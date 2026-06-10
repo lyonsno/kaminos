@@ -253,12 +253,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
     <button class="tb-btn" onclick="cullSmallFaces()" title="Remove debris triangles below area threshold">Cull Debris</button>
+    <button class="tb-btn" onclick="snapToGround()" title="Snap lowest vertex to ground plane">Snap Ground</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
     <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
   </div>
   <div id="info-bar">No asset loaded</div>
-  <div id="viewport-drop-overlay">Drop GLB to inspect</div>
+  <div id="viewport-drop-overlay">Drop GLB or OBJ to inspect</div>
 </div>
 
 <script type="importmap">
@@ -277,6 +278,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator;
@@ -602,6 +605,57 @@ async function showGLB(file) {
   });
 }
 
+// --- OBJ Inspector ---
+async function showOBJ(objFile, mtlFile) {
+  clearScene();
+  const objUrl = URL.createObjectURL(objFile);
+  glbFileName = objFile.name;
+
+  let materials = null;
+  if (mtlFile) {
+    const mtlUrl = URL.createObjectURL(mtlFile);
+    const mtlLoader = new MTLLoader();
+    materials = await new Promise(resolve => {
+      mtlLoader.load(mtlUrl, resolve);
+    });
+    materials.preload();
+  }
+
+  const objLoader = new OBJLoader();
+  if (materials) objLoader.setMaterials(materials);
+
+  objLoader.load(objUrl, obj => {
+    glbSourceScene = obj;
+    const box = new THREE.Box3().setFromObject(obj);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    obj.position.sub(center);
+    const scale = 2.0 / size;
+    obj.scale.setScalar(scale);
+    obj.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        // If no MTL, give it a decent default material
+        if (!mtlFile && child.material) {
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            roughness: 0.5,
+            metalness: 0.0,
+            envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+          });
+        } else if (child.material) {
+          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+        }
+      }
+    });
+    currentMesh = obj;
+    scene.add(currentMesh);
+    document.getElementById('transform-bar').classList.add('visible');
+    setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
+  });
+}
+
 // --- Depth Surface ---
 async function showDepthSurface() {
   clearScene();
@@ -867,10 +921,18 @@ viewport.addEventListener('drop', async e => {
   e.preventDefault();
   viewport.classList.remove('dragover');
   const files = e.dataTransfer.files;
-  for (const file of files) {
+  // Collect all dropped files for multi-file OBJ+MTL support
+  const allFiles = Array.from(files);
+  for (const file of allFiles) {
     if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
       showGLB(file);
       setInfo(`GLB Inspector — ${file.name}`);
+      return;
+    }
+    if (file.name.endsWith('.obj')) {
+      const mtlFile = allFiles.find(f => f.name.endsWith('.mtl'));
+      showOBJ(file, mtlFile);
+      setInfo(`OBJ Inspector — ${file.name}`);
       return;
     }
   }
@@ -1212,6 +1274,29 @@ window.cullSmallFaces = function() {
     }
   });
   setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
+};
+
+window.snapToGround = function() {
+  if (!currentMesh) return;
+  // Find the lowest Y vertex in world space
+  let minY = Infinity;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.geometry) return;
+    const pos = child.geometry.getAttribute('position');
+    if (!pos) return;
+    const worldMatrix = child.matrixWorld;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      v.applyMatrix4(worldMatrix);
+      if (v.y < minY) minY = v.y;
+    }
+  });
+  if (minY === Infinity) return;
+  // Shift model so lowest vertex sits on the ground plane
+  const groundY = groundPlane.position.y;
+  currentMesh.position.y += groundY - minY;
+  setInfo(`Snapped to ground (shifted ${(groundY - minY).toFixed(3)})`);
 };
 
 window.exportGLB = function() {
