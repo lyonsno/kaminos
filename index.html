@@ -251,6 +251,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="tb-btn" id="tb-double-sided" onclick="toggleDoubleSided()" title="Toggle double-sided rendering">2-Sided</button>
     <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
+    <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
+    <button class="tb-btn" onclick="cullSmallFaces()" title="Remove debris triangles below area threshold">Cull Debris</button>
+    <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
     <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
   </div>
@@ -1135,6 +1138,80 @@ window.toggleBackface = function() {
   document.getElementById('tb-backface').classList.toggle('active', isBack);
   document.getElementById('tb-double-sided').classList.remove('active');
   setInfo(isBack ? 'Backface only — seeing inside-out faces' : 'Front faces (normal)');
+};
+
+window.forceOpaque = function() {
+  if (!currentMesh) return;
+  let count = 0;
+  currentMesh.traverse(child => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      mat.transparent = false;
+      mat.opacity = 1.0;
+      mat.alphaTest = 0;
+      mat.depthWrite = true;
+      mat.blending = THREE.NormalBlending;
+      // If base color texture has alpha, ignore it
+      if (mat.alphaMap) { mat.alphaMap = null; }
+      mat.needsUpdate = true;
+      count++;
+    }
+  });
+  document.getElementById('tb-opaque').classList.add('active');
+  setInfo(`Forced ${count} material(s) opaque`);
+};
+
+window.cullSmallFaces = function() {
+  if (!currentMesh) return;
+  // Compute median triangle area, then remove triangles below 5% of median
+  let totalRemoved = 0;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.geometry) return;
+    const geo = child.geometry;
+    const pos = geo.getAttribute('position');
+    const idx = geo.index;
+    if (!idx || !pos) return;
+
+    const arr = idx.array;
+    const triCount = arr.length / 3;
+    const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3();
+
+    // Compute all triangle areas
+    const areas = new Float32Array(triCount);
+    for (let i = 0; i < triCount; i++) {
+      vA.fromBufferAttribute(pos, arr[i * 3]);
+      vB.fromBufferAttribute(pos, arr[i * 3 + 1]);
+      vC.fromBufferAttribute(pos, arr[i * 3 + 2]);
+      ab.subVectors(vB, vA);
+      ac.subVectors(vC, vA);
+      areas[i] = ab.cross(ac).length() * 0.5;
+    }
+
+    // Find median area
+    const sorted = Float32Array.from(areas).sort();
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const threshold = median * 0.05;
+
+    // Build new index without small triangles
+    const newIndices = [];
+    let removed = 0;
+    for (let i = 0; i < triCount; i++) {
+      if (areas[i] >= threshold) {
+        newIndices.push(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]);
+      } else {
+        removed++;
+      }
+    }
+    totalRemoved += removed;
+
+    if (removed > 0) {
+      geo.setIndex(newIndices);
+      geo.index.needsUpdate = true;
+    }
+  });
+  setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
 };
 
 window.exportGLB = function() {
