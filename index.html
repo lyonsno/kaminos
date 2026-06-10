@@ -183,19 +183,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Post Processing</h2>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="ssao-toggle" checked> SSAO
+        <input type="checkbox" id="ao-toggle" checked> GTAO
       </label>
     </div>
-    <div id="ssao-controls">
+    <div id="ao-controls">
       <div class="slider-row">
-        <span class="slider-label">AO Radius</span>
-        <input type="range" id="ssao-radius" min="0.01" max="2" step="0.01" value="0.3">
-        <span class="slider-val" id="ssao-radius-val">0.3</span>
+        <span class="slider-label">Radius</span>
+        <input type="range" id="ao-radius" min="0.1" max="3" step="0.05" value="0.5">
+        <span class="slider-val" id="ao-radius-val">0.5</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">AO Intensity</span>
-        <input type="range" id="ssao-intensity" min="0" max="4" step="0.1" value="1.5">
-        <span class="slider-val" id="ssao-intensity-val">1.5</span>
+        <span class="slider-label">Scale</span>
+        <input type="range" id="ao-scale" min="0.1" max="5" step="0.1" value="1.5">
+        <span class="slider-val" id="ao-scale-val">1.5</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thickness</span>
+        <input type="range" id="ao-thickness" min="0.1" max="20" step="0.1" value="5">
+        <span class="slider-val" id="ao-thickness-val">5.0</span>
       </div>
     </div>
   </div>
@@ -316,15 +321,14 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let composer = null;
-let ssaoPass = null;
-let usePostprocessing = true;
+let gtaoPass = null;
 let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
@@ -443,17 +447,29 @@ function initScene() {
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
 
-  // Postprocessing: SSAO + SMAA + Output
+  // Postprocessing: GTAO + SMAA + Output
   composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  ssaoPass = new SSAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
-  ssaoPass.kernelRadius = 0.3;
-  ssaoPass.minDistance = 0.001;
-  ssaoPass.maxDistance = 0.15;
-  ssaoPass.intensity = 1.5;
-  composer.addPass(ssaoPass);
+  gtaoPass = new GTAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
+  gtaoPass.output = GTAOPass.OUTPUT.Default;
+  gtaoPass.updateGtaoMaterial({
+    radius: 0.5,
+    distanceExponent: 2,
+    thickness: 5,
+    scale: 1.5,
+    samples: 16,
+  });
+  gtaoPass.updatePdMaterial({
+    lumaPhi: 10,
+    depthPhi: 2,
+    normalPhi: 3,
+    radius: 4,
+    rings: 2,
+    samples: 16,
+  });
+  composer.addPass(gtaoPass);
 
   const smaaPass = new SMAAPass(vp.clientWidth * renderer.getPixelRatio(), vp.clientHeight * renderer.getPixelRatio());
   composer.addPass(smaaPass);
@@ -468,7 +484,7 @@ function initScene() {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     composer.setSize(w, h);
-    ssaoPass.setSize(w, h);
+    gtaoPass.setSize(w, h);
     needsRender = true;
   });
 
@@ -1018,24 +1034,31 @@ function updateBackground() {
   }
 }
 
-// --- SSAO Controls ---
-document.getElementById('ssao-toggle').addEventListener('change', e => {
-  ssaoPass.enabled = e.target.checked;
-  document.getElementById('ssao-controls').style.display = e.target.checked ? '' : 'none';
+// --- GTAO Controls ---
+document.getElementById('ao-toggle').addEventListener('change', e => {
+  gtaoPass.enabled = e.target.checked;
+  document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   window._kaminosDirty?.();
 });
 
-document.getElementById('ssao-radius').addEventListener('input', e => {
+document.getElementById('ao-radius').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  ssaoPass.kernelRadius = v;
-  document.getElementById('ssao-radius-val').textContent = v.toFixed(2);
+  gtaoPass.updateGtaoMaterial({ radius: v });
+  document.getElementById('ao-radius-val').textContent = v.toFixed(2);
   window._kaminosDirty?.();
 });
 
-document.getElementById('ssao-intensity').addEventListener('input', e => {
+document.getElementById('ao-scale').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  ssaoPass.intensity = v;
-  document.getElementById('ssao-intensity-val').textContent = v.toFixed(1);
+  gtaoPass.updateGtaoMaterial({ scale: v });
+  document.getElementById('ao-scale-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
+});
+
+document.getElementById('ao-thickness').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  gtaoPass.updateGtaoMaterial({ thickness: v });
+  document.getElementById('ao-thickness-val').textContent = v.toFixed(1);
   window._kaminosDirty?.();
 });
 
