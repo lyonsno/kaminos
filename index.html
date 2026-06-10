@@ -350,6 +350,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <script type="module">
 import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
+import { GTAOComputePipeline } from './ao-pipeline.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -369,6 +370,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let postProcessing = null;
+let aoPipeline = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -491,17 +493,26 @@ async function initScene() {
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
 
-  // Postprocessing — load TSL dynamically, fall back to direct render
+  // --- Manual AO render pipeline ---
+  // Render scene to target with depth → GTAO compute on depth → composite AO × color to screen
+  postProcessing = null;
+
+  // Scene render target with depth attachment
+  let sceneRT = new THREE.RenderTarget(vp.clientWidth, vp.clientHeight, {
+    depthTexture: new THREE.DepthTexture(vp.clientWidth, vp.clientHeight),
+  });
+  sceneRT.depthTexture.format = THREE.DepthFormat;
+  sceneRT.depthTexture.type = THREE.UnsignedIntType;
+
+  // GTAO compute pipeline — will init async, renders direct until ready
+  let aoEnabled = true;
   try {
-    const tsl = await import('three/tsl');
-    pass = tsl.pass;
-    postProcessing = new THREE.PostProcessing(renderer);
-    const scenePass = pass(scene, camera);
-    postProcessing.outputNode = scenePass;
-    console.log('WebGPU PostProcessing initialized');
+    aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
+    await aoPipeline._initPromise;
+    console.log('GTAO compute pipeline:', aoPipeline.isReady ? 'ready' : 'failed');
   } catch (e) {
-    console.warn('PostProcessing setup failed, using direct render:', e);
-    postProcessing = null;
+    console.warn('GTAO compute init failed:', e);
+    aoPipeline = null;
   }
 
   window.addEventListener('resize', () => {
@@ -510,29 +521,33 @@ async function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    // Recreate render target at new size
+    sceneRT.dispose();
+    sceneRT = new THREE.RenderTarget(w, h, {
+      depthTexture: new THREE.DepthTexture(w, h),
+    });
+    sceneRT.depthTexture.format = THREE.DepthFormat;
+    sceneRT.depthTexture.type = THREE.UnsignedIntType;
+    if (aoPipeline) aoPipeline.setSize(w, h);
     needsRender = true;
   });
 
   // --- Render loop with idle detection ---
   let needsRender = true;
   let idleFrames = 0;
-  const IDLE_THRESHOLD = 3; // render a few extra frames after last change then sleep
+  const IDLE_THRESHOLD = 3;
 
-  // Mark dirty on any interaction
   const markDirty = () => { needsRender = true; idleFrames = 0; };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', markDirty);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
-
-  // Expose for other code that changes the scene
   window._kaminosDirty = markDirty;
 
   // FPS counter
   const fpsEl = document.getElementById('fps-counter');
   let fpsFrames = 0;
   let fpsLast = performance.now();
-  let fpsDisplay = '';
 
   function animate() {
     requestAnimationFrame(animate);
@@ -540,19 +555,17 @@ async function initScene() {
 
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
-      if (postProcessing) {
-        postProcessing.render();
-      } else {
-        renderer.render(scene, camera);
-      }
-      const frameMs = performance.now() - t0;
 
+      const useAO = aoEnabled && aoPipeline?.isReady && document.getElementById('ao-toggle').checked;
+
+      renderer.render(scene, camera);
+
+      const frameMs = performance.now() - t0;
       fpsFrames++;
       const elapsed = performance.now() - fpsLast;
       if (elapsed >= 500) {
         const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-        fpsDisplay = `${fps} fps · ${frameMs.toFixed(1)}ms`;
-        fpsEl.textContent = fpsDisplay;
+        fpsEl.textContent = `${fps} fps · ${frameMs.toFixed(1)}ms`;
         fpsFrames = 0;
         fpsLast = performance.now();
       }
@@ -1115,25 +1128,30 @@ function updateBackground() {
   }
 }
 
-// --- AO Controls (placeholder — WebGPU node AO coming next) ---
+// --- AO Controls ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
-  // TODO: wire to WebGPU AO node
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
-  document.getElementById('ao-radius-val').textContent = parseFloat(e.target.value).toFixed(2);
+  const v = parseFloat(e.target.value);
+  document.getElementById('ao-radius-val').textContent = v.toFixed(2);
+  if (aoPipeline) aoPipeline.radius = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-intensity').addEventListener('input', e => {
-  document.getElementById('ao-intensity-val').textContent = parseFloat(e.target.value).toFixed(1);
+  const v = parseFloat(e.target.value);
+  document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
+  if (aoPipeline) aoPipeline.intensity = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-far-blend').addEventListener('input', e => {
-  document.getElementById('ao-far-blend-val').textContent = parseFloat(e.target.value).toFixed(2);
+  const v = parseFloat(e.target.value);
+  document.getElementById('ao-far-blend-val').textContent = v.toFixed(2);
+  if (aoPipeline) aoPipeline.falloffEnd = v * 6.0; // scale 0-1 slider to 0-6 world units
   window._kaminosDirty?.();
 });
 
