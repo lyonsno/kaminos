@@ -90,7 +90,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         scene_path = SCENES_DIR / filename
         # Security: ensure under SCENES_DIR
-        if not str(scene_path.resolve()).startswith(str(SCENES_DIR.resolve())):
+        if not scene_path.resolve().is_relative_to(SCENES_DIR.resolve()):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
@@ -135,12 +135,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         target = (root / sub_path).resolve()
         # Security: ensure target is under root
-        if not str(target).startswith(str(root.resolve())):
+        if not target.is_relative_to(root.resolve()):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
         if not target.exists():
-            self.send_json({"error": "Not found", "path": str(target)}, 404)
+            self.send_json({"error": "Not found"}, 404)
             return
 
         if target.is_file():
@@ -213,7 +213,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         target = (root / sub_path).resolve()
-        if not str(target).startswith(str(root.resolve())):
+        if not target.is_relative_to(root.resolve()):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
@@ -231,6 +231,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream",
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(target.read_bytes())
             return
@@ -241,9 +242,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             if ext == ".json":
                 self.send_json(json.loads(text))
             else:
-                self.send_json({"content": text, "path": str(target)})
-        except Exception as e:
-            self.send_json({"error": str(e)}, 500)
+                self.send_json({"content": text})
+        except Exception:
+            self.send_json({"error": "Failed to read file"}, 500)
 
     def handle_job_outputs(self, params):
         """List files in a job's output_dir. ?job_id=xxx"""
@@ -271,6 +272,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         output_dir = receipt_data.get("output_dir")
         if not output_dir or not Path(output_dir).is_dir():
             self.send_json({"entries": [], "output_dir": output_dir})
+            return
+
+        # Verify output_dir is under a known root or home directory
+        output_resolved = Path(output_dir).resolve()
+        home = Path.home().resolve()
+        if not output_resolved.is_relative_to(home):
+            self.send_json({"error": "output_dir outside home directory"}, 403)
             return
 
         entries = []
@@ -317,9 +325,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "No output_dir in receipt"}, 404)
             return
 
+        # Verify output_dir is under home directory
+        output_resolved = Path(output_dir).resolve()
+        home = Path.home().resolve()
+        if not output_resolved.is_relative_to(home):
+            self.send_json({"error": "output_dir outside home directory"}, 403)
+            return
+
         target = (Path(output_dir) / filename).resolve()
         # Security: must be under the receipt's output_dir
-        if not str(target).startswith(str(Path(output_dir).resolve())):
+        if not target.is_relative_to(output_resolved):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
@@ -336,6 +351,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         }
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(target.read_bytes())
 
@@ -344,6 +360,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 

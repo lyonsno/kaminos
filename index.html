@@ -360,6 +360,12 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
+// --- Helpers ---
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let postProcessing = null;
@@ -658,8 +664,13 @@ function clearScene() {
     currentMesh.traverse(child => {
       if (child.geometry) child.geometry.dispose();
       if (child.material) {
-        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-        else child.material.dispose();
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) {
+          for (const prop of ['map','roughnessMap','metalnessMap','normalMap','displacementMap','envMap','aoMap','emissiveMap','alphaMap']) {
+            if (m[prop]) { m[prop].dispose(); m[prop] = null; }
+          }
+          m.dispose();
+        }
       }
     });
     currentMesh = null;
@@ -675,7 +686,9 @@ function clearScene() {
 function loadTexture(file) {
   return new Promise(resolve => {
     const url = typeof file === 'string' ? file : URL.createObjectURL(file);
+    const isBlob = typeof file !== 'string';
     new THREE.TextureLoader().load(url, tex => {
+      if (isBlob) URL.revokeObjectURL(url);
       tex.colorSpace = THREE.SRGBColorSpace;
       resolve(tex);
     });
@@ -685,7 +698,9 @@ function loadTexture(file) {
 function loadTextureLinear(file) {
   return new Promise(resolve => {
     const url = typeof file === 'string' ? file : URL.createObjectURL(file);
+    const isBlob = typeof file !== 'string';
     new THREE.TextureLoader().load(url, tex => {
+      if (isBlob) URL.revokeObjectURL(url);
       tex.colorSpace = THREE.LinearSRGBColorSpace;
       resolve(tex);
     });
@@ -855,7 +870,7 @@ function updateReceiptPanel(r) {
     'processing_stage', 'base_model', 'route', 'timestamp_iso', 'image_size', 'seed'];
   idFields.innerHTML = identityKeys
     .filter(k => r[k] !== undefined)
-    .map(k => `<div class="field"><span class="field-key">${k}</span><span class="field-val" title="${r[k]}">${r[k]}</span></div>`)
+    .map(k => `<div class="field"><span class="field-key">${escapeHtml(k)}</span><span class="field-val" title="${escapeHtml(r[k])}">${escapeHtml(r[k])}</span></div>`)
     .join('');
 
   const outFields = document.getElementById('output-fields');
@@ -866,8 +881,8 @@ function updateReceiptPanel(r) {
     const cls = present ? 'present' : 'missing';
     const sha = entry.sha256 ? entry.sha256.substring(0, 12) + '...' : 'n/a';
     const enc = entry.encoding ? ` [${entry.encoding.encoding || entry.encoding.format || ''}]` : '';
-    return `<div class="field"><span class="field-key">${name}</span><span class="field-val ${cls}">${present ? '\u2713' : '\u2717'} ${entry.path || 'absent'}${enc}</span></div>
-            <div class="field"><span class="field-key"></span><span class="field-val hash">${sha}</span></div>`;
+    return `<div class="field"><span class="field-key">${escapeHtml(name)}</span><span class="field-val ${cls}">${present ? '\u2713' : '\u2717'} ${escapeHtml(entry.path || 'absent')}${escapeHtml(enc)}</span></div>
+            <div class="field"><span class="field-key"></span><span class="field-val hash">${escapeHtml(sha)}</span></div>`;
   }).join('');
 
   // Channel thumbnails
@@ -880,7 +895,16 @@ function updateReceiptPanel(r) {
       const url = URL.createObjectURL(loadedFiles[fn]);
       const div = document.createElement('div');
       div.className = 'channel-item';
-      div.innerHTML = `<img class="channel-thumb" src="${url}" alt="${fn}"><div class="channel-label">${fn.replace('.png','').replace('.jpg','')}</div>`;
+      const img = document.createElement('img');
+      img.className = 'channel-thumb';
+      img.src = url;
+      img.alt = fn;
+      img.onload = () => URL.revokeObjectURL(url);
+      const label = document.createElement('div');
+      label.className = 'channel-label';
+      label.textContent = fn.replace('.png','').replace('.jpg','');
+      div.appendChild(img);
+      div.appendChild(label);
       grid.appendChild(div);
     }
   }
@@ -1387,7 +1411,7 @@ document.getElementById('search-input').addEventListener('keydown', async e => {
       resultsEl.appendChild(div);
     }
   } catch (err) {
-    resultsEl.innerHTML = '<div class="search-loading">Search failed: ' + err.message + '</div>';
+    resultsEl.innerHTML = '<div class="search-loading">Search failed: ' + escapeHtml(err.message) + '</div>';
   }
 });
 
@@ -1805,7 +1829,7 @@ async function grBrowse() {
 
   const data = await grFetchApi('browse', { root: grCurrentRoot, path: grCurrentPath });
   if (data.error) {
-    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:12px;">${data.error}</div>`;
+    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:12px;">${escapeHtml(data.error)}</div>`;
     return;
   }
 
@@ -1925,7 +1949,7 @@ async function grOpenJobDir(path) {
   if (receiptEntry) {
     const receipt = await grFetchApi('read', { root: grCurrentRoot, path: path + '/receipt.json' });
     receiptEl.innerHTML = Object.entries(receipt)
-      .map(([k, v]) => `<div class="field"><span class="field-key">${k}</span><span class="field-val" title="${v}">${v === null ? 'null' : v}</span></div>`)
+      .map(([k, v]) => `<div class="field"><span class="field-key">${escapeHtml(k)}</span><span class="field-val" title="${escapeHtml(v)}">${v === null ? 'null' : escapeHtml(v)}</span></div>`)
       .join('');
   } else {
     receiptEl.innerHTML = '<div style="color:#555; font-size:11px;">No receipt</div>';
@@ -2052,7 +2076,7 @@ async function grBrowseScenes() {
   const listEl = document.getElementById('scenes-list');
   const data = await grFetchApi('browse', { root: 'scenes', path: '' });
   if (data.error) {
-    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${data.error}</div>`;
+    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${escapeHtml(data.error)}</div>`;
     return;
   }
   const sceneFiles = (data.entries || []).filter(e => e.name.endsWith('.json'));
@@ -2159,7 +2183,7 @@ async function grBrowseScratch() {
   const listEl = document.getElementById('scratch-list');
   const data = await grFetchApi('browse', { root: 'scratch', path: '' });
   if (data.error) {
-    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${data.error}</div>`;
+    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${escapeHtml(data.error)}</div>`;
     return;
   }
   if (!data.entries || data.entries.length === 0) {
