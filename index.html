@@ -210,6 +210,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="checkbox" id="backdrop-toggle"> Grid Backdrop
       </label>
     </div>
+    <div class="slider-row" id="backdrop-brightness-row" style="display:none;">
+      <span class="slider-label">BG Bright</span>
+      <input type="range" id="backdrop-brightness" min="0.1" max="2" step="0.05" value="0.6">
+      <span class="slider-val" id="backdrop-brightness-val">0.6</span>
+    </div>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
         <input type="checkbox" id="dof-toggle"> Depth of Field
@@ -1235,6 +1240,9 @@ function createBackdrop() {
 
   backdropMesh = new THREE.Mesh(geo, mat);
   backdropMesh.receiveShadow = true;
+  // Apply current brightness
+  const brightness = parseFloat(document.getElementById('backdrop-brightness').value);
+  mat.color.setScalar(brightness);
   scene.add(backdropMesh);
 
   // Hide the default ground plane when backdrop is on
@@ -1256,6 +1264,17 @@ function removeBackdrop() {
 document.getElementById('backdrop-toggle').addEventListener('change', e => {
   if (e.target.checked) createBackdrop();
   else removeBackdrop();
+  document.getElementById('backdrop-brightness-row').style.display = e.target.checked ? '' : 'none';
+  window._kaminosDirty?.();
+});
+
+document.getElementById('backdrop-brightness').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('backdrop-brightness-val').textContent = v.toFixed(2);
+  if (backdropMesh && backdropMesh.material) {
+    backdropMesh.material.color.setScalar(v);
+    backdropMesh.material.needsUpdate = true;
+  }
   window._kaminosDirty?.();
 });
 
