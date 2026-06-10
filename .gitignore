@@ -1,3 +1,5 @@
 node_modules/
 scratch/*
 !scratch/.gitkeep
+scenes/*
+!scenes/.gitkeep

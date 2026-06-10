@@ -193,6 +193,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div id="greenroom-files"></div>
     </div>
     <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #2a2a2a;">
+      <h2>Saved Scenes</h2>
+      <div style="font-size: 10px; color: #444; margin-bottom: 8px;">Cmd+S to save. Scenes live in <code style="color:#666;">scenes/</code></div>
+      <div id="scenes-list"></div>
+    </div>
+    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #2a2a2a;">
       <h2>Scratch</h2>
       <div style="font-size: 10px; color: #444; margin-bottom: 8px;">Drop files into <code style="color:#666;">scratch/</code> to browse them here. Not checked into git.</div>
       <div id="scratch-list"></div>
@@ -1418,6 +1423,7 @@ async function grInit() {
   // Default: show done
   grCurrentPath = 'done';
   grBrowse();
+  grBrowseScenes();
   grBrowseScratch();
 }
 
@@ -1651,6 +1657,65 @@ function grOpenFile(name) {
   window.open(url, '_blank');
 }
 
+async function grBrowseScenes() {
+  const listEl = document.getElementById('scenes-list');
+  const data = await grFetchApi('browse', { root: 'scenes', path: '' });
+  if (data.error) {
+    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${data.error}</div>`;
+    return;
+  }
+  const scenes = (data.entries || []).filter(e => e.name.endsWith('.json'));
+  if (scenes.length === 0) {
+    listEl.innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">No saved scenes yet. Cmd+S to save.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  // Show newest first
+  scenes.reverse();
+  for (const entry of scenes) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = '\uD83C\uDFA8';
+    const name = document.createElement('span');
+    name.className = 'gr-name';
+    name.textContent = entry.name.replace('.kaminos.json', '');
+    const meta = document.createElement('span');
+    meta.className = 'gr-meta';
+    meta.textContent = entry.size !== null ? formatSize(entry.size) : '';
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = 'Load';
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const sceneData = await grFetchApi('read', { root: 'scenes', path: entry.name });
+      if (sceneData && !sceneData.error) {
+        // Create a fake File-like to reuse loadSceneFile
+        const blob = new Blob([JSON.stringify(sceneData)], { type: 'application/json' });
+        const file = new File([blob], entry.name);
+        loadSceneFile(file);
+      }
+    };
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn';
+    delBtn.textContent = '\u2715';
+    delBtn.title = 'Delete scene';
+    delBtn.style.cssText = 'padding: 5px 7px; color: #666;';
+    delBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await fetch(`/api/delete-scene?name=${encodeURIComponent(entry.name)}`);
+      grBrowseScenes();
+    };
+    div.appendChild(icon);
+    div.appendChild(name);
+    div.appendChild(meta);
+    div.appendChild(btn);
+    div.appendChild(delBtn);
+    listEl.appendChild(div);
+  }
+}
+
 async function grBrowseScratch() {
   const listEl = document.getElementById('scratch-list');
   const data = await grFetchApi('browse', { root: 'scratch', path: '' });
@@ -1722,7 +1787,7 @@ function formatSize(bytes) {
 }
 
 // --- Scene Save/Load ---
-window.saveScene = function() {
+window.saveScene = async function() {
   const sceneData = {
     version: 1,
     timestamp: new Date().toISOString(),
@@ -1752,16 +1817,34 @@ window.saveScene = function() {
     materials: getMaterialState(),
   };
 
-  const json = JSON.stringify(sceneData, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const name = (glbFileName || 'scene').replace(/\.[^.]+$/, '') + '.kaminos.json';
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-  setInfo(`Scene saved: ${name}`);
+  const jsonStr = JSON.stringify(sceneData, null, 2);
+
+  // Save to server
+  try {
+    const resp = await fetch('/api/save-scene', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonStr,
+    });
+    const result = await resp.json();
+    if (result.saved) {
+      setInfo(`Scene saved: ${result.saved}`);
+      grBrowseScenes(); // refresh the scenes list
+    } else {
+      setInfo(`Save failed: ${result.error || 'unknown'}`);
+    }
+  } catch (err) {
+    // Fallback to download if server is not reachable
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const name = (glbFileName || 'scene').replace(/\.[^.]+$/, '') + '.kaminos.json';
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+    setInfo(`Scene downloaded: ${name} (server unreachable)`);
+  }
 };
 
 function getMaterialState() {

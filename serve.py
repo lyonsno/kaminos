@@ -12,8 +12,12 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 ROOT = Path(__file__).parent
 
 # Directories the browse API can access
+SCENES_DIR = ROOT / "scenes"
+SCENES_DIR.mkdir(exist_ok=True)
+
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
+    "scenes": SCENES_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -37,8 +41,58 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_outputs(parse_qs(parsed.query))
         elif parsed.path.startswith("/api/job-output"):
             self.handle_job_output(parse_qs(parsed.query))
+        elif parsed.path == "/api/delete-scene":
+            self.handle_delete_scene(parse_qs(parsed.query))
         else:
             super().do_GET()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/save-scene":
+            self.handle_save_scene()
+        else:
+            self.send_json({"error": "Not found"}, 404)
+
+    def handle_save_scene(self):
+        """Save a scene JSON to the scenes directory."""
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            data = json.loads(body)
+        except Exception:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+
+        # Generate filename from model name and timestamp
+        model_name = data.get("model", {}).get("fileName", "scene")
+        model_name = Path(model_name).stem
+        timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
+        filename = f"{model_name}_{timestamp}.kaminos.json"
+
+        # Sanitize filename
+        filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+        if not filename:
+            filename = "scene.kaminos.json"
+
+        scene_path = SCENES_DIR / filename
+        scene_path.write_text(json.dumps(data, indent=2))
+        self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_delete_scene(self, params):
+        """Delete a scene file."""
+        name = params.get("name", [""])[0]
+        if not name:
+            self.send_json({"error": "name required"}, 400)
+            return
+        target = (SCENES_DIR / name).resolve()
+        if not str(target).startswith(str(SCENES_DIR.resolve())):
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        if not target.is_file():
+            self.send_json({"error": "Not found"}, 404)
+            return
+        target.unlink()
+        self.send_json({"deleted": name})
 
     def handle_roots(self):
         """List available browse roots and their existence."""
