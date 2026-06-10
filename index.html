@@ -203,6 +203,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-val" id="ao-thickness-val">5.0</span>
       </div>
     </div>
+
+    <h2>Backdrop & DoF</h2>
+    <div class="slider-row">
+      <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="backdrop-toggle"> Grid Backdrop
+      </label>
+    </div>
+    <div class="slider-row">
+      <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="dof-toggle"> Depth of Field
+      </label>
+    </div>
+    <div id="dof-controls" style="display:none;">
+      <div class="slider-row">
+        <span class="slider-label">Focus</span>
+        <input type="range" id="dof-focus" min="0.5" max="10" step="0.1" value="2.5">
+        <span class="slider-val" id="dof-focus-val">2.5</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Aperture</span>
+        <input type="range" id="dof-aperture" min="0.0001" max="0.01" step="0.0001" value="0.002">
+        <span class="slider-val" id="dof-aperture-val">0.002</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Max Blur</span>
+        <input type="range" id="dof-maxblur" min="0" max="0.05" step="0.001" value="0.01">
+        <span class="slider-val" id="dof-maxblur-val">0.01</span>
+      </div>
+    </div>
   </div>
 
   <!-- Greenroom Tab -->
@@ -325,11 +354,14 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let composer = null;
 let gtaoPass = null;
+let bokehPass = null;
+let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
@@ -472,6 +504,14 @@ function initScene() {
     samples: 16,
   });
   composer.addPass(gtaoPass);
+
+  bokehPass = new BokehPass(scene, camera, {
+    focus: 2.5,
+    aperture: 0.002,
+    maxblur: 0.01,
+  });
+  bokehPass.enabled = false;
+  composer.addPass(bokehPass);
 
   const smaaPass = new SMAAPass(vp.clientWidth * renderer.getPixelRatio(), vp.clientHeight * renderer.getPixelRatio());
   composer.addPass(smaaPass);
@@ -1061,6 +1101,108 @@ document.getElementById('ao-thickness').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   gtaoPass.updateGtaoMaterial({ thickness: v });
   document.getElementById('ao-thickness-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
+});
+
+// --- Backdrop ---
+function createBackdrop() {
+  if (backdropMesh) return;
+
+  // Create a procedural numbered grid texture (like Blender's Material Preview)
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048;
+  canvas.height = 2048;
+  const ctx = canvas.getContext('2d');
+
+  const gridSize = 8;
+  const cellW = canvas.width / gridSize;
+  const cellH = canvas.height / gridSize;
+
+  // Light grey base
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid cells with numbers
+  ctx.strokeStyle = '#d0d0d0';
+  ctx.lineWidth = 2;
+  ctx.font = `bold ${cellW * 0.3}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  let num = 1;
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const cx = x * cellW;
+      const cy = y * cellH;
+      ctx.strokeRect(cx, cy, cellW, cellH);
+      ctx.fillStyle = '#bbb';
+      ctx.fillText(String(num), cx + cellW / 2, cy + cellH / 2);
+      num++;
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  // Large angled plane behind and under the object
+  const geo = new THREE.PlaneGeometry(20, 20);
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex,
+    roughness: 0.7,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+  });
+  backdropMesh = new THREE.Mesh(geo, mat);
+  backdropMesh.receiveShadow = true;
+  // Position: behind and tilted to create the angled background look
+  backdropMesh.position.set(0, 2, -4);
+  backdropMesh.rotation.x = -0.15;
+  scene.add(backdropMesh);
+}
+
+function removeBackdrop() {
+  if (!backdropMesh) return;
+  scene.remove(backdropMesh);
+  backdropMesh.geometry.dispose();
+  backdropMesh.material.map?.dispose();
+  backdropMesh.material.dispose();
+  backdropMesh = null;
+}
+
+document.getElementById('backdrop-toggle').addEventListener('change', e => {
+  if (e.target.checked) createBackdrop();
+  else removeBackdrop();
+  window._kaminosDirty?.();
+});
+
+// --- DoF Controls ---
+document.getElementById('dof-toggle').addEventListener('change', e => {
+  bokehPass.enabled = e.target.checked;
+  document.getElementById('dof-controls').style.display = e.target.checked ? '' : 'none';
+  window._kaminosDirty?.();
+});
+
+document.getElementById('dof-focus').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  bokehPass.uniforms['focus'].value = v;
+  document.getElementById('dof-focus-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
+});
+
+document.getElementById('dof-aperture').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  bokehPass.uniforms['aperture'].value = v;
+  document.getElementById('dof-aperture-val').textContent = v.toFixed(4);
+  window._kaminosDirty?.();
+});
+
+document.getElementById('dof-maxblur').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  bokehPass.uniforms['maxblur'].value = v;
+  document.getElementById('dof-maxblur-val').textContent = v.toFixed(3);
   window._kaminosDirty?.();
 });
 
@@ -2008,6 +2150,21 @@ function buildSceneData() {
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
     materials: getMaterialState(),
+    postprocessing: {
+      ao: {
+        enabled: gtaoPass.enabled,
+        radius: parseFloat(document.getElementById('ao-radius').value),
+        scale: parseFloat(document.getElementById('ao-scale').value),
+        thickness: parseFloat(document.getElementById('ao-thickness').value),
+      },
+      dof: {
+        enabled: bokehPass.enabled,
+        focus: parseFloat(document.getElementById('dof-focus').value),
+        aperture: parseFloat(document.getElementById('dof-aperture').value),
+        maxblur: parseFloat(document.getElementById('dof-maxblur').value),
+      },
+    },
+    backdrop: !!backdropMesh,
   };
 }
 
@@ -2172,6 +2329,61 @@ async function loadSceneFile(file) {
 
   // Apply material state
   applyMaterialState(data.materials);
+
+  // Apply postprocessing
+  if (data.postprocessing) {
+    const ao = data.postprocessing.ao;
+    if (ao) {
+      gtaoPass.enabled = ao.enabled ?? true;
+      document.getElementById('ao-toggle').checked = gtaoPass.enabled;
+      document.getElementById('ao-controls').style.display = gtaoPass.enabled ? '' : 'none';
+      if (ao.radius !== undefined) {
+        gtaoPass.updateGtaoMaterial({ radius: ao.radius });
+        document.getElementById('ao-radius').value = ao.radius;
+        document.getElementById('ao-radius-val').textContent = ao.radius.toFixed(2);
+      }
+      if (ao.scale !== undefined) {
+        gtaoPass.updateGtaoMaterial({ scale: ao.scale });
+        document.getElementById('ao-scale').value = ao.scale;
+        document.getElementById('ao-scale-val').textContent = ao.scale.toFixed(1);
+      }
+      if (ao.thickness !== undefined) {
+        gtaoPass.updateGtaoMaterial({ thickness: ao.thickness });
+        document.getElementById('ao-thickness').value = ao.thickness;
+        document.getElementById('ao-thickness-val').textContent = ao.thickness.toFixed(1);
+      }
+    }
+    const dof = data.postprocessing.dof;
+    if (dof) {
+      bokehPass.enabled = dof.enabled ?? false;
+      document.getElementById('dof-toggle').checked = bokehPass.enabled;
+      document.getElementById('dof-controls').style.display = bokehPass.enabled ? '' : 'none';
+      if (dof.focus !== undefined) {
+        bokehPass.uniforms['focus'].value = dof.focus;
+        document.getElementById('dof-focus').value = dof.focus;
+        document.getElementById('dof-focus-val').textContent = dof.focus.toFixed(1);
+      }
+      if (dof.aperture !== undefined) {
+        bokehPass.uniforms['aperture'].value = dof.aperture;
+        document.getElementById('dof-aperture').value = dof.aperture;
+        document.getElementById('dof-aperture-val').textContent = dof.aperture.toFixed(4);
+      }
+      if (dof.maxblur !== undefined) {
+        bokehPass.uniforms['maxblur'].value = dof.maxblur;
+        document.getElementById('dof-maxblur').value = dof.maxblur;
+        document.getElementById('dof-maxblur-val').textContent = dof.maxblur.toFixed(3);
+      }
+    }
+  }
+
+  // Apply backdrop
+  if (data.backdrop) {
+    createBackdrop();
+    document.getElementById('backdrop-toggle').checked = true;
+  } else {
+    removeBackdrop();
+    document.getElementById('backdrop-toggle').checked = false;
+  }
 
   setInfo(`Scene loaded: ${data.model.fileName}`);
 }
