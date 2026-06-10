@@ -241,7 +241,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
-    <h2>GPU Greenroom</h2>
+    <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div class="env-grid" id="greenroom-root-buttons" style="margin-bottom: 10px;"></div>
     <div id="greenroom-breadcrumb" style="font-size: 10px; color: #555; font-family: 'SF Mono', monospace; margin-bottom: 8px;"></div>
     <div id="greenroom-list"></div>
@@ -332,13 +332,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
   <div id="info-bar">No asset loaded</div>
+  <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
 </div>
 
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.tsl.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
   }
 }
@@ -346,6 +349,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <script type="module">
 import * as THREE from 'three';
+let pass; // loaded lazily after renderer init
+
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
@@ -354,18 +359,10 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { HBAOPass } from './hbao-pass.js';
-import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
-let composer = null;
-let hbaoPass = null;
-let bokehPass = null;
+let postProcessing = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -423,14 +420,14 @@ const HDR_ENVS = {
 const envCache = {};
 
 // --- Three.js Setup ---
-function initScene() {
+async function initScene() {
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -440,6 +437,9 @@ function initScene() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   vp.appendChild(renderer.domElement);
 
+  await renderer.init();
+  console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
+
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
@@ -448,7 +448,6 @@ function initScene() {
   controls.target.set(0, 0, 0);
 
   pmremGenerator = new THREE.PMREMGenerator(renderer);
-  pmremGenerator.compileEquirectangularShader();
 
   // Ground plane (subtle reflective floor)
   const groundGeo = new THREE.CircleGeometry(5, 64);
@@ -486,35 +485,18 @@ function initScene() {
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
 
-  // Postprocessing: GTAO + SMAA + Output
-  composer = new EffectComposer(renderer);
-  const renderPass = new RenderPass(scene, camera);
-  composer.addPass(renderPass);
-
-  hbaoPass = new HBAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
-  hbaoPass.radius = 0.5;
-  hbaoPass.radiusFar = 2.0;
-  hbaoPass.intensity = 1.5;
-  hbaoPass.farBlend = 0.5;
-  hbaoPass.directions = 8;
-  hbaoPass.steps = 4;
-  hbaoPass.blurRadius = 4;
-  hbaoPass.blurSharpness = 40.0;
-  composer.addPass(hbaoPass);
-
-  bokehPass = new BokehPass(scene, camera, {
-    focus: 2.5,
-    aperture: 0.002,
-    maxblur: 0.01,
-  });
-  bokehPass.enabled = false;
-  composer.addPass(bokehPass);
-
-  const smaaPass = new SMAAPass(vp.clientWidth * renderer.getPixelRatio(), vp.clientHeight * renderer.getPixelRatio());
-  composer.addPass(smaaPass);
-
-  const outputPass = new OutputPass();
-  composer.addPass(outputPass);
+  // Postprocessing — load TSL dynamically, fall back to direct render
+  try {
+    const tsl = await import('three/tsl');
+    pass = tsl.pass;
+    postProcessing = new THREE.PostProcessing(renderer);
+    const scenePass = pass(scene, camera);
+    postProcessing.outputNode = scenePass;
+    console.log('WebGPU PostProcessing initialized');
+  } catch (e) {
+    console.warn('PostProcessing setup failed, using direct render:', e);
+    postProcessing = null;
+  }
 
   window.addEventListener('resize', () => {
     const w = vp.clientWidth;
@@ -522,8 +504,6 @@ function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    composer.setSize(w, h);
-    hbaoPass.setSize(w, h);
     needsRender = true;
   });
 
@@ -542,12 +522,35 @@ function initScene() {
   // Expose for other code that changes the scene
   window._kaminosDirty = markDirty;
 
+  // FPS counter
+  const fpsEl = document.getElementById('fps-counter');
+  let fpsFrames = 0;
+  let fpsLast = performance.now();
+  let fpsDisplay = '';
+
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
 
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
-      composer.render();
+      const t0 = performance.now();
+      if (postProcessing) {
+        postProcessing.render();
+      } else {
+        renderer.render(scene, camera);
+      }
+      const frameMs = performance.now() - t0;
+
+      fpsFrames++;
+      const elapsed = performance.now() - fpsLast;
+      if (elapsed >= 500) {
+        const fps = (fpsFrames / elapsed * 1000).toFixed(0);
+        fpsDisplay = `${fps} fps · ${frameMs.toFixed(1)}ms`;
+        fpsEl.textContent = fpsDisplay;
+        fpsFrames = 0;
+        fpsLast = performance.now();
+      }
+
       if (!needsRender) idleFrames++;
       needsRender = false;
     }
@@ -1073,32 +1076,25 @@ function updateBackground() {
   }
 }
 
-// --- HBAO Controls ---
+// --- AO Controls (placeholder — WebGPU node AO coming next) ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
-  hbaoPass.enabled = e.target.checked;
+  // TODO: wire to WebGPU AO node
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  hbaoPass.radius = v;
-  hbaoPass.radiusFar = v * 4;
-  document.getElementById('ao-radius-val').textContent = v.toFixed(2);
+  document.getElementById('ao-radius-val').textContent = parseFloat(e.target.value).toFixed(2);
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-intensity').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  hbaoPass.intensity = v;
-  document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
+  document.getElementById('ao-intensity-val').textContent = parseFloat(e.target.value).toFixed(1);
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-far-blend').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  hbaoPass.farBlend = v;
-  document.getElementById('ao-far-blend-val').textContent = v.toFixed(2);
+  document.getElementById('ao-far-blend-val').textContent = parseFloat(e.target.value).toFixed(2);
   window._kaminosDirty?.();
 });
 
@@ -1143,7 +1139,7 @@ function createBackdrop() {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = renderer.capabilities?.getMaxAnisotropy?.() ?? 16;
 
   const mat = new THREE.MeshStandardMaterial({
     map: tex,
@@ -1271,31 +1267,24 @@ document.getElementById('backdrop-brightness').addEventListener('input', e => {
   window._kaminosDirty?.();
 });
 
-// --- DoF Controls ---
+// --- DoF Controls (placeholder — WebGPU DoF node coming next) ---
 document.getElementById('dof-toggle').addEventListener('change', e => {
-  bokehPass.enabled = e.target.checked;
   document.getElementById('dof-controls').style.display = e.target.checked ? '' : 'none';
   window._kaminosDirty?.();
 });
 
 document.getElementById('dof-focus').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  bokehPass.uniforms['focus'].value = v;
-  document.getElementById('dof-focus-val').textContent = v.toFixed(1);
+  document.getElementById('dof-focus-val').textContent = parseFloat(e.target.value).toFixed(1);
   window._kaminosDirty?.();
 });
 
 document.getElementById('dof-aperture').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  bokehPass.uniforms['aperture'].value = v;
-  document.getElementById('dof-aperture-val').textContent = v.toFixed(4);
+  document.getElementById('dof-aperture-val').textContent = parseFloat(e.target.value).toFixed(4);
   window._kaminosDirty?.();
 });
 
 document.getElementById('dof-maxblur').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  bokehPass.uniforms['maxblur'].value = v;
-  document.getElementById('dof-maxblur-val').textContent = v.toFixed(3);
+  document.getElementById('dof-maxblur-val').textContent = parseFloat(e.target.value).toFixed(3);
   window._kaminosDirty?.();
 });
 
@@ -2289,13 +2278,13 @@ function buildSceneData() {
     materials: getMaterialState(),
     postprocessing: {
       ao: {
-        enabled: hbaoPass.enabled,
+        enabled: document.getElementById('ao-toggle').checked,
         radius: parseFloat(document.getElementById('ao-radius').value),
         intensity: parseFloat(document.getElementById('ao-intensity').value),
         farBlend: parseFloat(document.getElementById('ao-far-blend').value),
       },
       dof: {
-        enabled: bokehPass.enabled,
+        enabled: document.getElementById('dof-toggle').checked,
         focus: parseFloat(document.getElementById('dof-focus').value),
         aperture: parseFloat(document.getElementById('dof-aperture').value),
         maxblur: parseFloat(document.getElementById('dof-maxblur').value),
@@ -2471,49 +2460,39 @@ async function loadSceneFile(file) {
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {
-      hbaoPass.enabled = ao.enabled ?? true;
-      document.getElementById('ao-toggle').checked = hbaoPass.enabled;
-      document.getElementById('ao-controls').style.display = hbaoPass.enabled ? '' : 'none';
+      const aoEnabled = ao.enabled ?? true;
+      document.getElementById('ao-toggle').checked = aoEnabled;
+      document.getElementById('ao-controls').style.display = aoEnabled ? '' : 'none';
       if (ao.radius !== undefined) {
-        hbaoPass.radius = ao.radius;
-        hbaoPass.radiusFar = ao.radius * 4;
         document.getElementById('ao-radius').value = ao.radius;
         document.getElementById('ao-radius-val').textContent = ao.radius.toFixed(2);
       }
       if (ao.intensity !== undefined) {
-        hbaoPass.intensity = ao.intensity;
         document.getElementById('ao-intensity').value = ao.intensity;
         document.getElementById('ao-intensity-val').textContent = ao.intensity.toFixed(1);
-      }
-      if (ao.farBlend !== undefined) {
-        hbaoPass.farBlend = ao.farBlend;
-        document.getElementById('ao-far-blend').value = ao.farBlend;
-        document.getElementById('ao-far-blend-val').textContent = ao.farBlend.toFixed(2);
-      }
-      // Backwards compat: old scenes with scale/thickness still load
-      if (ao.scale !== undefined && ao.intensity === undefined) {
-        hbaoPass.intensity = ao.scale;
+      } else if (ao.scale !== undefined) {
         document.getElementById('ao-intensity').value = ao.scale;
         document.getElementById('ao-intensity-val').textContent = ao.scale.toFixed(1);
+      }
+      if (ao.farBlend !== undefined) {
+        document.getElementById('ao-far-blend').value = ao.farBlend;
+        document.getElementById('ao-far-blend-val').textContent = ao.farBlend.toFixed(2);
       }
     }
     const dof = data.postprocessing.dof;
     if (dof) {
-      bokehPass.enabled = dof.enabled ?? false;
-      document.getElementById('dof-toggle').checked = bokehPass.enabled;
-      document.getElementById('dof-controls').style.display = bokehPass.enabled ? '' : 'none';
+      const dofEnabled = dof.enabled ?? false;
+      document.getElementById('dof-toggle').checked = dofEnabled;
+      document.getElementById('dof-controls').style.display = dofEnabled ? '' : 'none';
       if (dof.focus !== undefined) {
-        bokehPass.uniforms['focus'].value = dof.focus;
         document.getElementById('dof-focus').value = dof.focus;
         document.getElementById('dof-focus-val').textContent = dof.focus.toFixed(1);
       }
       if (dof.aperture !== undefined) {
-        bokehPass.uniforms['aperture'].value = dof.aperture;
         document.getElementById('dof-aperture').value = dof.aperture;
         document.getElementById('dof-aperture-val').textContent = dof.aperture.toFixed(4);
       }
       if (dof.maxblur !== undefined) {
-        bokehPass.uniforms['maxblur'].value = dof.maxblur;
         document.getElementById('dof-maxblur').value = dof.maxblur;
         document.getElementById('dof-maxblur-val').textContent = dof.maxblur.toFixed(3);
       }
@@ -2558,13 +2537,18 @@ window.addEventListener('keydown', e => {
 
 // --- Init ---
 grInit();
-initScene();
-initEnvButtons();
-loadDemoButtons();
-
-// Load HDR environment first, then auto-load demo
-loadEnvironment('studio').then(() => {
-  loadDemo(DEMO_ASSETS[0]);
+initScene().then(() => {
+  initEnvButtons();
+  loadDemoButtons();
+  // Load HDR environment first, then auto-load demo
+  loadEnvironment('studio').then(() => {
+    loadDemo(DEMO_ASSETS[0]);
+  });
+}).catch(err => {
+  console.error('initScene failed:', err);
+  // Still init non-3D parts
+  initEnvButtons();
+  loadDemoButtons();
 });
 </script>
 </body>
