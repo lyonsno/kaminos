@@ -255,6 +255,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="tb-btn" onclick="cullSmallFaces()" title="Remove debris triangles below area threshold">Cull Debris</button>
     <button class="tb-btn" onclick="snapToGround()" title="Snap lowest vertex to ground plane">Snap Ground</button>
     <div class="tb-sep"></div>
+    <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
+    <button class="tb-btn" id="tb-gizmo-rotate" onclick="setGizmoMode('rotate')" title="Rotate gizmo (E)">Rotate</button>
+    <button class="tb-btn" id="tb-gizmo-scale" onclick="setGizmoMode('scale')" title="Scale gizmo (R)">Scale</button>
+    <button class="tb-btn" id="tb-gizmo-off" onclick="setGizmoMode(null)" title="Disable gizmo (Q)">No Gizmo</button>
+    <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
     <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
   </div>
@@ -278,11 +283,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 // --- State ---
-let scene, camera, renderer, controls, pmremGenerator;
+let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
@@ -389,6 +395,15 @@ function initScene() {
   keyLight.shadow.camera.bottom = -3;
   keyLight.shadow.bias = -0.001;
   scene.add(keyLight);
+
+  // Transform gizmo
+  transformControls = new TransformControls(camera, renderer.domElement);
+  transformControls.addEventListener('dragging-changed', e => {
+    controls.enabled = !e.value; // disable orbit while dragging gizmo
+  });
+  transformControls.setSize(0.75);
+  transformControls.visible = false;
+  scene.add(transformControls.getHelper());
 
   window.addEventListener('resize', () => {
     camera.aspect = vp.clientWidth / vp.clientHeight;
@@ -510,6 +525,10 @@ function clearScene() {
     currentMesh = null;
   }
   glbSourceScene = null;
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
   document.getElementById('transform-bar').classList.remove('visible');
 }
 
@@ -1275,6 +1294,38 @@ window.cullSmallFaces = function() {
   });
   setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
 };
+
+window.setGizmoMode = function(mode) {
+  if (!currentMesh) return;
+  const btns = ['translate', 'rotate', 'scale'];
+  btns.forEach(m => document.getElementById('tb-gizmo-' + m)?.classList.remove('active'));
+  document.getElementById('tb-gizmo-off')?.classList.remove('active');
+
+  if (!mode) {
+    transformControls.detach();
+    transformControls.visible = false;
+    document.getElementById('tb-gizmo-off')?.classList.add('active');
+    setInfo('Gizmo off');
+    return;
+  }
+  transformControls.attach(currentMesh);
+  transformControls.setMode(mode);
+  transformControls.visible = true;
+  document.getElementById('tb-gizmo-' + mode)?.classList.add('active');
+  setInfo(`${mode.charAt(0).toUpperCase() + mode.slice(1)} gizmo — drag to transform`);
+};
+
+// Keyboard shortcuts for gizmo modes
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (!currentMesh) return;
+  switch (e.key.toLowerCase()) {
+    case 'w': setGizmoMode('translate'); break;
+    case 'e': setGizmoMode('rotate'); break;
+    case 'r': setGizmoMode('scale'); break;
+    case 'q': setGizmoMode(null); break;
+  }
+});
 
 window.snapToGround = function() {
   if (!currentMesh) return;
