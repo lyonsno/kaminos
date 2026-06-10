@@ -249,6 +249,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="tb-btn" onclick="reverseWinding()" title="Reverse triangle winding order (CW/CCW)">Winding</button>
     <button class="tb-btn" onclick="flipNormals()" title="Flip vertex normals">Normals</button>
     <button class="tb-btn" id="tb-double-sided" onclick="toggleDoubleSided()" title="Toggle double-sided rendering">2-Sided</button>
+    <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
     <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
@@ -1099,7 +1100,26 @@ window.toggleDoubleSided = function() {
     }
   });
   document.getElementById('tb-double-sided').classList.toggle('active', isDouble);
-  setInfo(isDouble ? 'Double-sided rendering ON' : 'Double-sided rendering OFF');
+  document.getElementById('tb-backface').classList.remove('active');
+  setInfo(isDouble ? 'Double-sided rendering ON' : 'Front faces (normal)');
+};
+
+window.toggleBackface = function() {
+  if (!currentMesh) return;
+  let isBack = false;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.material) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      mat.side = mat.side === THREE.BackSide ? THREE.FrontSide : THREE.BackSide;
+      isBack = mat.side === THREE.BackSide;
+      mat.needsUpdate = true;
+    }
+  });
+  document.getElementById('tb-backface').classList.toggle('active', isBack);
+  // Clear 2-sided active state since they're mutually exclusive
+  document.getElementById('tb-double-sided').classList.remove('active');
+  setInfo(isBack ? 'Backface only — seeing inside-out faces' : 'Front faces (normal)');
 };
 
 window.exportGLB = function() {
