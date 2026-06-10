@@ -3,66 +3,226 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spatial Asset Studio</title>
+<title>Kaminos</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
-#sidebar { width: 360px; background: #222; border-right: 1px solid #333; overflow-y: auto; padding: 16px; flex-shrink: 0; }
-#viewport { flex: 1; position: relative; }
-canvas { display: block; }
-h1 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #fff; }
-h2 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
-.panel { background: #2a2a2a; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
-.field { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
-.field-key { color: #888; }
-.field-val { color: #ccc; font-family: 'SF Mono', monospace; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.field-val.present { color: #4caf50; }
-.field-val.missing { color: #f44336; }
-.field-val.hash { color: #666; font-size: 10px; }
-.btn { display: inline-block; padding: 6px 12px; background: #444; border: 1px solid #555; border-radius: 4px; color: #ddd; font-size: 12px; cursor: pointer; margin: 2px; }
-.btn:hover { background: #555; }
-.btn.active { background: #1976d2; border-color: #1976d2; color: #fff; }
-#drop-zone { border: 2px dashed #444; border-radius: 8px; padding: 24px; text-align: center; color: #666; font-size: 13px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s; }
-#drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; }
-.channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 8px 0; }
-.channel-thumb { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; cursor: pointer; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+
+/* Sidebar */
+#sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; }
+#sidebar::-webkit-scrollbar { width: 6px; }
+#sidebar::-webkit-scrollbar-track { background: transparent; }
+#sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #fff; letter-spacing: -0.3px; }
+.subtitle { font-size: 11px; color: #555; margin-bottom: 16px; font-family: 'SF Mono', 'Fira Code', monospace; }
+h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+.panel { background: #1f1f1f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.field { display: flex; justify-content: space-between; font-size: 11px; margin: 3px 0; padding: 2px 0; }
+.field-key { color: #666; }
+.field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-val.present { color: #66bb6a; }
+.field-val.missing { color: #ef5350; }
+.field-val.hash { color: #555; font-size: 9px; }
+
+.btn { display: inline-block; padding: 6px 14px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #bbb; font-size: 11px; cursor: pointer; margin: 2px; transition: all 0.15s; }
+.btn:hover { background: #333; color: #fff; border-color: #444; }
+.btn.active { background: #1565c0; border-color: #1976d2; color: #fff; }
+
+#drop-zone { border: 2px dashed #333; border-radius: 10px; padding: 20px; text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; cursor: pointer; transition: all 0.2s; }
+#drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; background: rgba(25,118,210,0.05); }
+
+.channel-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
+.channel-item { text-align: center; }
+.channel-thumb { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 6px; border: 1px solid #2a2a2a; background: #151515; cursor: pointer; transition: border-color 0.15s; }
 .channel-thumb:hover { border-color: #1976d2; }
-.channel-label { font-size: 10px; color: #888; text-align: center; margin-top: 2px; }
-#info-bar { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px; font-size: 11px; color: #aaa; font-family: 'SF Mono', monospace; }
+.channel-label { font-size: 9px; color: #555; margin-top: 3px; font-family: 'SF Mono', monospace; }
+
+/* Environment selector */
+.env-grid { display: flex; gap: 4px; flex-wrap: wrap; }
+.env-btn { padding: 5px 10px; background: #222; border: 1px solid #333; border-radius: 5px; color: #888; font-size: 10px; cursor: pointer; transition: all 0.15s; }
+.env-btn:hover { background: #2a2a2a; color: #bbb; }
+.env-btn.active { background: #1565c0; border-color: #1976d2; color: #fff; }
+
+/* Search panel */
+.search-container { position: relative; margin-bottom: 8px; }
+.search-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; }
+.search-input:focus { border-color: #1976d2; }
+.search-input::placeholder { color: #555; }
+.search-results { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; max-height: 300px; overflow-y: auto; }
+.search-result-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1px solid #2a2a2a; cursor: pointer; transition: all 0.15s; }
+.search-result-img:hover { border-color: #1976d2; transform: scale(1.02); }
+.search-attribution { font-size: 8px; color: #444; margin-top: 2px; }
+.search-loading { text-align: center; color: #555; font-size: 11px; padding: 20px; }
+.search-hint { font-size: 10px; color: #444; margin-top: 4px; }
+
+/* Generate panel */
+.gen-input { width: 100%; padding: 8px 12px; background: #1f1f1f; border: 1px solid #333; border-radius: 6px; color: #ccc; font-size: 12px; outline: none; margin-bottom: 6px; }
+.gen-input:focus { border-color: #1976d2; }
+.gen-input::placeholder { color: #555; }
+.gen-preview { width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
+.api-key-input { width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-size: 10px; font-family: 'SF Mono', monospace; outline: none; margin-bottom: 6px; }
+.api-key-input:focus { border-color: #444; }
+
+/* Viewport */
+#viewport { flex: 1; position: relative; background: #111; }
+canvas { display: block; }
+
+#transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
+#transform-bar.visible { display: flex; }
+.tb-btn { padding: 5px 10px; background: #252525; border: 1px solid #333; border-radius: 5px; color: #aaa; font-size: 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.tb-btn:hover { background: #333; color: #fff; border-color: #444; }
+.tb-btn.primary { background: #1565c0; border-color: #1976d2; color: #fff; }
+.tb-btn.primary:hover { background: #1976d2; }
+.tb-sep { width: 1px; height: 18px; background: #333; margin: 0 4px; }
+
+#viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
+#viewport.dragover #viewport-drop-overlay { display: flex; }
+
+#info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+
+#env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
+
+/* Exposure slider */
+.slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.slider-label { font-size: 10px; color: #666; min-width: 60px; }
+.slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
+input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+.tab { padding: 8px 14px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tab:hover { color: #999; }
+.tab.active { color: #fff; border-bottom-color: #1976d2; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h1>Spatial Asset Studio</h1>
+  <h1>Kaminos</h1>
+  <div class="subtitle">spatial asset kiln</div>
 
-  <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
-    Drop a receipt directory here<br>or click to browse
-    <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+  <div class="tab-bar">
+    <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="search">Search</div>
+    <div class="tab" data-tab="generate">Generate</div>
   </div>
 
-  <div id="demo-buttons">
-    <h2>Demo Assets</h2>
-    <div id="demo-list"></div>
+  <!-- Assets Tab -->
+  <div class="tab-content active" id="tab-assets">
+    <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
+      Drop a receipt directory here<br>or click to browse
+      <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+    </div>
+
+    <div id="demo-buttons">
+      <h2>Demo Assets</h2>
+      <div id="demo-list"></div>
+    </div>
+
+    <div id="receipt-panel" style="display:none">
+      <h2>Receipt Identity</h2>
+      <div class="panel" id="identity-fields"></div>
+
+      <h2>Outputs</h2>
+      <div class="panel" id="output-fields"></div>
+
+      <h2>Channel Preview</h2>
+      <div class="channel-grid" id="channel-grid"></div>
+
+      <h2>View Mode</h2>
+      <div id="view-modes"></div>
+    </div>
+
+    <h2>Environment</h2>
+    <div class="env-grid" id="env-buttons"></div>
+
+    <div class="slider-row" style="margin-top: 10px;">
+      <span class="slider-label">Exposure</span>
+      <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.5">
+      <span class="slider-val" id="exposure-val">1.5</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Env Intensity</span>
+      <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="1.0">
+      <span class="slider-val" id="env-intensity-val">1.0</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Rotation</span>
+      <input type="range" id="env-rotation-slider" min="0" max="6.28" step="0.1" value="0">
+      <span class="slider-val" id="env-rotation-val">0.0</span>
+    </div>
+    <div class="slider-row" style="margin-top: 6px;">
+      <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="show-env-bg"> Show Map
+      </label>
+    </div>
+    <div class="slider-row" id="blur-row" style="display: none;">
+      <span class="slider-label">Blur</span>
+      <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
+      <span class="slider-val" id="env-blur-val">0.4</span>
+    </div>
   </div>
 
-  <div id="receipt-panel" style="display:none">
-    <h2>Receipt Identity</h2>
-    <div class="panel" id="identity-fields"></div>
+  <!-- Search Tab -->
+  <div class="tab-content" id="tab-search">
+    <h2>Image Search</h2>
+    <div class="search-container">
+      <input type="text" class="search-input" id="search-input" placeholder="Search for reference images...">
+    </div>
+    <div class="search-hint">Search Pixabay for reference images, HDR environments, and textures. Press Enter to search.</div>
+    <div class="panel" style="margin-top: 8px;">
+      <div class="field"><span class="field-key">API Key</span></div>
+      <input type="text" class="api-key-input" id="pixabay-key" placeholder="Pixabay API key (get free at pixabay.com/api)">
+      <div style="font-size: 9px; color: #444; margin-top: 2px;">Free tier: 5000 requests/hour. Images are CC0.</div>
+    </div>
+    <div id="search-results" class="search-results"></div>
+  </div>
 
-    <h2>Outputs</h2>
-    <div class="panel" id="output-fields"></div>
-
-    <h2>Channel Preview</h2>
-    <div class="channel-grid" id="channel-grid"></div>
-
-    <h2>View Mode</h2>
-    <div id="view-modes"></div>
+  <!-- Generate Tab -->
+  <div class="tab-content" id="tab-generate">
+    <h2>Image Generation</h2>
+    <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate test images to feed through the MoGe + SuperMat pipeline.</p>
+    <div class="panel">
+      <div class="field"><span class="field-key">Provider</span></div>
+      <select class="gen-input" id="gen-provider" style="padding: 6px 10px;">
+        <option value="stability">Stability AI (free tier)</option>
+        <option value="pollinations">Pollinations.ai (free, no key)</option>
+      </select>
+      <div class="field" id="stability-key-row"><span class="field-key">API Key</span></div>
+      <input type="text" class="api-key-input" id="stability-key" placeholder="Stability AI API key (optional)">
+    </div>
+    <input type="text" class="gen-input" id="gen-prompt" placeholder="A gold ring on a dark surface, product photography">
+    <button class="btn" id="gen-btn" onclick="generateImage()">Generate</button>
+    <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Save to Pipeline</button>
+    <img class="gen-preview" id="gen-preview">
+    <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
   </div>
 </div>
 
 <div id="viewport">
+  <div id="env-loading">Loading environment...</div>
+  <div id="transform-bar">
+    <button class="tb-btn" onclick="flipAxis('x')" title="Flip X">Flip X</button>
+    <button class="tb-btn" onclick="flipAxis('y')" title="Flip Y">Flip Y</button>
+    <button class="tb-btn" onclick="flipAxis('z')" title="Flip Z">Flip Z</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="rotateAxis('x')" title="Rotate 90 around X">Rot X</button>
+    <button class="tb-btn" onclick="rotateAxis('y')" title="Rotate 90 around Y">Rot Y</button>
+    <button class="tb-btn" onclick="rotateAxis('z')" title="Rotate 90 around Z">Rot Z</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="reverseWinding()" title="Reverse triangle winding order (CW/CCW)">Winding</button>
+    <button class="tb-btn" onclick="flipNormals()" title="Flip vertex normals">Normals</button>
+    <button class="tb-btn" id="tb-double-sided" onclick="toggleDoubleSided()" title="Toggle double-sided rendering">2-Sided</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
+    <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
+  </div>
   <div id="info-bar">No asset loaded</div>
+  <div id="viewport-drop-overlay">Drop GLB to inspect</div>
 </div>
 
 <script type="importmap">
@@ -80,48 +240,116 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
 // --- State ---
-let scene, camera, renderer, controls;
+let scene, camera, renderer, controls, pmremGenerator;
 let currentMesh = null;
+let groundPlane = null;
 let loadedFiles = {};
 let receipt = null;
+let currentEnvName = 'studio';
+let showEnvBg = false;
+let currentEnvMap = null;
+let glbSourceScene = null; // raw loaded gltf scene for export
+let glbFileName = 'model.glb';
+
+// --- HDR Environments ---
+const HDR_ENVS = {
+  studio: {
+    label: 'Studio',
+    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
+    exposure: 1.5,
+    intensity: 1.0,
+  },
+  sunset: {
+    label: 'Sunset',
+    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr',
+    exposure: 1.2,
+    intensity: 1.0,
+  },
+  warehouse: {
+    label: 'Warehouse',
+    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/empty_warehouse_01_1k.hdr',
+    exposure: 1.4,
+    intensity: 1.2,
+  },
+  courtyard: {
+    label: 'Courtyard',
+    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/royal_esplanade_1k.hdr',
+    exposure: 1.0,
+    intensity: 1.0,
+  },
+  night: {
+    label: 'Night',
+    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonlit_golf_1k.hdr',
+    exposure: 2.0,
+    intensity: 1.5,
+  },
+  neutral: {
+    label: 'Neutral',
+    url: null, // procedural
+    exposure: 1.5,
+    intensity: 1.0,
+  },
+};
+
+const envCache = {};
 
 // --- Three.js Setup ---
 function initScene() {
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a1a);
 
-  camera = new THREE.PerspectiveCamera(45, vp.clientWidth / vp.clientHeight, 0.01, 100);
-  camera.position.set(0, 0, 2.5);
+  camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
+  camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.5;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   vp.appendChild(renderer.domElement);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 0.5;
+  controls.maxDistance = 10;
+  controls.target.set(0, 0, 0);
 
-  // Lighting
-  const ambient = new THREE.AmbientLight(0xffffff, 0.3);
-  scene.add(ambient);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  dirLight.position.set(2, 3, 4);
-  scene.add(dirLight);
-  const fillLight = new THREE.DirectionalLight(0x8888ff, 0.4);
-  fillLight.position.set(-2, -1, -2);
-  scene.add(fillLight);
+  pmremGenerator = new THREE.PMREMGenerator(renderer);
+  pmremGenerator.compileEquirectangularShader();
 
-  // Studio environment
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmremGenerator.fromScene(
-    new THREE.Scene().add(new THREE.AmbientLight(0xffffff, 1))
-  ).texture;
+  // Ground plane (subtle reflective floor)
+  const groundGeo = new THREE.CircleGeometry(5, 64);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x111111,
+    roughness: 0.5,
+    metalness: 0.0,
+  });
+  groundPlane = new THREE.Mesh(groundGeo, groundMat);
+  groundPlane.rotation.x = -Math.PI / 2;
+  groundPlane.position.y = -0.85;
+  groundPlane.receiveShadow = true;
+  scene.add(groundPlane);
+
+  // Key light for shadows
+  const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
+  keyLight.position.set(3, 5, 4);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.camera.near = 0.1;
+  keyLight.shadow.camera.far = 20;
+  keyLight.shadow.camera.left = -3;
+  keyLight.shadow.camera.right = 3;
+  keyLight.shadow.camera.top = 3;
+  keyLight.shadow.camera.bottom = -3;
+  keyLight.shadow.bias = -0.001;
+  scene.add(keyLight);
 
   window.addEventListener('resize', () => {
     camera.aspect = vp.clientWidth / vp.clientHeight;
@@ -137,6 +365,98 @@ function initScene() {
   animate();
 }
 
+// --- Environment Loading ---
+function createProceduralEnv() {
+  // Create a simple gradient environment for fallback
+  const envScene = new THREE.Scene();
+
+  // Top hemisphere - warm white
+  const topLight = new THREE.HemisphereLight(0xffeedd, 0x222233, 2.0);
+  envScene.add(topLight);
+
+  // Add some point lights for specular highlights
+  const pl1 = new THREE.PointLight(0xffffff, 8, 10);
+  pl1.position.set(2, 3, 2);
+  envScene.add(pl1);
+  const pl2 = new THREE.PointLight(0xddeeff, 5, 10);
+  pl2.position.set(-3, 2, -1);
+  envScene.add(pl2);
+  const pl3 = new THREE.PointLight(0xffeedd, 3, 10);
+  pl3.position.set(0, -1, 3);
+  envScene.add(pl3);
+
+  return pmremGenerator.fromScene(envScene, 0.04).texture;
+}
+
+async function loadEnvironment(name) {
+  const env = HDR_ENVS[name];
+  if (!env) return;
+
+  currentEnvName = name;
+
+  // Update button states
+  document.querySelectorAll('.env-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.env === name);
+  });
+
+  // Update sliders
+  document.getElementById('exposure-slider').value = env.exposure;
+  document.getElementById('exposure-val').textContent = env.exposure.toFixed(1);
+  document.getElementById('env-intensity-slider').value = env.intensity;
+  document.getElementById('env-intensity-val').textContent = env.intensity.toFixed(1);
+  renderer.toneMappingExposure = env.exposure;
+
+  if (envCache[name]) {
+    applyEnvMap(envCache[name], env.intensity);
+    return;
+  }
+
+  if (!env.url) {
+    // Procedural environment
+    const tex = createProceduralEnv();
+    envCache[name] = tex;
+    applyEnvMap(tex, env.intensity);
+    return;
+  }
+
+  const loadingEl = document.getElementById('env-loading');
+  loadingEl.style.display = 'block';
+  loadingEl.textContent = `Loading ${env.label} HDR...`;
+
+  try {
+    const tex = await new Promise((resolve, reject) => {
+      new RGBELoader().load(env.url, resolve, undefined, reject);
+    });
+    const envMap = pmremGenerator.fromEquirectangular(tex).texture;
+    tex.dispose();
+    envCache[name] = envMap;
+    applyEnvMap(envMap, env.intensity);
+  } catch (e) {
+    console.warn(`Failed to load HDR ${name}, using procedural fallback:`, e);
+    const tex = createProceduralEnv();
+    envCache[name] = tex;
+    applyEnvMap(tex, env.intensity);
+  }
+  loadingEl.style.display = 'none';
+}
+
+function applyEnvMap(envMap, intensity) {
+  scene.environment = envMap;
+  scene.environmentIntensity = intensity;
+  currentEnvMap = envMap;
+  updateBackground();
+
+  // Update all materials in scene to use envMap
+  if (currentMesh) {
+    currentMesh.traverse(child => {
+      if (child.material) {
+        child.material.envMapIntensity = intensity;
+        child.material.needsUpdate = true;
+      }
+    });
+  }
+}
+
 // --- File Loading ---
 function clearScene() {
   if (currentMesh) {
@@ -150,11 +470,13 @@ function clearScene() {
     });
     currentMesh = null;
   }
+  glbSourceScene = null;
+  document.getElementById('transform-bar').classList.remove('visible');
 }
 
 function loadTexture(file) {
   return new Promise(resolve => {
-    const url = URL.createObjectURL(file);
+    const url = typeof file === 'string' ? file : URL.createObjectURL(file);
     new THREE.TextureLoader().load(url, tex => {
       tex.colorSpace = THREE.SRGBColorSpace;
       resolve(tex);
@@ -164,7 +486,7 @@ function loadTexture(file) {
 
 function loadTextureLinear(file) {
   return new Promise(resolve => {
-    const url = URL.createObjectURL(file);
+    const url = typeof file === 'string' ? file : URL.createObjectURL(file);
     new THREE.TextureLoader().load(url, tex => {
       tex.colorSpace = THREE.LinearSRGBColorSpace;
       resolve(tex);
@@ -178,25 +500,37 @@ async function showPBRPreview() {
   const albedoFile = loadedFiles['albedo.png'];
   const roughnessFile = loadedFiles['roughness.png'];
   const metallicFile = loadedFiles['metallic.png'];
+  const normalFile = loadedFiles['normal.png'];
 
   if (!albedoFile) { setInfo('No albedo.png found'); return; }
 
   const albedoTex = await loadTexture(albedoFile);
-  const mat = new THREE.MeshStandardMaterial({ map: albedoTex });
+  const mat = new THREE.MeshStandardMaterial({
+    map: albedoTex,
+    envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+  });
 
   if (roughnessFile) {
-    const roughTex = await loadTextureLinear(roughnessFile);
-    mat.roughnessMap = roughTex;
+    mat.roughnessMap = await loadTextureLinear(roughnessFile);
     mat.roughness = 1.0;
+  } else {
+    mat.roughness = 0.3; // Default for metallic surfaces
   }
   if (metallicFile) {
-    const metalTex = await loadTextureLinear(metallicFile);
-    mat.metalnessMap = metalTex;
+    mat.metalnessMap = await loadTextureLinear(metallicFile);
     mat.metalness = 1.0;
+  } else {
+    mat.metalness = 0.0;
+  }
+  if (normalFile) {
+    mat.normalMap = await loadTextureLinear(normalFile);
   }
 
   const geo = new THREE.SphereGeometry(0.8, 128, 128);
-  currentMesh = new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.position.y = 0;
+  currentMesh = mesh;
   scene.add(currentMesh);
   setInfo('PBR Material Preview — orbit to inspect');
 }
@@ -204,20 +538,31 @@ async function showPBRPreview() {
 // --- GLB Inspector ---
 async function showGLB(file) {
   clearScene();
-  const url = URL.createObjectURL(file);
+  const url = typeof file === 'string' ? file : URL.createObjectURL(file);
+  if (file && file.name) glbFileName = file.name;
   const loader = new GLTFLoader();
   loader.load(url, gltf => {
+    glbSourceScene = gltf.scene;
     const model = gltf.scene;
-    // Auto-center and scale
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3()).length();
     model.position.sub(center);
     const scale = 2.0 / size;
     model.scale.setScalar(scale);
+    model.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if (child.material) {
+          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+        }
+      }
+    });
     currentMesh = model;
     scene.add(currentMesh);
-    setInfo('GLB Inspector — orbit to inspect');
+    document.getElementById('transform-bar').classList.add('visible');
+    setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
   });
 }
 
@@ -229,13 +574,18 @@ async function showDepthSurface() {
   if (!depthFile) { setInfo('No depth output found'); return; }
 
   const depthTex = await loadTexture(depthFile);
-
   const geo = new THREE.PlaneGeometry(2, 2, 256, 256);
   const mat = imageFile
-    ? new THREE.MeshStandardMaterial({ map: await loadTexture(imageFile), displacementMap: depthTex, displacementScale: -0.5 })
+    ? new THREE.MeshStandardMaterial({
+        map: await loadTexture(imageFile),
+        displacementMap: depthTex,
+        displacementScale: -0.5,
+        envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+      })
     : new THREE.MeshStandardMaterial({ map: depthTex });
 
   currentMesh = new THREE.Mesh(geo, mat);
+  currentMesh.castShadow = true;
   scene.add(currentMesh);
   setInfo('Depth Surface — orbit to inspect');
 }
@@ -252,7 +602,7 @@ function updateReceiptPanel(r) {
     'processing_stage', 'base_model', 'route', 'timestamp_iso', 'image_size', 'seed'];
   idFields.innerHTML = identityKeys
     .filter(k => r[k] !== undefined)
-    .map(k => `<div class="field"><span class="field-key">${k}</span><span class="field-val">${r[k]}</span></div>`)
+    .map(k => `<div class="field"><span class="field-key">${k}</span><span class="field-val" title="${r[k]}">${r[k]}</span></div>`)
     .join('');
 
   const outFields = document.getElementById('output-fields');
@@ -263,7 +613,7 @@ function updateReceiptPanel(r) {
     const cls = present ? 'present' : 'missing';
     const sha = entry.sha256 ? entry.sha256.substring(0, 12) + '...' : 'n/a';
     const enc = entry.encoding ? ` [${entry.encoding.encoding || entry.encoding.format || ''}]` : '';
-    return `<div class="field"><span class="field-key">${name}</span><span class="field-val ${cls}">${present ? '✓' : '✗'} ${entry.path || 'absent'}${enc}</span></div>
+    return `<div class="field"><span class="field-key">${name}</span><span class="field-val ${cls}">${present ? '\u2713' : '\u2717'} ${entry.path || 'absent'}${enc}</span></div>
             <div class="field"><span class="field-key"></span><span class="field-val hash">${sha}</span></div>`;
   }).join('');
 
@@ -276,7 +626,8 @@ function updateReceiptPanel(r) {
     if (loadedFiles[fn]) {
       const url = URL.createObjectURL(loadedFiles[fn]);
       const div = document.createElement('div');
-      div.innerHTML = `<img class="channel-thumb" src="${url}" alt="${fn}"><div class="channel-label">${fn}</div>`;
+      div.className = 'channel-item';
+      div.innerHTML = `<img class="channel-thumb" src="${url}" alt="${fn}"><div class="channel-label">${fn.replace('.png','').replace('.jpg','')}</div>`;
       grid.appendChild(div);
     }
   }
@@ -313,28 +664,24 @@ async function handleFiles(files) {
     loadedFiles[name] = file;
   }
 
-  // Try loading receipt
   if (loadedFiles['receipt.json']) {
     const text = await loadedFiles['receipt.json'].text();
     try {
-      const r = JSON.parse(text);
-      updateReceiptPanel(r);
+      updateReceiptPanel(JSON.parse(text));
     } catch (e) {
       setInfo('Failed to parse receipt.json');
     }
   } else {
-    // No receipt — build a minimal panel from files
     updateReceiptPanel({ outputs: {} });
   }
 
-  // Auto-show the best view
   if (loadedFiles['albedo.png']) {
     showPBRPreview();
   } else {
     const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
     if (glb) showGLB(loadedFiles[glb]);
     else if (loadedFiles['depth_vis.png']) showDepthSurface();
-    else setInfo('No recognized outputs — drop a sidecar output directory');
+    else setInfo('No recognized outputs \u2014 drop a sidecar output directory');
   }
 }
 
@@ -386,31 +733,14 @@ function loadDemoButtons() {
     const btn = document.createElement('button');
     btn.className = 'btn';
     btn.textContent = demo.name;
-    btn.onclick = async () => {
-      const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
-      if (!manifest) { setInfo('Demo manifest not found'); return; }
-      const files = [];
-      for (const fn of manifest.files) {
-        const resp = await fetch(demo.path + fn);
-        const blob = await resp.blob();
-        files.push(new File([blob], fn));
-      }
-      handleFiles(files);
-    };
+    btn.onclick = () => loadDemo(demo);
     list.appendChild(btn);
   }
 }
 
-// --- Init ---
-initScene();
-loadDemoButtons();
-
-// Auto-load the first demo on startup
-async function autoLoadDemo() {
-  const demo = DEMO_ASSETS[0];
-  if (!demo) return;
+async function loadDemo(demo) {
   const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
-  if (!manifest) return;
+  if (!manifest) { setInfo('Demo manifest not found'); return; }
   const files = [];
   for (const fn of manifest.files) {
     const resp = await fetch(demo.path + fn);
@@ -419,7 +749,356 @@ async function autoLoadDemo() {
   }
   handleFiles(files);
 }
-autoLoadDemo();
+
+// --- Environment Buttons ---
+function initEnvButtons() {
+  const container = document.getElementById('env-buttons');
+  for (const [key, env] of Object.entries(HDR_ENVS)) {
+    const btn = document.createElement('button');
+    btn.className = 'env-btn' + (key === 'studio' ? ' active' : '');
+    btn.textContent = env.label;
+    btn.dataset.env = key;
+    btn.onclick = () => loadEnvironment(key);
+    container.appendChild(btn);
+  }
+}
+
+// --- Exposure / Intensity Controls ---
+document.getElementById('exposure-slider').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  renderer.toneMappingExposure = v;
+  document.getElementById('exposure-val').textContent = v.toFixed(1);
+});
+
+document.getElementById('env-intensity-slider').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  scene.environmentIntensity = v;
+  document.getElementById('env-intensity-val').textContent = v.toFixed(1);
+  if (currentMesh) {
+    currentMesh.traverse(child => {
+      if (child.material) {
+        child.material.envMapIntensity = v;
+        child.material.needsUpdate = true;
+      }
+    });
+  }
+});
+
+document.getElementById('env-rotation-slider').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  const euler = new THREE.Euler(0, v, 0);
+  scene.environmentRotation = euler;
+  if (showEnvBg) scene.backgroundRotation = euler;
+  document.getElementById('env-rotation-val').textContent = v.toFixed(1);
+});
+
+// --- Show Env Map Background + Blur ---
+document.getElementById('show-env-bg').addEventListener('change', e => {
+  showEnvBg = e.target.checked;
+  document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
+  updateBackground();
+});
+
+document.getElementById('env-blur-slider').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  scene.backgroundBlurriness = v;
+  document.getElementById('env-blur-val').textContent = v.toFixed(2);
+});
+
+function updateBackground() {
+  if (showEnvBg && currentEnvMap) {
+    scene.background = currentEnvMap;
+    scene.backgroundBlurriness = parseFloat(document.getElementById('env-blur-slider').value);
+    scene.backgroundIntensity = 0.6;
+    scene.backgroundRotation = scene.environmentRotation;
+  } else {
+    scene.background = new THREE.Color(0x0a0a0a);
+    scene.backgroundBlurriness = 0;
+  }
+}
+
+// --- Viewport GLB Drag & Drop ---
+const viewport = document.getElementById('viewport');
+viewport.addEventListener('dragover', e => {
+  e.preventDefault();
+  viewport.classList.add('dragover');
+});
+viewport.addEventListener('dragleave', e => {
+  if (e.relatedTarget && viewport.contains(e.relatedTarget)) return;
+  viewport.classList.remove('dragover');
+});
+viewport.addEventListener('drop', async e => {
+  e.preventDefault();
+  viewport.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  for (const file of files) {
+    if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
+      showGLB(file);
+      setInfo(`GLB Inspector — ${file.name}`);
+      return;
+    }
+  }
+  // If directory drop, delegate to existing handler
+  const items = e.dataTransfer.items;
+  const collected = [];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry?.isDirectory) {
+      await readDir(entry, collected);
+    } else if (entry?.isFile) {
+      collected.push(await fileFromEntry(entry));
+    }
+  }
+  if (collected.length) handleFiles(collected);
+});
+
+// --- Tab Switching ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// --- Image Search (Pixabay) ---
+document.getElementById('search-input').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const query = e.target.value.trim();
+  const key = document.getElementById('pixabay-key').value.trim();
+  if (!query) return;
+  if (!key) {
+    document.getElementById('search-results').innerHTML = '<div class="search-loading">Please enter a Pixabay API key above.</div>';
+    return;
+  }
+  const resultsEl = document.getElementById('search-results');
+  resultsEl.innerHTML = '<div class="search-loading">Searching...</div>';
+
+  try {
+    const params = new URLSearchParams({
+      key, q: query, image_type: 'photo', per_page: '20', safesearch: 'true',
+    });
+    const resp = await fetch('https://pixabay.com/api/?' + params);
+    const data = await resp.json();
+    if (!data.hits?.length) {
+      resultsEl.innerHTML = '<div class="search-loading">No results found.</div>';
+      return;
+    }
+    resultsEl.innerHTML = '';
+    for (const hit of data.hits) {
+      const div = document.createElement('div');
+      const img = document.createElement('img');
+      img.className = 'search-result-img';
+      img.src = hit.previewURL;
+      img.title = hit.tags;
+      img.onclick = () => {
+        // Download full image and open in new tab for pipeline use
+        window.open(hit.largeImageURL, '_blank');
+      };
+      div.appendChild(img);
+      const attr = document.createElement('div');
+      attr.className = 'search-attribution';
+      attr.textContent = hit.user + ' / Pixabay CC0';
+      div.appendChild(attr);
+      resultsEl.appendChild(div);
+    }
+  } catch (err) {
+    resultsEl.innerHTML = '<div class="search-loading">Search failed: ' + err.message + '</div>';
+  }
+});
+
+// --- Image Generation ---
+window.generateImage = async function() {
+  const prompt = document.getElementById('gen-prompt').value.trim();
+  if (!prompt) return;
+  const provider = document.getElementById('gen-provider').value;
+  const statusEl = document.getElementById('gen-status');
+  const previewEl = document.getElementById('gen-preview');
+  const downloadBtn = document.getElementById('gen-download-btn');
+
+  statusEl.textContent = 'Generating...';
+  previewEl.style.display = 'none';
+  downloadBtn.style.display = 'none';
+
+  if (provider === 'pollinations') {
+    // Pollinations.ai — free, no API key needed
+    const encodedPrompt = encodeURIComponent(prompt);
+    const imgUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true`;
+    previewEl.src = imgUrl;
+    previewEl.style.display = 'block';
+    previewEl.onload = () => {
+      statusEl.textContent = 'Generated via Pollinations.ai (free). Right-click to save.';
+      downloadBtn.style.display = 'inline-block';
+      downloadBtn.dataset.url = imgUrl;
+    };
+    previewEl.onerror = () => {
+      statusEl.textContent = 'Generation failed. Try again or use a different prompt.';
+    };
+  } else if (provider === 'stability') {
+    const key = document.getElementById('stability-key').value.trim();
+    if (!key) {
+      statusEl.textContent = 'Please enter a Stability AI API key.';
+      return;
+    }
+    try {
+      const resp = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-v1-6/text-to-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          text_prompts: [{ text: prompt, weight: 1 }],
+          cfg_scale: 7, height: 512, width: 512, samples: 1, steps: 30,
+        }),
+      });
+      const data = await resp.json();
+      if (data.artifacts?.[0]) {
+        const imgData = data.artifacts[0].base64;
+        previewEl.src = `data:image/png;base64,${imgData}`;
+        previewEl.style.display = 'block';
+        statusEl.textContent = 'Generated via Stability AI. Right-click to save.';
+        downloadBtn.style.display = 'inline-block';
+        downloadBtn.dataset.url = previewEl.src;
+      } else {
+        statusEl.textContent = 'Generation failed: ' + JSON.stringify(data);
+      }
+    } catch (err) {
+      statusEl.textContent = 'Generation failed: ' + err.message;
+    }
+  }
+};
+
+window.downloadGenerated = function() {
+  const url = document.getElementById('gen-download-btn').dataset.url;
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'generated_input.png';
+  a.click();
+};
+
+// Show/hide stability key based on provider
+document.getElementById('gen-provider').addEventListener('change', e => {
+  const row = document.getElementById('stability-key-row');
+  const input = document.getElementById('stability-key');
+  if (e.target.value === 'stability') {
+    row.style.display = '';
+    input.style.display = '';
+  } else {
+    row.style.display = 'none';
+    input.style.display = 'none';
+  }
+});
+
+// --- GLB Transform & Export ---
+const HALF_PI = Math.PI / 2;
+
+window.flipAxis = function(axis) {
+  if (!currentMesh) return;
+  const s = currentMesh.scale;
+  if (axis === 'x') s.x *= -1;
+  else if (axis === 'y') s.y *= -1;
+  else if (axis === 'z') s.z *= -1;
+};
+
+window.rotateAxis = function(axis) {
+  if (!currentMesh) return;
+  if (axis === 'x') currentMesh.rotateX(HALF_PI);
+  else if (axis === 'y') currentMesh.rotateY(HALF_PI);
+  else if (axis === 'z') currentMesh.rotateZ(HALF_PI);
+};
+
+window.resetTransform = function() {
+  if (!currentMesh) return;
+  // Re-center and re-scale from scratch
+  currentMesh.rotation.set(0, 0, 0);
+  currentMesh.scale.set(1, 1, 1);
+  currentMesh.position.set(0, 0, 0);
+  const box = new THREE.Box3().setFromObject(currentMesh);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()).length();
+  currentMesh.position.sub(center);
+  const scale = 2.0 / size;
+  currentMesh.scale.setScalar(scale);
+};
+
+window.reverseWinding = function() {
+  if (!currentMesh) return;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.geometry) return;
+    const index = child.geometry.index;
+    if (index) {
+      const arr = index.array;
+      for (let i = 0; i < arr.length; i += 3) {
+        const tmp = arr[i + 1];
+        arr[i + 1] = arr[i + 2];
+        arr[i + 2] = tmp;
+      }
+      index.needsUpdate = true;
+    }
+  });
+  setInfo('Winding order reversed');
+};
+
+window.flipNormals = function() {
+  if (!currentMesh) return;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.geometry) return;
+    const normal = child.geometry.getAttribute('normal');
+    if (normal) {
+      for (let i = 0; i < normal.count; i++) {
+        normal.setXYZ(i, -normal.getX(i), -normal.getY(i), -normal.getZ(i));
+      }
+      normal.needsUpdate = true;
+    }
+  });
+  setInfo('Vertex normals flipped');
+};
+
+window.toggleDoubleSided = function() {
+  if (!currentMesh) return;
+  let isDouble = false;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.material) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      mat.side = mat.side === THREE.DoubleSide ? THREE.FrontSide : THREE.DoubleSide;
+      isDouble = mat.side === THREE.DoubleSide;
+      mat.needsUpdate = true;
+    }
+  });
+  document.getElementById('tb-double-sided').classList.toggle('active', isDouble);
+  setInfo(isDouble ? 'Double-sided rendering ON' : 'Double-sided rendering OFF');
+};
+
+window.exportGLB = function() {
+  if (!currentMesh) return;
+
+  // Bake the current transform into geometry so the export is corrected
+  const exportScene = currentMesh.clone(true);
+
+  const exporter = new GLTFExporter();
+  exporter.parse(exportScene, result => {
+    const blob = new Blob([result], { type: 'model/gltf-binary' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const name = glbFileName.replace(/\.(glb|gltf)$/i, '') + '_fixed.glb';
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+    setInfo(`Saved ${name}`);
+  }, { binary: true });
+};
+
+// --- Init ---
+initScene();
+initEnvButtons();
+loadDemoButtons();
+
+// Load HDR environment first, then auto-load demo
+loadEnvironment('studio').then(() => {
+  loadDemo(DEMO_ASSETS[0]);
+});
 </script>
 </body>
 </html>
