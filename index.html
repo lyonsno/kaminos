@@ -262,9 +262,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
     <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="saveScene()" title="Save scene state (Ctrl+S)">Save Scene</button>
+    <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene state (Ctrl+O)">Load Scene</button>
+    <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
   <div id="info-bar">No asset loaded</div>
-  <div id="viewport-drop-overlay">Drop GLB or OBJ to inspect</div>
+  <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
 </div>
 
 <script type="importmap">
@@ -298,6 +302,8 @@ let showEnvBg = false;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
+let modelSourceUrl = null; // URL or path used to load the current model
+let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -598,6 +604,8 @@ async function showGLB(file) {
   clearScene();
   const url = typeof file === 'string' ? file : URL.createObjectURL(file);
   if (file && file.name) glbFileName = file.name;
+  modelSourceUrl = typeof file === 'string' ? file : file.name;
+  modelSourceType = 'glb';
   const loader = new GLTFLoader();
   loader.load(url, gltf => {
     glbSourceScene = gltf.scene;
@@ -629,6 +637,8 @@ async function showOBJ(objFile, mtlFile) {
   clearScene();
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
+  modelSourceUrl = objFile.name;
+  modelSourceType = 'obj';
 
   let materials = null;
   if (mtlFile) {
@@ -943,6 +953,10 @@ viewport.addEventListener('drop', async e => {
   // Collect all dropped files for multi-file OBJ+MTL support
   const allFiles = Array.from(files);
   for (const file of allFiles) {
+    if (file.name.endsWith('.kaminos.json') || file.name.endsWith('.kaminos')) {
+      loadSceneFile(file);
+      return;
+    }
     if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
       showGLB(file);
       setInfo(`GLB Inspector — ${file.name}`);
@@ -1706,6 +1720,196 @@ function formatSize(bytes) {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
+
+// --- Scene Save/Load ---
+window.saveScene = function() {
+  const sceneData = {
+    version: 1,
+    timestamp: new Date().toISOString(),
+    model: {
+      source: modelSourceUrl,
+      type: modelSourceType,
+      fileName: glbFileName,
+    },
+    transform: currentMesh ? {
+      position: currentMesh.position.toArray(),
+      rotation: [currentMesh.rotation.x, currentMesh.rotation.y, currentMesh.rotation.z],
+      scale: currentMesh.scale.toArray(),
+    } : null,
+    camera: {
+      position: camera.position.toArray(),
+      target: controls.target.toArray(),
+      fov: camera.fov,
+    },
+    environment: {
+      name: currentEnvName,
+      exposure: renderer.toneMappingExposure,
+      intensity: parseFloat(document.getElementById('env-intensity-slider').value),
+      rotation: parseFloat(document.getElementById('env-rotation-slider').value),
+      showBackground: showEnvBg,
+      backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
+    },
+    materials: getMaterialState(),
+  };
+
+  const json = JSON.stringify(sceneData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = (glbFileName || 'scene').replace(/\.[^.]+$/, '') + '.kaminos.json';
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+  setInfo(`Scene saved: ${name}`);
+};
+
+function getMaterialState() {
+  if (!currentMesh) return null;
+  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
+  currentMesh.traverse(child => {
+    if (child.isMesh && child.material) {
+      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+      state.side = mat.side;
+      state.transparent = mat.transparent;
+      state.opacity = mat.opacity;
+    }
+  });
+  return state;
+}
+
+function applyMaterialState(state) {
+  if (!currentMesh || !state) return;
+  currentMesh.traverse(child => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      if (state.side !== undefined) mat.side = state.side;
+      if (state.transparent !== undefined) mat.transparent = state.transparent;
+      if (state.opacity !== undefined) mat.opacity = state.opacity;
+      if (!state.transparent) {
+        mat.depthWrite = true;
+        mat.blending = THREE.NormalBlending;
+      }
+      mat.needsUpdate = true;
+    }
+  });
+}
+
+async function loadSceneFile(file) {
+  const text = await file.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    setInfo('Invalid scene file');
+    return;
+  }
+  if (!data.version || !data.model?.source) {
+    setInfo('Invalid scene format');
+    return;
+  }
+
+  setInfo('Loading scene...');
+
+  // Load environment first
+  if (data.environment) {
+    const env = data.environment;
+    await loadEnvironment(env.name || 'studio');
+    renderer.toneMappingExposure = env.exposure ?? 1.5;
+    document.getElementById('exposure-slider').value = renderer.toneMappingExposure;
+    document.getElementById('exposure-val').textContent = renderer.toneMappingExposure.toFixed(1);
+
+    const intensity = env.intensity ?? 1.0;
+    document.getElementById('env-intensity-slider').value = intensity;
+    document.getElementById('env-intensity-val').textContent = intensity.toFixed(1);
+    scene.environmentIntensity = intensity;
+
+    const rotation = env.rotation ?? 0;
+    document.getElementById('env-rotation-slider').value = rotation;
+    document.getElementById('env-rotation-val').textContent = rotation.toFixed(1);
+    scene.environmentRotation = new THREE.Euler(0, rotation, 0);
+
+    showEnvBg = env.showBackground ?? false;
+    document.getElementById('show-env-bg').checked = showEnvBg;
+    document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
+    if (showEnvBg) {
+      document.getElementById('env-blur-slider').value = env.backgroundBlur ?? 0.4;
+      document.getElementById('env-blur-val').textContent = (env.backgroundBlur ?? 0.4).toFixed(2);
+    }
+    updateBackground();
+  }
+
+  // Load model
+  const src = data.model.source;
+  modelSourceType = data.model.type;
+  glbFileName = data.model.fileName || 'model.glb';
+
+  if (src.startsWith('/api/') || src.startsWith('http')) {
+    // URL-based source (greenroom job output, demo, etc.)
+    showGLB(src);
+  } else if (src.startsWith('demos/')) {
+    // Demo asset
+    showGLB(src);
+  } else {
+    setInfo(`Scene loaded but model "${src}" must be re-dropped (local file references cannot be reloaded automatically)`);
+    return;
+  }
+
+  // Wait for model to load, then apply transforms
+  const waitForMesh = () => new Promise(resolve => {
+    const check = () => {
+      if (currentMesh) resolve();
+      else setTimeout(check, 100);
+    };
+    check();
+  });
+
+  await waitForMesh();
+
+  // Apply transforms
+  if (data.transform) {
+    currentMesh.position.fromArray(data.transform.position);
+    currentMesh.rotation.set(...data.transform.rotation);
+    currentMesh.scale.fromArray(data.transform.scale);
+  }
+
+  // Apply camera
+  if (data.camera) {
+    camera.position.fromArray(data.camera.position);
+    controls.target.fromArray(data.camera.target);
+    if (data.camera.fov) camera.fov = data.camera.fov;
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+
+  // Apply material state
+  applyMaterialState(data.materials);
+
+  setInfo(`Scene loaded: ${data.model.fileName}`);
+}
+
+// File input handler for Load Scene
+document.getElementById('scene-file-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadSceneFile(e.target.files[0]);
+  e.target.value = ''; // reset so same file can be loaded again
+});
+
+// Also accept .kaminos.json via viewport drop
+const origViewportDrop = viewport.ondrop;
+
+// Keyboard shortcuts: Ctrl+S to save, Ctrl+O to load
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    if (currentMesh) saveScene();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+    e.preventDefault();
+    document.getElementById('scene-file-input').click();
+  }
+});
 
 // --- Init ---
 initScene();
