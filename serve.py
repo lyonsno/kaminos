@@ -54,7 +54,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Not found"}, 404)
 
     def handle_save_scene(self):
-        """Save a scene JSON to the scenes directory."""
+        """Save a scene JSON to the scenes directory.
+
+        If _filename is provided and exists, overwrites that file (Save).
+        Otherwise creates a new file (Save As).
+        """
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
         try:
@@ -63,18 +67,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Invalid JSON"}, 400)
             return
 
-        # Generate filename from model name and timestamp
-        model_name = data.get("model", {}).get("fileName", "scene")
-        model_name = Path(model_name).stem
-        timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
-        filename = f"{model_name}_{timestamp}.kaminos.json"
+        # Check for overwrite hint
+        hint = data.pop("_filename", None)
+        if hint:
+            safe_hint = "".join(c for c in hint if c.isalnum() or c in "._-")
+            if safe_hint and (SCENES_DIR / safe_hint).exists():
+                filename = safe_hint
+            else:
+                hint = None  # fall through to new file
 
-        # Sanitize filename
-        filename = "".join(c for c in filename if c.isalnum() or c in "._-")
-        if not filename:
-            filename = "scene.kaminos.json"
+        if not hint:
+            # Generate new filename from model name and timestamp
+            model_name = data.get("model", {}).get("fileName", "scene")
+            model_name = Path(model_name).stem
+            timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
+            filename = f"{model_name}_{timestamp}.kaminos.json"
+            filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+            if not filename:
+                filename = "scene.kaminos.json"
 
         scene_path = SCENES_DIR / filename
+        # Security: ensure under SCENES_DIR
+        if not str(scene_path.resolve()).startswith(str(SCENES_DIR.resolve())):
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+
         scene_path.write_text(json.dumps(data, indent=2))
         self.send_json({"saved": filename, "path": str(scene_path)})
 
