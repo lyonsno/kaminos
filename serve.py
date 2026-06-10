@@ -231,7 +231,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream",
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
-            self.send_header("X-Content-Type-Options", "nosniff")
+
             self.end_headers()
             self.wfile.write(target.read_bytes())
             return
@@ -351,7 +351,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         }
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
-        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(target.read_bytes())
 
@@ -360,9 +359,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
-        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
 
     def log_message(self, format, *args):
         if "/api/" in args[0]:

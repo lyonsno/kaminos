@@ -751,12 +751,14 @@ async function showPBRPreview() {
 // --- GLB Inspector ---
 async function showGLB(file) {
   clearScene();
-  const url = typeof file === 'string' ? file : URL.createObjectURL(file);
+  const isBlob = typeof file !== 'string';
+  const url = isBlob ? URL.createObjectURL(file) : file;
   if (file && file.name) glbFileName = file.name;
-  modelSourceUrl = typeof file === 'string' ? file : file.name;
+  modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
   loader.load(url, gltf => {
+    if (isBlob) URL.revokeObjectURL(url);
     glbSourceScene = gltf.scene;
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
@@ -778,6 +780,9 @@ async function showGLB(file) {
     scene.add(currentMesh);
     document.getElementById('transform-bar').classList.add('visible');
     setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
+  }, undefined, (err) => {
+    if (isBlob) URL.revokeObjectURL(url);
+    setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
   });
 }
 
@@ -1722,7 +1727,7 @@ window.cullSmallFaces = function() {
         for (const name of Object.keys(geo.attributes)) {
           const attr = geo.getAttribute(name);
           const itemSize = attr.itemSize;
-          const newArr = new Float32Array(keep.length * 3 * itemSize);
+          const newArr = new attr.array.constructor(keep.length * 3 * itemSize);
           for (let k = 0; k < keep.length; k++) {
             const srcOff = keep[k] * 3 * itemSize;
             const dstOff = k * 3 * itemSize;
@@ -2589,6 +2594,7 @@ async function loadSceneFile(file) {
   if (data.backdrop) {
     createBackdrop();
     document.getElementById('backdrop-toggle').checked = true;
+    document.getElementById('backdrop-brightness-row').style.display = '';
     if (data.backdropBrightness !== undefined && backdropMesh) {
       backdropMesh.material.color.setScalar(data.backdropBrightness);
       document.getElementById('backdrop-brightness').value = data.backdropBrightness;
