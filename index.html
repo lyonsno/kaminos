@@ -179,6 +179,25 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
     </div>
+
+    <h2>Post Processing</h2>
+    <div class="slider-row">
+      <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="ssao-toggle" checked> SSAO
+      </label>
+    </div>
+    <div id="ssao-controls">
+      <div class="slider-row">
+        <span class="slider-label">AO Radius</span>
+        <input type="range" id="ssao-radius" min="0.01" max="2" step="0.01" value="0.3">
+        <span class="slider-val" id="ssao-radius-val">0.3</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">AO Intensity</span>
+        <input type="range" id="ssao-intensity" min="0" max="4" step="0.1" value="1.5">
+        <span class="slider-val" id="ssao-intensity-val">1.5</span>
+      </div>
+    </div>
   </div>
 
   <!-- Greenroom Tab -->
@@ -295,9 +314,17 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let composer = null;
+let ssaoPass = null;
+let usePostprocessing = true;
 let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
@@ -416,16 +443,59 @@ function initScene() {
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
 
+  // Postprocessing: SSAO + SMAA + Output
+  composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+
+  ssaoPass = new SSAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
+  ssaoPass.kernelRadius = 0.3;
+  ssaoPass.minDistance = 0.001;
+  ssaoPass.maxDistance = 0.15;
+  ssaoPass.intensity = 1.5;
+  composer.addPass(ssaoPass);
+
+  const smaaPass = new SMAAPass(vp.clientWidth * renderer.getPixelRatio(), vp.clientHeight * renderer.getPixelRatio());
+  composer.addPass(smaaPass);
+
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+
   window.addEventListener('resize', () => {
-    camera.aspect = vp.clientWidth / vp.clientHeight;
+    const w = vp.clientWidth;
+    const h = vp.clientHeight;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(vp.clientWidth, vp.clientHeight);
+    renderer.setSize(w, h);
+    composer.setSize(w, h);
+    ssaoPass.setSize(w, h);
+    needsRender = true;
   });
+
+  // --- Render loop with idle detection ---
+  let needsRender = true;
+  let idleFrames = 0;
+  const IDLE_THRESHOLD = 3; // render a few extra frames after last change then sleep
+
+  // Mark dirty on any interaction
+  const markDirty = () => { needsRender = true; idleFrames = 0; };
+  controls.addEventListener('change', markDirty);
+  transformControls.addEventListener('change', markDirty);
+  renderer.domElement.addEventListener('pointerdown', markDirty);
+  renderer.domElement.addEventListener('wheel', markDirty);
+
+  // Expose for other code that changes the scene
+  window._kaminosDirty = markDirty;
 
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    renderer.render(scene, camera);
+
+    if (needsRender || idleFrames < IDLE_THRESHOLD) {
+      composer.render();
+      if (!needsRender) idleFrames++;
+      needsRender = false;
+    }
   }
   animate();
 }
@@ -520,6 +590,7 @@ function applyEnvMap(envMap, intensity) {
       }
     });
   }
+  window._kaminosDirty?.();
 }
 
 // --- File Loading ---
@@ -776,6 +847,7 @@ function addBtn(parent, label, fn) {
 
 function setInfo(msg) {
   document.getElementById('info-bar').textContent = msg;
+  window._kaminosDirty?.();
 }
 
 // --- File Input Handling ---
@@ -892,6 +964,7 @@ document.getElementById('exposure-slider').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   renderer.toneMappingExposure = v;
   document.getElementById('exposure-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
 });
 
 document.getElementById('env-intensity-slider').addEventListener('input', e => {
@@ -906,6 +979,7 @@ document.getElementById('env-intensity-slider').addEventListener('input', e => {
       }
     });
   }
+  window._kaminosDirty?.();
 });
 
 document.getElementById('env-rotation-slider').addEventListener('input', e => {
@@ -914,6 +988,7 @@ document.getElementById('env-rotation-slider').addEventListener('input', e => {
   scene.environmentRotation = euler;
   if (showEnvBg) scene.backgroundRotation = euler;
   document.getElementById('env-rotation-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
 });
 
 // --- Show Env Map Background + Blur ---
@@ -921,12 +996,14 @@ document.getElementById('show-env-bg').addEventListener('change', e => {
   showEnvBg = e.target.checked;
   document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
   updateBackground();
+  window._kaminosDirty?.();
 });
 
 document.getElementById('env-blur-slider').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   scene.backgroundBlurriness = v;
   document.getElementById('env-blur-val').textContent = v.toFixed(2);
+  window._kaminosDirty?.();
 });
 
 function updateBackground() {
@@ -940,6 +1017,27 @@ function updateBackground() {
     scene.backgroundBlurriness = 0;
   }
 }
+
+// --- SSAO Controls ---
+document.getElementById('ssao-toggle').addEventListener('change', e => {
+  ssaoPass.enabled = e.target.checked;
+  document.getElementById('ssao-controls').style.display = e.target.checked ? '' : 'none';
+  window._kaminosDirty?.();
+});
+
+document.getElementById('ssao-radius').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  ssaoPass.kernelRadius = v;
+  document.getElementById('ssao-radius-val').textContent = v.toFixed(2);
+  window._kaminosDirty?.();
+});
+
+document.getElementById('ssao-intensity').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  ssaoPass.intensity = v;
+  document.getElementById('ssao-intensity-val').textContent = v.toFixed(1);
+  window._kaminosDirty?.();
+});
 
 // --- Viewport GLB Drag & Drop ---
 const viewport = document.getElementById('viewport');
