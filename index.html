@@ -97,6 +97,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .tab.active { color: #fff; border-bottom-color: #1976d2; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Greenroom browser */
+.gr-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background 0.1s; }
+.gr-entry:hover { background: #222; }
+.gr-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+.gr-name { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-meta { font-size: 9px; color: #555; font-family: 'SF Mono', monospace; }
+.gr-status { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+.gr-status.done { background: #1b3a1b; color: #66bb6a; }
+.gr-status.failed { background: #3a1b1b; color: #ef5350; }
+.gr-status.pending { background: #2a2a1b; color: #ffa726; }
+.gr-status.running { background: #1b2a3a; color: #42a5f5; }
+.gr-status.cancelled { background: #2a2a2a; color: #777; }
 </style>
 </head>
 <body>
@@ -107,6 +120,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
   </div>
@@ -164,6 +178,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-label">Blur</span>
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
+    </div>
+  </div>
+
+  <!-- Greenroom Tab -->
+  <div class="tab-content" id="tab-greenroom">
+    <h2>GPU Greenroom</h2>
+    <div class="env-grid" id="greenroom-root-buttons" style="margin-bottom: 10px;"></div>
+    <div id="greenroom-breadcrumb" style="font-size: 10px; color: #555; font-family: 'SF Mono', monospace; margin-bottom: 8px;"></div>
+    <div id="greenroom-list"></div>
+    <div id="greenroom-detail" style="display:none;">
+      <button class="btn" id="greenroom-back" style="margin-bottom: 8px;">Back</button>
+      <div class="panel" id="greenroom-receipt"></div>
+      <div id="greenroom-files"></div>
+    </div>
+    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #2a2a2a;">
+      <h2>Scratch</h2>
+      <div style="font-size: 10px; color: #444; margin-bottom: 8px;">Drop files into <code style="color:#666;">scratch/</code> to browse them here. Not checked into git.</div>
+      <div id="scratch-list"></div>
     </div>
   </div>
 
@@ -1090,10 +1122,274 @@ window.exportGLB = function() {
   }, { binary: true });
 };
 
+// --- Greenroom Browser ---
+let grCurrentRoot = 'greenroom';
+let grCurrentPath = '';
+const GR_STATUS_DIRS = ['done', 'failed', 'pending', 'running', 'cancelled'];
+
+async function grFetchApi(endpoint, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  try {
+    const resp = await fetch(`/api/${endpoint}?${qs}`);
+    return await resp.json();
+  } catch {
+    return { error: 'Server not reachable. Use serve.py instead of python3 -m http.server' };
+  }
+}
+
+async function grInit() {
+  const rootBtns = document.getElementById('greenroom-root-buttons');
+  // Add status dir buttons for greenroom
+  for (const dir of GR_STATUS_DIRS) {
+    const btn = document.createElement('button');
+    btn.className = 'env-btn' + (dir === 'done' ? ' active' : '');
+    btn.textContent = dir;
+    btn.onclick = () => {
+      grCurrentRoot = 'greenroom';
+      grCurrentPath = dir;
+      rootBtns.querySelectorAll('.env-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      grBrowse();
+    };
+    rootBtns.appendChild(btn);
+  }
+  // Default: show done
+  grCurrentPath = 'done';
+  grBrowse();
+  grBrowseScratch();
+}
+
+async function grBrowse() {
+  const listEl = document.getElementById('greenroom-list');
+  const detailEl = document.getElementById('greenroom-detail');
+  detailEl.style.display = 'none';
+
+  const data = await grFetchApi('browse', { root: grCurrentRoot, path: grCurrentPath });
+  if (data.error) {
+    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:12px;">${data.error}</div>`;
+    return;
+  }
+
+  document.getElementById('greenroom-breadcrumb').textContent =
+    `${grCurrentRoot}/${grCurrentPath || ''}`;
+
+  if (!data.entries || data.entries.length === 0) {
+    listEl.innerHTML = '<div style="font-size:11px; color:#444; padding:12px;">Empty</div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  for (const entry of data.entries) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = entry.type === 'dir' ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+
+    const name = document.createElement('span');
+    name.className = 'gr-name';
+    name.textContent = entry.name;
+
+    div.appendChild(icon);
+    div.appendChild(name);
+
+    if (entry.receipt) {
+      const status = document.createElement('span');
+      status.className = 'gr-status ' + (entry.receipt.status || '');
+      status.textContent = entry.receipt.status || '';
+      div.appendChild(status);
+
+      if (entry.receipt.job_type) {
+        const meta = document.createElement('span');
+        meta.className = 'gr-meta';
+        meta.textContent = entry.receipt.job_type;
+        div.appendChild(meta);
+      }
+    } else if (entry.job_status) {
+      const status = document.createElement('span');
+      status.className = 'gr-status ' + entry.job_status;
+      status.textContent = entry.job_status;
+      div.appendChild(status);
+    }
+
+    if (entry.size !== null && entry.type === 'file') {
+      const meta = document.createElement('span');
+      meta.className = 'gr-meta';
+      meta.textContent = formatSize(entry.size);
+      div.appendChild(meta);
+    }
+
+    div.onclick = () => {
+      if (entry.type === 'dir') {
+        grOpenJobDir(grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name);
+      } else {
+        grOpenFile(entry.name);
+      }
+    };
+
+    listEl.appendChild(div);
+  }
+}
+
+async function grOpenJobDir(path) {
+  const listEl = document.getElementById('greenroom-list');
+  const detailEl = document.getElementById('greenroom-detail');
+
+  const data = await grFetchApi('browse', { root: grCurrentRoot, path });
+  if (data.error) return;
+
+  listEl.style.display = 'none';
+  detailEl.style.display = 'block';
+
+  // Show receipt if available
+  const receiptEl = document.getElementById('greenroom-receipt');
+  const receiptEntry = data.entries?.find(e => e.name === 'receipt.json');
+  if (receiptEntry) {
+    const receipt = await grFetchApi('read', { root: grCurrentRoot, path: path + '/receipt.json' });
+    receiptEl.innerHTML = Object.entries(receipt)
+      .map(([k, v]) => `<div class="field"><span class="field-key">${k}</span><span class="field-val" title="${v}">${v === null ? 'null' : v}</span></div>`)
+      .join('');
+  } else {
+    receiptEl.innerHTML = '<div style="color:#555; font-size:11px;">No receipt</div>';
+  }
+
+  // List files with load actions
+  const filesEl = document.getElementById('greenroom-files');
+  filesEl.innerHTML = '';
+  for (const entry of data.entries || []) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = '\uD83D\uDCC4';
+    const name = document.createElement('span');
+    name.className = 'gr-name';
+    name.textContent = entry.name;
+    div.appendChild(icon);
+    div.appendChild(name);
+
+    if (entry.size !== null) {
+      const meta = document.createElement('span');
+      meta.className = 'gr-meta';
+      meta.textContent = formatSize(entry.size);
+      div.appendChild(meta);
+    }
+
+    // Add load button for viewable files
+    const ext = entry.name.split('.').pop().toLowerCase();
+    if (['glb', 'gltf'].includes(ext)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'Load GLB';
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
+        showGLB(url);
+        setInfo(`GLB: ${entry.name}`);
+      };
+      div.appendChild(btn);
+    } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'View';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
+        window.open(url, '_blank');
+      };
+      div.appendChild(btn);
+    }
+
+    filesEl.appendChild(div);
+  }
+
+  document.getElementById('greenroom-back').onclick = () => {
+    detailEl.style.display = 'none';
+    listEl.style.display = '';
+  };
+}
+
+function grOpenFile(name) {
+  const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(grCurrentPath + '/' + name)}`;
+  window.open(url, '_blank');
+}
+
+async function grBrowseScratch() {
+  const listEl = document.getElementById('scratch-list');
+  const data = await grFetchApi('browse', { root: 'scratch', path: '' });
+  if (data.error) {
+    listEl.innerHTML = `<div style="font-size:10px; color:#444; padding:8px;">${data.error}</div>`;
+    return;
+  }
+  if (!data.entries || data.entries.length === 0) {
+    listEl.innerHTML = '<div style="font-size:10px; color:#444; padding:8px;">Empty. Drop files into scratch/ to see them here.</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const entry of data.entries) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = entry.type === 'dir' ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+    const name = document.createElement('span');
+    name.className = 'gr-name';
+    name.textContent = entry.name;
+    div.appendChild(icon);
+    div.appendChild(name);
+
+    if (entry.size !== null && entry.type === 'file') {
+      const meta = document.createElement('span');
+      meta.className = 'gr-meta';
+      meta.textContent = formatSize(entry.size);
+      div.appendChild(meta);
+    }
+
+    const ext = entry.name.split('.').pop().toLowerCase();
+    if (['glb', 'gltf'].includes(ext)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'Load';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const url = `/api/read?root=scratch&path=${encodeURIComponent(entry.name)}`;
+        showGLB(url);
+        setInfo(`Scratch: ${entry.name}`);
+      };
+      div.appendChild(btn);
+    } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'View';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        window.open(`/api/read?root=scratch&path=${encodeURIComponent(entry.name)}`, '_blank');
+      };
+      div.appendChild(btn);
+    }
+
+    div.onclick = () => {
+      if (entry.type === 'dir') {
+        // Could recurse, but for now just open
+        window.open(`/api/read?root=scratch&path=${encodeURIComponent(entry.name)}`, '_blank');
+      }
+    };
+    listEl.appendChild(div);
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 // --- Init ---
 initScene();
 initEnvButtons();
 loadDemoButtons();
+grInit();
 
 // Load HDR environment first, then auto-load demo
 loadEnvironment('studio').then(() => {
