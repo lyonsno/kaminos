@@ -33,6 +33,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
             self.handle_read(parse_qs(parsed.query))
+        elif parsed.path == "/api/job-outputs":
+            self.handle_job_outputs(parse_qs(parsed.query))
+        elif parsed.path.startswith("/api/job-output"):
+            self.handle_job_output(parse_qs(parsed.query))
         else:
             super().do_GET()
 
@@ -104,8 +108,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         k: receipt.get(k) for k in [
                             "status", "job_type", "exit_code",
                             "started_at", "finished_at", "failure_phase",
+                            "output_dir", "input_path",
                         ]
                     }
+                    # List output files if output_dir exists
+                    out_dir = receipt.get("output_dir")
+                    if out_dir and Path(out_dir).is_dir():
+                        info["output_files"] = [
+                            f.name for f in sorted(Path(out_dir).iterdir())
+                            if f.is_file() and not f.name.startswith(".")
+                        ]
                 except Exception:
                     pass
             entries.append(info)
@@ -159,6 +171,100 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"content": text, "path": str(target)})
         except Exception as e:
             self.send_json({"error": str(e)}, 500)
+
+    def handle_job_outputs(self, params):
+        """List files in a job's output_dir. ?job_id=xxx"""
+        job_id = params.get("job_id", [""])[0]
+        if not job_id:
+            self.send_json({"error": "job_id required"}, 400)
+            return
+
+        greenroom = BROWSE_ROOTS.get("greenroom")
+        if not greenroom or not greenroom.exists():
+            self.send_json({"error": "Greenroom not available"}, 404)
+            return
+
+        receipt_data = None
+        for status_dir in ("done", "failed", "running", "pending", "cancelled"):
+            receipt_path = greenroom / status_dir / job_id / "receipt.json"
+            if receipt_path.exists():
+                receipt_data = json.loads(receipt_path.read_text())
+                break
+
+        if not receipt_data:
+            self.send_json({"error": f"Job {job_id} not found"}, 404)
+            return
+
+        output_dir = receipt_data.get("output_dir")
+        if not output_dir or not Path(output_dir).is_dir():
+            self.send_json({"entries": [], "output_dir": output_dir})
+            return
+
+        entries = []
+        for f in sorted(Path(output_dir).iterdir()):
+            if f.name.startswith("."):
+                continue
+            entries.append({
+                "name": f.name,
+                "type": "dir" if f.is_dir() else "file",
+                "size": f.stat().st_size if f.is_file() else None,
+            })
+        self.send_json({"entries": entries, "output_dir": output_dir})
+
+    def handle_job_output(self, params):
+        """Serve files from a completed job's output_dir. ?job_id=xxx&file=output.glb
+
+        Security: only serves from output_dir paths recorded in greenroom receipts.
+        """
+        job_id = params.get("job_id", [""])[0]
+        filename = params.get("file", [""])[0]
+        if not job_id or not filename:
+            self.send_json({"error": "job_id and file required"}, 400)
+            return
+
+        greenroom = BROWSE_ROOTS.get("greenroom")
+        if not greenroom or not greenroom.exists():
+            self.send_json({"error": "Greenroom not available"}, 404)
+            return
+
+        # Find the job in any status directory
+        receipt_data = None
+        for status_dir in ("done", "failed", "running", "pending", "cancelled"):
+            receipt_path = greenroom / status_dir / job_id / "receipt.json"
+            if receipt_path.exists():
+                receipt_data = json.loads(receipt_path.read_text())
+                break
+
+        if not receipt_data:
+            self.send_json({"error": f"Job {job_id} not found"}, 404)
+            return
+
+        output_dir = receipt_data.get("output_dir")
+        if not output_dir:
+            self.send_json({"error": "No output_dir in receipt"}, 404)
+            return
+
+        target = (Path(output_dir) / filename).resolve()
+        # Security: must be under the receipt's output_dir
+        if not str(target).startswith(str(Path(output_dir).resolve())):
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+
+        if not target.is_file():
+            self.send_json({"error": f"File not found: {filename}"}, 404)
+            return
+
+        ext = target.suffix.lower()
+        content_types = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
+            ".exr": "application/octet-stream", ".ply": "application/octet-stream",
+            ".json": "application/json", ".txt": "text/plain", ".log": "text/plain",
+        }
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+        self.end_headers()
+        self.wfile.write(target.read_bytes())
 
     def send_json(self, data, status=200):
         body = json.dumps(data, indent=2).encode()

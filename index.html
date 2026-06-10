@@ -1220,6 +1220,24 @@ async function grBrowse() {
       div.appendChild(meta);
     }
 
+    // Quick-load button for jobs with GLB outputs
+    if (entry.output_files) {
+      const glbs = entry.output_files.filter(f => f.endsWith('.glb') || f.endsWith('.gltf'));
+      for (const glb of glbs) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = glbs.length > 1 ? glb : 'Load';
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
+          showGLB(url);
+          glbFileName = glb;
+          setInfo(`Greenroom: ${entry.name} / ${glb}`);
+        };
+        div.appendChild(btn);
+      }
+    }
+
     div.onclick = () => {
       if (entry.type === 'dir') {
         grOpenJobDir(grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name);
@@ -1302,6 +1320,62 @@ async function grOpenJobDir(path) {
     }
 
     filesEl.appendChild(div);
+  }
+
+  // Show output files from the job's output_dir
+  const jobId = path.split('/').pop();
+  const outputs = await grFetchApi('job-outputs', { job_id: jobId });
+  if (outputs.entries?.length > 0) {
+    const outHeader = document.createElement('h2');
+    outHeader.style.cssText = 'font-size:11px; font-weight:600; margin:14px 0 6px; color:#666; text-transform:uppercase; letter-spacing:1px;';
+    outHeader.textContent = 'Output Files';
+    filesEl.appendChild(outHeader);
+
+    for (const out of outputs.entries) {
+      const div = document.createElement('div');
+      div.className = 'gr-entry';
+      const icon = document.createElement('span');
+      icon.className = 'gr-icon';
+      icon.textContent = '\uD83D\uDCC4';
+      const name = document.createElement('span');
+      name.className = 'gr-name';
+      name.textContent = out.name;
+      div.appendChild(icon);
+      div.appendChild(name);
+
+      if (out.size !== null) {
+        const meta = document.createElement('span');
+        meta.className = 'gr-meta';
+        meta.textContent = formatSize(out.size);
+        div.appendChild(meta);
+      }
+
+      const ext = out.name.split('.').pop().toLowerCase();
+      if (['glb', 'gltf'].includes(ext)) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = 'Load GLB';
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
+          showGLB(url);
+          glbFileName = out.name;
+          setInfo(`Greenroom: ${jobId} / ${out.name}`);
+        };
+        div.appendChild(btn);
+      } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = 'View';
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          window.open(`/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`, '_blank');
+        };
+        div.appendChild(btn);
+      }
+
+      filesEl.appendChild(div);
+    }
   }
 
   document.getElementById('greenroom-back').onclick = () => {
