@@ -1296,7 +1296,6 @@ document.getElementById('backdrop-brightness').addEventListener('input', e => {
   document.getElementById('backdrop-brightness-val').textContent = v.toFixed(2);
   if (backdropMesh && backdropMesh.material) {
     backdropMesh.material.color.setScalar(v);
-    backdropMesh.material.needsUpdate = true;
   }
   window._kaminosDirty?.();
 });
@@ -2369,6 +2368,7 @@ function buildSceneData() {
       },
     },
     backdrop: !!backdropMesh,
+    backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
   };
 }
 
@@ -2589,6 +2589,11 @@ async function loadSceneFile(file) {
   if (data.backdrop) {
     createBackdrop();
     document.getElementById('backdrop-toggle').checked = true;
+    if (data.backdropBrightness !== undefined && backdropMesh) {
+      backdropMesh.material.color.setScalar(data.backdropBrightness);
+      document.getElementById('backdrop-brightness').value = data.backdropBrightness;
+      document.getElementById('backdrop-brightness-val').textContent = data.backdropBrightness.toFixed(2);
+    }
   } else {
     removeBackdrop();
     document.getElementById('backdrop-toggle').checked = false;
