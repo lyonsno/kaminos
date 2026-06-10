@@ -22,6 +22,8 @@ BROWSE_ROOTS = {
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
     )),
+    "pixal3d": Path(os.path.expanduser("~/dev/pixal3d-mlx/outputs")),
+    "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }
 
 

@@ -183,24 +183,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Post Processing</h2>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="ao-toggle" checked> GTAO
+        <input type="checkbox" id="ao-toggle" checked> HBAO
       </label>
     </div>
     <div id="ao-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
-        <input type="range" id="ao-radius" min="0.1" max="3" step="0.05" value="0.5">
-        <span class="slider-val" id="ao-radius-val">0.5</span>
+        <input type="range" id="ao-radius" min="0.05" max="3" step="0.05" value="0.5">
+        <span class="slider-val" id="ao-radius-val">0.50</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Scale</span>
-        <input type="range" id="ao-scale" min="0.1" max="5" step="0.1" value="1.5">
-        <span class="slider-val" id="ao-scale-val">1.5</span>
+        <span class="slider-label">Intensity</span>
+        <input type="range" id="ao-intensity" min="0.1" max="5" step="0.1" value="1.5">
+        <span class="slider-val" id="ao-intensity-val">1.5</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Thickness</span>
-        <input type="range" id="ao-thickness" min="0.1" max="20" step="0.1" value="5">
-        <span class="slider-val" id="ao-thickness-val">5.0</span>
+        <span class="slider-label">Far Blend</span>
+        <input type="range" id="ao-far-blend" min="0" max="1" step="0.05" value="0.5">
+        <span class="slider-val" id="ao-far-blend-val">0.50</span>
       </div>
     </div>
 
@@ -356,7 +356,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { HBAOPass } from './hbao-pass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
@@ -364,7 +364,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let composer = null;
-let gtaoPass = null;
+let hbaoPass = null;
 let bokehPass = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -491,24 +491,16 @@ function initScene() {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  gtaoPass = new GTAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
-  gtaoPass.output = GTAOPass.OUTPUT.Default;
-  gtaoPass.updateGtaoMaterial({
-    radius: 0.5,
-    distanceExponent: 2,
-    thickness: 5,
-    scale: 1.5,
-    samples: 16,
-  });
-  gtaoPass.updatePdMaterial({
-    lumaPhi: 10,
-    depthPhi: 2,
-    normalPhi: 3,
-    radius: 4,
-    rings: 2,
-    samples: 16,
-  });
-  composer.addPass(gtaoPass);
+  hbaoPass = new HBAOPass(scene, camera, vp.clientWidth, vp.clientHeight);
+  hbaoPass.radius = 0.5;
+  hbaoPass.radiusFar = 2.0;
+  hbaoPass.intensity = 1.5;
+  hbaoPass.farBlend = 0.5;
+  hbaoPass.directions = 8;
+  hbaoPass.steps = 4;
+  hbaoPass.blurRadius = 4;
+  hbaoPass.blurSharpness = 40.0;
+  composer.addPass(hbaoPass);
 
   bokehPass = new BokehPass(scene, camera, {
     focus: 2.5,
@@ -531,7 +523,7 @@ function initScene() {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     composer.setSize(w, h);
-    gtaoPass.setSize(w, h);
+    hbaoPass.setSize(w, h);
     needsRender = true;
   });
 
@@ -1081,31 +1073,32 @@ function updateBackground() {
   }
 }
 
-// --- GTAO Controls ---
+// --- HBAO Controls ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
-  gtaoPass.enabled = e.target.checked;
+  hbaoPass.enabled = e.target.checked;
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  gtaoPass.updateGtaoMaterial({ radius: v });
+  hbaoPass.radius = v;
+  hbaoPass.radiusFar = v * 4;
   document.getElementById('ao-radius-val').textContent = v.toFixed(2);
   window._kaminosDirty?.();
 });
 
-document.getElementById('ao-scale').addEventListener('input', e => {
+document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  gtaoPass.updateGtaoMaterial({ scale: v });
-  document.getElementById('ao-scale-val').textContent = v.toFixed(1);
+  hbaoPass.intensity = v;
+  document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
   window._kaminosDirty?.();
 });
 
-document.getElementById('ao-thickness').addEventListener('input', e => {
+document.getElementById('ao-far-blend').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  gtaoPass.updateGtaoMaterial({ thickness: v });
-  document.getElementById('ao-thickness-val').textContent = v.toFixed(1);
+  hbaoPass.farBlend = v;
+  document.getElementById('ao-far-blend-val').textContent = v.toFixed(2);
   window._kaminosDirty?.();
 });
 
@@ -1769,9 +1762,33 @@ async function grFetchApi(endpoint, params = {}) {
   }
 }
 
+const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
+
 async function grInit() {
   const rootBtns = document.getElementById('greenroom-root-buttons');
-  // Add status dir buttons for greenroom
+
+  // Output directory buttons first — these are where the artifacts live
+  for (const root of GR_OUTPUT_ROOTS) {
+    const btn = document.createElement('button');
+    btn.className = 'env-btn';
+    btn.textContent = root;
+    btn.onclick = () => {
+      grCurrentRoot = root;
+      grCurrentPath = '';
+      rootBtns.querySelectorAll('.env-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      grBrowse();
+    };
+    rootBtns.appendChild(btn);
+  }
+
+  // Separator
+  const sep = document.createElement('span');
+  sep.textContent = '|';
+  sep.style.cssText = 'color:#444; margin:0 4px; font-size:10px;';
+  rootBtns.appendChild(sep);
+
+  // Greenroom queue status dir buttons
   for (const dir of GR_STATUS_DIRS) {
     const btn = document.createElement('button');
     btn.className = 'env-btn' + (dir === 'done' ? ' active' : '');
@@ -1853,7 +1870,7 @@ async function grBrowse() {
       div.appendChild(meta);
     }
 
-    // Quick-load button for jobs with GLB outputs
+    // Quick-load button for jobs with GLB outputs (greenroom)
     if (entry.output_files) {
       const glbs = entry.output_files.filter(f => f.endsWith('.glb') || f.endsWith('.gltf'));
       for (const glb of glbs) {
@@ -1869,6 +1886,26 @@ async function grBrowse() {
         };
         div.appendChild(btn);
       }
+    }
+
+    // Quick-load button for plain GLB/OBJ files in output roots
+    if (entry.type === 'file' && /\.(glb|gltf|obj)$/i.test(entry.name)) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = 'Load';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
+        const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+        if (/\.obj$/i.test(entry.name)) {
+          showOBJ(url, entry.name);
+        } else {
+          showGLB(url);
+        }
+        glbFileName = entry.name;
+        setInfo(`${grCurrentRoot}: ${entry.name}`);
+      };
+      div.appendChild(btn);
     }
 
     div.onclick = () => {
@@ -2252,10 +2289,10 @@ function buildSceneData() {
     materials: getMaterialState(),
     postprocessing: {
       ao: {
-        enabled: gtaoPass.enabled,
+        enabled: hbaoPass.enabled,
         radius: parseFloat(document.getElementById('ao-radius').value),
-        scale: parseFloat(document.getElementById('ao-scale').value),
-        thickness: parseFloat(document.getElementById('ao-thickness').value),
+        intensity: parseFloat(document.getElementById('ao-intensity').value),
+        farBlend: parseFloat(document.getElementById('ao-far-blend').value),
       },
       dof: {
         enabled: bokehPass.enabled,
@@ -2434,23 +2471,30 @@ async function loadSceneFile(file) {
   if (data.postprocessing) {
     const ao = data.postprocessing.ao;
     if (ao) {
-      gtaoPass.enabled = ao.enabled ?? true;
-      document.getElementById('ao-toggle').checked = gtaoPass.enabled;
-      document.getElementById('ao-controls').style.display = gtaoPass.enabled ? '' : 'none';
+      hbaoPass.enabled = ao.enabled ?? true;
+      document.getElementById('ao-toggle').checked = hbaoPass.enabled;
+      document.getElementById('ao-controls').style.display = hbaoPass.enabled ? '' : 'none';
       if (ao.radius !== undefined) {
-        gtaoPass.updateGtaoMaterial({ radius: ao.radius });
+        hbaoPass.radius = ao.radius;
+        hbaoPass.radiusFar = ao.radius * 4;
         document.getElementById('ao-radius').value = ao.radius;
         document.getElementById('ao-radius-val').textContent = ao.radius.toFixed(2);
       }
-      if (ao.scale !== undefined) {
-        gtaoPass.updateGtaoMaterial({ scale: ao.scale });
-        document.getElementById('ao-scale').value = ao.scale;
-        document.getElementById('ao-scale-val').textContent = ao.scale.toFixed(1);
+      if (ao.intensity !== undefined) {
+        hbaoPass.intensity = ao.intensity;
+        document.getElementById('ao-intensity').value = ao.intensity;
+        document.getElementById('ao-intensity-val').textContent = ao.intensity.toFixed(1);
       }
-      if (ao.thickness !== undefined) {
-        gtaoPass.updateGtaoMaterial({ thickness: ao.thickness });
-        document.getElementById('ao-thickness').value = ao.thickness;
-        document.getElementById('ao-thickness-val').textContent = ao.thickness.toFixed(1);
+      if (ao.farBlend !== undefined) {
+        hbaoPass.farBlend = ao.farBlend;
+        document.getElementById('ao-far-blend').value = ao.farBlend;
+        document.getElementById('ao-far-blend-val').textContent = ao.farBlend.toFixed(2);
+      }
+      // Backwards compat: old scenes with scale/thickness still load
+      if (ao.scale !== undefined && ao.intensity === undefined) {
+        hbaoPass.intensity = ao.scale;
+        document.getElementById('ao-intensity').value = ao.scale;
+        document.getElementById('ao-intensity-val').textContent = ao.scale.toFixed(1);
       }
     }
     const dof = data.postprocessing.dof;
@@ -2513,10 +2557,10 @@ window.addEventListener('keydown', e => {
 });
 
 // --- Init ---
+grInit();
 initScene();
 initEnvButtons();
 loadDemoButtons();
-grInit();
 
 // Load HDR environment first, then auto-load demo
 loadEnvironment('studio').then(() => {
