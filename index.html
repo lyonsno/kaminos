@@ -1142,34 +1142,65 @@ function createBackdrop() {
   }
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 3);
+  tex.repeat.set(4, 4);
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-  // Large angled plane behind and under the object
-  const geo = new THREE.PlaneGeometry(20, 20);
   const mat = new THREE.MeshStandardMaterial({
     map: tex,
-    roughness: 0.7,
+    roughness: 0.85,
     metalness: 0.0,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
+    envMapIntensity: 0.3, // dim env reflections so it doesn't blow out
   });
-  backdropMesh = new THREE.Mesh(geo, mat);
-  backdropMesh.receiveShadow = true;
-  // Position: behind and tilted to create the angled background look
-  backdropMesh.position.set(0, 2, -4);
-  backdropMesh.rotation.x = -0.15;
+
+  // Build an L-shaped cyclorama: floor + curved sweep + wall
+  const group = new THREE.Group();
+
+  // Floor plane
+  const floorGeo = new THREE.PlaneGeometry(16, 10);
+  const floor = new THREE.Mesh(floorGeo, mat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.86, 1); // just below ground plane
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  // Curved sweep (connects floor to wall)
+  const sweepGeo = new THREE.CylinderGeometry(3, 3, 16, 32, 1, true, Math.PI, Math.PI / 2);
+  const sweep = new THREE.Mesh(sweepGeo, mat);
+  sweep.rotation.z = Math.PI / 2;
+  sweep.position.set(0, -0.86 + 3, -4);
+  sweep.receiveShadow = true;
+  group.add(sweep);
+
+  // Back wall
+  const wallGeo = new THREE.PlaneGeometry(16, 10);
+  const wall = new THREE.Mesh(wallGeo, mat);
+  wall.position.set(0, -0.86 + 3 + 5, -4);
+  wall.receiveShadow = true;
+  group.add(wall);
+
+  backdropMesh = group;
   scene.add(backdropMesh);
+
+  // Hide the default ground plane when backdrop is on
+  if (groundPlane) groundPlane.visible = false;
 }
 
 function removeBackdrop() {
   if (!backdropMesh) return;
   scene.remove(backdropMesh);
-  backdropMesh.geometry.dispose();
-  backdropMesh.material.map?.dispose();
-  backdropMesh.material.dispose();
+  backdropMesh.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      child.material.map?.dispose();
+      child.material.dispose();
+    }
+  });
   backdropMesh = null;
+  if (groundPlane) groundPlane.visible = true;
 }
 
 document.getElementById('backdrop-toggle').addEventListener('change', e => {
