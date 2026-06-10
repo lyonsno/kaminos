@@ -404,6 +404,22 @@ function loadDemoButtons() {
 // --- Init ---
 initScene();
 loadDemoButtons();
+
+// Auto-load the first demo on startup
+async function autoLoadDemo() {
+  const demo = DEMO_ASSETS[0];
+  if (!demo) return;
+  const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
+  if (!manifest) return;
+  const files = [];
+  for (const fn of manifest.files) {
+    const resp = await fetch(demo.path + fn);
+    const blob = await resp.blob();
+    files.push(new File([blob], fn));
+  }
+  handleFiles(files);
+}
+autoLoadDemo();
 </script>
 </body>
 </html>
