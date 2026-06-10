@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spatial Asset Studio</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+#sidebar { width: 360px; background: #222; border-right: 1px solid #333; overflow-y: auto; padding: 16px; flex-shrink: 0; }
+#viewport { flex: 1; position: relative; }
+canvas { display: block; }
+h1 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #fff; }
+h2 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+.panel { background: #2a2a2a; border: 1px solid #333; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+.field { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
+.field-key { color: #888; }
+.field-val { color: #ccc; font-family: 'SF Mono', monospace; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-val.present { color: #4caf50; }
+.field-val.missing { color: #f44336; }
+.field-val.hash { color: #666; font-size: 10px; }
+.btn { display: inline-block; padding: 6px 12px; background: #444; border: 1px solid #555; border-radius: 4px; color: #ddd; font-size: 12px; cursor: pointer; margin: 2px; }
+.btn:hover { background: #555; }
+.btn.active { background: #1976d2; border-color: #1976d2; color: #fff; }
+#drop-zone { border: 2px dashed #444; border-radius: 8px; padding: 24px; text-align: center; color: #666; font-size: 13px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s; }
+#drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; }
+.channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 8px 0; }
+.channel-thumb { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; cursor: pointer; }
+.channel-thumb:hover { border-color: #1976d2; }
+.channel-label { font-size: 10px; color: #888; text-align: center; margin-top: 2px; }
+#info-bar { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px; font-size: 11px; color: #aaa; font-family: 'SF Mono', monospace; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Spatial Asset Studio</h1>
+
+  <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
+    Drop a receipt directory here<br>or click to browse
+    <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+  </div>
+
+  <div id="demo-buttons">
+    <h2>Demo Assets</h2>
+    <div id="demo-list"></div>
+  </div>
+
+  <div id="receipt-panel" style="display:none">
+    <h2>Receipt Identity</h2>
+    <div class="panel" id="identity-fields"></div>
+
+    <h2>Outputs</h2>
+    <div class="panel" id="output-fields"></div>
+
+    <h2>Channel Preview</h2>
+    <div class="channel-grid" id="channel-grid"></div>
+
+    <h2>View Mode</h2>
+    <div id="view-modes"></div>
+  </div>
+</div>
+
+<div id="viewport">
+  <div id="info-bar">No asset loaded</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+
+// --- State ---
+let scene, camera, renderer, controls;
+let currentMesh = null;
+let loadedFiles = {};
+let receipt = null;
+
+// --- Three.js Setup ---
+function initScene() {
+  const vp = document.getElementById('viewport');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a1a);
+
+  camera = new THREE.PerspectiveCamera(45, vp.clientWidth / vp.clientHeight, 0.01, 100);
+  camera.position.set(0, 0, 2.5);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(vp.clientWidth, vp.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  vp.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+
+  // Lighting
+  const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+  scene.add(ambient);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  dirLight.position.set(2, 3, 4);
+  scene.add(dirLight);
+  const fillLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+  fillLight.position.set(-2, -1, -2);
+  scene.add(fillLight);
+
+  // Studio environment
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmremGenerator.fromScene(
+    new THREE.Scene().add(new THREE.AmbientLight(0xffffff, 1))
+  ).texture;
+
+  window.addEventListener('resize', () => {
+    camera.aspect = vp.clientWidth / vp.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(vp.clientWidth, vp.clientHeight);
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+// --- File Loading ---
+function clearScene() {
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.traverse(child => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+        else child.material.dispose();
+      }
+    });
+    currentMesh = null;
+  }
+}
+
+function loadTexture(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    new THREE.TextureLoader().load(url, tex => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      resolve(tex);
+    });
+  });
+}
+
+function loadTextureLinear(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    new THREE.TextureLoader().load(url, tex => {
+      tex.colorSpace = THREE.LinearSRGBColorSpace;
+      resolve(tex);
+    });
+  });
+}
+
+// --- PBR Material Preview ---
+async function showPBRPreview() {
+  clearScene();
+  const albedoFile = loadedFiles['albedo.png'];
+  const roughnessFile = loadedFiles['roughness.png'];
+  const metallicFile = loadedFiles['metallic.png'];
+
+  if (!albedoFile) { setInfo('No albedo.png found'); return; }
+
+  const albedoTex = await loadTexture(albedoFile);
+  const mat = new THREE.MeshStandardMaterial({ map: albedoTex });
+
+  if (roughnessFile) {
+    const roughTex = await loadTextureLinear(roughnessFile);
+    mat.roughnessMap = roughTex;
+    mat.roughness = 1.0;
+  }
+  if (metallicFile) {
+    const metalTex = await loadTextureLinear(metallicFile);
+    mat.metalnessMap = metalTex;
+    mat.metalness = 1.0;
+  }
+
+  const geo = new THREE.SphereGeometry(0.8, 128, 128);
+  currentMesh = new THREE.Mesh(geo, mat);
+  scene.add(currentMesh);
+  setInfo('PBR Material Preview — orbit to inspect');
+}
+
+// --- GLB Inspector ---
+async function showGLB(file) {
+  clearScene();
+  const url = URL.createObjectURL(file);
+  const loader = new GLTFLoader();
+  loader.load(url, gltf => {
+    const model = gltf.scene;
+    // Auto-center and scale
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    model.position.sub(center);
+    const scale = 2.0 / size;
+    model.scale.setScalar(scale);
+    currentMesh = model;
+    scene.add(currentMesh);
+    setInfo('GLB Inspector — orbit to inspect');
+  });
+}
+
+// --- Depth Surface ---
+async function showDepthSurface() {
+  clearScene();
+  const depthFile = loadedFiles['depth_vis.png'] || loadedFiles['depth.exr'];
+  const imageFile = loadedFiles['image.jpg'];
+  if (!depthFile) { setInfo('No depth output found'); return; }
+
+  const depthTex = await loadTexture(depthFile);
+
+  const geo = new THREE.PlaneGeometry(2, 2, 256, 256);
+  const mat = imageFile
+    ? new THREE.MeshStandardMaterial({ map: await loadTexture(imageFile), displacementMap: depthTex, displacementScale: -0.5 })
+    : new THREE.MeshStandardMaterial({ map: depthTex });
+
+  currentMesh = new THREE.Mesh(geo, mat);
+  scene.add(currentMesh);
+  setInfo('Depth Surface — orbit to inspect');
+}
+
+// --- Receipt Panel ---
+function updateReceiptPanel(r) {
+  receipt = r;
+  const panel = document.getElementById('receipt-panel');
+  panel.style.display = 'block';
+
+  const idFields = document.getElementById('identity-fields');
+  const identityKeys = ['source_repo', 'source_commit', 'weight_repo', 'weight_file', 'weight_commit',
+    'device_requested', 'device_resolved', 'model_variant', 'model_version',
+    'processing_stage', 'base_model', 'route', 'timestamp_iso', 'image_size', 'seed'];
+  idFields.innerHTML = identityKeys
+    .filter(k => r[k] !== undefined)
+    .map(k => `<div class="field"><span class="field-key">${k}</span><span class="field-val">${r[k]}</span></div>`)
+    .join('');
+
+  const outFields = document.getElementById('output-fields');
+  const outputs = r.outputs || {};
+  outFields.innerHTML = Object.entries(outputs).map(([name, entry]) => {
+    if (typeof entry !== 'object') return '';
+    const present = entry.present;
+    const cls = present ? 'present' : 'missing';
+    const sha = entry.sha256 ? entry.sha256.substring(0, 12) + '...' : 'n/a';
+    const enc = entry.encoding ? ` [${entry.encoding.encoding || entry.encoding.format || ''}]` : '';
+    return `<div class="field"><span class="field-key">${name}</span><span class="field-val ${cls}">${present ? '✓' : '✗'} ${entry.path || 'absent'}${enc}</span></div>
+            <div class="field"><span class="field-key"></span><span class="field-val hash">${sha}</span></div>`;
+  }).join('');
+
+  // Channel thumbnails
+  const grid = document.getElementById('channel-grid');
+  grid.innerHTML = '';
+  const thumbFiles = ['albedo.png', 'roughness.png', 'metallic.png', 'normal.png',
+    'depth_vis.png', 'mask.png', 'image.jpg'];
+  for (const fn of thumbFiles) {
+    if (loadedFiles[fn]) {
+      const url = URL.createObjectURL(loadedFiles[fn]);
+      const div = document.createElement('div');
+      div.innerHTML = `<img class="channel-thumb" src="${url}" alt="${fn}"><div class="channel-label">${fn}</div>`;
+      grid.appendChild(div);
+    }
+  }
+
+  // View mode buttons
+  const modes = document.getElementById('view-modes');
+  modes.innerHTML = '';
+  if (loadedFiles['albedo.png']) addBtn(modes, 'PBR Material', showPBRPreview);
+  for (const fn of Object.keys(loadedFiles)) {
+    if (fn.endsWith('.glb')) addBtn(modes, `GLB: ${fn}`, () => showGLB(loadedFiles[fn]));
+  }
+  if (loadedFiles['depth_vis.png'] || loadedFiles['depth.exr']) addBtn(modes, 'Depth Surface', showDepthSurface);
+}
+
+function addBtn(parent, label, fn) {
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.textContent = label;
+  btn.onclick = fn;
+  parent.appendChild(btn);
+}
+
+function setInfo(msg) {
+  document.getElementById('info-bar').textContent = msg;
+}
+
+// --- File Input Handling ---
+async function handleFiles(files) {
+  loadedFiles = {};
+  receipt = null;
+
+  for (const file of files) {
+    const name = file.name || file.webkitRelativePath?.split('/').pop();
+    loadedFiles[name] = file;
+  }
+
+  // Try loading receipt
+  if (loadedFiles['receipt.json']) {
+    const text = await loadedFiles['receipt.json'].text();
+    try {
+      const r = JSON.parse(text);
+      updateReceiptPanel(r);
+    } catch (e) {
+      setInfo('Failed to parse receipt.json');
+    }
+  } else {
+    // No receipt — build a minimal panel from files
+    updateReceiptPanel({ outputs: {} });
+  }
+
+  // Auto-show the best view
+  if (loadedFiles['albedo.png']) {
+    showPBRPreview();
+  } else {
+    const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
+    if (glb) showGLB(loadedFiles[glb]);
+    else if (loadedFiles['depth_vis.png']) showDepthSurface();
+    else setInfo('No recognized outputs — drop a sidecar output directory');
+  }
+}
+
+// --- Drag & Drop ---
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', async e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const items = e.dataTransfer.items;
+  const files = [];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry?.isDirectory) {
+      await readDir(entry, files);
+    } else if (entry?.isFile) {
+      files.push(await fileFromEntry(entry));
+    }
+  }
+  handleFiles(files);
+});
+
+document.getElementById('folder-input').addEventListener('change', e => {
+  handleFiles(Array.from(e.target.files));
+});
+
+async function readDir(dirEntry, files) {
+  const reader = dirEntry.createReader();
+  const entries = await new Promise(resolve => reader.readEntries(resolve));
+  for (const entry of entries) {
+    if (entry.isFile) files.push(await fileFromEntry(entry));
+    else if (entry.isDirectory) await readDir(entry, files);
+  }
+}
+
+function fileFromEntry(entry) {
+  return new Promise(resolve => entry.file(resolve));
+}
+
+// --- Demo Asset Loading ---
+const DEMO_ASSETS = [
+  { name: 'SuperMat Ring', path: 'demos/supermat-ring/' },
+];
+
+function loadDemoButtons() {
+  const list = document.getElementById('demo-list');
+  for (const demo of DEMO_ASSETS) {
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = demo.name;
+    btn.onclick = async () => {
+      const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
+      if (!manifest) { setInfo('Demo manifest not found'); return; }
+      const files = [];
+      for (const fn of manifest.files) {
+        const resp = await fetch(demo.path + fn);
+        const blob = await resp.blob();
+        files.push(new File([blob], fn));
+      }
+      handleFiles(files);
+    };
+    list.appendChild(btn);
+  }
+}
+
+// --- Init ---
+initScene();
+loadDemoButtons();
+</script>
+</body>
+</html>

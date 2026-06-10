@@ -1,0 +1,42 @@
+{
+  "source_repo": "https://github.com/hyj542682306/SuperMat",
+  "source_commit": "288339684d2d1d12283ee7c373fcce28982aba7c",
+  "weight_repo": "oyiya/SuperMat",
+  "weight_file": "supermat.pth",
+  "base_model": "sd2-community/stable-diffusion-2-1",
+  "device_requested": "mps",
+  "device_resolved": "mps",
+  "image_size": 512,
+  "seed": 42,
+  "route": "direct_api",
+  "output_dir": "demos/supermat-ring",
+  "timestamp_iso": "2026-06-09T21:07:00Z",
+  "is_cached": true,
+  "outputs": {
+    "albedo": {
+      "path": "albedo.png",
+      "sha256": "prebaked_demo",
+      "present": true,
+      "encoding": {"format": "png_uint8"}
+    },
+    "roughness": {
+      "path": "roughness.png",
+      "sha256": "prebaked_demo",
+      "present": true,
+      "encoding": {"format": "png_uint8"}
+    },
+    "metallic": {
+      "path": "metallic.png",
+      "sha256": "prebaked_demo",
+      "present": true,
+      "encoding": {"format": "png_uint8"}
+    }
+  },
+  "warnings": [],
+  "environment": {
+    "platform": "macOS-15.6-arm64-arm-64bit",
+    "python": "3.12.12",
+    "torch": "2.12.0",
+    "mps_available": true
+  }
+}
