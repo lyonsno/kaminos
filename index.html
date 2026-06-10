@@ -1118,14 +1118,14 @@ function createBackdrop() {
   const cellW = canvas.width / gridSize;
   const cellH = canvas.height / gridSize;
 
-  // Light grey base
-  ctx.fillStyle = '#e8e8e8';
+  // Warm off-white base with stronger grid
+  ctx.fillStyle = '#ddd';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Draw grid cells with numbers
-  ctx.strokeStyle = '#d0d0d0';
-  ctx.lineWidth = 2;
-  ctx.font = `bold ${cellW * 0.3}px -apple-system, sans-serif`;
+  ctx.strokeStyle = '#c0c0c0';
+  ctx.lineWidth = 3;
+  ctx.font = `bold ${cellW * 0.28}px -apple-system, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -1135,7 +1135,7 @@ function createBackdrop() {
       const cx = x * cellW;
       const cy = y * cellH;
       ctx.strokeRect(cx, cy, cellW, cellH);
-      ctx.fillStyle = '#bbb';
+      ctx.fillStyle = '#999';
       ctx.fillText(String(num), cx + cellW / 2, cy + cellH / 2);
       num++;
     }
@@ -1145,44 +1145,96 @@ function createBackdrop() {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 4);
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
   const mat = new THREE.MeshStandardMaterial({
     map: tex,
-    roughness: 0.85,
+    roughness: 0.9,
     metalness: 0.0,
-    side: THREE.FrontSide,
-    envMapIntensity: 0.3, // dim env reflections so it doesn't blow out
+    side: THREE.DoubleSide,
+    envMapIntensity: 0.15,
   });
 
-  // Build an L-shaped cyclorama: floor + curved sweep + wall
-  const group = new THREE.Group();
+  // Build a single continuous cyclorama: floor -> smooth curve -> wall
+  // Using a custom path extruded across X
+  const groundY = -0.86;
+  const floorDepth = 6;   // floor extends in front
+  const curveRadius = 2;  // radius of the sweep curve
+  const wallHeight = 6;   // wall extends upward
+  const wallZ = -3;       // where the wall starts (back edge of floor)
+  const width = 14;       // total width
 
-  // Floor plane
-  const floorGeo = new THREE.PlaneGeometry(16, 10);
-  const floor = new THREE.Mesh(floorGeo, mat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, -0.86, 1); // just below ground plane
-  floor.receiveShadow = true;
-  group.add(floor);
+  // Build the profile curve (in YZ plane): floor -> arc -> wall
+  const segments = 48;
+  const profilePoints = [];
 
-  // Curved sweep (connects floor to wall)
-  const sweepGeo = new THREE.CylinderGeometry(3, 3, 16, 32, 1, true, Math.PI, Math.PI / 2);
-  const sweep = new THREE.Mesh(sweepGeo, mat);
-  sweep.rotation.z = Math.PI / 2;
-  sweep.position.set(0, -0.86 + 3, -4);
-  sweep.receiveShadow = true;
-  group.add(sweep);
+  // Floor: from front to curve start
+  const floorFrontZ = floorDepth;
+  const curveStartZ = wallZ + curveRadius;
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    profilePoints.push(new THREE.Vector2(groundY, floorFrontZ - t * (floorFrontZ - curveStartZ)));
+  }
 
-  // Back wall
-  const wallGeo = new THREE.PlaneGeometry(16, 10);
-  const wall = new THREE.Mesh(wallGeo, mat);
-  wall.position.set(0, -0.86 + 3 + 5, -4);
-  wall.receiveShadow = true;
-  group.add(wall);
+  // Curved sweep: quarter circle from floor to wall
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const angle = t * Math.PI / 2;
+    const y = groundY + curveRadius * (1 - Math.cos(angle));
+    const z = curveStartZ - curveRadius * Math.sin(angle);
+    profilePoints.push(new THREE.Vector2(y, z));
+  }
 
-  backdropMesh = group;
+  // Wall: upward from curve end
+  const curveTopY = groundY + curveRadius;
+  for (let i = 1; i <= 8; i++) {
+    const t = i / 8;
+    profilePoints.push(new THREE.Vector2(curveTopY + t * wallHeight, wallZ));
+  }
+
+  // Build geometry by extruding profile across X
+  const totalPts = profilePoints.length;
+  const xSegs = 1; // just two edges, left and right
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+
+  // Compute total path length for UV mapping
+  let pathLen = 0;
+  const pathLengths = [0];
+  for (let i = 1; i < totalPts; i++) {
+    pathLen += profilePoints[i].distanceTo(profilePoints[i - 1]);
+    pathLengths.push(pathLen);
+  }
+
+  for (let xi = 0; xi <= xSegs; xi++) {
+    const x = (xi / xSegs - 0.5) * width;
+    const u = xi / xSegs;
+    for (let pi = 0; pi < totalPts; pi++) {
+      const pt = profilePoints[pi];
+      positions.push(x, pt.x, pt.y);
+      uvs.push(u * 4, (pathLengths[pi] / pathLen) * 4); // tile 4x
+    }
+  }
+
+  for (let xi = 0; xi < xSegs; xi++) {
+    for (let pi = 0; pi < totalPts - 1; pi++) {
+      const a = xi * totalPts + pi;
+      const b = a + 1;
+      const c = (xi + 1) * totalPts + pi;
+      const d = c + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+
+  backdropMesh = new THREE.Mesh(geo, mat);
+  backdropMesh.receiveShadow = true;
   scene.add(backdropMesh);
 
   // Hide the default ground plane when backdrop is on
@@ -1192,13 +1244,11 @@ function createBackdrop() {
 function removeBackdrop() {
   if (!backdropMesh) return;
   scene.remove(backdropMesh);
-  backdropMesh.traverse(child => {
-    if (child.geometry) child.geometry.dispose();
-    if (child.material) {
-      child.material.map?.dispose();
-      child.material.dispose();
-    }
-  });
+  if (backdropMesh.geometry) backdropMesh.geometry.dispose();
+  if (backdropMesh.material) {
+    backdropMesh.material.map?.dispose();
+    backdropMesh.material.dispose();
+  }
   backdropMesh = null;
   if (groundPlane) groundPlane.visible = true;
 }
