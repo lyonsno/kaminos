@@ -104,7 +104,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "name required"}, 400)
             return
         target = (SCENES_DIR / name).resolve()
-        if not str(target).startswith(str(SCENES_DIR.resolve())):
+        if not target.is_relative_to(SCENES_DIR.resolve()):
             self.send_json({"error": "Path traversal"}, 403)
             return
         if not target.is_file():

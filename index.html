@@ -2451,15 +2451,23 @@ async function loadSceneFile(file) {
   }
 
   // Wait for model to load, then apply transforms
-  const waitForMesh = () => new Promise(resolve => {
+  const waitForMesh = () => new Promise((resolve, reject) => {
+    let elapsed = 0;
     const check = () => {
-      if (currentMesh) resolve();
-      else setTimeout(check, 100);
+      if (currentMesh) return resolve();
+      elapsed += 100;
+      if (elapsed > 30000) return reject(new Error('Model load timed out'));
+      setTimeout(check, 100);
     };
     check();
   });
 
-  await waitForMesh();
+  try {
+    await waitForMesh();
+  } catch (e) {
+    setInfo('Scene load failed: ' + e.message);
+    return;
+  }
 
   // Apply transforms
   if (data.transform) {
