@@ -793,16 +793,23 @@ async function showOBJ(objFile, mtlFile) {
   if (mtlFile) {
     const mtlUrl = URL.createObjectURL(mtlFile);
     const mtlLoader = new MTLLoader();
-    materials = await new Promise(resolve => {
-      mtlLoader.load(mtlUrl, resolve);
-    });
-    materials.preload();
+    try {
+      materials = await new Promise((resolve, reject) => {
+        mtlLoader.load(mtlUrl, resolve, undefined, reject);
+      });
+      materials.preload();
+    } catch (e) {
+      setInfo('Failed to load MTL: ' + e.message);
+    } finally {
+      URL.revokeObjectURL(mtlUrl);
+    }
   }
 
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
 
   objLoader.load(objUrl, obj => {
+    URL.revokeObjectURL(objUrl);
     glbSourceScene = obj;
     const box = new THREE.Box3().setFromObject(obj);
     const center = box.getCenter(new THREE.Vector3());
@@ -831,6 +838,9 @@ async function showOBJ(objFile, mtlFile) {
     scene.add(currentMesh);
     document.getElementById('transform-bar').classList.add('visible');
     setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
+  }, undefined, (err) => {
+    URL.revokeObjectURL(objUrl);
+    setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
   });
 }
 
@@ -1532,7 +1542,8 @@ window.reverseWinding = function() {
   if (!currentMesh) return;
   currentMesh.traverse(child => {
     if (!child.isMesh || !child.geometry) return;
-    const index = child.geometry.index;
+    const geo = child.geometry;
+    const index = geo.index;
     if (index) {
       const arr = index.array;
       for (let i = 0; i < arr.length; i += 3) {
@@ -1541,6 +1552,20 @@ window.reverseWinding = function() {
         arr[i + 2] = tmp;
       }
       index.needsUpdate = true;
+    } else {
+      // Non-indexed: swap vertices 1 and 2 of each triangle in all attributes
+      for (const name of Object.keys(geo.attributes)) {
+        const attr = geo.getAttribute(name);
+        const itemSize = attr.itemSize;
+        for (let i = 0; i < attr.count; i += 3) {
+          for (let c = 0; c < itemSize; c++) {
+            const v1 = attr.array[(i + 1) * itemSize + c];
+            attr.array[(i + 1) * itemSize + c] = attr.array[(i + 2) * itemSize + c];
+            attr.array[(i + 2) * itemSize + c] = v1;
+          }
+        }
+        attr.needsUpdate = true;
+      }
     }
   });
   setInfo('Winding order reversed');
@@ -1637,49 +1662,78 @@ window.cullSmallFaces = function() {
   if (!currentMesh) return;
   // Compute median triangle area, then remove triangles below 5% of median
   let totalRemoved = 0;
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3();
+
   currentMesh.traverse(child => {
     if (!child.isMesh || !child.geometry) return;
     const geo = child.geometry;
     const pos = geo.getAttribute('position');
+    if (!pos) return;
     const idx = geo.index;
-    if (!idx || !pos) return;
-
-    const arr = idx.array;
-    const triCount = arr.length / 3;
-    const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
-    const ab = new THREE.Vector3(), ac = new THREE.Vector3();
+    const triCount = idx ? idx.array.length / 3 : pos.count / 3;
 
     // Compute all triangle areas
     const areas = new Float32Array(triCount);
     for (let i = 0; i < triCount; i++) {
-      vA.fromBufferAttribute(pos, arr[i * 3]);
-      vB.fromBufferAttribute(pos, arr[i * 3 + 1]);
-      vC.fromBufferAttribute(pos, arr[i * 3 + 2]);
+      if (idx) {
+        vA.fromBufferAttribute(pos, idx.array[i * 3]);
+        vB.fromBufferAttribute(pos, idx.array[i * 3 + 1]);
+        vC.fromBufferAttribute(pos, idx.array[i * 3 + 2]);
+      } else {
+        vA.fromBufferAttribute(pos, i * 3);
+        vB.fromBufferAttribute(pos, i * 3 + 1);
+        vC.fromBufferAttribute(pos, i * 3 + 2);
+      }
       ab.subVectors(vB, vA);
       ac.subVectors(vC, vA);
       areas[i] = ab.cross(ac).length() * 0.5;
     }
 
     // Find median area
-    const sorted = Float32Array.from(areas).sort();
+    const sorted = Float32Array.from(areas).sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)];
     const threshold = median * 0.05;
 
-    // Build new index without small triangles
-    const newIndices = [];
-    let removed = 0;
-    for (let i = 0; i < triCount; i++) {
-      if (areas[i] >= threshold) {
-        newIndices.push(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]);
-      } else {
-        removed++;
+    if (idx) {
+      // Indexed: build new index without small triangles
+      const arr = idx.array;
+      const newIndices = [];
+      let removed = 0;
+      for (let i = 0; i < triCount; i++) {
+        if (areas[i] >= threshold) {
+          newIndices.push(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]);
+        } else {
+          removed++;
+        }
       }
-    }
-    totalRemoved += removed;
-
-    if (removed > 0) {
-      geo.setIndex(newIndices);
-      geo.index.needsUpdate = true;
+      totalRemoved += removed;
+      if (removed > 0) {
+        geo.setIndex(newIndices);
+        geo.index.needsUpdate = true;
+      }
+    } else {
+      // Non-indexed: rebuild attribute arrays excluding small triangles
+      const keep = [];
+      for (let i = 0; i < triCount; i++) {
+        if (areas[i] >= threshold) keep.push(i);
+        else totalRemoved++;
+      }
+      if (keep.length < triCount) {
+        for (const name of Object.keys(geo.attributes)) {
+          const attr = geo.getAttribute(name);
+          const itemSize = attr.itemSize;
+          const newArr = new Float32Array(keep.length * 3 * itemSize);
+          for (let k = 0; k < keep.length; k++) {
+            const srcOff = keep[k] * 3 * itemSize;
+            const dstOff = k * 3 * itemSize;
+            for (let c = 0; c < 3 * itemSize; c++) {
+              newArr[dstOff + c] = attr.array[srcOff + c];
+            }
+          }
+          geo.setAttribute(name, new THREE.BufferAttribute(newArr, itemSize));
+        }
+      }
     }
   });
   setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
