@@ -110,6 +110,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-status.pending { background: #2a2a1b; color: #ffa726; }
 .gr-status.running { background: #1b2a3a; color: #42a5f5; }
 .gr-status.cancelled { background: #2a2a2a; color: #777; }
+
+/* Volume prototype */
+.route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
+.volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.volume-readout .field { margin: 0; padding: 0; }
+.volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#kaminos-volume-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; display: none; background: #050607; }
+#kaminos-volume-canvas.active { display: block; }
 </style>
 </head>
 <body>
@@ -120,6 +128,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -239,6 +248,56 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Volume Tab -->
+  <div class="tab-content" id="tab-volume">
+    <h2>Volume Renderer</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
+      <div class="field"><span class="field-key">Backend</span><span class="field-val" id="volume-backend">inactive</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="volume-identity">kaminos-volume-prototype-v0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="volume-toggle">Enable</button>
+        <button class="btn" id="volume-fit-camera">Frame</button>
+      </div>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Density</span>
+      <input type="range" id="volume-density" min="0.35" max="2.8" step="0.05" value="1.35">
+      <span class="slider-val" id="volume-density-val">1.35</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Fire</span>
+      <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="1.8">
+      <span class="slider-val" id="volume-fire-val">1.80</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Smoke</span>
+      <input type="range" id="volume-smoke" min="0.1" max="2.8" step="0.05" value="1.15">
+      <span class="slider-val" id="volume-smoke-val">1.15</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Curl</span>
+      <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="1.65">
+      <span class="slider-val" id="volume-curl-val">1.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Speed</span>
+      <input type="range" id="volume-speed" min="0.1" max="5" step="0.05" value="1.2">
+      <span class="slider-val" id="volume-speed-val">1.20</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Ray Steps</span>
+      <input type="range" id="volume-steps" min="32" max="160" step="4" value="64">
+      <span class="slider-val" id="volume-steps-val">64</span>
+    </div>
+    <div class="panel volume-readout">
+      <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
+      <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
+      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-procedural-raymarch-v0</span></div>
+      <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -352,6 +411,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
+import { createKaminosVolumePrototype } from './volume-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -386,6 +446,7 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+let volumePrototype = null;
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -975,6 +1036,97 @@ function setInfo(msg) {
   window._kaminosDirty?.();
 }
 
+function setActiveTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+}
+
+function readVolumeControls() {
+  return {
+    density: parseFloat(document.getElementById('volume-density').value),
+    fire: parseFloat(document.getElementById('volume-fire').value),
+    smoke: parseFloat(document.getElementById('volume-smoke').value),
+    curl: parseFloat(document.getElementById('volume-curl').value),
+    speed: parseFloat(document.getElementById('volume-speed').value),
+    raySteps: parseFloat(document.getElementById('volume-steps').value),
+  };
+}
+
+function updateVolumeControlLabels() {
+  const c = readVolumeControls();
+  document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
+  document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
+  document.getElementById('volume-smoke-val').textContent = c.smoke.toFixed(2);
+  document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
+  document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
+  document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
+}
+
+function refreshVolumeReadout() {
+  if (!volumePrototype) return;
+  const s = volumePrototype.debugState();
+  document.getElementById('volume-backend').textContent = s.backend || 'unknown';
+  document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
+  document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
+  document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-procedural-raymarch-v0';
+  document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
+  document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
+  document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
+}
+
+function frameVolumeCamera() {
+  camera.position.set(1.75, 0.42, 3.05);
+  controls.target.set(0, 0.12, 0);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+async function initKaminosVolumeRoute() {
+  updateVolumeControlLabels();
+  volumePrototype = createKaminosVolumePrototype({
+    THREE,
+    viewport: document.getElementById('viewport'),
+    camera,
+    controls,
+    getControls: readVolumeControls,
+    onStatus: status => {
+      document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      if (status.error) setInfo(`Volume renderer: ${status.error}`);
+    },
+  });
+  window.__kaminosVolumePrototype = volumePrototype;
+
+  const syncControls = () => {
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    refreshVolumeReadout();
+  };
+  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-speed', 'volume-steps']) {
+    document.getElementById(id).addEventListener('input', syncControls);
+  }
+  document.getElementById('volume-toggle').addEventListener('click', async () => {
+    if (volumePrototype.debugState().active) {
+      volumePrototype.setActive(false);
+      setInfo('Volume renderer disabled');
+    } else {
+      await volumePrototype.setActive(true);
+      setInfo('Volume renderer — native WebGPU procedural raymarch');
+    }
+    refreshVolumeReadout();
+  });
+  document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kaminos_volume_smoke') === '1') {
+    setActiveTab('volume');
+    frameVolumeCamera();
+    await volumePrototype.setActive(true);
+    setInfo('Volume renderer — native WebGPU procedural raymarch');
+  }
+  syncControls();
+  setInterval(refreshVolumeReadout, 500);
+}
+
 // --- File Input Handling ---
 async function handleFiles(files) {
   loadedFiles = {};
@@ -1409,10 +1561,7 @@ viewport.addEventListener('drop', async e => {
 // --- Tab Switching ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    setActiveTab(tab.dataset.tab);
   });
 });
 
@@ -2674,6 +2823,7 @@ initScene().then(() => {
   loadEnvironment('studio').then(() => {
     loadDemo(DEMO_ASSETS[0]);
   });
+  initKaminosVolumeRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
