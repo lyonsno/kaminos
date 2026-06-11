@@ -31,6 +31,10 @@ assert.match(core, /createComputePipeline/, 'fluid state advances through a WebG
 assert.match(core, /dispatchWorkgroups/, 'fluid sim dispatches compute workgroups each frame');
 assert.match(core, /simStepCount/, 'debug state exposes simulation step count');
 assert.match(core, /simGrid/, 'debug state exposes simulation grid identity');
+assert.doesNotMatch(core, /screenGridLine/, 'grid overlay must not fall back to a fake screen-space lattice');
+assert.match(core, /faceUv = p\.yz/, 'grid overlay uses volume coordinates on x-facing cube surfaces');
+assert.match(core, /faceUv = p\.xz/, 'grid overlay uses volume coordinates on y-facing cube surfaces');
+assert.match(core, /faceUv = p\.xy/, 'grid overlay uses volume coordinates on z-facing cube surfaces');
 
 const witnessPath = join(root, 'volume-witness.mjs');
 assert.ok(existsSync(witnessPath), 'volume-witness.mjs exists');

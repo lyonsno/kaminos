@@ -102,20 +102,21 @@ fn sampleWorld(p: vec3<f32>) -> vec4<f32> {
 }
 
 fn gridLine(p: vec3<f32>) -> f32 {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
-  let majorCell = cell / 8.0;
-  let f = fract(majorCell);
-  let nearest = min(min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)), min(f.z, 1.0 - f.z));
-  let line = 1.0 - smoothstep(0.035, 0.110, nearest);
-  let bounds = 1.0 - smoothstep(0.965, 1.005, max(max(abs(p.x), abs(p.y)), abs(p.z)));
-  return line * bounds;
-}
-
-fn screenGridLine(uv: vec2<f32>) -> f32 {
-  let majorCells = max(4.0, f32(GRID) / 8.0);
-  let f = fract(uv * majorCells);
+  let a = abs(p);
+  var faceUv = vec2<f32>(0.0);
+  if (a.x > a.y && a.x > a.z) {
+    faceUv = p.yz * 0.5 + vec2<f32>(0.5);
+  } else if (a.y > a.z) {
+    faceUv = p.xz * 0.5 + vec2<f32>(0.5);
+  } else {
+    faceUv = p.xy * 0.5 + vec2<f32>(0.5);
+  }
+  let majorCells = max(4.0, f32(GRID) / 16.0);
+  let f = fract(faceUv * majorCells);
   let nearest = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-  return 1.0 - smoothstep(0.010, 0.026, nearest);
+  let line = 1.0 - smoothstep(0.014, 0.042, nearest);
+  let face = smoothstep(0.940, 0.995, max(max(a.x, a.y), a.z));
+  return line * face;
 }
 
 fn slabAxis(origin: f32, dir: f32, halfSize: f32) -> vec2<f32> {
@@ -234,8 +235,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);
-  let overlay = clamp(max(gridAccum * 2.4, screenGridLine(in.uv) * 0.46) * u.grid_overlay_debug.x, 0.0, 1.0);
-  grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.82);
+  let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
+  grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   return vec4<f32>(pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84)), 1.0);
 }
 `;
