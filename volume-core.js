@@ -2,7 +2,8 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const DEFAULT_GRID_SIZE = 64;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
-const FLUID_COMPONENTS = 4;
+const FLUID_SLOTS_PER_CELL = 2;
+const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -71,22 +72,26 @@ fn clampCell(c: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
 }
 
-fn readCell(c: vec3<i32>) -> vec4<f32> {
-  return fluidSrc[index3(clampCell(c))];
+fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
+  return index3(clampCell(c)) * 2u + slot;
 }
 
-fn sampleFluidCell(p: vec3<f32>) -> vec4<f32> {
+fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  return fluidSrc[slotIndex(c, slot)];
+}
+
+fn sampleFluidSlot(p: vec3<f32>, slot: u32) -> vec4<f32> {
   let pc = clamp(p, vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
-  let c000 = readCell(i0 + vec3<i32>(0, 0, 0));
-  let c100 = readCell(i0 + vec3<i32>(1, 0, 0));
-  let c010 = readCell(i0 + vec3<i32>(0, 1, 0));
-  let c110 = readCell(i0 + vec3<i32>(1, 1, 0));
-  let c001 = readCell(i0 + vec3<i32>(0, 0, 1));
-  let c101 = readCell(i0 + vec3<i32>(1, 0, 1));
-  let c011 = readCell(i0 + vec3<i32>(0, 1, 1));
-  let c111 = readCell(i0 + vec3<i32>(1, 1, 1));
+  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
+  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
+  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
+  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
+  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
+  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
+  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
+  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -96,9 +101,56 @@ fn sampleFluidCell(p: vec3<f32>) -> vec4<f32> {
   return mix(y0, y1, f.z);
 }
 
-fn sampleWorld(p: vec3<f32>) -> vec4<f32> {
+fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
   let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
-  return sampleFluidCell(cell);
+  return sampleFluidSlot(cell, 0u);
+}
+
+fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  return sampleFluidSlot(cell, 1u);
+}
+
+fn curlAtCell(c: vec3<i32>) -> vec3<f32> {
+  let vx0 = readSlot(c + vec3<i32>(-1, 0, 0), 0u).xyz;
+  let vx1 = readSlot(c + vec3<i32>( 1, 0, 0), 0u).xyz;
+  let vy0 = readSlot(c + vec3<i32>(0, -1, 0), 0u).xyz;
+  let vy1 = readSlot(c + vec3<i32>(0,  1, 0), 0u).xyz;
+  let vz0 = readSlot(c + vec3<i32>(0, 0, -1), 0u).xyz;
+  let vz1 = readSlot(c + vec3<i32>(0, 0,  1), 0u).xyz;
+  return vec3<f32>(
+    (vy1.z - vy0.z) - (vz1.y - vz0.y),
+    (vz1.x - vz0.x) - (vx1.z - vx0.z),
+    (vx1.y - vx0.y) - (vy1.x - vy0.x)
+  ) * 0.5;
+}
+
+fn curlMagnitudeAtCell(c: vec3<i32>) -> f32 {
+  return length(curlAtCell(c));
+}
+
+fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
+  // Vorticity confinement preserves small curl features that semi-Lagrangian advection damps away.
+  let magX = curlMagnitudeAtCell(c + vec3<i32>(1, 0, 0)) - curlMagnitudeAtCell(c + vec3<i32>(-1, 0, 0));
+  let magY = curlMagnitudeAtCell(c + vec3<i32>(0, 1, 0)) - curlMagnitudeAtCell(c + vec3<i32>(0, -1, 0));
+  let magZ = curlMagnitudeAtCell(c + vec3<i32>(0, 0, 1)) - curlMagnitudeAtCell(c + vec3<i32>(0, 0, -1));
+  let normal = normalize(vec3<f32>(magX, magY, magZ) + vec3<f32>(0.0001));
+  return cross(normal, curlAtCell(c)) * amount;
+}
+
+fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
+  let q = p * vec3<f32>(9.0, 13.0, 11.0) + vec3<f32>(time * 1.7, -time * 2.1, time * 1.3);
+  let a = vec3<f32>(
+    sin(q.y + cos(q.z)),
+    sin(q.z + cos(q.x)),
+    sin(q.x + cos(q.y))
+  );
+  let b = vec3<f32>(
+    cos(q.z * 1.37 - q.y),
+    cos(q.x * 1.21 - q.z),
+    cos(q.y * 1.43 - q.x)
+  );
+  return normalize(a + b * 0.72 + vec3<f32>(0.001));
 }
 
 fn gridLine(p: vec3<f32>) -> f32 {
@@ -154,36 +206,65 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
+  let base = idx * 2u;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
+  let cellI = vec3<i32>(gid);
   let p = (cell / f32(GRID)) * 2.0 - vec3<f32>(1.0);
-  let prev = fluidSrc[idx];
+  let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
-  var advected = sampleFluidCell(backCell);
-  var vel = advected.xyz * 0.985;
-  var density = advected.w * 0.990;
+  let advected = sampleFluidSlot(backCell, 0u);
+  var material = sampleFluidSlot(backCell, 1u);
+  var vel = advected.xyz * 0.982;
+  var smoke = material.x * 0.992;
+  var heat = material.y * 0.966;
+  var fuel = material.z * 0.986;
+  var materialDetail = material.w * 0.970;
 
   let radial = length(p.xz);
   let sourceWobble = rotate2(p.xz, time * 1.3);
-  let sourceRadial = length(sourceWobble + vec2<f32>(0.10 * sin(time * 1.7), 0.08 * cos(time * 1.1)));
-  let source = exp(-sourceRadial * sourceRadial * 22.0) * smoothstep(-0.98, -0.76, p.y) * (1.0 - smoothstep(-0.42, -0.12, p.y));
+  let sourceCenter = sourceWobble + vec2<f32>(0.10 * sin(time * 1.7), 0.08 * cos(time * 1.1));
+  let sourceRadial = length(sourceCenter);
+  let sourceBand = smoothstep(-0.99, -0.76, p.y) * (1.0 - smoothstep(-0.38, -0.06, p.y));
+  let breakup = clamp(0.58 + 0.30 * sin(sourceWobble.x * 24.0 + time * 5.6) + 0.24 * cos(sourceWobble.y * 27.0 - time * 4.7), 0.12, 1.25);
+  let jetA = rotate2(vec2<f32>(0.22, 0.02), time * 0.91);
+  let jetB = rotate2(vec2<f32>(0.18, 0.16), time * -1.17 + 2.1);
+  let jetC = rotate2(vec2<f32>(0.15, -0.18), time * 1.43 + 4.2);
+  let jetField =
+    exp(-dot(sourceCenter - jetA, sourceCenter - jetA) * 76.0) +
+    exp(-dot(sourceCenter - jetB, sourceCenter - jetB) * 92.0) +
+    exp(-dot(sourceCenter - jetC, sourceCenter - jetC) * 84.0);
+  let source = (exp(-sourceRadial * sourceRadial * 24.0) * 0.46 + jetField * 0.42) * sourceBand * breakup;
+  let emberRing = exp(-pow(abs(sourceRadial - 0.20), 2.0) * 92.0) * sourceBand * (0.42 + 0.28 * sin(time * 3.1 + p.x * 11.0));
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
-  let phase = time * 1.8 + p.y * 7.0 + hash31(vec3<f32>(gid) * 0.07) * 2.0;
+  let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
+  let confinement = vorticityConfinement(cellI, 0.024 + curl * 0.034);
+  let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
   vel = vel + swirl * source * (0.040 + 0.022 * curl);
-  vel.y = vel.y + source * (0.135 + speed * 0.024) + density * 0.014;
-  vel.x = vel.x + sin(phase) * density * 0.010 * curl;
-  vel.z = vel.z + cos(phase * 0.93) * density * 0.010 * curl;
-  density = max(density, source * (1.25 + 0.18 * sin(time * 2.0)));
+  vel = vel + confinement * (0.55 + smoke * 0.44 + heat * 0.28);
+  vel = vel + detailForce;
+  vel.y = vel.y + source * (0.126 + speed * 0.030) + heat * 0.022 + smoke * 0.006;
+  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
+  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
+  smoke = max(smoke, source * 0.62 + emberRing * 0.18);
+  heat = max(heat, source * 1.34 + emberRing * 0.58);
+  fuel = max(fuel, source * (1.0 - smoothstep(-0.74, -0.18, p.y)));
+  materialDetail = max(materialDetail, (source + emberRing + jetField * sourceBand * 0.18) * (0.42 + 0.68 * breakup));
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
   let topFade = 1.0 - smoothstep(0.80, 0.995, p.y);
-  density = density * mix(0.35, 1.0, wallFade) * mix(0.72, 1.0, topFade);
+  smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.78, 1.0, topFade);
+  heat = heat * mix(0.30, 1.0, wallFade) * mix(0.60, 1.0, topFade);
+  fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.70, 1.0, topFade);
+  materialDetail = materialDetail * mix(0.22, 1.0, wallFade);
+  let density = clamp(max(smoke * 0.92, heat * 0.68 + materialDetail * 0.26 + fuel * 0.12), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = max(vel.y, -0.015);
-  fluidDst[idx] = vec4<f32>(clamp(vel, vec3<f32>(-0.30), vec3<f32>(0.46)), clamp(density, 0.0, 2.2));
+  fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
 }
 
 @fragment
@@ -217,16 +298,23 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || trans < 0.012) { break; }
     let p = ro + rd * t;
-    let state = sampleWorld(p);
+    let state = sampleWorldVelocity(p);
+    let material = sampleWorldMaterial(p);
     let velMag = length(state.xyz);
-    let density = state.w * u.viewport_steps_density.w;
+    let smokeDensity = material.x;
+    let heat = material.y;
+    let fuel = material.z;
+    let materialDetail = material.w;
+    let density = (smokeDensity * 0.72 + heat * 0.54 + materialDetail * 0.28) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
-    let temp = clamp(density * (0.78 - y * 0.24) + velMag * 2.15, 0.0, 1.20) * u.fire_smoke_curl_speed.x;
-    let smoke = density * smoothstep(0.05, 0.96, y) * u.fire_smoke_curl_speed.y;
-    let alpha = clamp((density * 0.030 + smoke * 0.028) * dt * steps, 0.0, 0.12);
-    let smokeCol = vec3<f32>(0.18, 0.27, 0.31) * (0.42 + min(0.72, velMag * 6.0));
-    let flame = fireColor(temp) * (0.42 + temp * 0.64);
-    let local = mix(smokeCol, flame, smoothstep(0.18, 0.78, temp));
+    let temp = clamp(heat * (0.96 - y * 0.18) + fuel * 0.18 + materialDetail * 0.32 + velMag * 1.72, 0.0, 1.55) * u.fire_smoke_curl_speed.x;
+    let smoke = smokeDensity * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
+    let alpha = clamp((smoke * 0.030 + heat * 0.022 + materialDetail * 0.026) * dt * steps * u.viewport_steps_density.w, 0.0, 0.14);
+    let filament = smoothstep(0.05, 0.62, materialDetail) * (0.72 + 0.28 * sin(p.x * 22.0 + p.y * 31.0 - p.z * 19.0 + u.cameraPos_time.w * 3.0));
+    let fineShadow = 0.56 + 0.54 * filament;
+    let smokeCol = vec3<f32>(0.18, 0.27, 0.31) * fineShadow * (0.42 + min(0.72, velMag * 6.4));
+    let flame = fireColor(temp) * (0.34 + temp * 0.72 + filament * 0.32);
+    let local = mix(smokeCol, flame, smoothstep(0.16, 0.78, temp));
     color = color + trans * alpha * local;
     trans = trans * (1.0 - alpha);
     t = t + dt;
@@ -264,7 +352,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
-    simGridLabel: `${gridSize}^3 velocity-density-storage-buffer`,
+    simGridLabel: `${gridSize}^3 velocity-material-storage-buffer`,
     gridOverlay: 0,
     lastFrameEnergy: 0,
     error: null,
@@ -307,7 +395,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
           data[i + 2] = fx * source * 0.11;
-          data[i + 3] = source * 1.6;
+          data[i + 3] = source * 1.25;
+          data[i + 4] = source * 0.74;
+          data[i + 5] = source * 1.28;
+          data[i + 6] = source * 1.0;
+          data[i + 7] = source * (0.35 + 0.65 * Math.sin((fx * 18) + (fz * 11)) ** 2);
         }
       }
     }
@@ -372,7 +464,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     currentFluid = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
-    state.simGridLabel = `${gridSize}^3 velocity-density-storage-buffer`;
+    state.simGridLabel = `${gridSize}^3 velocity-material-storage-buffer`;
     emitStatus({ phase: 'grid-rebuilt' });
   }
 
@@ -543,6 +635,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const data = new Float32Array(readback.getMappedRange());
     let densitySum = 0;
     let densityMax = 0;
+    let heatSum = 0;
+    let detailSum = 0;
     let velocitySum = 0;
     let liveVoxels = 0;
     const cells = gridCellCount(gridSize);
@@ -552,9 +646,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const vx = data[i];
       const vy = data[i + 1];
       const vz = data[i + 2];
-      const d = data[i + 3];
+      const d = Math.max(data[i + 3], data[i + 4] * 0.9, data[i + 5] * 0.72);
+      const heat = data[i + 5];
+      const detail = data[i + 7];
       densitySum += d;
       densityMax = Math.max(densityMax, d);
+      heatSum += heat;
+      detailSum += detail;
       velocitySum += Math.hypot(vx, vy, vz);
       if (d > 0.02) liveVoxels += 1;
     }
@@ -567,6 +665,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       samples,
       densityMean: densitySum / samples,
       densityMax,
+      heatMean: heatSum / samples,
+      detailMean: detailSum / samples,
       velocityMean: velocitySum / samples,
       liveVoxels,
     };
@@ -689,7 +789,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else {
         gridSize = requestedGrid;
         state.simGrid = gridSize;
-        state.simGridLabel = `${gridSize}^3 velocity-density-storage-buffer`;
+        state.simGridLabel = `${gridSize}^3 velocity-material-storage-buffer`;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     },

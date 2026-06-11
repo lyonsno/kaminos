@@ -25,9 +25,15 @@ assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable 
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
 assert.match(core, /DEFAULT_GRID_SIZE\s*=\s*64/, 'first fluid sim defaults to an explicit 64^3 grid size');
 assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolution choices');
+assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*2/, 'fluid sim stores velocity and material channels separately');
 assert.match(core, /rebuildFluidState/, 'fluid sim can rebuild GPU state when resolution changes');
 assert.match(core, /gridOverlay/, 'fluid renderer exposes grid overlay state');
 assert.match(core, /gridLine/, 'fragment shader renders an active grid overlay');
+assert.match(core, /curlAtCell/, 'fluid compute shader measures velocity curl for fine detail');
+assert.match(core, /vorticity confinement/i, 'fluid compute shader includes explicit vorticity confinement forcing');
+assert.match(core, /turbulentDetailForce/, 'fluid compute shader injects small-scale turbulent detail force');
+assert.match(core, /material = sampleFluidSlot/, 'fluid compute shader advects material channels separately from velocity');
+assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
 assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU storage buffers');
 assert.match(core, /createComputePipeline/, 'fluid state advances through a WebGPU compute pipeline');
 assert.match(core, /dispatchWorkgroups/, 'fluid sim dispatches compute workgroups each frame');
@@ -46,6 +52,7 @@ assert.match(witness, /effectiveRoute/, 'witness records effective route identit
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
+assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
 assert.match(witness, /simGridLabel/, 'witness records human-readable sim grid identity');
 assert.match(witness, /gridOverlay/, 'witness records grid overlay/debug state');
 assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');

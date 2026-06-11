@@ -16,6 +16,7 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const port = Number(args.get('--debug-port') || 9433);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
+const settleMs = Number(args.get('--settle-ms') || 1500);
 const routeParams = new URL(url).searchParams;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96].includes(requestedGrid) ? requestedGrid : 64;
@@ -225,7 +226,7 @@ async function main() {
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
     await wsRequest(ws, 'Page.bringToFront');
-    await delay(1500);
+    await delay(settleMs);
     phase = 'identity';
     let state = null;
     for (let i = 0; i < 40; i++) {
@@ -243,7 +244,7 @@ async function main() {
     assert.equal(state.active, true, 'volume route is not active');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-density-storage-buffer`, 'fluid sim label does not match selected grid');
+    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-storage-buffer`, 'fluid sim label does not match selected grid');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
@@ -263,6 +264,9 @@ async function main() {
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
     }
+    if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
+      throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
+    }
     const metrics = {
       width: sample.width,
       height: sample.height,
@@ -278,6 +282,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      settleMs,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
