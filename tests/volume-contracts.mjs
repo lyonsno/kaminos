@@ -14,6 +14,8 @@ assert.match(index, /id="volume-resolution"/, 'Volume tab exposes a fluid grid r
 assert.match(index, /id="volume-grid-overlay"/, 'Volume tab exposes a grid overlay control');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
+assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
+assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
 const corePath = join(root, 'volume-core.js');
 assert.ok(existsSync(corePath), 'volume-core.js exists');
