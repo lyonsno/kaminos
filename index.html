@@ -351,6 +351,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
+import { AOCompositePass } from './ao-composite.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -371,6 +372,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let postProcessing = null;
 let aoPipeline = null;
+let aoComposite = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -494,25 +496,32 @@ async function initScene() {
   scene.add(transformControls.getHelper());
 
   // --- Manual AO render pipeline ---
-  // Render scene to target with depth → GTAO compute on depth → composite AO × color to screen
+  // Scene → RenderTarget (color+depth) → GTAO compute → composite to canvas
   postProcessing = null;
 
-  // Scene render target with depth attachment
+  // Scene render target with depth
   let sceneRT = new THREE.RenderTarget(vp.clientWidth, vp.clientHeight, {
     depthTexture: new THREE.DepthTexture(vp.clientWidth, vp.clientHeight),
   });
   sceneRT.depthTexture.format = THREE.DepthFormat;
   sceneRT.depthTexture.type = THREE.UnsignedIntType;
 
-  // GTAO compute pipeline — will init async, renders direct until ready
-  let aoEnabled = true;
-  try {
-    aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
-    await aoPipeline._initPromise;
-    console.log('GTAO compute pipeline:', aoPipeline.isReady ? 'ready' : 'failed');
-  } catch (e) {
-    console.warn('GTAO compute init failed:', e);
-    aoPipeline = null;
+  // GTAO compute pipeline + composite pass
+  const device = renderer.backend?.device;
+  const canvasFormat = navigator.gpu?.getPreferredCanvasFormat?.() || 'bgra8unorm';
+  if (device) {
+    try {
+      aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
+      await aoPipeline._initPromise;
+      aoComposite = new AOCompositePass(device, canvasFormat);
+      console.log('GTAO compute + composite:', aoPipeline.isReady ? 'ready' : 'failed');
+    } catch (e) {
+      console.warn('GTAO pipeline init failed:', e);
+      aoPipeline = null;
+      aoComposite = null;
+    }
+  } else {
+    console.warn('No WebGPU device — AO compute disabled');
   }
 
   window.addEventListener('resize', () => {
@@ -556,8 +565,14 @@ async function initScene() {
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
-      const useAO = aoEnabled && aoPipeline?.isReady && document.getElementById('ao-toggle').checked;
-
+      // GTAO compute disabled in render loop — raw device access conflicts with Three.js
+      // command buffer management and caused kernel panic on M-series (texture usage flags,
+      // double canvas acquire, competing queue.submit calls).
+      // Compute shaders verified correct (ao-compute.js). Integration needs either:
+      // - Three.js r172+ ComputeNode in PostProcessing graph, OR
+      // - Full renderer takeover (don't use Three.js for rendering at all), OR
+      // - Patch Three.js RenderTarget to add TEXTURE_BINDING|STORAGE_BINDING usage
+      //   and hook into its command encoder instead of creating our own.
       renderer.render(scene, camera);
 
       const frameMs = performance.now() - t0;

@@ -23,9 +23,7 @@ struct Params {
 @group(0) @binding(1) var outputMip0: texture_storage_2d<r32float, write>;
 @group(0) @binding(2) var outputMip1: texture_storage_2d<r32float, write>;
 @group(0) @binding(3) var outputMip2: texture_storage_2d<r32float, write>;
-@group(0) @binding(4) var outputMip3: texture_storage_2d<r32float, write>;
-@group(0) @binding(5) var outputMip4: texture_storage_2d<r32float, write>;
-@group(0) @binding(6) var<uniform> params: Params;
+@group(0) @binding(4) var<uniform> params: Params;
 
 var<workgroup> sharedDepths: array<f32, 256>; // 16x16
 
@@ -39,15 +37,17 @@ fn linearizeDepth(d: f32) -> f32 {
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
   let coord = vec2i(gid.xy);
   let res = vec2i(params.resolution);
+  let inBounds = coord.x < res.x && coord.y < res.y;
 
-  if (coord.x >= res.x || coord.y >= res.y) { return; }
-
-  // Load and linearize depth
-  let rawDepth = textureLoad(depthTexture, coord, 0);
+  // Load and linearize depth (clamp coord for OOB threads)
+  let safeCoord = clamp(coord, vec2i(0), res - vec2i(1));
+  let rawDepth = textureLoad(depthTexture, safeCoord, 0);
   let linDepth = linearizeDepth(rawDepth);
 
-  // Write MIP 0 (full res)
-  textureStore(outputMip0, coord, vec4f(linDepth, 0.0, 0.0, 0.0));
+  // Write MIP 0 (full res) — only in-bounds threads
+  if (inBounds) {
+    textureStore(outputMip0, coord, vec4f(linDepth, 0.0, 0.0, 0.0));
+  }
 
   // Store in shared memory for MIP generation
   let localIdx = lid.y * 16u + lid.x;
@@ -61,12 +61,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let d10 = sharedDepths[i + 1u];
     let d01 = sharedDepths[i + 16u];
     let d11 = sharedDepths[i + 17u];
-    // Use min for conservative depth (closest surface)
     let mip1Val = min(min(d00, d10), min(d01, d11));
-    let mip1Coord = vec2i(gid.xy) / 2;
-    textureStore(outputMip1, mip1Coord, vec4f(mip1Val, 0.0, 0.0, 0.0));
-
-    // Store for further downsampling
+    if (inBounds) {
+      textureStore(outputMip1, vec2i(gid.xy) / 2, vec4f(mip1Val, 0.0, 0.0, 0.0));
+    }
     sharedDepths[localIdx] = mip1Val;
   }
   workgroupBarrier();
@@ -79,35 +77,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let d01 = sharedDepths[i + 32u];
     let d11 = sharedDepths[i + 34u];
     let mip2Val = min(min(d00, d10), min(d01, d11));
-    let mip2Coord = vec2i(gid.xy) / 4;
-    textureStore(outputMip2, mip2Coord, vec4f(mip2Val, 0.0, 0.0, 0.0));
-    sharedDepths[localIdx] = mip2Val;
-  }
-  workgroupBarrier();
-
-  // MIP 3: 8x8
-  if (lid.x % 8u == 0u && lid.y % 8u == 0u) {
-    let i = lid.y * 16u + lid.x;
-    let d00 = sharedDepths[i];
-    let d10 = sharedDepths[i + 4u];
-    let d01 = sharedDepths[i + 64u];
-    let d11 = sharedDepths[i + 68u];
-    let mip3Val = min(min(d00, d10), min(d01, d11));
-    let mip3Coord = vec2i(gid.xy) / 8;
-    textureStore(outputMip3, mip3Coord, vec4f(mip3Val, 0.0, 0.0, 0.0));
-    sharedDepths[localIdx] = mip3Val;
-  }
-  workgroupBarrier();
-
-  // MIP 4: 16x16
-  if (lid.x == 0u && lid.y == 0u) {
-    let d00 = sharedDepths[0u];
-    let d10 = sharedDepths[8u];
-    let d01 = sharedDepths[128u];
-    let d11 = sharedDepths[136u];
-    let mip4Val = min(min(d00, d10), min(d01, d11));
-    let mip4Coord = vec2i(gid.xy) / 16;
-    textureStore(outputMip4, mip4Coord, vec4f(mip4Val, 0.0, 0.0, 0.0));
+    if (inBounds) {
+      textureStore(outputMip2, vec2i(gid.xy) / 4, vec4f(mip2Val, 0.0, 0.0, 0.0));
+    }
   }
 }
 `;
@@ -127,11 +99,9 @@ struct Params {
 @group(0) @binding(0) var depthMip0: texture_2d<f32>;
 @group(0) @binding(1) var depthMip1: texture_2d<f32>;
 @group(0) @binding(2) var depthMip2: texture_2d<f32>;
-@group(0) @binding(3) var depthMip3: texture_2d<f32>;
-@group(0) @binding(4) var depthMip4: texture_2d<f32>;
-@group(0) @binding(5) var depthSampler: sampler;
-@group(0) @binding(6) var outputAO: texture_storage_2d<r32float, write>;
-@group(0) @binding(7) var<uniform> params: Params;
+@group(0) @binding(3) var depthSampler: sampler;
+@group(0) @binding(4) var outputAO: texture_storage_2d<r32float, write>;
+@group(0) @binding(5) var<uniform> params: Params;
 
 const PI: f32 = 3.14159265;
 
@@ -179,9 +149,7 @@ fn sampleDepthMIP(uv: vec2f, mipLevel: i32) -> f32 {
   switch(mipLevel) {
     case 0: { return textureSampleLevel(depthMip0, depthSampler, uv, 0.0).r; }
     case 1: { return textureSampleLevel(depthMip1, depthSampler, uv, 0.0).r; }
-    case 2: { return textureSampleLevel(depthMip2, depthSampler, uv, 0.0).r; }
-    case 3: { return textureSampleLevel(depthMip3, depthSampler, uv, 0.0).r; }
-    default: { return textureSampleLevel(depthMip4, depthSampler, uv, 0.0).r; }
+    default: { return textureSampleLevel(depthMip2, depthSampler, uv, 0.0).r; }
   }
 }
 
@@ -237,7 +205,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       let offset = dir * pixelRadius * t / params.resolution;
 
       // Choose MIP level based on step distance
-      let mipLevel = i32(clamp(log2(pixelRadius * t / 4.0), 0.0, 4.0));
+      let mipLevel = i32(clamp(log2(pixelRadius * t / 4.0), 0.0, 2.0));
 
       // Positive direction
       let sampleUVPos = uv + offset;

@@ -54,13 +54,11 @@ class GTAOComputePipeline {
     const w = this.width;
     const h = this.height;
 
-    // MIP chain textures (storage + sampled)
+    // MIP chain textures (storage + sampled) — 3 levels to stay within 4 storage texture limit
     const mipSizes = [
       [w, h],
       [Math.ceil(w/2), Math.ceil(h/2)],
       [Math.ceil(w/4), Math.ceil(h/4)],
-      [Math.ceil(w/8), Math.ceil(h/8)],
-      [Math.ceil(w/16), Math.ceil(h/16)],
     ];
 
     this._mipTextures = mipSizes.map(([mw, mh]) =>
@@ -204,9 +202,7 @@ class GTAOComputePipeline {
         { binding: 1, resource: this._mipTextures[0].createView() },
         { binding: 2, resource: this._mipTextures[1].createView() },
         { binding: 3, resource: this._mipTextures[2].createView() },
-        { binding: 4, resource: this._mipTextures[3].createView() },
-        { binding: 5, resource: this._mipTextures[4].createView() },
-        { binding: 6, resource: { buffer: this._prefilterUniformBuffer } },
+        { binding: 4, resource: { buffer: this._prefilterUniformBuffer } },
       ],
     });
 
@@ -223,11 +219,9 @@ class GTAOComputePipeline {
         { binding: 0, resource: this._mipTextures[0].createView() },
         { binding: 1, resource: this._mipTextures[1].createView() },
         { binding: 2, resource: this._mipTextures[2].createView() },
-        { binding: 3, resource: this._mipTextures[3].createView() },
-        { binding: 4, resource: this._mipTextures[4].createView() },
-        { binding: 5, resource: this._sampler },
-        { binding: 6, resource: this._aoRawTexture.createView() },
-        { binding: 7, resource: { buffer: this._gtaoUniformBuffer } },
+        { binding: 3, resource: this._sampler },
+        { binding: 4, resource: this._aoRawTexture.createView() },
+        { binding: 5, resource: { buffer: this._gtaoUniformBuffer } },
       ],
     });
 
