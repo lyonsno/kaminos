@@ -231,10 +231,12 @@ async function main() {
       await delay(250);
     }
     assert.ok(state, 'missing volume debug state');
-    assert.equal(state.effectiveRoute, 'native-3d-procedural-raymarch-v0', 'wrong effective route');
+    assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
     assert.equal(state.active, true, 'volume route is not active');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
+    assert.equal(state.simGrid, 64, 'fluid sim is not running on the expected 64^3 grid');
+    assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
     phase = 'gpu-readback';
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
@@ -245,6 +247,12 @@ async function main() {
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
+    }
+    if (!sample.simReadback || sample.simReadback.grid !== 64) {
+      throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
+      throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
     }
     const metrics = {
       width: sample.width,
@@ -266,6 +274,9 @@ async function main() {
       backend: state.backend,
       captureBackend,
       frameCount: state.frameCount,
+      simStepCount: sample.simStepCount,
+      simGrid: sample.simGrid,
+      simReadback: sample.simReadback,
       controls: state.controls,
       screenshot: out,
       metrics,

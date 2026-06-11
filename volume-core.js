@@ -1,7 +1,14 @@
-const ROUTE_IDENTITY = 'native-3d-procedural-raymarch-v0';
+const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
+const GRID_SIZE = 64;
+const GRID_CELL_COUNT = GRID_SIZE * GRID_SIZE * GRID_SIZE;
+const FLUID_COMPONENTS = 4;
+const FLUID_BUFFER_BYTES = GRID_CELL_COUNT * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 
 const WGSL = /* wgsl */`
+const GRID: u32 = 64u;
+const GRID_F: f32 = 64.0;
+
 struct Uniforms {
   invViewProj: mat4x4<f32>,
   cameraPos_time: vec4<f32>,
@@ -10,6 +17,8 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -35,41 +44,48 @@ fn hash31(p: vec3<f32>) -> f32 {
   return fract((r.x + r.y) * r.z);
 }
 
-fn noise3(p: vec3<f32>) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let w = f * f * (3.0 - 2.0 * f);
-  let a = hash31(i + vec3<f32>(0.0, 0.0, 0.0));
-  let b = hash31(i + vec3<f32>(1.0, 0.0, 0.0));
-  let c = hash31(i + vec3<f32>(0.0, 1.0, 0.0));
-  let d = hash31(i + vec3<f32>(1.0, 1.0, 0.0));
-  let e = hash31(i + vec3<f32>(0.0, 0.0, 1.0));
-  let f1 = hash31(i + vec3<f32>(1.0, 0.0, 1.0));
-  let g = hash31(i + vec3<f32>(0.0, 1.0, 1.0));
-  let h = hash31(i + vec3<f32>(1.0, 1.0, 1.0));
-  let x1 = mix(a, b, w.x);
-  let x2 = mix(c, d, w.x);
-  let x3 = mix(e, f1, w.x);
-  let x4 = mix(g, h, w.x);
-  return mix(mix(x1, x2, w.y), mix(x3, x4, w.y), w.z);
-}
-
-fn fbm(p0: vec3<f32>) -> f32 {
-  var p = p0;
-  var a = 0.55;
-  var v = 0.0;
-  for (var i = 0; i < 5; i = i + 1) {
-    v = v + a * noise3(p);
-    p = p * 2.03 + vec3<f32>(17.1, 9.2, 4.7);
-    a = a * 0.52;
-  }
-  return v;
-}
-
 fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
   let c = cos(a);
   let s = sin(a);
   return vec2<f32>(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+
+fn index3(c: vec3<u32>) -> u32 {
+  return c.x + c.y * GRID + c.z * GRID * GRID;
+}
+
+fn clampCell(c: vec3<i32>) -> vec3<u32> {
+  return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
+}
+
+fn readCell(c: vec3<i32>) -> vec4<f32> {
+  return fluidSrc[index3(clampCell(c))];
+}
+
+fn sampleFluidCell(p: vec3<f32>) -> vec4<f32> {
+  let pc = clamp(p, vec3<f32>(0.0), vec3<f32>(GRID_F - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  let c000 = readCell(i0 + vec3<i32>(0, 0, 0));
+  let c100 = readCell(i0 + vec3<i32>(1, 0, 0));
+  let c010 = readCell(i0 + vec3<i32>(0, 1, 0));
+  let c110 = readCell(i0 + vec3<i32>(1, 1, 0));
+  let c001 = readCell(i0 + vec3<i32>(0, 0, 1));
+  let c101 = readCell(i0 + vec3<i32>(1, 0, 1));
+  let c011 = readCell(i0 + vec3<i32>(0, 1, 1));
+  let c111 = readCell(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+fn sampleWorld(p: vec3<f32>) -> vec4<f32> {
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * (GRID_F - 1.0);
+  return sampleFluidCell(cell);
 }
 
 fn slabAxis(origin: f32, dir: f32, halfSize: f32) -> vec2<f32> {
@@ -91,42 +107,52 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
   return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
 }
 
-fn field(p0: vec3<f32>, time: f32) -> vec4<f32> {
-  let curl = u.fire_smoke_curl_speed.z;
-  let speed = u.fire_smoke_curl_speed.w;
-  let t = time * speed;
-  let y = clamp((p0.y + 1.0) * 0.5, 0.0, 1.0);
-  var p = p0;
-  let rotatedP = rotate2(p.xz, 0.8 * sin(t * 0.31 + p.y * 2.1));
-  p.x = rotatedP.x;
-  p.z = rotatedP.y;
-  let twist = curl * (1.2 + 2.4 * y) + t * (0.55 + y * 0.9);
-  let q = vec3<f32>(rotate2(p.xz, twist).x, p.y, rotate2(p.xz, -twist * 0.7).y);
-  let radial = length(q.xz);
-  let curlNoise = fbm(q * vec3<f32>(3.3, 2.0, 3.3) + vec3<f32>(0.0, -t * 0.86, t * 0.24));
-  let fineNoise = fbm(q * vec3<f32>(8.0, 5.6, 8.0) + vec3<f32>(t * 0.31, -t * 1.8, 4.0));
-  let column = 1.0 - smoothstep(0.16, 0.92, radial + 0.12 * y - 0.08 * curlNoise);
-  let neck = smoothstep(-0.96, -0.42, p.y);
-  let vent = 1.0 - smoothstep(0.72, 1.08, p.y);
-  let licks = smoothstep(0.18, 0.86, curlNoise + 0.38 * fineNoise - radial * 0.34);
-  let pilot = exp(-radial * radial * 9.0) * smoothstep(-0.94, -0.16, p.y) * (1.0 - smoothstep(0.50, 0.98, p.y));
-  let density = max(0.0, column * neck * vent * (0.18 + 1.15 * licks) + pilot * 0.55);
-  let hotCore = (1.0 - smoothstep(0.03, 0.54, radial + y * 0.10)) * smoothstep(-0.95, -0.20, p.y);
-  let filament = smoothstep(0.48, 0.86, fineNoise + curlNoise * 0.48);
-  let temperature = clamp((hotCore * 0.82 + filament * column * 0.58 + pilot * 0.72) * (1.08 - y * 0.24), 0.0, 1.35);
-  let smokeShell = smoothstep(0.26, 0.84, radial) * column * smoothstep(-0.32, 0.96, p.y);
-  let smoke = (density * smoothstep(0.06, 0.92, y) + smokeShell * 0.42) * (0.50 + 0.76 * curlNoise);
-  return vec4<f32>(density, temperature, smoke, curlNoise);
+fn fireColor(temp: f32) -> vec3<f32> {
+  let ember = vec3<f32>(0.70, 0.10, 0.018);
+  let orange = vec3<f32>(1.0, 0.38, 0.055);
+  let gold = vec3<f32>(1.0, 0.74, 0.20);
+  let pale = vec3<f32>(1.0, 0.82, 0.34);
+  let a = mix(ember, orange, smoothstep(0.08, 0.44, temp));
+  let b = mix(gold, pale, smoothstep(0.86, 1.55, temp));
+  return mix(a, b, smoothstep(0.34, 1.08, temp));
 }
 
-fn fireColor(temp: f32) -> vec3<f32> {
-  let ember = vec3<f32>(0.85, 0.12, 0.015);
-  let orange = vec3<f32>(1.0, 0.42, 0.055);
-  let gold = vec3<f32>(1.0, 0.82, 0.22);
-  let white = vec3<f32>(1.0, 0.96, 0.72);
-  let a = mix(ember, orange, smoothstep(0.10, 0.45, temp));
-  let b = mix(gold, white, smoothstep(0.75, 1.25, temp));
-  return mix(a, b, smoothstep(0.38, 0.95, temp));
+@compute @workgroup_size(4, 4, 4)
+fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let cell = vec3<f32>(gid) + vec3<f32>(0.5);
+  let p = (cell / GRID_F) * 2.0 - vec3<f32>(1.0);
+  let prev = fluidSrc[idx];
+  let speed = u.fire_smoke_curl_speed.w;
+  let curl = u.fire_smoke_curl_speed.z;
+  let time = u.cameraPos_time.w;
+  let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
+  var advected = sampleFluidCell(backCell);
+  var vel = advected.xyz * 0.985;
+  var density = advected.w * 0.990;
+
+  let radial = length(p.xz);
+  let sourceWobble = rotate2(p.xz, time * 1.3);
+  let sourceRadial = length(sourceWobble + vec2<f32>(0.10 * sin(time * 1.7), 0.08 * cos(time * 1.1)));
+  let source = exp(-sourceRadial * sourceRadial * 22.0) * smoothstep(-0.98, -0.76, p.y) * (1.0 - smoothstep(-0.42, -0.12, p.y));
+  let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
+  let phase = time * 1.8 + p.y * 7.0 + hash31(vec3<f32>(gid) * 0.07) * 2.0;
+  vel = vel + swirl * source * (0.040 + 0.022 * curl);
+  vel.y = vel.y + source * (0.135 + speed * 0.024) + density * 0.014;
+  vel.x = vel.x + sin(phase) * density * 0.010 * curl;
+  vel.z = vel.z + cos(phase * 0.93) * density * 0.010 * curl;
+  density = max(density, source * (1.25 + 0.18 * sin(time * 2.0)));
+
+  let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
+  let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
+  let topFade = 1.0 - smoothstep(0.80, 0.995, p.y);
+  density = density * mix(0.35, 1.0, wallFade) * mix(0.72, 1.0, topFade);
+  vel = vel * mix(0.55, 1.0, wallFade);
+  vel.y = max(vel.y, -0.015);
+  fluidDst[idx] = vec4<f32>(clamp(vel, vec3<f32>(-0.30), vec3<f32>(0.46)), clamp(density, 0.0, 2.2));
 }
 
 @fragment
@@ -149,33 +175,33 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dt = (endT - startT) / steps;
-  let jitter = hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), floor(u.cameraPos_time.w * 23.0))) * dt;
+  let jitter = hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), floor(u.cameraPos_time.w * 19.0))) * dt;
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
-  var energy = 0.0;
 
   for (var i = 0; i < 192; i = i + 1) {
-    if (f32(i) >= steps || trans < 0.015) { break; }
+    if (f32(i) >= steps || trans < 0.012) { break; }
     let p = ro + rd * t;
-    let sample = field(p, u.cameraPos_time.w);
-    let density = sample.x * u.viewport_steps_density.w;
-    let temp = sample.y * u.fire_smoke_curl_speed.x;
-    let smoke = sample.z * u.fire_smoke_curl_speed.y;
-    let alpha = clamp((density * 0.018 + smoke * 0.025) * dt * steps, 0.0, 0.12);
-    let smokeCol = vec3<f32>(0.20, 0.29, 0.33) * (0.35 + 0.62 * sample.w);
-    let flame = fireColor(temp) * temp * 1.05;
-    let local = mix(smokeCol, flame, smoothstep(0.22, 0.78, temp));
+    let state = sampleWorld(p);
+    let velMag = length(state.xyz);
+    let density = state.w * u.viewport_steps_density.w;
+    let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
+    let temp = clamp(density * (0.78 - y * 0.24) + velMag * 2.15, 0.0, 1.20) * u.fire_smoke_curl_speed.x;
+    let smoke = density * smoothstep(0.05, 0.96, y) * u.fire_smoke_curl_speed.y;
+    let alpha = clamp((density * 0.030 + smoke * 0.028) * dt * steps, 0.0, 0.12);
+    let smokeCol = vec3<f32>(0.18, 0.27, 0.31) * (0.42 + min(0.72, velMag * 6.0));
+    let flame = fireColor(temp) * (0.42 + temp * 0.64);
+    let local = mix(smokeCol, flame, smoothstep(0.18, 0.78, temp));
     color = color + trans * alpha * local;
     trans = trans * (1.0 - alpha);
-    energy = energy + alpha * (0.2 + temp);
     t = t + dt;
   }
 
-  let vignette = 1.0 - smoothstep(0.22, 1.42, length(ndc));
-  let exposed = vec3<f32>(1.0) - exp(-color * 0.92);
-  let grade = exposed * (0.78 + 0.20 * vignette);
-  return vec4<f32>(pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.82)), 1.0);
+  let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
+  let grade = exposed * (0.80 + 0.18 * vignette);
+  return vec4<f32>(pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84)), 1.0);
 }
 `;
 
@@ -199,6 +225,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     width: 0,
     height: 0,
     frameCount: 0,
+    simStepCount: 0,
+    simGrid: GRID_SIZE,
+    simGridLabel: `${GRID_SIZE}^3 velocity-density-storage-buffer`,
     lastFrameEnergy: 0,
     error: null,
   };
@@ -208,9 +237,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
-  let bindGroup = null;
+  let computePipeline = null;
+  let bindGroups = [];
   let bindGroupLayout = null;
   let uniformBuffer = null;
+  let fluidBuffers = [];
+  let currentFluid = 0;
   let frameTexture = null;
   let frameTextureSize = '';
   let format = null;
@@ -219,6 +251,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
+  }
+
+  function makeInitialFluid() {
+    const data = new Float32Array(GRID_CELL_COUNT * FLUID_COMPONENTS);
+    for (let z = 0; z < GRID_SIZE; z += 1) {
+      for (let y = 0; y < GRID_SIZE; y += 1) {
+        for (let x = 0; x < GRID_SIZE; x += 1) {
+          const fx = (x + 0.5) / GRID_SIZE * 2 - 1;
+          const fy = (y + 0.5) / GRID_SIZE * 2 - 1;
+          const fz = (z + 0.5) / GRID_SIZE * 2 - 1;
+          const radial = Math.hypot(fx, fz);
+          const source = Math.exp(-radial * radial * 20) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2);
+          const i = ((x + y * GRID_SIZE + z * GRID_SIZE * GRID_SIZE) * FLUID_COMPONENTS);
+          data[i] = -fz * source * 0.11;
+          data[i + 1] = source * 0.22;
+          data[i + 2] = fx * source * 0.11;
+          data[i + 3] = source * 1.6;
+        }
+      }
+    }
+    return data;
   }
 
   async function ensureGpu() {
@@ -237,11 +290,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emitStatus({ phase: 'gpu-error', error: state.error });
     });
     uniformBuffer = device.createBuffer({
-      label: 'kaminos volume uniforms',
+      label: 'kaminos fluid uniforms',
       size: uniforms.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    const shader = device.createShaderModule({ label: 'kaminos volume raymarch wgsl', code: WGSL });
+    const initialFluid = makeInitialFluid();
+    fluidBuffers = [0, 1].map(i => {
+      const buffer = device.createBuffer({
+        label: `kaminos fluid state ${i}`,
+        size: FLUID_BUFFER_BYTES,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(buffer, 0, initialFluid);
+      return buffer;
+    });
+    const shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
     if (compilationErrors.length > 0) {
@@ -251,15 +314,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       throw new Error(`WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos volume bind group layout',
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.FRAGMENT,
-        buffer: { type: 'uniform' },
-      }],
+      label: 'kaminos fluid bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
     });
     const pipelineLayout = device.createPipelineLayout({
-      label: 'kaminos volume pipeline layout',
+      label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
     });
     const makePipeline = (targetFormat, label) => device.createRenderPipeline({
@@ -270,22 +345,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       primitive: { topology: 'triangle-list' },
     });
     device.pushErrorScope('validation');
-    pipeline = makePipeline(format, 'kaminos volume canvas native-3d-procedural-raymarch-v0');
+    pipeline = makePipeline(format, 'kaminos volume canvas native-3d-compute-fluid-raymarch-v0');
     const canvasPipelineError = await device.popErrorScope();
     if (canvasPipelineError) {
       throw new Error(`canvas pipeline validation: ${canvasPipelineError.message || String(canvasPipelineError)}`);
     }
     device.pushErrorScope('validation');
-    readbackPipeline = makePipeline('rgba8unorm', 'kaminos volume readback native-3d-procedural-raymarch-v0');
+    readbackPipeline = makePipeline('rgba8unorm', 'kaminos volume readback native-3d-compute-fluid-raymarch-v0');
     const readbackPipelineError = await device.popErrorScope();
     if (readbackPipelineError) {
       throw new Error(`readback pipeline validation: ${readbackPipelineError.message || String(readbackPipelineError)}`);
     }
-    bindGroup = device.createBindGroup({
-      label: 'kaminos volume bind group',
-      layout: bindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+    computePipeline = device.createComputePipeline({
+      label: 'kaminos first fluid sim compute pipeline',
+      layout: pipelineLayout,
+      compute: { module: shader, entryPoint: 'cs' },
     });
+    bindGroups = [
+      device.createBindGroup({
+        label: 'kaminos fluid bind group A to B',
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[0] } },
+          { binding: 2, resource: { buffer: fluidBuffers[1] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: 'kaminos fluid bind group B to A',
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[1] } },
+          { binding: 2, resource: { buffer: fluidBuffers[0] } },
+        ],
+      }),
+    ];
     state.backend = `WebGPU:${adapter.info?.vendor || 'adapter'}`;
     emitStatus({ phase: 'gpu-ready' });
   }
@@ -338,6 +433,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
   }
 
+  function encodeSim(encoder) {
+    const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
+    pass.setPipeline(computePipeline);
+    pass.setBindGroup(0, bindGroups[currentFluid]);
+    pass.dispatchWorkgroups(GRID_SIZE / 4, GRID_SIZE / 4, GRID_SIZE / 4);
+    pass.end();
+    currentFluid = 1 - currentFluid;
+    state.simStepCount += 1;
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
     const pass = encoder.beginRenderPass({
       label,
@@ -349,7 +454,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }],
     });
     pass.setPipeline(targetPipeline);
-    pass.setBindGroup(0, bindGroup);
+    pass.setBindGroup(0, bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
   }
@@ -359,11 +464,52 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     raf = requestAnimationFrame(render);
     controls?.update?.();
     updateUniforms(now);
-    const encoder = device.createCommandEncoder({ label: 'kaminos volume frame' });
+    const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+    encodeSim(encoder);
     encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
     device.queue.submit([encoder.finish()]);
     state.frameCount += 1;
-    state.lastFrameEnergy = Math.min(9.999, 0.65 * controlsSnapshot.density + 0.55 * controlsSnapshot.fire + 0.28 * controlsSnapshot.smoke);
+    state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire);
+  }
+
+  async function sampleSimReadback() {
+    const readback = device.createBuffer({
+      label: 'kaminos fluid simReadback',
+      size: FLUID_BUFFER_BYTES,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos fluid simReadback encoder' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, FLUID_BUFFER_BYTES);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const data = new Float32Array(readback.getMappedRange());
+    let densitySum = 0;
+    let densityMax = 0;
+    let velocitySum = 0;
+    let liveVoxels = 0;
+    const stride = Math.max(1, Math.floor(GRID_CELL_COUNT / 4096));
+    for (let cell = 0; cell < GRID_CELL_COUNT; cell += stride) {
+      const i = cell * FLUID_COMPONENTS;
+      const vx = data[i];
+      const vy = data[i + 1];
+      const vz = data[i + 2];
+      const d = data[i + 3];
+      densitySum += d;
+      densityMax = Math.max(densityMax, d);
+      velocitySum += Math.hypot(vx, vy, vz);
+      if (d > 0.02) liveVoxels += 1;
+    }
+    const samples = Math.ceil(GRID_CELL_COUNT / stride);
+    readback.unmap();
+    readback.destroy();
+    return {
+      grid: GRID_SIZE,
+      samples,
+      densityMean: densitySum / samples,
+      densityMax,
+      velocityMean: velocitySum / samples,
+      liveVoxels,
+    };
   }
 
   async function sampleFrame() {
@@ -380,6 +526,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
+    encodeSim(encoder);
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
@@ -397,6 +544,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         width: state.width,
         height: state.height,
         frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        simGrid: state.simGrid,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -442,6 +591,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     buffer.unmap();
     buffer.destroy();
+    const simReadback = await sampleSimReadback();
     return {
       ok: true,
       width: state.width,
@@ -451,6 +601,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireLikePixels,
       smokeLikePixels,
       frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      simGrid: state.simGrid,
+      simReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -498,6 +651,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      for (const buffer of fluidBuffers) buffer.destroy();
       canvas.remove();
     },
   };

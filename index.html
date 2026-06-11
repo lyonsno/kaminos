@@ -293,7 +293,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
       <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
-      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-procedural-raymarch-v0</span></div>
+      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-compute-fluid-raymarch-v0</span></div>
       <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
     </div>
   </div>
@@ -1068,15 +1068,15 @@ function refreshVolumeReadout() {
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
-  document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-procedural-raymarch-v0';
+  document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
 }
 
 function frameVolumeCamera() {
-  camera.position.set(1.75, 0.42, 3.05);
-  controls.target.set(0, 0.12, 0);
+  camera.position.set(1.18, 0.28, 2.05);
+  controls.target.set(0, 0.02, 0);
   controls.update();
   window._kaminosDirty?.();
 }
@@ -1110,7 +1110,7 @@ async function initKaminosVolumeRoute() {
       setInfo('Volume renderer disabled');
     } else {
       await volumePrototype.setActive(true);
-      setInfo('Volume renderer — native WebGPU procedural raymarch');
+      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
     }
     refreshVolumeReadout();
   });
@@ -1121,7 +1121,7 @@ async function initKaminosVolumeRoute() {
     setActiveTab('volume');
     frameVolumeCamera();
     await volumePrototype.setActive(true);
-    setInfo('Volume renderer — native WebGPU procedural raymarch');
+    setInfo('Volume renderer — native WebGPU compute fluid raymarch');
   }
   syncControls();
   setInterval(refreshVolumeReadout, 500);
