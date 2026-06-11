@@ -89,6 +89,8 @@ canvas { display: block; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
+.select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
+.select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
@@ -290,9 +292,25 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-steps" min="32" max="160" step="4" value="64">
       <span class="slider-val" id="volume-steps-val">64</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Grid</span>
+      <select id="volume-resolution" class="select-input">
+        <option value="32">32^3</option>
+        <option value="48">48^3</option>
+        <option value="64" selected>64^3</option>
+        <option value="96">96^3</option>
+      </select>
+      <span class="slider-val" id="volume-resolution-val">64^3</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Grid Overlay</span>
+      <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
+    </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
       <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
+      <div class="field"><span class="field-key">Grid</span><span class="field-val" id="volume-grid">64^3</span></div>
       <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-compute-fluid-raymarch-v0</span></div>
       <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
     </div>
@@ -514,6 +532,7 @@ async function initScene() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
+  controls.panSpeed = 0.45;
   controls.minDistance = 0.5;
   controls.maxDistance = 10;
   controls.target.set(0, 0, 0);
@@ -1049,6 +1068,8 @@ function readVolumeControls() {
     curl: parseFloat(document.getElementById('volume-curl').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
+    resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+    gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
   };
 }
 
@@ -1060,6 +1081,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
+  document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
+  document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
 }
 
 function refreshVolumeReadout() {
@@ -1068,6 +1091,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
+  document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
@@ -1082,6 +1106,15 @@ function frameVolumeCamera() {
 }
 
 async function initKaminosVolumeRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
+  if ([32, 48, 64, 96].includes(routeResolution)) {
+    document.getElementById('volume-resolution').value = String(routeResolution);
+  }
+  const routeGrid = Number(params.get('volume_grid'));
+  if (Number.isFinite(routeGrid)) {
+    document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1101,8 +1134,9 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-speed', 'volume-steps']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-speed', 'volume-steps', 'volume-resolution', 'volume-grid-overlay']) {
     document.getElementById(id).addEventListener('input', syncControls);
+    document.getElementById(id).addEventListener('change', syncControls);
   }
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
@@ -1116,7 +1150,6 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
 
-  const params = new URLSearchParams(window.location.search);
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');
     frameVolumeCamera();

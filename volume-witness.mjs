@@ -16,6 +16,13 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const port = Number(args.get('--debug-port') || 9433);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
+const routeParams = new URL(url).searchParams;
+const requestedGrid = Number(routeParams.get('volume_resolution'));
+const expectedGrid = [32, 48, 64, 96].includes(requestedGrid) ? requestedGrid : 64;
+const requestedGridOverlay = Number(routeParams.get('volume_grid'));
+const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
+  ? Math.max(0, Math.min(1, requestedGridOverlay))
+  : 0;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -235,7 +242,9 @@ async function main() {
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
     assert.equal(state.active, true, 'volume route is not active');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
-    assert.equal(state.simGrid, 64, 'fluid sim is not running on the expected 64^3 grid');
+    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
+    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-density-storage-buffer`, 'fluid sim label does not match selected grid');
+    assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
     phase = 'gpu-readback';
@@ -248,7 +257,7 @@ async function main() {
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
-    if (!sample.simReadback || sample.simReadback.grid !== 64) {
+    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
@@ -276,7 +285,9 @@ async function main() {
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
+      simGridLabel: sample.simGridLabel,
       simReadback: sample.simReadback,
+      gridOverlay: sample.gridOverlay,
       controls: state.controls,
       screenshot: out,
       metrics,
