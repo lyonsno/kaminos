@@ -2,7 +2,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
-const FLUID_SLOTS_PER_CELL = 3;
+const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 
 function normalizeGridSize(value) {
@@ -21,7 +21,7 @@ function fluidBufferBytes(gridSize) {
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
-const SLOTS_PER_CELL: u32 = 3u;
+const SLOTS_PER_CELL: u32 = 4u;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -118,6 +118,11 @@ fn sampleWorldFireLayer(p: vec3<f32>) -> vec4<f32> {
   return sampleFluidSlot(cell, 2u);
 }
 
+fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  return sampleFluidSlot(cell, 3u);
+}
+
 fn curlAtCell(c: vec3<i32>) -> vec3<f32> {
   let vx0 = readSlot(c + vec3<i32>(-1, 0, 0), 0u).xyz;
   let vx1 = readSlot(c + vec3<i32>( 1, 0, 0), 0u).xyz;
@@ -189,6 +194,62 @@ fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
     cos(q.y * 1.43 - q.x)
   );
   return normalize(a + b * 0.72 + vec3<f32>(0.001));
+}
+
+fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
+  let sx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).x;
+  let sx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u).x;
+  let hx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).y;
+  let hx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u).y;
+  let fx0 = readSlot(c + vec3<i32>(-1, 0, 0), 2u).x;
+  let fx1 = readSlot(c + vec3<i32>( 1, 0, 0), 2u).x;
+  let sy0 = readSlot(c + vec3<i32>(0, -1, 0), 1u).x;
+  let sy1 = readSlot(c + vec3<i32>(0,  1, 0), 1u).x;
+  let hy0 = readSlot(c + vec3<i32>(0, -1, 0), 1u).y;
+  let hy1 = readSlot(c + vec3<i32>(0,  1, 0), 1u).y;
+  let fy0 = readSlot(c + vec3<i32>(0, -1, 0), 2u).x;
+  let fy1 = readSlot(c + vec3<i32>(0,  1, 0), 2u).x;
+  let sz0 = readSlot(c + vec3<i32>(0, 0, -1), 1u).x;
+  let sz1 = readSlot(c + vec3<i32>(0, 0,  1), 1u).x;
+  let hz0 = readSlot(c + vec3<i32>(0, 0, -1), 1u).y;
+  let hz1 = readSlot(c + vec3<i32>(0, 0,  1), 1u).y;
+  let fz0 = readSlot(c + vec3<i32>(0, 0, -1), 2u).x;
+  let fz1 = readSlot(c + vec3<i32>(0, 0,  1), 2u).x;
+  return vec3<f32>(
+    (sx1 - sx0) * 0.72 - (hx1 - hx0) * 0.44 + (fx1 - fx0) * 0.38,
+    (sy1 - sy0) * 0.72 - (hy1 - hy0) * 0.44 + (fy1 - fy0) * 0.38,
+    (sz1 - sz0) * 0.72 - (hz1 - hz0) * 0.44 + (fz1 - fz0) * 0.38
+  ) * 0.5;
+}
+
+fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32) -> vec4<f32> {
+  let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055), 0.0);
+  let slip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
+  let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
+  return sampleFluidSlot(backCell, 3u);
+}
+
+fn interfaceShreddingForce(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
+  let interfaceGrad = materialInterfaceGradient(c);
+  let interfaceEnergy = length(interfaceGrad);
+  let localCurl = curlAtCell(c);
+  let crossCurl = cross(normalize(interfaceGrad + vec3<f32>(0.001)), normalize(localCurl + turbulentDetailForce(p * 2.2, time) * 0.24 + vec3<f32>(0.001)));
+  let interfaceActive = smoothstep(0.018, 0.23, interfaceEnergy) * (0.28 + smoke * 0.34 + heat * 0.28 + flame * 0.20 + carriedShred * 0.30);
+  return normalize(crossCurl + turbulentDetailForce(p * 1.7 + vec3<f32>(0.23, -0.19, 0.13), time * 1.5) * 0.36 + vec3<f32>(0.001)) * interfaceActive * amount * 0.036;
+}
+
+fn smokeShredEnergy(c: vec3<i32>) -> f32 {
+  let m = readSlot(c, 3u);
+  return m.x * 0.52 + m.y * 0.90 + m.z * 0.30;
+}
+
+fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+  let interfaceEnergy = length(materialInterfaceGradient(c));
+  let verticalComb = 0.62 + 0.38 * sin(p.y * 31.0 + p.x * 17.0 - p.z * 13.0 + time * 7.1);
+  let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
+  let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
+  let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.06 + lick * 0.34);
+  return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
 fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32) -> vec4<f32> {
@@ -305,12 +366,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let inputRadius = max(0.04, u.source_controls.x);
   let inputFlow = max(0.0, u.source_controls.y);
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
+  let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
+  let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 2.5);
+  let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 2.5);
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
   var material = thermalAdvection(cell, prev.xyz, speed, localMaterial.y);
   var fireLayer = fireLayerAdvection(cell, prev.xyz, speed, localMaterial.y);
+  var microLayer = transportedMicrodetailAdvection(cell, prev.xyz, speed, localMaterial.y, localMaterial.x, fireLayer.x);
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
@@ -319,6 +384,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var flame = fireLayer.x * 0.938;
   var ember = fireLayer.y * 0.952;
   var flameDetail = fireLayer.z * 0.922;
+  var microSmoke = microLayer.x * 0.972;
+  var interfaceShred = microLayer.y * 0.948;
+  var fireLick = microLayer.z * 0.902;
+  var emberFleck = microLayer.w * 0.934;
 
   let radial = length(p.xz);
   let sourceCenter = p.xz;
@@ -341,13 +410,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
+  let interfaceEnergy = length(materialInterfaceGradient(cellI));
+  let lickBirth = fireLickBreakup(cellI, p, time, fireLickAmount, heat, fuel, flame, flameDetail, source);
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
+  let microForce = turbulentDetailForce(p * 2.85 + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
+  let shredForce = interfaceShreddingForce(cellI, p, time, shredAmount, heat, smoke, flame, interfaceShred);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let projectionCorrection = pressureProjectionCorrection(cellI, projection);
   vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
+  vel = vel + microForce;
+  vel = vel + shredForce;
   vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   vel = vel + heatExpansion;
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed);
@@ -361,9 +436,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
   fuel = max(fuel - heat * 0.018, 0.0);
   materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
-  flame = max(flame, fireBirth * 1.58 + heat * fuel * 0.060);
-  ember = max(ember, fireBirth * 0.78 + flame * 0.22);
-  flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * breakup));
+  microSmoke = max(microSmoke, (source * 0.36 + smokeFromHeat * 0.94 + materialDetail * 0.24) * microAmount * (0.48 + 0.52 * breakup));
+  interfaceShred = max(interfaceShred, interfaceEnergy * shredAmount * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.26 + microSmoke * 0.22 + source * 0.28) * 1.7);
+  fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickAmount * 0.34);
+  emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.08);
+  materialDetail = max(materialDetail, microSmoke * 0.44 + interfaceShred * 0.32);
+  flame = max(flame, fireBirth * 1.58 + heat * fuel * 0.060 + fireLick * 0.42);
+  ember = max(ember, fireBirth * 0.78 + flame * 0.22 + emberFleck * 0.18);
+  flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * breakup) + lickBirth.z + fireLick * 0.34);
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
@@ -376,12 +456,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   flame = flame * mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
   ember = ember * mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade);
   flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
-  let density = clamp(max(smoke * 1.08, heat * 0.42 + materialDetail * 0.22 + fuel * 0.10), 0.0, 2.2);
+  microSmoke = microSmoke * mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade);
+  interfaceShred = interfaceShred * mix(0.18, 1.0, wallFade);
+  fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, heatTopFade);
+  emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
+  let density = clamp(max(smoke * 1.08 + microSmoke * 0.20, heat * 0.42 + materialDetail * 0.22 + interfaceShred * 0.16 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = max(vel.y, -0.015);
   fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), 0.0);
+  fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
 }
 
 @fragment
@@ -418,6 +503,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let state = sampleWorldVelocity(p);
     let material = sampleWorldMaterial(p);
     let fireLayer = sampleWorldFireLayer(p);
+    let microLayer = sampleWorldMicrodetail(p);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -426,23 +512,29 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let flame = fireLayer.x;
     let ember = fireLayer.y;
     let flameDetail = fireLayer.z;
+    let microSmoke = microLayer.x;
+    let interfaceShred = microLayer.y;
+    let fireLick = microLayer.z;
+    let emberFleck = microLayer.w;
     let flowDebug = clamp(u.source_controls.w, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
-    let density = (smokeDensity * 0.96 + heat * 0.32 + materialDetail * 0.22) * u.viewport_steps_density.w;
+    let transportedTexture = clamp(microSmoke * 1.35 + interfaceShred * 2.25 + fireLick * 1.15 + emberFleck * 0.55, 0.0, 2.0);
+    let density = (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.16 + microSmoke * 0.30 + interfaceShred * 0.28 + fireLick * 0.10) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
-    let temp = clamp(flame * 1.34 + ember * 0.62 + flameDetail * 0.42 + heat * 0.18 + velMag * 0.42, 0.0, 1.95) * fireGain;
-    let smoke = smokeDensity * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
-    let smokeAlpha = clamp((smoke * 0.050 + heat * 0.006 + materialDetail * 0.014) * dt * steps * u.viewport_steps_density.w, 0.0, 0.12);
-    let fireAlpha = clamp((flame * 0.074 + ember * 0.040 + flameDetail * 0.030) * dt * steps * fireGain, 0.0, 0.17);
+    let temp = clamp(flame * 1.16 + ember * 0.52 + flameDetail * 0.34 + fireLick * 1.05 + emberFleck * 0.38 + heat * 0.15 + velMag * 0.42, 0.0, 1.95) * fireGain;
+    let smoke = (smokeDensity + microSmoke * 0.30 + interfaceShred * 0.28) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
+    let smokeAlpha = clamp((smoke * 0.043 + heat * 0.005 + materialDetail * 0.009 + microSmoke * 0.026 + interfaceShred * 0.032) * dt * steps * u.viewport_steps_density.w, 0.0, 0.13);
+    let fireAlpha = clamp((flame * 0.060 + ember * 0.034 + flameDetail * 0.024 + fireLick * 0.102 + emberFleck * 0.026 + interfaceShred * 0.012) * dt * steps * fireGain, 0.0, 0.18);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
-    let filament = smoothstep(0.05, 0.62, materialDetail) * (0.72 + 0.28 * sin(p.x * 22.0 + p.y * 31.0 - p.z * 19.0 + u.cameraPos_time.w * 3.0));
-    let fireFilament = smoothstep(0.04, 0.82, flameDetail) * (0.62 + 0.38 * sin(p.x * 28.0 - p.y * 18.0 + p.z * 24.0 + u.cameraPos_time.w * 4.6));
-    let fineShadow = 0.56 + 0.54 * filament;
-    let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.50 + min(0.76, velMag * 6.0));
-    let flameCol = fireColor(temp) * (0.30 + temp * 0.82 + fireFilament * 0.42);
+    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.76, transportedTexture)) * (0.55 + 0.45 * sin(p.x * 43.0 + p.y * 61.0 - p.z * 37.0 + u.cameraPos_time.w * 5.4));
+    let shredFilament = smoothstep(0.006, 0.20, interfaceShred * 2.4 + fireLick * 0.36 + microSmoke * 0.18) * (0.52 + 0.48 * sin(p.x * 56.0 - p.y * 31.0 + p.z * 49.0 - u.cameraPos_time.w * 7.1));
+    let fireFilament = smoothstep(0.010, 0.34, max(flameDetail * 0.72, fireLick * 1.65 + emberFleck * 0.36)) * (0.46 + 0.54 * sin(p.x * 52.0 - p.y * 36.0 + p.z * 43.0 + u.cameraPos_time.w * 8.4));
+    let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
+    let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26);
+    let flameCol = fireColor(temp) * (0.22 + temp * 0.82 + fireFilament * 0.74 + fireLick * 0.24 + shredFilament * 0.10);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
     var local = mix(smokeCol, flameCol, fireMix);
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
@@ -484,7 +576,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
-    simGridLabel: `${gridSize}^3 velocity-material-fire-storage-buffer`,
+    simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`,
     gridOverlay: 0,
     lastFrameEnergy: 0,
     error: null,
@@ -538,6 +630,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           data[i + 9] = source * 0.42;
           data[i + 10] = source * (0.30 + 0.70 * Math.cos((fx * 13) - (fz * 17)) ** 2);
           data[i + 11] = 0;
+          data[i + 12] = source * (0.22 + 0.78 * Math.sin((fx * 31) - (fz * 19)) ** 2);
+          data[i + 13] = source * (0.12 + 0.50 * Math.cos((fx * 23) + (fy * 17) - (fz * 29)) ** 2);
+          data[i + 14] = source * (0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21)) ** 2);
+          data[i + 15] = source * 0.16;
         }
       }
     }
@@ -602,7 +698,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     currentFluid = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
-    state.simGridLabel = `${gridSize}^3 velocity-material-fire-storage-buffer`;
+    state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
     emitStatus({ phase: 'grid-rebuilt' });
   }
 
@@ -715,7 +811,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[26] = controlsSnapshot.curl;
     uniforms[27] = controlsSnapshot.speed;
     uniforms[28] = controlsSnapshot.gridOverlay || 0;
-    uniforms[29] = gridSize;
+    uniforms[29] = controlsSnapshot.microdetail ?? 1.55;
+    uniforms[30] = controlsSnapshot.interfaceShred ?? 1.55;
+    uniforms[31] = controlsSnapshot.fireLicks ?? 1.65;
     uniforms[32] = controlsSnapshot.inputRadius || 0.08;
     uniforms[33] = controlsSnapshot.flowRate ?? 0.3;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
@@ -780,6 +878,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let heatSum = 0;
     let detailSum = 0;
     let fireLayerSum = 0;
+    let microdetailSum = 0;
+    let interfaceShredSum = 0;
+    let fireLickSum = 0;
     let velocitySum = 0;
     let curlSum = 0;
     let curlMax = 0;
@@ -809,11 +910,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const heat = data[i + 5];
       const detail = data[i + 7];
       const fireLayer = Math.max(data[i + 8], data[i + 9], data[i + 10]);
+      const microdetail = data[i + 12];
+      const interfaceShred = data[i + 13];
+      const fireLick = data[i + 14];
       densitySum += d;
       densityMax = Math.max(densityMax, d);
       heatSum += heat;
       detailSum += detail;
       fireLayerSum += fireLayer;
+      microdetailSum += microdetail;
+      interfaceShredSum += interfaceShred;
+      fireLickSum += fireLick;
       velocitySum += Math.hypot(vx, vy, vz);
       const vx0 = velocityAt(x - 1, y, z);
       const vx1 = velocityAt(x + 1, y, z);
@@ -844,6 +951,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       heatMean: heatSum / samples,
       detailMean: detailSum / samples,
       fireLayerMean: fireLayerSum / samples,
+      microdetailMean: microdetailSum / samples,
+      interfaceShredMean: interfaceShredSum / samples,
+      fireLickMean: fireLickSum / samples,
       velocityMean: velocitySum / samples,
       curlMean: curlSum / samples,
       curlMax,
@@ -970,7 +1080,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else {
         gridSize = requestedGrid;
         state.simGrid = gridSize;
-        state.simGridLabel = `${gridSize}^3 velocity-material-fire-storage-buffer`;
+        state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     },

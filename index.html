@@ -283,6 +283,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-curl-val">4.00</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Microdetail</span>
+      <input type="range" id="volume-microdetail" min="0" max="2.5" step="0.05" value="1.55">
+      <span class="slider-val" id="volume-microdetail-val">1.55</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Shred</span>
+      <input type="range" id="volume-interface-shred" min="0" max="2.5" step="0.05" value="1.55">
+      <span class="slider-val" id="volume-interface-shred-val">1.55</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Fire Licks</span>
+      <input type="range" id="volume-fire-licks" min="0" max="2.5" step="0.05" value="1.65">
+      <span class="slider-val" id="volume-fire-licks-val">1.65</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Projection</span>
       <input type="range" id="volume-projection" min="0" max="1.5" step="0.05" value="0.65">
       <span class="slider-val" id="volume-projection-val">0.65</span>
@@ -1098,6 +1113,9 @@ function readVolumeControls() {
     fire: parseFloat(document.getElementById('volume-fire').value),
     smoke: parseFloat(document.getElementById('volume-smoke').value),
     curl: parseFloat(document.getElementById('volume-curl').value),
+    microdetail: parseFloat(document.getElementById('volume-microdetail').value),
+    interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
+    fireLicks: parseFloat(document.getElementById('volume-fire-licks').value),
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
@@ -1115,6 +1133,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
   document.getElementById('volume-smoke-val').textContent = c.smoke.toFixed(2);
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
+  document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
+  document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
+  document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
@@ -1167,6 +1188,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
     document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));
   }
+  const routeMicrodetail = Number(params.get('volume_microdetail'));
+  if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
+    document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
+  }
+  const routeInterfaceShred = Number(params.get('volume_interface_shred'));
+  if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
+    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(2.5, routeInterfaceShred)));
+  }
+  const routeFireLicks = Number(params.get('volume_fire_licks'));
+  if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
+    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(2.5, routeFireLicks)));
+  }
   const routeFlowDebug = Number(params.get('volume_flow_debug'));
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
     document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
@@ -1190,7 +1223,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
