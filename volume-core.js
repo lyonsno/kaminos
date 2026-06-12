@@ -29,6 +29,7 @@ struct Uniforms {
   viewport_steps_density: vec4<f32>,
   fire_smoke_curl_speed: vec4<f32>,
   grid_overlay_debug: vec4<f32>,
+  source_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -270,6 +271,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
+  let inputRadius = max(0.04, u.source_controls.x);
+  let inputFlow = max(0.0, u.source_controls.y);
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
@@ -286,7 +289,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var flameDetail = fireLayer.z * 0.922;
 
   let radial = length(p.xz);
-  let sourceCenter = p.xz + vec2<f32>(0.025 * sin(time * 0.63), 0.020 * cos(time * 0.57));
+  let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
   let breakup = clamp(
@@ -297,10 +300,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.16,
     1.22
   );
-  let source = exp(-sourceRadial * sourceRadial * 18.0) * sourceBand * breakup;
-  let emberRing = exp(-pow(abs(sourceRadial - 0.24), 2.0) * 94.0) * sourceBand * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let sourceFalloff = 1.0 / max(0.0064, inputRadius * inputRadius);
+  let source = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
+  let emberRingRadius = inputRadius * 0.94;
+  let emberRingWidth = max(0.045, inputRadius * 0.22);
+  let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
-  let fireBirth = exp(-sourceRadial * sourceRadial * 34.0) * fireBirthBand * (0.72 + 0.66 * breakup);
+  let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let confinement = vorticityConfinement(cellI, 0.024 + curl * 0.034);
@@ -423,7 +429,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(32);
+  const uniforms = new Float32Array(36);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -475,7 +481,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
           const radial = Math.hypot(fx, fz);
-          const source = Math.exp(-radial * radial * 20) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2);
+          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.28);
+          const inputFlow = Math.max(0, controlsSnapshot.flowRate || 1);
+          const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
@@ -667,6 +675,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[27] = controlsSnapshot.speed;
     uniforms[28] = controlsSnapshot.gridOverlay || 0;
     uniforms[29] = gridSize;
+    uniforms[32] = controlsSnapshot.inputRadius || 0.28;
+    uniforms[33] = controlsSnapshot.flowRate ?? 1;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
   }

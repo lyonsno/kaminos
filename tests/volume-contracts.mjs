@@ -14,13 +14,19 @@ assert.match(index, /id="volume-resolution"/, 'Volume tab exposes a fluid grid r
 assert.match(index, /id="volume-grid-overlay"/, 'Volume tab exposes a grid overlay control');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
-assert.match(index, /id="volume-density"[^>]+value="0\.4"/, 'smoke route defaults to the operator-found density');
-assert.match(index, /id="volume-fire"[^>]+value="0\.25"/, 'smoke route defaults to low fire visibility');
-assert.match(index, /id="volume-smoke"[^>]+value="2\.15"/, 'smoke route defaults to high smoke visibility');
-assert.match(index, /id="volume-curl"[^>]+value="2\.5"/, 'smoke route defaults to the operator-found curl');
-assert.match(index, /id="volume-speed"[^>]+value="3\.55"/, 'smoke route defaults to the operator-found speed');
-assert.match(index, /id="volume-steps"[^>]+value="128"/, 'smoke route defaults to the operator-found ray steps');
+assert.match(index, /id="volume-density"[^>]+value="0\.35"/, 'smoke route defaults to the latest operator-found density');
+assert.match(index, /id="volume-fire"[^>]+value="0\.2"/, 'smoke route defaults to the latest low fire visibility');
+assert.match(index, /id="volume-smoke"[^>]+value="2\.8"/, 'smoke route defaults to the latest high smoke visibility');
+assert.match(index, /id="volume-curl"[^>]+value="3\.2"/, 'smoke route defaults to the latest operator-found curl');
+assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
+assert.match(index, /id="volume-steps"[^>]+value="140"/, 'smoke route defaults to the latest operator-found ray steps');
 assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route defaults to 96^3 grid');
+assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
+assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
+assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
+assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
+assert.match(index, /params\.has\('volume_input_radius'\)/, 'missing input-radius route param must not clamp the default to zero');
+assert.match(index, /params\.has\('volume_flow_rate'\)/, 'missing flow-rate route param must not clamp the default to zero');
 assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
 assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
@@ -48,6 +54,9 @@ assert.doesNotMatch(core, /jetA|jetB|jetC/, 'default motion must not be driven b
 assert.match(core, /fireLayerAdvection/, 'fluid compute shader advects a distinct fire layer');
 assert.match(core, /sampleWorldFireLayer/, 'fragment shader samples fire separately from smoke material');
 assert.match(core, /fireLayerMean/, 'sim readback reports separate fire layer evidence');
+assert.match(core, /source_controls/, 'fluid uniforms carry source radius and flow controls');
+assert.match(core, /let sourceCenter = p\.xz;/, 'fluid source is centered in sim XZ coordinates');
+assert.doesNotMatch(core, /sourceCenter = p\.xz \+ vec2/, 'fluid source must not wobble off-center in XZ');
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
 assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU storage buffers');
 assert.match(core, /createComputePipeline/, 'fluid state advances through a WebGPU compute pipeline');
