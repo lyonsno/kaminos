@@ -1,8 +1,8 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
-const DEFAULT_GRID_SIZE = 64;
+const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
-const FLUID_SLOTS_PER_CELL = 2;
+const FLUID_SLOTS_PER_CELL = 3;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 
 function normalizeGridSize(value) {
@@ -21,6 +21,7 @@ function fluidBufferBytes(gridSize) {
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
+const SLOTS_PER_CELL: u32 = 3u;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -73,7 +74,7 @@ fn clampCell(c: vec3<i32>) -> vec3<u32> {
 }
 
 fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
-  return index3(clampCell(c)) * 2u + slot;
+  return index3(clampCell(c)) * SLOTS_PER_CELL + slot;
 }
 
 fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
@@ -109,6 +110,11 @@ fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
 fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
   let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
   return sampleFluidSlot(cell, 1u);
+}
+
+fn sampleWorldFireLayer(p: vec3<f32>) -> vec4<f32> {
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  return sampleFluidSlot(cell, 2u);
 }
 
 fn curlAtCell(c: vec3<i32>) -> vec3<f32> {
@@ -193,6 +199,17 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
   return coolingBand * upperAir * 0.064 + fuelSmoke;
 }
 
+fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32) -> vec4<f32> {
+  let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13), 0.0);
+  let lick = vec3<f32>(
+    sin(cell.y * 0.44 + cell.z * 0.19 + heat * 3.8),
+    0.0,
+    cos(cell.y * 0.38 - cell.x * 0.21 - heat * 3.1)
+  ) * heat * 0.070;
+  let backCell = cell - (velocity + fastLift + lick) * (1.82 + speed * 0.34);
+  return sampleFluidSlot(backCell, 2u);
+}
+
 fn gridLine(p: vec3<f32>) -> f32 {
   let a = abs(p);
   var faceUv = vec2<f32>(0.0);
@@ -246,7 +263,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
-  let base = idx * 2u;
+  let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
   let p = (cell / f32(GRID)) * 2.0 - vec3<f32>(1.0);
@@ -258,11 +275,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
   var material = thermalAdvection(cell, prev.xyz, speed, localMaterial.y);
+  var fireLayer = fireLayerAdvection(cell, prev.xyz, speed, localMaterial.y);
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
   var fuel = material.z * 0.990;
   var materialDetail = material.w * 0.970;
+  var flame = fireLayer.x * 0.938;
+  var ember = fireLayer.y * 0.952;
+  var flameDetail = fireLayer.z * 0.922;
 
   let radial = length(p.xz);
   let sourceCenter = p.xz + vec2<f32>(0.025 * sin(time * 0.63), 0.020 * cos(time * 0.57));
@@ -278,6 +299,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let source = exp(-sourceRadial * sourceRadial * 18.0) * sourceBand * breakup;
   let emberRing = exp(-pow(abs(sourceRadial - 0.24), 2.0) * 94.0) * sourceBand * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
+  let fireBirth = exp(-sourceRadial * sourceRadial * 34.0) * fireBirthBand * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let confinement = vorticityConfinement(cellI, 0.024 + curl * 0.034);
@@ -297,6 +320,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
   fuel = max(fuel - heat * 0.018, 0.0);
   materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
+  flame = max(flame, fireBirth * 1.58 + heat * fuel * 0.060);
+  ember = max(ember, fireBirth * 0.78 + flame * 0.22);
+  flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * breakup));
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
@@ -306,11 +332,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   heat = heat * mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade);
   fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade);
   materialDetail = materialDetail * mix(0.22, 1.0, wallFade);
+  flame = flame * mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
+  ember = ember * mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade);
+  flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
   let density = clamp(max(smoke * 1.08, heat * 0.42 + materialDetail * 0.22 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = max(vel.y, -0.015);
   fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
+  fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), 0.0);
 }
 
 @fragment
@@ -346,21 +376,30 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let p = ro + rd * t;
     let state = sampleWorldVelocity(p);
     let material = sampleWorldMaterial(p);
+    let fireLayer = sampleWorldFireLayer(p);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
     let fuel = material.z;
     let materialDetail = material.w;
+    let flame = fireLayer.x;
+    let ember = fireLayer.y;
+    let flameDetail = fireLayer.z;
     let density = (smokeDensity * 0.96 + heat * 0.32 + materialDetail * 0.22) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
-    let temp = clamp(heat * (0.96 - y * 0.18) + fuel * 0.18 + materialDetail * 0.32 + velMag * 1.72, 0.0, 1.55) * u.fire_smoke_curl_speed.x;
+    let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
+    let temp = clamp(flame * 1.34 + ember * 0.62 + flameDetail * 0.42 + heat * 0.18 + velMag * 0.42, 0.0, 1.95) * fireGain;
     let smoke = smokeDensity * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
-    let alpha = clamp((smoke * 0.052 + heat * 0.014 + materialDetail * 0.020) * dt * steps * u.viewport_steps_density.w, 0.0, 0.13);
+    let smokeAlpha = clamp((smoke * 0.050 + heat * 0.006 + materialDetail * 0.014) * dt * steps * u.viewport_steps_density.w, 0.0, 0.12);
+    let fireAlpha = clamp((flame * 0.074 + ember * 0.040 + flameDetail * 0.030) * dt * steps * fireGain, 0.0, 0.17);
+    let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let filament = smoothstep(0.05, 0.62, materialDetail) * (0.72 + 0.28 * sin(p.x * 22.0 + p.y * 31.0 - p.z * 19.0 + u.cameraPos_time.w * 3.0));
+    let fireFilament = smoothstep(0.04, 0.82, flameDetail) * (0.62 + 0.38 * sin(p.x * 28.0 - p.y * 18.0 + p.z * 24.0 + u.cameraPos_time.w * 4.6));
     let fineShadow = 0.56 + 0.54 * filament;
     let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.50 + min(0.76, velMag * 6.0));
-    let flame = fireColor(temp) * (0.26 + temp * 0.60 + filament * 0.24);
-    let local = mix(smokeCol, flame, smoothstep(0.16, 0.78, temp));
+    let flameCol = fireColor(temp) * (0.30 + temp * 0.82 + fireFilament * 0.42);
+    let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
+    let local = mix(smokeCol, flameCol, fireMix);
     color = color + trans * alpha * local;
     trans = trans * (1.0 - alpha);
     t = t + dt;
@@ -398,7 +437,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
-    simGridLabel: `${gridSize}^3 velocity-material-storage-buffer`,
+    simGridLabel: `${gridSize}^3 velocity-material-fire-storage-buffer`,
     gridOverlay: 0,
     lastFrameEnergy: 0,
     error: null,
@@ -446,6 +485,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           data[i + 5] = source * 1.28;
           data[i + 6] = source * 1.0;
           data[i + 7] = source * (0.35 + 0.65 * Math.sin((fx * 18) + (fz * 11)) ** 2);
+          data[i + 8] = source * 0.90;
+          data[i + 9] = source * 0.42;
+          data[i + 10] = source * (0.30 + 0.70 * Math.cos((fx * 13) - (fz * 17)) ** 2);
+          data[i + 11] = 0;
         }
       }
     }
@@ -510,7 +553,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     currentFluid = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
-    state.simGridLabel = `${gridSize}^3 velocity-material-storage-buffer`;
+    state.simGridLabel = `${gridSize}^3 velocity-material-fire-storage-buffer`;
     emitStatus({ phase: 'grid-rebuilt' });
   }
 
@@ -683,6 +726,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let densityMax = 0;
     let heatSum = 0;
     let detailSum = 0;
+    let fireLayerSum = 0;
     let velocitySum = 0;
     let liveVoxels = 0;
     const cells = gridCellCount(gridSize);
@@ -695,10 +739,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const d = Math.max(data[i + 3], data[i + 4] * 0.9, data[i + 5] * 0.72);
       const heat = data[i + 5];
       const detail = data[i + 7];
+      const fireLayer = Math.max(data[i + 8], data[i + 9], data[i + 10]);
       densitySum += d;
       densityMax = Math.max(densityMax, d);
       heatSum += heat;
       detailSum += detail;
+      fireLayerSum += fireLayer;
       velocitySum += Math.hypot(vx, vy, vz);
       if (d > 0.02) liveVoxels += 1;
     }
@@ -713,6 +759,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       densityMax,
       heatMean: heatSum / samples,
       detailMean: detailSum / samples,
+      fireLayerMean: fireLayerSum / samples,
       velocityMean: velocitySum / samples,
       liveVoxels,
     };
@@ -835,7 +882,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else {
         gridSize = requestedGrid;
         state.simGrid = gridSize;
-        state.simGridLabel = `${gridSize}^3 velocity-material-storage-buffer`;
+        state.simGridLabel = `${gridSize}^3 velocity-material-fire-storage-buffer`;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     },

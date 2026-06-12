@@ -19,7 +19,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const routeParams = new URL(url).searchParams;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96].includes(requestedGrid) ? requestedGrid : 64;
+const expectedGrid = [32, 48, 64, 96].includes(requestedGrid) ? requestedGrid : 96;
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
@@ -244,7 +244,7 @@ async function main() {
     assert.equal(state.active, true, 'volume route is not active');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-storage-buffer`, 'fluid sim label does not match selected grid');
+    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-storage-buffer`, 'fluid sim label does not match selected grid');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
@@ -266,6 +266,9 @@ async function main() {
     }
     if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
+      throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
     const metrics = {
       width: sample.width,
