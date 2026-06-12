@@ -32,7 +32,12 @@ assert.match(core, /gridLine/, 'fragment shader renders an active grid overlay')
 assert.match(core, /curlAtCell/, 'fluid compute shader measures velocity curl for fine detail');
 assert.match(core, /vorticity confinement/i, 'fluid compute shader includes explicit vorticity confinement forcing');
 assert.match(core, /turbulentDetailForce/, 'fluid compute shader injects small-scale turbulent detail force');
-assert.match(core, /material = sampleFluidSlot/, 'fluid compute shader advects material channels separately from velocity');
+assert.match(core, /var material = thermalAdvection/, 'fluid compute shader advects material channels through thermal transport');
+assert.match(core, /thermalAdvection/, 'fluid compute shader treats heat as an explicit thermal-advection channel');
+assert.match(core, /thermalBuoyancyForce/, 'fluid compute shader derives buoyancy from transported heat');
+assert.match(core, /thermalExpansionForce/, 'fluid compute shader expands hot flow from heat gradients');
+assert.match(core, /heatToSmokeConversion/, 'fluid compute shader converts cooling heat/fuel into smoke');
+assert.doesNotMatch(core, /jetA|jetB|jetC/, 'default motion must not be driven by a three-nozzle whirling sprayer');
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
 assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU storage buffers');
 assert.match(core, /createComputePipeline/, 'fluid state advances through a WebGPU compute pipeline');

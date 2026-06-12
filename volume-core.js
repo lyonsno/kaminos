@@ -153,6 +153,46 @@ fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
   return normalize(a + b * 0.72 + vec3<f32>(0.001));
 }
 
+fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32) -> vec4<f32> {
+  let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055), 0.0);
+  let thermalSlip = vec3<f32>(
+    sin(cell.z * 0.41 + localHeat * 2.7),
+    0.0,
+    cos(cell.x * 0.37 - localHeat * 2.1)
+  ) * localHeat * 0.032;
+  let backCell = cell - (velocity + thermalLift + thermalSlip) * (2.30 + speed * 0.46);
+  return sampleFluidSlot(backCell, 1u);
+}
+
+fn thermalBuoyancyForce(heat: f32, smoke: f32, fuel: f32, speed: f32) -> vec3<f32> {
+  let hotLift = smoothstep(0.04, 1.25, heat) * (0.034 + speed * 0.018);
+  let smokeDrag = smoke * 0.014;
+  let fuelKick = fuel * heat * 0.014;
+  return vec3<f32>(0.0, hotLift + fuelKick - smokeDrag, 0.0);
+}
+
+fn heatGradientAtCell(c: vec3<i32>) -> vec3<f32> {
+  let hx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u).y;
+  let hx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u).y;
+  let hy0 = readSlot(c + vec3<i32>(0, -1, 0), 1u).y;
+  let hy1 = readSlot(c + vec3<i32>(0,  1, 0), 1u).y;
+  let hz0 = readSlot(c + vec3<i32>(0, 0, -1), 1u).y;
+  let hz1 = readSlot(c + vec3<i32>(0, 0,  1), 1u).y;
+  return vec3<f32>(hx1 - hx0, hy1 - hy0, hz1 - hz0) * 0.5;
+}
+
+fn thermalExpansionForce(c: vec3<i32>, heat: f32, amount: f32) -> vec3<f32> {
+  let grad = heatGradientAtCell(c);
+  return -grad * smoothstep(0.08, 1.35, heat) * amount;
+}
+
+fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
+  let coolingBand = smoothstep(0.16, 1.05, heat) * (1.0 - smoothstep(1.18, 1.85, heat));
+  let upperAir = smoothstep(-0.55, 0.72, y);
+  let fuelSmoke = fuel * smoothstep(0.06, 0.86, heat) * 0.072;
+  return coolingBand * upperAir * 0.064 + fuelSmoke;
+}
+
 fn gridLine(p: vec3<f32>) -> f32 {
   let a = abs(p);
   var faceUv = vec2<f32>(0.0);
@@ -216,51 +256,57 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
-  var material = sampleFluidSlot(backCell, 1u);
+  let localMaterial = readSlot(cellI, 1u);
+  var material = thermalAdvection(cell, prev.xyz, speed, localMaterial.y);
   var vel = advected.xyz * 0.982;
-  var smoke = material.x * 0.992;
-  var heat = material.y * 0.966;
-  var fuel = material.z * 0.986;
+  var smoke = material.x * 0.990;
+  var heat = material.y * 0.982;
+  var fuel = material.z * 0.990;
   var materialDetail = material.w * 0.970;
 
   let radial = length(p.xz);
-  let sourceWobble = rotate2(p.xz, time * 1.3);
-  let sourceCenter = sourceWobble + vec2<f32>(0.10 * sin(time * 1.7), 0.08 * cos(time * 1.1));
+  let sourceCenter = p.xz + vec2<f32>(0.025 * sin(time * 0.63), 0.020 * cos(time * 0.57));
   let sourceRadial = length(sourceCenter);
-  let sourceBand = smoothstep(-0.99, -0.76, p.y) * (1.0 - smoothstep(-0.38, -0.06, p.y));
-  let breakup = clamp(0.58 + 0.30 * sin(sourceWobble.x * 24.0 + time * 5.6) + 0.24 * cos(sourceWobble.y * 27.0 - time * 4.7), 0.12, 1.25);
-  let jetA = rotate2(vec2<f32>(0.22, 0.02), time * 0.91);
-  let jetB = rotate2(vec2<f32>(0.18, 0.16), time * -1.17 + 2.1);
-  let jetC = rotate2(vec2<f32>(0.15, -0.18), time * 1.43 + 4.2);
-  let jetField =
-    exp(-dot(sourceCenter - jetA, sourceCenter - jetA) * 76.0) +
-    exp(-dot(sourceCenter - jetB, sourceCenter - jetB) * 92.0) +
-    exp(-dot(sourceCenter - jetC, sourceCenter - jetC) * 84.0);
-  let source = (exp(-sourceRadial * sourceRadial * 24.0) * 0.46 + jetField * 0.42) * sourceBand * breakup;
-  let emberRing = exp(-pow(abs(sourceRadial - 0.20), 2.0) * 92.0) * sourceBand * (0.42 + 0.28 * sin(time * 3.1 + p.x * 11.0));
+  let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
+  let breakup = clamp(
+    0.64
+      + 0.24 * sin(p.x * 19.0 + p.z * 7.0 + time * 1.7)
+      + 0.20 * cos(p.z * 23.0 - p.x * 5.0 - time * 1.3)
+      + 0.16 * hash31(vec3<f32>(gid) * 0.061 + vec3<f32>(floor(time * 2.0))),
+    0.16,
+    1.22
+  );
+  let source = exp(-sourceRadial * sourceRadial * 18.0) * sourceBand * breakup;
+  let emberRing = exp(-pow(abs(sourceRadial - 0.24), 2.0) * 94.0) * sourceBand * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let confinement = vorticityConfinement(cellI, 0.024 + curl * 0.034);
   let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
-  vel = vel + swirl * source * (0.040 + 0.022 * curl);
-  vel = vel + confinement * (0.55 + smoke * 0.44 + heat * 0.28);
+  let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
+  vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
+  vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
-  vel.y = vel.y + source * (0.126 + speed * 0.030) + heat * 0.022 + smoke * 0.006;
+  vel = vel + heatExpansion;
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed);
+  vel.y = vel.y + source * (0.022 + speed * 0.006) + smoke * 0.003;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
-  smoke = max(smoke, source * 0.62 + emberRing * 0.18);
-  heat = max(heat, source * 1.34 + emberRing * 0.58);
-  fuel = max(fuel, source * (1.0 - smoothstep(-0.74, -0.18, p.y)));
-  materialDetail = max(materialDetail, (source + emberRing + jetField * sourceBand * 0.18) * (0.42 + 0.68 * breakup));
+  let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
+  smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
+  heat = max(heat, source * 0.86 + emberRing * 0.22);
+  fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
+  fuel = max(fuel - heat * 0.018, 0.0);
+  materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
-  let topFade = 1.0 - smoothstep(0.80, 0.995, p.y);
-  smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.78, 1.0, topFade);
-  heat = heat * mix(0.30, 1.0, wallFade) * mix(0.60, 1.0, topFade);
-  fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.70, 1.0, topFade);
+  let smokeTopFade = 1.0 - smoothstep(0.76, 0.995, p.y);
+  let heatTopFade = 1.0 - smoothstep(0.50, 0.940, p.y);
+  smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade);
+  heat = heat * mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade);
+  fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade);
   materialDetail = materialDetail * mix(0.22, 1.0, wallFade);
-  let density = clamp(max(smoke * 0.92, heat * 0.68 + materialDetail * 0.26 + fuel * 0.12), 0.0, 2.2);
+  let density = clamp(max(smoke * 1.08, heat * 0.42 + materialDetail * 0.22 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = max(vel.y, -0.015);
   fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
@@ -305,15 +351,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let heat = material.y;
     let fuel = material.z;
     let materialDetail = material.w;
-    let density = (smokeDensity * 0.72 + heat * 0.54 + materialDetail * 0.28) * u.viewport_steps_density.w;
+    let density = (smokeDensity * 0.96 + heat * 0.32 + materialDetail * 0.22) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let temp = clamp(heat * (0.96 - y * 0.18) + fuel * 0.18 + materialDetail * 0.32 + velMag * 1.72, 0.0, 1.55) * u.fire_smoke_curl_speed.x;
     let smoke = smokeDensity * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
-    let alpha = clamp((smoke * 0.030 + heat * 0.022 + materialDetail * 0.026) * dt * steps * u.viewport_steps_density.w, 0.0, 0.14);
+    let alpha = clamp((smoke * 0.052 + heat * 0.014 + materialDetail * 0.020) * dt * steps * u.viewport_steps_density.w, 0.0, 0.13);
     let filament = smoothstep(0.05, 0.62, materialDetail) * (0.72 + 0.28 * sin(p.x * 22.0 + p.y * 31.0 - p.z * 19.0 + u.cameraPos_time.w * 3.0));
     let fineShadow = 0.56 + 0.54 * filament;
-    let smokeCol = vec3<f32>(0.18, 0.27, 0.31) * fineShadow * (0.42 + min(0.72, velMag * 6.4));
-    let flame = fireColor(temp) * (0.34 + temp * 0.72 + filament * 0.32);
+    let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.50 + min(0.76, velMag * 6.0));
+    let flame = fireColor(temp) * (0.26 + temp * 0.60 + filament * 0.24);
     let local = mix(smokeCol, flame, smoothstep(0.16, 0.78, temp));
     color = color + trans * alpha * local;
     trans = trans * (1.0 - alpha);
