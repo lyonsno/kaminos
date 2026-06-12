@@ -270,6 +270,12 @@ async function main() {
     if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
+    if (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005) {
+      throw new Error(`GPU sim readback does not show curl/vorticity evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
+      throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
     const metrics = {
       width: sample.width,
       height: sample.height,

@@ -14,19 +14,27 @@ assert.match(index, /id="volume-resolution"/, 'Volume tab exposes a fluid grid r
 assert.match(index, /id="volume-grid-overlay"/, 'Volume tab exposes a grid overlay control');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
-assert.match(index, /id="volume-density"[^>]+value="0\.35"/, 'smoke route defaults to the latest operator-found density');
-assert.match(index, /id="volume-fire"[^>]+value="0\.2"/, 'smoke route defaults to the latest low fire visibility');
+assert.match(index, /id="volume-density"[^>]+value="1"/, 'smoke route defaults to the latest operator-found density');
+assert.match(index, /id="volume-fire"[^>]+value="0\.6"/, 'smoke route defaults to the latest low fire visibility');
 assert.match(index, /id="volume-smoke"[^>]+value="2\.8"/, 'smoke route defaults to the latest high smoke visibility');
-assert.match(index, /id="volume-curl"[^>]+value="3\.2"/, 'smoke route defaults to the latest operator-found curl');
+assert.match(index, /id="volume-curl"[^>]+value="4"/, 'smoke route defaults to the latest operator-found curl');
 assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
-assert.match(index, /id="volume-steps"[^>]+value="140"/, 'smoke route defaults to the latest operator-found ray steps');
+assert.match(index, /id="volume-steps"[^>]+value="160"/, 'smoke route defaults to the latest operator-found ray steps');
 assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route defaults to 96^3 grid');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
+assert.match(index, /id="volume-input-radius"[^>]+value="0\.08"/, 'smoke route defaults to the latest narrow input radius');
+assert.match(index, /id="volume-flow-rate"[^>]+value="0\.3"/, 'smoke route defaults to the latest operator-found flow rate');
+assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
+assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
 assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
 assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
+assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
+assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic overlay');
 assert.match(index, /params\.has\('volume_input_radius'\)/, 'missing input-radius route param must not clamp the default to zero');
 assert.match(index, /params\.has\('volume_flow_rate'\)/, 'missing flow-rate route param must not clamp the default to zero');
+assert.match(index, /params\.has\('volume_projection'\)/, 'missing projection route param must not clamp the default to zero');
+assert.match(index, /params\.has\('volume_flow_debug'\)/, 'missing flow-debug route param must not clamp the default to zero');
 assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
 assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
@@ -45,6 +53,9 @@ assert.match(core, /gridLine/, 'fragment shader renders an active grid overlay')
 assert.match(core, /curlAtCell/, 'fluid compute shader measures velocity curl for fine detail');
 assert.match(core, /vorticity confinement/i, 'fluid compute shader includes explicit vorticity confinement forcing');
 assert.match(core, /turbulentDetailForce/, 'fluid compute shader injects small-scale turbulent detail force');
+assert.match(core, /divergenceAtCell/, 'fluid compute shader measures local divergence before projection');
+assert.match(core, /pressureProjectionCorrection/, 'fluid compute shader applies an explicit pressure-like projection correction');
+assert.match(core, /fineScaleBreakup/, 'fluid compute shader applies controllable fine-scale breakup after projection');
 assert.match(core, /var material = thermalAdvection/, 'fluid compute shader advects material channels through thermal transport');
 assert.match(core, /thermalAdvection/, 'fluid compute shader treats heat as an explicit thermal-advection channel');
 assert.match(core, /thermalBuoyancyForce/, 'fluid compute shader derives buoyancy from transported heat');
@@ -55,6 +66,8 @@ assert.match(core, /fireLayerAdvection/, 'fluid compute shader advects a distinc
 assert.match(core, /sampleWorldFireLayer/, 'fragment shader samples fire separately from smoke material');
 assert.match(core, /fireLayerMean/, 'sim readback reports separate fire layer evidence');
 assert.match(core, /source_controls/, 'fluid uniforms carry source radius and flow controls');
+assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/projection strength');
+assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
 assert.match(core, /let sourceCenter = p\.xz;/, 'fluid source is centered in sim XZ coordinates');
 assert.doesNotMatch(core, /sourceCenter = p\.xz \+ vec2/, 'fluid source must not wobble off-center in XZ');
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
@@ -63,6 +76,8 @@ assert.match(core, /createComputePipeline/, 'fluid state advances through a WebG
 assert.match(core, /dispatchWorkgroups/, 'fluid sim dispatches compute workgroups each frame');
 assert.match(core, /simStepCount/, 'debug state exposes simulation step count');
 assert.match(core, /simGrid/, 'debug state exposes simulation grid identity');
+assert.match(core, /curlMean/, 'sim readback reports curl evidence');
+assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection evidence');
 assert.doesNotMatch(core, /screenGridLine/, 'grid overlay must not fall back to a fake screen-space lattice');
 assert.match(core, /faceUv = p\.yz/, 'grid overlay uses volume coordinates on x-facing cube surfaces');
 assert.match(core, /faceUv = p\.xz/, 'grid overlay uses volume coordinates on y-facing cube surfaces');
@@ -80,5 +95,7 @@ assert.match(witness, /detailMean/, 'witness records transported material detail
 assert.match(witness, /simGridLabel/, 'witness records human-readable sim grid identity');
 assert.match(witness, /velocity-material-fire-storage-buffer/, 'witness requires the fire-layer storage label');
 assert.match(witness, /fireLayerMean/, 'witness requires transported fire layer evidence');
+assert.match(witness, /curlMean/, 'witness requires curl diagnostic evidence');
+assert.match(witness, /divergenceMean/, 'witness requires divergence diagnostic evidence');
 assert.match(witness, /gridOverlay/, 'witness records grid overlay/debug state');
 assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');

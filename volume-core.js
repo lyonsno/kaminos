@@ -136,6 +136,26 @@ fn curlMagnitudeAtCell(c: vec3<i32>) -> f32 {
   return length(curlAtCell(c));
 }
 
+fn divergenceAtCell(c: vec3<i32>) -> f32 {
+  let vx0 = readSlot(c + vec3<i32>(-1, 0, 0), 0u).x;
+  let vx1 = readSlot(c + vec3<i32>( 1, 0, 0), 0u).x;
+  let vy0 = readSlot(c + vec3<i32>(0, -1, 0), 0u).y;
+  let vy1 = readSlot(c + vec3<i32>(0,  1, 0), 0u).y;
+  let vz0 = readSlot(c + vec3<i32>(0, 0, -1), 0u).z;
+  let vz1 = readSlot(c + vec3<i32>(0, 0,  1), 0u).z;
+  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
+}
+
+fn pressureProjectionCorrection(c: vec3<i32>, strength: f32) -> vec3<f32> {
+  let divX = divergenceAtCell(c + vec3<i32>(1, 0, 0)) - divergenceAtCell(c + vec3<i32>(-1, 0, 0));
+  let divY = divergenceAtCell(c + vec3<i32>(0, 1, 0)) - divergenceAtCell(c + vec3<i32>(0, -1, 0));
+  let divZ = divergenceAtCell(c + vec3<i32>(0, 0, 1)) - divergenceAtCell(c + vec3<i32>(0, 0, -1));
+  let gradient = vec3<f32>(divX, divY, divZ) * 0.5;
+  let center = divergenceAtCell(c);
+  let localDamping = readSlot(c, 0u).xyz * center * 0.055;
+  return (gradient * 0.46 + localDamping) * clamp(strength, 0.0, 1.5);
+}
+
 fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   // Vorticity confinement preserves small curl features that semi-Lagrangian advection damps away.
   let magX = curlMagnitudeAtCell(c + vec3<i32>(1, 0, 0)) - curlMagnitudeAtCell(c + vec3<i32>(-1, 0, 0));
@@ -143,6 +163,17 @@ fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   let magZ = curlMagnitudeAtCell(c + vec3<i32>(0, 0, 1)) - curlMagnitudeAtCell(c + vec3<i32>(0, 0, -1));
   let normal = normalize(vec3<f32>(magX, magY, magZ) + vec3<f32>(0.0001));
   return cross(normal, curlAtCell(c)) * amount;
+}
+
+fn fineScaleBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
+  let localCurl = curlAtCell(c);
+  let curlEnergy = length(localCurl);
+  let detailA = turbulentDetailForce(p * 1.63 + vec3<f32>(0.17, -0.11, 0.23), time * 1.37);
+  let detailB = turbulentDetailForce(p * 2.41 + vec3<f32>(-0.31, 0.19, -0.07), time * 1.91);
+  let shearAxis = normalize(localCurl + detailA * 0.19 + vec3<f32>(0.001));
+  let shear = normalize(cross(shearAxis, detailB) + detailA * 0.36 + vec3<f32>(0.001));
+  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
+  return shear * activeFlow * (0.006 + curl * 0.010);
 }
 
 fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
@@ -273,6 +304,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let curl = u.fire_smoke_curl_speed.z;
   let inputRadius = max(0.04, u.source_controls.x);
   let inputFlow = max(0.0, u.source_controls.y);
+  let projection = clamp(u.source_controls.z, 0.0, 1.5);
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
@@ -309,17 +341,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
-  let confinement = vorticityConfinement(cellI, 0.024 + curl * 0.034);
+  let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
+  let projectionCorrection = pressureProjectionCorrection(cellI, projection);
   vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
+  vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   vel = vel + heatExpansion;
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed);
   vel.y = vel.y + source * (0.022 + speed * 0.006) + smoke * 0.003;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
+  vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
   heat = max(heat, source * 0.86 + emberRing * 0.22);
@@ -391,6 +426,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let flame = fireLayer.x;
     let ember = fireLayer.y;
     let flameDetail = fireLayer.z;
+    let flowDebug = clamp(u.source_controls.w, 0.0, 1.0);
+    let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+    let curlDebug = curlMagnitudeAtCell(sampleCell);
+    let divDebug = abs(divergenceAtCell(sampleCell));
     let density = (smokeDensity * 0.96 + heat * 0.32 + materialDetail * 0.22) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
@@ -405,7 +444,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.50 + min(0.76, velMag * 6.0));
     let flameCol = fireColor(temp) * (0.30 + temp * 0.82 + fireFilament * 0.42);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
-    let local = mix(smokeCol, flameCol, fireMix);
+    var local = mix(smokeCol, flameCol, fireMix);
+    let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
+    local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     color = color + trans * alpha * local;
     trans = trans * (1.0 - alpha);
     t = t + dt;
@@ -481,8 +522,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
           const radial = Math.hypot(fx, fz);
-          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.28);
-          const inputFlow = Math.max(0, controlsSnapshot.flowRate || 1);
+          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08);
+          const inputFlow = Math.max(0, controlsSnapshot.flowRate ?? 0.3);
           const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
@@ -675,8 +716,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[27] = controlsSnapshot.speed;
     uniforms[28] = controlsSnapshot.gridOverlay || 0;
     uniforms[29] = gridSize;
-    uniforms[32] = controlsSnapshot.inputRadius || 0.28;
-    uniforms[33] = controlsSnapshot.flowRate ?? 1;
+    uniforms[32] = controlsSnapshot.inputRadius || 0.08;
+    uniforms[33] = controlsSnapshot.flowRate ?? 0.3;
+    uniforms[34] = controlsSnapshot.projection ?? 0.65;
+    uniforms[35] = controlsSnapshot.flowDebug || 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
   }
@@ -738,11 +781,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let detailSum = 0;
     let fireLayerSum = 0;
     let velocitySum = 0;
+    let curlSum = 0;
+    let curlMax = 0;
+    let divergenceSum = 0;
+    let divergenceMax = 0;
     let liveVoxels = 0;
     const cells = gridCellCount(gridSize);
     const stride = Math.max(1, Math.floor(cells / 4096));
+    const clampIndex = value => Math.max(0, Math.min(gridSize - 1, value));
+    const velocityAt = (x, y, z) => {
+      const cx = clampIndex(x);
+      const cy = clampIndex(y);
+      const cz = clampIndex(z);
+      const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    let samples = 0;
     for (let cell = 0; cell < cells; cell += stride) {
       const i = cell * FLUID_COMPONENTS;
+      const x = cell % gridSize;
+      const y = Math.floor(cell / gridSize) % gridSize;
+      const z = Math.floor(cell / (gridSize * gridSize));
       const vx = data[i];
       const vy = data[i + 1];
       const vz = data[i + 2];
@@ -756,9 +815,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       detailSum += detail;
       fireLayerSum += fireLayer;
       velocitySum += Math.hypot(vx, vy, vz);
+      const vx0 = velocityAt(x - 1, y, z);
+      const vx1 = velocityAt(x + 1, y, z);
+      const vy0 = velocityAt(x, y - 1, z);
+      const vy1 = velocityAt(x, y + 1, z);
+      const vz0 = velocityAt(x, y, z - 1);
+      const vz1 = velocityAt(x, y, z + 1);
+      const curlX = ((vy1[2] - vy0[2]) - (vz1[1] - vz0[1])) * 0.5;
+      const curlY = ((vz1[0] - vz0[0]) - (vx1[2] - vx0[2])) * 0.5;
+      const curlZ = ((vx1[1] - vx0[1]) - (vy1[0] - vy0[0])) * 0.5;
+      const curlMag = Math.hypot(curlX, curlY, curlZ);
+      const div = Math.abs(((vx1[0] - vx0[0]) + (vy1[1] - vy0[1]) + (vz1[2] - vz0[2])) * 0.5);
+      curlSum += curlMag;
+      curlMax = Math.max(curlMax, curlMag);
+      divergenceSum += div;
+      divergenceMax = Math.max(divergenceMax, div);
       if (d > 0.02) liveVoxels += 1;
+      samples += 1;
     }
-    const samples = Math.ceil(cells / stride);
     readback.unmap();
     readback.destroy();
     return {
@@ -771,6 +845,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       detailMean: detailSum / samples,
       fireLayerMean: fireLayerSum / samples,
       velocityMean: velocitySum / samples,
+      curlMean: curlSum / samples,
+      curlMax,
+      divergenceMean: divergenceSum / samples,
+      divergenceMax,
       liveVoxels,
     };
   }

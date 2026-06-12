@@ -264,13 +264,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Density</span>
-      <input type="range" id="volume-density" min="0.35" max="2.8" step="0.05" value="0.35">
-      <span class="slider-val" id="volume-density-val">0.35</span>
+      <input type="range" id="volume-density" min="0.35" max="2.8" step="0.05" value="1">
+      <span class="slider-val" id="volume-density-val">1.00</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Fire</span>
-      <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="0.2">
-      <span class="slider-val" id="volume-fire-val">0.20</span>
+      <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="0.6">
+      <span class="slider-val" id="volume-fire-val">0.60</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Smoke</span>
@@ -279,8 +279,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Curl</span>
-      <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="3.2">
-      <span class="slider-val" id="volume-curl-val">3.20</span>
+      <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="4">
+      <span class="slider-val" id="volume-curl-val">4.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Projection</span>
+      <input type="range" id="volume-projection" min="0" max="1.5" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-projection-val">0.65</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Speed</span>
@@ -289,18 +294,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="32" max="160" step="4" value="140">
-      <span class="slider-val" id="volume-steps-val">140</span>
+      <input type="range" id="volume-steps" min="32" max="160" step="4" value="160">
+      <span class="slider-val" id="volume-steps-val">160</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Input Radius</span>
-      <input type="range" id="volume-input-radius" min="0.08" max="0.7" step="0.01" value="0.28">
-      <span class="slider-val" id="volume-input-radius-val">0.28</span>
+      <input type="range" id="volume-input-radius" min="0.08" max="0.7" step="0.01" value="0.08">
+      <span class="slider-val" id="volume-input-radius-val">0.08</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Flow Rate</span>
-      <input type="range" id="volume-flow-rate" min="0" max="2.5" step="0.05" value="1">
-      <span class="slider-val" id="volume-flow-rate-val">1.00</span>
+      <input type="range" id="volume-flow-rate" min="0" max="2.5" step="0.05" value="0.3">
+      <span class="slider-val" id="volume-flow-rate-val">0.30</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Grid</span>
@@ -316,6 +321,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Flow Debug</span>
+      <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
@@ -1088,12 +1098,14 @@ function readVolumeControls() {
     fire: parseFloat(document.getElementById('volume-fire').value),
     smoke: parseFloat(document.getElementById('volume-smoke').value),
     curl: parseFloat(document.getElementById('volume-curl').value),
+    projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
+    flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
   };
 }
 
@@ -1103,12 +1115,14 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
   document.getElementById('volume-smoke-val').textContent = c.smoke.toFixed(2);
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
+  document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
+  document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
 }
 
 function refreshVolumeReadout() {
@@ -1149,6 +1163,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_rate') && Number.isFinite(routeFlowRate)) {
     document.getElementById('volume-flow-rate').value = String(Math.max(0, Math.min(2.5, routeFlowRate)));
   }
+  const routeProjection = Number(params.get('volume_projection'));
+  if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
+    document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));
+  }
+  const routeFlowDebug = Number(params.get('volume_flow_debug'));
+  if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
+    document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1168,7 +1190,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-speed', 'volume-steps', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-smoke', 'volume-curl', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
