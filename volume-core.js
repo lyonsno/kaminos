@@ -30,6 +30,7 @@ struct Uniforms {
   fire_smoke_curl_speed: vec4<f32>,
   grid_overlay_debug: vec4<f32>,
   source_controls: vec4<f32>,
+  radiance_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -350,6 +351,35 @@ fn fireColor(temp: f32) -> vec3<f32> {
   return mix(a, b, smoothstep(0.34, 1.08, temp));
 }
 
+fn emissiveTemperature(fireLayer: vec4<f32>, material: vec4<f32>, microLayer: vec4<f32>, velMag: f32) -> f32 {
+  return clamp(
+    fireLayer.x * 1.22
+      + fireLayer.y * 0.46
+      + fireLayer.z * 0.40
+      + microLayer.z * 1.18
+      + microLayer.w * 0.48
+      + material.y * 0.20
+      + velMag * 0.30,
+    0.0,
+    2.4
+  );
+}
+
+fn fireRadianceEmission(temp: f32, flameDetail: f32, fireLick: f32, emberFleck: f32, radianceGain: f32, glowGain: f32) -> vec3<f32> {
+  let core = smoothstep(0.16, 1.18, temp);
+  let whiteCore = smoothstep(1.06, 2.10, temp);
+  let lickSpark = smoothstep(0.025, 0.34, fireLick + emberFleck * 0.45);
+  let filament = smoothstep(0.025, 0.62, flameDetail + fireLick * 0.56);
+  let body = fireColor(temp) * (0.28 + core * 1.24 + filament * 0.34);
+  let hot = mix(body, vec3<f32>(1.0, 0.92, 0.55), whiteCore * (0.34 + glowGain * 0.12));
+  return hot * radianceGain * (0.55 + lickSpark * 0.20 + glowGain * 0.18);
+}
+
+fn smokeRadianceExtinction(smokeDensity: f32, microSmoke: f32, interfaceShred: f32, materialDetail: f32, absorptionGain: f32) -> f32 {
+  let body = smokeDensity * 0.74 + microSmoke * 0.42 + interfaceShred * 0.34 + materialDetail * 0.12;
+  return clamp(body * (0.34 + absorptionGain * 0.46), 0.0, 2.3);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
@@ -517,6 +547,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let fireLick = microLayer.z;
     let emberFleck = microLayer.w;
     let flowDebug = clamp(u.source_controls.w, 0.0, 1.0);
+    let radianceGain = max(0.0, u.radiance_controls.x);
+    let absorptionGain = max(0.0, u.radiance_controls.y);
+    let glowGain = max(0.0, u.radiance_controls.z);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
@@ -524,10 +557,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let density = (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.16 + microSmoke * 0.30 + interfaceShred * 0.28 + fireLick * 0.10) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
-    let temp = clamp(flame * 1.16 + ember * 0.52 + flameDetail * 0.34 + fireLick * 1.05 + emberFleck * 0.38 + heat * 0.15 + velMag * 0.42, 0.0, 1.95) * fireGain;
+    let temp = emissiveTemperature(fireLayer, material, microLayer, velMag) * fireGain;
     let smoke = (smokeDensity + microSmoke * 0.30 + interfaceShred * 0.28) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
-    let smokeAlpha = clamp((smoke * 0.043 + heat * 0.005 + materialDetail * 0.009 + microSmoke * 0.026 + interfaceShred * 0.032) * dt * steps * u.viewport_steps_density.w, 0.0, 0.13);
-    let fireAlpha = clamp((flame * 0.060 + ember * 0.034 + flameDetail * 0.024 + fireLick * 0.102 + emberFleck * 0.026 + interfaceShred * 0.012) * dt * steps * fireGain, 0.0, 0.18);
+    let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
+    let smokeAlpha = clamp((smoke * 0.038 + heat * 0.004 + materialDetail * 0.008 + microSmoke * 0.024 + interfaceShred * 0.030) * dt * steps * u.viewport_steps_density.w * (0.82 + absorptionGain * 0.10), 0.0, 0.15);
+    let fireAlpha = clamp((flame * 0.050 + ember * 0.026 + flameDetail * 0.020 + fireLick * 0.086 + emberFleck * 0.024 + interfaceShred * 0.008) * dt * steps * fireGain * (0.52 + radianceGain * 0.16), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.76, transportedTexture)) * (0.55 + 0.45 * sin(p.x * 43.0 + p.y * 61.0 - p.z * 37.0 + u.cameraPos_time.w * 5.4));
     let shredFilament = smoothstep(0.006, 0.20, interfaceShred * 2.4 + fireLick * 0.36 + microSmoke * 0.18) * (0.52 + 0.48 * sin(p.x * 56.0 - p.y * 31.0 + p.z * 49.0 - u.cameraPos_time.w * 7.1));
@@ -535,12 +569,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
     let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26);
     let flameCol = fireColor(temp) * (0.22 + temp * 0.82 + fireFilament * 0.74 + fireLick * 0.24 + shredFilament * 0.10);
+    let radianceEmission = fireRadianceEmission(temp, flameDetail, fireLick, emberFleck, radianceGain, glowGain);
+    let smokeBacklight = fireColor(temp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, temp) * (0.13 + fireFilament * 0.10);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
-    var local = mix(smokeCol, flameCol, fireMix);
+    var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
-    color = color + trans * alpha * local;
-    trans = trans * (1.0 - alpha);
+    color = color + trans * (alpha * local + fireAlpha * radianceEmission * 0.46 + smokeBacklight);
+    let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    trans = trans * exp(-extinctionStep);
     t = t + dt;
   }
 
@@ -562,7 +599,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(36);
+  const uniforms = new Float32Array(40);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -818,6 +855,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[33] = controlsSnapshot.flowRate ?? 0.3;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
     uniforms[35] = controlsSnapshot.flowDebug || 0;
+    uniforms[36] = controlsSnapshot.radiance ?? 1.65;
+    uniforms[37] = controlsSnapshot.absorption ?? 0.85;
+    uniforms[38] = controlsSnapshot.glow ?? 1.15;
+    uniforms[39] = 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
   }
@@ -859,7 +900,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
     device.queue.submit([encoder.finish()]);
     state.frameCount += 1;
-    state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire);
+    state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
   }
 
   async function sampleSimReadback() {
@@ -878,6 +919,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let heatSum = 0;
     let detailSum = 0;
     let fireLayerSum = 0;
+    let radianceSum = 0;
+    let extinctionSum = 0;
     let microdetailSum = 0;
     let interfaceShredSum = 0;
     let fireLickSum = 0;
@@ -907,17 +950,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const vy = data[i + 1];
       const vz = data[i + 2];
       const d = Math.max(data[i + 3], data[i + 4] * 0.9, data[i + 5] * 0.72);
+      const smokeDensity = data[i + 4];
       const heat = data[i + 5];
       const detail = data[i + 7];
-      const fireLayer = Math.max(data[i + 8], data[i + 9], data[i + 10]);
+      const flame = data[i + 8];
+      const ember = data[i + 9];
+      const flameDetail = data[i + 10];
+      const fireLayer = Math.max(flame, ember, flameDetail);
       const microdetail = data[i + 12];
       const interfaceShred = data[i + 13];
       const fireLick = data[i + 14];
+      const emberFleck = data[i + 15];
+      const radianceGain = controlsSnapshot.radiance ?? 1.65;
+      const absorptionGain = controlsSnapshot.absorption ?? 0.85;
+      const radiance = Math.max(0, flame * 1.22 + ember * 0.46 + flameDetail * 0.40 + fireLick * 1.18 + emberFleck * 0.48 + heat * 0.20) * radianceGain;
+      const extinction = Math.max(0, smokeDensity * 0.74 + microdetail * 0.42 + interfaceShred * 0.34 + detail * 0.12) * (0.34 + absorptionGain * 0.46);
       densitySum += d;
       densityMax = Math.max(densityMax, d);
       heatSum += heat;
       detailSum += detail;
       fireLayerSum += fireLayer;
+      radianceSum += radiance;
+      extinctionSum += extinction;
       microdetailSum += microdetail;
       interfaceShredSum += interfaceShred;
       fireLickSum += fireLick;
@@ -951,6 +1005,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       heatMean: heatSum / samples,
       detailMean: detailSum / samples,
       fireLayerMean: fireLayerSum / samples,
+      radianceMean: radianceSum / samples,
+      extinctionMean: extinctionSum / samples,
       microdetailMean: microdetailSum / samples,
       interfaceShredMean: interfaceShredSum / samples,
       fireLickMean: fireLickSum / samples,
@@ -1008,6 +1064,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
     let fireLikePixels = 0;
+    let emissiveLikePixels = 0;
     let smokeLikePixels = 0;
     let totalLuma = 0;
     let samples = 0;
@@ -1026,6 +1083,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         samples += 1;
         if (luma > 20) litPixels += 1;
         if (r > 120 && g > 70 && b < 90) fireLikePixels += 1;
+        if (r > 170 && g > 120 && b < 115 && luma > 130) emissiveLikePixels += 1;
         if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) smokeLikePixels += 1;
       }
     }
@@ -1052,6 +1110,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       meanLuma: totalLuma / Math.max(1, samples),
       litPixels,
       fireLikePixels,
+      emissiveLikePixels,
       smokeLikePixels,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
