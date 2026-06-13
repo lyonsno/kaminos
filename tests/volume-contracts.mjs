@@ -77,6 +77,10 @@ assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
+assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
+assert.match(core, /microFilamentNoise/, 'raymarch derives visible microdetail from multi-axis turbulent filament noise');
+assert.match(core, /let lickWarp = turbulentDetailForce/, 'fire-lick breakup dephases its comb with turbulent warp before transport');
+assert.doesNotMatch(core, /sin\(p\.x \* 43\.0 \+ p\.y \* 61\.0 - p\.z \* 37\.0/, 'visible microdetail must not use the old single coherent diagonal phase wave');
 assert.match(core, /shredOperatorGain/, 'Shred slider has explicit nonlinear leverage for the exaggerated end of the range');
 assert.match(core, /fireLickOperatorGain/, 'Fire Licks slider has explicit nonlinear leverage for the exaggerated end of the range');
 assert.match(core, /var material = thermalAdvection/, 'fluid compute shader advects material channels through thermal transport');

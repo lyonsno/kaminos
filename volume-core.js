@@ -246,7 +246,12 @@ fn smokeShredEnergy(c: vec3<i32>) -> f32 {
 
 fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceEnergy = length(materialInterfaceGradient(c));
-  let verticalComb = 0.62 + 0.38 * sin(p.y * 31.0 + p.x * 17.0 - p.z * 13.0 + time * 7.1);
+  let lickWarp = turbulentDetailForce(p * 2.64 + vec3<f32>(0.19, -0.23, 0.11), time * 0.91) * (0.046 + source * 0.040 + heat * 0.018 + flameDetail * 0.016);
+  let q = p + lickWarp;
+  let combA = sin(q.y * 23.0 + sin(q.x * 19.0 + q.z * 11.0 + time * 3.2) + source * 2.6);
+  let combB = cos(q.z * 27.0 - q.x * 13.0 + q.y * 7.0 - time * 4.1 + flameDetail * 1.7);
+  let combC = hash31(floor((q + vec3<f32>(1.0)) * 24.0) + vec3<f32>(floor(time * 3.0)));
+  let verticalComb = clamp(0.54 + 0.22 * combA + 0.18 * combB + 0.10 * (combC - 0.5), 0.12, 1.10);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
   let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
   let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.06 + lick * 0.34);
@@ -378,6 +383,31 @@ fn fireRadianceEmission(temp: f32, flameDetail: f32, fireLick: f32, emberFleck: 
 fn smokeRadianceExtinction(smokeDensity: f32, microSmoke: f32, interfaceShred: f32, materialDetail: f32, absorptionGain: f32) -> f32 {
   let body = smokeDensity * 0.74 + microSmoke * 0.42 + interfaceShred * 0.34 + materialDetail * 0.12;
   return clamp(body * (0.34 + absorptionGain * 0.46), 0.0, 2.3);
+}
+
+fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32) -> vec3<f32> {
+  let carrier = clamp(
+    microLayer.x * 0.62
+      + microLayer.y * 1.08
+      + microLayer.z * 0.78
+      + microLayer.w * 0.30
+      + fireLayer.z * 0.28
+      + material.w * 0.18,
+    0.0,
+    2.6
+  );
+  let flow = normalize(velocity + turbulentDetailForce(p * 1.31 + vec3<f32>(0.17, -0.11, 0.23), time * 0.47) * 0.16 + vec3<f32>(0.012, 0.019, -0.014));
+  let foldA = turbulentDetailForce(p * 2.17 + flow * (0.42 + carrier * 0.34), time * 0.83);
+  let foldB = turbulentDetailForce(p.yzx * 2.91 + vec3<f32>(carrier * 0.19, -carrier * 0.13, carrier * 0.17), time * 1.19);
+  return (foldA * 0.70 + foldB * 0.36 + flow * 0.24) * carrier * 0.038;
+}
+
+fn microFilamentNoise(p: vec3<f32>, warp: vec3<f32>, carrier: f32, velocity: vec3<f32>, time: f32) -> f32 {
+  let q = p + warp + velocity * 0.31;
+  let phaseA = dot(q, vec3<f32>(29.0, 17.0, -23.0)) + sin(dot(q.yzx, vec3<f32>(11.0, -19.0, 31.0)) + carrier * 2.7 + time * 2.3);
+  let phaseB = dot(q.zxy, vec3<f32>(-13.0, 37.0, 19.0)) + cos(dot(q, vec3<f32>(23.0, -7.0, 13.0)) - carrier * 1.9 - time * 3.1);
+  let cellNoise = hash31(floor((q + vec3<f32>(1.0)) * 28.0) + vec3<f32>(floor(time * 2.0)));
+  return clamp(0.50 + 0.25 * sin(phaseA) + 0.18 * sin(phaseB) + 0.14 * (cellNoise - 0.5), 0.12, 1.12);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -556,6 +586,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
+    let microWarp = microDetailDomainWarp(p, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
+    let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
+    let filamentNoise = microFilamentNoise(p, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
+    let shredNoise = microFilamentNoise(p.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
+    let fireNoise = microFilamentNoise(p.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
     let density = (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
@@ -566,9 +601,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeAlpha = clamp((smoke * 0.038 + heat * 0.004 + materialDetail * 0.007 + microBodyContribution * 0.032) * dt * steps * u.viewport_steps_density.w * (0.82 + absorptionGain * 0.10), 0.0, 0.15);
     let fireAlpha = clamp((flame * 0.050 + ember * 0.026 + flameDetail * 0.020 + fireLick * 0.105 + emberFleck * 0.026 + interfaceShred * 0.010) * dt * steps * fireGain * (0.52 + radianceGain * 0.16), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
-    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * (0.55 + 0.45 * sin(p.x * 43.0 + p.y * 61.0 - p.z * 37.0 + u.cameraPos_time.w * 5.4));
-    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * (0.52 + 0.48 * sin(p.x * 56.0 - p.y * 31.0 + p.z * 49.0 - u.cameraPos_time.w * 7.1));
-    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * (0.46 + 0.54 * sin(p.x * 52.0 - p.y * 36.0 + p.z * 43.0 + u.cameraPos_time.w * 8.4));
+    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
+    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
+    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
     let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26);
     let flameCol = fireColor(temp) * (0.22 + temp * 0.82 + fireFilament * 0.82 + fireLick * 0.32 + shredFilament * 0.10);
