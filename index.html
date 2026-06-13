@@ -123,6 +123,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
+    <div class="tab" data-tab="lamellar">Lamellar</div>
   </div>
 
   <!-- Assets Tab -->
@@ -306,6 +307,42 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <img class="gen-preview" id="gen-preview">
     <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
   </div>
+
+  <div class="tab-content" id="tab-lamellar">
+    <h2>Lamellar Witness</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="field-val">kaminos_lamellar_witness=1</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="lamellar-identity">kaminos-lamellar-witness-v0</span></div>
+      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="lamellar-route-id">sphere-domain-section-segment-witness-v0</span></div>
+      <button class="btn" id="lamellar-toggle">Enable</button>
+      <button class="btn" id="lamellar-frame">Frame</button>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">View</span>
+      <select id="lamellar-view" class="select-input">
+        <option value="cap_profile" selected>cap profile</option>
+        <option value="cut_radius_coupling">cut radius</option>
+        <option value="malformed_contact_stress">contact stress</option>
+      </select>
+      <span class="slider-val" id="lamellar-view-val">cap_profile</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Cut Radius</span>
+      <input type="range" id="lamellar-cut-radius" min="0.018" max="0.12" step="0.001" value="0.04">
+      <span class="slider-val" id="lamellar-cut-radius-val">0.040</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Layers</span>
+      <input type="range" id="lamellar-layer-count" min="1" max="4" step="1" value="2">
+      <span class="slider-val" id="lamellar-layer-count-val">2</span>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Segments</span><span class="field-val" id="lamellar-segments">0</span></div>
+      <div class="field"><span class="field-key">Caps</span><span class="field-val" id="lamellar-caps">[]</span></div>
+      <div class="field"><span class="field-key">Open Edges</span><span class="field-val" id="lamellar-open-edges">0</span></div>
+      <div class="field"><span class="field-key">Hooks</span><span class="field-val" id="lamellar-hooks">0</span></div>
+    </div>
+  </div>
 </div>
 
 <div id="viewport">
@@ -371,6 +408,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { createKaminosLamellarWitness } from './lamellar-core.js';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -395,6 +433,7 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+let lamellarWitness = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -439,8 +478,8 @@ function restoreSettings() {
 }
 
 // Auto-save on any sidebar control change
-document.querySelector('.sidebar').addEventListener('input', saveSettings);
-document.querySelector('.sidebar').addEventListener('change', saveSettings);
+document.querySelector('#sidebar').addEventListener('input', saveSettings);
+document.querySelector('#sidebar').addEventListener('change', saveSettings);
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -625,6 +664,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    lamellarWitness?.update();
 
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
@@ -646,6 +686,81 @@ async function initScene() {
     }
   }
   animate();
+}
+
+function readLamellarControls() {
+  return {
+    view: document.getElementById('lamellar-view').value,
+    cutRadius: parseFloat(document.getElementById('lamellar-cut-radius').value),
+    layerCount: parseInt(document.getElementById('lamellar-layer-count').value, 10),
+  };
+}
+
+function syncLamellarReadout() {
+  const c = readLamellarControls();
+  document.getElementById('lamellar-view-val').textContent = c.view;
+  document.getElementById('lamellar-cut-radius-val').textContent = c.cutRadius.toFixed(3);
+  document.getElementById('lamellar-layer-count-val').textContent = String(c.layerCount);
+  if (!lamellarWitness) return;
+  const state = lamellarWitness.debugState();
+  document.getElementById('lamellar-identity').textContent = state.witnessIdentity || 'kaminos-lamellar-witness-v0';
+  document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
+  document.getElementById('lamellar-segments').textContent = String(state.sectionSegments?.length ?? 0);
+  document.getElementById('lamellar-caps').textContent = JSON.stringify(state.capTValues || []);
+  document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
+  document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
+  document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
+  document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
+}
+
+function applyLamellarRouteParams() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('lamellar_view');
+  if (view && document.querySelector(`#lamellar-view option[value="${view}"]`)) {
+    document.getElementById('lamellar-view').value = view;
+  }
+  const cutRadius = Number(params.get('lamellar_cut_radius'));
+  if (params.has('lamellar_cut_radius') && Number.isFinite(cutRadius)) {
+    document.getElementById('lamellar-cut-radius').value = String(Math.max(0.018, Math.min(0.12, cutRadius)));
+  }
+  const layers = Number(params.get('lamellar_layers'));
+  if (params.has('lamellar_layers') && Number.isFinite(layers)) {
+    document.getElementById('lamellar-layer-count').value = String(Math.max(1, Math.min(4, Math.round(layers))));
+  }
+}
+
+async function initLamellarRoute() {
+  const params = new URLSearchParams(window.location.search);
+  lamellarWitness = createKaminosLamellarWitness({ THREE, scene, camera, controls });
+  window.__kaminosLamellarWitness = lamellarWitness;
+  applyLamellarRouteParams();
+  lamellarWitness.setControls(readLamellarControls());
+  for (const id of ['lamellar-view', 'lamellar-cut-radius', 'lamellar-layer-count']) {
+    document.getElementById(id).addEventListener('input', () => {
+      lamellarWitness.setControls(readLamellarControls());
+      syncLamellarReadout();
+      window._kaminosDirty?.();
+    });
+    document.getElementById(id).addEventListener('change', () => {
+      lamellarWitness.setControls(readLamellarControls());
+      syncLamellarReadout();
+      window._kaminosDirty?.();
+    });
+  }
+  document.getElementById('lamellar-toggle').addEventListener('click', () => {
+    const active = !lamellarWitness.debugState().active;
+    lamellarWitness.setActive(active);
+    syncLamellarReadout();
+  });
+  document.getElementById('lamellar-frame').addEventListener('click', () => {
+    lamellarWitness.frameCamera();
+    syncLamellarReadout();
+  });
+  if (params.get('kaminos_lamellar_witness') === '1') {
+    setActiveTab('lamellar');
+    lamellarWitness.setActive(true);
+  }
+  syncLamellarReadout();
 }
 
 // --- Environment Loading ---
@@ -1486,13 +1601,14 @@ viewport.addEventListener('drop', async e => {
 });
 
 // --- Tab Switching ---
+function setActiveTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name)?.classList.add('active');
+}
+
 document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-  });
+  tab.addEventListener('click', () => setActiveTab(tab.dataset.tab));
 });
 
 // --- Image Search (Pixabay) ---
@@ -2803,16 +2919,19 @@ grInit();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
+  initLamellarRoute();
   restoreSettings();
+  const lamellarRouteActive = new URLSearchParams(window.location.search).get('kaminos_lamellar_witness') === '1';
   // Load HDR environment first, then auto-load demo
   loadEnvironment('studio').then(() => {
-    loadDemo(DEMO_ASSETS[0]);
+    if (!lamellarRouteActive) loadDemo(DEMO_ASSETS[0]);
   });
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
+  initLamellarRoute();
   restoreSettings();
 });
 </script>

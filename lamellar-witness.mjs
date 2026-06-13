@@ -1,0 +1,231 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { inflateSync } from 'node:zlib';
+
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
+
+const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_lamellar_witness=1&lamellar_view=cap_profile&lamellar_cut_radius=0.04';
+const out = resolve(args.get('--out') || '/tmp/kaminos-lamellar-witness.png');
+const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
+const port = Number(args.get('--debug-port') || 9441);
+const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lamellar-witness-profile-${port}`;
+const settleMs = Number(args.get('--settle-ms') || 1000);
+const requested = new URL(url).searchParams;
+
+function delay(ms) {
+  return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+async function cdpFetch(path, options) {
+  const resp = await fetch(`http://127.0.0.1:${port}${path}`, options);
+  if (!resp.ok) throw new Error(`CDP ${path} failed ${resp.status}`);
+  return resp.json();
+}
+
+async function waitForCdp() {
+  for (let i = 0; i < 80; i++) {
+    try {
+      return await cdpFetch('/json/version');
+    } catch {
+      await delay(125);
+    }
+  }
+  throw new Error('Chrome DevTools endpoint did not open');
+}
+
+function wsRequest(ws, method, params = {}) {
+  const id = ws._nextId = (ws._nextId || 0) + 1;
+  ws.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolveReq, rejectReq) => {
+    const onMessage = event => {
+      const msg = JSON.parse(String(event.data));
+      if (msg.id !== id) return;
+      ws.removeEventListener('message', onMessage);
+      if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
+      else resolveReq(msg.result);
+    };
+    ws.addEventListener('message', onMessage);
+  });
+}
+
+function waitForWebSocketOpen(ws) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    ws.addEventListener('open', resolveOpen, { once: true });
+    ws.addEventListener('error', () => rejectOpen(new Error('WebSocket open failed')), { once: true });
+  });
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+
+function unfilterPngRow(row, prev, filter, bytesPerPixel) {
+  for (let i = 0; i < row.length; i++) {
+    const left = i >= bytesPerPixel ? row[i - bytesPerPixel] : 0;
+    const up = prev[i] || 0;
+    const upLeft = i >= bytesPerPixel ? prev[i - bytesPerPixel] || 0 : 0;
+    if (filter === 1) row[i] = (row[i] + left) & 255;
+    else if (filter === 2) row[i] = (row[i] + up) & 255;
+    else if (filter === 3) row[i] = (row[i] + Math.floor((left + up) / 2)) & 255;
+    else if (filter === 4) row[i] = (row[i] + paethPredictor(left, up, upLeft)) & 255;
+    else if (filter !== 0) throw new Error(`Unsupported PNG filter ${filter}`);
+  }
+}
+
+function pngVisualStats(buffer) {
+  assert.equal(buffer.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'blank frame or missing PNG output');
+  let offset = 8;
+  let ihdr = null;
+  const idat = [];
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') ihdr = data;
+    if (type === 'IDAT') idat.push(data);
+    offset += 12 + length;
+    if (type === 'IEND') break;
+  }
+  assert.ok(ihdr && idat.length, 'blank frame or missing PNG output');
+  const width = ihdr.readUInt32BE(0);
+  const height = ihdr.readUInt32BE(4);
+  const bitDepth = ihdr[8];
+  const colorType = ihdr[9];
+  assert.equal(bitDepth, 8, 'Lamellar witness only supports 8-bit PNG screenshots');
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 0;
+  assert.ok(channels, `Lamellar witness unsupported PNG color type ${colorType}`);
+
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  let rawOffset = 0;
+  let prev = Buffer.alloc(stride);
+  let minLuma = 255;
+  let maxLuma = 0;
+  let sampledPixels = 0;
+  const buckets = new Set();
+  for (let y = 0; y < height; y++) {
+    const filter = raw[rawOffset++];
+    const row = Buffer.from(raw.subarray(rawOffset, rawOffset + stride));
+    rawOffset += stride;
+    unfilterPngRow(row, prev, filter, channels);
+    for (let x = 0; x < width; x += 8) {
+      const i = x * channels;
+      const r = row[i];
+      const g = row[i + 1];
+      const b = row[i + 2];
+      const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+      minLuma = Math.min(minLuma, luma);
+      maxLuma = Math.max(maxLuma, luma);
+      buckets.add(`${r >> 4}:${g >> 4}:${b >> 4}`);
+      sampledPixels += 1;
+    }
+    prev = row;
+  }
+  return {
+    width,
+    height,
+    sampledPixels,
+    lumaRange: maxLuma - minLuma,
+    colorBuckets: buckets.size,
+  };
+}
+
+function assertVisualDiversity(buffer) {
+  assert.ok(buffer.length > 10000, 'blank frame or missing PNG output');
+  const stats = pngVisualStats(buffer);
+  assert.ok(stats.width >= 640 && stats.height >= 480, 'blank frame or missing PNG output');
+  assert.ok(stats.lumaRange >= 24, 'blank frame lacks luminance diversity');
+  assert.ok(stats.colorBuckets >= 16, 'blank frame lacks color diversity');
+  return stats;
+}
+
+async function main() {
+  mkdirSync(dirname(out), { recursive: true });
+  mkdirSync(dirname(reportPath), { recursive: true });
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--window-size=1280,960',
+    url,
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  let stderr = '';
+  proc.stderr.on('data', chunk => { stderr += chunk.toString(); });
+
+  try {
+    await waitForCdp();
+    const pages = await cdpFetch('/json');
+    const page = pages.find(p => p.type === 'page') || pages[0];
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    await waitForWebSocketOpen(ws);
+    await wsRequest(ws, 'Runtime.enable');
+    await wsRequest(ws, 'Page.enable');
+    await wsRequest(ws, 'Page.bringToFront');
+    await delay(settleMs);
+
+    const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `(() => {
+        const w = window.__kaminosLamellarWitness;
+        return w ? w.debugState() : { active: false, missing: true };
+      })()`,
+      returnByValue: true,
+    });
+    const state = evalResult.result.value;
+    assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
+    assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
+    assert.ok(state.active, 'Lamellar witness route was not active');
+    assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar witness did not build section segments');
+    assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
+
+    const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+    const buffer = Buffer.from(screenshot.data, 'base64');
+    writeFileSync(out, buffer);
+    const visualStats = assertVisualDiversity(buffer);
+
+    const report = {
+      schema: 'kaminos.lamellar-witness.v0',
+      requestedUrl: url,
+      requestedView: requested.get('lamellar_view') || 'cap_profile',
+      effectiveView: state.effectiveView,
+      requestedCutRadius: requested.get('lamellar_cut_radius') || null,
+      effectiveCutRadius: state.cutRadius,
+      effectiveRoute: state.effectiveRoute,
+      witnessIdentity: state.witnessIdentity,
+      capTValues: state.capTValues,
+      openEdgeCount: state.openEdgeCount,
+      lightHookCount: state.lightHookCount,
+      sectionSegments: state.sectionSegments,
+      screenshot: out,
+      visualStats,
+      stderrTail: stderr.slice(-2000),
+    };
+    writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+    ws.close();
+  } finally {
+    proc.kill('SIGTERM');
+  }
+}
+
+main().catch(err => {
+  writeFileSync(reportPath, JSON.stringify({
+    schema: 'kaminos.lamellar-witness.v0',
+    requestedUrl: url,
+    failurePhase: 'lamellar-witness',
+    error: String(err.stack || err),
+  }, null, 2) + '\n');
+  console.error(err);
+  process.exit(1);
+});

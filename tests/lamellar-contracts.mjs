@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = new URL('..', import.meta.url).pathname;
+const index = readFileSync(join(root, 'index.html'), 'utf8');
+
+assert.match(index, /data-tab="lamellar"/, 'sidebar exposes a Lamellar tab');
+assert.match(index, /id="tab-lamellar"/, 'Lamellar tab content is present');
+assert.match(index, /kaminos_lamellar_witness/, 'URL route gate names the Lamellar witness');
+assert.match(index, /lamellar-core\.js/, 'index imports the Lamellar witness module');
+assert.match(index, /createKaminosLamellarWitness/, 'index initializes the Lamellar route explicitly');
+assert.match(index, /function setActiveTab\(/, 'route initialization can activate the Lamellar tab without a click event');
+assert.match(index, /id="lamellar-cut-radius"/, 'Lamellar tab exposes cut radius control');
+assert.match(index, /id="lamellar-view"/, 'Lamellar tab exposes witness view selector');
+assert.match(index, /id="lamellar-layer-count"/, 'Lamellar tab exposes layer count control');
+assert.match(index, /lamellar_cut_radius/, 'URL route can override Lamellar cut radius');
+assert.match(index, /lamellar_view/, 'URL route can override Lamellar witness view');
+assert.match(index, /lamellar_layers/, 'URL route can override Lamellar placeholder layer count');
+assert.match(index, /kaminos-lamellar-witness-v0/, 'UI carries stable Lamellar witness identity');
+assert.match(index, /sphere-domain-section-segment-witness-v0/, 'UI carries effective Lamellar route identity');
+
+const corePath = join(root, 'lamellar-core.js');
+assert.ok(existsSync(corePath), 'lamellar-core.js exists');
+const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
+assert.match(core, /export function createKaminosLamellarWitness/, 'Lamellar module exports createKaminosLamellarWitness');
+assert.match(core, /kaminos-lamellar-witness-v0/, 'Lamellar module exposes stable witness identity');
+assert.match(core, /sphere-domain-section-segment-witness-v0/, 'Lamellar module records effective route identity');
+assert.match(core, /cap_profile/, 'Lamellar module supports the cap-profile witness view');
+assert.match(core, /cut_radius_coupling/, 'Lamellar module supports the cut-radius coupling witness view');
+assert.match(core, /stable-strip-width-cut-radius-only-changes-window-caps-gap/, 'Lamellar module preserves width/radius decoupling identity');
+assert.match(core, /zero-lift-closed-terminal-cap-slab/, 'Lamellar module preserves closed end-cap sealing identity');
+assert.match(core, /temporary-aesthetic-composition-primitive-not-final-lamellar-topology/, 'Lamellar module marks nested shells as placeholder composition only');
+assert.match(core, /sectionSegments/, 'Lamellar debug state reports section segment descriptors');
+assert.match(core, /capTValues/, 'Lamellar debug state reports cut cap T-values');
+assert.match(core, /openEdgeCount/, 'Lamellar debug state reports open-edge evidence');
+assert.match(core, /lightHooks/, 'Lamellar debug state reports exported light hooks');
+assert.match(core, /effectiveRoute/, 'Lamellar debug state reports effective route identity');
+
+const witnessPath = join(root, 'lamellar-witness.mjs');
+assert.ok(existsSync(witnessPath), 'lamellar-witness.mjs exists');
+const witness = existsSync(witnessPath) ? readFileSync(witnessPath, 'utf8') : '';
+assert.match(witness, /kaminos_lamellar_witness=1/, 'witness captures the explicit Lamellar route');
+assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
+assert.match(witness, /sphere-domain-section-segment-witness-v0/, 'witness requires the Lamellar route identity');
+assert.match(witness, /requestedView/, 'witness records requested view');
+assert.match(witness, /effectiveView/, 'witness records effective view');
+assert.match(witness, /requestedCutRadius/, 'witness records requested cut radius');
+assert.match(witness, /effectiveCutRadius/, 'witness records effective cut radius');
+assert.match(witness, /capTValues/, 'witness records cap T-values');
+assert.match(witness, /lightHookCount/, 'witness records exported light hook count');
+assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');
+assert.match(witness, /assertVisualDiversity/, 'witness checks screenshot pixel diversity, not only file size');
