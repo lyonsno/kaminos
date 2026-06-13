@@ -24,6 +24,14 @@ const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
   : 0;
+const requestedRaySteps = Number(routeParams.get('volume_steps'));
+const expectedRaySteps = Number.isFinite(requestedRaySteps)
+  ? Math.max(24, Math.min(160, requestedRaySteps))
+  : 96;
+const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
+const expectedAdaptiveRays = Number.isFinite(requestedAdaptiveRays)
+  ? Math.max(0, Math.min(1, requestedAdaptiveRays))
+  : 0.65;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -246,6 +254,9 @@ async function main() {
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
     assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer`, 'fluid sim label does not match selected grid');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
+    assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
+    assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
+    assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
     phase = 'gpu-readback';
@@ -318,6 +329,8 @@ async function main() {
       simGridLabel: sample.simGridLabel,
       simReadback: sample.simReadback,
       gridOverlay: sample.gridOverlay,
+      raySteps: state.controls?.raySteps,
+      adaptiveRaymarch: sample.adaptiveRaymarch,
       controls: state.controls,
       screenshot: out,
       metrics,

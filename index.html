@@ -328,6 +328,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Adaptive Rays</span>
+      <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Input Radius</span>
       <input type="range" id="volume-input-radius" min="0.08" max="0.7" step="0.01" value="0.12">
       <span class="slider-val" id="volume-input-radius-val">0.12</span>
@@ -1137,6 +1142,7 @@ function readVolumeControls() {
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
+    adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
@@ -1160,6 +1166,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
+  document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
@@ -1237,6 +1244,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
     document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
   }
+  const routeRaySteps = Number(params.get('volume_steps'));
+  if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
+    document.getElementById('volume-steps').value = String(Math.max(24, Math.min(160, routeRaySteps)));
+  }
+  const routeAdaptiveRays = Number(params.get('volume_adaptive_rays'));
+  if (params.has('volume_adaptive_rays') && Number.isFinite(routeAdaptiveRays)) {
+    document.getElementById('volume-adaptive-rays').value = String(Math.max(0, Math.min(1, routeAdaptiveRays)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1256,7 +1271,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

@@ -385,6 +385,34 @@ fn smokeRadianceExtinction(smokeDensity: f32, microSmoke: f32, interfaceShred: f
   return clamp(body * (0.34 + absorptionGain * 0.46), 0.0, 2.3);
 }
 
+fn raymarchInterest(
+  density: f32,
+  smoke: f32,
+  heat: f32,
+  temp: f32,
+  flame: f32,
+  flameDetail: f32,
+  microTextureSignal: f32,
+  velMag: f32,
+  fireLick: f32,
+  interfaceShred: f32
+) -> f32 {
+  let body = density * 0.22 + smoke * 0.16 + heat * 0.10;
+  let fire = temp * 0.40 + flame * 0.36 + flameDetail * 0.22 + fireLick * 0.30;
+  let edge = microTextureSignal * 0.22 + interfaceShred * 0.42 + velMag * 0.46;
+  return clamp(body + fire + edge, 0.0, 1.6);
+}
+
+fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
+  let fine = smoothstep(0.035, 0.92, interest);
+  let adaptiveScale = mix(2.65, 0.68, fine);
+  return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
+}
+
+fn raymarchEarlyTermination(transmittance: f32) -> bool {
+  return transmittance < 0.012;
+}
+
 fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32) -> vec3<f32> {
   let carrier = clamp(
     microLayer.x * 0.62
@@ -550,8 +578,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
-  let dt = (endT - startT) / steps;
-  let jitter = hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), floor(u.cameraPos_time.w * 19.0))) * dt;
+  let dtBase = (endT - startT) / steps;
+  let jitter = hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), floor(u.cameraPos_time.w * 19.0))) * dtBase;
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -560,7 +588,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
 
   for (var i = 0; i < 192; i = i + 1) {
-    if (f32(i) >= steps || trans < 0.012) { break; }
+    if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
     let state = sampleWorldVelocity(p);
     let material = sampleWorldMaterial(p);
@@ -582,6 +610,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let radianceGain = max(0.0, u.radiance_controls.x);
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
+    let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
@@ -598,7 +627,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let temp = emissiveTemperature(fireLayer, material, microLayer, velMag) * fireGain;
     let smoke = (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
     let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
-    let rayStepOpacity = dt * 3.65;
+    let interest = raymarchInterest(density, smoke, heat, temp, flame, flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
+    let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
+    let rayStepOpacity = localDt * 3.65;
     let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16);
     let fireAlpha = clamp((flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26) * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
@@ -617,7 +648,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     color = color + trans * (alpha * local + fireAlpha * radianceEmission * 0.82 + smokeBacklight);
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
-    t = t + dt;
+    t = t + localDt;
   }
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
@@ -654,6 +685,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`,
     gridOverlay: 0,
+    adaptiveRaymarch: 0.65,
     lastFrameEnergy: 0,
     error: null,
   };
@@ -897,9 +929,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[36] = controlsSnapshot.radiance ?? 1.65;
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
-    uniforms[39] = 0;
+    uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+    state.adaptiveRaymarch = uniforms[39];
   }
 
   function encodeSim(encoder) {
@@ -1094,6 +1127,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simGrid: state.simGrid,
         simGridLabel: state.simGridLabel,
         gridOverlay: state.gridOverlay,
+        adaptiveRaymarch: state.adaptiveRaymarch,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -1156,6 +1190,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
       gridOverlay: state.gridOverlay,
+      adaptiveRaymarch: state.adaptiveRaymarch,
       simReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -1181,6 +1216,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+      state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
     },
     async setActive(active) {
       if (active) {

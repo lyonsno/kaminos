@@ -29,6 +29,9 @@ assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorpti
 assert.match(index, /id="volume-glow"/, 'Volume tab exposes emissive glow control');
 assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
 assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to a lower step budget after normalized alpha');
+assert.match(index, /id="volume-adaptive-rays"/, 'Volume tab exposes adaptive raymarch sampling control');
+assert.match(index, /volume_adaptive_rays/, 'URL route can override adaptive raymarch sampling');
+assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sampling into the renderer');
 assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route defaults to 96^3 grid');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
@@ -79,6 +82,10 @@ assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived 
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
 assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step optical thickness');
+assert.match(core, /raymarchInterest/, 'raymarch computes local sample interest before adapting step distance');
+assert.match(core, /adaptiveRayStepScale/, 'raymarch adapts step distance instead of only changing alpha');
+assert.match(core, /raymarchEarlyTermination/, 'raymarch exposes named early-termination behavior');
+assert.match(core, /adaptiveRaymarch/, 'debug state exposes effective adaptive raymarch strength');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
 assert.match(core, /microFilamentNoise/, 'raymarch derives visible microdetail from multi-axis turbulent filament noise');
@@ -127,6 +134,8 @@ const witness = existsSync(witnessPath) ? readFileSync(witnessPath, 'utf8') : ''
 assert.match(witness, /kaminos_volume_smoke=1/, 'witness captures the explicit volume route');
 assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
+assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
+assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
