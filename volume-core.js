@@ -1339,6 +1339,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     debugState() {
       return { ...state, controls: { ...controlsSnapshot } };
     },
+    canvasElement() {
+      return canvas;
+    },
     sampleFrame,
     dispose() {
       this.setActive(false);

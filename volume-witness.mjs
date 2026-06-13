@@ -268,6 +268,13 @@ async function main() {
     assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
     assert.equal(state.active, true, 'volume route is not active');
+    const bridgeEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'window.__kaminosVolumeBridge?.debugState?.()',
+      returnByValue: true,
+    });
+    const bridge = bridgeEval.result.value;
+    assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
+    assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
     assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer`, 'fluid sim label does not match selected grid');
@@ -347,11 +354,23 @@ async function main() {
     if (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
+    const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
+    const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+    });
+    const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
+    writeFileSync(mainRendererScreenshot, mainRendererBuffer);
+    const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+      throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
+    }
     const report = {
       requestedRoute: url,
       settleMs,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
+      volumeBridge: bridge,
       backend: state.backend,
       captureBackend,
       frameCount: state.frameCount,
@@ -368,6 +387,9 @@ async function main() {
       controls: state.controls,
       screenshot: out,
       metrics,
+      mainRendererScreenshot,
+      mainRendererCaptureBackend: 'cdp-page-capture',
+      mainRendererMetrics,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();

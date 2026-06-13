@@ -118,8 +118,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-#kaminos-volume-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; display: none; background: #050607; }
-#kaminos-volume-canvas.active { display: block; }
+#kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 </style>
 </head>
 <body>
@@ -520,6 +519,7 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
+let volumeBridge = null;
 const SCENE_SCHEMA = 'kaminos.scene.v1';
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
@@ -922,8 +922,9 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       // GTAO compute disabled in render loop — raw device access conflicts with Three.js
@@ -946,7 +947,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender) idleFrames++;
+      if (!needsRender && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -1430,6 +1431,72 @@ function frameVolumeCamera() {
   window._kaminosDirty?.();
 }
 
+function createVolumeMainRendererBridge() {
+  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
+  sourceTexture.colorSpace = THREE.SRGBColorSpace;
+  sourceTexture.generateMipmaps = false;
+  sourceTexture.minFilter = THREE.LinearFilter;
+  sourceTexture.magFilter = THREE.LinearFilter;
+
+  const material = new THREE.MeshBasicMaterial({
+    map: sourceTexture,
+    transparent: true,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  mesh.name = 'volume-main-renderer-bridge-v0';
+  mesh.renderOrder = 9000;
+  mesh.visible = false;
+  mesh.userData.kaminosVolumeBridge = {
+    identity: 'volume-main-renderer-bridge-v0',
+    source: 'native-webgpu-volume-canvas',
+    composition: 'three-canvas-texture-additive-plane',
+  };
+  scene.add(mesh);
+
+  const direction = new THREE.Vector3();
+  return {
+    identity: 'volume-main-renderer-bridge-v0',
+    mesh,
+    texture: sourceTexture,
+    update() {
+      const state = volumePrototype.debugState();
+      const active = !!state.active;
+      mesh.visible = active;
+      if (!active) return false;
+      sourceTexture.needsUpdate = true;
+      const distance = 1.5;
+      camera.getWorldDirection(direction);
+      mesh.position.copy(camera.position).addScaledVector(direction, distance);
+      mesh.quaternion.copy(camera.quaternion);
+      const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
+      mesh.scale.set(height * camera.aspect, height, 1);
+      return true;
+    },
+    debugState() {
+      return {
+        identity: 'volume-main-renderer-bridge-v0',
+        visible: mesh.visible,
+        textureSource: volumePrototype?.canvasElement?.()?.id || null,
+        meshName: mesh.name,
+        renderOrder: mesh.renderOrder,
+        composition: mesh.userData.kaminosVolumeBridge.composition,
+      };
+    },
+    dispose() {
+      scene.remove(mesh);
+      sourceTexture.dispose();
+      material.dispose();
+      mesh.geometry.dispose();
+    },
+  };
+}
+
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
@@ -1501,6 +1568,10 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  volumeBridge?.dispose?.();
+  volumeBridge = createVolumeMainRendererBridge();
+  window.__kaminosVolumeBridge = volumeBridge;
+  window.__kaminosVolumeMainRendererBridge = volumeBridge;
   volumePrototype.setVolumePrimitives(volumePrimitives);
   if (params.has('volume_primitive_fixture')) {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
