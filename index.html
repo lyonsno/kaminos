@@ -304,12 +304,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Shred</span>
-      <input type="range" id="volume-interface-shred" min="0" max="2.5" step="0.05" value="2.5">
+      <input type="range" id="volume-interface-shred" min="0" max="5" step="0.05" value="2.5">
       <span class="slider-val" id="volume-interface-shred-val">2.50</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Fire Licks</span>
-      <input type="range" id="volume-fire-licks" min="0" max="2.5" step="0.05" value="1.65">
+      <input type="range" id="volume-fire-licks" min="0" max="5" step="0.05" value="1.65">
       <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
     <div class="slider-row">
@@ -1215,11 +1215,11 @@ async function initKaminosVolumeRoute() {
   }
   const routeInterfaceShred = Number(params.get('volume_interface_shred'));
   if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
-    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(2.5, routeInterfaceShred)));
+    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(5, routeInterfaceShred)));
   }
   const routeFireLicks = Number(params.get('volume_fire_licks'));
   if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
-    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(2.5, routeFireLicks)));
+    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(5, routeFireLicks)));
   }
   const routeRadiance = Number(params.get('volume_radiance'));
   if (params.has('volume_radiance') && Number.isFinite(routeRadiance)) {

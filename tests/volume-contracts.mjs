@@ -21,6 +21,8 @@ assert.match(index, /id="volume-curl"[^>]+value="2\.65"/, 'smoke route defaults 
 assert.match(index, /id="volume-microdetail"/, 'Volume tab exposes transported microdetail control');
 assert.match(index, /id="volume-interface-shred"/, 'Volume tab exposes interface shredding control');
 assert.match(index, /id="volume-fire-licks"/, 'Volume tab exposes fire-lick breakup control');
+assert.match(index, /id="volume-interface-shred"[^>]+max="5"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
+assert.match(index, /id="volume-fire-licks"[^>]+max="5"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
 assert.match(index, /id="volume-radiance"/, 'Volume tab exposes fire radiance control');
 assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorption control');
 assert.match(index, /id="volume-glow"/, 'Volume tab exposes emissive glow control');
@@ -40,6 +42,8 @@ assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic
 assert.match(index, /volume_microdetail/, 'URL route can override transported microdetail strength');
 assert.match(index, /volume_interface_shred/, 'URL route can override interface shredding strength');
 assert.match(index, /volume_fire_licks/, 'URL route can override fire-lick breakup strength');
+assert.match(index, /Math\.min\(5, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(5, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
 assert.match(index, /volume_radiance/, 'URL route can override fire radiance strength');
 assert.match(index, /volume_absorption/, 'URL route can override smoke absorption strength');
 assert.match(index, /volume_glow/, 'URL route can override emissive glow strength');
@@ -71,6 +75,10 @@ assert.match(core, /fineScaleBreakup/, 'fluid compute shader applies controllabl
 assert.match(core, /transportedMicrodetailAdvection/, 'fluid compute shader advects a distinct microdetail field');
 assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke/fire interfaces from transported gradients');
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
+assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
+assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
+assert.match(core, /shredOperatorGain/, 'Shred slider has explicit nonlinear leverage for the exaggerated end of the range');
+assert.match(core, /fireLickOperatorGain/, 'Fire Licks slider has explicit nonlinear leverage for the exaggerated end of the range');
 assert.match(core, /var material = thermalAdvection/, 'fluid compute shader advects material channels through thermal transport');
 assert.match(core, /thermalAdvection/, 'fluid compute shader treats heat as an explicit thermal-advection channel');
 assert.match(core, /thermalBuoyancyForce/, 'fluid compute shader derives buoyancy from transported heat');
