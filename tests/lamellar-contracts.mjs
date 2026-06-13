@@ -19,7 +19,7 @@ assert.match(index, /lamellar_view/, 'URL route can override Lamellar witness vi
 assert.match(index, /lamellar_layers/, 'URL route can override Lamellar placeholder layer count');
 assert.match(index, /function isLamellarRouteActive\(/, 'Lamellar route active check is centralized');
 assert.match(index, /if \(!isLamellarRouteActive\(\)\) restoreSettings\(\)/, 'Lamellar route starts blank instead of restoring persisted scene/material state');
-assert.match(index, /if \(!lamellarRouteActive\) loadDemo\(DEMO_ASSETS\[0\]\)/, 'Lamellar route does not auto-load the default demo object');
+assert.doesNotMatch(index, /loadDemo\(DEMO_ASSETS\[0\]\)/, 'Kaminos starts blank and only loads demo assets by explicit user action');
 assert.match(index, /kaminos-lamellar-witness-v0/, 'UI carries stable Lamellar witness identity');
 assert.match(index, /sphere-domain-section-segment-witness-v0/, 'UI carries effective Lamellar route identity');
 

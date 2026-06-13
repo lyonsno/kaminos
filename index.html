@@ -2925,11 +2925,7 @@ initScene().then(() => {
   loadDemoButtons();
   initLamellarRoute();
   if (!isLamellarRouteActive()) restoreSettings();
-  const lamellarRouteActive = isLamellarRouteActive();
-  // Load HDR environment first, then auto-load demo
-  loadEnvironment('studio').then(() => {
-    if (!lamellarRouteActive) loadDemo(DEMO_ASSETS[0]);
-  });
+  loadEnvironment('studio');
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
