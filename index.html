@@ -336,11 +336,55 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="lamellar-layer-count" min="1" max="4" step="1" value="2">
       <span class="slider-val" id="lamellar-layer-count-val">2</span>
     </div>
+    <h2>Composer</h2>
+    <div class="panel">
+      <div class="slider-row">
+        <span class="slider-label">Seed</span>
+        <input type="number" class="gen-input" id="lamellar-seed" min="0" max="99999" step="1" value="17" style="margin-bottom:0">
+        <span class="slider-val" id="lamellar-seed-val">17</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Chirality</span>
+        <select id="lamellar-chirality" class="select-input">
+          <option value="same" selected>same</option>
+          <option value="counterpatch">counterpatch</option>
+          <option value="mixed">mixed</option>
+        </select>
+        <span class="slider-val" id="lamellar-chirality-val">same</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Depth</span>
+        <input type="range" id="lamellar-depth-spacing" min="0.015" max="0.09" step="0.001" value="0.035">
+        <span class="slider-val" id="lamellar-depth-spacing-val">0.035</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Overlap</span>
+        <input type="range" id="lamellar-overlap-bias" min="0" max="1" step="0.01" value="0.38">
+        <span class="slider-val" id="lamellar-overlap-bias-val">0.38</span>
+      </div>
+      <button class="btn" id="lamellar-generate">Generate</button>
+    </div>
+    <h2>Slice Tool</h2>
+    <div class="panel">
+      <div class="slider-row">
+        <span class="slider-label">Slice T</span>
+        <input type="range" id="lamellar-slice-t" min="0.2" max="0.8" step="0.001" value="0.47">
+        <span class="slider-val" id="lamellar-slice-t-val">0.470</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Angle</span>
+        <input type="range" id="lamellar-slice-angle" min="-70" max="70" step="1" value="0">
+        <span class="slider-val" id="lamellar-slice-angle-val">0</span>
+      </div>
+      <button class="btn" id="lamellar-apply-slice">Apply Slice</button>
+    </div>
     <div class="panel">
       <div class="field"><span class="field-key">Segments</span><span class="field-val" id="lamellar-segments">0</span></div>
+      <div class="field"><span class="field-key">Descriptors</span><span class="field-val" id="lamellar-descriptors">0</span></div>
       <div class="field"><span class="field-key">Caps</span><span class="field-val" id="lamellar-caps">[]</span></div>
       <div class="field"><span class="field-key">Open Edges</span><span class="field-val" id="lamellar-open-edges">0</span></div>
       <div class="field"><span class="field-key">Hooks</span><span class="field-val" id="lamellar-hooks">0</span></div>
+      <div class="field"><span class="field-key">Slice</span><span class="field-val" id="lamellar-slice-receipt">none</span></div>
     </div>
   </div>
 </div>
@@ -697,6 +741,12 @@ function readLamellarControls() {
     view: document.getElementById('lamellar-view').value,
     cutRadius: parseFloat(document.getElementById('lamellar-cut-radius').value),
     layerCount: parseInt(document.getElementById('lamellar-layer-count').value, 10),
+    seed: parseInt(document.getElementById('lamellar-seed').value, 10),
+    chirality: document.getElementById('lamellar-chirality').value,
+    depthSpacing: parseFloat(document.getElementById('lamellar-depth-spacing').value),
+    overlapBias: parseFloat(document.getElementById('lamellar-overlap-bias').value),
+    sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
+    sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
   };
 }
 
@@ -705,14 +755,22 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-view-val').textContent = c.view;
   document.getElementById('lamellar-cut-radius-val').textContent = c.cutRadius.toFixed(3);
   document.getElementById('lamellar-layer-count-val').textContent = String(c.layerCount);
+  document.getElementById('lamellar-seed-val').textContent = String(c.seed);
+  document.getElementById('lamellar-chirality-val').textContent = c.chirality;
+  document.getElementById('lamellar-depth-spacing-val').textContent = c.depthSpacing.toFixed(3);
+  document.getElementById('lamellar-overlap-bias-val').textContent = c.overlapBias.toFixed(2);
+  document.getElementById('lamellar-slice-t-val').textContent = c.sliceT.toFixed(3);
+  document.getElementById('lamellar-slice-angle-val').textContent = String(Math.round(c.sliceAngle));
   if (!lamellarWitness) return;
   const state = lamellarWitness.debugState();
   document.getElementById('lamellar-identity').textContent = state.witnessIdentity || 'kaminos-lamellar-witness-v0';
   document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
   document.getElementById('lamellar-segments').textContent = String(state.sectionSegments?.length ?? 0);
+  document.getElementById('lamellar-descriptors').textContent = String(state.segmentDescriptorCount ?? state.generatedSegmentDescriptors?.length ?? 0);
   document.getElementById('lamellar-caps').textContent = JSON.stringify(state.capTValues || []);
   document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
   document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
+  document.getElementById('lamellar-slice-receipt').textContent = state.sliceApplicationReceipt?.affectedSegmentIds?.join(',') || 'none';
   document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
   document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
 }
@@ -731,6 +789,30 @@ function applyLamellarRouteParams() {
   if (params.has('lamellar_layers') && Number.isFinite(layers)) {
     document.getElementById('lamellar-layer-count').value = String(Math.max(1, Math.min(4, Math.round(layers))));
   }
+  const seed = Number(params.get('lamellar_seed'));
+  if (params.has('lamellar_seed') && Number.isFinite(seed)) {
+    document.getElementById('lamellar-seed').value = String(Math.max(0, Math.min(99999, Math.round(seed))));
+  }
+  const chirality = params.get('lamellar_chirality');
+  if (chirality && document.querySelector(`#lamellar-chirality option[value="${chirality}"]`)) {
+    document.getElementById('lamellar-chirality').value = chirality;
+  }
+  const depthSpacing = Number(params.get('lamellar_depth_spacing'));
+  if (params.has('lamellar_depth_spacing') && Number.isFinite(depthSpacing)) {
+    document.getElementById('lamellar-depth-spacing').value = String(Math.max(0.015, Math.min(0.09, depthSpacing)));
+  }
+  const overlapBias = Number(params.get('lamellar_overlap_bias'));
+  if (params.has('lamellar_overlap_bias') && Number.isFinite(overlapBias)) {
+    document.getElementById('lamellar-overlap-bias').value = String(Math.max(0, Math.min(1, overlapBias)));
+  }
+  const sliceT = Number(params.get('lamellar_slice_t'));
+  if (params.has('lamellar_slice_t') && Number.isFinite(sliceT)) {
+    document.getElementById('lamellar-slice-t').value = String(Math.max(0.2, Math.min(0.8, sliceT)));
+  }
+  const sliceAngle = Number(params.get('lamellar_slice_angle'));
+  if (params.has('lamellar_slice_angle') && Number.isFinite(sliceAngle)) {
+    document.getElementById('lamellar-slice-angle').value = String(Math.max(-70, Math.min(70, sliceAngle)));
+  }
 }
 
 async function initLamellarRoute() {
@@ -739,7 +821,18 @@ async function initLamellarRoute() {
   window.__kaminosLamellarWitness = lamellarWitness;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
-  for (const id of ['lamellar-view', 'lamellar-cut-radius', 'lamellar-layer-count']) {
+  const composerControlIds = [
+    'lamellar-view',
+    'lamellar-cut-radius',
+    'lamellar-layer-count',
+    'lamellar-seed',
+    'lamellar-chirality',
+    'lamellar-depth-spacing',
+    'lamellar-overlap-bias',
+    'lamellar-slice-t',
+    'lamellar-slice-angle',
+  ];
+  for (const id of composerControlIds) {
     document.getElementById(id).addEventListener('input', () => {
       lamellarWitness.setControls(readLamellarControls());
       syncLamellarReadout();
@@ -751,6 +844,18 @@ async function initLamellarRoute() {
       window._kaminosDirty?.();
     });
   }
+  document.getElementById('lamellar-generate').addEventListener('click', () => {
+    const seedInput = document.getElementById('lamellar-seed');
+    seedInput.value = String((parseInt(seedInput.value || '0', 10) + 1) % 100000);
+    lamellarWitness.setControls(readLamellarControls());
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+  document.getElementById('lamellar-apply-slice').addEventListener('click', () => {
+    lamellarWitness.setControls(readLamellarControls());
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
   document.getElementById('lamellar-toggle').addEventListener('click', () => {
     const active = !lamellarWitness.debugState().active;
     lamellarWitness.setActive(active);

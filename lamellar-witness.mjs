@@ -188,6 +188,10 @@ async function main() {
     assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
     assert.ok(state.active, 'Lamellar witness route was not active');
     assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar witness did not build section segments');
+    assert.ok((state.segmentDescriptorCount || 0) >= 3, 'Lamellar witness did not export generated section descriptors');
+    assert.ok(state.composerDescriptor?.mode, 'Lamellar witness did not export composer descriptor');
+    assert.ok(state.sliceToolDescriptor?.mode, 'Lamellar witness did not export slice tool descriptor');
+    assert.ok(state.sliceApplicationReceipt?.mode, 'Lamellar witness did not export slice application receipt');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -207,6 +211,11 @@ async function main() {
       capTValues: state.capTValues,
       openEdgeCount: state.openEdgeCount,
       cuttingEdgeDescriptor: state.cuttingEdgeDescriptor,
+      composerDescriptor: state.composerDescriptor,
+      sliceToolDescriptor: state.sliceToolDescriptor,
+      sliceApplicationReceipt: state.sliceApplicationReceipt,
+      segmentDescriptorCount: state.segmentDescriptorCount,
+      generatedSegmentDescriptors: state.generatedSegmentDescriptors,
       lightHookCount: state.lightHookCount,
       sectionSegments: state.sectionSegments,
       screenshot: out,

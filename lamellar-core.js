@@ -3,6 +3,8 @@ const EFFECTIVE_ROUTE = "sphere-domain-section-segment-witness-v0";
 const WIDTH_RADIUS_COUPLING_MODE = "stable-strip-width-cut-radius-only-changes-window-caps-gap";
 const END_CAP_SEALING_MODE = "zero-lift-closed-terminal-cap-slab";
 const PLACEHOLDER_CONTRACT = "temporary-aesthetic-composition-primitive-not-final-lamellar-topology";
+const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
+const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -12,6 +14,196 @@ const VIEW_PRESETS = {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function chiralitySign(mode, layerIndex, rand) {
+  if (mode === "counterpatch") return layerIndex === 1 ? -1 : 1;
+  if (mode === "mixed") return rand() > 0.52 ? 1 : -1;
+  return 1;
+}
+
+function descriptorCurveOptions(descriptor) {
+  return {
+    theta0: descriptor.theta0,
+    thetaTwist: descriptor.thetaTwist,
+    phi0: descriptor.phi0,
+    phiSlope: descriptor.phiSlope,
+    phase: descriptor.phase,
+    radius: descriptor.radius,
+    width: descriptor.width,
+    edgeLift: descriptor.edgeLift,
+    waviness: descriptor.waviness,
+  };
+}
+
+export function generateLamellarSectionSegments(input = {}) {
+  const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const layerCount = Math.round(clamp(Number(input.layerCount ?? 2), 1, 4));
+  const depthSpacing = clamp(Number(input.depthSpacing ?? 0.035), 0.015, 0.09);
+  const overlapBias = clamp(Number(input.overlapBias ?? 0.38), 0, 1);
+  const chiralityMode = ["same", "counterpatch", "mixed"].includes(input.chirality) ? input.chirality : "same";
+  const rand = mulberry32(seed);
+  const descriptors = [];
+  const composerDescriptor = {
+    mode: COMPOSER_MODE,
+    segmentKind: "LamellarSectionSegment",
+    proceduralSeed: seed,
+    chiralityMode,
+    layerCount,
+    depthSpacing: Number(depthSpacing.toFixed(4)),
+    overlapBias: Number(overlapBias.toFixed(4)),
+    curveLaw: "poloxodromic-sphere-strip-v0",
+    capLaw: END_CAP_SEALING_MODE,
+    meshEmission: "descriptor-solved-before-ribbon-geometry",
+  };
+
+  const selectedPhase = 0.24 + rand() * 0.72;
+  descriptors.push({
+    kind: "LamellarSectionSegment",
+    id: `seed-${seed}-layer-0-selected-source`,
+    source: "procedural-composer",
+    materialRole: "selected-source",
+    layerIndex: 0,
+    depth: 0,
+    chirality: 1,
+    interval: [0.12, 0.9],
+    curveLaw: composerDescriptor.curveLaw,
+    capLaw: composerDescriptor.capLaw,
+    theta0: -1.18 + (rand() - 0.5) * 0.16,
+    thetaTwist: 4.42 + rand() * 0.42,
+    phi0: -0.38 + (rand() - 0.5) * 0.08,
+    phiSlope: 0.94 + rand() * 0.18,
+    phase: selectedPhase,
+    radius: 1,
+    width: 0.068,
+    thickness: 0.014,
+    edgeLift: 0.018,
+    waviness: 0.07 + rand() * 0.04,
+  });
+
+  const neighborStart = clamp(0.24 + (0.42 - overlapBias) * 0.18, 0.16, 0.44);
+  const neighborEnd = clamp(0.72 + overlapBias * 0.18, 0.62, 0.92);
+  const neighborSign = chiralitySign(chiralityMode, 1, rand);
+  descriptors.push({
+    kind: "LamellarSectionSegment",
+    id: `seed-${seed}-layer-1-neighbor-envelope`,
+    source: "procedural-composer",
+    materialRole: "neighbor-envelope",
+    layerIndex: 1,
+    depth: Number((-depthSpacing * 0.35).toFixed(4)),
+    chirality: neighborSign,
+    interval: [Number(neighborStart.toFixed(4)), Number(neighborEnd.toFixed(4))],
+    curveLaw: composerDescriptor.curveLaw,
+    capLaw: composerDescriptor.capLaw,
+    theta0: -0.76 + (rand() - 0.5) * 0.2,
+    thetaTwist: neighborSign * (4.35 + overlapBias * 0.55),
+    phi0: -0.2 + (rand() - 0.5) * 0.12,
+    phiSlope: 0.82 + rand() * 0.28,
+    phase: 0.92 + rand() * 0.74,
+    radius: Number((1.012 + depthSpacing * (0.35 + overlapBias * 0.5)).toFixed(4)),
+    width: 0.047 + overlapBias * 0.018,
+    thickness: 0.012,
+    edgeLift: 0.015,
+    waviness: 0.075 + rand() * 0.05,
+  });
+
+  for (let layerIndex = 2; layerIndex <= layerCount; layerIndex++) {
+    const sign = chiralitySign(chiralityMode, layerIndex, rand);
+    const phase = layerIndex * 0.54 + rand() * 0.9;
+    descriptors.push({
+      kind: "LamellarSectionSegment",
+      id: `seed-${seed}-layer-${layerIndex}-nested-composition`,
+      source: "procedural-composer",
+      materialRole: "nested-placeholder-shell",
+      layerIndex,
+      depth: Number((depthSpacing * layerIndex).toFixed(4)),
+      chirality: sign,
+      interval: [
+        Number(clamp(0.08 + rand() * 0.12, 0.08, 0.22).toFixed(4)),
+        Number(clamp(0.82 + rand() * 0.12, 0.78, 0.94).toFixed(4)),
+      ],
+      curveLaw: composerDescriptor.curveLaw,
+      capLaw: composerDescriptor.capLaw,
+      theta0: -1.05 + layerIndex * 0.34 + (rand() - 0.5) * 0.2,
+      thetaTwist: sign * (3.95 + rand() * 0.75),
+      phi0: -0.34 + (rand() - 0.5) * 0.2,
+      phiSlope: 0.72 + rand() * 0.36,
+      phase,
+      radius: Number((1 - depthSpacing * layerIndex).toFixed(4)),
+      width: 0.024 + rand() * 0.012,
+      thickness: 0.01,
+      edgeLift: 0.012,
+      waviness: 0.06 + rand() * 0.05,
+    });
+  }
+
+  return { composerDescriptor, descriptors };
+}
+
+export function sliceLamellarSectionSegments(descriptors, input = {}) {
+  const cutRadius = clamp(Number(input.cutRadius ?? 0.04), 0.018, 0.12);
+  const sliceT = clamp(Number(input.sliceT ?? 0.47), 0.2, 0.8);
+  const sliceAngle = clamp(Number(input.sliceAngle ?? 0), -70, 70);
+  const halfWindow = clamp(cutRadius * 1.35, 0.024, 0.18);
+  const lower = Number(clamp(sliceT - halfWindow, 0.08, 0.88).toFixed(4));
+  const upper = Number(clamp(sliceT + halfWindow, 0.12, 0.94).toFixed(4));
+  const affectedSegmentIds = [];
+  const sliced = [];
+
+  for (const descriptor of descriptors) {
+    if (descriptor.materialRole !== "selected-source") {
+      sliced.push(descriptor);
+      continue;
+    }
+    affectedSegmentIds.push(descriptor.id);
+    const [start, end] = descriptor.interval;
+    sliced.push({
+      ...descriptor,
+      id: `${descriptor.id}-pre-cut`,
+      materialRole: "selected-pre-cut",
+      interval: [start, lower],
+      sliceParentId: descriptor.id,
+    });
+    sliced.push({
+      ...descriptor,
+      id: `${descriptor.id}-continuation`,
+      materialRole: "selected-continuation",
+      interval: [upper, end],
+      sliceParentId: descriptor.id,
+      width: Number((descriptor.width * 0.86).toFixed(4)),
+      edgeLift: Number((descriptor.edgeLift * 0.92).toFixed(4)),
+    });
+  }
+
+  return {
+    descriptors: sliced,
+    sliceToolDescriptor: {
+      mode: SLICE_TOOL_MODE,
+      cutterId: "perpendicular-cutting-edge",
+      cutT: Number(sliceT.toFixed(4)),
+      cutRadius: Number(cutRadius.toFixed(4)),
+      angleDegrees: Number(sliceAngle.toFixed(2)),
+      capLaw: END_CAP_SEALING_MODE,
+      window: [lower, upper],
+    },
+    sliceApplicationReceipt: {
+      mode: "descriptor-slice-before-mesh-emission",
+      affectedSegmentIds,
+      emittedSegmentIds: sliced.map(d => d.id),
+      capTValues: [lower, upper],
+      openEdgeCount: 0,
+    },
+  };
 }
 
 function spherePoint(theta, phi, radius = 1) {
@@ -35,7 +227,7 @@ function makeRibbonGeometry(THREE, span, opts) {
   for (let i = 0; i <= samples; i++) {
     const t = span[0] + (span[1] - span[0]) * (i / samples);
     const theta = opts.theta0 + opts.thetaTwist * t;
-    const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * 0.08;
+    const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
     const p = spherePoint(theta, phi, radius);
     const p2 = spherePoint(theta + 0.018, phi + 0.012, radius);
     const tangent = new THREE.Vector3(p2.x - p.x, p2.y - p.y, p2.z - p.z).normalize();
@@ -63,7 +255,7 @@ function makeRibbonGeometry(THREE, span, opts) {
 
 function lamellarFrame(THREE, t, opts) {
   const theta = opts.theta0 + opts.thetaTwist * t;
-  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * 0.08;
+  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
   const p = spherePoint(theta, phi, opts.radius || 1);
   const p2 = spherePoint(theta + 0.018, phi + 0.012, opts.radius || 1);
   const tangent = new THREE.Vector3(p2.x - p.x, p2.y - p.y, p2.z - p.z).normalize();
@@ -82,11 +274,14 @@ function makeCuttingEdgeGeometry(THREE, t, opts) {
   const length = opts.length || 0.56;
   const halfWidth = opts.halfWidth || 0.018;
   const lift = opts.lift || 0.075;
+  const angle = (opts.angleDegrees || 0) * Math.PI / 180;
+  const crossAxis = frame.side.clone().multiplyScalar(Math.cos(angle)).addScaledVector(frame.tangent, Math.sin(angle)).normalize();
+  const railAxis = frame.tangent.clone().multiplyScalar(Math.cos(angle)).addScaledVector(frame.side, -Math.sin(angle)).normalize();
   const center = frame.center.clone().addScaledVector(frame.normal, lift);
-  const a = center.clone().addScaledVector(frame.side, -length * 0.5).addScaledVector(frame.tangent, -halfWidth);
-  const b = center.clone().addScaledVector(frame.side, length * 0.5).addScaledVector(frame.tangent, -halfWidth);
-  const c = center.clone().addScaledVector(frame.side, -length * 0.5).addScaledVector(frame.tangent, halfWidth);
-  const d = center.clone().addScaledVector(frame.side, length * 0.5).addScaledVector(frame.tangent, halfWidth);
+  const a = center.clone().addScaledVector(crossAxis, -length * 0.5).addScaledVector(railAxis, -halfWidth);
+  const b = center.clone().addScaledVector(crossAxis, length * 0.5).addScaledVector(railAxis, -halfWidth);
+  const c = center.clone().addScaledVector(crossAxis, -length * 0.5).addScaledVector(railAxis, halfWidth);
+  const d = center.clone().addScaledVector(crossAxis, length * 0.5).addScaledVector(railAxis, halfWidth);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute([
     a.x, a.y, a.z,
@@ -107,11 +302,12 @@ function makeCuttingEdgeGeometry(THREE, t, opts) {
     descriptor: {
       role: "perpendicular-cutting-edge",
       cutT: Number(t.toFixed(4)),
+      angleDegrees: Number((opts.angleDegrees || 0).toFixed(2)),
       length: Number(length.toFixed(4)),
       halfWidth: Number(halfWidth.toFixed(4)),
       center: vectorSnapshot(center),
-      tangent: vectorSnapshot(frame.tangent),
-      crossAxis: vectorSnapshot(frame.side),
+      tangent: vectorSnapshot(railAxis),
+      crossAxis: vectorSnapshot(crossAxis),
       normal: vectorSnapshot(frame.normal),
     },
   };
@@ -119,7 +315,7 @@ function makeCuttingEdgeGeometry(THREE, t, opts) {
 
 function makeCapGeometry(THREE, t, opts) {
   const theta = opts.theta0 + opts.thetaTwist * t;
-  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * 0.08;
+  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
   const center = spherePoint(theta, phi, opts.radius || 1);
   const geometry = new THREE.CircleGeometry(opts.capRadius || 0.075, 24);
   geometry.rotateY(Math.PI / 2 - theta);
@@ -128,17 +324,20 @@ function makeCapGeometry(THREE, t, opts) {
   return geometry;
 }
 
-function makeHook(centerline, layerIndex, bandIndex, role) {
+function makeHook(centerline, layerIndex, bandIndex, role, descriptor = null) {
   return {
-    bandId: `lamellar-${layerIndex}-${bandIndex}-${role}`,
+    bandId: descriptor?.id || `lamellar-${layerIndex}-${bandIndex}-${role}`,
     layerIndex,
     bandIndex,
     role,
+    segmentKind: descriptor?.kind || "LamellarSectionSegment",
+    curveLaw: descriptor?.curveLaw || "poloxodromic-sphere-strip-v0",
+    depth: descriptor?.depth ?? 0,
     centerlineSamples: centerline.filter((_, i) => i % 8 === 0),
-    rimMask: role === "selected" ? 0.92 : 0.48,
-    innerExposure: role === "selected" ? 0.66 : 0.28,
-    shellOcclusion: role === "selected" ? 0.32 : 0.58,
-    emissiveCatch: role === "selected" ? 0.78 : 0.36,
+    rimMask: role.startsWith("selected") ? 0.92 : 0.48,
+    innerExposure: role.startsWith("selected") ? 0.66 : 0.28,
+    shellOcclusion: role.startsWith("selected") ? 0.32 : 0.58,
+    emissiveCatch: role.startsWith("selected") ? 0.78 : 0.36,
     placeholderContract: PLACEHOLDER_CONTRACT,
   };
 }
@@ -160,10 +359,20 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     effectiveView: "cap_profile",
     cutRadius: 0.04,
     layerCount: 2,
+    proceduralSeed: 17,
+    chiralityMode: "same",
+    depthSpacing: 0.035,
+    overlapBias: 0.38,
+    sliceT: 0.47,
+    sliceAngle: 0,
     frameCount: 0,
     capTValues: [],
     sectionSegments: [],
     cuttingEdgeDescriptor: null,
+    composerDescriptor: null,
+    generatedSegmentDescriptors: [],
+    sliceToolDescriptor: null,
+    sliceApplicationReceipt: null,
     openEdgeCount: 0,
     lightHooks: [],
     lastBuildAt: null,
@@ -179,6 +388,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     cuttingEdge: new THREE.MeshStandardMaterial({ color: 0xff5d46, emissive: 0x3a0b04, emissiveIntensity: 0.35, metalness: 0.18, roughness: 0.32, side: THREE.DoubleSide }),
     cap: new THREE.MeshStandardMaterial({ color: 0xffcf76, metalness: 0.52, roughness: 0.3, side: THREE.DoubleSide }),
     gauge: new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
+    placeholderA: new THREE.MeshStandardMaterial({ color: 0xd8cfab, metalness: 0.44, roughness: 0.48, side: THREE.DoubleSide }),
+    placeholderB: new THREE.MeshStandardMaterial({ color: 0x7fc5bc, metalness: 0.44, roughness: 0.48, side: THREE.DoubleSide }),
   };
 
   function clear() {
@@ -191,46 +402,78 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
 
   function build({ frame = false } = {}) {
     clear();
-    state.capTValues = [Number((0.43 - state.cutRadius * 1.0).toFixed(4)), Number((0.49 + state.cutRadius * 1.5).toFixed(4))];
-    const selectedSpans = [[0.12, state.capTValues[0]], [state.capTValues[1], 0.9]];
-    const base = {
-      theta0: -1.1,
-      thetaTwist: 4.65,
-      phi0: -0.35,
-      phiSlope: 1.0,
-      phase: 0.4,
-      radius: 1,
-      width: 0.07,
-      edgeLift: 0.018,
-    };
-    const neighbor = { ...base, theta0: -0.64, phi0: -0.18, phase: 1.25, width: 0.055, radius: 1.025 };
+    const generated = generateLamellarSectionSegments({
+      seed: state.proceduralSeed,
+      chirality: state.chiralityMode,
+      layerCount: state.layerCount,
+      depthSpacing: state.depthSpacing,
+      overlapBias: state.overlapBias,
+    });
+    const sliced = sliceLamellarSectionSegments(generated.descriptors, {
+      cutRadius: state.cutRadius,
+      sliceT: state.sliceT,
+      sliceAngle: state.sliceAngle,
+    });
+    state.composerDescriptor = generated.composerDescriptor;
+    state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
+      id: d.id,
+      kind: d.kind,
+      materialRole: d.materialRole,
+      layerIndex: d.layerIndex,
+      depth: d.depth,
+      chirality: d.chirality,
+      interval: d.interval,
+      curveLaw: d.curveLaw,
+      capLaw: d.capLaw,
+      source: d.source,
+      sliceParentId: d.sliceParentId || null,
+    }));
+    state.sliceToolDescriptor = sliced.sliceToolDescriptor;
+    state.sliceApplicationReceipt = sliced.sliceApplicationReceipt;
+    state.capTValues = sliced.sliceApplicationReceipt.capTValues;
     state.sectionSegments = [];
     state.lightHooks = [];
 
-    selectedSpans.forEach((span, index) => {
-      const { geometry, centerline } = makeRibbonGeometry(THREE, span, base);
-      const mesh = new THREE.Mesh(geometry, index === 0 ? materials.selected : materials.continuation);
-      mesh.userData.lamellarRole = index === 0 ? "selected-pre-cut" : "selected-continuation";
+    sliced.descriptors.forEach((descriptor, index) => {
+      const opts = descriptorCurveOptions(descriptor);
+      const { geometry, centerline } = makeRibbonGeometry(THREE, descriptor.interval, opts);
+      let material = materials.neighbor;
+      if (descriptor.materialRole === "selected-pre-cut") material = materials.selected;
+      if (descriptor.materialRole === "selected-continuation") material = materials.continuation;
+      if (descriptor.materialRole === "nested-placeholder-shell") {
+        material = descriptor.layerIndex % 2 ? materials.placeholderA : materials.placeholderB;
+      }
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.lamellarRole = descriptor.materialRole;
+      mesh.userData.lamellarSectionId = descriptor.id;
       group.add(mesh);
-      state.sectionSegments.push({ role: mesh.userData.lamellarRole, span, openEdgeCount: 0 });
-      state.lightHooks.push(makeHook(centerline, 0, index, "selected"));
+      state.sectionSegments.push({
+        id: descriptor.id,
+        kind: descriptor.kind,
+        role: descriptor.materialRole,
+        layerIndex: descriptor.layerIndex,
+        depth: descriptor.depth,
+        chirality: descriptor.chirality,
+        span: descriptor.interval,
+        curveLaw: descriptor.curveLaw,
+        openEdgeCount: 0,
+      });
+      state.lightHooks.push(makeHook(centerline, descriptor.layerIndex, index, descriptor.materialRole, descriptor));
     });
 
-    const neighborSpan = state.effectiveView === "cap_profile" ? [0.22, 0.86] : [0.3, 0.78];
-    const neighborRibbon = makeRibbonGeometry(THREE, neighborSpan, neighbor);
-    const neighborMesh = new THREE.Mesh(neighborRibbon.geometry, materials.neighbor);
-    neighborMesh.userData.lamellarRole = "neighbor-envelope";
-    group.add(neighborMesh);
-    state.sectionSegments.push({ role: "neighbor-envelope", span: neighborSpan, openEdgeCount: 0 });
-    state.lightHooks.push(makeHook(neighborRibbon.centerline, 1, 0, "neighbor"));
-
-    const cutT = (state.capTValues[0] + state.capTValues[1]) / 2;
-    const cuttingEdge = makeCuttingEdgeGeometry(THREE, cutT, { ...base, length: 0.46 + state.cutRadius * 1.2 });
+    const selectedDescriptor = sliced.descriptors.find(d => d.materialRole === "selected-pre-cut") || sliced.descriptors[0];
+    const base = descriptorCurveOptions(selectedDescriptor);
+    const cutT = state.sliceToolDescriptor.cutT;
+    const cuttingEdge = makeCuttingEdgeGeometry(THREE, cutT, {
+      ...base,
+      length: 0.46 + state.cutRadius * 1.2 + state.overlapBias * 0.12,
+      angleDegrees: state.sliceAngle,
+    });
     const cuttingMesh = new THREE.Mesh(cuttingEdge.geometry, materials.cuttingEdge);
     cuttingMesh.userData.lamellarRole = "perpendicular-cutting-edge";
     group.add(cuttingMesh);
     state.cuttingEdgeDescriptor = cuttingEdge.descriptor;
-    state.sectionSegments.push({ role: "perpendicular-cutting-edge", span: [cutT, cutT], openEdgeCount: 0 });
+    state.sectionSegments.push({ role: "perpendicular-cutting-edge", span: [cutT, cutT], angleDegrees: state.sliceAngle, openEdgeCount: 0 });
 
     for (const t of state.capTValues) {
       const cap = new THREE.Mesh(makeCapGeometry(THREE, t, { ...base, capRadius: 0.06 + state.cutRadius * 0.32 }), materials.cap);
@@ -242,16 +485,6 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       const gauge = new THREE.Mesh(makeRibbonGeometry(THREE, [state.capTValues[0], state.capTValues[1]], { ...base, width: 0.018 + state.cutRadius * 0.12, radius: 1.055 }).geometry, materials.gauge);
       gauge.userData.lamellarRole = "cut-window-gauge";
       group.add(gauge);
-    }
-
-    for (let layer = 2; layer < state.layerCount + 1; layer++) {
-      const layerOpts = { ...base, theta0: base.theta0 + layer * 0.33, radius: 0.82 - layer * 0.035, width: 0.025, phase: layer * 0.7 };
-      const shell = makeRibbonGeometry(THREE, [0.08, 0.9], layerOpts);
-      const mat = new THREE.MeshStandardMaterial({ color: layer % 2 ? 0xd8cfab : 0x7fc5bc, metalness: 0.44, roughness: 0.48, side: THREE.DoubleSide });
-      const mesh = new THREE.Mesh(shell.geometry, mat);
-      mesh.userData.lamellarRole = "nested-placeholder-shell";
-      group.add(mesh);
-      state.lightHooks.push(makeHook(shell.centerline, layer, 0, "placeholder"));
     }
 
     state.openEdgeCount = 0;
@@ -272,6 +505,12 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   function setControls(next = {}) {
     state.cutRadius = clamp(Number(next.cutRadius ?? state.cutRadius), 0.018, 0.12);
     state.layerCount = Math.round(clamp(Number(next.layerCount ?? state.layerCount), 1, 4));
+    state.proceduralSeed = Math.round(clamp(Number(next.seed ?? state.proceduralSeed), 0, 99999));
+    state.chiralityMode = ["same", "counterpatch", "mixed"].includes(next.chirality) ? next.chirality : state.chiralityMode;
+    state.depthSpacing = clamp(Number(next.depthSpacing ?? state.depthSpacing), 0.015, 0.09);
+    state.overlapBias = clamp(Number(next.overlapBias ?? state.overlapBias), 0, 1);
+    state.sliceT = clamp(Number(next.sliceT ?? state.sliceT), 0.2, 0.8);
+    state.sliceAngle = clamp(Number(next.sliceAngle ?? state.sliceAngle), -70, 70);
     state.effectiveView = VIEW_PRESETS[next.view] ? next.view : state.effectiveView;
     if (state.active) build({ frame: false });
   }
@@ -292,6 +531,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       ...state,
       requestedRoute: "kaminos_lamellar_witness=1",
       lightHookCount: state.lightHooks.length,
+      segmentDescriptorCount: state.generatedSegmentDescriptors.length,
       childCount: group.children.length,
       cameraPosition: vectorSnapshot(camera.position),
       cameraTarget: vectorSnapshot(controls.target),
