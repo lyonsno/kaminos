@@ -172,6 +172,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     info["input_path"] = status.get("input_path")
                 except Exception:
                     pass
+            # For output dirs with metadata sidecar (from greenroom)
+            metadata_file = entry / "metadata.json" if entry.is_dir() else None
+            if metadata_file and metadata_file.exists():
+                try:
+                    meta = json.loads(metadata_file.read_text())
+                    info["metadata"] = meta
+                except Exception:
+                    pass
             # For receipt dirs, include receipt summary
             receipt_file = entry / "receipt.json" if entry.is_dir() else None
             if receipt_file and receipt_file.exists():

@@ -183,24 +183,34 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Post Processing</h2>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="ao-toggle" checked> HBAO
+        <input type="checkbox" id="ao-toggle" checked> GTAO Compute
       </label>
     </div>
     <div id="ao-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
-        <input type="range" id="ao-radius" min="0.05" max="3" step="0.05" value="0.5">
-        <span class="slider-val" id="ao-radius-val">0.50</span>
+        <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="4.0">
+        <span class="slider-val" id="ao-radius-val">4.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Intensity</span>
-        <input type="range" id="ao-intensity" min="0.1" max="5" step="0.1" value="1.5">
-        <span class="slider-val" id="ao-intensity-val">1.5</span>
+        <input type="range" id="ao-intensity" min="0.0" max="3" step="0.05" value="1.0">
+        <span class="slider-val" id="ao-intensity-val">1.0</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Far Blend</span>
-        <input type="range" id="ao-far-blend" min="0" max="1" step="0.05" value="0.5">
-        <span class="slider-val" id="ao-far-blend-val">0.50</span>
+        <span class="slider-label">Scale</span>
+        <input type="range" id="ao-scale" min="0.1" max="5" step="0.05" value="1.62">
+        <span class="slider-val" id="ao-scale-val">1.62</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thickness</span>
+        <input type="range" id="ao-thickness" min="0.1" max="5" step="0.05" value="1.81">
+        <span class="slider-val" id="ao-thickness-val">1.81</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Falloff</span>
+        <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.74">
+        <span class="slider-val" id="ao-falloff-val">0.74</span>
       </div>
     </div>
 
@@ -339,9 +349,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
-    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
-    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.tsl.js",
+    "three": "./lib/three.webgpu.js",
+    "three/webgpu": "./lib/three.webgpu.js",
+    "three/tsl": "./lib/three.tsl.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
   }
 }
@@ -349,9 +359,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <script type="module">
 import * as THREE from 'three';
-let pass; // loaded lazily after renderer init
-import { GTAOComputePipeline } from './ao-pipeline.js';
-import { AOCompositePass } from './ao-composite.js';
+import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
+import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -371,8 +381,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let postProcessing = null;
-let aoPipeline = null;
-let aoComposite = null;
+let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -386,6 +395,52 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+
+// --- Settings Persistence ---
+const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
+const PERSISTED_SLIDERS = [
+  'exposure-slider', 'env-intensity-slider', 'env-rotation-slider', 'env-blur-slider',
+  'ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff',
+  'backdrop-brightness', 'dof-focus', 'dof-aperture', 'dof-maxblur'
+];
+const PERSISTED_CHECKBOXES = ['ao-toggle', 'show-env-bg', 'backdrop-toggle', 'dof-toggle'];
+
+function saveSettings() {
+  const settings = {};
+  for (const id of PERSISTED_SLIDERS) {
+    const el = document.getElementById(id);
+    if (el) settings[id] = el.value;
+  }
+  for (const id of PERSISTED_CHECKBOXES) {
+    const el = document.getElementById(id);
+    if (el) settings[id] = el.checked;
+  }
+  try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+}
+
+function restoreSettings() {
+  let settings;
+  try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
+  if (!settings) return;
+  for (const id of PERSISTED_SLIDERS) {
+    const el = document.getElementById(id);
+    if (el && settings[id] !== undefined) {
+      el.value = settings[id];
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  for (const id of PERSISTED_CHECKBOXES) {
+    const el = document.getElementById(id);
+    if (el && settings[id] !== undefined) {
+      el.checked = settings[id];
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+}
+
+// Auto-save on any sidebar control change
+document.querySelector('.sidebar').addEventListener('input', saveSettings);
+document.querySelector('.sidebar').addEventListener('change', saveSettings);
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -495,34 +550,49 @@ async function initScene() {
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
 
-  // --- Manual AO render pipeline ---
-  // Scene → RenderTarget (color+depth) → GTAO compute → composite to canvas
-  postProcessing = null;
+  // --- GTAO Compute AO via RenderPipeline ---
+  renderPipeline = new THREE.RenderPipeline(renderer);
 
-  // Scene render target with depth
-  let sceneRT = new THREE.RenderTarget(vp.clientWidth, vp.clientHeight, {
-    depthTexture: new THREE.DepthTexture(vp.clientWidth, vp.clientHeight),
-  });
-  sceneRT.depthTexture.format = THREE.DepthFormat;
-  sceneRT.depthTexture.type = THREE.UnsignedIntType;
+  // Pre-pass for normals
+  const prePass = pass(scene, camera);
+  prePass.name = 'Pre-Pass';
+  prePass.transparent = false;
+  prePass.setMRT(mrt({ output: packNormalToRGB(normalView) }));
+  const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
+  const prePassDepth = prePass.getTextureNode('depth');
+  const normalTexture = prePass.getTexture('output');
+  normalTexture.type = THREE.UnsignedByteType;
 
-  // GTAO compute pipeline + composite pass
-  const device = renderer.backend?.device;
-  const canvasFormat = navigator.gpu?.getPreferredCanvasFormat?.() || 'bgra8unorm';
-  if (device) {
-    try {
-      aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
-      await aoPipeline._initPromise;
-      aoComposite = new AOCompositePass(device, canvasFormat);
-      console.log('GTAO compute + composite:', aoPipeline.isReady ? 'ready' : 'failed');
-    } catch (e) {
-      console.warn('GTAO pipeline init failed:', e);
-      aoPipeline = null;
-      aoComposite = null;
-    }
-  } else {
-    console.warn('No WebGPU device — AO compute disabled');
-  }
+  // Scene pass
+  scenePass = pass(scene, camera);
+
+  // Depth render target for compute AO
+  const resScale = 0.5;
+  const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  let depthRT = new THREE.RenderTarget(
+    Math.round(drawSize.x * resScale),
+    Math.round(drawSize.y * resScale),
+    { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
+  );
+  const depthMaterial = new THREE.NodeMaterial();
+  depthMaterial.name = 'LinearDepthToColor';
+  depthMaterial.blending = THREE.NoBlending;
+  depthMaterial.colorNode = vec4(positionView.z.negate(), 0, 0, 1);
+
+  // Compute AO
+  const depthTexNode = texture(depthRT.texture);
+  const normalTexNode = texture(normalTexture);
+  aoPass = aoCompute(depthTexNode, normalTexNode, camera);
+  aoPass.setDepthPass(depthRT, depthMaterial, scene);
+
+  // StorageTexture → regular texture bridge + denoise
+  const aoResolved = convertToTexture(aoPass.getTextureNode());
+  const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
+
+  // Composite: scene × AO
+  aoIntensity = uniform(1.0);
+  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
+  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
 
   window.addEventListener('resize', () => {
     const w = vp.clientWidth;
@@ -530,14 +600,8 @@ async function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    // Recreate render target at new size
-    sceneRT.dispose();
-    sceneRT = new THREE.RenderTarget(w, h, {
-      depthTexture: new THREE.DepthTexture(w, h),
-    });
-    sceneRT.depthTexture.format = THREE.DepthFormat;
-    sceneRT.depthTexture.type = THREE.UnsignedIntType;
-    if (aoPipeline) aoPipeline.setSize(w, h);
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    depthRT.setSize(Math.round(size.x * resScale), Math.round(size.y * resScale));
     needsRender = true;
   });
 
@@ -565,15 +629,7 @@ async function initScene() {
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
-      // GTAO compute disabled in render loop — raw device access conflicts with Three.js
-      // command buffer management and caused kernel panic on M-series (texture usage flags,
-      // double canvas acquire, competing queue.submit calls).
-      // Compute shaders verified correct (ao-compute.js). Integration needs either:
-      // - Three.js r172+ ComputeNode in PostProcessing graph, OR
-      // - Full renderer takeover (don't use Three.js for rendering at all), OR
-      // - Patch Three.js RenderTarget to add TEXTURE_BINDING|STORAGE_BINDING usage
-      //   and hook into its command encoder instead of creating our own.
-      renderer.render(scene, camera);
+      renderPipeline.render();
 
       const frameMs = performance.now() - t0;
       fpsFrames++;
@@ -1146,27 +1202,50 @@ function updateBackground() {
 // --- AO Controls ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
+  if (renderPipeline && scenePass) {
+    if (e.target.checked) {
+      // Re-enable AO composite
+      if (aoIntensity) aoIntensity.value = parseFloat(document.getElementById('ao-intensity').value);
+    } else {
+      // Bypass AO by setting intensity to 0
+      if (aoIntensity) aoIntensity.value = 0;
+    }
+  }
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-radius-val').textContent = v.toFixed(2);
-  if (aoPipeline) aoPipeline.radius = v;
+  if (aoPass) aoPass.radius.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoPipeline) aoPipeline.intensity = v;
+  if (aoIntensity) aoIntensity.value = v;
   window._kaminosDirty?.();
 });
 
-document.getElementById('ao-far-blend').addEventListener('input', e => {
+document.getElementById('ao-scale').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
-  document.getElementById('ao-far-blend-val').textContent = v.toFixed(2);
-  if (aoPipeline) aoPipeline.falloffEnd = v * 6.0; // scale 0-1 slider to 0-6 world units
+  document.getElementById('ao-scale-val').textContent = v.toFixed(2);
+  if (aoPass) aoPass.scale.value = v;
+  window._kaminosDirty?.();
+});
+
+document.getElementById('ao-thickness').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('ao-thickness-val').textContent = v.toFixed(2);
+  if (aoPass) aoPass.thickness.value = v;
+  window._kaminosDirty?.();
+});
+
+document.getElementById('ao-falloff').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('ao-falloff-val').textContent = v.toFixed(2);
+  if (aoPass) aoPass.distanceFallOff.value = v;
   window._kaminosDirty?.();
 });
 
@@ -1943,12 +2022,66 @@ async function grBrowse() {
 
     const name = document.createElement('span');
     name.className = 'gr-name';
-    name.textContent = entry.name;
+    // Show semantic name from metadata if available, raw name as fallback
+    const md = entry.metadata;
+    if (md && md.name) {
+      name.textContent = md.name;
+      name.title = entry.name; // raw dir name on hover
+    } else {
+      name.textContent = entry.name;
+    }
 
     div.appendChild(icon);
     div.appendChild(name);
 
-    if (entry.receipt) {
+    // Metadata tags (from greenroom metadata sidecar)
+    if (md) {
+      if (md.job_type) {
+        const tag = document.createElement('span');
+        tag.className = 'gr-meta';
+        tag.textContent = md.job_type;
+        div.appendChild(tag);
+      }
+      const params = md.params || {};
+      if (params.seed) {
+        const tag = document.createElement('span');
+        tag.className = 'gr-meta';
+        tag.textContent = 's:' + params.seed;
+        div.appendChild(tag);
+      }
+      if (params.resolution) {
+        const tag = document.createElement('span');
+        tag.className = 'gr-meta';
+        tag.textContent = params.resolution + 'px';
+        div.appendChild(tag);
+      }
+      if (md.duration_s != null) {
+        const tag = document.createElement('span');
+        tag.className = 'gr-meta';
+        tag.textContent = md.duration_s < 60
+          ? md.duration_s.toFixed(0) + 's'
+          : (md.duration_s / 60).toFixed(1) + 'm';
+        div.appendChild(tag);
+      }
+      // Quick-load GLBs from metadata output_files
+      if (md.output_files) {
+        const glbs = md.output_files.filter(f => /\.(glb|gltf)$/i.test(f));
+        for (const glb of glbs) {
+          const btn = document.createElement('button');
+          btn.className = 'btn';
+          btn.textContent = glbs.length > 1 ? glb : 'Load';
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            const filePath = (grCurrentPath ? grCurrentPath + '/' : '') + entry.name + '/' + glb;
+            const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+            showGLB(url);
+            glbFileName = glb;
+            setInfo(`${md.name || entry.name} (${md.job_type || ''}${params.seed ? ' s:' + params.seed : ''})`);
+          };
+          div.appendChild(btn);
+        }
+      }
+    } else if (entry.receipt) {
       const status = document.createElement('span');
       status.className = 'gr-status ' + (entry.receipt.status || '');
       status.textContent = entry.receipt.status || '';
@@ -2670,6 +2803,7 @@ grInit();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
+  restoreSettings();
   // Load HDR environment first, then auto-load demo
   loadEnvironment('studio').then(() => {
     loadDemo(DEMO_ASSETS[0]);
@@ -2679,6 +2813,7 @@ initScene().then(() => {
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
+  restoreSettings();
 });
 </script>
 </body>
