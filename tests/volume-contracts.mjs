@@ -9,6 +9,10 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume_primitive_fixture/, 'URL route can seed a saved volume primitive fixture');
+assert.match(index, /createLamellarHookVolumePrimitiveFixture/, 'URL fixture can seed a Lamellar-derived volume primitive');
+assert.match(index, /couplingSource:\s*'lamellar'/, 'Lamellar volume primitives preserve coupling source identity');
+assert.match(index, /targetHookId:\s*'lamellar-0-0-selected'/, 'Lamellar volume primitives preserve target hook identity');
+assert.match(index, /temporary-aesthetic-composition-primitive-not-final-lamellar-topology/, 'Lamellar fixture preserves the placeholder topology contract');
 assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume primitive schema explicitly');
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
@@ -119,6 +123,8 @@ assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/proje
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
 assert.match(core, /primitive_source/, 'fluid uniforms carry an explicit primitive source transform');
 assert.match(core, /setVolumePrimitives/, 'volume prototype accepts authored primitive records');
+assert.match(core, /assertNoPlaceholderTopologyClaim/, 'volume prototype fails loudly on placeholder topology production claims');
+assert.match(core, /placeholderContract/, 'volume prototype preserves placeholder topology contracts in debug state');
 assert.match(core, /volumePrimitiveCount/, 'debug state records the number of consumed volume primitives');
 assert.match(core, /volumePrimitiveIds/, 'debug state records stable primitive ids');
 assert.match(core, /let sourceCenter = p - u\.primitive_source\.xyz;/, 'fluid source is centered from the selected primitive transform');
@@ -144,6 +150,8 @@ assert.match(witness, /expectedPrimitiveFixture/, 'witness derives expected volu
 assert.match(witness, /volumePrimitiveCount/, 'witness requires effective volume primitive consumption');
 assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive ids');
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
+assert.match(witness, /assertNoPlaceholderTopologyClaim/, 'witness fails loudly on placeholder topology production claims');
+assert.match(witness, /expectedLamellarHookFixture/, 'witness knows when the route expects a Lamellar hook fixture');
 assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');

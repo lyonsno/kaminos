@@ -759,6 +759,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function normalizePrimitiveRecord(primitive) {
     const source = primitive && typeof primitive === 'object' ? primitive : {};
+    assertNoPlaceholderTopologyClaim(source);
     const transform = source.transform && typeof source.transform === 'object' ? source.transform : {};
     const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : {};
     const scale = Array.isArray(transform.scale) ? transform.scale.map(Number) : [0.12, 0.12, 0.12];
@@ -780,6 +781,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function assertNoPlaceholderTopologyClaim(primitive) {
+    const placeholderContract = primitive?.placeholderContract || primitive?.coupling?.placeholderContract || primitive?.lamellarHook?.placeholderContract;
+    const claimsProduction =
+      primitive?.topologyAuthority === 'production' ||
+      primitive?.coupling?.topologyAuthority === 'production' ||
+      primitive?.claims?.productionLamellarTopology === true;
+    if (placeholderContract && claimsProduction) {
+      throw new Error(`Volume primitive ${primitive?.id || '(unknown)'} carries placeholderContract=${placeholderContract} but claims production Lamellar topology`);
+    }
+  }
+
   function publishVolumePrimitiveState() {
     state.volumePrimitiveCount = volumePrimitives.length;
     state.volumePrimitiveIds = volumePrimitives.map(primitive => primitive.id);
@@ -787,6 +799,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       id: primitive.id,
       kind: primitive.kind,
       shape: primitive.shape,
+      couplingSource: primitive.couplingSource,
+      targetHookId: primitive.targetHookId,
+      topologyAuthority: primitive.topologyAuthority,
+      placeholderContract: primitive.placeholderContract,
+      coupling: primitive.coupling ? { ...primitive.coupling } : undefined,
+      lamellarHook: primitive.lamellarHook ? { ...primitive.lamellarHook } : undefined,
       transform: {
         position: [...primitive.transform.position],
         rotation: [...primitive.transform.rotation],

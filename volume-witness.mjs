@@ -33,7 +33,23 @@ const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.i
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
   : 0.65;
 const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
-const expectedPrimitiveId = expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
+const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].includes(expectedPrimitiveFixture);
+const expectedPrimitiveId = expectedLamellarHookFixture
+  ? 'fixture-lamellar-hook-selected'
+  : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
+
+function assertNoPlaceholderTopologyClaim(primitives = []) {
+  for (const primitive of primitives) {
+    const placeholderContract = primitive?.placeholderContract || primitive?.coupling?.placeholderContract || primitive?.lamellarHook?.placeholderContract;
+    const claimsProduction =
+      primitive?.topologyAuthority === 'production' ||
+      primitive?.coupling?.topologyAuthority === 'production' ||
+      primitive?.claims?.productionLamellarTopology === true;
+    if (placeholderContract && claimsProduction) {
+      throw new Error(`Volume primitive ${primitive?.id || '(unknown)'} carries placeholderContract=${placeholderContract} but claims production Lamellar topology`);
+    }
+  }
+}
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -262,6 +278,15 @@ async function main() {
     if (expectedPrimitiveFixture) {
       assert.ok(state.volumePrimitiveCount > 0, 'volume primitive fixture was not consumed by the renderer');
       assert.ok(state.volumePrimitiveIds?.includes(expectedPrimitiveId), `volume primitive ids did not include ${expectedPrimitiveId}`);
+    }
+    assertNoPlaceholderTopologyClaim(state.volumePrimitives);
+    if (expectedLamellarHookFixture) {
+      const primitive = state.volumePrimitives?.find(item => item.id === expectedPrimitiveId);
+      assert.equal(primitive?.couplingSource, 'lamellar', 'Lamellar hook primitive did not preserve coupling source');
+      assert.equal(primitive?.targetHookId, 'lamellar-0-0-selected', 'Lamellar hook primitive did not preserve target hook id');
+      assert.equal(primitive?.placeholderContract, 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology', 'Lamellar hook primitive did not preserve placeholder topology contract');
+      assert.equal(primitive?.coupling?.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar hook primitive did not preserve witness identity');
+      assert.ok(Number.isFinite(primitive?.lamellarHook?.emissiveCatch), 'Lamellar hook primitive did not preserve scalar hook hints');
     }
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 

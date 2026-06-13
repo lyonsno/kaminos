@@ -520,14 +520,21 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
+const SCENE_SCHEMA = 'kaminos.scene.v1';
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
+const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 let volumePrimitives = [];
+let sceneObjects = [];
+let activeSceneObjectId = null;
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
 }
 
 function createVolumePrimitiveFixture(name = 'fire_sphere') {
+  if (['lamellar_hook', 'lamellar_selected_hook'].includes(name)) {
+    return createLamellarHookVolumePrimitiveFixture();
+  }
   if (!['fire_sphere', 'fire_smoke_sphere'].includes(name)) return null;
   return {
     id: 'fixture-fire-smoke-sphere',
@@ -558,6 +565,62 @@ function createVolumePrimitiveFixture(name = 'fire_sphere') {
     render: {
       radiance: 1.65,
       glow: 1.15,
+    },
+  };
+}
+
+function createLamellarHookVolumePrimitiveFixture() {
+  return {
+    id: 'fixture-lamellar-hook-selected',
+    kind: 'lamellar_hook_emitter',
+    shape: 'hook-derived',
+    couplingSource: 'lamellar',
+    targetHookId: 'lamellar-0-0-selected',
+    topologyAuthority: 'placeholder',
+    placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    transform: {
+      position: [0.18, -0.58, 0.16],
+      rotation: [0, 0, 0],
+      scale: [0.11, 0.11, 0.11],
+    },
+    channels: {
+      density: 0.72,
+      temperature: 0.86,
+      fuel: 0.42,
+      smoke: 0.58,
+      emissive: 0.78,
+      absorption: 0.58,
+    },
+    coupling: {
+      source: 'lamellar',
+      couplingSource: 'lamellar',
+      targetHookId: 'lamellar-0-0-selected',
+      witnessIdentity: 'kaminos-lamellar-witness-v0',
+      effectiveRoute: 'sphere-domain-section-segment-witness-v0',
+      routeGate: 'kaminos_lamellar_witness=1',
+      controlIds: ['lamellar-view', 'lamellar-cut-radius', 'lamellar-layer-count'],
+      placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    },
+    lamellarHook: {
+      bandId: 'lamellar-0-0-selected',
+      layerIndex: 0,
+      bandIndex: 0,
+      role: 'selected',
+      centerlineSamples: [[0.32, -0.42, 0.18], [0.18, -0.28, 0.37], [0.02, -0.08, 0.48]],
+      rimMask: 0.92,
+      innerExposure: 0.66,
+      shellOcclusion: 0.32,
+      emissiveCatch: 0.78,
+      placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    },
+    simulation: {
+      sourceRadius: 0.11,
+      flowRate: 0.18,
+      vorticity: 2.25,
+    },
+    render: {
+      radiance: 1.45,
+      glow: 1.05,
     },
   };
 }
@@ -604,6 +667,72 @@ function seedVolumePrimitiveFixture(name) {
   const fixture = createVolumePrimitiveFixture(name);
   if (!fixture) return;
   setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [fixture] });
+}
+
+function makeSceneObjectId(prefix = 'object') {
+  if (crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sceneObjectMetadataFor(object) {
+  return object?.userData?.kaminosSceneObject || null;
+}
+
+function disposeObjectTree(object) {
+  object.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const m of mats) {
+        for (const prop of ['map','roughnessMap','metalnessMap','normalMap','displacementMap','envMap','aoMap','emissiveMap','alphaMap']) {
+          if (m[prop]) { m[prop].dispose(); m[prop] = null; }
+        }
+        m.dispose();
+      }
+    }
+  });
+}
+
+function setActiveSceneObject(id) {
+  const entry = sceneObjects.find(obj => obj.id === id);
+  activeSceneObjectId = entry ? entry.id : null;
+  currentMesh = entry ? entry.object : null;
+  if (!transformControls) return;
+  transformControls.detach();
+  transformControls.visible = false;
+  if (currentMesh) {
+    transformControls.attach(currentMesh);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  } else {
+    document.getElementById('transform-bar').classList.remove('visible');
+  }
+}
+
+function registerSceneObject(object, metadata = {}) {
+  const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
+  const record = {
+    id,
+    object,
+    source: metadata.source ?? null,
+    type: metadata.type ?? null,
+    fileName: metadata.fileName ?? 'object',
+    label: metadata.label ?? metadata.fileName ?? id,
+    createdAt: metadata.createdAt ?? new Date().toISOString(),
+  };
+  object.userData.kaminosSceneObject = {
+    id: record.id,
+    source: record.source,
+    type: record.type,
+    fileName: record.fileName,
+    label: record.label,
+    createdAt: record.createdAt,
+  };
+  sceneObjects = sceneObjects.filter(obj => obj.id !== id);
+  sceneObjects.push(record);
+  setActiveSceneObject(id);
+  window._kaminosDirty?.();
+  return record;
 }
 
 // --- HDR Environments ---
@@ -906,35 +1035,26 @@ function applyEnvMap(envMap, intensity) {
   updateBackground();
 
   // Update all materials in scene to use envMap
-  if (currentMesh) {
-    currentMesh.traverse(child => {
+  sceneObjects.forEach(({ object }) => {
+    object.traverse(child => {
       if (child.material) {
         child.material.envMapIntensity = intensity;
         child.material.needsUpdate = true;
       }
     });
-  }
+  });
   window._kaminosDirty?.();
 }
 
 // --- File Loading ---
 function clearScene() {
-  if (currentMesh) {
-    scene.remove(currentMesh);
-    currentMesh.traverse(child => {
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        for (const m of mats) {
-          for (const prop of ['map','roughnessMap','metalnessMap','normalMap','displacementMap','envMap','aoMap','emissiveMap','alphaMap']) {
-            if (m[prop]) { m[prop].dispose(); m[prop] = null; }
-          }
-          m.dispose();
-        }
-      }
-    });
-    currentMesh = null;
+  for (const entry of sceneObjects) {
+    scene.remove(entry.object);
+    disposeObjectTree(entry.object);
   }
+  sceneObjects = [];
+  activeSceneObjectId = null;
+  currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
     transformControls.detach();
@@ -1003,52 +1123,67 @@ async function showPBRPreview() {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.position.y = 0;
-  currentMesh = mesh;
-  scene.add(currentMesh);
+  scene.add(mesh);
+  registerSceneObject(mesh, {
+    source: modelSourceUrl || 'material-preview',
+    type: 'pbr',
+    fileName: glbFileName || 'pbr-material-preview',
+  });
   setInfo('PBR Material Preview — orbit to inspect');
 }
 
 // --- GLB Inspector ---
-async function showGLB(file) {
-  clearScene();
+async function showGLB(file, options = {}) {
+  if (options.clear !== false) clearScene();
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
-  loader.load(url, gltf => {
-    if (isBlob) URL.revokeObjectURL(url);
-    glbSourceScene = gltf.scene;
-    const model = gltf.scene;
-    const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3()).length();
-    model.position.sub(center);
-    const scale = 2.0 / size;
-    model.scale.setScalar(scale);
-    model.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        if (child.material) {
-          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
-        }
+  return new Promise((resolve, reject) => {
+    loader.load(url, gltf => {
+      if (isBlob) URL.revokeObjectURL(url);
+      glbSourceScene = gltf.scene;
+      const model = gltf.scene;
+      if (options.normalize !== false) {
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        model.position.sub(center);
+        const scale = 2.0 / size;
+        model.scale.setScalar(scale);
       }
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+          }
+        }
+      });
+      scene.add(model);
+      registerSceneObject(model, {
+        ...(options.metadata || {}),
+        source: options.metadata?.source ?? modelSourceUrl,
+        type: options.metadata?.type ?? 'glb',
+        fileName: options.metadata?.fileName ?? glbFileName,
+      });
+      document.getElementById('transform-bar').classList.add('visible');
+      setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
+      resolve(model);
+    }, undefined, (err) => {
+      if (isBlob) URL.revokeObjectURL(url);
+      setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
+      reject(err);
     });
-    currentMesh = model;
-    scene.add(currentMesh);
-    document.getElementById('transform-bar').classList.add('visible');
-    setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-  }, undefined, (err) => {
-    if (isBlob) URL.revokeObjectURL(url);
-    setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
   });
 }
 
 // --- OBJ Inspector ---
-async function showOBJ(objFile, mtlFile) {
-  clearScene();
+async function showOBJ(objFile, mtlFile, options = {}) {
+  if (options.clear !== false) clearScene();
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
   modelSourceUrl = objFile.name;
@@ -1073,39 +1208,50 @@ async function showOBJ(objFile, mtlFile) {
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
 
-  objLoader.load(objUrl, obj => {
-    URL.revokeObjectURL(objUrl);
-    glbSourceScene = obj;
-    const box = new THREE.Box3().setFromObject(obj);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3()).length();
-    obj.position.sub(center);
-    const scale = 2.0 / size;
-    obj.scale.setScalar(scale);
-    obj.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        // If no MTL, give it a decent default material
-        if (!mtlFile && child.material) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            roughness: 0.5,
-            metalness: 0.0,
-            envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
-          });
-        } else if (child.material) {
-          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
-        }
+  return new Promise((resolve, reject) => {
+    objLoader.load(objUrl, obj => {
+      URL.revokeObjectURL(objUrl);
+      glbSourceScene = obj;
+      if (options.normalize !== false) {
+        const box = new THREE.Box3().setFromObject(obj);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        obj.position.sub(center);
+        const scale = 2.0 / size;
+        obj.scale.setScalar(scale);
       }
+      obj.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          // If no MTL, give it a decent default material
+          if (!mtlFile && child.material) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0xcccccc,
+              roughness: 0.5,
+              metalness: 0.0,
+              envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+            });
+          } else if (child.material) {
+            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+          }
+        }
+      });
+      scene.add(obj);
+      registerSceneObject(obj, {
+        ...(options.metadata || {}),
+        source: options.metadata?.source ?? modelSourceUrl,
+        type: options.metadata?.type ?? 'obj',
+        fileName: options.metadata?.fileName ?? glbFileName,
+      });
+      document.getElementById('transform-bar').classList.add('visible');
+      setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
+      resolve(obj);
+    }, undefined, (err) => {
+      URL.revokeObjectURL(objUrl);
+      setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
+      reject(err);
     });
-    currentMesh = obj;
-    scene.add(currentMesh);
-    document.getElementById('transform-bar').classList.add('visible');
-    setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
-  }, undefined, (err) => {
-    URL.revokeObjectURL(objUrl);
-    setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
   });
 }
 
@@ -1127,9 +1273,14 @@ async function showDepthSurface() {
       })
     : new THREE.MeshStandardMaterial({ map: depthTex });
 
-  currentMesh = new THREE.Mesh(geo, mat);
-  currentMesh.castShadow = true;
-  scene.add(currentMesh);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  registerSceneObject(mesh, {
+    source: modelSourceUrl || 'depth-surface',
+    type: 'depth',
+    fileName: glbFileName || 'depth-surface',
+  });
   setInfo('Depth Surface — orbit to inspect');
 }
 
@@ -2749,42 +2900,116 @@ function formatSize(bytes) {
 }
 
 // --- Scene Save/Load ---
-function buildSceneData() {
-  // Extract provenance from greenroom job if source is a job-output URL
-  let provenance = null;
-  if (modelSourceUrl) {
-    const jobMatch = modelSourceUrl.match(/job_id=([^&]+)/);
-    if (jobMatch) {
-      provenance = { greenroom_job_id: jobMatch[1], source_url: modelSourceUrl };
-    } else {
-      provenance = { source_url: modelSourceUrl };
-    }
-    // Add model source as sortable key
-    if (modelSourceUrl.startsWith('demos/')) {
-      provenance.source_group = 'demo';
-    } else if (modelSourceUrl.startsWith('/api/job-output')) {
-      provenance.source_group = 'greenroom';
-    } else if (modelSourceUrl.startsWith('/api/read?root=scratch')) {
-      provenance.source_group = 'scratch';
-    } else {
-      provenance.source_group = 'local';
-    }
+function provenanceForSource(source) {
+  if (!source) return null;
+  const provenance = {};
+  const jobMatch = source.match(/job_id=([^&]+)/);
+  if (jobMatch) provenance.greenroom_job_id = jobMatch[1];
+  provenance.source_url = source;
+  if (source.startsWith('demos/')) {
+    provenance.source_group = 'demo';
+  } else if (source.startsWith('/api/job-output')) {
+    provenance.source_group = 'greenroom';
+  } else if (source.startsWith('/api/read?root=scratch')) {
+    provenance.source_group = 'scratch';
+  } else {
+    provenance.source_group = 'local';
   }
+  return provenance;
+}
+
+function getMaterialStateForObject(object) {
+  if (!object) return null;
+  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
+  object.traverse(child => {
+    if (child.isMesh && child.material) {
+      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+      state.side = mat.side;
+      state.transparent = mat.transparent;
+      state.opacity = mat.opacity;
+    }
+  });
+  return state;
+}
+
+function serializeSceneObject(entry) {
+  const object = entry.object;
+  const metadata = sceneObjectMetadataFor(object) || entry;
+  return {
+    id: entry.id,
+    source: metadata.source ?? entry.source,
+    type: metadata.type ?? entry.type,
+    fileName: metadata.fileName ?? entry.fileName,
+    label: metadata.label ?? entry.label,
+    createdAt: metadata.createdAt ?? entry.createdAt,
+    transform: {
+      position: object.position.toArray(),
+      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+      scale: object.scale.toArray(),
+    },
+    materials: getMaterialStateForObject(object),
+  };
+}
+
+function sceneObjectToLegacyModel(data) {
+  return {
+    id: 'legacy-model',
+    source: data.model.source,
+    type: data.model.type,
+    fileName: data.model.fileName || 'model.glb',
+    label: data.model.fileName || 'legacy model',
+    transform: data.transform,
+    materials: data.materials,
+  };
+}
+
+async function addSceneObjectFromSource(record) {
+  if (!record?.source) throw new Error('Scene object missing source');
+  const type = record.type || 'glb';
+  if (type === 'glb' && (record.source.startsWith('/api/') || record.source.startsWith('http') || record.source.startsWith('demos/'))) {
+    return showGLB(record.source, {
+      clear: false,
+      normalize: false,
+      metadata: record,
+    });
+  }
+  throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
+}
+
+async function loadSceneObjects(records, activeId) {
+  clearScene();
+  const loaded = [];
+  for (const record of records) {
+    const object = await addSceneObjectFromSource(record);
+    if (record.transform) {
+      object.position.fromArray(record.transform.position || [0, 0, 0]);
+      object.rotation.set(...(record.transform.rotation || [0, 0, 0]));
+      object.scale.fromArray(record.transform.scale || [1, 1, 1]);
+    }
+    applyMaterialStateToObject(object, record.materials);
+    loaded.push(record.id);
+  }
+  setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
+}
+
+function buildSceneData() {
+  const objects = sceneObjects.map(serializeSceneObject);
+  const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
+  const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
   return {
-    version: 2,
+    schema: SCENE_SCHEMA,
+    version: 3,
     timestamp: new Date().toISOString(),
-    model: {
-      source: modelSourceUrl,
-      type: modelSourceType,
-      fileName: glbFileName,
-    },
-    provenance,
-    transform: currentMesh ? {
-      position: currentMesh.position.toArray(),
-      rotation: [currentMesh.rotation.x, currentMesh.rotation.y, currentMesh.rotation.z],
-      scale: currentMesh.scale.toArray(),
+    objects: sceneObjects.map(serializeSceneObject),
+    activeObjectId: activeSceneObjectId,
+    model: activeObject ? {
+      source: activeObject.source,
+      type: activeObject.type,
+      fileName: activeObject.fileName,
     } : null,
+    provenance,
+    transform: activeObject?.transform || null,
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -2799,7 +3024,7 @@ function buildSceneData() {
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
     volumePrimitives: getVolumePrimitiveState(),
-    materials: getMaterialState(),
+    materials: activeObject?.materials || getMaterialState(),
     postprocessing: {
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
@@ -2856,22 +3081,12 @@ window.saveSceneAs = async function() {
 };
 
 function getMaterialState() {
-  if (!currentMesh) return null;
-  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
-  currentMesh.traverse(child => {
-    if (child.isMesh && child.material) {
-      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
-      state.side = mat.side;
-      state.transparent = mat.transparent;
-      state.opacity = mat.opacity;
-    }
-  });
-  return state;
+  return getMaterialStateForObject(currentMesh);
 }
 
-function applyMaterialState(state) {
-  if (!currentMesh || !state) return;
-  currentMesh.traverse(child => {
+function applyMaterialStateToObject(object, state) {
+  if (!object || !state) return;
+  object.traverse(child => {
     if (!child.isMesh) return;
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     for (const mat of mats) {
@@ -2885,6 +3100,10 @@ function applyMaterialState(state) {
       mat.needsUpdate = true;
     }
   });
+}
+
+function applyMaterialState(state) {
+  applyMaterialStateToObject(currentMesh, state);
 }
 
 async function loadSceneFile(file) {
@@ -2901,7 +3120,10 @@ async function loadSceneFile(file) {
     currentSceneFile = file.name;
   }
   const hasVolumePrimitiveScene = Array.isArray(data.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
-  if (!data.version || (!data.model?.source && !hasVolumePrimitiveScene)) {
+  const objectRecords = Array.isArray(data.objects)
+    ? data.objects
+    : (data.model?.source ? [sceneObjectToLegacyModel(data)] : []);
+  if (!data.version || (objectRecords.length === 0 && !hasVolumePrimitiveScene)) {
     setInfo('Invalid scene format');
     return;
   }
@@ -2942,7 +3164,14 @@ async function loadSceneFile(file) {
     await volumePrototype?.setActive?.(true);
   }
 
-  if (!data.model?.source) {
+  if (objectRecords.length > 0) {
+    try {
+      await loadSceneObjects(data.objects || objectRecords, data.activeObjectId);
+    } catch (e) {
+      setInfo('Scene load failed: ' + e.message);
+      return;
+    }
+  } else {
     if (data.camera) {
       camera.position.fromArray(data.camera.position);
       controls.target.fromArray(data.camera.target);
@@ -2952,48 +3181,6 @@ async function loadSceneFile(file) {
     }
     setInfo('Volume scene loaded');
     return;
-  }
-
-  // Load model
-  const src = data.model.source;
-  modelSourceType = data.model.type;
-  glbFileName = data.model.fileName || 'model.glb';
-
-  if (src.startsWith('/api/') || src.startsWith('http')) {
-    // URL-based source (greenroom job output, demo, etc.)
-    showGLB(src);
-  } else if (src.startsWith('demos/')) {
-    // Demo asset
-    showGLB(src);
-  } else {
-    setInfo(`Scene loaded but model "${src}" must be re-dropped (local file references cannot be reloaded automatically)`);
-    return;
-  }
-
-  // Wait for model to load, then apply transforms
-  const waitForMesh = () => new Promise((resolve, reject) => {
-    let elapsed = 0;
-    const check = () => {
-      if (currentMesh) return resolve();
-      elapsed += 100;
-      if (elapsed > 30000) return reject(new Error('Model load timed out'));
-      setTimeout(check, 100);
-    };
-    check();
-  });
-
-  try {
-    await waitForMesh();
-  } catch (e) {
-    setInfo('Scene load failed: ' + e.message);
-    return;
-  }
-
-  // Apply transforms
-  if (data.transform) {
-    currentMesh.position.fromArray(data.transform.position);
-    currentMesh.rotation.set(...data.transform.rotation);
-    currentMesh.scale.fromArray(data.transform.scale);
   }
 
   // Apply camera
@@ -3006,7 +3193,7 @@ async function loadSceneFile(file) {
   }
 
   // Apply material state
-  applyMaterialState(data.materials);
+  if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
   if (data.postprocessing) {
@@ -3066,7 +3253,7 @@ async function loadSceneFile(file) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
-  setInfo(`Scene loaded: ${data.model.fileName}`);
+  setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
 }
 
 // File input handler for Load Scene
