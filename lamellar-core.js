@@ -279,7 +279,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   function setActive(active) {
     state.active = Boolean(active);
     group.visible = state.active;
-    if (state.active) build({ frame: true });
+    if (state.active) build({ frame: false });
   }
 
   function update() {
