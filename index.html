@@ -2110,17 +2110,23 @@ function frameVolumeCamera() {
 }
 
 function createVolumeMainRendererBridge() {
-  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
-  sourceTexture.colorSpace = THREE.SRGBColorSpace;
-  sourceTexture.generateMipmaps = false;
-  sourceTexture.minFilter = THREE.LinearFilter;
-  sourceTexture.magFilter = THREE.LinearFilter;
+  function makeVolumeBridgeTexture() {
+    const texture = new THREE.CanvasTexture(volumePrototype.canvasElement());
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  let sourceTexture = makeVolumeBridgeTexture();
+  let sourceTextureSize = `${sourceTexture.image?.width || 0}x${sourceTexture.image?.height || 0}`;
 
   const material = new THREE.MeshBasicMaterial({
     map: sourceTexture,
     transparent: true,
     opacity: 1,
-    depthTest: true,
+    depthTest: false,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     toneMapped: false,
@@ -2134,22 +2140,46 @@ function createVolumeMainRendererBridge() {
     identity: 'volume-main-renderer-bridge-v0',
     source: 'native-webgpu-volume-canvas',
     composition: 'three-canvas-texture-additive-plane',
-    depthMode: 'main-renderer-depth-tested-plane-v0',
+    depthMode: 'main-renderer-scene-object-depth-bridge-v1',
   };
   scene.add(mesh);
 
   const direction = new THREE.Vector3();
-  return {
+  const bridge = {
     identity: 'volume-main-renderer-bridge-v0',
     mesh,
     texture: sourceTexture,
+    syncActiveState() {
+      const active = !!volumePrototype.debugState().active;
+      mesh.visible = active;
+      return active;
+    },
+    refreshVolumeBridgeTexture() {
+      const source = volumePrototype.canvasElement();
+      const nextSize = `${source?.width || 0}x${source?.height || 0}`;
+      if (source?.width > 0 && source?.height > 0 && nextSize !== sourceTextureSize) {
+        const previousTexture = sourceTexture;
+        sourceTexture = makeVolumeBridgeTexture();
+        sourceTextureSize = nextSize;
+        material.map = sourceTexture;
+        material.needsUpdate = true;
+        previousTexture.dispose();
+        bridge.texture = sourceTexture;
+      }
+      sourceTexture.needsUpdate = true;
+    },
     update() {
       const state = volumePrototype.debugState();
-      const active = !!state.active;
-      mesh.visible = active;
+      const active = bridge.syncActiveState();
       if (!active) return false;
-      sourceTexture.needsUpdate = true;
-      const distance = 1.5;
+      const placementMode = sceneObjects.length > 0
+        ? 'scene-object-depth-tested-plane-v0'
+        : 'empty-scene-visible-depth-tested-plane-v0';
+      mesh.userData.kaminosVolumeBridge.placementMode = placementMode;
+      material.depthTest = sceneObjects.length > 0;
+      material.needsUpdate = true;
+      bridge.refreshVolumeBridgeTexture();
+      const distance = sceneObjects.length > 0 ? 1.5 : 0.45;
       camera.getWorldDirection(direction);
       mesh.position.copy(camera.position).addScaledVector(direction, distance);
       mesh.quaternion.copy(camera.quaternion);
@@ -2166,6 +2196,7 @@ function createVolumeMainRendererBridge() {
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
         depthMode: mesh.userData.kaminosVolumeBridge.depthMode,
+        placementMode: mesh.userData.kaminosVolumeBridge.placementMode || null,
         depthTest: material.depthTest,
         depthWrite: material.depthWrite,
       };
@@ -2177,6 +2208,7 @@ function createVolumeMainRendererBridge() {
       mesh.geometry.dispose();
     },
   };
+  return bridge;
 }
 
 async function initKaminosVolumeRoute() {
@@ -2271,9 +2303,13 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
       volumePrototype.setActive(false);
+      volumeBridge?.syncActiveState?.();
+      window._kaminosDirty?.();
       setInfo('Volume renderer disabled');
     } else {
       await volumePrototype.setActive(true);
+      volumeBridge?.syncActiveState?.();
+      window._kaminosDirty?.();
       setInfo('Volume renderer — native WebGPU compute fluid raymarch');
     }
     refreshVolumeReadout();
@@ -2288,6 +2324,10 @@ async function initKaminosVolumeRoute() {
   }
   syncControls();
   setInterval(refreshVolumeReadout, 500);
+}
+
+function isKaminosVolumeSmokeRoute() {
+  return new URLSearchParams(window.location.search).get('kaminos_volume_smoke') === '1';
 }
 
 // --- File Input Handling ---
@@ -4311,7 +4351,9 @@ initScene().then(() => {
   restoreSettings();
   // Load HDR environment first, then auto-load demo
   loadEnvironment('studio').then(() => {
-    loadDemo(DEMO_ASSETS[0]);
+    if (!isKaminosVolumeSmokeRoute()) {
+      loadDemo(DEMO_ASSETS[0]);
+    }
   });
   initKaminosVolumeRoute();
 }).catch(err => {

@@ -667,6 +667,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
   viewport.appendChild(canvas);
+  const textureCanvas = document.createElement('canvas');
+  textureCanvas.id = 'kaminos-volume-texture-canvas';
+  textureCanvas.dataset.source = 'webgpu-canvas-drawImage-2d-mirror-v0';
+  const textureContext = textureCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
@@ -690,6 +694,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumePrimitiveCount: 0,
     volumePrimitiveIds: [],
     volumePrimitives: [],
+    textureMirror: {
+      identity: 'webgpu-canvas-drawImage-2d-mirror-v0',
+      sourceCanvas: 'kaminos-volume-canvas',
+      textureCanvas: 'kaminos-volume-texture-canvas',
+      width: 0,
+      height: 0,
+      ok: false,
+      error: null,
+    },
     lastFrameEnergy: 0,
     error: null,
   };
@@ -963,9 +976,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
+      textureCanvas.width = width;
+      textureCanvas.height = height;
       state.width = width;
       state.height = height;
+      state.textureMirror.width = width;
+      state.textureMirror.height = height;
       frameTextureSize = '';
+    }
+  }
+
+  function syncTextureMirror() {
+    if (!textureContext || canvas.width <= 0 || canvas.height <= 0) return;
+    if (textureCanvas.width !== canvas.width || textureCanvas.height !== canvas.height) {
+      textureCanvas.width = canvas.width;
+      textureCanvas.height = canvas.height;
+    }
+    try {
+      textureContext.drawImage(canvas, 0, 0, textureCanvas.width, textureCanvas.height);
+      state.textureMirror = {
+        identity: 'webgpu-canvas-drawImage-2d-mirror-v0',
+        sourceCanvas: canvas.id,
+        textureCanvas: textureCanvas.id,
+        width: textureCanvas.width,
+        height: textureCanvas.height,
+        ok: true,
+        error: null,
+      };
+    } catch (err) {
+      state.textureMirror = {
+        identity: 'webgpu-canvas-drawImage-2d-mirror-v0',
+        sourceCanvas: canvas.id,
+        textureCanvas: textureCanvas.id,
+        width: textureCanvas.width,
+        height: textureCanvas.height,
+        ok: false,
+        error: err?.message || String(err),
+      };
     }
   }
 
@@ -1058,6 +1105,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeSim(encoder);
     encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
     device.queue.submit([encoder.finish()]);
+    syncTextureMirror();
     state.frameCount += 1;
     state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
   }
@@ -1340,7 +1388,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return { ...state, controls: { ...controlsSnapshot } };
     },
     canvasElement() {
-      return canvas;
+      return textureCanvas;
     },
     sampleFrame,
     dispose() {

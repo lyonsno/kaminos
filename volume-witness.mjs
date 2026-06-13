@@ -274,9 +274,13 @@ async function main() {
     });
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
-    assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
-    assert.equal(bridge?.depthMode, 'main-renderer-depth-tested-plane-v0', 'wrong volume bridge depth mode');
-    assert.equal(bridge?.depthTest, true, 'volume bridge is not participating in main renderer depth testing');
+    assert.equal(bridge?.textureSource, 'kaminos-volume-texture-canvas', 'volume bridge is not sourcing the CanvasTexture-compatible volume mirror');
+    assert.equal(bridge?.depthMode, 'main-renderer-scene-object-depth-bridge-v1', 'wrong volume bridge depth mode');
+    if (bridge?.placementMode === 'empty-scene-visible-depth-tested-plane-v0') {
+      assert.equal(bridge?.depthTest, false, 'empty volume scenes must not hide the bridge behind the procedural backdrop');
+    } else {
+      assert.equal(bridge?.depthTest, true, 'volume bridge is not participating in main renderer depth testing with authored scene objects');
+    }
     assert.equal(bridge?.depthWrite, false, 'volume bridge must not write depth while still using texture-plane composition');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
@@ -374,6 +378,7 @@ async function main() {
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       volumeBridge: bridge,
+      textureMirror: state.textureMirror,
       backend: state.backend,
       captureBackend,
       frameCount: state.frameCount,
