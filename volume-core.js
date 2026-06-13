@@ -598,8 +598,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let temp = emissiveTemperature(fireLayer, material, microLayer, velMag) * fireGain;
     let smoke = (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
     let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
-    let smokeAlpha = clamp((smoke * 0.038 + heat * 0.004 + materialDetail * 0.007 + microBodyContribution * 0.032) * dt * steps * u.viewport_steps_density.w * (0.82 + absorptionGain * 0.10), 0.0, 0.15);
-    let fireAlpha = clamp((flame * 0.050 + ember * 0.026 + flameDetail * 0.020 + fireLick * 0.105 + emberFleck * 0.026 + interfaceShred * 0.010) * dt * steps * fireGain * (0.52 + radianceGain * 0.16), 0.0, 0.20);
+    let rayStepOpacity = dt * 3.65;
+    let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16);
+    let fireAlpha = clamp((flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26) * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
@@ -613,7 +614,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
-    color = color + trans * (alpha * local + fireAlpha * radianceEmission * 0.46 + smokeBacklight);
+    color = color + trans * (alpha * local + fireAlpha * radianceEmission * 0.82 + smokeBacklight);
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + dt;

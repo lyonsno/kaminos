@@ -14,7 +14,8 @@ assert.match(index, /id="volume-resolution"/, 'Volume tab exposes a fluid grid r
 assert.match(index, /id="volume-grid-overlay"/, 'Volume tab exposes a grid overlay control');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
-assert.match(index, /id="volume-density"[^>]+value="2\.8"/, 'smoke route defaults to the accepted dense smoke shape');
+assert.match(index, /id="volume-density"[^>]+max="6"/, 'Density exposes enough headroom to compensate lower ray-step budgets');
+assert.match(index, /id="volume-density"[^>]+value="4\.2"/, 'smoke route defaults to denser normalized raymarch body');
 assert.match(index, /id="volume-fire"[^>]+value="1\.4"/, 'smoke route defaults to the accepted transported fire shape');
 assert.match(index, /id="volume-smoke"[^>]+value="2\.8"/, 'smoke route defaults to the latest high smoke visibility');
 assert.match(index, /id="volume-curl"[^>]+value="2\.65"/, 'smoke route defaults to the accepted curl shape');
@@ -27,7 +28,7 @@ assert.match(index, /id="volume-radiance"/, 'Volume tab exposes fire radiance co
 assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorption control');
 assert.match(index, /id="volume-glow"/, 'Volume tab exposes emissive glow control');
 assert.match(index, /id="volume-speed"[^>]+value="5"/, 'smoke route defaults to the latest operator-found speed');
-assert.match(index, /id="volume-steps"[^>]+value="144"/, 'smoke route defaults to the accepted ray-step budget');
+assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to a lower step budget after normalized alpha');
 assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route defaults to 96^3 grid');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
@@ -77,6 +78,8 @@ assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
+assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step optical thickness');
+assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
 assert.match(core, /microFilamentNoise/, 'raymarch derives visible microdetail from multi-axis turbulent filament noise');
 assert.match(core, /let lickWarp = turbulentDetailForce/, 'fire-lick breakup dephases its comb with turbulent warp before transport');
