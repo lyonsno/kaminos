@@ -25,13 +25,15 @@ const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
   : 0;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
-const expectedRaySteps = Number.isFinite(requestedRaySteps)
+const expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
   ? Math.max(24, Math.min(160, requestedRaySteps))
   : 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
-const expectedAdaptiveRays = Number.isFinite(requestedAdaptiveRays)
+const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
   : 0.65;
+const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
+const expectedPrimitiveId = expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -257,6 +259,10 @@ async function main() {
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
+    if (expectedPrimitiveFixture) {
+      assert.ok(state.volumePrimitiveCount > 0, 'volume primitive fixture was not consumed by the renderer');
+      assert.ok(state.volumePrimitiveIds?.includes(expectedPrimitiveId), `volume primitive ids did not include ${expectedPrimitiveId}`);
+    }
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
     phase = 'gpu-readback';
@@ -331,6 +337,9 @@ async function main() {
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
       adaptiveRaymarch: sample.adaptiveRaymarch,
+      volumePrimitiveCount: state.volumePrimitiveCount,
+      volumePrimitiveIds: state.volumePrimitiveIds,
+      volumePrimitives: state.volumePrimitives,
       controls: state.controls,
       screenshot: out,
       metrics,

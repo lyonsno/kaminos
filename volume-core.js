@@ -31,6 +31,7 @@ struct Uniforms {
   grid_overlay_debug: vec4<f32>,
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
+  primitive_source: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -480,9 +481,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var emberFleck = microLayer.w * 0.934;
 
   let radial = length(p.xz);
-  let sourceCenter = p.xz;
-  let sourceRadial = length(sourceCenter);
-  let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
+  let sourceCenter = p - u.primitive_source.xyz;
+  let sourceRadial = length(sourceCenter.xz);
+  let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.68, 1.08, sourceCenter.y));
   let breakup = clamp(
     0.64
       + 0.24 * sin(p.x * 19.0 + p.z * 7.0 + time * 1.7)
@@ -496,7 +497,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let emberRingRadius = inputRadius * 0.94;
   let emberRingWidth = max(0.045, inputRadius * 0.22);
   let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
-  let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
+  let fireBirthBand = smoothstep(-0.25, -0.08, sourceCenter.y) * (1.0 - smoothstep(0.30, 0.70, sourceCenter.y));
   let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
@@ -669,7 +670,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(40);
+  const uniforms = new Float32Array(44);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -686,6 +687,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`,
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
+    volumePrimitiveCount: 0,
+    volumePrimitiveIds: [],
+    volumePrimitives: [],
     lastFrameEnergy: 0,
     error: null,
   };
@@ -708,6 +712,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let format = null;
   let raf = 0;
   let controlsSnapshot = getControls();
+  let volumePrimitives = [];
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
@@ -715,16 +720,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function makeInitialFluid(nextGridSize) {
     const data = new Float32Array(gridCellCount(nextGridSize) * FLUID_COMPONENTS);
+    const sourcePrimitive = getPrimitiveSource();
     for (let z = 0; z < nextGridSize; z += 1) {
       for (let y = 0; y < nextGridSize; y += 1) {
         for (let x = 0; x < nextGridSize; x += 1) {
           const fx = (x + 0.5) / nextGridSize * 2 - 1;
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
-          const radial = Math.hypot(fx, fz);
-          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08);
-          const inputFlow = Math.max(0, controlsSnapshot.flowRate ?? 0.3);
-          const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
+          const dx = fx - sourcePrimitive.position[0];
+          const dy = fy - sourcePrimitive.position[1];
+          const dz = fz - sourcePrimitive.position[2];
+          const radial = Math.hypot(dx, dz);
+          const inputRadius = sourcePrimitive.radius;
+          const inputFlow = sourcePrimitive.flowRate;
+          const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(dy - 0.22) * 4.2) * inputFlow;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
@@ -746,6 +755,61 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     }
     return data;
+  }
+
+  function normalizePrimitiveRecord(primitive) {
+    const source = primitive && typeof primitive === 'object' ? primitive : {};
+    const transform = source.transform && typeof source.transform === 'object' ? source.transform : {};
+    const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : {};
+    const scale = Array.isArray(transform.scale) ? transform.scale.map(Number) : [0.12, 0.12, 0.12];
+    return {
+      ...source,
+      id: String(source.id || 'volume-primitive-0'),
+      kind: String(source.kind || 'fire_smoke'),
+      shape: String(source.shape || 'sphere'),
+      transform: {
+        position: Array.isArray(transform.position) ? transform.position.map(Number) : [0, -0.74, 0],
+        rotation: Array.isArray(transform.rotation) ? transform.rotation.map(Number) : [0, 0, 0],
+        scale,
+      },
+      simulation: {
+        ...simulation,
+        sourceRadius: Number.isFinite(Number(simulation.sourceRadius)) ? Number(simulation.sourceRadius) : Math.max(0.08, Number(scale[0]) || 0.12),
+        flowRate: Number.isFinite(Number(simulation.flowRate)) ? Number(simulation.flowRate) : (controlsSnapshot.flowRate ?? 0.3),
+      },
+    };
+  }
+
+  function publishVolumePrimitiveState() {
+    state.volumePrimitiveCount = volumePrimitives.length;
+    state.volumePrimitiveIds = volumePrimitives.map(primitive => primitive.id);
+    state.volumePrimitives = volumePrimitives.map(primitive => ({
+      id: primitive.id,
+      kind: primitive.kind,
+      shape: primitive.shape,
+      transform: {
+        position: [...primitive.transform.position],
+        rotation: [...primitive.transform.rotation],
+        scale: [...primitive.transform.scale],
+      },
+      simulation: { ...primitive.simulation },
+    }));
+  }
+
+  function getPrimitiveSource() {
+    const primitive = volumePrimitives[0];
+    if (!primitive) {
+      return {
+        position: [0, -0.74, 0],
+        radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
+        flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      };
+    }
+    return {
+      position: primitive.transform.position,
+      radius: Math.max(0.04, primitive.simulation.sourceRadius),
+      flowRate: Math.max(0, primitive.simulation.flowRate),
+    };
   }
 
   function destroyFluidState() {
@@ -922,14 +986,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[29] = controlsSnapshot.microdetail ?? 1.55;
     uniforms[30] = controlsSnapshot.interfaceShred ?? 1.55;
     uniforms[31] = controlsSnapshot.fireLicks ?? 1.65;
-    uniforms[32] = controlsSnapshot.inputRadius || 0.08;
-    uniforms[33] = controlsSnapshot.flowRate ?? 0.3;
+    const sourcePrimitive = getPrimitiveSource();
+    uniforms[32] = sourcePrimitive.radius;
+    uniforms[33] = sourcePrimitive.flowRate;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
     uniforms[35] = controlsSnapshot.flowDebug || 0;
     uniforms[36] = controlsSnapshot.radiance ?? 1.65;
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
+    uniforms[40] = sourcePrimitive.position[0];
+    uniforms[41] = sourcePrimitive.position[1];
+    uniforms[42] = sourcePrimitive.position[2];
+    uniforms[43] = volumePrimitives.length > 0 ? 1 : 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
@@ -1217,6 +1286,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
+    },
+    setVolumePrimitives(next) {
+      const incoming = Array.isArray(next) ? next : [];
+      volumePrimitives = incoming.map(normalizePrimitiveRecord);
+      publishVolumePrimitiveState();
+      if (device) rebuildFluidState(gridSize);
     },
     async setActive(active) {
       if (active) {

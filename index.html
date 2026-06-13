@@ -520,6 +520,91 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
+const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
+let volumePrimitives = [];
+
+function cloneVolumePrimitive(primitive) {
+  return JSON.parse(JSON.stringify(primitive));
+}
+
+function createVolumePrimitiveFixture(name = 'fire_sphere') {
+  if (!['fire_sphere', 'fire_smoke_sphere'].includes(name)) return null;
+  return {
+    id: 'fixture-fire-smoke-sphere',
+    kind: 'fire_smoke',
+    shape: 'sphere',
+    transform: {
+      position: [0, -0.74, 0],
+      rotation: [0, 0, 0],
+      scale: [0.12, 0.12, 0.12],
+    },
+    channels: {
+      density: 1,
+      temperature: 1,
+      fuel: 0.9,
+      smoke: 1,
+      emissive: 1,
+      absorption: 0.85,
+    },
+    coupling: {
+      source: 'route-fixture',
+      targetHook: 'native-fluid-source',
+    },
+    simulation: {
+      sourceRadius: 0.12,
+      flowRate: 0.15,
+      vorticity: 2.65,
+    },
+    render: {
+      radiance: 1.65,
+      glow: 1.15,
+    },
+  };
+}
+
+function normalizeVolumePrimitive(primitive) {
+  const source = primitive && typeof primitive === 'object' ? primitive : {};
+  const fixture = createVolumePrimitiveFixture();
+  const transform = source.transform && typeof source.transform === 'object' ? source.transform : fixture.transform;
+  const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : fixture.simulation;
+  return {
+    ...fixture,
+    ...source,
+    id: String(source.id || fixture.id),
+    kind: String(source.kind || fixture.kind),
+    shape: String(source.shape || fixture.shape),
+    transform: {
+      position: Array.isArray(transform.position) ? transform.position.map(Number) : [...fixture.transform.position],
+      rotation: Array.isArray(transform.rotation) ? transform.rotation.map(Number) : [...fixture.transform.rotation],
+      scale: Array.isArray(transform.scale) ? transform.scale.map(Number) : [...fixture.transform.scale],
+    },
+    simulation: {
+      ...fixture.simulation,
+      ...simulation,
+    },
+  };
+}
+
+function getVolumePrimitiveState() {
+  return {
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    primitives: volumePrimitives.map(cloneVolumePrimitive),
+  };
+}
+
+function setVolumePrimitivesState(state) {
+  const primitiveList = Array.isArray(state) ? state : state?.primitives;
+  volumePrimitives = Array.isArray(primitiveList) ? primitiveList.map(normalizeVolumePrimitive) : [];
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  window._kaminosDirty?.();
+}
+
+function seedVolumePrimitiveFixture(name) {
+  const fixture = createVolumePrimitiveFixture(name);
+  if (!fixture) return;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [fixture] });
+}
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1265,6 +1350,10 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setVolumePrimitives(volumePrimitives);
+  if (params.has('volume_primitive_fixture')) {
+    seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
+  }
 
   const syncControls = () => {
     updateVolumeControlLabels();
@@ -2709,6 +2798,7 @@ function buildSceneData() {
       showBackground: showEnvBg,
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
+    volumePrimitives: getVolumePrimitiveState(),
     materials: getMaterialState(),
     postprocessing: {
       ao: {
@@ -2810,7 +2900,8 @@ async function loadSceneFile(file) {
   if (file.name && file.name.endsWith('.kaminos.json')) {
     currentSceneFile = file.name;
   }
-  if (!data.version || !data.model?.source) {
+  const hasVolumePrimitiveScene = Array.isArray(data.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
+  if (!data.version || (!data.model?.source && !hasVolumePrimitiveScene)) {
     setInfo('Invalid scene format');
     return;
   }
@@ -2843,6 +2934,24 @@ async function loadSceneFile(file) {
       document.getElementById('env-blur-val').textContent = (env.backgroundBlur ?? 0.4).toFixed(2);
     }
     updateBackground();
+  }
+
+  if (hasVolumePrimitiveScene) {
+    setVolumePrimitivesState(data.volumePrimitives);
+    setActiveTab('volume');
+    await volumePrototype?.setActive?.(true);
+  }
+
+  if (!data.model?.source) {
+    if (data.camera) {
+      camera.position.fromArray(data.camera.position);
+      controls.target.fromArray(data.camera.target);
+      if (data.camera.fov) camera.fov = data.camera.fov;
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+    setInfo('Volume scene loaded');
+    return;
   }
 
   // Load model
