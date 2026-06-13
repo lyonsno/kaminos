@@ -343,19 +343,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="number" class="gen-input" id="lamellar-seed" min="0" max="99999" step="1" value="17" style="margin-bottom:0">
         <span class="slider-val" id="lamellar-seed-val">17</span>
       </div>
+      <select id="lamellar-chirality" class="select-input" style="display:none" aria-hidden="true">
+        <option value="same" selected>same</option>
+        <option value="counterpatch">counterpatch</option>
+        <option value="mixed">mixed</option>
+      </select>
       <div class="slider-row">
-        <span class="slider-label">Chirality</span>
-        <select id="lamellar-chirality" class="select-input">
+        <span class="slider-label">Pattern</span>
+        <select id="lamellar-chirality-pattern" class="select-input">
           <option value="same" selected>same</option>
+          <option value="alternating">alternating</option>
           <option value="counterpatch">counterpatch</option>
           <option value="mixed">mixed</option>
         </select>
-        <span class="slider-val" id="lamellar-chirality-val">same</span>
+        <span class="slider-val" id="lamellar-chirality-pattern-val">same</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Depth</span>
         <input type="range" id="lamellar-depth-spacing" min="0.015" max="0.09" step="0.001" value="0.035">
         <span class="slider-val" id="lamellar-depth-spacing-val">0.035</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Chunky</span>
+        <input type="range" id="lamellar-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <span class="slider-val" id="lamellar-chunkiness-val">0.48</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Variance</span>
+        <input type="range" id="lamellar-chunkiness-variance" min="0" max="0.65" step="0.01" value="0.22">
+        <span class="slider-val" id="lamellar-chunkiness-variance-val">0.22</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Overlap</span>
@@ -381,6 +397,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div class="field"><span class="field-key">Segments</span><span class="field-val" id="lamellar-segments">0</span></div>
       <div class="field"><span class="field-key">Descriptors</span><span class="field-val" id="lamellar-descriptors">0</span></div>
+      <div class="field"><span class="field-key">Layer Stack</span><span class="field-val" id="lamellar-layer-stack">none</span></div>
       <div class="field"><span class="field-key">Caps</span><span class="field-val" id="lamellar-caps">[]</span></div>
       <div class="field"><span class="field-key">Open Edges</span><span class="field-val" id="lamellar-open-edges">0</span></div>
       <div class="field"><span class="field-key">Hooks</span><span class="field-val" id="lamellar-hooks">0</span></div>
@@ -743,7 +760,10 @@ function readLamellarControls() {
     layerCount: parseInt(document.getElementById('lamellar-layer-count').value, 10),
     seed: parseInt(document.getElementById('lamellar-seed').value, 10),
     chirality: document.getElementById('lamellar-chirality').value,
+    chiralityPattern: document.getElementById('lamellar-chirality-pattern').value,
     depthSpacing: parseFloat(document.getElementById('lamellar-depth-spacing').value),
+    chunkinessBase: parseFloat(document.getElementById('lamellar-chunkiness').value),
+    chunkinessVariance: parseFloat(document.getElementById('lamellar-chunkiness-variance').value),
     overlapBias: parseFloat(document.getElementById('lamellar-overlap-bias').value),
     sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
     sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
@@ -756,8 +776,10 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-cut-radius-val').textContent = c.cutRadius.toFixed(3);
   document.getElementById('lamellar-layer-count-val').textContent = String(c.layerCount);
   document.getElementById('lamellar-seed-val').textContent = String(c.seed);
-  document.getElementById('lamellar-chirality-val').textContent = c.chirality;
+  document.getElementById('lamellar-chirality-pattern-val').textContent = c.chiralityPattern;
   document.getElementById('lamellar-depth-spacing-val').textContent = c.depthSpacing.toFixed(3);
+  document.getElementById('lamellar-chunkiness-val').textContent = c.chunkinessBase.toFixed(2);
+  document.getElementById('lamellar-chunkiness-variance-val').textContent = c.chunkinessVariance.toFixed(2);
   document.getElementById('lamellar-overlap-bias-val').textContent = c.overlapBias.toFixed(2);
   document.getElementById('lamellar-slice-t-val').textContent = c.sliceT.toFixed(3);
   document.getElementById('lamellar-slice-angle-val').textContent = String(Math.round(c.sliceAngle));
@@ -767,6 +789,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
   document.getElementById('lamellar-segments').textContent = String(state.sectionSegments?.length ?? 0);
   document.getElementById('lamellar-descriptors').textContent = String(state.segmentDescriptorCount ?? state.generatedSegmentDescriptors?.length ?? 0);
+  document.getElementById('lamellar-layer-stack').textContent = state.layerSpecs?.map(l => `${l.layerIndex}:${l.chirality > 0 ? '+' : '-'}:${l.chunkiness}`).join(' ') || 'none';
   document.getElementById('lamellar-caps').textContent = JSON.stringify(state.capTValues || []);
   document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
   document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
@@ -797,9 +820,21 @@ function applyLamellarRouteParams() {
   if (chirality && document.querySelector(`#lamellar-chirality option[value="${chirality}"]`)) {
     document.getElementById('lamellar-chirality').value = chirality;
   }
+  const chiralityPattern = params.get('lamellar_chirality_pattern') || chirality;
+  if (chiralityPattern && document.querySelector(`#lamellar-chirality-pattern option[value="${chiralityPattern}"]`)) {
+    document.getElementById('lamellar-chirality-pattern').value = chiralityPattern;
+  }
   const depthSpacing = Number(params.get('lamellar_depth_spacing'));
   if (params.has('lamellar_depth_spacing') && Number.isFinite(depthSpacing)) {
     document.getElementById('lamellar-depth-spacing').value = String(Math.max(0.015, Math.min(0.09, depthSpacing)));
+  }
+  const chunkiness = Number(params.get('lamellar_chunkiness'));
+  if (params.has('lamellar_chunkiness') && Number.isFinite(chunkiness)) {
+    document.getElementById('lamellar-chunkiness').value = String(Math.max(0.05, Math.min(1, chunkiness)));
+  }
+  const chunkinessVariance = Number(params.get('lamellar_chunkiness_variance'));
+  if (params.has('lamellar_chunkiness_variance') && Number.isFinite(chunkinessVariance)) {
+    document.getElementById('lamellar-chunkiness-variance').value = String(Math.max(0, Math.min(0.65, chunkinessVariance)));
   }
   const overlapBias = Number(params.get('lamellar_overlap_bias'));
   if (params.has('lamellar_overlap_bias') && Number.isFinite(overlapBias)) {
@@ -827,7 +862,10 @@ async function initLamellarRoute() {
     'lamellar-layer-count',
     'lamellar-seed',
     'lamellar-chirality',
+    'lamellar-chirality-pattern',
     'lamellar-depth-spacing',
+    'lamellar-chunkiness',
+    'lamellar-chunkiness-variance',
     'lamellar-overlap-bias',
     'lamellar-slice-t',
     'lamellar-slice-angle',

@@ -4,6 +4,7 @@ const WIDTH_RADIUS_COUPLING_MODE = "stable-strip-width-cut-radius-only-changes-w
 const END_CAP_SEALING_MODE = "zero-lift-closed-terminal-cap-slab";
 const PLACEHOLDER_CONTRACT = "temporary-aesthetic-composition-primitive-not-final-lamellar-topology";
 const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
+const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 
 const VIEW_PRESETS = {
@@ -26,9 +27,13 @@ function mulberry32(seed) {
   };
 }
 
-function chiralitySign(mode, layerIndex, rand) {
-  if (mode === "counterpatch") return layerIndex === 1 ? -1 : 1;
-  if (mode === "mixed") return rand() > 0.52 ? 1 : -1;
+function chiralitySign(pattern, layerIndex, rand) {
+  if (typeof pattern === "string" && /^[+-]+$/.test(pattern)) {
+    return pattern[layerIndex % pattern.length] === "-" ? -1 : 1;
+  }
+  if (pattern === "alternating") return layerIndex % 2 === 0 ? 1 : -1;
+  if (pattern === "counterpatch") return layerIndex === 1 ? -1 : 1;
+  if (pattern === "mixed") return rand() > 0.52 ? 1 : -1;
   return 1;
 }
 
@@ -46,36 +51,104 @@ function descriptorCurveOptions(descriptor) {
   };
 }
 
-export function generateLamellarSectionSegments(input = {}) {
+function clampPattern(pattern) {
+  if (["same", "alternating", "counterpatch", "mixed"].includes(pattern)) return pattern;
+  if (typeof pattern === "string" && /^[+-]+$/.test(pattern)) return pattern;
+  return "same";
+}
+
+export function generateLamellarLayerSpecs(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
-  const layerCount = Math.round(clamp(Number(input.layerCount ?? 2), 1, 4));
+  const numLayers = Math.round(clamp(Number(input.layerCount ?? input.numLayers ?? 2), 1, 4));
   const depthSpacing = clamp(Number(input.depthSpacing ?? 0.035), 0.015, 0.09);
   const overlapBias = clamp(Number(input.overlapBias ?? 0.38), 0, 1);
-  const chiralityMode = ["same", "counterpatch", "mixed"].includes(input.chirality) ? input.chirality : "same";
+  const chunkinessBase = clamp(Number(input.chunkinessBase ?? 0.48), 0.05, 1);
+  const chunkinessVariance = clamp(Number(input.chunkinessVariance ?? 0.22), 0, 0.65);
+  const chiralityPattern = clampPattern(input.chiralityPattern ?? input.chirality ?? "same");
+  const rand = mulberry32(seed ^ 0x9e3779b9);
+  const layerSpecs = [];
+
+  for (let layerIndex = 0; layerIndex < numLayers; layerIndex++) {
+    const chirality = chiralitySign(chiralityPattern, layerIndex, rand);
+    const role = layerIndex === 0 ? "selected-source" : layerIndex === 1 ? "neighbor-envelope" : "nested-placeholder-shell";
+    const depth = layerIndex === 0 ? 0 : Number((depthSpacing * (layerIndex === 1 ? -0.35 : layerIndex)).toFixed(4));
+    const layerWeight = layerIndex === 0 ? 0.15 : layerIndex === 1 ? 0.05 : -0.04 * layerIndex;
+    const variance = (rand() * 2 - 1) * chunkinessVariance;
+    const chunkiness = Number(clamp(chunkinessBase + layerWeight + variance, 0.05, 1).toFixed(3));
+    layerSpecs.push({
+      kind: "LamellarLayerSpec",
+      id: `seed-${seed}-layer-${layerIndex}-spec`,
+      layerIndex,
+      enabled: true,
+      materialRole: role,
+      chirality,
+      chiralityPattern,
+      depth,
+      chunkiness,
+      width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
+      thickness: Number((0.006 + chunkiness * 0.022).toFixed(4)),
+      segmentCount: role === "nested-placeholder-shell" && chunkiness > 0.68 ? 2 : 1,
+      intervalBias: Number(((rand() - 0.5) * (0.12 + overlapBias * 0.1)).toFixed(4)),
+      phase: Number((layerIndex * 0.57 + rand() * 0.9).toFixed(4)),
+      overlapBias: Number(overlapBias.toFixed(4)),
+      sliceParticipation: role === "selected-source" ? "primary-cut-target" : role === "neighbor-envelope" ? "cut-author-envelope" : "background-layer",
+    });
+  }
+
+  return {
+    layerStackDescriptor: {
+      kind: "LayerStackDescriptor",
+      mode: LAYER_STACK_MODE,
+      proceduralSeed: seed,
+      numLayers,
+      chiralityPattern,
+      chunkinessBase: Number(chunkinessBase.toFixed(4)),
+      chunkinessVariance: Number(chunkinessVariance.toFixed(4)),
+      depthSpacing: Number(depthSpacing.toFixed(4)),
+      overlapBias: Number(overlapBias.toFixed(4)),
+      layerSpecIds: layerSpecs.map(spec => spec.id),
+      authoringModel: "per-layer-specs-before-section-generation",
+    },
+    layerSpecs,
+  };
+}
+
+export function generateLamellarSectionSegments(input = {}) {
+  const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const layerStack = generateLamellarLayerSpecs(input);
+  const { layerStackDescriptor, layerSpecs } = layerStack;
   const rand = mulberry32(seed);
   const descriptors = [];
   const composerDescriptor = {
     mode: COMPOSER_MODE,
     segmentKind: "LamellarSectionSegment",
+    layerStackKind: "LayerStackDescriptor",
     proceduralSeed: seed,
-    chiralityMode,
-    layerCount,
-    depthSpacing: Number(depthSpacing.toFixed(4)),
-    overlapBias: Number(overlapBias.toFixed(4)),
+    chiralityPattern: layerStackDescriptor.chiralityPattern,
+    layerCount: layerStackDescriptor.numLayers,
+    numLayers: layerStackDescriptor.numLayers,
+    chunkinessBase: layerStackDescriptor.chunkinessBase,
+    chunkinessVariance: layerStackDescriptor.chunkinessVariance,
+    depthSpacing: layerStackDescriptor.depthSpacing,
+    overlapBias: layerStackDescriptor.overlapBias,
     curveLaw: "poloxodromic-sphere-strip-v0",
     capLaw: END_CAP_SEALING_MODE,
     meshEmission: "descriptor-solved-before-ribbon-geometry",
   };
 
+  const selectedSpec = layerSpecs[0];
   const selectedPhase = 0.24 + rand() * 0.72;
   descriptors.push({
     kind: "LamellarSectionSegment",
     id: `seed-${seed}-layer-0-selected-source`,
+    layerSpecId: selectedSpec.id,
     source: "procedural-composer",
-    materialRole: "selected-source",
-    layerIndex: 0,
-    depth: 0,
-    chirality: 1,
+    materialRole: selectedSpec.materialRole,
+    layerIndex: selectedSpec.layerIndex,
+    depth: selectedSpec.depth,
+    chirality: selectedSpec.chirality,
+    chunkiness: selectedSpec.chunkiness,
+    segmentCount: selectedSpec.segmentCount,
     interval: [0.12, 0.9],
     curveLaw: composerDescriptor.curveLaw,
     capLaw: composerDescriptor.capLaw,
@@ -84,70 +157,52 @@ export function generateLamellarSectionSegments(input = {}) {
     phi0: -0.38 + (rand() - 0.5) * 0.08,
     phiSlope: 0.94 + rand() * 0.18,
     phase: selectedPhase,
-    radius: 1,
-    width: 0.068,
-    thickness: 0.014,
-    edgeLift: 0.018,
-    waviness: 0.07 + rand() * 0.04,
+    radius: 1 + selectedSpec.depth,
+    width: selectedSpec.width,
+    thickness: selectedSpec.thickness,
+    edgeLift: Number((0.012 + selectedSpec.chunkiness * 0.014).toFixed(4)),
+    waviness: 0.045 + selectedSpec.chunkiness * 0.08,
   });
 
-  const neighborStart = clamp(0.24 + (0.42 - overlapBias) * 0.18, 0.16, 0.44);
-  const neighborEnd = clamp(0.72 + overlapBias * 0.18, 0.62, 0.92);
-  const neighborSign = chiralitySign(chiralityMode, 1, rand);
-  descriptors.push({
-    kind: "LamellarSectionSegment",
-    id: `seed-${seed}-layer-1-neighbor-envelope`,
-    source: "procedural-composer",
-    materialRole: "neighbor-envelope",
-    layerIndex: 1,
-    depth: Number((-depthSpacing * 0.35).toFixed(4)),
-    chirality: neighborSign,
-    interval: [Number(neighborStart.toFixed(4)), Number(neighborEnd.toFixed(4))],
-    curveLaw: composerDescriptor.curveLaw,
-    capLaw: composerDescriptor.capLaw,
-    theta0: -0.76 + (rand() - 0.5) * 0.2,
-    thetaTwist: neighborSign * (4.35 + overlapBias * 0.55),
-    phi0: -0.2 + (rand() - 0.5) * 0.12,
-    phiSlope: 0.82 + rand() * 0.28,
-    phase: 0.92 + rand() * 0.74,
-    radius: Number((1.012 + depthSpacing * (0.35 + overlapBias * 0.5)).toFixed(4)),
-    width: 0.047 + overlapBias * 0.018,
-    thickness: 0.012,
-    edgeLift: 0.015,
-    waviness: 0.075 + rand() * 0.05,
-  });
-
-  for (let layerIndex = 2; layerIndex <= layerCount; layerIndex++) {
-    const sign = chiralitySign(chiralityMode, layerIndex, rand);
-    const phase = layerIndex * 0.54 + rand() * 0.9;
-    descriptors.push({
-      kind: "LamellarSectionSegment",
-      id: `seed-${seed}-layer-${layerIndex}-nested-composition`,
-      source: "procedural-composer",
-      materialRole: "nested-placeholder-shell",
-      layerIndex,
-      depth: Number((depthSpacing * layerIndex).toFixed(4)),
-      chirality: sign,
-      interval: [
-        Number(clamp(0.08 + rand() * 0.12, 0.08, 0.22).toFixed(4)),
-        Number(clamp(0.82 + rand() * 0.12, 0.78, 0.94).toFixed(4)),
-      ],
-      curveLaw: composerDescriptor.curveLaw,
-      capLaw: composerDescriptor.capLaw,
-      theta0: -1.05 + layerIndex * 0.34 + (rand() - 0.5) * 0.2,
-      thetaTwist: sign * (3.95 + rand() * 0.75),
-      phi0: -0.34 + (rand() - 0.5) * 0.2,
-      phiSlope: 0.72 + rand() * 0.36,
-      phase,
-      radius: Number((1 - depthSpacing * layerIndex).toFixed(4)),
-      width: 0.024 + rand() * 0.012,
-      thickness: 0.01,
-      edgeLift: 0.012,
-      waviness: 0.06 + rand() * 0.05,
-    });
+  for (const spec of layerSpecs.slice(1)) {
+    const isNeighbor = spec.materialRole === "neighbor-envelope";
+    const segmentCount = spec.segmentCount;
+    for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++) {
+      const baseStart = isNeighbor ? 0.24 + (0.42 - spec.overlapBias) * 0.18 : 0.08 + rand() * 0.12;
+      const baseEnd = isNeighbor ? 0.72 + spec.overlapBias * 0.18 : 0.82 + rand() * 0.12;
+      const stagger = segmentCount > 1 ? segmentIndex * 0.08 : 0;
+      descriptors.push({
+        kind: "LamellarSectionSegment",
+        id: `seed-${seed}-layer-${spec.layerIndex}-${spec.materialRole}-${segmentIndex}`,
+        layerSpecId: spec.id,
+        source: "layer-stack-composer",
+        materialRole: spec.materialRole,
+        layerIndex: spec.layerIndex,
+        depth: spec.depth,
+        chirality: spec.chirality,
+        chunkiness: spec.chunkiness,
+        segmentCount: spec.segmentCount,
+        interval: [
+          Number(clamp(baseStart + spec.intervalBias + stagger, 0.08, 0.44).toFixed(4)),
+          Number(clamp(baseEnd + spec.intervalBias + stagger, 0.62, 0.94).toFixed(4)),
+        ],
+        curveLaw: composerDescriptor.curveLaw,
+        capLaw: composerDescriptor.capLaw,
+        theta0: -0.98 + spec.layerIndex * 0.28 + (rand() - 0.5) * 0.22,
+        thetaTwist: spec.chirality * (3.9 + spec.chunkiness * 1.1 + rand() * 0.35),
+        phi0: -0.3 + spec.layerIndex * 0.035 + (rand() - 0.5) * 0.16,
+        phiSlope: 0.68 + spec.chunkiness * 0.38 + rand() * 0.2,
+        phase: spec.phase + segmentIndex * 0.44,
+        radius: Number((1 + spec.depth).toFixed(4)),
+        width: spec.width,
+        thickness: spec.thickness,
+        edgeLift: Number((0.009 + spec.chunkiness * 0.016).toFixed(4)),
+        waviness: 0.045 + spec.chunkiness * 0.095,
+      });
+    }
   }
 
-  return { composerDescriptor, descriptors };
+  return { composerDescriptor, layerStackDescriptor, layerSpecs, descriptors };
 }
 
 export function sliceLamellarSectionSegments(descriptors, input = {}) {
@@ -361,7 +416,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     layerCount: 2,
     proceduralSeed: 17,
     chiralityMode: "same",
+    chiralityPattern: "same",
     depthSpacing: 0.035,
+    chunkinessBase: 0.48,
+    chunkinessVariance: 0.22,
     overlapBias: 0.38,
     sliceT: 0.47,
     sliceAngle: 0,
@@ -370,6 +428,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     sectionSegments: [],
     cuttingEdgeDescriptor: null,
     composerDescriptor: null,
+    layerStackDescriptor: null,
+    layerSpecs: [],
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
     sliceApplicationReceipt: null,
@@ -405,8 +465,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     const generated = generateLamellarSectionSegments({
       seed: state.proceduralSeed,
       chirality: state.chiralityMode,
+      chiralityPattern: state.chiralityPattern,
       layerCount: state.layerCount,
       depthSpacing: state.depthSpacing,
+      chunkinessBase: state.chunkinessBase,
+      chunkinessVariance: state.chunkinessVariance,
       overlapBias: state.overlapBias,
     });
     const sliced = sliceLamellarSectionSegments(generated.descriptors, {
@@ -415,13 +478,18 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       sliceAngle: state.sliceAngle,
     });
     state.composerDescriptor = generated.composerDescriptor;
+    state.layerStackDescriptor = generated.layerStackDescriptor;
+    state.layerSpecs = generated.layerSpecs;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
       id: d.id,
       kind: d.kind,
+      layerSpecId: d.layerSpecId,
       materialRole: d.materialRole,
       layerIndex: d.layerIndex,
       depth: d.depth,
       chirality: d.chirality,
+      chunkiness: d.chunkiness,
+      segmentCount: d.segmentCount,
       interval: d.interval,
       curveLaw: d.curveLaw,
       capLaw: d.capLaw,
@@ -450,10 +518,12 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       state.sectionSegments.push({
         id: descriptor.id,
         kind: descriptor.kind,
+        layerSpecId: descriptor.layerSpecId,
         role: descriptor.materialRole,
         layerIndex: descriptor.layerIndex,
         depth: descriptor.depth,
         chirality: descriptor.chirality,
+        chunkiness: descriptor.chunkiness,
         span: descriptor.interval,
         curveLaw: descriptor.curveLaw,
         openEdgeCount: 0,
@@ -507,7 +577,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.layerCount = Math.round(clamp(Number(next.layerCount ?? state.layerCount), 1, 4));
     state.proceduralSeed = Math.round(clamp(Number(next.seed ?? state.proceduralSeed), 0, 99999));
     state.chiralityMode = ["same", "counterpatch", "mixed"].includes(next.chirality) ? next.chirality : state.chiralityMode;
+    state.chiralityPattern = clampPattern(next.chiralityPattern ?? state.chiralityPattern);
     state.depthSpacing = clamp(Number(next.depthSpacing ?? state.depthSpacing), 0.015, 0.09);
+    state.chunkinessBase = clamp(Number(next.chunkinessBase ?? state.chunkinessBase), 0.05, 1);
+    state.chunkinessVariance = clamp(Number(next.chunkinessVariance ?? state.chunkinessVariance), 0, 0.65);
     state.overlapBias = clamp(Number(next.overlapBias ?? state.overlapBias), 0, 1);
     state.sliceT = clamp(Number(next.sliceT ?? state.sliceT), 0.2, 0.8);
     state.sliceAngle = clamp(Number(next.sliceAngle ?? state.sliceAngle), -70, 70);
