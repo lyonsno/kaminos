@@ -57,6 +57,19 @@ function clampPattern(pattern) {
   return "same";
 }
 
+function normalizeLayerOverrides(overrides) {
+  if (!Array.isArray(overrides)) return [];
+  return overrides.map((override, layerIndex) => {
+    const chirality = Number(override?.chirality);
+    const chunkiness = Number(override?.chunkiness);
+    return {
+      layerIndex: Number.isFinite(Number(override?.layerIndex)) ? Math.round(Number(override.layerIndex)) : layerIndex,
+      chirality: chirality < 0 ? -1 : 1,
+      chunkiness: Number.isFinite(chunkiness) ? clamp(chunkiness, 0.05, 1) : null,
+    };
+  });
+}
+
 export function generateLamellarLayerSpecs(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const numLayers = Math.round(clamp(Number(input.layerCount ?? input.numLayers ?? 2), 1, 4));
@@ -65,16 +78,18 @@ export function generateLamellarLayerSpecs(input = {}) {
   const chunkinessBase = clamp(Number(input.chunkinessBase ?? 0.48), 0.05, 1);
   const chunkinessVariance = clamp(Number(input.chunkinessVariance ?? 0.22), 0, 0.65);
   const chiralityPattern = clampPattern(input.chiralityPattern ?? input.chirality ?? "same");
+  const layerOverrides = normalizeLayerOverrides(input.layerOverrides);
   const rand = mulberry32(seed ^ 0x9e3779b9);
   const layerSpecs = [];
 
   for (let layerIndex = 0; layerIndex < numLayers; layerIndex++) {
-    const chirality = chiralitySign(chiralityPattern, layerIndex, rand);
+    const layerOverride = layerOverrides.find(override => override.layerIndex === layerIndex);
+    const chirality = layerOverride?.chirality ?? chiralitySign(chiralityPattern, layerIndex, rand);
     const role = layerIndex === 0 ? "selected-source" : layerIndex === 1 ? "neighbor-envelope" : "nested-placeholder-shell";
     const depth = layerIndex === 0 ? 0 : Number((depthSpacing * (layerIndex === 1 ? -0.35 : layerIndex)).toFixed(4));
     const layerWeight = layerIndex === 0 ? 0.15 : layerIndex === 1 ? 0.05 : -0.04 * layerIndex;
     const variance = (rand() * 2 - 1) * chunkinessVariance;
-    const chunkiness = Number(clamp(chunkinessBase + layerWeight + variance, 0.05, 1).toFixed(3));
+    const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
     layerSpecs.push({
       kind: "LamellarLayerSpec",
       id: `seed-${seed}-layer-${layerIndex}-spec`,
@@ -87,10 +102,11 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkiness,
       width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
       thickness: Number((0.006 + chunkiness * 0.022).toFixed(4)),
-      segmentCount: role === "nested-placeholder-shell" && chunkiness > 0.68 ? 2 : 1,
+      segmentCount: 1,
       intervalBias: Number(((rand() - 0.5) * (0.12 + overlapBias * 0.1)).toFixed(4)),
       phase: Number((layerIndex * 0.57 + rand() * 0.9).toFixed(4)),
       overlapBias: Number(overlapBias.toFixed(4)),
+      overrideSource: layerOverride ? "ui-layer-row" : "generated-layer-stack",
       sliceParticipation: role === "selected-source" ? "primary-cut-target" : role === "neighbor-envelope" ? "cut-author-envelope" : "background-layer",
     });
   }
@@ -106,6 +122,7 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkinessVariance: Number(chunkinessVariance.toFixed(4)),
       depthSpacing: Number(depthSpacing.toFixed(4)),
       overlapBias: Number(overlapBias.toFixed(4)),
+      layerOverrides: layerOverrides.slice(0, numLayers),
       layerSpecIds: layerSpecs.map(spec => spec.id),
       authoringModel: "per-layer-specs-before-section-generation",
     },
@@ -160,8 +177,8 @@ export function generateLamellarSectionSegments(input = {}) {
     radius: 1 + selectedSpec.depth,
     width: selectedSpec.width,
     thickness: selectedSpec.thickness,
-    edgeLift: Number((0.012 + selectedSpec.chunkiness * 0.014).toFixed(4)),
-    waviness: 0.045 + selectedSpec.chunkiness * 0.08,
+    edgeLift: 0.018,
+    waviness: 0.085,
   });
 
   for (const spec of layerSpecs.slice(1)) {
@@ -189,15 +206,15 @@ export function generateLamellarSectionSegments(input = {}) {
         curveLaw: composerDescriptor.curveLaw,
         capLaw: composerDescriptor.capLaw,
         theta0: -0.98 + spec.layerIndex * 0.28 + (rand() - 0.5) * 0.22,
-        thetaTwist: spec.chirality * (3.9 + spec.chunkiness * 1.1 + rand() * 0.35),
+        thetaTwist: spec.chirality * (4.36 + rand() * 0.35),
         phi0: -0.3 + spec.layerIndex * 0.035 + (rand() - 0.5) * 0.16,
-        phiSlope: 0.68 + spec.chunkiness * 0.38 + rand() * 0.2,
+        phiSlope: 0.86 + rand() * 0.2,
         phase: spec.phase + segmentIndex * 0.44,
         radius: Number((1 + spec.depth).toFixed(4)),
         width: spec.width,
         thickness: spec.thickness,
-        edgeLift: Number((0.009 + spec.chunkiness * 0.016).toFixed(4)),
-        waviness: 0.045 + spec.chunkiness * 0.095,
+        edgeLift: spec.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
+        waviness: 0.085,
       });
     }
   }
@@ -420,6 +437,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     depthSpacing: 0.035,
     chunkinessBase: 0.48,
     chunkinessVariance: 0.22,
+    layerOverrides: [],
     overlapBias: 0.38,
     sliceT: 0.47,
     sliceAngle: 0,
@@ -470,6 +488,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       depthSpacing: state.depthSpacing,
       chunkinessBase: state.chunkinessBase,
       chunkinessVariance: state.chunkinessVariance,
+      layerOverrides: state.layerOverrides,
       overlapBias: state.overlapBias,
     });
     const sliced = sliceLamellarSectionSegments(generated.descriptors, {
@@ -581,6 +600,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.depthSpacing = clamp(Number(next.depthSpacing ?? state.depthSpacing), 0.015, 0.09);
     state.chunkinessBase = clamp(Number(next.chunkinessBase ?? state.chunkinessBase), 0.05, 1);
     state.chunkinessVariance = clamp(Number(next.chunkinessVariance ?? state.chunkinessVariance), 0, 0.65);
+    state.layerOverrides = normalizeLayerOverrides(next.layerOverrides ?? state.layerOverrides).slice(0, 4);
     state.overlapBias = clamp(Number(next.overlapBias ?? state.overlapBias), 0, 1);
     state.sliceT = clamp(Number(next.sliceT ?? state.sliceT), 0.2, 0.8);
     state.sliceAngle = clamp(Number(next.sliceAngle ?? state.sliceAngle), -70, 70);

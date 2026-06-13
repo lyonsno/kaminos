@@ -216,6 +216,7 @@ async function main() {
       composerDescriptor: state.composerDescriptor,
       layerStackDescriptor: state.layerStackDescriptor,
       layerSpecs: state.layerSpecs,
+      layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,
       segmentDescriptorCount: state.segmentDescriptorCount,

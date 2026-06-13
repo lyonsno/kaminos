@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -20,6 +21,9 @@ assert.match(index, /id="lamellar-chirality-pattern"/, 'Lamellar tab exposes chi
 assert.match(index, /id="lamellar-depth-spacing"/, 'Lamellar tab exposes layer depth spacing control');
 assert.match(index, /id="lamellar-chunkiness"/, 'Lamellar tab exposes layer chunkiness control');
 assert.match(index, /id="lamellar-chunkiness-variance"/, 'Lamellar tab exposes chunkiness variance control');
+assert.match(index, /id="lamellar-layer-rows"/, 'Lamellar tab exposes per-layer authoring rows');
+assert.match(index, /id="lamellar-layer-0-chirality"/, 'Lamellar tab exposes layer 0 chirality override');
+assert.match(index, /id="lamellar-layer-0-chunkiness"/, 'Lamellar tab exposes layer 0 chunkiness override');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -32,6 +36,8 @@ assert.match(index, /lamellar_chirality_pattern/, 'URL route can override Lamell
 assert.match(index, /lamellar_depth_spacing/, 'URL route can override Lamellar depth spacing');
 assert.match(index, /lamellar_chunkiness/, 'URL route can override Lamellar layer chunkiness');
 assert.match(index, /lamellar_chunkiness_variance/, 'URL route can override Lamellar chunkiness variance');
+assert.match(index, /lamellar_layer_chiralities/, 'URL route can override per-layer chirality values');
+assert.match(index, /lamellar_layer_chunkiness/, 'URL route can override per-layer chunkiness values');
 assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar overlap bias');
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
@@ -71,6 +77,7 @@ assert.match(core, /layerSpecs/, 'Lamellar debug state reports per-layer specs')
 assert.match(core, /chiralityPattern/, 'Lamellar debug state reports chirality pattern through layers');
 assert.match(core, /chunkinessBase/, 'Lamellar debug state reports layer chunkiness base');
 assert.match(core, /chunkinessVariance/, 'Lamellar debug state reports layer chunkiness variance');
+assert.match(core, /layerOverrides/, 'Lamellar debug state reports per-layer override inputs');
 assert.match(core, /layerSpecId/, 'Lamellar section descriptors carry layer-spec ancestry');
 assert.match(core, /sliceToolDescriptor/, 'Lamellar debug state reports slicing tool descriptor');
 assert.match(core, /sliceApplicationReceipt/, 'Lamellar debug state reports effective slice application receipt');
@@ -98,9 +105,70 @@ assert.match(witness, /cuttingEdgeDescriptor/, 'witness records cut-causing edge
 assert.match(witness, /composerDescriptor/, 'witness records procedural composer descriptor');
 assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descriptor');
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
+assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
 assert.match(witness, /segmentDescriptorCount/, 'witness records generated descriptor count');
 assert.match(witness, /lightHookCount/, 'witness records exported light hook count');
 assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');
 assert.match(witness, /assertVisualDiversity/, 'witness checks screenshot pixel diversity, not only file size');
+
+const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
+const lowChunk = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 4,
+  chiralityPattern: 'alternating',
+  depthSpacing: 0.09,
+  chunkinessBase: 0.05,
+  chunkinessVariance: 0,
+  overlapBias: 1,
+});
+const highChunk = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 4,
+  chiralityPattern: 'alternating',
+  depthSpacing: 0.09,
+  chunkinessBase: 0.96,
+  chunkinessVariance: 0,
+  overlapBias: 1,
+});
+
+function shapeSignature(generated) {
+  return generated.descriptors.map(d => ({
+    id: d.id,
+    layerSpecId: d.layerSpecId,
+    role: d.materialRole,
+    layerIndex: d.layerIndex,
+    chirality: d.chirality,
+    interval: d.interval,
+    theta0: d.theta0,
+    thetaTwist: d.thetaTwist,
+    phi0: d.phi0,
+    phiSlope: d.phiSlope,
+    phase: d.phase,
+    radius: d.radius,
+    waviness: d.waviness,
+    segmentCount: d.segmentCount,
+  }));
+}
+
+function massSignature(generated) {
+  return generated.descriptors.map(d => ({
+    id: d.id,
+    layerSpecId: d.layerSpecId,
+    chunkiness: d.chunkiness,
+    width: d.width,
+    thickness: d.thickness,
+  }));
+}
+
+assert.deepEqual(
+  shapeSignature(lowChunk),
+  shapeSignature(highChunk),
+  'chunkiness changes mass/width only, not layer shape, centerline law, intervals, or descriptor count'
+);
+assert.notDeepEqual(
+  massSignature(lowChunk),
+  massSignature(highChunk),
+  'chunkiness still changes authored layer mass fields'
+);
