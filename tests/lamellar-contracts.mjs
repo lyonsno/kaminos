@@ -17,6 +17,9 @@ assert.match(index, /id="lamellar-layer-count"/, 'Lamellar tab exposes layer cou
 assert.match(index, /lamellar_cut_radius/, 'URL route can override Lamellar cut radius');
 assert.match(index, /lamellar_view/, 'URL route can override Lamellar witness view');
 assert.match(index, /lamellar_layers/, 'URL route can override Lamellar placeholder layer count');
+assert.match(index, /function isLamellarRouteActive\(/, 'Lamellar route active check is centralized');
+assert.match(index, /if \(!isLamellarRouteActive\(\)\) restoreSettings\(\)/, 'Lamellar route starts blank instead of restoring persisted scene/material state');
+assert.match(index, /if \(!lamellarRouteActive\) loadDemo\(DEMO_ASSETS\[0\]\)/, 'Lamellar route does not auto-load the default demo object');
 assert.match(index, /kaminos-lamellar-witness-v0/, 'UI carries stable Lamellar witness identity');
 assert.match(index, /sphere-domain-section-segment-witness-v0/, 'UI carries effective Lamellar route identity');
 
@@ -24,10 +27,16 @@ const corePath = join(root, 'lamellar-core.js');
 assert.ok(existsSync(corePath), 'lamellar-core.js exists');
 const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
 assert.match(core, /export function createKaminosLamellarWitness/, 'Lamellar module exports createKaminosLamellarWitness');
+assert.match(core, /build\(\{ frame = false \} = \{\}\)/, 'Lamellar rebuild can preserve the current human camera');
+assert.match(core, /setControls[\s\S]*build\(\{ frame: false \}\)/, 'slider/control changes rebuild without reframing the camera');
+assert.match(core, /setActive[\s\S]*build\(\{ frame: true \}\)/, 'first route activation still frames the witness once');
 assert.match(core, /kaminos-lamellar-witness-v0/, 'Lamellar module exposes stable witness identity');
 assert.match(core, /sphere-domain-section-segment-witness-v0/, 'Lamellar module records effective route identity');
 assert.match(core, /cap_profile/, 'Lamellar module supports the cap-profile witness view');
 assert.match(core, /cut_radius_coupling/, 'Lamellar module supports the cut-radius coupling witness view');
+assert.match(core, /perpendicular-cutting-edge/, 'Lamellar module exposes the cut-causing perpendicular edge as its own witness actor');
+assert.match(core, /cuttingEdgeDescriptor/, 'Lamellar debug state reports the cut-causing edge descriptor');
+assert.match(core, /makeCuttingEdgeGeometry/, 'Lamellar module builds a visible cross-cut edge instead of implying causality through parallel bands');
 assert.match(core, /stable-strip-width-cut-radius-only-changes-window-caps-gap/, 'Lamellar module preserves width/radius decoupling identity');
 assert.match(core, /zero-lift-closed-terminal-cap-slab/, 'Lamellar module preserves closed end-cap sealing identity');
 assert.match(core, /temporary-aesthetic-composition-primitive-not-final-lamellar-topology/, 'Lamellar module marks nested shells as placeholder composition only');
@@ -36,6 +45,8 @@ assert.match(core, /capTValues/, 'Lamellar debug state reports cut cap T-values'
 assert.match(core, /openEdgeCount/, 'Lamellar debug state reports open-edge evidence');
 assert.match(core, /lightHooks/, 'Lamellar debug state reports exported light hooks');
 assert.match(core, /effectiveRoute/, 'Lamellar debug state reports effective route identity');
+assert.match(core, /cameraPosition/, 'Lamellar debug state reports camera position for slider-preservation witnesses');
+assert.match(core, /cameraTarget/, 'Lamellar debug state reports camera target for slider-preservation witnesses');
 
 const witnessPath = join(root, 'lamellar-witness.mjs');
 assert.ok(existsSync(witnessPath), 'lamellar-witness.mjs exists');
@@ -48,6 +59,7 @@ assert.match(witness, /effectiveView/, 'witness records effective view');
 assert.match(witness, /requestedCutRadius/, 'witness records requested cut radius');
 assert.match(witness, /effectiveCutRadius/, 'witness records effective cut radius');
 assert.match(witness, /capTValues/, 'witness records cap T-values');
+assert.match(witness, /cuttingEdgeDescriptor/, 'witness records cut-causing edge descriptor');
 assert.match(witness, /lightHookCount/, 'witness records exported light hook count');
 assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');
 assert.match(witness, /assertVisualDiversity/, 'witness checks screenshot pixel diversity, not only file size');

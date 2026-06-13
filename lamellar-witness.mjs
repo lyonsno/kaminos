@@ -206,6 +206,7 @@ async function main() {
       witnessIdentity: state.witnessIdentity,
       capTValues: state.capTValues,
       openEdgeCount: state.openEdgeCount,
+      cuttingEdgeDescriptor: state.cuttingEdgeDescriptor,
       lightHookCount: state.lightHookCount,
       sectionSegments: state.sectionSegments,
       screenshot: out,

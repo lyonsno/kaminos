@@ -61,6 +61,62 @@ function makeRibbonGeometry(THREE, span, opts) {
   return { geometry, centerline };
 }
 
+function lamellarFrame(THREE, t, opts) {
+  const theta = opts.theta0 + opts.thetaTwist * t;
+  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * 0.08;
+  const p = spherePoint(theta, phi, opts.radius || 1);
+  const p2 = spherePoint(theta + 0.018, phi + 0.012, opts.radius || 1);
+  const tangent = new THREE.Vector3(p2.x - p.x, p2.y - p.y, p2.z - p.z).normalize();
+  const normal = new THREE.Vector3(p.x, p.y, p.z).normalize();
+  const side = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+  return {
+    center: new THREE.Vector3(p.x, p.y, p.z),
+    tangent,
+    normal,
+    side,
+  };
+}
+
+function makeCuttingEdgeGeometry(THREE, t, opts) {
+  const frame = lamellarFrame(THREE, t, opts);
+  const length = opts.length || 0.56;
+  const halfWidth = opts.halfWidth || 0.018;
+  const lift = opts.lift || 0.075;
+  const center = frame.center.clone().addScaledVector(frame.normal, lift);
+  const a = center.clone().addScaledVector(frame.side, -length * 0.5).addScaledVector(frame.tangent, -halfWidth);
+  const b = center.clone().addScaledVector(frame.side, length * 0.5).addScaledVector(frame.tangent, -halfWidth);
+  const c = center.clone().addScaledVector(frame.side, -length * 0.5).addScaledVector(frame.tangent, halfWidth);
+  const d = center.clone().addScaledVector(frame.side, length * 0.5).addScaledVector(frame.tangent, halfWidth);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+    a.x, a.y, a.z,
+    b.x, b.y, b.z,
+    c.x, c.y, c.z,
+    d.x, d.y, d.z,
+  ], 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute([
+    frame.normal.x, frame.normal.y, frame.normal.z,
+    frame.normal.x, frame.normal.y, frame.normal.z,
+    frame.normal.x, frame.normal.y, frame.normal.z,
+    frame.normal.x, frame.normal.y, frame.normal.z,
+  ], 3));
+  geometry.setIndex([0, 1, 2, 1, 3, 2]);
+  geometry.computeBoundingSphere();
+  return {
+    geometry,
+    descriptor: {
+      role: "perpendicular-cutting-edge",
+      cutT: Number(t.toFixed(4)),
+      length: Number(length.toFixed(4)),
+      halfWidth: Number(halfWidth.toFixed(4)),
+      center: vectorSnapshot(center),
+      tangent: vectorSnapshot(frame.tangent),
+      crossAxis: vectorSnapshot(frame.side),
+      normal: vectorSnapshot(frame.normal),
+    },
+  };
+}
+
 function makeCapGeometry(THREE, t, opts) {
   const theta = opts.theta0 + opts.thetaTwist * t;
   const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * 0.08;
@@ -87,6 +143,10 @@ function makeHook(centerline, layerIndex, bandIndex, role) {
   };
 }
 
+function vectorSnapshot(v) {
+  return [Number(v.x.toFixed(5)), Number(v.y.toFixed(5)), Number(v.z.toFixed(5))];
+}
+
 export function createKaminosLamellarWitness({ THREE, scene, camera, controls }) {
   const group = new THREE.Group();
   group.name = "kaminos-lamellar-witness";
@@ -103,6 +163,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     frameCount: 0,
     capTValues: [],
     sectionSegments: [],
+    cuttingEdgeDescriptor: null,
     openEdgeCount: 0,
     lightHooks: [],
     lastBuildAt: null,
@@ -115,6 +176,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     selected: new THREE.MeshStandardMaterial({ color: 0xd6a33d, metalness: 0.72, roughness: 0.34, side: THREE.DoubleSide }),
     continuation: new THREE.MeshStandardMaterial({ color: 0xf2c86b, metalness: 0.64, roughness: 0.38, side: THREE.DoubleSide }),
     neighbor: new THREE.MeshStandardMaterial({ color: 0x1db6ac, metalness: 0.38, roughness: 0.42, side: THREE.DoubleSide }),
+    cuttingEdge: new THREE.MeshStandardMaterial({ color: 0xff5d46, emissive: 0x3a0b04, emissiveIntensity: 0.35, metalness: 0.18, roughness: 0.32, side: THREE.DoubleSide }),
     cap: new THREE.MeshStandardMaterial({ color: 0xffcf76, metalness: 0.52, roughness: 0.3, side: THREE.DoubleSide }),
     gauge: new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
   };
@@ -127,7 +189,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     }
   }
 
-  function build() {
+  function build({ frame = false } = {}) {
     clear();
     state.capTValues = [Number((0.43 - state.cutRadius * 1.0).toFixed(4)), Number((0.49 + state.cutRadius * 1.5).toFixed(4))];
     const selectedSpans = [[0.12, state.capTValues[0]], [state.capTValues[1], 0.9]];
@@ -162,6 +224,14 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.sectionSegments.push({ role: "neighbor-envelope", span: neighborSpan, openEdgeCount: 0 });
     state.lightHooks.push(makeHook(neighborRibbon.centerline, 1, 0, "neighbor"));
 
+    const cutT = (state.capTValues[0] + state.capTValues[1]) / 2;
+    const cuttingEdge = makeCuttingEdgeGeometry(THREE, cutT, { ...base, length: 0.46 + state.cutRadius * 1.2 });
+    const cuttingMesh = new THREE.Mesh(cuttingEdge.geometry, materials.cuttingEdge);
+    cuttingMesh.userData.lamellarRole = "perpendicular-cutting-edge";
+    group.add(cuttingMesh);
+    state.cuttingEdgeDescriptor = cuttingEdge.descriptor;
+    state.sectionSegments.push({ role: "perpendicular-cutting-edge", span: [cutT, cutT], openEdgeCount: 0 });
+
     for (const t of state.capTValues) {
       const cap = new THREE.Mesh(makeCapGeometry(THREE, t, { ...base, capRadius: 0.06 + state.cutRadius * 0.32 }), materials.cap);
       cap.userData.lamellarRole = "zero-lift-cut-end-cap";
@@ -186,7 +256,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
 
     state.openEdgeCount = 0;
     state.lastBuildAt = new Date().toISOString();
-    frameCamera();
+    if (frame) frameCamera();
   }
 
   function frameCamera() {
@@ -203,13 +273,13 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.cutRadius = clamp(Number(next.cutRadius ?? state.cutRadius), 0.018, 0.12);
     state.layerCount = Math.round(clamp(Number(next.layerCount ?? state.layerCount), 1, 4));
     state.effectiveView = VIEW_PRESETS[next.view] ? next.view : state.effectiveView;
-    if (state.active) build();
+    if (state.active) build({ frame: false });
   }
 
   function setActive(active) {
     state.active = Boolean(active);
     group.visible = state.active;
-    if (state.active) build();
+    if (state.active) build({ frame: true });
   }
 
   function update() {
@@ -223,6 +293,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       requestedRoute: "kaminos_lamellar_witness=1",
       lightHookCount: state.lightHooks.length,
       childCount: group.children.length,
+      cameraPosition: vectorSnapshot(camera.position),
+      cameraTarget: vectorSnapshot(controls.target),
     };
   }
 
