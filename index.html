@@ -484,6 +484,12 @@ let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
+import {
+  SCENE_SCHEMA,
+  buildSceneDocument,
+  isReloadableSceneObjectRecord,
+  planSceneRestore,
+} from './scene-persistence-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -520,7 +526,6 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
-const SCENE_SCHEMA = 'kaminos.scene.v1';
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 let volumePrimitives = [];
@@ -3022,22 +3027,9 @@ function serializeSceneObject(entry) {
   };
 }
 
-function sceneObjectToLegacyModel(data) {
-  return {
-    id: 'legacy-model',
-    source: data.model.source,
-    type: data.model.type,
-    fileName: data.model.fileName || 'model.glb',
-    label: data.model.fileName || 'legacy model',
-    transform: data.transform,
-    materials: data.materials,
-  };
-}
-
 async function addSceneObjectFromSource(record) {
   if (!record?.source) throw new Error('Scene object missing source');
-  const type = record.type || 'glb';
-  if (type === 'glb' && (record.source.startsWith('/api/') || record.source.startsWith('http') || record.source.startsWith('demos/'))) {
+  if (isReloadableSceneObjectRecord(record)) {
     return showGLB(record.source, {
       clear: false,
       normalize: false,
@@ -3050,15 +3042,20 @@ async function addSceneObjectFromSource(record) {
 async function loadSceneObjects(records, activeId) {
   clearScene();
   const loaded = [];
-  for (const record of records) {
-    const object = await addSceneObjectFromSource(record);
-    if (record.transform) {
-      object.position.fromArray(record.transform.position || [0, 0, 0]);
-      object.rotation.set(...(record.transform.rotation || [0, 0, 0]));
-      object.scale.fromArray(record.transform.scale || [1, 1, 1]);
+  try {
+    for (const record of records) {
+      const object = await addSceneObjectFromSource(record);
+      if (record.transform) {
+        object.position.fromArray(record.transform.position || [0, 0, 0]);
+        object.rotation.set(...(record.transform.rotation || [0, 0, 0]));
+        object.scale.fromArray(record.transform.scale || [1, 1, 1]);
+      }
+      applyMaterialStateToObject(object, record.materials);
+      loaded.push(record.id);
     }
-    applyMaterialStateToObject(object, record.materials);
-    loaded.push(record.id);
+  } catch (e) {
+    clearScene();
+    throw e;
   }
   setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
 }
@@ -3068,19 +3065,11 @@ function buildSceneData() {
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
-  return {
-    schema: SCENE_SCHEMA,
-    version: 3,
+  return buildSceneDocument({
     timestamp: new Date().toISOString(),
-    objects: sceneObjects.map(serializeSceneObject),
+    objects,
     activeObjectId: activeSceneObjectId,
-    model: activeObject ? {
-      source: activeObject.source,
-      type: activeObject.type,
-      fileName: activeObject.fileName,
-    } : null,
     provenance,
-    transform: activeObject?.transform || null,
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -3095,7 +3084,6 @@ function buildSceneData() {
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
     volumePrimitives: getVolumePrimitiveState(),
-    materials: activeObject?.materials || getMaterialState(),
     postprocessing: {
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
@@ -3112,7 +3100,7 @@ function buildSceneData() {
     },
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
-  };
+  });
 }
 
 async function saveToServer(sceneData, filename) {
@@ -3190,14 +3178,15 @@ async function loadSceneFile(file) {
   if (file.name && file.name.endsWith('.kaminos.json')) {
     currentSceneFile = file.name;
   }
-  const hasVolumePrimitiveScene = Array.isArray(data.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
-  const objectRecords = Array.isArray(data.objects)
-    ? data.objects
-    : (data.model?.source ? [sceneObjectToLegacyModel(data)] : []);
-  if (!data.version || (objectRecords.length === 0 && !hasVolumePrimitiveScene)) {
+  let restorePlan;
+  try {
+    restorePlan = planSceneRestore(data);
+  } catch {
     setInfo('Invalid scene format');
     return;
   }
+  const objectRecords = restorePlan.objects;
+  const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
 
   setInfo('Loading scene...');
 
@@ -3230,28 +3219,18 @@ async function loadSceneFile(file) {
   }
 
   if (hasVolumePrimitiveScene) {
-    setVolumePrimitivesState(data.volumePrimitives);
+    setVolumePrimitivesState(restorePlan.volumePrimitives);
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
   }
 
   if (objectRecords.length > 0) {
     try {
-      await loadSceneObjects(data.objects || objectRecords, data.activeObjectId);
+      await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
     } catch (e) {
       setInfo('Scene load failed: ' + e.message);
       return;
     }
-  } else {
-    if (data.camera) {
-      camera.position.fromArray(data.camera.position);
-      controls.target.fromArray(data.camera.target);
-      if (data.camera.fov) camera.fov = data.camera.fov;
-      camera.updateProjectionMatrix();
-      controls.update();
-    }
-    setInfo('Volume scene loaded');
-    return;
   }
 
   // Apply camera
@@ -3324,7 +3303,11 @@ async function loadSceneFile(file) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
-  setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
+  if (objectRecords.length > 0) {
+    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
+  } else {
+    setInfo('Volume scene loaded');
+  }
 }
 
 // File input handler for Load Scene
@@ -3341,7 +3324,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
-    if (!currentMesh) return;
+    if (!currentMesh && volumePrimitives.length === 0) return;
     if (e.shiftKey) saveSceneAs();
     else saveScene();
   }

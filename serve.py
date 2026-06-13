@@ -80,7 +80,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         if not hint:
             # Generate new filename from model name and timestamp
-            model_name = data.get("model", {}).get("fileName", "scene")
+            model_name = (data.get("model") or {}).get("fileName", "scene")
             model_name = Path(model_name).stem
             timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
             filename = f"{model_name}_{timestamp}.kaminos.json"
@@ -367,7 +367,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_message(self, format, *args):
-        if "/api/" in args[0]:
+        rendered = format % args if args else format
+        if "/api/" in rendered:
             return  # quiet API spam
         super().log_message(format, *args)
 
