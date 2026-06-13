@@ -2120,7 +2120,7 @@ function createVolumeMainRendererBridge() {
     map: sourceTexture,
     transparent: true,
     opacity: 1,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     toneMapped: false,
@@ -2134,6 +2134,7 @@ function createVolumeMainRendererBridge() {
     identity: 'volume-main-renderer-bridge-v0',
     source: 'native-webgpu-volume-canvas',
     composition: 'three-canvas-texture-additive-plane',
+    depthMode: 'main-renderer-depth-tested-plane-v0',
   };
   scene.add(mesh);
 
@@ -2164,6 +2165,9 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        depthMode: mesh.userData.kaminosVolumeBridge.depthMode,
+        depthTest: material.depthTest,
+        depthWrite: material.depthWrite,
       };
     },
     dispose() {

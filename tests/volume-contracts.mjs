@@ -12,6 +12,9 @@ assert.match(index, /volume_primitive_fixture/, 'URL route can seed a saved volu
 assert.match(index, /createVolumeMainRendererBridge/, 'volume route composes into the main Three.js renderer');
 assert.match(index, /CanvasTexture\(volumePrototype\.canvasElement\(\)\)/, 'main renderer consumes the native volume canvas as a Three.js texture');
 assert.match(index, /volume-main-renderer-bridge-v0/, 'volume main-renderer bridge carries stable route identity');
+assert.match(index, /depthMode:\s*'main-renderer-depth-tested-plane-v0'/, 'volume bridge reports the main-renderer depth-test composition mode');
+assert.match(index, /depthTest:\s*true/, 'volume bridge participates in the main renderer depth test instead of drawing as a flat overlay');
+assert.match(index, /depthWrite:\s*false/, 'volume bridge must not write depth while it is still a texture-plane handoff');
 assert.match(index, /volumeBridge\.update/, 'render loop refreshes the volume bridge before main renderer draw');
 assert.doesNotMatch(index, /#kaminos-volume-canvas\.active \{ display: block; \}/, 'volume canvas must not become a separate visible overlay');
 assert.match(index, /createLamellarHookVolumePrimitiveFixture/, 'URL fixture can seed a Lamellar-derived volume primitive');
@@ -159,6 +162,8 @@ assert.match(witness, /assertNoPlaceholderTopologyClaim/, 'witness fails loudly 
 assert.match(witness, /expectedLamellarHookFixture/, 'witness knows when the route expects a Lamellar hook fixture');
 assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
+assert.match(witness, /main-renderer-depth-tested-plane-v0/, 'volume witness asserts the effective bridge depth mode');
+assert.match(witness, /bridge\?\.depthTest/, 'volume witness records that the bridge actually depth-tests in the main renderer');
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');

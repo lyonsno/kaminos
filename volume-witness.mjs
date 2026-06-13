@@ -275,6 +275,9 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    assert.equal(bridge?.depthMode, 'main-renderer-depth-tested-plane-v0', 'wrong volume bridge depth mode');
+    assert.equal(bridge?.depthTest, true, 'volume bridge is not participating in main renderer depth testing');
+    assert.equal(bridge?.depthWrite, false, 'volume bridge must not write depth while still using texture-plane composition');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
     assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer`, 'fluid sim label does not match selected grid');
