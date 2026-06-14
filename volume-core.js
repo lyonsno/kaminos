@@ -45,12 +45,15 @@ struct Uniforms {
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
   occupancy_controls: vec4<f32>,
+  temporal_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read> majorantField: array<vec4<f32>>;
+@group(0) @binding(4) var historyTexture: texture_2d<f32>;
+@group(0) @binding(5) var historySampler: sampler;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 
 struct VSOut {
@@ -75,6 +78,46 @@ fn hash31(p: vec3<f32>) -> f32 {
   let q = fract(p * 0.1031);
   let r = q + dot(q, q.yzx + 33.33);
   return fract((r.x + r.y) * r.z);
+}
+
+fn sampleHistoryColor(uv: vec2<f32>) -> vec3<f32> {
+  return textureSampleLevel(historyTexture, historySampler, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0).rgb;
+}
+
+fn temporalJitterOffset(uv: vec2<f32>, dtBase: f32) -> f32 {
+  let temporalJitter = clamp(u.temporal_controls.y, 0.0, 1.0);
+  let temporalFrame = u.temporal_controls.w;
+  let pixel = floor(uv * u.viewport_steps_density.xy);
+  let interleaved = hash31(vec3<f32>(pixel + vec2<f32>(temporalFrame * 17.0, temporalFrame * 29.0), temporalFrame));
+  let r2 = fract(temporalFrame * 0.754877666 + interleaved * 0.569840296);
+  return mix(0.5, r2, temporalJitter) * dtBase;
+}
+
+fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f32) -> vec3<f32> {
+  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let energyDelta = abs(currentLuma - historyLuma);
+  let fireTighten = smoothstep(0.42, 0.92, max(current.r, current.g));
+  let radius = mix(vec3<f32>(0.26), vec3<f32>(0.045), clampStrength) + current * mix(0.10, 0.035, fireTighten) + vec3<f32>(energyDelta * 0.045);
+  return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
+}
+
+fn temporalResolveColor(current: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+  let temporalAccum = clamp(u.temporal_controls.x, 0.0, 0.90);
+  let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
+  let history = sampleHistoryColor(uv);
+  let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
+  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let currentHot = max(current.r, current.g);
+  let historyHot = max(history.r, history.g);
+  let fireProtect = smoothstep(0.38, 0.82, currentHot);
+  let hotMismatch = smoothstep(0.08, 0.34, abs(historyHot - currentHot));
+  let colorMismatch = smoothstep(0.05, 0.28, length(history - current));
+  let currentSupport = smoothstep(0.035, 0.18, currentLuma);
+  let fadingTrailReject = 1.0 - smoothstep(0.018, 0.12, historyLuma - currentLuma);
+  let historyWeight = temporalAccum * currentSupport * fadingTrailReject * (1.0 - fireProtect * 0.70) * (1.0 - hotMismatch * 0.78) * (1.0 - colorMismatch * 0.64);
+  return mix(current, clampedHistory, historyWeight);
 }
 
 fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
@@ -729,7 +772,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
-  let jitter = hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), floor(u.cameraPos_time.w * 19.0))) * dtBase;
+  let jitter = temporalJitterOffset(in.uv, dtBase);
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -832,7 +875,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
-  return vec4<f32>(pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84)), 1.0);
+  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  return vec4<f32>(temporalResolveColor(current, in.uv), 1.0);
 }
 `;
 
@@ -845,7 +889,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(44);
+  const uniforms = new Float32Array(48);
   let gridSize = normalizeGridSize(getControls().resolution);
   let majorantGridSize = normalizeMajorantGridSize(getControls().majorantGrid);
   const state = {
@@ -867,6 +911,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantSkip: 0.70,
     majorantSmooth: 0.85,
     majorantGuard: 0.75,
+    temporalAccum: 0.25,
+    temporalJitter: 0.85,
+    historyClamp: 0.70,
+    temporalAccumEffective: 0,
+    temporalHistoryFrames: 0,
+    temporalHistoryResetCount: 0,
+    temporalHistoryResetReason: 'initial',
+    temporalHistoryValid: false,
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
@@ -908,6 +960,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let currentFluid = 0;
   let frameTexture = null;
   let frameTextureSize = '';
+  let historyTexture = null;
+  let historyTextureSize = '';
+  let historySampler = null;
+  let historyValid = false;
+  let lastTemporalCameraSignature = '';
+  let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
   let controlsSnapshot = getControls();
@@ -1036,6 +1094,120 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantWriteBindGroup = null;
   }
 
+  function resetTemporalHistory(reason = 'reset') {
+    historyValid = false;
+    state.temporalHistoryValid = false;
+    state.temporalHistoryFrames = 0;
+    state.temporalHistoryResetCount += 1;
+    state.temporalHistoryResetReason = reason;
+  }
+
+  function destroyTemporalHistory() {
+    historyTexture?.destroy();
+    historyTexture = null;
+    historyTextureSize = '';
+    resetTemporalHistory('history-destroyed');
+  }
+
+  function ensureTemporalHistoryTexture() {
+    if (!device || !format) return;
+    const width = Math.max(1, state.width || 1);
+    const height = Math.max(1, state.height || 1);
+    const key = `${width}x${height}:${format}`;
+    if (historyTexture && historyTextureSize === key) return;
+    historyTexture?.destroy();
+    historyTexture = device.createTexture({
+      label: `kaminos temporal history texture ${width}x${height}`,
+      size: { width, height, depthOrArrayLayers: 1 },
+      format,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    historyTextureSize = key;
+    resetTemporalHistory('history-resized');
+    rebuildFluidBindGroups();
+  }
+
+  function temporalCameraSignature() {
+    return [
+      camera.position.x.toFixed(4),
+      camera.position.y.toFixed(4),
+      camera.position.z.toFixed(4),
+      camera.quaternion.x.toFixed(4),
+      camera.quaternion.y.toFixed(4),
+      camera.quaternion.z.toFixed(4),
+      camera.quaternion.w.toFixed(4),
+      camera.projectionMatrix.elements.map(value => value.toFixed(4)).join(','),
+    ].join('|');
+  }
+
+  function temporalControlSignature(snapshot = controlsSnapshot) {
+    return [
+      snapshot.density,
+      snapshot.fire,
+      snapshot.radiance,
+      snapshot.absorption,
+      snapshot.glow,
+      snapshot.smoke,
+      snapshot.curl,
+      snapshot.microdetail,
+      snapshot.interfaceShred,
+      snapshot.fireLicks,
+      snapshot.projection,
+      snapshot.speed,
+      snapshot.raySteps,
+      snapshot.adaptiveRays,
+      snapshot.occupancySkip,
+      snapshot.majorantSkip,
+      snapshot.majorantSmooth,
+      snapshot.majorantGuard,
+      snapshot.inputRadius,
+      snapshot.flowRate,
+      snapshot.resolution,
+      snapshot.majorantGrid,
+      snapshot.gridOverlay,
+      snapshot.flowDebug,
+      snapshot.rayBudgetPreset || '',
+    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
+  }
+
+  function maybeResetTemporalHistoryForCamera() {
+    const signature = temporalCameraSignature();
+    if (lastTemporalCameraSignature && lastTemporalCameraSignature !== signature) {
+      resetTemporalHistory('camera-change');
+    }
+    lastTemporalCameraSignature = signature;
+  }
+
+  function rebuildFluidBindGroups() {
+    if (!device || !bindGroupLayout || !uniformBuffer || fluidBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
+    bindGroups = [
+      device.createBindGroup({
+        label: `kaminos fluid bind group ${gridSize}^3 A to B`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[0] } },
+          { binding: 2, resource: { buffer: fluidBuffers[1] } },
+          { binding: 3, resource: { buffer: majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos fluid bind group ${gridSize}^3 B to A`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluidBuffers[1] } },
+          { binding: 2, resource: { buffer: fluidBuffers[0] } },
+          { binding: 3, resource: { buffer: majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+        ],
+      }),
+    ];
+  }
+
   function ensureMajorantBuffer() {
     if (majorantBuffer) return;
     majorantBuffer = device.createBuffer({
@@ -1092,28 +1264,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: majorantPipelineLayout,
       compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
     });
-    bindGroups = [
-      device.createBindGroup({
-        label: `kaminos fluid bind group ${gridSize}^3 A to B`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[0] } },
-          { binding: 2, resource: { buffer: fluidBuffers[1] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-        ],
-      }),
-      device.createBindGroup({
-        label: `kaminos fluid bind group ${gridSize}^3 B to A`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluidBuffers[1] } },
-          { binding: 2, resource: { buffer: fluidBuffers[0] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-        ],
-      }),
-    ];
+    ensureTemporalHistoryTexture();
+    rebuildFluidBindGroups();
     majorantFluidBindGroups = [
       device.createBindGroup({
         label: `kaminos majorant fluid-read bind group ${gridSize}^3 A`,
@@ -1137,6 +1289,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
+    resetTemporalHistory('grid-rebuilt');
     emitStatus({ phase: 'grid-rebuilt' });
   }
 
@@ -1155,7 +1308,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({ device, format, alphaMode: 'opaque' });
+    context.configure({
+      device,
+      format,
+      alphaMode: 'opaque',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
       emitStatus({ phase: 'gpu-error', error: state.error });
@@ -1164,6 +1322,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos fluid uniforms',
       size: uniforms.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    historySampler = device.createSampler({
+      label: 'kaminos temporal history sampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
     });
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
@@ -1196,6 +1361,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 3,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 5,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
         },
       ],
     });
@@ -1267,6 +1442,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function updateUniforms(now) {
     resize();
     camera.updateMatrixWorld();
+    maybeResetTemporalHistoryForCamera();
+    ensureTemporalHistoryTexture();
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     invViewProj.copy(viewProj).invert();
     uniforms.set(invViewProj.elements, 0);
@@ -1298,6 +1475,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[41] = controlsSnapshot.majorantSkip ?? 0.70;
     uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
     uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
+    const requestedTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
+    uniforms[44] = historyValid ? requestedTemporalAccum : 0;
+    uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
+    uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
+    uniforms[47] = state.frameCount % 4096;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
@@ -1305,6 +1487,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantSkip = uniforms[41];
     state.majorantSmooth = uniforms[42];
     state.majorantGuard = uniforms[43];
+    state.temporalAccum = requestedTemporalAccum;
+    state.temporalJitter = uniforms[45];
+    state.historyClamp = uniforms[46];
+    state.temporalAccumEffective = uniforms[44];
+    state.temporalHistoryValid = historyValid;
   }
 
   function encodeSim(encoder) {
@@ -1346,6 +1533,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.end();
   }
 
+  function encodeHistoryCopy(encoder, sourceTexture) {
+    if (!historyTexture || state.width < 1 || state.height < 1) return;
+    encoder.copyTextureToTexture(
+      { texture: sourceTexture },
+      { texture: historyTexture },
+      { width: state.width, height: state.height, depthOrArrayLayers: 1 }
+    );
+    historyValid = true;
+    state.temporalHistoryValid = true;
+    state.temporalHistoryFrames += 1;
+  }
+
   function render(now) {
     if (!state.active) return;
     raf = requestAnimationFrame(render);
@@ -1355,7 +1554,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
     encodeSim(encoder);
     encodeMajorant(encoder);
-    encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
+    const currentTexture = context.getCurrentTexture();
+    encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+    encodeHistoryCopy(encoder, currentTexture);
     device.queue.submit([encoder.finish()]);
     state.frameCount += 1;
     state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
@@ -1597,6 +1798,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         majorantSkip: state.majorantSkip,
         majorantSmooth: state.majorantSmooth,
         majorantGuard: state.majorantGuard,
+        temporalAccum: state.temporalAccum,
+        temporalJitter: state.temporalJitter,
+        historyClamp: state.historyClamp,
+        temporalAccumEffective: state.temporalAccumEffective,
+        temporalHistoryFrames: state.temporalHistoryFrames,
+        temporalHistoryResetCount: state.temporalHistoryResetCount,
+        temporalHistoryResetReason: state.temporalHistoryResetReason,
+        temporalHistoryValid: state.temporalHistoryValid,
         majorantGrid: state.majorantGrid,
         majorantBuilt: state.majorantBuilt,
         timing: { ...state.timing },
@@ -1668,6 +1877,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantSkip: state.majorantSkip,
       majorantSmooth: state.majorantSmooth,
       majorantGuard: state.majorantGuard,
+      temporalAccum: state.temporalAccum,
+      temporalJitter: state.temporalJitter,
+      historyClamp: state.historyClamp,
+      temporalAccumEffective: state.temporalAccumEffective,
+      temporalHistoryFrames: state.temporalHistoryFrames,
+      temporalHistoryResetCount: state.temporalHistoryResetCount,
+      temporalHistoryResetReason: state.temporalHistoryResetReason,
+      temporalHistoryValid: state.temporalHistoryValid,
       majorantGrid: state.majorantGrid,
       majorantBuilt: state.majorantBuilt,
       timing: { ...state.timing },
@@ -1688,7 +1905,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
+      const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       controlsSnapshot = { ...controlsSnapshot, ...next };
+      const nextControlSignature = temporalControlSignature(controlsSnapshot);
+      if (previousControlSignature !== nextControlSignature) {
+        resetTemporalHistory('control-change');
+      }
+      lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
       if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
@@ -1706,6 +1929,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
       state.majorantSmooth = controlsSnapshot.majorantSmooth ?? 0.85;
       state.majorantGuard = controlsSnapshot.majorantGuard ?? 0.75;
+      state.temporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
+      state.temporalJitter = controlsSnapshot.temporalJitter ?? 0.85;
+      state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;
       state.majorantGrid = majorantGridSize;
     },
     async setActive(active) {
@@ -1740,6 +1966,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();
       canvas.remove();

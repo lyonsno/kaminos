@@ -59,6 +59,18 @@ const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
 const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
   ? Math.max(0, Math.min(1, requestedMajorantGuard))
   : 0.75;
+const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
+const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
+  ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
+  : 0.25;
+const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
+const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
+  ? Math.max(0, Math.min(1, requestedTemporalJitter))
+  : 0.85;
+const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
+const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
+  ? Math.max(0, Math.min(1, requestedHistoryClamp))
+  : 0.70;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -295,6 +307,17 @@ async function main() {
     assert.ok(Math.abs((state.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'effective majorant smooth state did not match route/control');
     assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
     assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
+    assert.ok(Math.abs((state.controls?.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'temporal accumulation route/control did not apply');
+    assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
+    assert.ok(Math.abs((state.controls?.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'temporal jitter route/control did not apply');
+    assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
+    assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
+    assert.ok(Math.abs((state.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'effective temporal history clamp state did not match route/control');
+    if (expectedTemporalAccum > 0) {
+      assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
+      assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
+      assert.ok((state.temporalHistoryResetCount ?? 0) >= 1, 'temporal history did not record reset/rejection state');
+    }
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
@@ -398,6 +421,14 @@ async function main() {
       majorantSkip: sample.majorantSkip,
       majorantSmooth: sample.majorantSmooth,
       majorantGuard: sample.majorantGuard,
+      temporalAccum: sample.temporalAccum,
+      temporalJitter: sample.temporalJitter,
+      historyClamp: sample.historyClamp,
+      temporalAccumEffective: sample.temporalAccumEffective,
+      temporalHistoryFrames: sample.temporalHistoryFrames,
+      temporalHistoryResetCount: sample.temporalHistoryResetCount,
+      temporalHistoryResetReason: sample.temporalHistoryResetReason,
+      temporalHistoryValid: sample.temporalHistoryValid,
       majorantGrid: sample.majorantGrid,
       majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,
