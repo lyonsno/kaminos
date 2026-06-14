@@ -69,6 +69,9 @@ assert.match(index, /detailScale/, 'Volume controls carry fine-detail scale into
 assert.match(index, /id="volume-plume-height"/, 'Volume tab exposes plume height/world-rise scale control');
 assert.match(index, /volume_plume_height/, 'URL route can override plume height/world-rise scale');
 assert.match(index, /plumeHeight/, 'Volume controls carry plume height/world-rise scale into the renderer');
+assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
+assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
+assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
 assert.match(index, /id="volume-majorant-grid"/, 'Volume tab exposes coarse majorant grid resolution control');
 assert.match(index, /volume_majorant_grid/, 'URL route can override coarse majorant grid resolution');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
@@ -221,6 +224,12 @@ assert.match(core, /scale_controls/, 'volume uniforms carry fire/detail/plume sc
 assert.match(core, /fireScale/, 'debug state exposes apparent fire/world scale');
 assert.match(core, /detailScale/, 'debug state exposes fine-detail scale');
 assert.match(core, /plumeHeight/, 'debug state exposes plume height/world-rise scale');
+assert.match(core, /normalizeRenderScale/, 'renderer normalizes internal render scale explicitly');
+assert.match(core, /displayWidth/, 'debug state preserves displayed canvas width separately from internal render width');
+assert.match(core, /renderWidth/, 'debug state exposes internal render width');
+assert.match(core, /renderPixelRatio/, 'debug state exposes render-to-display pixel ratio');
+assert.match(core, /volumeReconstructionStyle/, 'canvas uses an explicit reconstruction/upscale style for lower internal render scale');
+assert.match(core, /resetTemporalHistory\('render-scale-change'\)/, 'temporal history resets when internal render scale changes');
 assert.match(core, /scaledSourceRadius/, 'fluid source scales fire size without relying only on screen zoom');
 assert.match(core, /scaledDetailFrequency/, 'raymarch detail frequency can increase so fire details read smaller');
 assert.match(core, /plumeRiseScale/, 'fluid sim has an explicit plume height/world-rise scale');
@@ -305,6 +314,11 @@ assert.match(witness, /temporalInterfaceHistoryProtect/, 'witness records interf
 assert.match(witness, /expectedFireScale/, 'witness verifies apparent fire/world scale route/control identity');
 assert.match(witness, /expectedDetailScale/, 'witness verifies fine-detail scale route/control identity');
 assert.match(witness, /expectedPlumeHeight/, 'witness verifies plume height/world-rise route/control identity');
+assert.match(witness, /expectedRenderScale/, 'witness verifies internal render-scale route/control identity');
+assert.match(witness, /renderScale/, 'witness records effective internal render scale');
+assert.match(witness, /displayWidth/, 'witness records displayed canvas width');
+assert.match(witness, /renderWidth/, 'witness records internal render width');
+assert.match(witness, /renderPixelRatio/, 'witness records render-to-display pixel ratio');
 assert.match(witness, /expectedExternalEmitterMode/, 'witness verifies external emitter route identity when requested');
 assert.match(witness, /externalEmitterMode/, 'witness records external emitter mode');
 assert.match(witness, /externalEmitterCount/, 'witness records effective external emitter count');

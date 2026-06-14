@@ -21,6 +21,12 @@ function normalizeMajorantGridSize(value) {
   return DEFAULT_MAJORANT_GRID_SIZE;
 }
 
+function normalizeRenderScale(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 0.85;
+  return Math.max(0.6, Math.min(1, requested));
+}
+
 function gridCellCount(gridSize) {
   return gridSize * gridSize * gridSize;
 }
@@ -1232,8 +1238,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(68);
-  let gridSize = normalizeGridSize(getControls().resolution);
-  let majorantGridSize = normalizeMajorantGridSize(getControls().majorantGrid);
+  let controlsSnapshot = getControls();
+  let gridSize = normalizeGridSize(controlsSnapshot.resolution);
+  let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -1243,6 +1250,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     active: false,
     width: 0,
     height: 0,
+    displayWidth: 0,
+    displayHeight: 0,
+    renderWidth: 0,
+    renderHeight: 0,
+    renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
+    renderPixelRatio: 1,
+    volumeReconstructionStyle: 'linear-css-upscale',
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
@@ -1327,7 +1341,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
-  let controlsSnapshot = getControls();
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -1559,6 +1572,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.majorantSkip,
       snapshot.majorantSmooth,
       snapshot.majorantGuard,
+      snapshot.renderScale,
       snapshot.fireScale,
       snapshot.detailScale,
       snapshot.plumeHeight,
@@ -1825,13 +1839,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function resize() {
     const rect = viewport.getBoundingClientRect();
     const dpr = 1;
-    const width = Math.max(1, Math.floor(rect.width * dpr));
-    const height = Math.max(1, Math.floor(rect.height * dpr));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-      state.width = width;
-      state.height = height;
+    const displayWidth = Math.max(1, Math.floor(rect.width * dpr));
+    const displayHeight = Math.max(1, Math.floor(rect.height * dpr));
+    const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
+    const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
+    const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
+    if (state.renderScale !== renderScale) {
+      resetTemporalHistory('render-scale-change');
+    }
+    if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight) {
+      canvas.width = renderWidth;
+      canvas.height = renderHeight;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      state.width = renderWidth;
+      state.height = renderHeight;
+      state.displayWidth = displayWidth;
+      state.displayHeight = displayHeight;
+      state.renderWidth = renderWidth;
+      state.renderHeight = renderHeight;
+      state.renderScale = renderScale;
+      state.renderPixelRatio = renderWidth / Math.max(1, displayWidth);
+      state.volumeReconstructionStyle = renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+      canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
     }
   }
@@ -1913,6 +1943,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
+    state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
+    state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
     state.temporalAccumEffective = uniforms[44];
     const temporalSettled = historyValid ? Math.min(1, Math.max(0, state.temporalHistoryFrames / 12)) : 0;
     const temporalMotionTrust = previousViewProjReady ? 1 : 0;
@@ -2330,6 +2362,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ok: true,
       width: state.width,
       height: state.height,
+      displayWidth: state.displayWidth,
+      displayHeight: state.displayHeight,
+      renderWidth: state.renderWidth,
+      renderHeight: state.renderHeight,
+      renderScale: state.renderScale,
+      renderPixelRatio: state.renderPixelRatio,
+      volumeReconstructionStyle: state.volumeReconstructionStyle,
       meanLuma: totalLuma / Math.max(1, samples),
       litPixels,
       fireLikePixels,
@@ -2351,6 +2390,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       plumeHeight: state.plumeHeight,
+      renderScale: state.renderScale,
+      renderPixelRatio: state.renderPixelRatio,
+      displayWidth: state.displayWidth,
+      displayHeight: state.displayHeight,
+      renderWidth: state.renderWidth,
+      renderHeight: state.renderHeight,
+      volumeReconstructionStyle: state.volumeReconstructionStyle,
       externalEmitterMode: state.externalEmitterMode,
       externalEmitterCoordinateSpace: state.externalEmitterCoordinateSpace,
       externalEmitterCount: state.externalEmitterCount,
@@ -2417,6 +2463,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
+      state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
+      state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
       state.majorantGrid = majorantGridSize;
     },
     setExternalEmitters(payload = {}) {

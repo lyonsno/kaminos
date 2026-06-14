@@ -83,6 +83,10 @@ const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
   : 1.45;
+const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
+const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
+  ? Math.max(0.6, Math.min(1, requestedRenderScale))
+  : 0.85;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
 function delay(ms) {
@@ -349,6 +353,11 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
+    assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
+    assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
+    assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
+    assert.ok((state.displayHeight ?? 0) >= (state.renderHeight ?? 0), 'internal render height exceeded display height');
+    assert.ok(Math.abs((state.renderPixelRatio ?? 0) - expectedRenderScale) < 0.015, 'render-to-display pixel ratio did not match render scale');
     if (expectedExternalEmitterMode) {
       assert.equal(state.externalEmitterMode, expectedExternalEmitterMode, 'external emitter route identity did not apply');
       assert.equal(state.externalEmitterCoordinateSpace, 'volume-local', 'external emitter coordinate space did not reach debug state');
@@ -478,6 +487,14 @@ async function main() {
       expectedFireScale,
       expectedDetailScale,
       expectedPlumeHeight,
+      expectedRenderScale,
+      renderScale: sample.renderScale,
+      renderPixelRatio: sample.renderPixelRatio,
+      displayWidth: sample.displayWidth,
+      displayHeight: sample.displayHeight,
+      renderWidth: sample.renderWidth,
+      renderHeight: sample.renderHeight,
+      volumeReconstructionStyle: sample.volumeReconstructionStyle,
       externalEmitterMode: sample.externalEmitterMode,
       externalEmitterCoordinateSpace: sample.externalEmitterCoordinateSpace,
       externalEmitterCount: sample.externalEmitterCount,
