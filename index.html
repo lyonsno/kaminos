@@ -356,6 +356,27 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="volume-fit-camera">Frame</button>
       </div>
     </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Selected</span><span class="field-val" id="volume-selected-primitive">none</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="volume-add-fire-smoke">Add Fire+Smoke</button>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Prim Radius</span>
+        <input type="range" id="volume-primitive-radius" min="0.06" max="0.5" step="0.01" value="0.12">
+        <span class="slider-val" id="volume-primitive-radius-val">0.12</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Prim Flow</span>
+        <input type="range" id="volume-primitive-flow-rate" min="0" max="2.5" step="0.05" value="0.15">
+        <span class="slider-val" id="volume-primitive-flow-rate-val">0.15</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Prim Radiance</span>
+        <input type="range" id="volume-primitive-radiance" min="0" max="3" step="0.05" value="1.65">
+        <span class="slider-val" id="volume-primitive-radiance-val">1.65</span>
+      </div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Density</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
@@ -636,6 +657,11 @@ let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 let volumePrimitives = [];
+let volumeAuthoringMode = null;
+let selectedVolumePrimitiveId = null;
+let volumePrimitiveMarkers = new Map();
+let volumePrimitiveRaycaster = null;
+let volumePlacementPlane = null;
 let sceneObjects = [];
 let activeSceneObjectId = null;
 let sceneSaveBlockedByFailedRestore = false;
@@ -777,9 +803,267 @@ function getVolumePrimitiveState() {
 function setVolumePrimitivesState(state) {
   const primitiveList = Array.isArray(state) ? state : state?.primitives;
   volumePrimitives = Array.isArray(primitiveList) ? primitiveList.map(normalizeVolumePrimitive) : [];
+  if (selectedVolumePrimitiveId && !volumePrimitives.some(primitive => primitive.id === selectedVolumePrimitiveId)) {
+    selectedVolumePrimitiveId = null;
+  }
+  if (!selectedVolumePrimitiveId && volumePrimitives.length > 0) {
+    selectedVolumePrimitiveId = volumePrimitives[volumePrimitives.length - 1].id;
+  }
   volumePrototype?.setVolumePrimitives?.(volumePrimitives);
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  syncVolumePrimitiveMarkers();
+  refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
+}
+
+function clampVolumePrimitivePosition(position = [0, -0.58, 0]) {
+  const source = Array.isArray(position) ? position : [0, -0.58, 0];
+  const x = Number(source[0]);
+  const y = Number(source[1]);
+  const z = Number(source[2]);
+  return [
+    THREE.MathUtils.clamp(Number.isFinite(x) ? x : 0, -0.55, 0.55),
+    THREE.MathUtils.clamp(Number.isFinite(y) ? y : -0.58, -0.74, 0.45),
+    THREE.MathUtils.clamp(Number.isFinite(z) ? z : 0, -0.55, 0.55),
+  ];
+}
+
+function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options = {}) {
+  const controlsSnapshot = typeof readVolumeControls === 'function' ? readVolumeControls() : {};
+  const clampedPosition = clampVolumePrimitivePosition(position);
+  const radius = Number(options.radius ?? controlsSnapshot.inputRadius ?? 0.12);
+  const flowRate = Number(options.flowRate ?? controlsSnapshot.flowRate ?? 0.15);
+  const radiance = Number(options.radiance ?? controlsSnapshot.radiance ?? 1.65);
+  const glow = Number(options.glow ?? controlsSnapshot.glow ?? 1.15);
+  const smoke = Number(options.smoke ?? controlsSnapshot.smoke ?? 1);
+  const density = Number(options.density ?? controlsSnapshot.density ?? 1);
+  return {
+    id: String(options.id || makeSceneObjectId('manual-fire-smoke')),
+    kind: 'fire_smoke',
+    shape: 'sphere',
+    couplingSource: 'manual',
+    transform: {
+      position: clampedPosition,
+      rotation: [0, 0, 0],
+      scale: [radius, radius, radius],
+    },
+    channels: {
+      density,
+      temperature: 1,
+      fuel: 0.9,
+      smoke,
+      emissive: 1,
+      absorption: Number(options.absorption ?? controlsSnapshot.absorption ?? 0.85),
+    },
+    coupling: {
+      source: 'manual',
+      targetHook: 'native-fluid-source',
+      authoringTool: 'volume-add-fire-smoke',
+    },
+    simulation: {
+      sourceRadius: radius,
+      flowRate,
+      vorticity: Number(options.vorticity ?? controlsSnapshot.curl ?? 2.65),
+    },
+    render: {
+      radiance,
+      glow,
+    },
+  };
+}
+
+function volumePrimitivePosition(primitive) {
+  return primitive?.transform?.position || [0, -0.58, 0];
+}
+
+function volumePrimitiveRadius(primitive) {
+  const radius = Number(primitive?.simulation?.sourceRadius ?? primitive?.transform?.scale?.[0]);
+  return Number.isFinite(radius) ? radius : 0.12;
+}
+
+function selectedVolumePrimitive() {
+  return volumePrimitives.find(primitive => primitive.id === selectedVolumePrimitiveId) || null;
+}
+
+function refreshVolumePrimitivePanel() {
+  const primitive = selectedVolumePrimitive();
+  const selectedEl = document.getElementById('volume-selected-primitive');
+  const radiusEl = document.getElementById('volume-primitive-radius');
+  const radiusVal = document.getElementById('volume-primitive-radius-val');
+  const flowEl = document.getElementById('volume-primitive-flow-rate');
+  const flowVal = document.getElementById('volume-primitive-flow-rate-val');
+  const radianceEl = document.getElementById('volume-primitive-radiance');
+  const radianceVal = document.getElementById('volume-primitive-radiance-val');
+  if (!selectedEl || !radiusEl || !flowEl || !radianceEl) return;
+  selectedEl.textContent = primitive ? primitive.id : 'none';
+  selectedEl.title = primitive ? primitive.id : '';
+  for (const el of [radiusEl, flowEl, radianceEl]) el.disabled = !primitive;
+  if (!primitive) {
+    radiusVal.textContent = Number(radiusEl.value).toFixed(2);
+    flowVal.textContent = Number(flowEl.value).toFixed(2);
+    radianceVal.textContent = Number(radianceEl.value).toFixed(2);
+    return;
+  }
+  radiusEl.value = String(volumePrimitiveRadius(primitive));
+  flowEl.value = String(Number(primitive.simulation?.flowRate ?? 0.15));
+  radianceEl.value = String(Number(primitive.render?.radiance ?? 1.65));
+  radiusVal.textContent = Number(radiusEl.value).toFixed(2);
+  flowVal.textContent = Number(flowEl.value).toFixed(2);
+  radianceVal.textContent = Number(radianceEl.value).toFixed(2);
+}
+
+function applySelectedVolumePrimitiveControls() {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive) {
+    refreshVolumePrimitivePanel();
+    return;
+  }
+  const radius = Number(document.getElementById('volume-primitive-radius')?.value ?? primitive.simulation?.sourceRadius ?? 0.12);
+  const flowRate = Number(document.getElementById('volume-primitive-flow-rate')?.value ?? primitive.simulation?.flowRate ?? 0.15);
+  const radiance = Number(document.getElementById('volume-primitive-radiance')?.value ?? primitive.render?.radiance ?? 1.65);
+  primitive.transform = primitive.transform || { position: [0, -0.58, 0], rotation: [0, 0, 0], scale: [radius, radius, radius] };
+  primitive.transform.scale = [radius, radius, radius];
+  primitive.simulation = { ...(primitive.simulation || {}), sourceRadius: radius, flowRate };
+  primitive.render = { ...(primitive.render || {}), radiance };
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  syncVolumePrimitiveMarkers();
+  refreshVolumePrimitivePanel();
+  window._kaminosDirty?.();
+}
+
+function selectVolumePrimitive(id) {
+  selectedVolumePrimitiveId = volumePrimitives.some(primitive => primitive.id === id) ? id : null;
+  syncVolumePrimitiveMarkers();
+  refreshVolumePrimitivePanel();
+  window._kaminosDirty?.();
+  return selectedVolumePrimitive();
+}
+
+function syncVolumePrimitiveMarkers() {
+  if (!scene) return;
+  const liveIds = new Set(volumePrimitives.map(primitive => primitive.id));
+  for (const [id, marker] of volumePrimitiveMarkers.entries()) {
+    if (!liveIds.has(id)) {
+      scene.remove(marker);
+      marker.geometry?.dispose?.();
+      marker.material?.dispose?.();
+      volumePrimitiveMarkers.delete(id);
+    }
+  }
+  for (const primitive of volumePrimitives) {
+    let marker = volumePrimitiveMarkers.get(primitive.id);
+    if (!marker) {
+      const geometry = new THREE.SphereGeometry(1, 24, 12);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xffa53d,
+        transparent: true,
+        opacity: 0.82,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      marker = new THREE.Mesh(geometry, material);
+      marker.name = 'volume-primitive-marker-v0';
+      marker.renderOrder = 9200;
+      marker.userData.kaminosVolumePrimitiveMarker = {
+        identity: 'volume-primitive-marker-v0',
+        primitiveId: primitive.id,
+      };
+      scene.add(marker);
+      volumePrimitiveMarkers.set(primitive.id, marker);
+    }
+    marker.position.fromArray(volumePrimitivePosition(primitive));
+    const radius = volumePrimitiveRadius(primitive);
+    const selected = primitive.id === selectedVolumePrimitiveId;
+    marker.scale.setScalar(Math.max(0.035, radius * (selected ? 0.72 : 0.5)));
+    marker.material.color.setHex(selected ? 0xffd25c : 0xff8f33);
+    marker.material.opacity = selected ? 0.95 : 0.7;
+    marker.visible = true;
+  }
+}
+
+function armVolumePrimitiveTool(kind = 'fire_smoke') {
+  volumeAuthoringMode = kind;
+  document.getElementById('volume-add-fire-smoke')?.classList.toggle('active', kind === 'fire_smoke');
+  setActiveTab('volume');
+  setInfo('Click viewport to place Fire+Smoke volume primitive');
+  return volumeAuthoringMode;
+}
+
+function disarmVolumePrimitiveTool() {
+  volumeAuthoringMode = null;
+  document.getElementById('volume-add-fire-smoke')?.classList.remove('active');
+}
+
+function viewportPointerNdc(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  return new THREE.Vector2(
+    ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+    -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1),
+  );
+}
+
+function placeVolumePrimitiveAt(position, options = {}) {
+  const primitive = createManualFireSmokeVolumePrimitive(position, options);
+  setVolumePrimitivesState({
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    primitives: [...volumePrimitives, primitive],
+  });
+  selectVolumePrimitive(primitive.id);
+  return primitive;
+}
+
+function volumePlacementPointFromEvent(event) {
+  if (!volumePrimitiveRaycaster) volumePrimitiveRaycaster = new THREE.Raycaster();
+  if (!volumePlacementPlane) volumePlacementPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.58);
+  const ndc = viewportPointerNdc(event);
+  volumePrimitiveRaycaster.setFromCamera(ndc, camera);
+  const sceneMeshes = [];
+  for (const entry of sceneObjects) {
+    entry.object.traverse(child => {
+      if (child.isMesh) sceneMeshes.push(child);
+    });
+  }
+  const hits = sceneMeshes.length > 0 ? volumePrimitiveRaycaster.intersectObjects(sceneMeshes, false) : [];
+  if (hits[0]?.point) return hits[0].point.toArray();
+  const fallback = new THREE.Vector3();
+  if (volumePrimitiveRaycaster.ray.intersectPlane(volumePlacementPlane, fallback)) {
+    return fallback.toArray();
+  }
+  return [0, -0.58, 0];
+}
+
+function placeVolumePrimitiveFromEvent(event) {
+  const primitive = placeVolumePrimitiveAt(volumePlacementPointFromEvent(event));
+  disarmVolumePrimitiveTool();
+  setInfo(`Placed volume primitive ${primitive.id}`);
+  return primitive;
+}
+
+function selectVolumePrimitiveFromEvent(event) {
+  if (!volumePrimitiveRaycaster) volumePrimitiveRaycaster = new THREE.Raycaster();
+  const markers = Array.from(volumePrimitiveMarkers.values()).filter(marker => marker.visible);
+  if (markers.length === 0) return null;
+  volumePrimitiveRaycaster.setFromCamera(viewportPointerNdc(event), camera);
+  const hit = volumePrimitiveRaycaster.intersectObjects(markers, false)[0];
+  const id = hit?.object?.userData?.kaminosVolumePrimitiveMarker?.primitiveId;
+  return id ? selectVolumePrimitive(id) : null;
+}
+
+function handleVolumeViewportPointerDown(event) {
+  if (volumeAuthoringMode === 'fire_smoke') {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    placeVolumePrimitiveFromEvent(event);
+    return;
+  }
+  const selected = selectVolumePrimitiveFromEvent(event);
+  if (selected) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    setInfo(`Selected volume primitive ${selected.id}`);
+  }
 }
 
 function seedVolumePrimitiveFixture(name) {
@@ -1539,6 +1823,7 @@ async function initScene() {
   });
   initTransformInspector();
   const viewportEl = document.getElementById('viewport');
+  renderer.domElement.addEventListener('pointerdown', handleVolumeViewportPointerDown, { capture: true });
   renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
   renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
   renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
@@ -2315,6 +2600,46 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
+  document.getElementById('volume-add-fire-smoke').addEventListener('click', () => {
+    if (volumeAuthoringMode === 'fire_smoke') {
+      disarmVolumePrimitiveTool();
+      setInfo('Volume primitive placement cancelled');
+    } else {
+      armVolumePrimitiveTool('fire_smoke');
+    }
+  });
+  for (const id of ['volume-primitive-radius', 'volume-primitive-flow-rate', 'volume-primitive-radiance']) {
+    document.getElementById(id).addEventListener('input', applySelectedVolumePrimitiveControls);
+    document.getElementById(id).addEventListener('change', applySelectedVolumePrimitiveControls);
+  }
+  refreshVolumePrimitivePanel();
+  window.__kaminosVolumeAuthoring = {
+    arm: armVolumePrimitiveTool,
+    disarm: disarmVolumePrimitiveTool,
+    placeAt: placeVolumePrimitiveAt,
+    select: selectVolumePrimitive,
+    updateSelected(values = {}) {
+      const primitive = selectedVolumePrimitive();
+      if (!primitive) return null;
+      if (values.radius !== undefined) document.getElementById('volume-primitive-radius').value = String(values.radius);
+      if (values.flowRate !== undefined) document.getElementById('volume-primitive-flow-rate').value = String(values.flowRate);
+      if (values.radiance !== undefined) document.getElementById('volume-primitive-radiance').value = String(values.radiance);
+      applySelectedVolumePrimitiveControls();
+      return selectedVolumePrimitive();
+    },
+    debugState() {
+      return {
+        identity: 'volume-authoring-loop-v0',
+        mode: volumeAuthoringMode,
+        selectedVolumePrimitiveId,
+        markerCount: volumePrimitiveMarkers.size,
+        markerIds: Array.from(volumePrimitiveMarkers.keys()),
+        volumePrimitiveCount: volumePrimitives.length,
+        volumePrimitiveIds: volumePrimitives.map(primitive => primitive.id),
+        volumePrimitives: getVolumePrimitiveState().primitives,
+      };
+    },
+  };
 
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');

@@ -34,8 +34,11 @@ const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.i
   : 0.65;
 const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
 const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].includes(expectedPrimitiveFixture);
+const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
+const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
+  : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
   : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 
 function assertNoPlaceholderTopologyClaim(primitives = []) {
@@ -253,6 +256,42 @@ async function main() {
     await wsRequest(ws, 'Page.navigate', { url });
     await wsRequest(ws, 'Page.bringToFront');
     await delay(settleMs);
+    let volumeAuthoring = null;
+    if (expectedAuthoringProbe) {
+      phase = 'authoring-probe';
+      let authoringReady = false;
+      for (let i = 0; i < 40; i++) {
+        const readyEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: '!!window.__kaminosVolumeAuthoring?.debugState',
+          returnByValue: true,
+        });
+        authoringReady = readyEval.result.value === true;
+        if (authoringReady) break;
+        await delay(250);
+      }
+      assert.equal(authoringReady, true, 'volume authoring debug route did not initialize');
+      const authoringEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const authoring = window.__kaminosVolumeAuthoring;
+          const primitive = authoring.placeAt([0.24, -0.58, 0.12], {
+            id: '${expectedAuthoredPrimitiveId}',
+            radius: 0.18,
+            flowRate: 0.35,
+            radiance: 2.1,
+          });
+          authoring.select('${expectedAuthoredPrimitiveId}');
+          authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
+          return { ok: true, primitive, state: authoring.debugState() };
+        })()`,
+        returnByValue: true,
+      });
+      const authoringProbe = authoringEval.result.value;
+      assert.equal(authoringProbe?.ok, true, 'authored volume primitive probe did not run');
+      volumeAuthoring = authoringProbe.state;
+      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive was not selected');
+      assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored volume primitive marker was not created');
+      await delay(Math.max(600, Math.floor(settleMs / 2)));
+    }
     phase = 'identity';
     let state = null;
     for (let i = 0; i < 40; i++) {
@@ -289,7 +328,7 @@ async function main() {
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
-    if (expectedPrimitiveFixture) {
+    if (expectedPrimitiveFixture || expectedAuthoringProbe) {
       assert.ok(state.volumePrimitiveCount > 0, 'volume primitive fixture was not consumed by the renderer');
       assert.ok(state.volumePrimitiveIds?.includes(expectedPrimitiveId), `volume primitive ids did not include ${expectedPrimitiveId}`);
     }
@@ -301,6 +340,23 @@ async function main() {
       assert.equal(primitive?.placeholderContract, 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology', 'Lamellar hook primitive did not preserve placeholder topology contract');
       assert.equal(primitive?.coupling?.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar hook primitive did not preserve witness identity');
       assert.ok(Number.isFinite(primitive?.lamellarHook?.emissiveCatch), 'Lamellar hook primitive did not preserve scalar hook hints');
+    }
+    if (expectedAuthoringProbe) {
+      const authoringStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeAuthoring?.debugState?.()',
+        returnByValue: true,
+      });
+      volumeAuthoring = authoringStateEval.result.value;
+      const primitive = state.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+      const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+      assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
+      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive selection was not retained');
+      assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored primitive marker id was not retained');
+      assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
+      assert.equal(primitive?.coupling?.authoringTool, 'volume-add-fire-smoke', 'authored primitive did not preserve authoring tool identity');
+      assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
+      assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
+      assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - 2.1) < 0.001, 'authored primitive radiance setting was not applied');
     }
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
 
@@ -392,6 +448,7 @@ async function main() {
       volumePrimitiveCount: state.volumePrimitiveCount,
       volumePrimitiveIds: state.volumePrimitiveIds,
       volumePrimitives: state.volumePrimitives,
+      volumeAuthoring,
       controls: state.controls,
       screenshot: out,
       metrics,
