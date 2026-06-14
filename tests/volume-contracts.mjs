@@ -43,6 +43,12 @@ assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance
 assert.match(index, /id="volume-majorant-skip"/, 'Volume tab exposes coarse majorant skip control');
 assert.match(index, /volume_majorant_skip/, 'URL route can override coarse majorant skipping');
 assert.match(index, /majorantSkip/, 'Volume controls carry coarse majorant skip strength into the renderer');
+assert.match(index, /id="volume-majorant-smooth"/, 'Volume tab exposes smoothed majorant sampling control');
+assert.match(index, /volume_majorant_smooth/, 'URL route can override smoothed majorant sampling');
+assert.match(index, /majorantSmooth/, 'Volume controls carry smoothed majorant sampling strength into the renderer');
+assert.match(index, /id="volume-majorant-guard"/, 'Volume tab exposes majorant edge/dilation guard control');
+assert.match(index, /volume_majorant_guard/, 'URL route can override majorant edge/dilation guard');
+assert.match(index, /majorantGuard/, 'Volume controls carry majorant edge/dilation guard strength into the renderer');
 assert.match(index, /id="volume-majorant-grid"/, 'Volume tab exposes coarse majorant grid resolution control');
 assert.match(index, /volume_majorant_grid/, 'URL route can override coarse majorant grid resolution');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
@@ -108,6 +114,11 @@ assert.match(core, /csMajorant/, 'coarse majorant field is built by a dedicated 
 assert.match(core, /majorantComputePipeline/, 'coarse majorant field has a dedicated compute pipeline');
 assert.match(core, /encodeMajorant/, 'frame encoding builds the coarse majorant field after sim update');
 assert.match(core, /sampleWorldMajorant/, 'fragment raymarch samples the coarse majorant field');
+assert.match(core, /sampleWorldMajorantLinear/, 'fragment raymarch can interpolate coarse majorant samples instead of nearest-brick gating');
+assert.match(core, /sampleWorldMajorantDilated/, 'fragment raymarch can dilate occupied majorant regions before skip admission');
+assert.match(core, /majorantGradientSignal/, 'fragment raymarch computes a majorant edge signal to protect brick boundaries');
+assert.match(core, /majorantEdgeGuard/, 'fragment raymarch names the majorant edge/dilation guard control');
+assert.match(core, /majorantSkipGate/, 'fragment raymarch names the final guarded majorant skip gate');
 assert.match(core, /majorantCellExitDistance/, 'raymarch can skip toward the next coarse majorant cell boundary');
 assert.match(core, /sampleMajorantReadback/, 'witness readback can prove nonzero coarse majorant contents');
 assert.match(core, /rebuildFluidState/, 'fluid sim can rebuild GPU state when resolution changes');
@@ -134,6 +145,8 @@ assert.match(core, /occupancySkipStepScale/, 'raymarch can skip/coarsen low-occu
 assert.match(core, /occupancySkipStrength/, 'shader gives occupancy skipping an explicit bounded strength');
 assert.match(core, /state\.occupancySkip/, 'debug state exposes effective occupancy skip strength');
 assert.match(core, /state\.majorantSkip/, 'debug state exposes effective coarse majorant skip strength');
+assert.match(core, /state\.majorantSmooth/, 'debug state exposes effective smoothed majorant sampling strength');
+assert.match(core, /state\.majorantGuard/, 'debug state exposes effective majorant edge/dilation guard strength');
 assert.match(core, /state\.majorantGrid/, 'debug state exposes coarse majorant grid identity');
 assert.match(core, /adaptiveRaymarch/, 'debug state exposes effective adaptive raymarch strength');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
@@ -192,10 +205,14 @@ assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires t
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
 assert.match(witness, /expectedOccupancySkip/, 'witness verifies occupancy skip route/control identity');
 assert.match(witness, /expectedMajorantSkip/, 'witness verifies coarse majorant route/control identity');
+assert.match(witness, /expectedMajorantSmooth/, 'witness verifies smoothed majorant route/control identity');
+assert.match(witness, /expectedMajorantGuard/, 'witness verifies majorant edge/dilation guard route/control identity');
 assert.match(witness, /expectedMajorantGrid/, 'witness verifies coarse majorant grid route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /occupancySkip/, 'witness records effective occupancy skip strength');
 assert.match(witness, /majorantSkip/, 'witness records effective coarse majorant skip strength');
+assert.match(witness, /majorantSmooth/, 'witness records effective smoothed majorant sampling strength');
+assert.match(witness, /majorantGuard/, 'witness records effective majorant edge/dilation guard strength');
 assert.match(witness, /majorantReadback/, 'witness records coarse majorant readback evidence');
 assert.match(witness, /occupiedBricks/, 'witness requires nonzero occupied coarse majorant bricks');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');

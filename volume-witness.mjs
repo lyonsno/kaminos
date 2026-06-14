@@ -51,6 +51,14 @@ const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
 const expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
   ? Math.max(0, Math.min(1, requestedMajorantSkip))
   : 0.70;
+const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
+const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
+  ? Math.max(0, Math.min(1, requestedMajorantSmooth))
+  : 0.85;
+const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
+const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
+  ? Math.max(0, Math.min(1, requestedMajorantGuard))
+  : 0.75;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -283,6 +291,10 @@ async function main() {
     assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
     assert.ok(Math.abs((state.controls?.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'majorant skip route/control did not apply');
     assert.ok(Math.abs((state.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'effective majorant skip state did not match route/control');
+    assert.ok(Math.abs((state.controls?.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'majorant smooth route/control did not apply');
+    assert.ok(Math.abs((state.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'effective majorant smooth state did not match route/control');
+    assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
+    assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
@@ -384,6 +396,8 @@ async function main() {
       adaptiveRaymarch: sample.adaptiveRaymarch,
       occupancySkip: sample.occupancySkip,
       majorantSkip: sample.majorantSkip,
+      majorantSmooth: sample.majorantSmooth,
+      majorantGuard: sample.majorantGuard,
       majorantGrid: sample.majorantGrid,
       majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,

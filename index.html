@@ -360,6 +360,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-majorant-skip" min="0" max="1" step="0.05" value="0.70">
       <span class="slider-val" id="volume-majorant-skip-val">0.70</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Majorant Smooth</span>
+      <input type="range" id="volume-majorant-smooth" min="0" max="1" step="0.05" value="0.85">
+      <span class="slider-val" id="volume-majorant-smooth-val">0.85</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Majorant Guard</span>
+      <input type="range" id="volume-majorant-guard" min="0" max="1" step="0.05" value="0.75">
+      <span class="slider-val" id="volume-majorant-guard-val">0.75</span>
+    </div>
     <div class="ray-budget-wrap">
       <div class="ray-budget-grid">
         <div class="ray-budget-axis-y">Adaptive</div>
@@ -1284,6 +1294,8 @@ function readVolumeControls() {
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
     majorantSkip: parseFloat(document.getElementById('volume-majorant-skip').value),
+    majorantSmooth: parseFloat(document.getElementById('volume-majorant-smooth').value),
+    majorantGuard: parseFloat(document.getElementById('volume-majorant-guard').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
@@ -1312,6 +1324,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-majorant-skip-val').textContent = c.majorantSkip.toFixed(2);
+  document.getElementById('volume-majorant-smooth-val').textContent = c.majorantSmooth.toFixed(2);
+  document.getElementById('volume-majorant-guard-val').textContent = c.majorantGuard.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
@@ -1331,7 +1345,10 @@ function refreshVolumeReadout() {
   document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
-  document.getElementById('volume-majorant-state').textContent = s.majorantBuilt ? `${s.majorantGrid}^3 / ${Number.isFinite(s.majorantSkip) ? s.majorantSkip.toFixed(2) : '--'}` : '--';
+  const majorantSkip = Number.isFinite(s.majorantSkip) ? s.majorantSkip.toFixed(2) : '--';
+  const majorantSmooth = Number.isFinite(s.majorantSmooth) ? s.majorantSmooth.toFixed(2) : '--';
+  const majorantGuard = Number.isFinite(s.majorantGuard) ? s.majorantGuard.toFixed(2) : '--';
+  document.getElementById('volume-majorant-state').textContent = s.majorantBuilt ? `${s.majorantGrid}^3 / ${majorantSkip} / ${majorantSmooth} / ${majorantGuard}` : '--';
   document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
   document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
@@ -1425,6 +1442,14 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_majorant_skip') && Number.isFinite(routeMajorantSkip)) {
     document.getElementById('volume-majorant-skip').value = String(Math.max(0, Math.min(1, routeMajorantSkip)));
   }
+  const routeMajorantSmooth = Number(params.get('volume_majorant_smooth'));
+  if (params.has('volume_majorant_smooth') && Number.isFinite(routeMajorantSmooth)) {
+    document.getElementById('volume-majorant-smooth').value = String(Math.max(0, Math.min(1, routeMajorantSmooth)));
+  }
+  const routeMajorantGuard = Number(params.get('volume_majorant_guard'));
+  if (params.has('volume_majorant_guard') && Number.isFinite(routeMajorantGuard)) {
+    document.getElementById('volume-majorant-guard').value = String(Math.max(0, Math.min(1, routeMajorantGuard)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1456,7 +1481,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

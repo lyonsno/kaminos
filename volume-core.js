@@ -159,6 +159,57 @@ fn sampleWorldMajorant(p: vec3<f32>) -> vec4<f32> {
   return majorantField[majorantIndex(vec3<u32>(floor(q)))];
 }
 
+fn sampleMajorantCell(c: vec3<i32>) -> vec4<f32> {
+  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(MAJORANT_GRID) - 1)));
+  return majorantField[majorantIndex(cell)];
+}
+
+fn sampleWorldMajorantLinear(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * (f32(MAJORANT_GRID) - 1.0), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let c000 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 0));
+  let c100 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 0));
+  let c010 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 0));
+  let c110 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 0));
+  let c001 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 1));
+  let c101 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 1));
+  let c011 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 1));
+  let c111 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+fn sampleWorldMajorantDilated(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
+  let c = vec3<i32>(floor(q));
+  var m = sampleMajorantCell(c);
+  m = max(m, sampleMajorantCell(c + vec3<i32>(1, 0, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(-1, 0, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 1, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, -1, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, 1)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, -1)));
+  return m;
+}
+
+fn majorantGradientSignal(p: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
+  let c = vec3<i32>(floor(q));
+  let x0 = sampleMajorantCell(c + vec3<i32>(-1, 0, 0)).w;
+  let x1 = sampleMajorantCell(c + vec3<i32>(1, 0, 0)).w;
+  let y0 = sampleMajorantCell(c + vec3<i32>(0, -1, 0)).w;
+  let y1 = sampleMajorantCell(c + vec3<i32>(0, 1, 0)).w;
+  let z0 = sampleMajorantCell(c + vec3<i32>(0, 0, -1)).w;
+  let z1 = sampleMajorantCell(c + vec3<i32>(0, 0, 1)).w;
+  return clamp(abs(x1 - x0) + abs(y1 - y0) + abs(z1 - z0), 0.0, 1.5);
+}
+
 fn majorantCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
   let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
   let dqdt = rd * (0.5 * f32(MAJORANT_GRID));
@@ -689,10 +740,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
     let p = ro + rd * t;
-    let majorant = sampleWorldMajorant(p);
+    let majorantNearest = sampleWorldMajorant(p);
+    let majorantLinear = sampleWorldMajorantLinear(p);
+    let majorantDilated = sampleWorldMajorantDilated(p);
     let majorantSkipStrength = clamp(u.occupancy_controls.y, 0.0, 1.0);
-    let majorantEmpty = 1.0 - smoothstep(0.004, 0.060, majorant.w);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength;
+    let majorantSmooth = clamp(u.occupancy_controls.z, 0.0, 1.0);
+    let majorantEdgeGuard = clamp(u.occupancy_controls.w, 0.0, 1.0);
+    let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.28 + majorantEdgeGuard * 0.42), majorantSmooth);
+    let majorantEdge = majorantGradientSignal(p);
+    let guardedImportance = max(majorant.w, majorantDilated.w * majorantEdgeGuard * (0.55 + majorantSmooth * 0.25));
+    let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
+    let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
+    let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
+    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
     if (majorantSkipGate > 0.42) {
       let cellExit = majorantCellExitDistance(p, rd);
       let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
@@ -805,6 +865,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
     majorantSkip: 0.70,
+    majorantSmooth: 0.85,
+    majorantGuard: 0.75,
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
@@ -1234,13 +1296,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     uniforms[41] = controlsSnapshot.majorantSkip ?? 0.70;
-    uniforms[42] = 0;
-    uniforms[43] = 0;
+    uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
+    uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
     state.majorantSkip = uniforms[41];
+    state.majorantSmooth = uniforms[42];
+    state.majorantGuard = uniforms[43];
   }
 
   function encodeSim(encoder) {
@@ -1531,6 +1595,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
         majorantSkip: state.majorantSkip,
+        majorantSmooth: state.majorantSmooth,
+        majorantGuard: state.majorantGuard,
         majorantGrid: state.majorantGrid,
         majorantBuilt: state.majorantBuilt,
         timing: { ...state.timing },
@@ -1600,6 +1666,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
       majorantSkip: state.majorantSkip,
+      majorantSmooth: state.majorantSmooth,
+      majorantGuard: state.majorantGuard,
       majorantGrid: state.majorantGrid,
       majorantBuilt: state.majorantBuilt,
       timing: { ...state.timing },
@@ -1636,6 +1704,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
+      state.majorantSmooth = controlsSnapshot.majorantSmooth ?? 0.85;
+      state.majorantGuard = controlsSnapshot.majorantGuard ?? 0.75;
       state.majorantGrid = majorantGridSize;
     },
     async setActive(active) {
