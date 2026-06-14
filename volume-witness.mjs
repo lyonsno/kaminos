@@ -19,6 +19,19 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
 const routeParams = new URL(url).searchParams;
+const VOLUME_SCENE_PRESETS = {
+  compact_plume: {},
+  tall_plume: {
+    fireScale: 0.35,
+    detailScale: 3.20,
+    plumeHeight: 2.20,
+  },
+};
+const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
+const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
+  ? requestedVolumeScene
+  : 'compact_plume';
+const scenePreset = VOLUME_SCENE_PRESETS[expectedVolumeScene] || {};
 const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
@@ -74,15 +87,15 @@ const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.i
 const requestedFireScale = Number(routeParams.get('volume_fire_scale'));
 const expectedFireScale = routeParams.has('volume_fire_scale') && Number.isFinite(requestedFireScale)
   ? Math.max(0.35, Math.min(1.3, requestedFireScale))
-  : 0.86;
+  : scenePreset.fireScale ?? 0.86;
 const requestedDetailScale = Number(routeParams.get('volume_detail_scale'));
 const expectedDetailScale = routeParams.has('volume_detail_scale') && Number.isFinite(requestedDetailScale)
   ? Math.max(0.45, Math.min(3.2, requestedDetailScale))
-  : 1.75;
+  : scenePreset.detailScale ?? 1.75;
 const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
-  : 1.45;
+  : scenePreset.plumeHeight ?? 1.45;
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
@@ -324,6 +337,8 @@ async function main() {
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
     assert.equal(state.active, true, 'volume route is not active');
     assert.ok(state.frameCount > 5, 'volume route did not render enough frames');
+    assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
+    assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
     assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer`, 'fluid sim label does not match selected grid');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
@@ -450,6 +465,8 @@ async function main() {
       fireLikePixels: sample.fireLikePixels,
       emissiveLikePixels: sample.emissiveLikePixels,
       smokeLikePixels: sample.smokeLikePixels,
+      volumeBounds: sample.volumeBounds,
+      verticalFillRatio: sample.volumeBounds?.verticalFillRatio ?? 0,
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
@@ -476,6 +493,8 @@ async function main() {
       majorantReadback: sample.majorantReadback,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
+      volumeScene: sample.volumeScene,
+      expectedVolumeScene,
       adaptiveRaymarch: sample.adaptiveRaymarch,
       occupancySkip: sample.occupancySkip,
       majorantSkip: sample.majorantSkip,

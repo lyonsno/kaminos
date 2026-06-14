@@ -273,12 +273,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Volume Renderer</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
+      <div class="field"><span class="field-key">Scene</span><span class="field-val" id="volume-scene-state">compact_plume</span></div>
       <div class="field"><span class="field-key">Backend</span><span class="field-val" id="volume-backend">inactive</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="volume-identity">kaminos-volume-prototype-v0</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
       </div>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Scene</span>
+      <select id="volume-scene" class="select-input">
+        <option value="compact_plume" selected>Compact plume</option>
+        <option value="tall_plume">Tall plume</option>
+      </select>
+      <span class="slider-val" id="volume-scene-val">compact</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Density</span>
@@ -1242,6 +1251,49 @@ const VOLUME_RAY_BUDGET_PRESETS = {
   hero: { raySteps: 144, adaptiveRays: 0.30, fire: 1.35, radiance: 1.60, absorption: 0.80 },
 };
 
+const VOLUME_SCENE_PRESETS = {
+  compact_plume: {
+    label: 'compact',
+    density: 4.20,
+    fire: 1.40,
+    radiance: 1.65,
+    absorption: 0.85,
+    glow: 1.15,
+    smoke: 2.80,
+    curl: 2.65,
+    microdetail: 2.50,
+    interfaceShred: 2.50,
+    fireLicks: 1.65,
+    projection: 0.65,
+    speed: 5.00,
+    inputRadius: 0.12,
+    flowRate: 0.15,
+    fireScale: 0.86,
+    detailScale: 1.75,
+    plumeHeight: 1.45,
+  },
+  tall_plume: {
+    label: 'tall',
+    density: 6.00,
+    fire: 1.15,
+    radiance: 3.00,
+    absorption: 2.00,
+    glow: 1.20,
+    smoke: 2.80,
+    curl: 3.80,
+    microdetail: 2.50,
+    interfaceShred: 1.20,
+    fireLicks: 5.00,
+    projection: 0.90,
+    speed: 5.00,
+    inputRadius: 0.08,
+    flowRate: 0.45,
+    fireScale: 0.35,
+    detailScale: 3.20,
+    plumeHeight: 2.20,
+  },
+};
+
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
 
@@ -1261,6 +1313,25 @@ function setVolumeControlValue(id, value) {
   const el = document.getElementById(id);
   if (!el) return;
   el.value = String(value);
+}
+
+function volumeSceneControlId(key) {
+  return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
+}
+
+function applyVolumeScenePreset(scene, options = {}) {
+  const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : 'compact_plume';
+  const preset = VOLUME_SCENE_PRESETS[normalizedScene];
+  setVolumeControlValue('volume-scene', normalizedScene);
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label') continue;
+    setVolumeControlValue(volumeSceneControlId(key), typeof value === 'number' ? value.toFixed(2) : value);
+  }
+  if (!options.keepBudgetPreset) {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
+  return normalizedScene;
 }
 
 function rayBudgetGamutPointFromControls() {
@@ -1314,6 +1385,7 @@ function applyRayBudgetPreset(name, options = {}) {
 
 function readVolumeControls() {
   return {
+    volumeScene: document.getElementById('volume-scene').value,
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
     radiance: parseFloat(document.getElementById('volume-radiance').value),
@@ -1351,6 +1423,7 @@ function readVolumeControls() {
 
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
+  document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
   document.getElementById('volume-radiance-val').textContent = c.radiance.toFixed(2);
@@ -1390,6 +1463,7 @@ function refreshVolumeReadout() {
   const s = volumePrototype.debugState();
   const timing = s.timing || {};
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
+  document.getElementById('volume-scene-state').textContent = s.volumeScene || 'compact_plume';
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
   document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
@@ -1420,6 +1494,10 @@ function frameVolumeCamera() {
 
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  const routeVolumeScene = params.get('volume_scene');
+  if (routeVolumeScene) {
+    applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
+  }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
@@ -1556,6 +1634,9 @@ async function initKaminosVolumeRoute() {
     'volume-absorption',
   ]);
   const syncControls = event => {
+    if (event?.target?.id === 'volume-scene') {
+      applyVolumeScenePreset(event.target.value);
+    }
     if (rayBudgetPresetOwnedControls.has(event?.target?.id)) {
       activeVolumeRayBudgetPreset = '';
       routedVolumeRayBudgetPreset = '';
@@ -1564,7 +1645,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

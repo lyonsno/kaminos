@@ -113,6 +113,23 @@ const COMPACT_MATRIX_SCENARIOS = [
     radiance: 2.4,
     absorption: 1.1,
   },
+  {
+    id: 'tall-plume-scale',
+    label: 'Tall Plume Scale',
+    volumeScene: 'tall_plume',
+    simGrid: 128,
+    majorantGrid: 48,
+    raySteps: 96,
+    renderScale: 0.85,
+    adaptiveRays: 0.65,
+    occupancySkip: 0.50,
+    majorantSkip: 0.60,
+    majorantSmooth: 0.78,
+    majorantGuard: 0.78,
+    temporalAccum: 0.35,
+    temporalJitter: 0.40,
+    historyClamp: 0.75,
+  },
 ];
 
 function numberList(value, fallback) {
@@ -182,6 +199,7 @@ function applyNumberParam(url, name, value) {
 function routeFor(run) {
   const url = new URL(baseUrl);
   url.searchParams.set('kaminos_volume_smoke', '1');
+  if (run.volumeScene) url.searchParams.set('volume_scene', run.volumeScene);
   applyNumberParam(url, 'volume_resolution', run.simGrid);
   applyNumberParam(url, 'volume_majorant_grid', run.majorantGrid);
   applyNumberParam(url, 'volume_steps', run.raySteps);
@@ -212,6 +230,7 @@ function requestedConfig(run) {
   return {
     scenarioId: run.id,
     label: run.label,
+    volumeScene: run.volumeScene || 'compact_plume',
     simGrid: run.simGrid,
     majorantGrid: run.majorantGrid,
     raySteps: run.raySteps,
@@ -232,6 +251,7 @@ function effectiveConfig(witness) {
   return {
     backend: witness.backend,
     effectiveRoute: witness.effectiveRoute,
+    volumeScene: witness.volumeScene || 'compact_plume',
     simGrid: witness.simGrid,
     majorantGrid: witness.majorantGrid,
     raySteps: witness.raySteps,

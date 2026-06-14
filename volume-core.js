@@ -8,6 +8,8 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
+const DEFAULT_VOLUME_SCENE = 'compact_plume';
+const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'tall_plume']);
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -25,6 +27,10 @@ function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
   return Math.max(0.6, Math.min(1, requested));
+}
+
+function normalizeVolumeScene(value) {
+  return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
 
 function gridCellCount(gridSize) {
@@ -1257,6 +1263,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
     renderPixelRatio: 1,
     volumeReconstructionStyle: 'linear-css-upscale',
+    volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
@@ -1603,6 +1610,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.majorantGrid,
       snapshot.gridOverlay,
       snapshot.flowDebug,
+      normalizeVolumeScene(snapshot.volumeScene),
       snapshot.rayBudgetPreset || '',
     ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
@@ -1953,6 +1961,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms.set(previousViewProj.elements, 52);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+    state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
     state.majorantSkip = uniforms[41];
@@ -2300,6 +2309,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepCount: state.simStepCount,
         simGrid: state.simGrid,
         simGridLabel: state.simGridLabel,
+        volumeScene: state.volumeScene,
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
@@ -2345,6 +2355,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let smokeLikePixels = 0;
     let totalLuma = 0;
     let samples = 0;
+    const volumeBounds = {
+      minX: state.width,
+      minY: state.height,
+      maxX: -1,
+      maxY: -1,
+      pixelCount: 0,
+      width: 0,
+      height: 0,
+      horizontalFillRatio: 0,
+      verticalFillRatio: 0,
+    };
+    const includeVolumePixel = (x, y) => {
+      volumeBounds.minX = Math.min(volumeBounds.minX, x);
+      volumeBounds.minY = Math.min(volumeBounds.minY, y);
+      volumeBounds.maxX = Math.max(volumeBounds.maxX, x);
+      volumeBounds.maxY = Math.max(volumeBounds.maxY, y);
+      volumeBounds.pixelCount += 1;
+    };
     const previewWidth = 256;
     const previewHeight = Math.max(1, Math.round(previewWidth * state.height / state.width));
     const preview = new Uint8Array(previewWidth * previewHeight * 4);
@@ -2358,11 +2386,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         totalLuma += luma;
         samples += 1;
-        if (luma > 20) litPixels += 1;
+        if (luma > 20) {
+          litPixels += 1;
+          includeVolumePixel(x, y);
+        }
         if (r > 120 && g > 70 && b < 90) fireLikePixels += 1;
         if (r > 170 && g > 120 && b < 115 && luma > 130) emissiveLikePixels += 1;
-        if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) smokeLikePixels += 1;
+        if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) {
+          smokeLikePixels += 1;
+          includeVolumePixel(x, y);
+        }
       }
+    }
+    if (volumeBounds.pixelCount > 0) {
+      volumeBounds.width = volumeBounds.maxX - volumeBounds.minX + 1;
+      volumeBounds.height = volumeBounds.maxY - volumeBounds.minY + 1;
+      volumeBounds.horizontalFillRatio = volumeBounds.width / Math.max(1, state.width);
+      volumeBounds.verticalFillRatio = volumeBounds.height / Math.max(1, state.height);
+    } else {
+      volumeBounds.minX = 0;
+      volumeBounds.minY = 0;
+      volumeBounds.maxX = 0;
+      volumeBounds.maxY = 0;
     }
     for (let py = 0; py < previewHeight; py += 1) {
       const srcY = Math.min(state.height - 1, Math.floor(py / previewHeight * state.height));
@@ -2392,11 +2437,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
       volumeReconstructionStyle: state.volumeReconstructionStyle,
+      volumeScene: state.volumeScene,
       meanLuma: totalLuma / Math.max(1, samples),
       litPixels,
       fireLikePixels,
       emissiveLikePixels,
       smokeLikePixels,
+      volumeBounds,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       simGrid: state.simGrid,
@@ -2420,6 +2467,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderWidth: state.renderWidth,
       renderHeight: state.renderHeight,
       volumeReconstructionStyle: state.volumeReconstructionStyle,
+      volumeScene: state.volumeScene,
       externalEmitterMode: state.externalEmitterMode,
       externalEmitterCoordinateSpace: state.externalEmitterCoordinateSpace,
       externalEmitterCount: state.externalEmitterCount,
@@ -2476,6 +2524,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
+      state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
