@@ -566,6 +566,78 @@ async function runSceneBoundaryRoundtripScenario(ws) {
       }
       const mixedCleanup = await assertSceneDeleted(previousFile);
 
+      const actualFailurePreviousFile = await saveFixtureToServer(previousScene);
+      await loadSceneDocument(previousScene, actualFailurePreviousFile);
+      await waitForInfo('Volume scene loaded');
+      const actualFailurePreviousBefore = await readScene(actualFailurePreviousFile);
+      const missingDemoMixedScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp: new Date().toISOString(),
+        objects: [{
+          id: 'missing-demo-object',
+          source: 'demos/missing/',
+          type: 'pbr',
+          fileName: 'Missing Demo Object',
+          label: 'Missing Demo Object',
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+          materials: { side: 0, transparent: false, opacity: 1 },
+        }],
+        activeObjectId: 'missing-demo-object',
+        model: { source: 'demos/missing/', type: 'pbr', fileName: 'Missing Demo Object' },
+        volumePrimitives: {
+          schema,
+          primitives: [{
+            id: 'actual-load-failed-volume',
+            kind: 'fire_smoke',
+            shape: 'sphere',
+            transform: { position: [-0.2, -0.74, 0.2], rotation: [0, 0, 0], scale: [0.2, 0.2, 0.2] },
+            simulation: { sourceRadius: 0.2, flowRate: 0.3, vorticity: 3.6 },
+          }],
+        },
+      };
+      await loadSceneDocument(missingDemoMixedScene, 'mixed-missing-demo.kaminos.json');
+      let missingDemoFailedInfo = '';
+      for (let i = 0; i < 120; i++) {
+        missingDemoFailedInfo = document.getElementById('info-bar').textContent.trim();
+        if (missingDemoFailedInfo.startsWith('Scene load failed:')) break;
+        await wait(125);
+      }
+      if (!missingDemoFailedInfo.startsWith('Scene load failed:')) {
+        throw new Error('syntactically reloadable mixed scene load did not fail as expected: ' + missingDemoFailedInfo);
+      }
+      const goodDemo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!goodDemo) throw new Error('SuperMat Ring demo button missing for actual failure recovery');
+      goodDemo.click();
+      for (let i = 0; i < 120; i++) {
+        if (rowState().length === 1 && rowState()[0].label === 'SuperMat Ring') break;
+        await wait(125);
+      }
+      const postFailureImportRows = rowState();
+      if (postFailureImportRows.length !== 1 || postFailureImportRows[0].label !== 'SuperMat Ring') {
+        throw new Error('normal import after syntactically reloadable failure did not recover one good row: ' + JSON.stringify(postFailureImportRows));
+      }
+      const beforePostFailureImportSaveFiles = new Set(await listScenes());
+      await window.saveScene();
+      let postFailureImportSavedFiles = [];
+      for (let i = 0; i < 120; i++) {
+        const afterFiles = await listScenes();
+        postFailureImportSavedFiles = afterFiles.filter(name => !beforePostFailureImportSaveFiles.has(name));
+        if (postFailureImportSavedFiles.length <= 1) break;
+        await wait(125);
+      }
+      const actualFailurePreviousAfter = await readScene(actualFailurePreviousFile);
+      if (JSON.stringify(actualFailurePreviousAfter.volumePrimitives) !== JSON.stringify(actualFailurePreviousBefore.volumePrimitives)) {
+        throw new Error('syntactically reloadable failed scene load overwrote previous save target after import: ' + JSON.stringify({ actualFailurePreviousBefore, actualFailurePreviousAfter }));
+      }
+      if ((actualFailurePreviousAfter.objects || []).length !== (actualFailurePreviousBefore.objects || []).length) {
+        throw new Error('syntactically reloadable failed scene load changed previous scene objects after import: ' + JSON.stringify({ actualFailurePreviousBefore, actualFailurePreviousAfter }));
+      }
+      for (const generatedFile of postFailureImportSavedFiles) {
+        if (generatedFile !== actualFailurePreviousFile) await assertSceneDeleted(generatedFile);
+      }
+      const actualFailureCleanup = await assertSceneDeleted(actualFailurePreviousFile);
+
       const objectScene = {
         schema: 'kaminos.scene.v1',
         version: 3,
@@ -611,6 +683,11 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         mixedProtectedSave,
         mixedPreviousPrimitiveIds: previousAfterMixedFailure.volumePrimitives?.primitives?.map(primitive => primitive.id) || [],
         mixedCleanupDeleted: mixedCleanup.cleanup.deleted,
+        missingDemoFailedInfo,
+        postFailureImportRows,
+        postFailureImportSavedFiles,
+        actualFailurePreviousPrimitiveIds: actualFailurePreviousAfter.volumePrimitives?.primitives?.map(primitive => primitive.id) || [],
+        actualFailureCleanupDeleted: actualFailureCleanup.cleanup.deleted,
         rowsAfterObject,
         objectInfo,
         objectSavedPrimitiveCount: objectSave.savedScene.volumePrimitives?.primitives?.length || 0,

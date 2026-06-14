@@ -64,6 +64,8 @@ assert.match(witness, /scene load did not clear stale volume primitives for obje
 assert.match(witness, /failed local-preview scene load did not protect save target/, 'scene boundary witness proves failed local-preview loads do not become overwrite targets');
 assert.match(witness, /mixed failed scene load did not protect previous save target/, 'scene boundary witness covers mixed volume plus non-reloadable object load failure');
 assert.match(witness, /mixed failed scene load overwrote previous save target/, 'scene boundary witness proves failed mixed restore cannot overwrite the prior scene file');
+assert.match(witness, /demos\/missing\//, 'scene boundary witness covers syntactically reloadable sources that fail during actual object load');
+assert.match(witness, /syntactically reloadable failed scene load overwrote previous save target after import/, 'scene boundary witness proves actual object-load failure cannot overwrite a previous scene after later import');
 assert.match(witness, /boundary cleanup did not delete scene file/, 'scene boundary witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes boundary scene file/, 'scene boundary witness proves cleanup removes temporary scene files');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');

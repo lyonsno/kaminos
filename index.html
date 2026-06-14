@@ -3352,6 +3352,7 @@ function claimLoadedSceneFile(file) {
 
 async function loadSceneFile(file) {
   const previousSceneFile = currentSceneFile;
+  const previousVolumePrimitiveState = getVolumePrimitiveState();
   const text = await file.text();
   let data;
   try {
@@ -3374,7 +3375,7 @@ async function loadSceneFile(file) {
     assertSceneObjectsReloadable(objectRecords);
   } catch (e) {
     sceneSaveBlockedByFailedRestore = true;
-    currentSceneFile = previousSceneFile;
+    currentSceneFile = null;
     setInfo('Scene load failed: ' + e.message);
     return;
   }
@@ -3409,25 +3410,26 @@ async function loadSceneFile(file) {
     updateBackground();
   }
 
+  if (objectRecords.length > 0) {
+    try {
+      await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
+    } catch (e) {
+      setVolumePrimitivesState(previousVolumePrimitiveState);
+      sceneSaveBlockedByFailedRestore = true;
+      currentSceneFile = null;
+      setInfo('Scene load failed: ' + e.message);
+      return;
+    }
+  } else {
+    clearScene();
+  }
+
   setVolumePrimitivesState(restorePlan.volumePrimitives);
   if (hasVolumePrimitiveScene) {
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
   } else {
     await volumePrototype?.setActive?.(false);
-  }
-
-  if (objectRecords.length > 0) {
-    try {
-      await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
-    } catch (e) {
-      sceneSaveBlockedByFailedRestore = true;
-      currentSceneFile = previousSceneFile;
-      setInfo('Scene load failed: ' + e.message);
-      return;
-    }
-  } else {
-    clearScene();
   }
 
   // Apply camera
