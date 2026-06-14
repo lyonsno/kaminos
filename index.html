@@ -31,6 +31,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 
 #drop-zone { border: 2px dashed #333; border-radius: 10px; padding: 20px; text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; cursor: pointer; transition: all 0.2s; }
 #drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; background: rgba(25,118,210,0.05); }
+.import-mode { display: flex; align-items: center; gap: 6px; margin: -6px 0 12px; font-size: 10px; color: #777; cursor: pointer; }
+.import-mode input { accent-color: #1976d2; }
 
 .channel-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
 .channel-item { text-align: center; }
@@ -151,6 +153,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       Drop a receipt directory here<br>or click to browse
       <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
     </div>
+    <label class="import-mode">
+      <input type="checkbox" id="append-import-toggle">
+      <span>Append</span>
+    </label>
 
     <h2>Scene Objects</h2>
     <div class="panel">
@@ -714,6 +720,11 @@ function disposeObjectTree(object) {
   });
 }
 
+function shouldClearSceneForImport(options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, 'clear')) return options.clear !== false;
+  return !document.getElementById('append-import-toggle')?.checked;
+}
+
 function sceneObjectReloadabilityLabel(record) {
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
   if (!record.source) return 'unsourced';
@@ -1155,8 +1166,8 @@ function loadTextureLinear(file) {
 }
 
 // --- PBR Material Preview ---
-async function showPBRPreview() {
-  clearScene();
+async function showPBRPreview(options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
   const albedoFile = loadedFiles['albedo.png'];
   const roughnessFile = loadedFiles['roughness.png'];
   const metallicFile = loadedFiles['metallic.png'];
@@ -1202,7 +1213,7 @@ async function showPBRPreview() {
 
 // --- GLB Inspector ---
 async function showGLB(file, options = {}) {
-  if (options.clear !== false) clearScene();
+  if (shouldClearSceneForImport(options)) clearScene();
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
   if (file && file.name) glbFileName = file.name;
@@ -1251,7 +1262,7 @@ async function showGLB(file, options = {}) {
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
-  if (options.clear !== false) clearScene();
+  if (shouldClearSceneForImport(options)) clearScene();
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
   modelSourceUrl = objFile.name;
@@ -1324,8 +1335,8 @@ async function showOBJ(objFile, mtlFile, options = {}) {
 }
 
 // --- Depth Surface ---
-async function showDepthSurface() {
-  clearScene();
+async function showDepthSurface(options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
   const depthFile = loadedFiles['depth_vis.png'] || loadedFiles['depth.exr'];
   const imageFile = loadedFiles['image.jpg'];
   if (!depthFile) { setInfo('No depth output found'); return; }

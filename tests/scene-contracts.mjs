@@ -23,6 +23,12 @@ assert.match(index, /renderSceneObjectList\(\);[\s\S]*if \(!transformControls\) 
 assert.match(index, /registerSceneObject\(mesh,[\s\S]*type: 'pbr'[\s\S]*document\.getElementById\('transform-bar'\)\.classList\.add\('visible'\);[\s\S]*setInfo\('PBR Material Preview/, 'PBR material previews surface the transform toolbar after registering the selected scene object');
 assert.match(index, /scene-object-row active/, 'active object row has a stable visual state');
 assert.match(index, /data-scene-object-id/, 'object list buttons expose stable object ids for browser witnesses');
+assert.match(index, /id="append-import-toggle"/, 'Assets tab exposes an explicit append import toggle for authoring multi-object scenes');
+assert.match(index, /function shouldClearSceneForImport\(/, 'direct import paths share one append-aware clear/replace decision');
+assert.match(index, /async function showGLB\(file, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'GLB imports can append instead of replacing the scene');
+assert.match(index, /async function showOBJ\(objFile, mtlFile, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'OBJ imports can append instead of replacing the scene');
+assert.match(index, /async function showPBRPreview\(options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'PBR material previews can append instead of replacing the scene');
+assert.match(index, /async function showDepthSurface\(options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'depth surface imports can append instead of replacing the scene');
 assert.match(index, /buildSceneDocument\(\{[\s\S]*objects,/ , 'scene save writes all authored objects through the shared document builder');
 assert.match(index, /activeObjectId:\s*activeSceneObjectId/, 'scene save preserves the active object id');
 assert.match(index, /volumePrimitives:\s*getVolumePrimitiveState\(\)/, 'scene save keeps Beaming volume primitives alongside objects');
