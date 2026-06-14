@@ -25,11 +25,17 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.35,
     detailScale: 3.20,
     plumeHeight: 2.20,
+    windStrength: 0,
+    windAngle: 0,
+    windHeight: 0.15,
   },
   bonfire_plume: {
     fireScale: 0.78,
     detailScale: 2.75,
     plumeHeight: 2.20,
+    windStrength: 0,
+    windAngle: 0,
+    windHeight: 0.15,
   },
 };
 const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
@@ -101,6 +107,18 @@ const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
   : scenePreset.plumeHeight ?? 1.45;
+const requestedWindStrength = Number(routeParams.get('volume_wind_strength'));
+const expectedWindStrength = routeParams.has('volume_wind_strength') && Number.isFinite(requestedWindStrength)
+  ? Math.max(0, Math.min(1.5, requestedWindStrength))
+  : scenePreset.windStrength ?? 0;
+const requestedWindAngle = Number(routeParams.get('volume_wind_angle'));
+const expectedWindAngle = routeParams.has('volume_wind_angle') && Number.isFinite(requestedWindAngle)
+  ? Math.max(-180, Math.min(180, requestedWindAngle))
+  : scenePreset.windAngle ?? 0;
+const requestedWindHeight = Number(routeParams.get('volume_wind_height'));
+const expectedWindHeight = routeParams.has('volume_wind_height') && Number.isFinite(requestedWindHeight)
+  ? Math.max(-0.8, Math.min(0.8, requestedWindHeight))
+  : scenePreset.windHeight ?? 0.15;
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
@@ -373,6 +391,12 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
+    assert.ok(Math.abs((state.controls?.windStrength ?? 0) - expectedWindStrength) < 0.001, 'wind strength route/control did not apply');
+    assert.ok(Math.abs((state.windStrength ?? 0) - expectedWindStrength) < 0.001, 'effective wind strength state did not match route/control');
+    assert.ok(Math.abs((state.controls?.windAngle ?? 0) - expectedWindAngle) < 0.001, 'wind direction route/control did not apply');
+    assert.ok(Math.abs((state.windAngle ?? 0) - expectedWindAngle) < 0.001, 'effective wind direction state did not match route/control');
+    assert.ok(Math.abs((state.controls?.windHeight ?? 0) - expectedWindHeight) < 0.001, 'wind height/ramp route/control did not apply');
+    assert.ok(Math.abs((state.windHeight ?? 0) - expectedWindHeight) < 0.001, 'effective wind height/ramp state did not match route/control');
     assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
     assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
     assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
@@ -513,9 +537,15 @@ async function main() {
       fireScale: sample.fireScale,
       detailScale: sample.detailScale,
       plumeHeight: sample.plumeHeight,
+      windStrength: sample.windStrength,
+      windAngle: sample.windAngle,
+      windHeight: sample.windHeight,
       expectedFireScale,
       expectedDetailScale,
       expectedPlumeHeight,
+      expectedWindStrength,
+      expectedWindAngle,
+      expectedWindHeight,
       expectedRenderScale,
       renderScale: sample.renderScale,
       renderPixelRatio: sample.renderPixelRatio,

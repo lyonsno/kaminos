@@ -411,6 +411,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-plume-height-val">1.45</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Wind Strength</span>
+      <input type="range" id="volume-wind-strength" min="0" max="1.5" step="0.05" value="0">
+      <span class="slider-val" id="volume-wind-strength-val">0.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Wind Angle</span>
+      <input type="range" id="volume-wind-angle" min="-180" max="180" step="5" value="0">
+      <span class="slider-val" id="volume-wind-angle-val">0°</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Wind Height</span>
+      <input type="range" id="volume-wind-height" min="-0.8" max="0.8" step="0.05" value="0.15">
+      <span class="slider-val" id="volume-wind-height-val">0.15</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Render Scale</span>
       <input type="range" id="volume-render-scale" min="0.6" max="1" step="0.05" value="0.85">
       <span class="slider-val" id="volume-render-scale-val">0.85</span>
@@ -1272,6 +1287,9 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.86,
     detailScale: 1.75,
     plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
   },
   tall_plume: {
     label: 'tall',
@@ -1292,6 +1310,9 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.35,
     detailScale: 3.20,
     plumeHeight: 2.20,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
   },
   bonfire_plume: {
     label: 'bonfire',
@@ -1312,6 +1333,9 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.78,
     detailScale: 2.75,
     plumeHeight: 2.20,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
   },
 };
 
@@ -1431,6 +1455,9 @@ function readVolumeControls() {
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
     detailScale: parseFloat(document.getElementById('volume-detail-scale').value),
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
+    windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
+    windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
+    windHeight: parseFloat(document.getElementById('volume-wind-height').value),
     renderScale: parseFloat(document.getElementById('volume-render-scale').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
@@ -1469,6 +1496,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
+  document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
+  document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
+  document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
   document.getElementById('volume-render-scale-val').textContent = c.renderScale.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
@@ -1627,6 +1657,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
     document.getElementById('volume-plume-height').value = String(Math.max(0.7, Math.min(2.2, routePlumeHeight)));
   }
+  const routeWindStrength = Number(params.get('volume_wind_strength'));
+  if (params.has('volume_wind_strength') && Number.isFinite(routeWindStrength)) {
+    document.getElementById('volume-wind-strength').value = String(Math.max(0, Math.min(1.5, routeWindStrength)));
+  }
+  const routeWindAngle = Number(params.get('volume_wind_angle'));
+  if (params.has('volume_wind_angle') && Number.isFinite(routeWindAngle)) {
+    document.getElementById('volume-wind-angle').value = String(Math.max(-180, Math.min(180, routeWindAngle)));
+  }
+  const routeWindHeight = Number(params.get('volume_wind_height'));
+  if (params.has('volume_wind_height') && Number.isFinite(routeWindHeight)) {
+    document.getElementById('volume-wind-height').value = String(Math.max(-0.8, Math.min(0.8, routeWindHeight)));
+  }
   const routeRenderScale = Number(params.get('volume_render_scale'));
   if (params.has('volume_render_scale') && Number.isFinite(routeRenderScale)) {
     document.getElementById('volume-render-scale').value = String(Math.max(0.6, Math.min(1, routeRenderScale)));
@@ -1666,7 +1708,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

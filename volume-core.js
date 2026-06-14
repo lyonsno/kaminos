@@ -33,6 +33,18 @@ function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
 
+function normalizeWindStrength(value) {
+  return clampFinite(value, 0, 1.5, 0);
+}
+
+function normalizeWindAngle(value) {
+  return clampFinite(value, -180, 180, 0);
+}
+
+function normalizeWindHeight(value) {
+  return clampFinite(value, -0.8, 0.8, 0.15);
+}
+
 function volumeSceneMode(value) {
   const scene = normalizeVolumeScene(value);
   if (scene === 'tall_plume') return 1;
@@ -990,6 +1002,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
   let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
+  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
+  let windAngle = u.scene_controls.z;
+  let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
+  let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
+  let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let bonfireScene = step(1.5, sceneMode);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
   let breakup = clamp(
@@ -1041,8 +1058,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLiftDirection = mix(1.0, -1.0, bonfireScene);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireLiftDirection;
   vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireLiftDirection;
-  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
-  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
+  let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
+  vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * (0.020 + speed * 0.004);
+  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
+  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
@@ -1309,6 +1328,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireScale: 0.86,
     detailScale: 1.75,
     plumeHeight: 1.45,
+    windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
+    windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
+    windHeight: normalizeWindHeight(controlsSnapshot.windHeight),
     externalEmitterMode: 'off',
     externalEmitterCoordinateSpace: 'none',
     externalEmitterCount: 0,
@@ -1633,6 +1655,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.fireScale,
       snapshot.detailScale,
       snapshot.plumeHeight,
+      snapshot.windStrength,
+      snapshot.windAngle,
+      snapshot.windHeight,
       snapshot.inputRadius,
       snapshot.flowRate,
       snapshot.resolution,
@@ -1988,9 +2013,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateExternalEmitterDebug(now);
     uniforms[51] = state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
-    uniforms[53] = 0;
-    uniforms[54] = 0;
-    uniforms[55] = 0;
+    uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
+    uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
+    uniforms[55] = normalizeWindHeight(controlsSnapshot.windHeight);
     uniforms.set(previousViewProj.elements, 56);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
@@ -2006,6 +2031,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
+    state.windStrength = uniforms[53];
+    state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
+    state.windHeight = uniforms[55];
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
     state.temporalAccumEffective = uniforms[44];
@@ -2509,6 +2537,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       plumeHeight: state.plumeHeight,
+      windStrength: state.windStrength,
+      windAngle: state.windAngle,
+      windHeight: state.windHeight,
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
       displayWidth: state.displayWidth,
@@ -2585,6 +2616,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
+      state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
+      state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
+      state.windHeight = normalizeWindHeight(controlsSnapshot.windHeight);
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
       state.majorantGrid = majorantGridSize;
