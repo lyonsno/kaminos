@@ -358,6 +358,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Selected</span><span class="field-val" id="volume-selected-primitive">none</span></div>
+      <div class="field"><span class="field-key">Primitive</span><select class="select-input" id="volume-primitive-select"></select></div>
       <div class="volume-actions">
         <button class="btn" id="volume-add-fire-smoke">Add Fire+Smoke</button>
       </div>
@@ -375,6 +376,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-label">Prim Radiance</span>
         <input type="range" id="volume-primitive-radiance" min="0" max="3" step="0.05" value="1.65">
         <span class="slider-val" id="volume-primitive-radiance-val">1.65</span>
+      </div>
+      <div class="slider-row">
+        <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="volume-marker-visible" checked> Show Handle
+        </label>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Handle Opacity</span>
+        <input type="range" id="volume-marker-opacity" min="0" max="0.45" step="0.01" value="0.16">
+        <span class="slider-val" id="volume-marker-opacity-val">0.16</span>
       </div>
     </div>
     <div class="slider-row">
@@ -886,6 +897,32 @@ function selectedVolumePrimitive() {
   return volumePrimitives.find(primitive => primitive.id === selectedVolumePrimitiveId) || null;
 }
 
+function readVolumeMarkerControls() {
+  const opacity = Number(document.getElementById('volume-marker-opacity')?.value ?? 0.16);
+  return {
+    markerVisible: document.getElementById('volume-marker-visible')?.checked !== false,
+    markerOpacity: Number.isFinite(opacity) ? THREE.MathUtils.clamp(opacity, 0, 0.45) : 0.16,
+  };
+}
+
+function updateVolumeMarkerControlLabels() {
+  const controlsState = readVolumeMarkerControls();
+  const opacityVal = document.getElementById('volume-marker-opacity-val');
+  if (opacityVal) opacityVal.textContent = controlsState.markerOpacity.toFixed(2);
+}
+
+function refreshVolumePrimitiveSelector() {
+  const selectEl = document.getElementById('volume-primitive-select');
+  if (!selectEl) return;
+  const current = selectedVolumePrimitiveId || '';
+  selectEl.innerHTML = [
+    '<option value="">none</option>',
+    ...volumePrimitives.map(primitive => `<option value="${escapeHtml(primitive.id)}">${escapeHtml(primitive.id)}</option>`),
+  ].join('');
+  selectEl.value = volumePrimitives.some(primitive => primitive.id === current) ? current : '';
+  selectEl.disabled = volumePrimitives.length === 0;
+}
+
 function refreshVolumePrimitivePanel() {
   const primitive = selectedVolumePrimitive();
   const selectedEl = document.getElementById('volume-selected-primitive');
@@ -895,6 +932,8 @@ function refreshVolumePrimitivePanel() {
   const flowVal = document.getElementById('volume-primitive-flow-rate-val');
   const radianceEl = document.getElementById('volume-primitive-radiance');
   const radianceVal = document.getElementById('volume-primitive-radiance-val');
+  refreshVolumePrimitiveSelector();
+  updateVolumeMarkerControlLabels();
   if (!selectedEl || !radiusEl || !flowEl || !radianceEl) return;
   selectedEl.textContent = primitive ? primitive.id : 'none';
   selectedEl.title = primitive ? primitive.id : '';
@@ -971,6 +1010,7 @@ function syncVolumePrimitiveMarkers() {
       marker.userData.kaminosVolumePrimitiveMarker = {
         identity: 'volume-primitive-marker-v0',
         markerAffordance: 'volume-primitive-marker-wire-halo-v0',
+        markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
         primitiveId: primitive.id,
       };
       scene.add(marker);
@@ -979,11 +1019,12 @@ function syncVolumePrimitiveMarkers() {
     marker.position.fromArray(volumePrimitivePosition(primitive));
     const radius = volumePrimitiveRadius(primitive);
     const selected = primitive.id === selectedVolumePrimitiveId;
+    const markerControls = readVolumeMarkerControls();
     marker.scale.setScalar(Math.max(0.035, radius * (selected ? 1.35 : 1.05)));
-    marker.material.color.setHex(selected ? 0xffd25c : 0xff8f33);
-    marker.material.opacity = selected ? 0.5 : 0.3;
+    marker.material.color.setHex(selected ? 0x9aa0a6 : 0x555b60);
+    marker.material.opacity = markerControls.markerOpacity * (selected ? 1 : 0.65);
     marker.material.wireframe = true;
-    marker.visible = true;
+    marker.visible = markerControls.markerVisible;
   }
 }
 
@@ -2628,6 +2669,17 @@ async function initKaminosVolumeRoute() {
       armVolumePrimitiveTool('fire_smoke');
     }
   });
+  document.getElementById('volume-primitive-select').addEventListener('change', event => {
+    selectVolumePrimitive(event.target.value || null);
+  });
+  const syncMarkerControls = () => {
+    updateVolumeMarkerControlLabels();
+    syncVolumePrimitiveMarkers();
+    window._kaminosDirty?.();
+  };
+  document.getElementById('volume-marker-visible').addEventListener('change', syncMarkerControls);
+  document.getElementById('volume-marker-opacity').addEventListener('input', syncMarkerControls);
+  document.getElementById('volume-marker-opacity').addEventListener('change', syncMarkerControls);
   for (const id of ['volume-primitive-radius', 'volume-primitive-flow-rate', 'volume-primitive-radiance']) {
     document.getElementById(id).addEventListener('input', applySelectedVolumePrimitiveControls);
     document.getElementById(id).addEventListener('change', applySelectedVolumePrimitiveControls);
@@ -2653,8 +2705,14 @@ async function initKaminosVolumeRoute() {
         mode: volumeAuthoringMode,
         selectedVolumePrimitiveId,
         markerAffordance: 'volume-primitive-marker-wire-halo-v0',
+        markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
+        markerOpacity: readVolumeMarkerControls().markerOpacity,
+        markerVisible: readVolumeMarkerControls().markerVisible,
         markerCount: volumePrimitiveMarkers.size,
         markerIds: Array.from(volumePrimitiveMarkers.keys()),
+        visibleMarkerCount: Array.from(volumePrimitiveMarkers.values())
+          .filter(marker => marker.visible)
+          .length,
         solidMarkerCount: Array.from(volumePrimitiveMarkers.values())
           .filter(marker => marker.material && marker.material.wireframe !== true)
           .length,

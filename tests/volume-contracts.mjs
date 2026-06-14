@@ -34,9 +34,12 @@ assert.match(index, /volumePrimitives/, 'scene data persists authored volume pri
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /id="volume-add-fire-smoke"/, 'Volume tab exposes an Add Fire+Smoke primitive tool');
 assert.match(index, /id="volume-selected-primitive"/, 'Volume tab exposes selected volume primitive identity');
+assert.match(index, /id="volume-primitive-select"/, 'Volume tab exposes a primitive selector independent of viewport marker visibility');
 assert.match(index, /id="volume-primitive-radius"/, 'Volume tab exposes selected primitive radius editing');
 assert.match(index, /id="volume-primitive-flow-rate"/, 'Volume tab exposes selected primitive flow-rate editing');
 assert.match(index, /id="volume-primitive-radiance"/, 'Volume tab exposes selected primitive radiance editing');
+assert.match(index, /id="volume-marker-visible"/, 'Volume tab exposes a marker visibility toggle');
+assert.match(index, /id="volume-marker-opacity"/, 'Volume tab exposes marker opacity control');
 assert.match(index, /volumeAuthoringMode/, 'viewport keeps explicit volume primitive authoring mode state');
 assert.match(index, /selectedVolumePrimitiveId/, 'viewport keeps explicit selected volume primitive state');
 assert.match(index, /volumePrimitiveMarkers/, 'authored volume primitives have selectable main-renderer markers');
@@ -49,8 +52,13 @@ assert.match(index, /selectVolumePrimitive/, 'authored volume primitives can be 
 assert.match(index, /volume-primitive-marker-v0/, 'main-renderer primitive markers carry stable identity');
 assert.match(index, /volume-primitive-marker-wire-halo-v0/, 'volume primitive markers render as wire/halo handles instead of solid fake bodies');
 assert.match(index, /wireframe:\s*true/, 'volume primitive markers must not be solid filled spheres');
+assert.match(index, /volume-primitive-source-handle-not-raymarch-bounds-v0/, 'volume primitive markers must identify as source handles, not full raymarch bounds');
+assert.match(index, /0x9aa0a6/, 'selected volume primitive marker uses a neutral gray palette instead of bright fire yellow');
 assert.match(index, /selected\s*\?\s*1\.35\s*:\s*1\.05/, 'volume primitive marker halo should bound the visible primitive body instead of shrinking inside it');
+assert.match(index, /readVolumeMarkerControls/, 'volume marker visibility and opacity route through explicit controls');
 assert.match(index, /markerAffordance/, 'authoring debug state reports marker visual affordance');
+assert.match(index, /markerSemantic/, 'authoring debug state reports that the marker is a source handle rather than raymarch bounds');
+assert.match(index, /markerOpacity/, 'authoring debug state reports effective marker opacity');
 assert.match(index, /selectedMarkerProjection/, 'authoring debug state reports selected marker projection for volume/body alignment witnesses');
 assert.match(index, /window\.__kaminosVolumeAuthoring/, 'witnesses can drive and inspect the volume primitive authoring loop');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
@@ -201,6 +209,8 @@ assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored v
 assert.match(witness, /authored-fire-smoke-witness/, 'witness uses a stable authored primitive id');
 assert.match(witness, /volumeAuthoring/, 'witness report carries authoring state evidence');
 assert.match(witness, /volume-primitive-marker-wire-halo-v0/, 'witness rejects solid marker affordance regression');
+assert.match(witness, /volume-primitive-source-handle-not-raymarch-bounds-v0/, 'witness rejects marker semantics that imply full raymarch bounds');
+assert.match(witness, /markerOpacity/, 'witness records and checks marker opacity evidence');
 assert.match(witness, /primitive-centered-sphere-volume-v0/, 'witness requires authored volume body to be centered in the primitive');
 assert.match(witness, /primitiveCenteredLiveVelocityThreshold/, 'witness uses a distinct liveness threshold for contained primitive-centered bodies');
 assert.match(witness, /warmEmissivePixels/, 'witness measures warm emissive primitive-centered bodies separately from red plume pixels');
