@@ -71,6 +71,18 @@ const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
 const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
   ? Math.max(0, Math.min(1, requestedHistoryClamp))
   : 0.70;
+const requestedFireScale = Number(routeParams.get('volume_fire_scale'));
+const expectedFireScale = routeParams.has('volume_fire_scale') && Number.isFinite(requestedFireScale)
+  ? Math.max(0.35, Math.min(1.3, requestedFireScale))
+  : 0.86;
+const requestedDetailScale = Number(routeParams.get('volume_detail_scale'));
+const expectedDetailScale = routeParams.has('volume_detail_scale') && Number.isFinite(requestedDetailScale)
+  ? Math.max(0.45, Math.min(3.2, requestedDetailScale))
+  : 1.75;
+const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
+const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
+  ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
+  : 1.45;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -313,6 +325,12 @@ async function main() {
     assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
     assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
     assert.ok(Math.abs((state.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'effective temporal history clamp state did not match route/control');
+    assert.ok(Math.abs((state.controls?.fireScale ?? 0) - expectedFireScale) < 0.001, 'fire scale route/control did not apply');
+    assert.ok(Math.abs((state.fireScale ?? 0) - expectedFireScale) < 0.001, 'effective fire scale state did not match route/control');
+    assert.ok(Math.abs((state.controls?.detailScale ?? 0) - expectedDetailScale) < 0.001, 'detail scale route/control did not apply');
+    assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
+    assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
+    assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
     if (expectedTemporalAccum > 0) {
       assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
       assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
@@ -427,6 +445,12 @@ async function main() {
       temporalAccum: sample.temporalAccum,
       temporalJitter: sample.temporalJitter,
       historyClamp: sample.historyClamp,
+      fireScale: sample.fireScale,
+      detailScale: sample.detailScale,
+      plumeHeight: sample.plumeHeight,
+      expectedFireScale,
+      expectedDetailScale,
+      expectedPlumeHeight,
       temporalAccumEffective: sample.temporalAccumEffective,
       temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
       temporalHistoryWeight: sample.temporalHistoryWeight,

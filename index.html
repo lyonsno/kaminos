@@ -385,6 +385,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-history-clamp" min="0" max="1" step="0.05" value="0.70">
       <span class="slider-val" id="volume-history-clamp-val">0.70</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Fire Scale</span>
+      <input type="range" id="volume-fire-scale" min="0.35" max="1.3" step="0.01" value="0.86">
+      <span class="slider-val" id="volume-fire-scale-val">0.86</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Detail Scale</span>
+      <input type="range" id="volume-detail-scale" min="0.45" max="3.2" step="0.05" value="1.75">
+      <span class="slider-val" id="volume-detail-scale-val">1.75</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Plume Height</span>
+      <input type="range" id="volume-plume-height" min="0.7" max="2.2" step="0.05" value="1.45">
+      <span class="slider-val" id="volume-plume-height-val">1.45</span>
+    </div>
     <div class="ray-budget-wrap">
       <div class="ray-budget-grid">
         <div class="ray-budget-axis-y">Adaptive</div>
@@ -1315,6 +1330,9 @@ function readVolumeControls() {
     temporalAccum: parseFloat(document.getElementById('volume-temporal-accum').value),
     temporalJitter: parseFloat(document.getElementById('volume-temporal-jitter').value),
     historyClamp: parseFloat(document.getElementById('volume-history-clamp').value),
+    fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
+    detailScale: parseFloat(document.getElementById('volume-detail-scale').value),
+    plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
@@ -1348,6 +1366,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-temporal-accum-val').textContent = c.temporalAccum.toFixed(2);
   document.getElementById('volume-temporal-jitter-val').textContent = c.temporalJitter.toFixed(2);
   document.getElementById('volume-history-clamp-val').textContent = c.historyClamp.toFixed(2);
+  document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
+  document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
+  document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
@@ -1488,6 +1509,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_history_clamp') && Number.isFinite(routeHistoryClamp)) {
     document.getElementById('volume-history-clamp').value = String(Math.max(0, Math.min(1, routeHistoryClamp)));
   }
+  const routeFireScale = Number(params.get('volume_fire_scale'));
+  if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
+    document.getElementById('volume-fire-scale').value = String(Math.max(0.35, Math.min(1.3, routeFireScale)));
+  }
+  const routeDetailScale = Number(params.get('volume_detail_scale'));
+  if (params.has('volume_detail_scale') && Number.isFinite(routeDetailScale)) {
+    document.getElementById('volume-detail-scale').value = String(Math.max(0.45, Math.min(3.2, routeDetailScale)));
+  }
+  const routePlumeHeight = Number(params.get('volume_plume_height'));
+  if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
+    document.getElementById('volume-plume-height').value = String(Math.max(0.7, Math.min(2.2, routePlumeHeight)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1519,7 +1552,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

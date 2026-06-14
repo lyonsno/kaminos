@@ -46,6 +46,7 @@ struct Uniforms {
   radiance_controls: vec4<f32>,
   occupancy_controls: vec4<f32>,
   temporal_controls: vec4<f32>,
+  scale_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -688,11 +689,21 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let inputRadius = max(0.04, u.source_controls.x);
   let inputFlow = max(0.0, u.source_controls.y);
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
+  let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
+  let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
+  let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
+  let plumeHeight01 = smoothstep(0.70, 2.20, plumeHeight);
+  let scaledSourceRadius = max(0.035, inputRadius * fireScale);
+  let scaledSmokeSourceRadius = max(0.055, inputRadius * mix(0.92, 1.08, plumeHeight01));
+  let scaledDetailFrequency = clamp(detailScale / max(fireScale, 0.45), 0.55, 5.40);
+  let plumeRiseScale = mix(0.82, 1.58, plumeHeight01);
+  let sourceScaleCompensation = mix(1.22, 0.94, smoothstep(0.35, 1.30, fireScale));
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
   let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 5.0);
   let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 5.0);
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
+  let detailDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.18, plumeHeight01), scaledDetailFrequency);
   let time = u.cameraPos_time.w;
   let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
@@ -719,27 +730,28 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
   let breakup = clamp(
     0.64
-      + 0.24 * sin(p.x * 19.0 + p.z * 7.0 + time * 1.7)
-      + 0.20 * cos(p.z * 23.0 - p.x * 5.0 - time * 1.3)
-      + 0.16 * hash31(vec3<f32>(gid) * 0.061 + vec3<f32>(floor(time * 2.0))),
+      + 0.24 * sin(p.x * 19.0 * scaledDetailFrequency + p.z * 7.0 * scaledDetailFrequency + time * 1.7)
+      + 0.20 * cos(p.z * 23.0 * scaledDetailFrequency - p.x * 5.0 * scaledDetailFrequency - time * 1.3)
+      + 0.16 * hash31(vec3<f32>(gid) * 0.061 * scaledDetailFrequency + vec3<f32>(floor(time * 2.0))),
     0.16,
     1.22
   );
-  let sourceFalloff = 1.0 / max(0.0064, inputRadius * inputRadius);
-  let source = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
-  let emberRingRadius = inputRadius * 0.94;
-  let emberRingWidth = max(0.045, inputRadius * 0.22);
+  let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
+  let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
+  let source = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let emberRingRadius = scaledSourceRadius * 0.94;
+  let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
   let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
-  let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+  let fireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
-  let lickBirth = fireLickBreakup(cellI, p, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let lickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
-  let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
-  let microForce = turbulentDetailForce(p * 2.85 + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
-  let shredForce = interfaceShreddingForce(cellI, p, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
+  let detailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
+  let microForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
+  let shredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let projectionCorrection = pressureProjectionCorrection(cellI, projection);
   vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
@@ -749,8 +761,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + shredForce;
   vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   vel = vel + heatExpansion;
-  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed);
-  vel.y = vel.y + source * (0.022 + speed * 0.006) + smoke * 0.003;
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale;
+  vel.y = vel.y + source * (0.022 + speed * 0.006) * plumeRiseScale + smoke * 0.003 * plumeRiseScale;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
@@ -771,8 +783,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
-  let smokeTopFade = 1.0 - smoothstep(0.76, 0.995, p.y);
-  let heatTopFade = 1.0 - smoothstep(0.50, 0.940, p.y);
+  let smokeTopFade = 1.0 - smoothstep(mix(0.66, 0.84, plumeHeight01), 0.995, p.y);
+  let heatTopFade = 1.0 - smoothstep(mix(0.42, 0.62, plumeHeight01), 0.960, p.y);
   smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade);
   heat = heat * mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade);
   fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade);
@@ -810,6 +822,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
+  let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
+  let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
+  let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
+  let scaledDetailFrequency = clamp(detailScale / max(fireScale, 0.45), 0.55, 5.40);
+  let scaleDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), scaledDetailFrequency);
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
@@ -888,11 +905,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
     }
-    let microWarp = microDetailDomainWarp(p, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
+    let detailP = p * scaleDomain;
+    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
     let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
-    let filamentNoise = microFilamentNoise(p, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
-    let shredNoise = microFilamentNoise(p.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
-    let fireNoise = microFilamentNoise(p.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
+    let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
+    let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
+    let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, flame, flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
@@ -947,7 +965,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(64);
+  const uniforms = new Float32Array(68);
   let gridSize = normalizeGridSize(getControls().resolution);
   let majorantGridSize = normalizeMajorantGridSize(getControls().majorantGrid);
   const state = {
@@ -972,6 +990,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalAccum: 0.25,
     temporalJitter: 0.85,
     historyClamp: 0.70,
+    fireScale: 0.86,
+    detailScale: 1.75,
+    plumeHeight: 1.45,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -1117,9 +1138,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
           const radial = Math.hypot(fx, fz);
-          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08);
+          const fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
+          const detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
+          const plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
+          const plumeHeight01 = Math.max(0, Math.min(1, (plumeHeight - 0.7) / 1.5));
+          const scaledDetailFrequency = Math.max(0.55, Math.min(5.4, detailScale / Math.max(fireScale, 0.45)));
+          const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * (0.92 + (1.08 - 0.92) * plumeHeight01);
           const inputFlow = Math.max(0, controlsSnapshot.flowRate ?? 0.3);
-          const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
+          const source = Math.exp(-(radial * radial) / Math.max(0.0036, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
@@ -1128,14 +1154,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           data[i + 4] = source * 0.74;
           data[i + 5] = source * 1.28;
           data[i + 6] = source * 1.0;
-          data[i + 7] = source * (0.35 + 0.65 * Math.sin((fx * 18) + (fz * 11)) ** 2);
+          data[i + 7] = source * (0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2);
           data[i + 8] = source * 0.90;
           data[i + 9] = source * 0.42;
-          data[i + 10] = source * (0.30 + 0.70 * Math.cos((fx * 13) - (fz * 17)) ** 2);
+          data[i + 10] = source * (0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2);
           data[i + 11] = 0;
-          data[i + 12] = source * (0.22 + 0.78 * Math.sin((fx * 31) - (fz * 19)) ** 2);
-          data[i + 13] = source * (0.12 + 0.50 * Math.cos((fx * 23) + (fy * 17) - (fz * 29)) ** 2);
-          data[i + 14] = source * (0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21)) ** 2);
+          data[i + 12] = source * (0.22 + 0.78 * Math.sin((fx * 31 * scaledDetailFrequency) - (fz * 19 * scaledDetailFrequency)) ** 2);
+          data[i + 13] = source * (0.12 + 0.50 * Math.cos((fx * 23 * scaledDetailFrequency) + (fy * 17) - (fz * 29 * scaledDetailFrequency)) ** 2);
+          data[i + 14] = source * (0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * scaledDetailFrequency)) ** 2);
           data[i + 15] = source * 0.16;
         }
       }
@@ -1231,6 +1257,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.majorantSkip,
       snapshot.majorantSmooth,
       snapshot.majorantGuard,
+      snapshot.fireScale,
+      snapshot.detailScale,
+      snapshot.plumeHeight,
       snapshot.inputRadius,
       snapshot.flowRate,
       snapshot.resolution,
@@ -1555,7 +1584,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
     uniforms[47] = state.frameCount % 4096;
-    uniforms.set(previousViewProj.elements, 48);
+    uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
+    uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
+    uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
+    uniforms[51] = 0;
+    uniforms.set(previousViewProj.elements, 52);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
@@ -1566,6 +1599,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalAccum = requestedTemporalAccum;
     state.temporalJitter = uniforms[45];
     state.historyClamp = uniforms[46];
+    state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
+    state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
+    state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.temporalAccumEffective = uniforms[44];
     const temporalSettled = historyValid ? Math.min(1, Math.max(0, state.temporalHistoryFrames / 12)) : 0;
     const temporalMotionTrust = previousViewProjReady ? 1 : 0;
@@ -1889,6 +1925,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalAccum: state.temporalAccum,
         temporalJitter: state.temporalJitter,
         historyClamp: state.historyClamp,
+        fireScale: state.fireScale,
+        detailScale: state.detailScale,
+        plumeHeight: state.plumeHeight,
         temporalAccumEffective: state.temporalAccumEffective,
         temporalReprojectionConfidence: state.temporalReprojectionConfidence,
         temporalHistoryWeight: state.temporalHistoryWeight,
@@ -1971,6 +2010,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalAccum: state.temporalAccum,
       temporalJitter: state.temporalJitter,
       historyClamp: state.historyClamp,
+      fireScale: state.fireScale,
+      detailScale: state.detailScale,
+      plumeHeight: state.plumeHeight,
       temporalAccumEffective: state.temporalAccumEffective,
       temporalReprojectionConfidence: state.temporalReprojectionConfidence,
       temporalHistoryWeight: state.temporalHistoryWeight,
@@ -2026,6 +2068,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.temporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
       state.temporalJitter = controlsSnapshot.temporalJitter ?? 0.85;
       state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;
+      state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
+      state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
+      state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.majorantGrid = majorantGridSize;
     },
     async setActive(active) {
