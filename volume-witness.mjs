@@ -83,6 +83,7 @@ const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
   : 1.45;
+const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -286,6 +287,23 @@ async function main() {
     await wsRequest(ws, 'Page.navigate', { url });
     await wsRequest(ws, 'Page.bringToFront');
     await delay(settleMs);
+    if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const prototype = window.__kaminosVolumePrototype;
+          const timestampMs = performance.now();
+          return prototype?.setExternalEmitters?.({
+            mode: 'synthetic_hand_trails',
+            frameId: prototype.debugState().frameCount,
+            timestampMs,
+            coordinateSpace: 'volume-local',
+            emitters: prototype.syntheticHandTrailEmitters(timestampMs),
+          });
+        })()`,
+        returnByValue: true,
+      });
+      await delay(750);
+    }
     phase = 'identity';
     let state = null;
     for (let i = 0; i < 40; i++) {
@@ -331,6 +349,12 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
+    if (expectedExternalEmitterMode) {
+      assert.equal(state.externalEmitterMode, expectedExternalEmitterMode, 'external emitter route identity did not apply');
+      assert.equal(state.externalEmitterCoordinateSpace, 'volume-local', 'external emitter coordinate space did not reach debug state');
+      assert.ok((state.externalEmitterCount ?? 0) > 0, 'external emitter route did not seed any emitters');
+      assert.ok(Number.isFinite(state.externalEmitterAgeMs), 'external emitter age did not reach debug state');
+    }
     if (expectedTemporalAccum > 0) {
       assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
       assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
@@ -454,6 +478,11 @@ async function main() {
       expectedFireScale,
       expectedDetailScale,
       expectedPlumeHeight,
+      externalEmitterMode: sample.externalEmitterMode,
+      externalEmitterCoordinateSpace: sample.externalEmitterCoordinateSpace,
+      externalEmitterCount: sample.externalEmitterCount,
+      externalEmitterAgeMs: sample.externalEmitterAgeMs,
+      externalEmitterFrameId: sample.externalEmitterFrameId,
       temporalAccumEffective: sample.temporalAccumEffective,
       temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
       temporalHistoryWeight: sample.temporalHistoryWeight,

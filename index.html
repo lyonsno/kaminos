@@ -1521,6 +1521,7 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
     document.getElementById('volume-plume-height').value = String(Math.max(0.7, Math.min(2.2, routePlumeHeight)));
   }
+  const routeExternalEmitters = params.get('volume_external_emitters') || '';
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1607,10 +1608,27 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
 
+  let syntheticEmitterTimer = 0;
+  const refreshSyntheticExternalEmitters = () => {
+    if (routeExternalEmitters !== 'synthetic_hand_trails' || !volumePrototype) return;
+    const timestampMs = performance.now();
+    volumePrototype.setExternalEmitters({
+      mode: 'synthetic_hand_trails',
+      frameId: volumePrototype.debugState().frameCount,
+      timestampMs,
+      coordinateSpace: 'volume-local',
+      emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
+    });
+  };
+
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');
     frameVolumeCamera();
     await volumePrototype.setActive(true);
+    refreshSyntheticExternalEmitters();
+    if (routeExternalEmitters === 'synthetic_hand_trails') {
+      syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+    }
     setInfo('Volume renderer — native WebGPU compute fluid raymarch');
   }
   syncControls();

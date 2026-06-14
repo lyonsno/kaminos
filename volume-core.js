@@ -6,6 +6,8 @@ const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
+const MAX_EXTERNAL_EMITTERS = 32;
+const EXTERNAL_EMITTER_COMPONENTS = 20;
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -31,10 +33,101 @@ function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function externalEmitterBufferBytes() {
+  return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function clampFinite(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function externalEmitterNowMs() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function syntheticHandTrailEmitters(nowMs = externalEmitterNowMs()) {
+  const t = nowMs * 0.001;
+  const emitters = [];
+  for (let i = 0; i < 5; i += 1) {
+    const f = i - 2;
+    const phase = t * 1.75 + i * 0.72;
+    const x = f * 0.105 + Math.sin(phase * 0.81) * 0.035;
+    const y = -0.58 + Math.sin(phase * 0.63) * 0.28 + i * 0.012;
+    const z = Math.cos(phase * 0.74) * 0.055;
+    const dx = Math.cos(phase * 1.17) * 0.075;
+    const dy = 0.05 + Math.sin(phase * 0.91) * 0.045;
+    const dz = Math.sin(phase * 1.23) * 0.055;
+    emitters.push({
+      start: [x - dx, y - dy, z - dz],
+      end: [x + dx, y + dy, z + dz],
+      radius: 0.030 + i * 0.002,
+      strength: 0.92,
+      velocity: [dx * 2.2, 0.20 + dy * 1.8, dz * 2.0],
+      smoke: 0.62,
+      heat: 1.08,
+      fuel: 0.72,
+      flame: 1.18,
+      detail: 0.82,
+      lifetime: 0.55,
+      active: true,
+    });
+  }
+  return emitters;
+}
+
+function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs()) {
+  const emitters = Array.isArray(payload.emitters) ? payload.emitters.slice(0, MAX_EXTERNAL_EMITTERS) : [];
+  const data = new Float32Array(MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS);
+  const timestampMs = clampFinite(payload.timestampMs, 0, Number.MAX_SAFE_INTEGER, nowMs);
+  const ageSeconds = Math.max(0, (nowMs - timestampMs) / 1000);
+  const coordinateSpace = payload.coordinateSpace === 'volume-local' ? 'volume-local' : 'volume-local';
+  let count = 0;
+  for (const emitter of emitters) {
+    if (!emitter || emitter.active === false) continue;
+    const start = Array.isArray(emitter.start) ? emitter.start : [0, -0.72, 0];
+    const end = Array.isArray(emitter.end) ? emitter.end : start;
+    const velocity = Array.isArray(emitter.velocity) ? emitter.velocity : [0, 0.18, 0];
+    const offset = count * EXTERNAL_EMITTER_COMPONENTS;
+    data[offset] = clampFinite(start[0], -1.5, 1.5, 0);
+    data[offset + 1] = clampFinite(start[1], -1.5, 1.5, -0.72);
+    data[offset + 2] = clampFinite(start[2], -1.5, 1.5, 0);
+    data[offset + 3] = clampFinite(emitter.radius, 0.006, 0.18, 0.028);
+    data[offset + 4] = clampFinite(end[0], -1.5, 1.5, data[offset]);
+    data[offset + 5] = clampFinite(end[1], -1.5, 1.5, data[offset + 1]);
+    data[offset + 6] = clampFinite(end[2], -1.5, 1.5, data[offset + 2]);
+    data[offset + 7] = clampFinite(emitter.strength, 0, 4, 1);
+    data[offset + 8] = clampFinite(velocity[0], -3, 3, 0);
+    data[offset + 9] = clampFinite(velocity[1], -3, 3, 0.18);
+    data[offset + 10] = clampFinite(velocity[2], -3, 3, 0);
+    data[offset + 11] = clampFinite(emitter.ageSeconds, 0, 10, ageSeconds);
+    data[offset + 12] = clampFinite(emitter.smoke, 0, 3, 0.62);
+    data[offset + 13] = clampFinite(emitter.heat, 0, 4, 1.08);
+    data[offset + 14] = clampFinite(emitter.fuel, 0, 3, 0.72);
+    data[offset + 15] = clampFinite(emitter.flame, 0, 4, 1.18);
+    data[offset + 16] = clampFinite(emitter.detail, 0, 3, 0.82);
+    data[offset + 17] = clampFinite(emitter.lifetime, 0.016, 8, 0.55);
+    data[offset + 18] = 0;
+    data[offset + 19] = 1;
+    count += 1;
+  }
+  return {
+    data,
+    count,
+    mode: payload.mode || (count > 0 ? 'external' : 'off'),
+    coordinateSpace: count > 0 ? coordinateSpace : 'none',
+    timestampMs,
+    frameId: payload.frameId ?? null,
+    ageMs: Math.max(0, nowMs - timestampMs),
+  };
+}
+
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
+const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -50,12 +143,28 @@ struct Uniforms {
   previousViewProj: mat4x4<f32>,
 };
 
+struct ExternalEmitter {
+  start_radius: vec4<f32>,
+  end_strength: vec4<f32>,
+  velocity_age: vec4<f32>,
+  material: vec4<f32>,
+  detail_lifetime: vec4<f32>,
+};
+
+struct ExternalEmitterInfluence {
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+  velocity: vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read> majorantField: array<vec4<f32>>;
 @group(0) @binding(4) var historyTexture: texture_2d<f32>;
 @group(0) @binding(5) var historySampler: sampler;
+@group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 
 struct VSOut {
@@ -508,6 +617,51 @@ fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
+fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
+  var result: ExternalEmitterInfluence;
+  result.material = vec4<f32>(0.0);
+  result.fire = vec4<f32>(0.0);
+  result.micro = vec4<f32>(0.0);
+  result.velocity = vec4<f32>(0.0);
+  let count = min(u32(max(0.0, floor(u.scale_controls.w + 0.5))), MAX_EXTERNAL_EMITTERS_WGSL);
+  for (var i: u32 = 0u; i < count; i = i + 1u) {
+    let emitter = externalEmitters[i];
+    let start = emitter.start_radius.xyz;
+    let end = emitter.end_strength.xyz;
+    let segment = end - start;
+    let denom = max(dot(segment, segment), 0.00001);
+    let t = clamp(dot(p - start, segment) / denom, 0.0, 1.0);
+    let closest = start + segment * t;
+    let radius = max(0.006, emitter.start_radius.w);
+    let dist2 = dot(p - closest, p - closest);
+    let strength = max(0.0, emitter.end_strength.w);
+    let age = max(0.0, emitter.velocity_age.w);
+    let lifetime = max(0.016, emitter.detail_lifetime.y);
+    let isActiveEmitter = step(0.5, emitter.detail_lifetime.w);
+    let ageFade = 1.0 - smoothstep(lifetime * 0.68, lifetime, age);
+    let falloff = exp(-dist2 / max(0.00001, radius * radius)) * strength * ageFade * isActiveEmitter;
+    let flicker = 0.82 + 0.18 * hash31(vec3<f32>(f32(i) * 13.7, time * 4.1, t * 9.3));
+    let w = falloff * flicker;
+    result.material.x = max(result.material.x, emitter.material.x * w);
+    result.material.y = max(result.material.y, emitter.material.y * w);
+    result.material.z = max(result.material.z, emitter.material.z * w);
+    result.material.w = max(result.material.w, emitter.detail_lifetime.x * w);
+    result.fire.x = max(result.fire.x, emitter.material.w * w);
+    result.fire.y = max(result.fire.y, emitter.material.w * w * 0.42);
+    result.fire.z = max(result.fire.z, emitter.detail_lifetime.x * w * 0.82);
+    result.micro.x = max(result.micro.x, emitter.detail_lifetime.x * w * 0.72);
+    result.micro.y = max(result.micro.y, emitter.detail_lifetime.x * w * 0.42 + emitter.material.w * w * 0.12);
+    result.micro.z = max(result.micro.z, emitter.material.w * w * 0.60);
+    result.micro.w = max(result.micro.w, emitter.material.w * w * 0.22);
+    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;
+}
+
+fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> ExternalEmitterInfluence {
+  return influence;
+}
+
 fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32) -> vec4<f32> {
   let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055), 0.0);
   let thermalSlip = vec3<f32>(
@@ -805,6 +959,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
   let lickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let detailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
   let microForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
@@ -818,6 +973,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + shredForce;
   vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   vel = vel + heatExpansion;
+  vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale;
   vel.y = vel.y + source * (0.022 + speed * 0.006) * plumeRiseScale + smoke * 0.003 * plumeRiseScale;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
@@ -825,18 +981,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
+  smoke = max(smoke, externalInjection.material.x * 0.76);
   heat = max(heat, source * 0.86 + emberRing * 0.22);
+  heat = max(heat, externalInjection.material.y * 0.92);
   fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
+  fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
   materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
+  materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
   microSmoke = max(microSmoke, (source * 0.26 + smokeFromHeat * 0.70 + materialDetail * 0.18) * microAmount * (0.48 + 0.52 * breakup));
+  microSmoke = max(microSmoke, externalInjection.micro.x);
   interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + source * 0.30) * 1.72);
+  interfaceShred = max(interfaceShred, externalInjection.micro.y);
   fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickOperatorGain * 0.34);
+  fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
+  emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
   flame = max(flame, fireBirth * 1.58 + heat * fuel * 0.060 + fireLick * 0.48);
+  flame = max(flame, externalInjection.fire.x);
   ember = max(ember, fireBirth * 0.78 + flame * 0.22 + emberFleck * 0.18);
+  ember = max(ember, externalInjection.fire.y);
   flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * breakup) + lickBirth.z + fireLick * 0.34);
+  flameDetail = max(flameDetail, externalInjection.fire.z);
 
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
@@ -1060,6 +1227,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireScale: 0.86,
     detailScale: 1.75,
     plumeHeight: 1.45,
+    externalEmitterMode: 'off',
+    externalEmitterCoordinateSpace: 'none',
+    externalEmitterCount: 0,
+    externalEmitterAgeMs: null,
+    externalEmitterFrameId: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -1107,6 +1279,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let majorantPipelineLayout = null;
   let shader = null;
   let uniformBuffer = null;
+  let externalEmitterBuffer = null;
+  let externalEmitterState = normalizeExternalEmitters();
   let majorantBuffer = null;
   let fluidBuffers = [];
   let currentFluid = 0;
@@ -1197,6 +1371,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
+  }
+
+  function updateExternalEmitterDebug(nowMs = externalEmitterNowMs()) {
+    state.externalEmitterMode = externalEmitterState.mode;
+    state.externalEmitterCoordinateSpace = externalEmitterState.coordinateSpace;
+    state.externalEmitterCount = externalEmitterState.count;
+    state.externalEmitterFrameId = externalEmitterState.frameId;
+    state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
+  }
+
+  function ensureExternalEmitterBuffer() {
+    if (externalEmitterBuffer) return;
+    externalEmitterBuffer = device.createBuffer({
+      label: `kaminos external segment emitters ${MAX_EXTERNAL_EMITTERS}`,
+      size: externalEmitterBufferBytes(),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(externalEmitterBuffer, 0, externalEmitterState.data);
+  }
+
+  function writeExternalEmitterBuffer() {
+    if (!device || !externalEmitterBuffer) return;
+    device.queue.writeBuffer(externalEmitterBuffer, 0, externalEmitterState.data);
   }
 
   function makeInitialFluid(nextGridSize) {
@@ -1352,7 +1549,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || fluidBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || fluidBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -1364,6 +1561,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 3, resource: { buffer: majorantBuffer } },
           { binding: 4, resource: historyTexture.createView() },
           { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
         ],
       }),
       device.createBindGroup({
@@ -1376,6 +1574,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 3, resource: { buffer: majorantBuffer } },
           { binding: 4, resource: historyTexture.createView() },
           { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
         ],
       }),
     ];
@@ -1496,6 +1695,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: uniforms.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    ensureExternalEmitterBuffer();
     historySampler = device.createSampler({
       label: 'kaminos temporal history sampler',
       magFilter: 'linear',
@@ -1544,6 +1744,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 5,
           visibility: GPUShaderStage.FRAGMENT,
           sampler: { type: 'filtering' },
+        },
+        {
+          binding: 6,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
         },
       ],
     });
@@ -1660,7 +1865,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
-    uniforms[51] = 0;
+    updateExternalEmitterDebug(now);
+    uniforms[51] = state.externalEmitterCount;
     uniforms.set(previousViewProj.elements, 52);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
@@ -2020,6 +2226,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         plumeHeight: state.plumeHeight,
+        externalEmitterMode: state.externalEmitterMode,
+        externalEmitterCoordinateSpace: state.externalEmitterCoordinateSpace,
+        externalEmitterCount: state.externalEmitterCount,
+        externalEmitterAgeMs: state.externalEmitterAgeMs,
+        externalEmitterFrameId: state.externalEmitterFrameId,
         temporalAccumEffective: state.temporalAccumEffective,
         temporalReprojectionConfidence: state.temporalReprojectionConfidence,
         temporalHistoryWeight: state.temporalHistoryWeight,
@@ -2108,6 +2319,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       plumeHeight: state.plumeHeight,
+      externalEmitterMode: state.externalEmitterMode,
+      externalEmitterCoordinateSpace: state.externalEmitterCoordinateSpace,
+      externalEmitterCount: state.externalEmitterCount,
+      externalEmitterAgeMs: state.externalEmitterAgeMs,
+      externalEmitterFrameId: state.externalEmitterFrameId,
       temporalAccumEffective: state.temporalAccumEffective,
       temporalReprojectionConfidence: state.temporalReprojectionConfidence,
       temporalHistoryWeight: state.temporalHistoryWeight,
@@ -2171,6 +2387,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.majorantGrid = majorantGridSize;
     },
+    setExternalEmitters(payload = {}) {
+      externalEmitterState = normalizeExternalEmitters(payload);
+      updateExternalEmitterDebug();
+      writeExternalEmitterBuffer();
+      emitStatus({ phase: 'external-emitters' });
+      return {
+        mode: state.externalEmitterMode,
+        coordinateSpace: state.externalEmitterCoordinateSpace,
+        count: state.externalEmitterCount,
+        ageMs: state.externalEmitterAgeMs,
+        frameId: state.externalEmitterFrameId,
+      };
+    },
+    syntheticHandTrailEmitters,
     async setActive(active) {
       if (active) {
         try {
@@ -2203,6 +2433,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      externalEmitterBuffer?.destroy();
       destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();
