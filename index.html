@@ -350,6 +350,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Occupancy Skip</span>
+      <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
+      <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
+    </div>
     <div class="ray-budget-wrap">
       <div class="ray-budget-grid">
         <div class="ray-budget-axis-y">Adaptive</div>
@@ -1260,6 +1265,7 @@ function readVolumeControls() {
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
+    occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
@@ -1285,6 +1291,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
+  document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
@@ -1384,6 +1391,10 @@ async function initKaminosVolumeRoute() {
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
   }
+  const routeOccupancySkip = Number(params.get('volume_occupancy_skip'));
+  if (params.has('volume_occupancy_skip') && Number.isFinite(routeOccupancySkip)) {
+    document.getElementById('volume-occupancy-skip').value = String(Math.max(0, Math.min(1, routeOccupancySkip)));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -1399,14 +1410,23 @@ async function initKaminosVolumeRoute() {
   window.__kaminosVolumePrototype = volumePrototype;
   volumePrototype.setControls(readVolumeControls());
 
-  const syncControls = () => {
-    activeVolumeRayBudgetPreset = '';
-    routedVolumeRayBudgetPreset = '';
+  const rayBudgetPresetOwnedControls = new Set([
+    'volume-steps',
+    'volume-adaptive-rays',
+    'volume-fire',
+    'volume-radiance',
+    'volume-absorption',
+  ]);
+  const syncControls = event => {
+    if (rayBudgetPresetOwnedControls.has(event?.target?.id)) {
+      activeVolumeRayBudgetPreset = '';
+      routedVolumeRayBudgetPreset = '';
+    }
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

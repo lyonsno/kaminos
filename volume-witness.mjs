@@ -40,6 +40,10 @@ const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
 const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
   : presetBudget?.adaptiveRays ?? 0.65;
+const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
+const expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
+  ? Math.max(0, Math.min(1, requestedOccupancySkip))
+  : 0.35;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -264,7 +268,12 @@ async function main() {
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
+    if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
+      assert.equal(state.controls?.rayBudgetPreset, rayBudgetPreset, 'ray-budget preset route identity was not preserved in debug controls');
+    }
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
+    assert.ok(Math.abs((state.controls?.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'occupancy skip route/control did not apply');
+    assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
@@ -356,6 +365,7 @@ async function main() {
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
       adaptiveRaymarch: sample.adaptiveRaymarch,
+      occupancySkip: sample.occupancySkip,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       timing: sample.timing || stateTiming,
       controls: reportControls,

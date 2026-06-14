@@ -37,6 +37,9 @@ assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to
 assert.match(index, /id="volume-adaptive-rays"/, 'Volume tab exposes adaptive raymarch sampling control');
 assert.match(index, /volume_adaptive_rays/, 'URL route can override adaptive raymarch sampling');
 assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sampling into the renderer');
+assert.match(index, /id="volume-occupancy-skip"/, 'Volume tab exposes occupancy/importance skipping control');
+assert.match(index, /volume_occupancy_skip/, 'URL route can override occupancy/importance skipping');
+assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance skip strength into the renderer');
 assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
 assert.match(index, /id="volume-ray-budget-handle"/, 'ray-budget gamut exposes a draggable handle');
 assert.match(index, /id="volume-ray-budget-readout"/, 'ray-budget gamut exposes a compact effective budget readout');
@@ -102,6 +105,11 @@ assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step op
 assert.match(core, /raymarchInterest/, 'raymarch computes local sample interest before adapting step distance');
 assert.match(core, /adaptiveRayStepScale/, 'raymarch adapts step distance instead of only changing alpha');
 assert.match(core, /raymarchEarlyTermination/, 'raymarch exposes named early-termination behavior');
+assert.match(core, /occupancy_controls/, 'volume uniforms carry occupancy/importance skip controls separately from adaptive rays');
+assert.match(core, /raymarchOccupancySignal/, 'raymarch computes a named low-occupancy signal before expensive shading');
+assert.match(core, /occupancySkipStepScale/, 'raymarch can skip/coarsen low-occupancy spans before spending dense samples');
+assert.match(core, /occupancySkipStrength/, 'shader gives occupancy skipping an explicit bounded strength');
+assert.match(core, /state\.occupancySkip/, 'debug state exposes effective occupancy skip strength');
 assert.match(core, /adaptiveRaymarch/, 'debug state exposes effective adaptive raymarch strength');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
@@ -157,7 +165,9 @@ assert.match(witness, /kaminos_volume_smoke=1/, 'witness captures the explicit v
 assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
+assert.match(witness, /expectedOccupancySkip/, 'witness verifies occupancy skip route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
+assert.match(witness, /occupancySkip/, 'witness records effective occupancy skip strength');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
 assert.match(witness, /timing/, 'witness records route-local timing evidence');
 assert.match(witness, /queueDoneMs/, 'witness records GPU queue completion timing when available');

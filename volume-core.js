@@ -31,6 +31,7 @@ struct Uniforms {
   grid_overlay_debug: vec4<f32>,
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
+  occupancy_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -409,6 +410,28 @@ fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
 }
 
+fn raymarchOccupancySignal(
+  density: f32,
+  smoke: f32,
+  heat: f32,
+  temp: f32,
+  flame: f32,
+  microTextureSignal: f32,
+  velMag: f32,
+  extinction: f32
+) -> f32 {
+  let body = density * 0.44 + smoke * 0.38 + extinction * 0.28;
+  let fire = temp * 0.24 + flame * 0.28 + heat * 0.16;
+  let detail = microTextureSignal * 0.20 + velMag * 0.32;
+  return clamp(body + fire + detail, 0.0, 1.8);
+}
+
+fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRays: f32) -> f32 {
+  let emptySpan = 1.0 - smoothstep(0.012, 0.135, occupancy);
+  let adaptiveAssist = mix(1.45, 3.20, clamp(adaptiveRays, 0.0, 1.0));
+  return clamp(1.0 + emptySpan * clamp(occupancySkipStrength, 0.0, 1.0) * adaptiveAssist, 1.0, 4.60);
+}
+
 fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
 }
@@ -611,15 +634,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
+    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
-    let microWarp = microDetailDomainWarp(p, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
-    let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
-    let filamentNoise = microFilamentNoise(p, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
-    let shredNoise = microFilamentNoise(p.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
-    let fireNoise = microFilamentNoise(p.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
     let density = (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w;
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
@@ -627,6 +646,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let temp = emissiveTemperature(fireLayer, material, microLayer, velMag) * fireGain;
     let smoke = (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
     let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
+    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction);
+    let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
+    if (emptySpanScale > 1.08) {
+      t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
+      continue;
+    }
+    let microWarp = microDetailDomainWarp(p, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
+    let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
+    let filamentNoise = microFilamentNoise(p, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
+    let shredNoise = microFilamentNoise(p.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
+    let fireNoise = microFilamentNoise(p.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, flame, flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
@@ -669,7 +699,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(40);
+  const uniforms = new Float32Array(44);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -686,6 +716,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`,
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
+    occupancySkip: 0.35,
     lastFrameEnergy: 0,
     timing: {
       rafFps: 0,
@@ -1014,9 +1045,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
+    uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
+    uniforms[41] = 0;
+    uniforms[42] = 0;
+    uniforms[43] = 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
+    state.occupancySkip = uniforms[40];
   }
 
   function encodeSim(encoder) {
@@ -1215,6 +1251,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simGridLabel: state.simGridLabel,
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
+        occupancySkip: state.occupancySkip,
         timing: { ...state.timing },
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
@@ -1279,6 +1316,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simGridLabel: state.simGridLabel,
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
+      occupancySkip: state.occupancySkip,
       timing: { ...state.timing },
       simReadback,
       effectiveRoute: state.effectiveRoute,
@@ -1306,6 +1344,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
+      state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
     },
     async setActive(active) {
       if (active) {
