@@ -1,15 +1,22 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const DEFAULT_GRID_SIZE = 96;
-const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
+const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
-const MAJORANT_GRID_SIZE = 24;
+const DEFAULT_MAJORANT_GRID_SIZE = 48;
+const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 
 function normalizeGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
   return DEFAULT_GRID_SIZE;
+}
+
+function normalizeMajorantGridSize(value) {
+  const requested = Number(value);
+  if (SUPPORTED_MAJORANT_GRID_SIZES.includes(requested)) return requested;
+  return DEFAULT_MAJORANT_GRID_SIZE;
 }
 
 function gridCellCount(gridSize) {
@@ -20,14 +27,14 @@ function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function majorantBufferBytes() {
-  return MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE * 4 * Float32Array.BYTES_PER_ELEMENT;
+function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
+  return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
+override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
-const MAJORANT_GRID: u32 = 24u;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -780,6 +787,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const viewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(44);
   let gridSize = normalizeGridSize(getControls().resolution);
+  let majorantGridSize = normalizeMajorantGridSize(getControls().majorantGrid);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -797,7 +805,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
     majorantSkip: 0.70,
-    majorantGrid: MAJORANT_GRID_SIZE,
+    majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
     lastFrameEnergy: 0,
@@ -960,16 +968,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantFluidBindGroups = [];
   }
 
+  function destroyMajorantState() {
+    majorantBuffer?.destroy();
+    majorantBuffer = null;
+    majorantWriteBindGroup = null;
+  }
+
   function ensureMajorantBuffer() {
     if (majorantBuffer) return;
     majorantBuffer = device.createBuffer({
-      label: `kaminos coarse majorant field ${MAJORANT_GRID_SIZE}^3`,
-      size: majorantBufferBytes(),
+      label: `kaminos coarse majorant field ${majorantGridSize}^3`,
+      size: majorantBufferBytes(majorantGridSize),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(majorantBuffer, 0, new Float32Array(MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE * 4));
+    device.queue.writeBuffer(majorantBuffer, 0, new Float32Array(majorantGridSize * majorantGridSize * majorantGridSize * 4));
     majorantWriteBindGroup = device.createBindGroup({
-      label: `kaminos coarse majorant write bind group ${MAJORANT_GRID_SIZE}^3`,
+      label: `kaminos coarse majorant write bind group ${majorantGridSize}^3`,
       layout: majorantWriteBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: majorantBuffer } },
@@ -977,9 +991,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
-  function rebuildFluidState(nextGridSize = gridSize) {
+  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize) {
     gridSize = normalizeGridSize(nextGridSize);
+    majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     destroyFluidState();
+    destroyMajorantState();
     ensureMajorantBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const initialFluid = makeInitialFluid(gridSize);
@@ -992,12 +1008,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(buffer, 0, initialFluid);
       return buffer;
     });
-    const pipelineConstants = { GRID: gridSize };
+    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
+    const computePipelineConstants = { GRID: gridSize };
+    const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const makePipeline = (targetFormat, label) => device.createRenderPipeline({
       label,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
-      fragment: { module: shader, entryPoint: 'fs', constants: pipelineConstants, targets: [{ format: targetFormat }] },
+      fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
@@ -1005,12 +1023,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
-      compute: { module: shader, entryPoint: 'cs', constants: pipelineConstants },
+      compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
     });
     majorantComputePipeline = device.createComputePipeline({
-      label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${MAJORANT_GRID_SIZE}^3`,
+      label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
       layout: majorantPipelineLayout,
-      compute: { module: shader, entryPoint: 'csMajorant', constants: pipelineConstants },
+      compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
     });
     bindGroups = [
       device.createBindGroup({
@@ -1054,7 +1072,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
-    state.majorantGrid = MAJORANT_GRID_SIZE;
+    state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
     emitStatus({ phase: 'grid-rebuilt' });
@@ -1067,7 +1085,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    device = await adapter.requestDevice();
+    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+    const requiredLimits = {};
+    if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+    }
+    device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: 'opaque' });
@@ -1143,7 +1166,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bindGroupLayouts: [majorantFluidBindGroupLayout, majorantWriteBindGroupLayout],
     });
     device.pushErrorScope('validation');
-    rebuildFluidState(controlsSnapshot.resolution);
+    rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
     const pipelineError = await device.popErrorScope();
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
@@ -1236,7 +1259,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.setPipeline(majorantComputePipeline);
     pass.setBindGroup(0, majorantFluidBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
-    const workgroups = Math.ceil(MAJORANT_GRID_SIZE / 4);
+    const workgroups = Math.ceil(majorantGridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
     state.majorantBuilt = true;
@@ -1305,6 +1328,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let liveVoxels = 0;
     const cells = gridCellCount(gridSize);
     const stride = Math.max(1, Math.floor(cells / 4096));
+    const sampleCells = new Set();
+    for (let cell = 0; cell < cells; cell += stride) sampleCells.add(cell);
+    const addSampleCell = (x, y, z) => {
+      const cx = Math.max(0, Math.min(gridSize - 1, x | 0));
+      const cy = Math.max(0, Math.min(gridSize - 1, y | 0));
+      const cz = Math.max(0, Math.min(gridSize - 1, z | 0));
+      sampleCells.add(cx + cy * gridSize + cz * gridSize * gridSize);
+    };
+    const center = Math.floor(gridSize * 0.5);
+    const sourceY = Math.floor(gridSize * 0.13);
+    const sourceRadius = Math.max(2, Math.ceil(gridSize * Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * 0.75));
+    const localStep = Math.max(1, Math.floor(sourceRadius / 3));
+    for (let y = sourceY - sourceRadius; y <= sourceY + sourceRadius * 6; y += localStep) {
+      for (let z = center - sourceRadius; z <= center + sourceRadius; z += localStep) {
+        for (let x = center - sourceRadius; x <= center + sourceRadius; x += localStep) {
+          addSampleCell(x, y, z);
+        }
+      }
+    }
     const clampIndex = value => Math.max(0, Math.min(gridSize - 1, value));
     const velocityAt = (x, y, z) => {
       const cx = clampIndex(x);
@@ -1314,7 +1356,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return [data[i], data[i + 1], data[i + 2]];
     };
     let samples = 0;
-    for (let cell = 0; cell < cells; cell += stride) {
+    for (const cell of sampleCells) {
       const i = cell * FLUID_COMPONENTS;
       const x = cell % gridSize;
       const y = Math.floor(cell / gridSize) % gridSize;
@@ -1395,11 +1437,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function sampleMajorantReadback() {
     const readback = device.createBuffer({
       label: 'kaminos coarse majorant readback',
-      size: majorantBufferBytes(),
+      size: majorantBufferBytes(majorantGridSize),
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const encoder = device.createCommandEncoder({ label: 'kaminos coarse majorant readback encoder' });
-    encoder.copyBufferToBuffer(majorantBuffer, 0, readback, 0, majorantBufferBytes());
+    encoder.copyBufferToBuffer(majorantBuffer, 0, readback, 0, majorantBufferBytes(majorantGridSize));
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
     const data = new Float32Array(readback.getMappedRange());
@@ -1412,7 +1454,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let extinctionMax = 0;
     let importanceMax = 0;
     let occupiedBricks = 0;
-    const bricks = MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE * MAJORANT_GRID_SIZE;
+    const bricks = majorantGridSize * majorantGridSize * majorantGridSize;
     for (let i = 0; i < bricks; i += 1) {
       const offset = i * 4;
       const density = data[offset];
@@ -1432,7 +1474,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     readback.unmap();
     readback.destroy();
     const result = {
-      grid: MAJORANT_GRID_SIZE,
+      grid: majorantGridSize,
       bricks,
       occupiedBricks,
       densityMean: densitySum / bricks,
@@ -1577,19 +1619,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   return {
     setControls(next) {
       const previousGrid = gridSize;
+      const previousMajorantGrid = majorantGridSize;
       controlsSnapshot = { ...controlsSnapshot, ...next };
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
-      if (device && requestedGrid !== previousGrid) {
-        rebuildFluidState(requestedGrid);
+      const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
+        rebuildFluidState(requestedGrid, requestedMajorantGrid);
       } else {
         gridSize = requestedGrid;
+        majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
         state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
+        state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
+      state.majorantGrid = majorantGridSize;
     },
     async setActive(active) {
       if (active) {
@@ -1624,8 +1671,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       this.setActive(false);
       frameTexture?.destroy();
       destroyFluidState();
-      majorantBuffer?.destroy();
-      majorantBuffer = null;
+      destroyMajorantState();
       canvas.remove();
     },
   };

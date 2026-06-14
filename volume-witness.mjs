@@ -17,9 +17,12 @@ const port = Number(args.get('--debug-port') || 9433);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1500);
+const windowSize = args.get('--window-size') || '1280,960';
 const routeParams = new URL(url).searchParams;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96].includes(requestedGrid) ? requestedGrid : 96;
+const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : 96;
+const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
+const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : 48;
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
@@ -232,7 +235,7 @@ async function main() {
     '--no-first-run',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
-    '--window-size=1280,960',
+    `--window-size=${windowSize}`,
     url,
   ], { stdio: 'ignore' });
 
@@ -280,7 +283,8 @@ async function main() {
     assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
     assert.ok(Math.abs((state.controls?.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'majorant skip route/control did not apply');
     assert.ok(Math.abs((state.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'effective majorant skip state did not match route/control');
-    assert.equal(state.majorantGrid, 24, 'coarse majorant grid identity did not apply');
+    assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
+    assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
@@ -301,7 +305,7 @@ async function main() {
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!sample.majorantReadback || sample.majorantReadback.grid !== 24 || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
+    if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
       throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
     const sampleTiming = sample.timing || stateTiming;
@@ -364,6 +368,7 @@ async function main() {
     const report = {
       requestedRoute: url,
       settleMs,
+      windowSize,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -411,6 +416,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      windowSize,
       phase,
       error: err?.message || String(err),
       state,
