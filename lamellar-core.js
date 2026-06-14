@@ -790,7 +790,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   group.name = "kaminos-lamellar-witness";
   group.visible = false;
   scene.add(group);
-  let selectionHighlight = null;
+  let selectionHighlights = [];
 
   const state = {
     active: false,
@@ -832,6 +832,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     openEdgeCount: 0,
     lightHooks: [],
     selectedLamellarObject: null,
+    selectionLevel: null,
+    selectedLayerSpecId: null,
+    selectedStripInstanceId: null,
+    selectionAnchor: null,
     viewportPickReceipt: null,
     lastBuildAt: null,
     widthRadiusCouplingMode: WIDTH_RADIUS_COUPLING_MODE,
@@ -852,10 +856,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   };
 
   function clear() {
-    if (selectionHighlight) {
-      selectionHighlight.material?.dispose?.();
-      selectionHighlight = null;
-    }
+    clearSelectionHighlights();
     while (group.children.length) {
       const child = group.children.pop();
       child.geometry?.dispose?.();
@@ -869,9 +870,12 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       kind: "selectedLamellarObject",
       selectionSource: source,
       objectKind: mesh.userData.lamellarObjectKind || "section-segment",
+      selectionLevel: "strip",
       sectionId: mesh.userData.lamellarSectionId || null,
       stripInstanceId: mesh.userData.stripInstanceId || null,
+      selectedStripInstanceId: mesh.userData.stripInstanceId || null,
       layerSpecId: mesh.userData.layerSpecId || null,
+      selectedLayerSpecId: mesh.userData.layerSpecId || null,
       layerIndex: mesh.userData.layerIndex ?? null,
       stripIndex: mesh.userData.stripIndex ?? null,
       role: mesh.userData.lamellarRole || null,
@@ -880,24 +884,50 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     };
   }
 
-  function applySelectionHighlight(mesh) {
-    if (selectionHighlight) {
-      group.remove(selectionHighlight);
-      selectionHighlight.material?.dispose?.();
-      selectionHighlight = null;
+  function clearSelectionHighlights() {
+    for (const highlight of selectionHighlights) {
+      group.remove(highlight);
+      highlight.material?.dispose?.();
     }
-    if (!mesh?.geometry) return;
+    selectionHighlights = [];
+  }
+
+  function selectionAnchorForMeshes(meshes) {
+    const box = new THREE.Box3();
+    let hasMesh = false;
+    for (const mesh of meshes) {
+      if (!mesh?.geometry) continue;
+      mesh.geometry.computeBoundingBox();
+      const meshBox = mesh.geometry.boundingBox.clone();
+      meshBox.applyMatrix4(mesh.matrixWorld);
+      box.union(meshBox);
+      hasMesh = true;
+    }
+    if (!hasMesh) return null;
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    return vectorSnapshot(center);
+  }
+
+  function applySelectionHighlight(meshes, level = "strip") {
+    clearSelectionHighlights();
+    const selectedMeshes = Array.isArray(meshes) ? meshes.filter(mesh => mesh?.geometry) : (meshes?.geometry ? [meshes] : []);
+    if (!selectedMeshes.length) return;
     const highlightMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
+      color: level === "layer" ? 0xd9f4ff : 0xffffff,
       wireframe: true,
       transparent: true,
-      opacity: 0.72,
+      opacity: level === "layer" ? 0.34 : 0.72,
       depthTest: false,
     });
-    selectionHighlight = new THREE.Mesh(mesh.geometry, highlightMaterial);
-    selectionHighlight.renderOrder = 999;
-    selectionHighlight.userData.lamellarRole = "selection-highlight";
-    group.add(selectionHighlight);
+    for (const mesh of selectedMeshes) {
+      const highlight = new THREE.Mesh(mesh.geometry, highlightMaterial);
+      highlight.renderOrder = 999;
+      highlight.userData.lamellarRole = level === "layer" ? "layer-selection-highlight" : "strip-selection-highlight";
+      highlight.userData.lamellarSelectable = false;
+      selectionHighlights.push(highlight);
+      group.add(highlight);
+    }
   }
 
   function selectableMeshes() {
@@ -907,11 +937,20 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   function selectMesh(mesh, source = "programmatic") {
     if (!mesh) {
       state.selectedLamellarObject = null;
+      state.selectionLevel = null;
+      state.selectedLayerSpecId = null;
+      state.selectedStripInstanceId = null;
+      state.selectionAnchor = null;
       applySelectionHighlight(null);
       return null;
     }
     state.selectedLamellarObject = selectedObjectFromMesh(mesh, source);
-    applySelectionHighlight(mesh);
+    state.selectionLevel = "strip";
+    state.selectedLayerSpecId = state.selectedLamellarObject.layerSpecId;
+    state.selectedStripInstanceId = state.selectedLamellarObject.stripInstanceId;
+    state.selectionAnchor = selectionAnchorForMeshes([mesh]);
+    state.selectedLamellarObject.selectionAnchor = state.selectionAnchor;
+    applySelectionHighlight(mesh, "strip");
     return state.selectedLamellarObject;
   }
 
@@ -921,18 +960,60 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   }
 
   function selectByStripInstanceId(stripInstanceId, source = "strip-instance-id") {
+    return selectStripByStripInstanceId(stripInstanceId, source);
+  }
+
+  function selectStripByStripInstanceId(stripInstanceId, source = "strip-instance-id") {
     const mesh = selectableMeshes().find(child => child.userData.stripInstanceId === stripInstanceId) || null;
     return selectMesh(mesh, source);
   }
 
-  function rehydrateSelection() {
-    if (!state.selectedLamellarObject) return;
-    const { sectionId, stripInstanceId } = state.selectedLamellarObject;
-    if (sectionId && selectBySectionId(sectionId, "rebuild-rehydrate")) return;
-    if (stripInstanceId) selectByStripInstanceId(stripInstanceId, "rebuild-rehydrate");
+  function selectLayerByStripInstanceId(stripInstanceId, source = "strip-layer-hit") {
+    const hitMesh = selectableMeshes().find(child => child.userData.stripInstanceId === stripInstanceId) || null;
+    if (!hitMesh) return selectMesh(null, source);
+    const layerSpecId = hitMesh.userData.layerSpecId || null;
+    const layerIndex = hitMesh.userData.layerIndex ?? null;
+    const layerMeshes = selectableMeshes().filter(child => child.userData.layerSpecId === layerSpecId && child.userData.stripInstanceId);
+    const layerSpec = state.layerSpecs.find(layer => layer.id === layerSpecId || layer.layerIndex === layerIndex) || null;
+    const anchor = selectionAnchorForMeshes(layerMeshes.length ? layerMeshes : [hitMesh]);
+    state.selectionLevel = "layer";
+    state.selectedLayerSpecId = layerSpecId;
+    state.selectedStripInstanceId = null;
+    state.selectionAnchor = anchor;
+    state.selectedLamellarObject = {
+      kind: "selectedLamellarObject",
+      selectionSource: source,
+      selectionLevel: "layer",
+      objectKind: "LayerShellDescriptor",
+      sectionId: null,
+      stripInstanceId: null,
+      hitStripInstanceId: stripInstanceId,
+      selectedStripInstanceId: null,
+      layerSpecId,
+      selectedLayerSpecId: layerSpecId,
+      layerIndex,
+      stripIndex: null,
+      stripIds: layerSpec?.stripIds || state.stripInstances.filter(strip => strip.layerSpecId === layerSpecId).map(strip => strip.id),
+      stripCount: layerSpec?.stripCount ?? layerMeshes.length,
+      role: "layer-shell",
+      populationId: null,
+      populationRole: null,
+      selectionAnchor: anchor,
+    };
+    applySelectionHighlight(layerMeshes.length ? layerMeshes : hitMesh, "layer");
+    return state.selectedLamellarObject;
   }
 
-  function pickFromClientPoint(clientX, clientY, domElement) {
+  function rehydrateSelection() {
+    if (!state.selectedLamellarObject) return;
+    const { sectionId, stripInstanceId, hitStripInstanceId, selectionLevel } = state.selectedLamellarObject;
+    if (selectionLevel === "layer" && hitStripInstanceId && selectLayerByStripInstanceId(hitStripInstanceId, "rebuild-rehydrate")) return;
+    if (selectionLevel === "strip" && stripInstanceId && selectStripByStripInstanceId(stripInstanceId, "rebuild-rehydrate")) return;
+    if (sectionId && selectBySectionId(sectionId, "rebuild-rehydrate")) return;
+    if (stripInstanceId) selectStripByStripInstanceId(stripInstanceId, "rebuild-rehydrate");
+  }
+
+  function pickFromClientPoint(clientX, clientY, domElement, options = {}) {
     const rect = domElement.getBoundingClientRect();
     const pointer = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -942,14 +1023,25 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(selectableMeshes(), false);
     const picked = hits[0]?.object || null;
-    const selected = selectMesh(picked, "viewport-raycast");
+    const hitStripInstanceId = picked?.userData.stripInstanceId || null;
+    const drillDown = options.drillDown === true || options.selectionLevel === "strip";
+    const selected = hitStripInstanceId
+      ? (drillDown
+        ? selectStripByStripInstanceId(hitStripInstanceId, "viewport-double-click")
+        : selectLayerByStripInstanceId(hitStripInstanceId, "viewport-raycast-layer"))
+      : selectMesh(null, "viewport-raycast");
     state.viewportPickReceipt = {
       mode: "viewport-raycast-lamellar-selection-v0",
       hit: Boolean(picked),
+      selectionLevel: selected?.selectionLevel || null,
       client: [Number(clientX.toFixed(1)), Number(clientY.toFixed(1))],
+      hitSectionId: picked?.userData.lamellarSectionId || null,
+      hitStripInstanceId,
       selectedSectionId: selected?.sectionId || null,
       selectedStripInstanceId: selected?.stripInstanceId || null,
+      selectedLayerSpecId: selected?.layerSpecId || null,
       selectedRole: selected?.role || null,
+      selectionAnchor: state.selectionAnchor,
     };
     return state.viewportPickReceipt;
   }
@@ -1169,11 +1261,15 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       segmentDescriptorCount: state.generatedSegmentDescriptors.length,
       childCount: group.children.length,
       selectedLamellarObject: state.selectedLamellarObject,
+      selectionLevel: state.selectionLevel,
+      selectedLayerSpecId: state.selectedLayerSpecId,
+      selectedStripInstanceId: state.selectedStripInstanceId,
+      selectionAnchor: state.selectionAnchor,
       viewportPickReceipt: state.viewportPickReceipt,
       cameraPosition: vectorSnapshot(camera.position),
       cameraTarget: vectorSnapshot(controls.target),
     };
   }
 
-  return { setActive, setControls, update, frameCamera, debugState, selectBySectionId, selectByStripInstanceId, pickFromClientPoint };
+  return { setActive, setControls, update, frameCamera, debugState, selectBySectionId, selectByStripInstanceId, selectLayerByStripInstanceId, selectStripByStripInstanceId, pickFromClientPoint };
 }

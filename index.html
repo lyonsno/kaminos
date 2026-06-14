@@ -80,6 +80,11 @@ canvas { display: block; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
 #info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#lamellar-selection-popover { position: absolute; left: 0; top: 0; display: none; min-width: 178px; max-width: 250px; padding: 9px 10px; background: rgba(12,12,12,0.72); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; box-shadow: 0 10px 26px rgba(0,0,0,0.38); color: #d8d8d8; z-index: 7; pointer-events: auto; }
+#lamellar-popover-title { font-size: 11px; font-weight: 700; color: #f0f0f0; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lamellar-popover-meta { font-size: 10px; color: #8f8f8f; font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lamellar-popover-actions { display: flex; gap: 6px; margin-top: 8px; }
+#lamellar-popover-actions .btn { margin: 0; padding: 5px 9px; font-size: 10px; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -398,6 +403,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2>Context</h2>
     <div class="panel" id="lamellar-context-inspector" data-contextual-inspector="viewport-selection">
       <div class="field"><span class="field-key">Kind</span><span class="field-val" id="lamellar-selected-object-kind">none</span></div>
+      <div class="field"><span class="field-key">Level</span><span class="field-val" id="lamellar-selected-object-level">none</span></div>
       <div class="field"><span class="field-key">Object</span><span class="field-val" id="lamellar-selected-object-id">none</span></div>
       <div class="field"><span class="field-key">Role</span><span class="field-val" id="lamellar-selected-object-role">none</span></div>
       <div id="lamellar-layer-detail" style="display:none">
@@ -557,6 +563,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
   <div id="info-bar">No asset loaded</div>
+  <div id="lamellar-selection-popover" aria-live="polite">
+    <div id="lamellar-popover-title">none</div>
+    <div id="lamellar-popover-meta">none</div>
+    <div id="lamellar-popover-actions"></div>
+  </div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
 </div>
@@ -851,6 +862,7 @@ async function initScene() {
     requestAnimationFrame(animate);
     controls.update();
     lamellarWitness?.update();
+    if (lamellarWitness?.debugState?.().active) positionLamellarSelectionPopover();
 
     if (needsRender || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
@@ -940,10 +952,39 @@ function setSelectedLamellarStripById(stripInstanceId) {
   return strip;
 }
 
+function selectLamellarLayerFromStrip(stripInstanceId, source = 'ui-layer-from-strip') {
+  if (!stripInstanceId || !lamellarWitness?.selectLayerByStripInstanceId) return null;
+  const selection = lamellarWitness.selectLayerByStripInstanceId(stripInstanceId, source);
+  selectLamellarObject(selection);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return selection;
+}
+
+function drillIntoLamellarStrip(stripInstanceId = null) {
+  const current = lamellarWitness?.debugState?.() || {};
+  const fallbackStrip = (current.stripInstances || []).find(strip => strip.layerIndex === selectedLamellarLayerIndex);
+  const targetStripId = stripInstanceId
+    || current.selectedLamellarObject?.hitStripInstanceId
+    || current.viewportPickReceipt?.hitStripInstanceId
+    || fallbackStrip?.id;
+  if (!targetStripId || !lamellarWitness?.selectStripByStripInstanceId) return null;
+  const selection = lamellarWitness.selectStripByStripInstanceId(targetStripId, 'ui-strip-drilldown');
+  selectLamellarObject(selection);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return selection;
+}
+
 function selectLamellarObject(selection) {
   selectedLamellarObject = selection || null;
   if (selection?.stripInstanceId) setSelectedLamellarStripById(selection.stripInstanceId);
-  else syncLamellarContextInspector(lamellarWitness?.debugState?.() || {});
+  else if (Number.isFinite(selection?.layerIndex)) {
+    selectedLamellarLayerIndex = selection.layerIndex;
+    selectedLamellarStripIndex = 0;
+    syncSelectedLamellarLayer(lamellarWitness?.debugState?.() || {});
+  } else syncLamellarContextInspector(lamellarWitness?.debugState?.() || {});
+  syncLamellarSelectionPopover(lamellarWitness?.debugState?.() || {});
   return selectedLamellarObject;
 }
 
@@ -1012,10 +1053,61 @@ function syncLamellarContextInspector(state = null) {
   selectedLamellarObject = current.selectedLamellarObject || selectedLamellarObject;
   const object = selectedLamellarObject;
   document.getElementById('lamellar-selected-object-kind').textContent = object?.objectKind || 'none';
-  document.getElementById('lamellar-selected-object-id').textContent = object?.sectionId || object?.stripInstanceId || 'none';
+  document.getElementById('lamellar-selected-object-level').textContent = object?.selectionLevel || current.selectionLevel || 'none';
+  document.getElementById('lamellar-selected-object-id').textContent = object?.sectionId || object?.stripInstanceId || object?.layerSpecId || 'none';
   document.getElementById('lamellar-selected-object-role').textContent = object?.role || 'none';
   const profile = document.getElementById('lamellar-context-profile');
-  if (profile) profile.style.display = object?.stripInstanceId ? '' : 'none';
+  if (profile) profile.style.display = object?.selectionLevel === 'strip' && object?.stripInstanceId ? '' : 'none';
+}
+
+function positionLamellarSelectionPopover(state = null) {
+  const popover = document.getElementById('lamellar-selection-popover');
+  const anchor = (state || lamellarWitness?.debugState?.() || {}).selectionAnchor;
+  if (!popover || !anchor || anchor.length !== 3 || popover.style.display === 'none') return false;
+  const point = new THREE.Vector3(anchor[0], anchor[1], anchor[2]);
+  point.project(camera);
+  const viewport = document.getElementById('viewport');
+  const rect = viewport.getBoundingClientRect();
+  const width = popover.offsetWidth || 178;
+  const height = popover.offsetHeight || 72;
+  const x = ((point.x + 1) / 2) * rect.width;
+  const y = ((-point.y + 1) / 2) * rect.height;
+  const left = Math.max(12, Math.min(rect.width - width - 12, x + 18));
+  const top = Math.max(12, Math.min(rect.height - height - 12, y - 18));
+  popover.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
+  return true;
+}
+
+function syncLamellarSelectionPopover(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const object = current.selectedLamellarObject || selectedLamellarObject;
+  const popover = document.getElementById('lamellar-selection-popover');
+  const title = document.getElementById('lamellar-popover-title');
+  const meta = document.getElementById('lamellar-popover-meta');
+  const actions = document.getElementById('lamellar-popover-actions');
+  if (!popover || !title || !meta || !actions) return;
+  if (!object || !current.active) {
+    popover.style.display = 'none';
+    actions.replaceChildren();
+    return;
+  }
+  popover.style.display = 'block';
+  if (object.selectionLevel === 'layer') {
+    title.textContent = `Layer L${object.layerIndex}`;
+    meta.textContent = `${object.stripCount || object.stripIds?.length || 0} strips`;
+    actions.innerHTML = '<button class="btn" data-action="drill">Drill</button>';
+  } else {
+    title.textContent = `L${object.layerIndex} / s${object.stripIndex}`;
+    meta.textContent = object.role || object.stripInstanceId || 'strip';
+    actions.innerHTML = '<button class="btn" data-action="layer">Layer</button>';
+  }
+  actions.querySelector('[data-action="drill"]')?.addEventListener('click', () => {
+    drillIntoLamellarStrip(object.hitStripInstanceId || object.stripIds?.[0]);
+  });
+  actions.querySelector('[data-action="layer"]')?.addEventListener('click', () => {
+    selectLamellarLayerFromStrip(object.stripInstanceId);
+  });
+  positionLamellarSelectionPopover(current);
 }
 
 function installLamellarViewportSelection() {
@@ -1034,6 +1126,14 @@ function installLamellarViewportSelection() {
     const receipt = lamellarWitness.pickFromClientPoint(event.clientX, event.clientY, canvas);
     if (receipt?.hit) selectLamellarObject(lamellarWitness.debugState().selectedLamellarObject);
     else selectLamellarObject(null);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+  canvas.addEventListener('dblclick', event => {
+    if (!lamellarWitness?.debugState?.().active) return;
+    event.preventDefault();
+    const receipt = lamellarWitness.pickFromClientPoint(event.clientX, event.clientY, canvas, { drillDown: true });
+    if (receipt?.hit) selectLamellarObject(lamellarWitness.debugState().selectedLamellarObject);
     syncLamellarReadout();
     window._kaminosDirty?.();
   });
@@ -1121,6 +1221,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-cut-author').textContent = state.channelCutReceipt?.mode || 'none';
   syncSelectedLamellarLayer(state);
   syncLamellarContextInspector(state);
+  syncLamellarSelectionPopover(state);
   document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
   document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
 }
@@ -1225,12 +1326,14 @@ async function initLamellarRoute() {
   lamellarWitness = createKaminosLamellarWitness({ THREE, scene, camera, controls });
   window.__kaminosLamellarWitness = lamellarWitness;
   window.__kaminosLamellarSelectByStripInstanceId = stripInstanceId => {
-    const selection = lamellarWitness.selectByStripInstanceId(stripInstanceId, 'ui-selection-helper');
+    const selection = lamellarWitness.selectStripByStripInstanceId(stripInstanceId, 'ui-selection-helper');
     selectLamellarObject(selection);
     syncLamellarReadout();
     window._kaminosDirty?.();
     return selection;
   };
+  window.__kaminosLamellarSelectLayerByStripInstanceId = stripInstanceId => selectLamellarLayerFromStrip(stripInstanceId, 'ui-layer-selection-helper');
+  window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());

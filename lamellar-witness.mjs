@@ -181,11 +181,42 @@ async function main() {
         const w = window.__kaminosLamellarWitness;
         const preState = w ? w.debugState() : { active: false, missing: true };
         const firstStrip = (preState.sectionSegments || []).find(segment => segment.stripInstanceId);
-        if (firstStrip) window.__kaminosLamellarSelectByStripInstanceId?.(firstStrip.stripInstanceId);
+        if (firstStrip) window.__kaminosLamellarSelectLayerByStripInstanceId?.(firstStrip.stripInstanceId);
+        const layerState = w ? w.debugState() : preState;
+        const layerPopover = document.getElementById('lamellar-selection-popover');
+        const layerSelectionUi = {
+          selectionLevel: layerState.selectionLevel,
+          selectedLayerSpecId: layerState.selectedLayerSpecId,
+          selectedStripInstanceId: layerState.selectedStripInstanceId,
+          selectedObjectKind: layerState.selectedLamellarObject?.objectKind || '',
+          selectedLayerStripIds: layerState.selectedLamellarObject?.stripIds || [],
+          contextProfileDisplay: getComputedStyle(document.getElementById('lamellar-context-profile')).display,
+          popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
+          popoverDisplay: getComputedStyle(layerPopover).display,
+        };
+        if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
+        const popover = document.getElementById('lamellar-selection-popover');
+        const popoverRect = popover?.getBoundingClientRect();
         return {
           ...state,
+          layerSelectionUi,
+          stripDrilldownUi: {
+            selectionLevel: state.selectionLevel,
+            selectedLayerSpecId: state.selectedLayerSpecId,
+            selectedStripInstanceId: state.selectedStripInstanceId,
+            selectedObjectKind: state.selectedLamellarObject?.objectKind || '',
+            contextProfileDisplay: getComputedStyle(document.getElementById('lamellar-context-profile')).display,
+          },
+          selectionPopoverUi: {
+            display: popover ? getComputedStyle(popover).display : 'missing',
+            title: document.getElementById('lamellar-popover-title')?.textContent || '',
+            meta: document.getElementById('lamellar-popover-meta')?.textContent || '',
+            actionCount: document.querySelectorAll('#lamellar-popover-actions .btn').length,
+            left: Number(popoverRect?.left?.toFixed(1) || 0),
+            top: Number(popoverRect?.top?.toFixed(1) || 0),
+          },
           selectedLayerUi: {
             activeLayer: Number(activeLayerButton?.dataset.layer ?? -1),
             selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
@@ -228,6 +259,16 @@ async function main() {
     assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
     assert.equal(state.selectedLayerUi?.activeLayer, 0, 'Lamellar witness did not expose selected layer UI');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
+    assert.equal(state.layerSelectionUi?.selectionLevel, 'layer', 'Lamellar single-click selection did not select the layer first');
+    assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
+    assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
+    assert.equal(state.layerSelectionUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls should stay hidden for layer selection');
+    assert.equal(state.stripDrilldownUi?.selectionLevel, 'strip', 'Lamellar drilldown did not select a strip');
+    assert.ok(state.stripDrilldownUi?.selectedStripInstanceId, 'Lamellar strip drilldown did not carry a strip instance id');
+    assert.notEqual(state.stripDrilldownUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls did not appear after strip drilldown');
+    assert.notEqual(state.selectionPopoverUi?.display, 'none', 'Lamellar selection popover did not render');
+    assert.ok(state.selectionPopoverUi?.title, 'Lamellar selection popover did not carry a title');
+    assert.ok((state.selectionPopoverUi?.actionCount || 0) >= 1, 'Lamellar selection popover did not carry contextual actions');
     assert.ok(state.selectedStripUi?.selectedStripText, 'Lamellar witness did not expose selected strip UI');
     assert.ok((state.selectedStripUi?.width || 0) > 0, 'Lamellar selected-strip width control did not carry a positive value');
     assert.ok(state.selectedLamellarObject?.stripInstanceId, 'Lamellar witness did not select a viewport/context object');
@@ -260,6 +301,9 @@ async function main() {
       stripInstances: state.stripInstances,
       selectedLayerUi: state.selectedLayerUi,
       selectedStripUi: state.selectedStripUi,
+      layerSelectionUi: state.layerSelectionUi,
+      stripDrilldownUi: state.stripDrilldownUi,
+      selectionPopoverUi: state.selectionPopoverUi,
       selectionUi: state.selectionUi,
       selectedLamellarObject: state.selectedLamellarObject,
       viewportPickReceipt: state.viewportPickReceipt,
