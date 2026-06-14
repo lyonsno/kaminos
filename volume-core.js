@@ -233,34 +233,65 @@ fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f
   return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
 }
 
-fn materialTemporalClassification(smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32) -> vec4<f32> {
+fn cheapTemporalRamp(x: f32, lo: f32, hi: f32) -> f32 {
+  return clamp((x - lo) / max(hi - lo, 0.0001), 0.0, 1.0);
+}
+
+struct MaterialTemporalSignals {
+  lanes: vec4<f32>,
+  protectedDetail: f32,
+  sampleWeight: f32,
+  reactiveBoost: f32,
+};
+
+fn materialTemporalSignals(alpha: f32, smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32, trans: f32) -> MaterialTemporalSignals {
   let fireHistoryProtect = clamp(
-    smoothstep(0.010, 0.105, fireAlpha)
-      + smoothstep(0.40, 1.18, temp) * 0.70
-      + smoothstep(0.045, 0.36, fireLick) * 0.36,
+    cheapTemporalRamp(fireAlpha, 0.010, 0.105)
+      + cheapTemporalRamp(temp, 0.40, 1.18) * 0.70
+      + cheapTemporalRamp(fireLick, 0.045, 0.36) * 0.36,
     0.0,
     1.0
   );
+  let interfaceSignal = interfaceShred * 1.30 + fireLick * 0.34 + majorantEdge * 0.82;
+  let detailSignal = microTextureSignal + interest * 0.20;
   let interfaceHistoryProtect = clamp(
-    smoothstep(0.035, 0.52, interfaceShred * 1.30 + fireLick * 0.34 + majorantEdge * 0.82)
-      + smoothstep(0.22, 1.18, microTextureSignal + interest * 0.16) * 0.30,
+    cheapTemporalRamp(interfaceSignal, 0.035, 0.52)
+      + cheapTemporalRamp(detailSignal, 0.22, 1.20) * 0.30,
     0.0,
     1.0
   );
   let detailHistoryProtect = clamp(
-    smoothstep(0.24, 1.35, microTextureSignal + interest * 0.22) * 0.74
+    cheapTemporalRamp(detailSignal, 0.24, 1.35) * 0.74
       + interfaceHistoryProtect * 0.26,
     0.0,
     1.0
   );
-  let smokeBody = smoothstep(0.012, 0.13, smokeAlpha) * (1.0 - smoothstep(0.006, 0.075, fireAlpha));
+  let smokeBody = cheapTemporalRamp(smokeAlpha, 0.012, 0.13) * (1.0 - cheapTemporalRamp(fireAlpha, 0.006, 0.075));
   let smokeHistoryTrust = clamp(
     smokeBody * (1.0 - fireHistoryProtect * 0.82) * (1.0 - interfaceHistoryProtect * 0.52)
-      + smoothstep(0.025, 0.22, smokeAlpha) * 0.12,
+      + cheapTemporalRamp(smokeAlpha, 0.025, 0.22) * 0.12,
     0.0,
     1.0
   );
-  return vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect);
+  let protectedDetail = max(fireHistoryProtect, max(interfaceHistoryProtect, detailHistoryProtect));
+  let smokeCarrier = smokeAlpha * (1.35 + smokeHistoryTrust * 0.68);
+  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
+  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
+  let sampleWeight = clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
+  let reactiveBoost = fireHistoryProtect * 0.36 + interfaceHistoryProtect * 0.22;
+  return MaterialTemporalSignals(vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect), protectedDetail, sampleWeight, reactiveBoost);
+}
+
+fn materialTemporalClassificationFromSignals(signals: MaterialTemporalSignals) -> vec4<f32> {
+  return signals.lanes;
+}
+
+fn materialTemporalClassification(smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32) -> vec4<f32> {
+  return materialTemporalClassificationFromSignals(materialTemporalSignals(smokeAlpha + fireAlpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, 1.0));
+}
+
+fn materialAwareImportanceWeightFromSignals(signals: MaterialTemporalSignals) -> f32 {
+  return signals.sampleWeight;
 }
 
 fn materialAwareImportanceWeight(alpha: f32, smokeAlpha: f32, fireAlpha: f32, interest: f32, materialTemporal: vec4<f32>, trans: f32) -> f32 {
@@ -1145,8 +1176,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16);
     let fireAlpha = clamp((flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26) * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
-    let materialTemporal = materialTemporalClassification(smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest);
-    let temporalSampleWeight = materialAwareImportanceWeight(alpha, smokeAlpha, fireAlpha, interest, materialTemporal, trans);
+    let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
+    let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
+    let temporalSampleWeight = materialAwareImportanceWeightFromSignals(materialSignals);
     temporalMaterialWeight = temporalMaterialWeight + temporalSampleWeight;
     temporalWorldSum = temporalWorldSum + p * temporalSampleWeight;
     temporalVelocitySum = temporalVelocitySum + state.xyz * temporalSampleWeight;
@@ -1154,7 +1186,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     temporalFireHistoryProtectSum = temporalFireHistoryProtectSum + materialTemporal.y * temporalSampleWeight;
     temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
     temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
-    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16 + materialTemporal.y * 0.36 + materialTemporal.z * 0.22, 0.0, 2.2));
+    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;

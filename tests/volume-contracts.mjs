@@ -194,6 +194,11 @@ assert.match(core, /temporalReprojectionConfidence/, 'fragment shader computes m
 assert.match(core, /temporalReactiveMask/, 'fragment shader rejects temporal history near reactive fire/smoke changes and skip edges');
 assert.match(core, /temporalHistoryWeight/, 'fragment shader names the final confidence/reactive history weight');
 assert.match(core, /materialTemporalClassification/, 'fragment shader classifies smoke, fire, interface, and detail for temporal reuse');
+assert.match(core, /cheapTemporalRamp/, 'material-temporal classification uses a cheap bounded ramp in the inner raymarch');
+assert.match(core, /struct MaterialTemporalSignals/, 'material-temporal classification packs reusable sample signals into one lane');
+assert.match(core, /materialTemporalSignals/, 'raymarch derives material-temporal signals once per shaded sample');
+assert.match(core, /materialTemporalClassificationFromSignals/, 'fragment shader derives temporal history lanes from cached material signals');
+assert.match(core, /materialAwareImportanceWeightFromSignals/, 'raymarch reuses cached material signals for temporal importance weighting');
 assert.match(core, /materialAwareTemporalWeights/, 'fragment shader derives material-aware history weights from accumulated ray samples');
 assert.match(core, /materialAwareImportanceWeight/, 'raymarch weights temporal representative samples by material importance');
 assert.match(core, /smokeHistoryTrust/, 'temporal weighting names the low-frequency smoke history trust lane');
