@@ -24,14 +24,22 @@ const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
   : 0;
+const RAY_BUDGET_PRESETS = {
+  draft: { raySteps: 48, adaptiveRays: 0.80 },
+  live: { raySteps: 72, adaptiveRays: 0.65 },
+  rich: { raySteps: 96, adaptiveRays: 0.45 },
+  hero: { raySteps: 144, adaptiveRays: 0.30 },
+};
+const rayBudgetPreset = routeParams.get('volume_ray_budget_preset') || '';
+const presetBudget = RAY_BUDGET_PRESETS[rayBudgetPreset] || null;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
-const expectedRaySteps = Number.isFinite(requestedRaySteps)
+const expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
   ? Math.max(24, Math.min(160, requestedRaySteps))
-  : 96;
+  : presetBudget?.raySteps ?? 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
-const expectedAdaptiveRays = Number.isFinite(requestedAdaptiveRays)
+const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
-  : 0.65;
+  : presetBudget?.adaptiveRays ?? 0.65;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -316,6 +324,10 @@ async function main() {
     if (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
+    const reportControls = {
+      ...(state.controls || {}),
+      rayBudgetPreset: state.controls?.rayBudgetPreset || rayBudgetPreset,
+    };
     const report = {
       requestedRoute: url,
       settleMs,
@@ -331,7 +343,8 @@ async function main() {
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
       adaptiveRaymarch: sample.adaptiveRaymarch,
-      controls: state.controls,
+      rayBudgetPreset: reportControls.rayBudgetPreset,
+      controls: reportControls,
       screenshot: out,
       metrics,
     };

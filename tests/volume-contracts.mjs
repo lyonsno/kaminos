@@ -32,6 +32,18 @@ assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to
 assert.match(index, /id="volume-adaptive-rays"/, 'Volume tab exposes adaptive raymarch sampling control');
 assert.match(index, /volume_adaptive_rays/, 'URL route can override adaptive raymarch sampling');
 assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sampling into the renderer');
+assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
+assert.match(index, /id="volume-ray-budget-handle"/, 'ray-budget gamut exposes a draggable handle');
+assert.match(index, /id="volume-ray-budget-readout"/, 'ray-budget gamut exposes a compact effective budget readout');
+for (const preset of ['draft', 'live', 'rich', 'hero']) {
+  assert.match(index, new RegExp(`data-volume-budget-preset="${preset}"`), `Volume tab exposes ${preset} ray-budget preset`);
+}
+assert.match(index, /VOLUME_RAY_BUDGET_PRESETS/, 'ray-budget presets have stable source identities');
+assert.match(index, /rayBudgetGamutPointFromControls/, 'ray-budget gamut maps slider values to a 2D point');
+assert.match(index, /applyRayBudgetGamutPoint/, 'ray-budget gamut maps pointer positions back to sliders');
+assert.match(index, /syncRayBudgetGamutFromControls/, 'ray-budget gamut stays coupled when individual sliders move');
+assert.match(index, /applyRayBudgetPreset/, 'ray-budget preset buttons jump to stable budget positions');
+assert.match(index, /volume_ray_budget_preset/, 'URL route can select a named ray-budget preset');
 assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route defaults to 96^3 grid');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
@@ -136,6 +148,7 @@ assert.match(witness, /effectiveRoute/, 'witness records effective route identit
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
+assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');

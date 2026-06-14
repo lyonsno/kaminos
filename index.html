@@ -118,6 +118,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ray-budget-wrap { margin: 8px 0 10px; }
+.ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
+.ray-budget-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); color: #666; font: 9px 'SF Mono', monospace; letter-spacing: 0; justify-self: center; }
+.ray-budget-axis-x { grid-column: 2; color: #666; font: 9px 'SF Mono', monospace; text-align: center; letter-spacing: 0; }
+.ray-budget-gamut { position: relative; width: 100%; aspect-ratio: 1; min-height: 148px; border: 1px solid #333; border-radius: 6px; background: linear-gradient(90deg, rgba(80,120,160,0.14), rgba(255,190,90,0.18)), linear-gradient(0deg, rgba(40,60,75,0.22), rgba(120,185,255,0.16)); cursor: crosshair; touch-action: none; overflow: hidden; }
+.ray-budget-gamut::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px); background-size: 25% 25%; pointer-events: none; }
+.ray-budget-handle { position: absolute; width: 16px; height: 16px; border: 2px solid #fff; border-radius: 50%; background: #1976d2; box-shadow: 0 0 0 3px rgba(25,118,210,0.24), 0 2px 8px rgba(0,0,0,0.55); transform: translate(-50%, -50%); pointer-events: none; }
+.ray-budget-corners { position: absolute; inset: 6px; pointer-events: none; color: rgba(220,220,220,0.42); font: 9px 'SF Mono', monospace; }
+.ray-budget-corners span { position: absolute; }
+.ray-budget-corners span:nth-child(1) { left: 0; bottom: 0; }
+.ray-budget-corners span:nth-child(2) { right: 0; bottom: 0; }
+.ray-budget-corners span:nth-child(3) { left: 0; top: 0; }
+.ray-budget-corners span:nth-child(4) { right: 0; top: 0; }
+.ray-budget-readout { color: #888; font: 10px 'SF Mono', monospace; margin: 6px 0 4px; }
+.ray-budget-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.ray-budget-presets .btn { margin: 0; padding: 5px 0; text-align: center; }
 #kaminos-volume-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; display: none; background: #050607; }
 #kaminos-volume-canvas.active { display: block; }
 </style>
@@ -331,6 +347,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-label">Adaptive Rays</span>
       <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
+    </div>
+    <div class="ray-budget-wrap">
+      <div class="ray-budget-grid">
+        <div class="ray-budget-axis-y">Adaptive</div>
+        <div id="volume-ray-budget-gamut" class="ray-budget-gamut" role="slider" tabindex="0" aria-label="Ray budget gamut" aria-valuemin="0" aria-valuemax="1">
+          <div class="ray-budget-corners"><span>Draft</span><span>Rich</span><span>Live</span><span>Hero</span></div>
+          <div id="volume-ray-budget-handle" class="ray-budget-handle"></div>
+        </div>
+        <div></div>
+        <div class="ray-budget-axis-x">Ray Steps</div>
+      </div>
+      <div id="volume-ray-budget-readout" class="ray-budget-readout">96 steps / 0.65 adaptive</div>
+      <div class="ray-budget-presets">
+        <button type="button" class="btn" data-volume-budget-preset="draft">Draft</button>
+        <button type="button" class="btn" data-volume-budget-preset="live">Live</button>
+        <button type="button" class="btn" data-volume-budget-preset="rich">Rich</button>
+        <button type="button" class="btn" data-volume-budget-preset="hero">Hero</button>
+      </div>
     </div>
     <div class="slider-row">
       <span class="slider-label">Input Radius</span>
@@ -1127,6 +1161,83 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
 }
 
+const VOLUME_RAY_BUDGET_PRESETS = {
+  draft: { raySteps: 48, adaptiveRays: 0.80, fire: 1.65, radiance: 1.80, absorption: 1.10 },
+  live: { raySteps: 72, adaptiveRays: 0.65, fire: 1.50, radiance: 1.70, absorption: 0.95 },
+  rich: { raySteps: 96, adaptiveRays: 0.45, fire: 1.40, radiance: 1.65, absorption: 0.85 },
+  hero: { raySteps: 144, adaptiveRays: 0.30, fire: 1.35, radiance: 1.60, absorption: 0.80 },
+};
+
+let activeVolumeRayBudgetPreset = '';
+let routedVolumeRayBudgetPreset = '';
+
+function clampVolumeValue(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value)));
+}
+
+function snapVolumeRaySteps(value) {
+  return Math.round(clampVolumeValue(value, 24, 160) / 4) * 4;
+}
+
+function snapVolumeAdaptiveRays(value) {
+  return Math.round(clampVolumeValue(value, 0, 1) / 0.05) * 0.05;
+}
+
+function setVolumeControlValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = String(value);
+}
+
+function rayBudgetGamutPointFromControls() {
+  const steps = parseFloat(document.getElementById('volume-steps').value);
+  const adaptive = parseFloat(document.getElementById('volume-adaptive-rays').value);
+  return {
+    x: (snapVolumeRaySteps(steps) - 24) / (160 - 24),
+    y: 1 - snapVolumeAdaptiveRays(adaptive),
+  };
+}
+
+function syncRayBudgetPresetButtons() {
+  document.querySelectorAll('[data-volume-budget-preset]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.volumeBudgetPreset === activeVolumeRayBudgetPreset);
+  });
+}
+
+function syncRayBudgetGamutFromControls() {
+  const handle = document.getElementById('volume-ray-budget-handle');
+  const readout = document.getElementById('volume-ray-budget-readout');
+  if (!handle || !readout) return;
+  const p = rayBudgetGamutPointFromControls();
+  const c = readVolumeControls();
+  handle.style.left = `${p.x * 100}%`;
+  handle.style.top = `${p.y * 100}%`;
+  readout.textContent = `${c.raySteps | 0} steps / ${c.adaptiveRays.toFixed(2)} adaptive`;
+  syncRayBudgetPresetButtons();
+}
+
+function applyRayBudgetGamutPoint(x, y) {
+  const nextSteps = snapVolumeRaySteps(24 + clampVolumeValue(x, 0, 1) * (160 - 24));
+  const nextAdaptive = snapVolumeAdaptiveRays(1 - clampVolumeValue(y, 0, 1));
+  setVolumeControlValue('volume-steps', nextSteps);
+  setVolumeControlValue('volume-adaptive-rays', nextAdaptive.toFixed(2));
+  activeVolumeRayBudgetPreset = '';
+  routedVolumeRayBudgetPreset = '';
+}
+
+function applyRayBudgetPreset(name, options = {}) {
+  const preset = VOLUME_RAY_BUDGET_PRESETS[name];
+  if (!preset) return false;
+  setVolumeControlValue('volume-steps', preset.raySteps);
+  setVolumeControlValue('volume-adaptive-rays', preset.adaptiveRays.toFixed(2));
+  setVolumeControlValue('volume-fire', preset.fire.toFixed(2));
+  setVolumeControlValue('volume-radiance', preset.radiance.toFixed(2));
+  setVolumeControlValue('volume-absorption', preset.absorption.toFixed(2));
+  activeVolumeRayBudgetPreset = name;
+  routedVolumeRayBudgetPreset = options.route ? name : '';
+  return true;
+}
+
 function readVolumeControls() {
   return {
     density: parseFloat(document.getElementById('volume-density').value),
@@ -1148,6 +1259,7 @@ function readVolumeControls() {
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+    rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
   };
 }
 
@@ -1172,6 +1284,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+  syncRayBudgetGamutFromControls();
 }
 
 function refreshVolumeReadout() {
@@ -1244,13 +1357,21 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
     document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
   }
+  const routeRayBudgetPreset = params.get('volume_ray_budget_preset');
+  if (routeRayBudgetPreset) {
+    applyRayBudgetPreset(routeRayBudgetPreset, { route: true });
+  }
   const routeRaySteps = Number(params.get('volume_steps'));
   if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
     document.getElementById('volume-steps').value = String(Math.max(24, Math.min(160, routeRaySteps)));
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
   }
   const routeAdaptiveRays = Number(params.get('volume_adaptive_rays'));
   if (params.has('volume_adaptive_rays') && Number.isFinite(routeAdaptiveRays)) {
     document.getElementById('volume-adaptive-rays').value = String(Math.max(0, Math.min(1, routeAdaptiveRays)));
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
   }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
@@ -1265,8 +1386,11 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setControls(readVolumeControls());
 
   const syncControls = () => {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
@@ -1275,6 +1399,45 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
+  const applyBudgetControls = () => {
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    refreshVolumeReadout();
+  };
+  const gamut = document.getElementById('volume-ray-budget-gamut');
+  const updateGamutFromPointer = event => {
+    const rect = gamut.getBoundingClientRect();
+    applyRayBudgetGamutPoint((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+    applyBudgetControls();
+  };
+  gamut.addEventListener('pointerdown', event => {
+    gamut.setPointerCapture(event.pointerId);
+    updateGamutFromPointer(event);
+  });
+  gamut.addEventListener('pointermove', event => {
+    if (event.buttons) updateGamutFromPointer(event);
+  });
+  gamut.addEventListener('keydown', event => {
+    const c = readVolumeControls();
+    let handled = true;
+    if (event.key === 'ArrowLeft') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps - 4));
+    else if (event.key === 'ArrowRight') setVolumeControlValue('volume-steps', snapVolumeRaySteps(c.raySteps + 4));
+    else if (event.key === 'ArrowDown') setVolumeControlValue('volume-adaptive-rays', snapVolumeAdaptiveRays(c.adaptiveRays - 0.05).toFixed(2));
+    else if (event.key === 'ArrowUp') setVolumeControlValue('volume-adaptive-rays', snapVolumeAdaptiveRays(c.adaptiveRays + 0.05).toFixed(2));
+    else handled = false;
+    if (handled) {
+      event.preventDefault();
+      activeVolumeRayBudgetPreset = '';
+      routedVolumeRayBudgetPreset = '';
+      applyBudgetControls();
+    }
+  });
+  document.querySelectorAll('[data-volume-budget-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyRayBudgetPreset(btn.dataset.volumeBudgetPreset);
+      applyBudgetControls();
+    });
+  });
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
       volumePrototype.setActive(false);
