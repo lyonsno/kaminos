@@ -46,13 +46,22 @@ assert.match(index, /id="lamellar-popover-meta"/, 'Lamellar selection popover ha
 assert.match(index, /id="lamellar-popover-actions"/, 'Lamellar selection popover has local contextual actions');
 assert.match(index, /id="lamellar-popover-populations"/, 'Lamellar selection popover exposes same-layer population chips');
 assert.match(index, /data-action="add-population"/, 'Lamellar layer toolhead can add a same-layer strip population');
+assert.match(index, />Add lamella set</, 'Lamellar layer toolhead labels same-layer population addition in operator-readable words');
 assert.match(index, /data-action="add-cutter"/, 'Lamellar layer toolhead can add a same-layer cutter population');
+assert.match(index, />Add cutter set</, 'Lamellar layer toolhead labels cutter addition in operator-readable words');
 assert.match(index, /data-action="solo-layer"/, 'Lamellar layer toolhead can solo the selected layer locally');
+assert.match(index, />Solo layer</, 'Lamellar layer toolhead labels layer solo in operator-readable words');
 assert.match(index, /data-action="fit-selection"/, 'Lamellar layer toolhead can fit the selected composition locally');
+assert.match(index, />Fit view</, 'Lamellar layer toolhead labels local framing in operator-readable words');
 assert.match(index, /data-population-id/, 'Lamellar layer toolhead population chips carry population ids');
 assert.match(index, /data-action="population-count-minus"/, 'Lamellar population toolhead can reduce selected population count');
+assert.match(index, />Remove strip</, 'Lamellar population toolhead labels count decrement in operator-readable words');
 assert.match(index, /data-action="population-count-plus"/, 'Lamellar population toolhead can increase selected population count');
+assert.match(index, />Add strip</, 'Lamellar population toolhead labels count increment in operator-readable words');
 assert.match(index, /data-action="population-flip-chirality"/, 'Lamellar population toolhead can flip selected population chirality');
+assert.match(index, />Flip chirality</, 'Lamellar population toolhead labels chirality flip in operator-readable words');
+assert.match(index, /pinLamellarSelectionPopover/, 'Lamellar population toolhead can pin its initial screen position during direct manipulation');
+assert.match(index, /data-popover-pinned/, 'Lamellar population toolhead exposes pinned state for witness/operator diagnostics');
 assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar population toolhead exposes bearing spread control');
 assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
@@ -177,6 +186,7 @@ assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverag
 assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
 assert.match(core, /bearingPhase/, 'Lamellar strip instances carry actual shell bearing phase, not tiny jitter only');
 assert.match(core, /shellLaneOffset/, 'Lamellar strip instances carry shell-lane offsets for visible coverage sets');
+assert.match(core, /diagnosticLayerSeparationScale/, 'Lamellar core reports diagnostic layer separation exaggeration while authoring shells');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
 assert.match(core, /thicknessVariance/, 'Lamellar core supports strip-local thickness variance independent of layer thickness');
@@ -239,6 +249,7 @@ assert.match(witness, /layerSelectionUi/, 'witness records layer-first viewport 
 assert.match(witness, /stripDrilldownUi/, 'witness records explicit strip drilldown state');
 assert.match(witness, /selectionPopoverUi/, 'witness records the floating selection popover state');
 assert.match(witness, /populationToolheadUi/, 'witness records selected-population toolhead state');
+assert.match(witness, /popoverPinnedDuringSliderReceipt/, 'witness records that slider manipulation pins the floating toolhead');
 assert.match(witness, /selectedPopulationObject/, 'witness records selected population object state');
 assert.match(witness, /populationControlReceipt/, 'witness records a selected-population control mutation receipt');
 assert.match(witness, /populationSliderSweepReceipt/, 'witness records selected-population slider sweep behavior');

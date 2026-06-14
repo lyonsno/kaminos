@@ -651,6 +651,7 @@ let selectedLamellarObject = null;
 let lamellarCameraInteracted = false;
 const lamellarStripProfileOverrides = {};
 const lamellarStripPopulationOverrides = {};
+let lamellarPinnedPopoverSelectionKey = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -871,7 +872,10 @@ async function initScene() {
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
-  const markLamellarCameraInteracted = () => { lamellarCameraInteracted = true; };
+  const markLamellarCameraInteracted = () => {
+    lamellarCameraInteracted = true;
+    unpinLamellarSelectionPopover();
+  };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', markDirty);
   renderer.domElement.addEventListener('pointerdown', markDirty);
@@ -1123,6 +1127,9 @@ function shouldFrameLamellarOnEnable(wasActive) {
 }
 
 function selectLamellarObject(selection) {
+  const previousSelectionKey = lamellarPopoverSelectionKey();
+  const nextSelectionKey = lamellarPopoverSelectionKey(selection);
+  if (previousSelectionKey !== nextSelectionKey) unpinLamellarSelectionPopover();
   selectedLamellarObject = selection || null;
   selectedLamellarPopulationId = selection?.populationId || null;
   if (selection?.selectionLevel === 'population') {
@@ -1215,6 +1222,7 @@ function positionLamellarSelectionPopover(state = null) {
   const popover = document.getElementById('lamellar-selection-popover');
   const anchor = (state || lamellarWitness?.debugState?.() || {}).selectionAnchor;
   if (!popover || !anchor || anchor.length !== 3 || popover.style.display === 'none') return false;
+  if (popover.dataset.popoverPinned === '1') return false;
   const point = new THREE.Vector3(anchor[0], anchor[1], anchor[2]);
   point.project(camera);
   const viewport = document.getElementById('viewport');
@@ -1227,6 +1235,38 @@ function positionLamellarSelectionPopover(state = null) {
   const top = Math.max(12, Math.min(rect.height - height - 12, y - 18));
   popover.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
   return true;
+}
+
+function lamellarPopoverSelectionKey(selection = selectedLamellarObject) {
+  if (!selection) return 'none';
+  return [
+    selection.selectionLevel || 'object',
+    selection.populationId || '',
+    selection.stripInstanceId || '',
+    selection.layerSpecId || '',
+    Number.isFinite(selection.layerIndex) ? `L${selection.layerIndex}` : '',
+  ].join(':');
+}
+
+function pinLamellarSelectionPopover() {
+  const popover = document.getElementById('lamellar-selection-popover');
+  if (!popover || popover.style.display === 'none') return false;
+  if (!popover.style.transform || popover.style.transform === 'none') {
+    positionLamellarSelectionPopover(lamellarWitness?.debugState?.() || {});
+  }
+  popover.dataset.popoverPinned = '1';
+  popover.setAttribute('data-popover-pinned', '1');
+  lamellarPinnedPopoverSelectionKey = lamellarPopoverSelectionKey();
+  return true;
+}
+
+function unpinLamellarSelectionPopover() {
+  const popover = document.getElementById('lamellar-selection-popover');
+  if (popover) {
+    delete popover.dataset.popoverPinned;
+    popover.removeAttribute('data-popover-pinned');
+  }
+  lamellarPinnedPopoverSelectionKey = null;
 }
 
 function syncLamellarSelectionPopover(state = null) {
@@ -1252,28 +1292,28 @@ function syncLamellarSelectionPopover(state = null) {
     title.textContent = `Layer L${object.layerIndex}`;
     meta.textContent = `${object.stripCount || object.stripIds?.length || 0} strips`;
     actions.innerHTML = [
-      '<button class="btn" data-action="add-population">+ Pop</button>',
-      '<button class="btn" data-action="add-cutter">+ Cutter</button>',
-      '<button class="btn" data-action="solo-layer">Solo</button>',
-      '<button class="btn" data-action="fit-selection">Fit</button>',
-      '<button class="btn" data-action="drill">Drill</button>',
+      '<button class="btn" data-action="add-population">Add lamella set</button>',
+      '<button class="btn" data-action="add-cutter">Add cutter set</button>',
+      '<button class="btn" data-action="solo-layer">Solo layer</button>',
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="drill">Open strips</button>',
     ].join('');
   } else if (object.selectionLevel === 'population') {
     title.textContent = `L${object.layerIndex} / ${object.populationRole || object.role}`;
     meta.textContent = `${object.count || object.stripCount || 0} strips · ${object.chirality > 0 ? '+' : '-'}`;
     actions.innerHTML = [
-      '<button class="btn" data-action="population-count-minus">-</button>',
-      '<button class="btn" data-action="population-count-plus">+</button>',
-      '<button class="btn" data-action="population-flip-chirality">Flip</button>',
-      '<button class="btn" data-action="fit-selection">Fit</button>',
-      '<button class="btn" data-action="layer">Layer</button>',
+      '<button class="btn" data-action="population-count-minus">Remove strip</button>',
+      '<button class="btn" data-action="population-count-plus">Add strip</button>',
+      '<button class="btn" data-action="population-flip-chirality">Flip chirality</button>',
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="layer">Select layer</button>',
     ].join('');
   } else {
     title.textContent = `L${object.layerIndex} / s${object.stripIndex}`;
     meta.textContent = object.role || object.stripInstanceId || 'strip';
     actions.innerHTML = [
-      '<button class="btn" data-action="fit-selection">Fit</button>',
-      '<button class="btn" data-action="layer">Layer</button>',
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="layer">Select layer</button>',
     ].join('');
   }
   actions.querySelector('[data-action="add-population"]')?.addEventListener('click', () => addLamellarPopulation('lamella'));
@@ -1324,9 +1364,15 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   offset.value = String(selectedPopulation.bearingOffset ?? 0);
   spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);
   offsetVal.textContent = Number(selectedPopulation.bearingOffset ?? 0).toFixed(2);
-  spread.oninput = event => applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
+  spread.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
+  };
   spread.onchange = spread.oninput;
-  offset.oninput = event => applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) });
+  offset.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) });
+  };
   offset.onchange = offset.oninput;
 }
 
@@ -1557,6 +1603,7 @@ async function initLamellarRoute() {
   window.__kaminosLamellarNudgeSelectedPopulationCount = delta => nudgeSelectedPopulationCount(delta);
   window.__kaminosLamellarFlipSelectedPopulationChirality = () => flipSelectedPopulationChirality();
   window.__kaminosLamellarApplyPopulationOverride = (populationId, patch) => applyLamellarPopulationOverride(populationId, patch);
+  window.__kaminosLamellarPinSelectionPopover = () => pinLamellarSelectionPopover();
   window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
@@ -1617,6 +1664,9 @@ async function initLamellarRoute() {
   });
   document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
   document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));
+  const selectionPopover = document.getElementById('lamellar-selection-popover');
+  selectionPopover.addEventListener('pointerdown', () => pinLamellarSelectionPopover());
+  selectionPopover.addEventListener('focusin', () => pinLamellarSelectionPopover());
   const stripProfileControlIds = [
     'lamellar-selected-strip-width',
     'lamellar-selected-strip-thickness',

@@ -215,6 +215,21 @@ async function main() {
         if (firstPopulationId) window.__kaminosLamellarNudgeSelectedPopulationCount?.(1);
         const afterCountState = w ? w.debugState() : selectedPopulationState;
         if (firstPopulationId) window.__kaminosLamellarFlipSelectedPopulationChirality?.();
+        const pinPopover = document.getElementById('lamellar-selection-popover');
+        const beforePinnedRect = pinPopover?.getBoundingClientRect();
+        const beforePinnedTransform = pinPopover?.style.transform || '';
+        if (firstPopulationId) window.__kaminosLamellarPinSelectionPopover?.();
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1.73, bearingOffset: -1.1 });
+        const afterPinnedRect = pinPopover?.getBoundingClientRect();
+        const afterPinnedTransform = pinPopover?.style.transform || '';
+        const popoverPinnedDuringSliderReceipt = {
+          mode: 'selected-population-toolhead-position-pinned-during-slider-v0',
+          pinned: pinPopover?.dataset.popoverPinned === '1',
+          beforeTransform: beforePinnedTransform,
+          afterTransform: afterPinnedTransform,
+          leftDelta: Number(((afterPinnedRect?.left || 0) - (beforePinnedRect?.left || 0)).toFixed(3)),
+          topDelta: Number(((afterPinnedRect?.top || 0) - (beforePinnedRect?.top || 0)).toFixed(3)),
+        };
         const sliderSweep = [];
         for (const bearingVariance of [0.15, 1, 2]) {
           if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance, bearingOffset: 0.23 });
@@ -240,7 +255,9 @@ async function main() {
           selectedPopulationId: populationState.selectedPopulationId,
           selectedPopulationObject: populationState.selectedLamellarObject,
           populationChipCount: document.querySelectorAll('#lamellar-popover-populations [data-population-id]').length,
+          actionLabels: Array.from(document.querySelectorAll('#lamellar-popover-actions .btn')).map(button => button.textContent.trim()),
           toolheadDisplay: populationToolhead ? getComputedStyle(populationToolhead).display : 'missing',
+          popoverPinned: document.getElementById('lamellar-selection-popover')?.dataset.popoverPinned === '1',
           popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
           spreadValue: Number(document.getElementById('lamellar-population-bearing-spread')?.value || 0),
           offsetValue: Number(document.getElementById('lamellar-population-bearing-offset')?.value || 0),
@@ -284,6 +301,7 @@ async function main() {
           selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
           populationControlReceipt,
           populationSliderSweepReceipt,
+          popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
             selectedLayerSpecId: state.selectedLayerSpecId,
@@ -296,6 +314,8 @@ async function main() {
             title: document.getElementById('lamellar-popover-title')?.textContent || '',
             meta: document.getElementById('lamellar-popover-meta')?.textContent || '',
             actionCount: document.querySelectorAll('#lamellar-popover-actions .btn').length,
+            actionLabels: Array.from(document.querySelectorAll('#lamellar-popover-actions .btn')).map(button => button.textContent.trim()),
+            popoverPinned: popover?.dataset.popoverPinned === '1',
             left: Number(popoverRect?.left?.toFixed(1) || 0),
             top: Number(popoverRect?.top?.toFixed(1) || 0),
           },
@@ -355,7 +375,13 @@ async function main() {
     assert.equal(state.populationToolheadUi?.selectionLevel, 'population', 'Lamellar population chip did not select population level');
     assert.ok(state.populationToolheadUi?.selectedPopulationId, 'Lamellar population selection did not carry a population id');
     assert.notEqual(state.populationToolheadUi?.toolheadDisplay, 'none', 'Lamellar population toolhead controls did not render');
+    assert.ok((state.populationToolheadUi?.actionLabels || []).includes('Add strip'), 'Lamellar population toolhead did not expose readable Add strip label');
+    assert.ok((state.populationToolheadUi?.actionLabels || []).includes('Remove strip'), 'Lamellar population toolhead did not expose readable Remove strip label');
+    assert.ok((state.populationToolheadUi?.actionLabels || []).includes('Flip chirality'), 'Lamellar population toolhead did not expose readable Flip chirality label');
     assert.ok((state.selectedPopulationObject?.populationStripIds || []).length >= 1, 'Lamellar selected population did not carry strip ids');
+    assert.equal(state.popoverPinnedDuringSliderReceipt?.pinned, true, 'Lamellar population slider manipulation did not pin the floating toolhead');
+    assert.ok(Math.abs(state.popoverPinnedDuringSliderReceipt?.leftDelta || 0) < 0.75, 'Lamellar floating toolhead moved horizontally while a slider manipulated geometry');
+    assert.ok(Math.abs(state.popoverPinnedDuringSliderReceipt?.topDelta || 0) < 0.75, 'Lamellar floating toolhead moved vertically while a slider manipulated geometry');
     assert.equal(
       state.populationControlReceipt?.afterCount,
       (state.populationControlReceipt?.beforeCount || 0) + 1,
@@ -426,6 +452,7 @@ async function main() {
       selectedPopulationObject: state.selectedPopulationObject,
       populationControlReceipt: state.populationControlReceipt,
       populationSliderSweepReceipt: state.populationSliderSweepReceipt,
+      popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,
       selectionUi: state.selectionUi,

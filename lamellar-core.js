@@ -18,6 +18,7 @@ const POPULATION_LAYOUT_PRESETS = new Set(["coverage", "cluster"]);
 const MAX_LAYER_COUNT = 12;
 const TAU = Math.PI * 2;
 const MAX_COVERAGE_LANE_SPAN = 1.44;
+const DIAGNOSTIC_LAYER_SEPARATION_SCALE = 2.15;
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -287,7 +288,8 @@ export function generateLamellarLayerSpecs(input = {}) {
     const layerOverride = layerOverrides.find(override => override.layerIndex === layerIndex);
     const chirality = layerOverride?.chirality ?? chiralitySign(chiralityPattern, layerIndex, rand);
     const role = layerIndex === 0 ? "selected-source" : layerIndex === 1 ? "neighbor-envelope" : "nested-placeholder-shell";
-    const depth = layerIndex === 0 ? 0 : Number((depthSpacing * (layerIndex === 1 ? -0.35 : layerIndex)).toFixed(4));
+    const depthStep = layerIndex === 0 ? 0 : depthSpacing * (layerIndex === 1 ? -0.35 : layerIndex);
+    const depth = Number((depthStep * DIAGNOSTIC_LAYER_SEPARATION_SCALE).toFixed(4));
     const layerWeight = layerIndex === 0 ? 0.15 : layerIndex === 1 ? 0.05 : -0.04 * layerIndex;
     const variance = (rand() * 2 - 1) * chunkinessVariance;
     const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
@@ -304,6 +306,7 @@ export function generateLamellarLayerSpecs(input = {}) {
       chirality,
       chiralityPattern,
       depth,
+      diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
       chunkiness,
       width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
       thickness: Number((0.006 + chunkiness * 0.022).toFixed(4)),
@@ -328,6 +331,7 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkinessBase: Number(chunkinessBase.toFixed(4)),
       chunkinessVariance: Number(chunkinessVariance.toFixed(4)),
       depthSpacing: Number(depthSpacing.toFixed(4)),
+      diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
       overlapBias: Number(overlapBias.toFixed(4)),
       layerOverrides: layerOverrides.slice(0, numLayers),
       layerSpecIds: layerSpecs.map(spec => spec.id),
@@ -873,6 +877,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     chiralityMode: "same",
     chiralityPattern: "same",
     depthSpacing: 0.035,
+    diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
     chunkinessBase: 0.48,
     chunkinessVariance: 0.22,
     layerOverrides: [],
@@ -1444,6 +1449,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       soloLayerIndex: state.soloLayerIndex,
       cameraPosition: vectorSnapshot(camera.position),
       cameraTarget: vectorSnapshot(controls.target),
+      diagnosticLayerSeparationScale: state.diagnosticLayerSeparationScale,
     };
   }
 
