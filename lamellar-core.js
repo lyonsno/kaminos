@@ -6,6 +6,9 @@ const PLACEHOLDER_CONTRACT = "temporary-aesthetic-composition-primitive-not-fina
 const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
 const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
+const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
+const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
+const CHANNEL_WITNESS_ANCHOR_MODE = "selected-neighbor-channel-closeup";
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -48,6 +51,49 @@ function descriptorCurveOptions(descriptor) {
     width: descriptor.width,
     edgeLift: descriptor.edgeLift,
     waviness: descriptor.waviness,
+  };
+}
+
+function createChannelCutReceipt(descriptors, cutRadius, lower, upper) {
+  const neighbor = descriptors.find(descriptor => descriptor.materialRole === "neighbor-envelope") || null;
+  const selected = descriptors.find(descriptor => descriptor.materialRole === "selected-source") || null;
+  const gap = Number(clamp(cutRadius * 0.78, 0.018, 0.075).toFixed(4));
+  const terminalRailStopCount = 30;
+  const sampledClearanceBand = [Number((-gap * 0.02).toFixed(4)), Number((gap * 1.13).toFixed(4))];
+  const affectedSegmentIds = selected ? [selected.id] : [];
+  return {
+    mode: CHANNEL_CUT_MODE,
+    role: "cut-author-envelope",
+    terminalContourSource: CHANNEL_TERMINAL_CONTOUR_SOURCE,
+    channelGapRadius: gap,
+    terminalRailStopCount,
+    sampledClearanceBand,
+    witnessAnchorMode: CHANNEL_WITNESS_ANCHOR_MODE,
+    sourceSegmentId: neighbor?.id || null,
+    sourceLayerSpecId: neighbor?.layerSpecId || null,
+    affectedSegmentIds,
+    capTValues: [lower, upper],
+  };
+}
+
+function createCutAuthorEnvelopeDescriptor(descriptor, channelCutReceipt) {
+  if (!descriptor) return null;
+  const envelopeDisplayWidth = Number(clamp(descriptor.width * 0.18, 0.012, 0.024).toFixed(4));
+  return {
+    role: "cut-author-envelope",
+    mode: CHANNEL_CUT_MODE,
+    sourceRole: descriptor.materialRole,
+    sourceSegmentId: descriptor.id,
+    sourceLayerSpecId: descriptor.layerSpecId,
+    layerIndex: descriptor.layerIndex,
+    chunkiness: descriptor.chunkiness,
+    authoredLayerWidth: descriptor.width,
+    envelopeDisplayWidth,
+    terminalContourSource: CHANNEL_TERMINAL_CONTOUR_SOURCE,
+    channelGapRadius: channelCutReceipt.channelGapRadius,
+    terminalRailStopCount: channelCutReceipt.terminalRailStopCount,
+    sampledClearanceBand: channelCutReceipt.sampledClearanceBand,
+    witnessAnchorMode: CHANNEL_WITNESS_ANCHOR_MODE,
   };
 }
 
@@ -231,6 +277,11 @@ export function sliceLamellarSectionSegments(descriptors, input = {}) {
   const upper = Number(clamp(sliceT + halfWindow, 0.12, 0.94).toFixed(4));
   const affectedSegmentIds = [];
   const sliced = [];
+  const channelCutReceipt = createChannelCutReceipt(descriptors, cutRadius, lower, upper);
+  const cutAuthorEnvelopeDescriptor = createCutAuthorEnvelopeDescriptor(
+    descriptors.find(descriptor => descriptor.materialRole === "neighbor-envelope"),
+    channelCutReceipt
+  );
 
   for (const descriptor of descriptors) {
     if (descriptor.materialRole !== "selected-source") {
@@ -267,6 +318,7 @@ export function sliceLamellarSectionSegments(descriptors, input = {}) {
       angleDegrees: Number(sliceAngle.toFixed(2)),
       capLaw: END_CAP_SEALING_MODE,
       window: [lower, upper],
+      channelCutMode: CHANNEL_CUT_MODE,
     },
     sliceApplicationReceipt: {
       mode: "descriptor-slice-before-mesh-emission",
@@ -274,7 +326,14 @@ export function sliceLamellarSectionSegments(descriptors, input = {}) {
       emittedSegmentIds: sliced.map(d => d.id),
       capTValues: [lower, upper],
       openEdgeCount: 0,
+      channelCutMode: CHANNEL_CUT_MODE,
+      terminalContourSource: CHANNEL_TERMINAL_CONTOUR_SOURCE,
     },
+    channelCutReceipt: {
+      ...channelCutReceipt,
+      affectedSegmentIds,
+    },
+    cutAuthorEnvelopeDescriptor,
   };
 }
 
@@ -385,6 +444,24 @@ function makeCuttingEdgeGeometry(THREE, t, opts) {
   };
 }
 
+function makeCutAuthorEnvelopeGeometry(THREE, descriptor, cutAuthorEnvelopeDescriptor) {
+  const opts = {
+    ...descriptorCurveOptions(descriptor),
+    width: cutAuthorEnvelopeDescriptor.envelopeDisplayWidth,
+    edgeLift: Number(((descriptor.edgeLift || 0.014) + 0.025).toFixed(4)),
+  };
+  const rail = makeRibbonGeometry(THREE, descriptor.interval, opts);
+  return {
+    geometry: rail.geometry,
+    centerline: rail.centerline,
+    descriptor: {
+      ...cutAuthorEnvelopeDescriptor,
+      interval: descriptor.interval,
+      displayMode: "thin-visible-neighbor-offset-envelope-rail",
+    },
+  };
+}
+
 function makeCapGeometry(THREE, t, opts) {
   const theta = opts.theta0 + opts.thetaTwist * t;
   const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
@@ -451,6 +528,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
     sliceApplicationReceipt: null,
+    cutAuthorEnvelopeDescriptor: null,
+    channelCutReceipt: null,
     openEdgeCount: 0,
     lightHooks: [],
     lastBuildAt: null,
@@ -462,12 +541,12 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   const materials = {
     selected: new THREE.MeshStandardMaterial({ color: 0xd6a33d, metalness: 0.72, roughness: 0.34, side: THREE.DoubleSide }),
     continuation: new THREE.MeshStandardMaterial({ color: 0xf2c86b, metalness: 0.64, roughness: 0.38, side: THREE.DoubleSide }),
-    neighbor: new THREE.MeshStandardMaterial({ color: 0x1db6ac, metalness: 0.38, roughness: 0.42, side: THREE.DoubleSide }),
+    neighbor: new THREE.MeshStandardMaterial({ color: 0x10c9c1, emissive: 0x073330, emissiveIntensity: 0.18, metalness: 0.34, roughness: 0.36, side: THREE.DoubleSide }),
     cuttingEdge: new THREE.MeshStandardMaterial({ color: 0xff5d46, emissive: 0x3a0b04, emissiveIntensity: 0.35, metalness: 0.18, roughness: 0.32, side: THREE.DoubleSide }),
     cap: new THREE.MeshStandardMaterial({ color: 0xffcf76, metalness: 0.52, roughness: 0.3, side: THREE.DoubleSide }),
     gauge: new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
     placeholderA: new THREE.MeshStandardMaterial({ color: 0xd8cfab, metalness: 0.44, roughness: 0.48, side: THREE.DoubleSide }),
-    placeholderB: new THREE.MeshStandardMaterial({ color: 0x7fc5bc, metalness: 0.44, roughness: 0.48, side: THREE.DoubleSide }),
+    placeholderB: new THREE.MeshStandardMaterial({ color: 0x909895, metalness: 0.38, roughness: 0.56, side: THREE.DoubleSide }),
   };
 
   function clear() {
@@ -517,13 +596,19 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     }));
     state.sliceToolDescriptor = sliced.sliceToolDescriptor;
     state.sliceApplicationReceipt = sliced.sliceApplicationReceipt;
+    state.cutAuthorEnvelopeDescriptor = sliced.cutAuthorEnvelopeDescriptor;
+    state.channelCutReceipt = sliced.channelCutReceipt;
     state.capTValues = sliced.sliceApplicationReceipt.capTValues;
     state.sectionSegments = [];
     state.lightHooks = [];
 
     sliced.descriptors.forEach((descriptor, index) => {
+      const isCutAuthorEnvelope = descriptor.materialRole === "neighbor-envelope";
       const opts = descriptorCurveOptions(descriptor);
-      const { geometry, centerline } = makeRibbonGeometry(THREE, descriptor.interval, opts);
+      const built = isCutAuthorEnvelope && state.cutAuthorEnvelopeDescriptor
+        ? makeCutAuthorEnvelopeGeometry(THREE, descriptor, state.cutAuthorEnvelopeDescriptor)
+        : makeRibbonGeometry(THREE, descriptor.interval, opts);
+      const { geometry, centerline } = built;
       let material = materials.neighbor;
       if (descriptor.materialRole === "selected-pre-cut") material = materials.selected;
       if (descriptor.materialRole === "selected-continuation") material = materials.continuation;
@@ -531,14 +616,17 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         material = descriptor.layerIndex % 2 ? materials.placeholderA : materials.placeholderB;
       }
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.userData.lamellarRole = descriptor.materialRole;
+      mesh.userData.lamellarRole = isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole;
       mesh.userData.lamellarSectionId = descriptor.id;
       group.add(mesh);
       state.sectionSegments.push({
         id: descriptor.id,
         kind: descriptor.kind,
         layerSpecId: descriptor.layerSpecId,
-        role: descriptor.materialRole,
+        role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
+        sourceRole: isCutAuthorEnvelope ? descriptor.materialRole : null,
+        channelCutMode: isCutAuthorEnvelope ? CHANNEL_CUT_MODE : null,
+        envelopeDisplayWidth: isCutAuthorEnvelope ? state.cutAuthorEnvelopeDescriptor?.envelopeDisplayWidth : null,
         layerIndex: descriptor.layerIndex,
         depth: descriptor.depth,
         chirality: descriptor.chirality,

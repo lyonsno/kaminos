@@ -194,6 +194,8 @@ async function main() {
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
     assert.ok(state.sliceToolDescriptor?.mode, 'Lamellar witness did not export slice tool descriptor');
     assert.ok(state.sliceApplicationReceipt?.mode, 'Lamellar witness did not export slice application receipt');
+    assert.ok(state.cutAuthorEnvelopeDescriptor?.mode, 'Lamellar witness did not export cut-author envelope descriptor');
+    assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -219,6 +221,8 @@ async function main() {
       layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,
+      cutAuthorEnvelopeDescriptor: state.cutAuthorEnvelopeDescriptor,
+      channelCutReceipt: state.channelCutReceipt,
       segmentDescriptorCount: state.segmentDescriptorCount,
       generatedSegmentDescriptors: state.generatedSegmentDescriptors,
       lightHookCount: state.lightHookCount,

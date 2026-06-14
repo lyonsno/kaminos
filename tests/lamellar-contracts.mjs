@@ -61,7 +61,15 @@ assert.match(core, /cap_profile/, 'Lamellar module supports the cap-profile witn
 assert.match(core, /cut_radius_coupling/, 'Lamellar module supports the cut-radius coupling witness view');
 assert.match(core, /perpendicular-cutting-edge/, 'Lamellar module exposes the cut-causing perpendicular edge as its own witness actor');
 assert.match(core, /cuttingEdgeDescriptor/, 'Lamellar debug state reports the cut-causing edge descriptor');
+assert.match(core, /cutAuthorEnvelopeDescriptor/, 'Lamellar debug state reports the neighbor cut-author envelope descriptor');
+assert.match(core, /channelCutReceipt/, 'Lamellar debug state reports the channel-cut receipt');
+assert.match(core, /neighbor-offset-envelope-terminal-channel-cut/, 'Lamellar core names the neighbor-offset envelope channel-cut mode');
+assert.match(core, /neighbor-offset-envelope-rail-contour/, 'Lamellar core names the neighbor-derived terminal rail contour source');
+assert.match(core, /selected-neighbor-channel-closeup/, 'Lamellar core records the cut-author witness anchor mode');
+assert.match(core, /terminalRailStopCount/, 'Lamellar cut-author receipt records terminal rail stop count');
+assert.match(core, /sampledClearanceBand/, 'Lamellar cut-author receipt records sampled clearance band');
 assert.match(core, /makeCuttingEdgeGeometry/, 'Lamellar module builds a visible cross-cut edge instead of implying causality through parallel bands');
+assert.match(core, /makeCutAuthorEnvelopeGeometry/, 'Lamellar module builds a visible thin neighbor envelope instead of a broad diagnostic slab');
 assert.match(core, /stable-strip-width-cut-radius-only-changes-window-caps-gap/, 'Lamellar module preserves width/radius decoupling identity');
 assert.match(core, /zero-lift-closed-terminal-cap-slab/, 'Lamellar module preserves closed end-cap sealing identity');
 assert.match(core, /temporary-aesthetic-composition-primitive-not-final-lamellar-topology/, 'Lamellar module marks nested shells as placeholder composition only');
@@ -102,6 +110,8 @@ assert.match(witness, /requestedCutRadius/, 'witness records requested cut radiu
 assert.match(witness, /effectiveCutRadius/, 'witness records effective cut radius');
 assert.match(witness, /capTValues/, 'witness records cap T-values');
 assert.match(witness, /cuttingEdgeDescriptor/, 'witness records cut-causing edge descriptor');
+assert.match(witness, /cutAuthorEnvelopeDescriptor/, 'witness records cut-author envelope descriptor');
+assert.match(witness, /channelCutReceipt/, 'witness records channel-cut receipt');
 assert.match(witness, /composerDescriptor/, 'witness records procedural composer descriptor');
 assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descriptor');
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
@@ -171,4 +181,34 @@ assert.notDeepEqual(
   massSignature(lowChunk),
   massSignature(highChunk),
   'chunkiness still changes authored layer mass fields'
+);
+
+const sliced = coreModule.sliceLamellarSectionSegments(highChunk.descriptors, {
+  cutRadius: 0.052,
+  sliceT: 0.352,
+  sliceAngle: -11,
+});
+assert.equal(
+  sliced.channelCutReceipt.mode,
+  'neighbor-offset-envelope-terminal-channel-cut',
+  'slice receipt identifies B offset envelope as the cut author'
+);
+assert.equal(
+  sliced.channelCutReceipt.terminalContourSource,
+  'neighbor-offset-envelope-rail-contour',
+  'slice receipt identifies the neighbor-derived terminal contour source'
+);
+assert.ok(
+  sliced.channelCutReceipt.channelGapRadius > 0,
+  'slice receipt records a positive channel gap radius'
+);
+assert.equal(
+  sliced.channelCutReceipt.terminalRailStopCount,
+  30,
+  'slice receipt keeps a stable rail-stop count for the channel contour'
+);
+assert.equal(
+  sliced.channelCutReceipt.witnessAnchorMode,
+  'selected-neighbor-channel-closeup',
+  'slice receipt records the cut-author witness anchor mode'
 );

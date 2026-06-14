@@ -441,6 +441,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Open Edges</span><span class="field-val" id="lamellar-open-edges">0</span></div>
       <div class="field"><span class="field-key">Hooks</span><span class="field-val" id="lamellar-hooks">0</span></div>
       <div class="field"><span class="field-key">Slice</span><span class="field-val" id="lamellar-slice-receipt">none</span></div>
+      <div class="field"><span class="field-key">Cut Author</span><span class="field-val" id="lamellar-cut-author">none</span></div>
     </div>
   </div>
 </div>
@@ -853,6 +854,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
   document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
   document.getElementById('lamellar-slice-receipt').textContent = state.sliceApplicationReceipt?.affectedSegmentIds?.join(',') || 'none';
+  document.getElementById('lamellar-cut-author').textContent = state.channelCutReceipt?.mode || 'none';
   document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
   document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
 }
