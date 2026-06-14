@@ -77,7 +77,13 @@ assert.match(witness, /greenroom picker did not expose subtitle and raw metadata
 assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');
 assert.match(witness, /greenroom picker mesh route was not fetchable/, 'Green Room picker witness proves visible mesh actions can fetch the advertised route');
 assert.match(witness, /greenroom View did not replace the scene with one preview object/, 'Green Room action witness proves View replaces rather than appends');
+assert.match(witness, /greenroom View did not replace the setup object with the Greenroom route/, 'Green Room action witness proves View replaced the original object identity/source');
 assert.match(witness, /greenroom Import did not append a second scene object/, 'Green Room action witness proves Import appends without ambient checkbox state');
+assert.match(witness, /greenroom Import did not append Greenroom-sourced scene objects/, 'Green Room action witness proves imported rows are sourced from the selected Greenroom route');
 assert.match(witness, /greenroom View did not protect the previous save target/, 'Green Room action witness proves View does not overwrite an existing scene target');
+assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
+assert.match(witness, /viewReplacedWithGreenroomRoute/, 'Green Room action witness computes a route-backed View replacement predicate');
+assert.match(witness, /importRowsGreenroomSourced/, 'Green Room action witness computes a route-backed Import source predicate');
+assert.match(witness, /loadProbe\.route/, 'Green Room action witness compares object source against the advertised mesh route');
 assert.match(witness, /job-output\?job_id=/, 'Green Room picker witness probes the same job-output route used by the Load mesh button');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');

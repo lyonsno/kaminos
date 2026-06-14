@@ -203,6 +203,7 @@ async function runSaveLoadRoundtripScenario(ws) {
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
         label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
       const waitForRows = async count => {
         for (let i = 0; i < 120; i++) {
@@ -345,6 +346,7 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
         label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
       const listScenes = async () => {
         const resp = await fetch('/api/browse?root=scenes&path=');
@@ -902,6 +904,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
         label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
       const waitForSceneRows = async count => {
         for (let i = 0; i < 120; i++) {
@@ -918,7 +921,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
         demo.click();
         return waitForSceneRows(1);
       };
-      await ensureBaseObject();
+      const setupRows = await ensureBaseObject();
       const beforeSceneFiles = new Set(await listScenes());
       await window.saveSceneAs();
       let savedFile = null;
@@ -1011,11 +1014,17 @@ async function runGreenroomPickerDisplayScenario(ws) {
       }
       const savedAfterView = await readScene(savedFile);
       const viewProtectedSaveTarget = !!viewSaveFile && JSON.stringify(savedBeforeView) === JSON.stringify(savedAfterView);
+      const viewReplacedWithGreenroomRoute = afterViewRows.length === 1
+        && afterViewRows[0].label === loadRow?.title
+        && afterViewRows[0].source?.includes(loadProbe?.route)
+        && afterViewRows[0].source !== setupRows[0]?.source;
       if (importButton) {
         importButton.click();
         await waitForSceneRows(2);
       }
       const afterImportRows = rowState();
+      const importRowsGreenroomSourced = afterImportRows.length === 2
+        && afterImportRows.every(row => row.label === loadRow?.title && row.source?.includes(loadProbe?.route));
       for (const name of [savedFile, viewSaveFile].filter(Boolean)) {
         await deleteScene(name);
         const postCleanupFiles = await listScenes();
@@ -1037,6 +1046,9 @@ async function runGreenroomPickerDisplayScenario(ws) {
         savedFile,
         viewSaveFile,
         viewProtectedSaveTarget,
+        setupRows,
+        viewReplacedWithGreenroomRoute,
+        importRowsGreenroomSourced,
       };
     })()
   `, { timeoutMs: 90000 });
@@ -1060,8 +1072,14 @@ async function runGreenroomPickerDisplayScenario(ws) {
   if (lastEvidence.greenroomPickerDisplay.afterViewRows?.length !== 1) {
     throw new Error(`greenroom View did not replace the scene with one preview object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
+  if (!lastEvidence.greenroomPickerDisplay.viewReplacedWithGreenroomRoute) {
+    throw new Error(`greenroom View did not replace the setup object with the Greenroom route: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
   if (lastEvidence.greenroomPickerDisplay.afterImportRows?.length !== 2) {
     throw new Error(`greenroom Import did not append a second scene object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.importRowsGreenroomSourced) {
+    throw new Error(`greenroom Import did not append Greenroom-sourced scene objects: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
   if (!lastEvidence.greenroomPickerDisplay.viewProtectedSaveTarget) {
     throw new Error(`greenroom View did not protect the previous save target: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
