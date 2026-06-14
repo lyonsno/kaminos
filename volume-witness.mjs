@@ -374,12 +374,15 @@ async function main() {
       assert.ok(Number.isFinite(state.temporalSmokeHistoryTrust), 'material-aware smoke history trust did not reach debug state');
       assert.ok(Number.isFinite(state.temporalFireHistoryProtect), 'material-aware fire history protection did not reach debug state');
       assert.ok(Number.isFinite(state.temporalInterfaceHistoryProtect), 'material-aware interface history protection did not reach debug state');
+      assert.equal(state.temporalEvidenceSource, 'cpu-estimate-control-proxy', 'temporal evidence source label did not reach debug state');
     }
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
+    assert.equal(stateTiming.timingEvidenceSource, 'raf-and-queue-proxy', 'timing evidence source label did not reach debug state');
+    assert.equal(stateTiming.timingDisclaimer, 'not-gpu-exclusive-or-present-latency', 'timing proxy disclaimer did not reach debug state');
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
     assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
@@ -507,6 +510,7 @@ async function main() {
       temporalSmokeHistoryTrust: sample.temporalSmokeHistoryTrust,
       temporalFireHistoryProtect: sample.temporalFireHistoryProtect,
       temporalInterfaceHistoryProtect: sample.temporalInterfaceHistoryProtect,
+      temporalEvidenceSource: sample.temporalEvidenceSource,
       temporalHistoryFrames: sample.temporalHistoryFrames,
       temporalHistoryResetCount: sample.temporalHistoryResetCount,
       temporalHistoryResetReason: sample.temporalHistoryResetReason,
@@ -515,6 +519,8 @@ async function main() {
       majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       timing: sample.timing || stateTiming,
+      timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
+      timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
       controls: reportControls,
       screenshot: out,
       metrics,

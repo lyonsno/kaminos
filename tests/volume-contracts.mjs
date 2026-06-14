@@ -218,6 +218,8 @@ assert.match(core, /state\.temporalRejectedHistory/, 'debug state exposes tempor
 assert.match(core, /state\.temporalSmokeHistoryTrust/, 'debug state exposes smoke-history trust evidence');
 assert.match(core, /state\.temporalFireHistoryProtect/, 'debug state exposes fire-history protection evidence');
 assert.match(core, /state\.temporalInterfaceHistoryProtect/, 'debug state exposes interface-history protection evidence');
+assert.match(core, /temporalEvidenceSource/, 'debug state labels temporal evidence provenance');
+assert.match(core, /cpu-estimate-control-proxy/, 'temporal evidence is explicitly labeled as a CPU/control estimate');
 assert.match(core, /state\.temporalHistoryFrames/, 'debug state exposes accumulated temporal history frame count');
 assert.match(core, /state\.temporalHistoryResetCount/, 'debug state exposes temporal history reset/rejection count');
 assert.match(core, /scale_controls/, 'volume uniforms carry fire/detail/plume scale controls');
@@ -273,6 +275,8 @@ assert.match(core, /percentileTiming/, 'volume core computes timing percentiles 
 assert.match(core, /queue\.onSubmittedWorkDone/, 'volume core samples WebGPU queue completion timing');
 assert.match(core, /queueProbePending/, 'volume core exposes whether GPU queue timing is currently pending');
 assert.match(core, /timing:/, 'debug state exposes a timing object');
+assert.match(core, /raf-and-queue-proxy/, 'timing evidence is explicitly labeled as RAF/queue proxy data');
+assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carries a present-latency disclaimer');
 assert.match(core, /curlMean/, 'sim readback reports curl evidence');
 assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection evidence');
 assert.doesNotMatch(core, /screenGridLine/, 'grid overlay must not fall back to a fake screen-space lattice');
@@ -311,6 +315,8 @@ assert.match(witness, /temporalRejectedHistory/, 'witness records temporal histo
 assert.match(witness, /temporalSmokeHistoryTrust/, 'witness records smoke-history trust evidence');
 assert.match(witness, /temporalFireHistoryProtect/, 'witness records fire-history protection evidence');
 assert.match(witness, /temporalInterfaceHistoryProtect/, 'witness records interface-history protection evidence');
+assert.match(witness, /temporalEvidenceSource/, 'witness records temporal evidence provenance');
+assert.match(witness, /cpu-estimate-control-proxy/, 'witness preserves CPU/control temporal evidence label');
 assert.match(witness, /expectedFireScale/, 'witness verifies apparent fire/world scale route/control identity');
 assert.match(witness, /expectedDetailScale/, 'witness verifies fine-detail scale route/control identity');
 assert.match(witness, /expectedPlumeHeight/, 'witness verifies plume height/world-rise route/control identity');
@@ -333,6 +339,8 @@ assert.match(witness, /occupiedBricks/, 'witness requires nonzero occupied coars
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
 assert.match(witness, /timing/, 'witness records route-local timing evidence');
 assert.match(witness, /queueDoneMs/, 'witness records GPU queue completion timing when available');
+assert.match(witness, /timingEvidenceSource/, 'witness records timing evidence provenance');
+assert.match(witness, /not-gpu-exclusive-or-present-latency/, 'witness preserves timing proxy disclaimer');
 assert.match(witness, /windowSize/, 'witness accepts an explicit browser window size for fullscreen-ish sweeps');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');

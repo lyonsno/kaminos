@@ -88,7 +88,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
   const data = new Float32Array(MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS);
   const timestampMs = clampFinite(payload.timestampMs, 0, Number.MAX_SAFE_INTEGER, nowMs);
   const ageSeconds = Math.max(0, (nowMs - timestampMs) / 1000);
-  const coordinateSpace = payload.coordinateSpace === 'volume-local' ? 'volume-local' : 'volume-local';
+  const coordinateSpace = 'volume-local';
   let count = 0;
   for (const emitter of emitters) {
     if (!emitter || emitter.active === false) continue;
@@ -1285,6 +1285,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalSmokeHistoryTrust: 0,
     temporalFireHistoryProtect: 0,
     temporalInterfaceHistoryProtect: 0,
+    temporalEvidenceSource: 'cpu-estimate-control-proxy',
     temporalHistoryFrames: 0,
     temporalHistoryResetCount: 0,
     temporalHistoryResetReason: 'initial',
@@ -1294,6 +1295,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantFrameCount: 0,
     lastFrameEnergy: 0,
     timing: {
+      timingEvidenceSource: 'raf-and-queue-proxy',
+      timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
       rafFps: 0,
       frameDeltaMs: 0,
       frameP95Ms: 0,
@@ -1371,6 +1374,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const cpuP95 = percentileTiming(timingSamples.cpuFrame, 0.95);
     state.timing = {
       ...state.timing,
+      timingEvidenceSource: 'raf-and-queue-proxy',
+      timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
       rafFps: rafP95 ? 1000 / rafP95 : 0,
       frameDeltaMs: timingSamples.rafDelta.at(-1) ?? 0,
       frameP95Ms: rafP95 ?? 0,
@@ -1386,6 +1391,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pushTimingSample('queueDone', queueDoneMs, 80);
     state.timing = {
       ...state.timing,
+      timingEvidenceSource: 'raf-and-queue-proxy',
+      timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
       queueDoneMs,
       queueDoneP95Ms: percentileTiming(timingSamples.queueDone, 0.95),
       queueProbePending: queueProbePending,
@@ -1397,20 +1404,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function probeVolumeQueueTiming() {
     if (queueProbePending || !device?.queue?.onSubmittedWorkDone) return;
     queueProbePending = true;
-    state.timing = { ...state.timing, queueProbePending: true, queueTimingAvailable: true };
+    state.timing = {
+      ...state.timing,
+      timingEvidenceSource: 'raf-and-queue-proxy',
+      timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
+      queueProbePending: true,
+      queueTimingAvailable: true,
+    };
     const submittedAt = performance.now();
     device.queue.onSubmittedWorkDone()
       .then(() => recordVolumeQueueTiming(submittedAt))
       .catch(error => {
         state.timing = {
           ...state.timing,
+          timingEvidenceSource: 'raf-and-queue-proxy',
+          timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
           queueTimingAvailable: false,
           queueTimingError: error?.message || String(error),
         };
       })
       .finally(() => {
         queueProbePending = false;
-        state.timing = { ...state.timing, queueProbePending: false };
+        state.timing = {
+          ...state.timing,
+          timingEvidenceSource: 'raf-and-queue-proxy',
+          timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
+          queueProbePending: false,
+        };
       });
   }
 
@@ -1505,6 +1525,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalSmokeHistoryTrust = 0;
     state.temporalFireHistoryProtect = 0;
     state.temporalInterfaceHistoryProtect = 0;
+    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
     state.temporalHistoryResetCount += 1;
     state.temporalHistoryResetReason = reason;
   }
@@ -1973,6 +1994,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalSmokeHistoryTrust = smokeHistoryTrust;
     state.temporalFireHistoryProtect = fireHistoryProtect;
     state.temporalInterfaceHistoryProtect = interfaceHistoryProtect;
+    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
     state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * Math.max(0, 1 - temporalReactiveEstimate - materialTemporalProtection * 0.18);
     state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence * (0.34 + smokeHistoryTrust * 0.66) * (1 - fireHistoryProtect * 0.55) * (1 - interfaceHistoryProtect * 0.36);
     state.temporalRejectedHistory = Math.max(0, Math.min(1, 1 - (state.temporalHistoryWeight / Math.max(0.0001, uniforms[44]))));
@@ -2302,6 +2324,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
         temporalFireHistoryProtect: state.temporalFireHistoryProtect,
         temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
+        temporalEvidenceSource: state.temporalEvidenceSource,
         temporalHistoryFrames: state.temporalHistoryFrames,
         temporalHistoryResetCount: state.temporalHistoryResetCount,
         temporalHistoryResetReason: state.temporalHistoryResetReason,
@@ -2409,6 +2432,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
       temporalFireHistoryProtect: state.temporalFireHistoryProtect,
       temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
+      temporalEvidenceSource: state.temporalEvidenceSource,
       temporalHistoryFrames: state.temporalHistoryFrames,
       temporalHistoryResetCount: state.temporalHistoryResetCount,
       temporalHistoryResetReason: state.temporalHistoryResetReason,
