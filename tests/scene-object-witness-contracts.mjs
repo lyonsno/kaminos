@@ -10,9 +10,11 @@ assert.ok(existsSync(witnessPath), 'scene-object-witness.mjs must provide a reus
 const witness = readFileSync(witnessPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
+assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /debugPort:\s*port/, 'witness report records effective debug port');
+assert.match(witness, /process\.pid/, 'witness uses an isolated default Chrome profile for each run');
 assert.match(witness, /phase\s*=/, 'witness tracks failure phase for report-on-failure');
 assert.match(witness, /writeReport\(/, 'witness writes a durable JSON report');
 assert.match(witness, /catch \(error\)[\s\S]*writeReport\([\s\S]*ok:\s*false/, 'witness writes report even when the primary flow fails');
@@ -41,4 +43,12 @@ assert.match(witness, /mouse remove did not preserve transform toolbar/, 'witnes
 assert.match(witness, /keyboard remove did not remove focused row/, 'witness proves focused keyboard removal');
 assert.match(witness, /keyboard remove did not preserve transform toolbar/, 'witness proves keyboard removal keeps transform controls on fallback object');
 assert.match(witness, /append selection did not preserve transform toolbar/, 'witness proves transform controls after append selection');
+assert.match(witness, /scene save did not create exactly one new scene file/, 'save/load witness proves a server scene file was created');
+assert.match(witness, /saved scene document did not persist two objects/, 'save/load witness proves saved JSON contains both authored objects');
+assert.match(witness, /saved scene document did not preserve active object id/, 'save/load witness proves saved JSON preserves active object identity');
+assert.match(witness, /saved scene document did not preserve reloadable demo sources/, 'save/load witness proves saved JSON preserves reloadable demo sources');
+assert.match(witness, /scene load did not restore two object rows/, 'save/load witness proves browser load restores two object rows');
+assert.match(witness, /scene load did not restore active object id/, 'save/load witness proves browser load restores active selection');
+assert.match(witness, /scene load did not preserve transform toolbar/, 'save/load witness proves transform controls survive scene load');
+assert.match(witness, /scene load did not report two loaded objects/, 'save/load witness proves load status reflects multi-object restore');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');

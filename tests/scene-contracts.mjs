@@ -21,7 +21,7 @@ assert.match(index, /function sceneObjectReloadabilityLabel\(/, 'scene object li
 assert.match(index, /window\.selectSceneObject\s*=/, 'object list can select an authored object');
 assert.match(index, /window\.removeSceneObject\s*=/, 'object list can remove an authored object');
 assert.match(index, /renderSceneObjectList\(\);[\s\S]*if \(!transformControls\) return;/, 'active object selection refreshes list state before transform gizmo retargeting');
-assert.match(index, /registerSceneObject\(mesh,[\s\S]*type: 'pbr'[\s\S]*document\.getElementById\('transform-bar'\)\.classList\.add\('visible'\);[\s\S]*setInfo\('PBR Material Preview/, 'PBR material previews surface the transform toolbar after registering the selected scene object');
+assert.match(index, /registerSceneObject\(mesh,[\s\S]*\.\.\.metadata,[\s\S]*type: metadata\.type \?\? 'pbr'[\s\S]*document\.getElementById\('transform-bar'\)\.classList\.add\('visible'\);[\s\S]*setInfo\('PBR Material Preview/, 'PBR material previews preserve metadata and surface the transform toolbar after registering the selected scene object');
 assert.match(index, /scene-object-row active/, 'active object row has a stable visual state');
 assert.match(index, /data-scene-object-id/, 'object list buttons expose stable object ids for browser witnesses');
 assert.match(index, /data-scene-object-remove-id/, 'object list exposes stable remove ids for browser witnesses');

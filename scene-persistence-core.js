@@ -70,7 +70,8 @@ export function sceneDocumentIsLoadable(data) {
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
-  if (type !== 'glb' || typeof source !== 'string') return false;
+  if (!['glb', 'pbr'].includes(type) || typeof source !== 'string') return false;
+  if (type === 'pbr') return source.startsWith('demos/');
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
 }
 

@@ -1208,6 +1208,10 @@ function loadTextureLinear(file) {
 // --- PBR Material Preview ---
 async function showPBRPreview(options = {}) {
   if (shouldClearSceneForImport(options)) clearScene();
+  const metadata = options.metadata || {};
+  modelSourceUrl = metadata.source ?? modelSourceUrl ?? 'material-preview';
+  modelSourceType = 'pbr';
+  glbFileName = metadata.fileName ?? glbFileName ?? 'pbr-material-preview';
   const albedoFile = loadedFiles['albedo.png'];
   const roughnessFile = loadedFiles['roughness.png'];
   const metallicFile = loadedFiles['metallic.png'];
@@ -1243,12 +1247,14 @@ async function showPBRPreview(options = {}) {
   mesh.position.y = 0;
   scene.add(mesh);
   registerSceneObject(mesh, {
-    source: modelSourceUrl || 'material-preview',
-    type: 'pbr',
-    fileName: glbFileName || 'pbr-material-preview',
+    ...metadata,
+    source: metadata.source ?? modelSourceUrl ?? 'material-preview',
+    type: metadata.type ?? 'pbr',
+    fileName: metadata.fileName ?? glbFileName ?? 'pbr-material-preview',
   });
   document.getElementById('transform-bar').classList.add('visible');
   setInfo('PBR Material Preview — orbit to inspect');
+  return mesh;
 }
 
 // --- GLB Inspector ---
@@ -1727,7 +1733,7 @@ async function initKaminosVolumeRoute() {
 }
 
 // --- File Input Handling ---
-async function handleFiles(files) {
+async function handleFiles(files, options = {}) {
   loadedFiles = {};
   receipt = null;
 
@@ -1748,13 +1754,22 @@ async function handleFiles(files) {
   }
 
   if (loadedFiles['albedo.png']) {
-    showPBRPreview();
+    const metadata = options.metadata || {};
+    const previewOptions = { metadata };
+    if (Object.prototype.hasOwnProperty.call(options, 'clear')) previewOptions.clear = options.clear;
+    modelSourceUrl = metadata.source ?? 'material-preview';
+    modelSourceType = 'pbr';
+    glbFileName = metadata.fileName ?? 'pbr-material-preview';
+    return showPBRPreview(previewOptions);
   } else {
     const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
-    if (glb) showGLB(loadedFiles[glb]);
-    else if (loadedFiles['depth_vis.png']) showDepthSurface();
+    const loadOptions = { metadata: options.metadata };
+    if (Object.prototype.hasOwnProperty.call(options, 'clear')) loadOptions.clear = options.clear;
+    if (glb) return showGLB(loadedFiles[glb], loadOptions);
+    else if (loadedFiles['depth_vis.png']) return showDepthSurface(loadOptions);
     else setInfo('No recognized outputs \u2014 drop a sidecar output directory');
   }
+  return null;
 }
 
 // --- Drag & Drop ---
@@ -1811,15 +1826,28 @@ function loadDemoButtons() {
 }
 
 async function loadDemo(demo) {
-  const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
+  const files = await loadDemoFiles(demo.path);
+  if (!files) return null;
+  return handleFiles(files, {
+    metadata: {
+      source: demo.path,
+      type: 'pbr',
+      fileName: demo.name,
+      label: demo.name,
+    },
+  });
+}
+
+async function loadDemoFiles(path) {
+  const manifest = await fetch(path + 'manifest.json').then(r => r.json()).catch(() => null);
   if (!manifest) { setInfo('Demo manifest not found'); return; }
   const files = [];
   for (const fn of manifest.files) {
-    const resp = await fetch(demo.path + fn);
+    const resp = await fetch(path + fn);
     const blob = await resp.blob();
     files.push(new File([blob], fn));
   }
-  handleFiles(files);
+  return files;
 }
 
 // --- Environment Buttons ---
@@ -3142,6 +3170,14 @@ function serializeSceneObject(entry) {
 
 async function addSceneObjectFromSource(record) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
+    const files = await loadDemoFiles(record.source);
+    if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
+    return handleFiles(files, {
+      clear: false,
+      metadata: record,
+    });
+  }
   if (isReloadableSceneObjectRecord(record)) {
     return showGLB(record.source, {
       clear: false,

@@ -114,6 +114,18 @@ assert.deepEqual(restorePlan.objects.map(obj => obj.transform.position), [[-1.25
 assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1], 'restore plan keeps independent material state');
 assert.equal(isReloadableSceneObjectRecord(objectA), true, 'demo GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(objectB), true, 'API GLB object is reloadable');
+assert.equal(isReloadableSceneObjectRecord({
+  id: 'pbr-demo',
+  source: 'demos/supermat-ring/',
+  type: 'pbr',
+  fileName: 'SuperMat Ring',
+}), true, 'demo PBR material preview object is reloadable');
+assert.equal(isReloadableSceneObjectRecord({
+  id: 'pbr-local',
+  source: 'material-preview',
+  type: 'pbr',
+  fileName: 'pbr-material-preview',
+}), false, 'local PBR material preview without demo source is not silently reloadable');
 assert.equal(isReloadableSceneObjectRecord({ ...objectA, source: 'local-drop.glb' }), false, 'local dropped source is not silently reloadable');
 
 const legacy = {

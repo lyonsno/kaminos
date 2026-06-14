@@ -14,7 +14,7 @@ const out = resolve(args.get('--out') || '/tmp/kaminos-scene-object-witness.png'
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9439);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}`;
+const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 
@@ -78,14 +78,14 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
-function wsRequest(ws, method, params = {}) {
+function wsRequest(ws, method, params = {}, options = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveReq, rejectReq) => {
     const timer = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       rejectReq(new Error(`${method}: CDP request timed out`));
-    }, 10000);
+    }, options.timeoutMs || 10000);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
@@ -105,12 +105,12 @@ function waitForWebSocketOpen(ws) {
   });
 }
 
-async function evaluate(ws, expression) {
+async function evaluate(ws, expression, options = {}) {
   const result = await wsRequest(ws, 'Runtime.evaluate', {
     awaitPromise: true,
     returnByValue: true,
     expression,
-  });
+  }, { timeoutMs: options.timeoutMs });
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
@@ -138,6 +138,162 @@ function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   if (!other || other.active || other.pressed !== 'false') {
     throw new Error(`${phaseLabel} selection did not deactivate other rows: ${JSON.stringify({ otherId, rows })}`);
   }
+}
+
+async function runSaveLoadRoundtripScenario(ws) {
+  phase = 'scenario-save-load-roundtrip';
+  lastEvidence.saveLoadRoundtrip = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        return resp.json();
+      };
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const waitForRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!demo) throw new Error('SuperMat Ring demo button missing');
+
+      for (let i = 0; i < 80; i++) {
+        if (document.querySelectorAll('[data-scene-object-id]').length === 1) break;
+        await wait(125);
+      }
+      const initialRows = rowState();
+      if (initialRows.length !== 1) throw new Error('scene save setup did not start with one object row: ' + JSON.stringify(initialRows));
+
+      const append = document.getElementById('append-import-toggle');
+      if (!append) throw new Error('append import toggle missing');
+      append.checked = true;
+      demo.click();
+      const appendedRows = await waitForRows(2);
+      if (appendedRows.length !== 2) throw new Error('scene save setup did not create two object rows: ' + JSON.stringify(appendedRows));
+      if (new Set(appendedRows.map(row => row.id)).size !== 2) throw new Error('scene save setup rows were not unique: ' + JSON.stringify(appendedRows));
+
+      const firstId = appendedRows[0].id;
+      const secondId = appendedRows[1].id;
+      document.querySelector('[data-scene-object-id="' + firstId + '"]').click();
+      await wait(250);
+      const beforeSaveRows = rowState();
+      const activeBeforeSave = beforeSaveRows.find(row => row.active && row.pressed === 'true')?.id || null;
+      if (activeBeforeSave !== firstId) throw new Error('scene save setup did not activate first object before save: ' + JSON.stringify(beforeSaveRows));
+
+      const beforeSceneFiles = new Set(await listScenes());
+      await window.saveSceneAs();
+      let newFiles = [];
+      for (let i = 0; i < 120; i++) {
+        const afterSceneFiles = await listScenes();
+        newFiles = afterSceneFiles.filter(name => !beforeSceneFiles.has(name));
+        if (newFiles.length === 1) break;
+        await wait(125);
+      }
+      if (newFiles.length !== 1) {
+        throw new Error('scene save did not create exactly one new scene file: ' + JSON.stringify({ newFiles, before: [...beforeSceneFiles] }));
+      }
+      const savedFile = newFiles[0];
+      const savedScene = await readScene(savedFile);
+      if (!Array.isArray(savedScene.objects) || savedScene.objects.length !== 2) {
+        throw new Error('saved scene document did not persist two objects: ' + JSON.stringify(savedScene.objects));
+      }
+      const savedIds = savedScene.objects.map(object => object.id);
+      if (!savedIds.includes(firstId) || !savedIds.includes(secondId)) {
+        throw new Error('saved scene document ids did not match authored objects: ' + JSON.stringify({ savedIds, firstId, secondId }));
+      }
+      if (savedScene.activeObjectId !== firstId) {
+        throw new Error('saved scene document did not preserve active object id: ' + JSON.stringify({ activeObjectId: savedScene.activeObjectId, firstId }));
+      }
+      const savedSources = savedScene.objects.map(object => object.source);
+      if (!savedSources.every(source => source === 'demos/supermat-ring/')) {
+        throw new Error('saved scene document did not preserve reloadable demo sources: ' + JSON.stringify(savedSources));
+      }
+      if (savedScene.volumePrimitives?.schema !== 'kaminos.volume-primitives.v0') {
+        throw new Error('saved scene document did not preserve volume primitive schema: ' + JSON.stringify(savedScene.volumePrimitives));
+      }
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      let sceneEntry = null;
+      for (let i = 0; i < 120; i++) {
+        sceneEntry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(entry => (
+          entry.querySelector('.gr-name')?.textContent?.trim() === savedFile.replace('.kaminos.json', '')
+        ));
+        if (sceneEntry) break;
+        await wait(125);
+      }
+      if (!sceneEntry) throw new Error('saved scene did not appear in scene list: ' + savedFile);
+      const loadButton = [...sceneEntry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load');
+      if (!loadButton) throw new Error('saved scene list entry missing Load button: ' + savedFile);
+      loadButton.click();
+
+      let restoredRows = [];
+      for (let i = 0; i < 160; i++) {
+        restoredRows = rowState();
+        const activeId = restoredRows.find(row => row.active && row.pressed === 'true')?.id || null;
+        const info = document.getElementById('info-bar').textContent.trim();
+        if (restoredRows.length === 2 && activeId === firstId && info === 'Scene loaded: 2 objects') break;
+        await wait(125);
+      }
+      const activeAfterLoad = restoredRows.find(row => row.active && row.pressed === 'true')?.id || null;
+      const infoAfterLoad = document.getElementById('info-bar').textContent.trim();
+      const transformBarVisible = document.getElementById('transform-bar').classList.contains('visible');
+      const restoredIds = restoredRows.map(row => row.id);
+      if (restoredRows.length !== 2 || !restoredIds.includes(firstId) || !restoredIds.includes(secondId)) {
+        throw new Error('scene load did not restore two object rows: ' + JSON.stringify({ restoredRows, firstId, secondId, infoAfterLoad }));
+      }
+      if (activeAfterLoad !== firstId) {
+        throw new Error('scene load did not restore active object id: ' + JSON.stringify({ activeAfterLoad, firstId, restoredRows }));
+      }
+      if (!transformBarVisible) {
+        throw new Error('scene load did not preserve transform toolbar: ' + JSON.stringify({ restoredRows, activeAfterLoad }));
+      }
+      if (infoAfterLoad !== 'Scene loaded: 2 objects') {
+        throw new Error('scene load did not report two loaded objects: ' + JSON.stringify({ infoAfterLoad }));
+      }
+
+      document.querySelector('[data-tab="assets"]').click();
+      const cleanup = await deleteScene(savedFile);
+      return {
+        savedFile,
+        firstId,
+        secondId,
+        beforeSaveRows,
+        savedScene: {
+          objectCount: savedScene.objects.length,
+          objectIds: savedIds,
+          objectSources: savedSources,
+          activeObjectId: savedScene.activeObjectId,
+          volumePrimitiveSchema: savedScene.volumePrimitives?.schema || null,
+        },
+        restoredRows,
+        activeAfterLoad,
+        infoAfterLoad,
+        transformBarVisible,
+        cleanup,
+      };
+    })()
+  `, { timeoutMs: 60000 });
 }
 
 async function runAppendSelectRemoveKeyboardScenario(ws) {
@@ -373,10 +529,13 @@ try {
     throw new Error(`effective URL mismatch: requested ${requestedHref} but browser loaded ${effectiveHref}`);
   }
 
-  if (scenario !== 'append-select-remove-keyboard') {
+  if (scenario === 'append-select-remove-keyboard') {
+    await runAppendSelectRemoveKeyboardScenario(ws);
+  } else if (scenario === 'save-load-roundtrip') {
+    await runSaveLoadRoundtripScenario(ws);
+  } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }
-  await runAppendSelectRemoveKeyboardScenario(ws);
 
   phase = 'capturing-screenshot';
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
