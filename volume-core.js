@@ -5,6 +5,11 @@ const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const MAX_VOLUME_PRIMITIVE_SOURCES = 4;
+const VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY = 'volume-primitive-scene-to-native-source-clamp-v0';
+const VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS = Object.freeze({
+  min: [-0.86, -0.58, -0.86],
+  max: [0.86, 0.74, 0.86],
+});
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -18,6 +23,21 @@ function gridCellCount(gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function clampFinite(value, fallback, min, max) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function normalizePrimitiveNativeSourcePosition(position = []) {
+  const source = Array.isArray(position) ? position : [];
+  return [
+    clampFinite(source[0], 0, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[0], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[0]),
+    clampFinite(source[1], -0.58, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[1], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[1]),
+    clampFinite(source[2], 0, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[2], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[2]),
+  ];
 }
 
 const WGSL = /* wgsl */`
@@ -873,9 +893,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function sourceFromPrimitive(primitive) {
     const primitiveCenteredBody = primitive.volumeBodyMode === 'primitive-centered-sphere-volume-v0' || primitive.couplingSource === 'manual';
+    const scenePosition = Array.isArray(primitive.transform?.position) ? primitive.transform.position : [0, -0.58, 0];
+    const nativeSourcePosition = normalizePrimitiveNativeSourcePosition(scenePosition);
     return {
       id: primitive.id,
-      position: primitive.transform.position,
+      position: nativeSourcePosition,
+      scenePosition: [...scenePosition],
+      nativeSourcePosition,
+      sourceMappingIdentity: VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY,
       radius: Math.max(0.04, primitive.simulation.sourceRadius),
       flowRate: Math.max(0, primitive.simulation.flowRate),
       primitiveCenteredBody,
@@ -887,6 +912,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       id: 'legacy-plume-source',
       position: [0, -0.74, 0],
+      scenePosition: [0, -0.74, 0],
+      nativeSourcePosition: [0, -0.74, 0],
+      sourceMappingIdentity: 'legacy-plume-source-native-v0',
       radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
       flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
       primitiveCenteredBody: false,
@@ -907,6 +935,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       id: sourcePrimitive.id,
       position: [...sourcePrimitive.position],
+      scenePosition: [...(sourcePrimitive.scenePosition || sourcePrimitive.position)],
+      nativeSourcePosition: [...(sourcePrimitive.nativeSourcePosition || sourcePrimitive.position)],
+      sourceMappingIdentity: sourcePrimitive.sourceMappingIdentity || 'legacy-plume-source-native-v0',
       radius: sourcePrimitive.radius,
       flowRate: sourcePrimitive.flowRate,
       primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,

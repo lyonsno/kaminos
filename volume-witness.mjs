@@ -38,11 +38,16 @@ const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1'
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
 const expectedSceneBoundsProbe = routeParams.get('volume_scene_bounds_probe') === '1';
+const expectedSceneSourceProbe = routeParams.get('volume_scene_source_probe') === '1';
+const expectedScenePlacementProbe = expectedSceneBoundsProbe || expectedSceneSourceProbe;
+const expectedSceneBoundsOnlyProbe = expectedSceneBoundsProbe && !expectedSceneSourceProbe;
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedSecondPrimitiveId = 'authored-fire-smoke-witness-b';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
 const expectedAuthoredSceneBoundsPosition = [0.62, -0.9, 0.0];
-const expectedAuthoredEffectivePosition = expectedSceneBoundsProbe ? expectedAuthoredSceneBoundsPosition : expectedAuthoredMovedPosition;
+const expectedAuthoredEffectivePosition = expectedScenePlacementProbe ? expectedAuthoredSceneBoundsPosition : expectedAuthoredMovedPosition;
+const expectedAuthoredNativeSourcePosition = expectedSceneSourceProbe ? [0.62, -0.58, 0.0] : expectedAuthoredEffectivePosition;
+const expectedSourceMappingIdentity = 'volume-primitive-scene-to-native-source-clamp-v0';
 const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
@@ -362,7 +367,12 @@ async function main() {
         assertVectorClose(savedPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'saved scene primitive transform position');
         assertVectorClose(loadedPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'loaded scene primitive transform position');
         assertVectorClose(roundTripPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'round-tripped renderer primitive transform position');
-        assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.position, expectedAuthoredEffectivePosition, 'round-tripped primitive source position');
+        assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.position, expectedAuthoredNativeSourcePosition, 'round-tripped primitive source position');
+        if (expectedSceneSourceProbe) {
+          assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.scenePosition, expectedAuthoredEffectivePosition, 'round-tripped primitive source scene position');
+          assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.nativeSourcePosition, expectedAuthoredNativeSourcePosition, 'round-tripped primitive native source position');
+          assert.equal(saveLoadRoundTrip?.volumeState?.primitiveSource?.sourceMappingIdentity, expectedSourceMappingIdentity, 'round-tripped primitive source mapping identity missing');
+        }
       }
       await delay(Math.max(600, Math.floor(settleMs / 2)));
     }
@@ -443,6 +453,12 @@ async function main() {
         assert.equal(volumeAuthoring?.selectedMarkerBelowGround, true, 'scene-bounds probe did not move the selected marker below the ground disc');
         assert.equal(volumeAuthoring?.selectedMarkerDepthTest, false, 'below-floor wire marker should not be hidden by the ground depth buffer');
       }
+      if (expectedSceneSourceProbe) {
+        assertVectorClose(state.primitiveSource?.scenePosition, expectedAuthoredEffectivePosition, 'primary primitive source scene position');
+        assertVectorClose(state.primitiveSource?.nativeSourcePosition, expectedAuthoredNativeSourcePosition, 'primary primitive native source position');
+        assertVectorClose(state.primitiveSource?.position, expectedAuthoredNativeSourcePosition, 'primary primitive shader source position');
+        assert.equal(state.primitiveSource?.sourceMappingIdentity, expectedSourceMappingIdentity, 'primitive source did not publish the scene-to-native source mapping identity');
+      }
       if (expectedMultiPrimitiveProbe) {
         assert.equal(state.volumePrimitiveCount, 2, 'renderer did not retain two authored volume primitives');
         assert.equal(state.primitiveSourceCount, 2, 'renderer did not publish two effective primitive sources');
@@ -450,7 +466,7 @@ async function main() {
         assert.ok(Array.isArray(state.primitiveSources), 'renderer did not expose primitive source records');
         const firstSource = state.primitiveSources.find(source => source.id === expectedAuthoredPrimitiveId);
         const secondSource = state.primitiveSources.find(source => source.id === expectedSecondPrimitiveId);
-        assertVectorClose(firstSource?.position, expectedAuthoredEffectivePosition, 'first effective primitive source position');
+        assertVectorClose(firstSource?.position, expectedAuthoredNativeSourcePosition, 'first effective primitive source position');
         assertVectorClose(secondSource?.position, expectedSecondPrimitivePosition, 'second effective primitive source position');
         assert.equal(firstSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'first source did not preserve primitive-centered mode');
         assert.equal(secondSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'second source did not preserve primitive-centered mode');
@@ -468,7 +484,7 @@ async function main() {
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
       assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - 2.1) < 0.001, 'authored primitive radiance setting was not applied');
     }
-    if (!expectedSceneBoundsProbe) {
+    if (!expectedSceneBoundsOnlyProbe) {
       for (let i = 0; i < 40 && (state?.simStepCount ?? 0) <= 5; i += 1) {
         await delay(150);
         const simAdvanceEval = await wsRequest(ws, 'Runtime.evaluate', {
@@ -540,7 +556,7 @@ async function main() {
       warmEmissivePixels: sample.warmEmissivePixels,
       smokeLikePixels: sample.smokeLikePixels,
     };
-    if (!expectedSceneBoundsProbe && (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
+    if (!expectedSceneBoundsOnlyProbe && (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
@@ -549,7 +565,7 @@ async function main() {
     const missingMainRendererVolume = primitiveCenteredBodyVisual
       ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.warmEmissivePixels < 500 || mainRendererMetrics.meanLuma < 8
       : mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8;
-    if (!expectedSceneBoundsProbe && missingMainRendererVolume) {
+    if (!expectedSceneBoundsOnlyProbe && missingMainRendererVolume) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const report = {

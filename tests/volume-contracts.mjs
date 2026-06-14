@@ -192,6 +192,11 @@ assert.match(core, /primitive_sources:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE
 assert.match(core, /primitive_source_params:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry per-primitive radius and flow parameters');
 assert.match(core, /primitiveSourceCount/, 'debug state reports effective primitive source count');
 assert.match(core, /primitiveSources/, 'debug state reports effective primitive source records');
+assert.match(core, /volume-primitive-scene-to-native-source-clamp-v0/, 'renderer names the scene-to-native source projection that keeps scene-scale primitives visible');
+assert.match(core, /normalizePrimitiveNativeSourcePosition/, 'renderer maps scene-scale primitive transforms into the native fluid source domain');
+assert.match(core, /scenePosition/, 'primitive source records preserve the authored scene position separately from shader source position');
+assert.match(core, /nativeSourcePosition/, 'primitive source records publish the effective native shader source position');
+assert.match(core, /sourceMappingIdentity/, 'primitive source records publish the effective source mapping identity');
 assert.doesNotMatch(core, /const primitive = volumePrimitives\[0\];/, 'volume renderer must not collapse authored primitives to the first source only');
 assert.match(core, /primitiveCenteredBody/, 'fluid source records distinguish primitive-centered manual bodies from legacy plume sources');
 assert.match(core, /primitive-centered-sphere-volume-v0/, 'fluid debug state preserves primitive-centered body mode identity');
@@ -231,6 +236,9 @@ assert.match(witness, /volumePrimitives/, 'witness report carries primitive reco
 assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored volume primitive placement');
 assert.match(witness, /volume_save_load_probe/, 'witness can exercise authored moved primitive save/load round-trip');
 assert.match(witness, /volume_multi_primitive_probe/, 'witness can exercise two authored live volume primitive sources');
+assert.match(witness, /volume_scene_source_probe/, 'witness can prove scene-scale primitive placement still produces a visible native source');
+assert.match(witness, /expectedAuthoredNativeSourcePosition/, 'witness distinguishes authored scene position from effective native source position');
+assert.match(witness, /sourceMappingIdentity/, 'witness rejects primitive sources without a named scene-to-native source mapping');
 assert.match(witness, /expectedSecondPrimitiveId/, 'witness uses a stable second authored primitive id');
 assert.match(witness, /saveLoadRoundTrip/, 'witness report carries save/load round-trip evidence');
 assert.match(witness, /authored-fire-smoke-witness/, 'witness uses a stable authored primitive id');
