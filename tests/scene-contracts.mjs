@@ -24,6 +24,13 @@ assert.match(index, /className = 'gr-title'/, 'Greenroom rows promote humane dis
 assert.match(index, /className = 'gr-subtitle'/, 'Greenroom rows expose receipt-derived source/job/seed metadata below the title');
 assert.match(index, /display\.raw_name/, 'Greenroom rows preserve raw filenames and job ids as secondary metadata');
 assert.match(index, /entry\.display \|\| greenroomEntryDisplay\(entry\)/, 'Greenroom browse results consume server-provided display metadata with a client fallback');
+assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
+assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
+assert.match(index, /greenroomViewMesh\([\s\S]*clear:\s*true/, 'Greenroom View replaces the current viewer contents explicitly');
+assert.match(index, /greenroomImportMesh\([\s\S]*clear:\s*false/, 'Greenroom Import appends explicitly without relying on the Assets tab Append checkbox');
+assert.match(index, /function clearSceneSaveTargetForPreview\(/, 'Greenroom View breaks existing scene overwrite ownership before previewing an output');
+assert.match(index, /btn\.textContent = 'View'/, 'Greenroom mesh rows render a View button');
+assert.match(index, /textContent = 'Import'/, 'Greenroom mesh rows render an Import button');
 assert.match(index, /window\.selectSceneObject\s*=/, 'object list can select an authored object');
 assert.match(index, /window\.removeSceneObject\s*=/, 'object list can remove an authored object');
 assert.match(index, /renderSceneObjectList\(\);[\s\S]*if \(!transformControls\) return;/, 'active object selection refreshes list state before transform gizmo retargeting');

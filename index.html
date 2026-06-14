@@ -733,6 +733,10 @@ function shouldClearSceneForImport(options = {}) {
   return !document.getElementById('append-import-toggle')?.checked;
 }
 
+function clearSceneSaveTargetForPreview() {
+  currentSceneFile = null;
+}
+
 function sceneObjectReloadabilityLabel(record) {
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
   if (!record.source) return 'unsourced';
@@ -2685,6 +2689,58 @@ function greenroomEntryDisplay(entry = {}) {
   };
 }
 
+function greenroomMeshMetadata(display, fileName, source) {
+  return {
+    source,
+    type: 'glb',
+    fileName,
+    label: display?.title || fileName,
+  };
+}
+
+async function greenroomViewMesh(url, fileName, display) {
+  clearSceneSaveTargetForPreview();
+  glbFileName = fileName;
+  await showGLB(url, {
+    clear: true,
+    metadata: greenroomMeshMetadata(display, fileName, url),
+  });
+  setInfo(`Greenroom view: ${display?.title || fileName}`);
+}
+
+async function greenroomImportMesh(url, fileName, display) {
+  glbFileName = fileName;
+  await showGLB(url, {
+    clear: false,
+    metadata: greenroomMeshMetadata(display, fileName, url),
+  });
+  setInfo(`Greenroom import: ${display?.title || fileName}`);
+}
+
+function addGreenroomMeshActions(container, url, fileName, display) {
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'btn';
+  viewBtn.textContent = 'View';
+  viewBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await greenroomViewMesh(url, fileName, display);
+    } catch {}
+  };
+  container.appendChild(viewBtn);
+
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn';
+  importBtn.textContent = 'Import';
+  importBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await greenroomImportMesh(url, fileName, display);
+    } catch {}
+  };
+  container.appendChild(importBtn);
+}
+
 function renderGreenroomEntryIdentity(container, entry, options = {}) {
   const display = entry.display || greenroomEntryDisplay(entry);
   const main = document.createElement('span');
@@ -2815,22 +2871,20 @@ async function grBrowse() {
     if (entry.output_files) {
       const glbs = entry.output_files.filter(f => f.endsWith('.glb') || f.endsWith('.gltf'));
       for (const glb of glbs) {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = glbs.length > 1 ? greenroomHumanizeName(glb, glb) : (display.load_label || 'Load mesh');
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
-          showGLB(url);
-          glbFileName = glb;
-          setInfo(`Greenroom: ${display.title || entry.name} / ${glb}`);
-        };
-        div.appendChild(btn);
+        const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
+        const actionDisplay = glbs.length > 1
+          ? { ...display, title: `${display.title || entry.name} / ${greenroomHumanizeName(glb, glb)}` }
+          : display;
+        addGreenroomMeshActions(div, url, glb, actionDisplay);
       }
     }
 
     // Quick-load button for plain GLB/OBJ files in output roots
-    if (entry.type === 'file' && /\.(glb|gltf|obj)$/i.test(entry.name)) {
+    if (entry.type === 'file' && /\.(glb|gltf)$/i.test(entry.name)) {
+      const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+      addGreenroomMeshActions(div, url, entry.name, entry.display);
+    } else if (entry.type === 'file' && /\.obj$/i.test(entry.name)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
       btn.textContent = entry.display?.load_label || 'Load';
@@ -2838,11 +2892,7 @@ async function grBrowse() {
         e.stopPropagation();
         const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
         const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
-        if (/\.obj$/i.test(entry.name)) {
-          showOBJ(url, entry.name);
-        } else {
-          showGLB(url);
-        }
+        showOBJ(url, entry.name);
         glbFileName = entry.name;
         setInfo(`${grCurrentRoot}: ${entry.display?.title || entry.name}`);
       };
@@ -2905,16 +2955,8 @@ async function grOpenJobDir(path) {
     // Add load button for viewable files
     const ext = entry.name.split('.').pop().toLowerCase();
     if (['glb', 'gltf'].includes(ext)) {
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.textContent = display.load_label || 'Load mesh';
-      btn.onclick = async (e) => {
-        e.stopPropagation();
-        const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
-        showGLB(url);
-        setInfo(`GLB: ${display.title || entry.name}`);
-      };
-      div.appendChild(btn);
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
+      addGreenroomMeshActions(div, url, entry.name, display);
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
@@ -2957,17 +2999,8 @@ async function grOpenJobDir(path) {
 
       const ext = out.name.split('.').pop().toLowerCase();
       if (['glb', 'gltf'].includes(ext)) {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = display.load_label || 'Load mesh';
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
-          showGLB(url);
-          glbFileName = out.name;
-          setInfo(`Greenroom: ${display.title || out.name}`);
-        };
-        div.appendChild(btn);
+        const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
+        addGreenroomMeshActions(div, url, out.name, display);
       } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
         const btn = document.createElement('button');
         btn.className = 'btn';

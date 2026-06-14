@@ -879,6 +879,61 @@ async function runGreenroomPickerDisplayScenario(ws) {
   lastEvidence.greenroomPickerDisplay = await evaluate(ws, `
     (async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const ensureBaseObject = async () => {
+        if (rowState().length) return rowState();
+        const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+        if (!demo) throw new Error('SuperMat Ring demo button missing');
+        demo.click();
+        return waitForSceneRows(1);
+      };
+      await ensureBaseObject();
+      const beforeSceneFiles = new Set(await listScenes());
+      await window.saveSceneAs();
+      let savedFile = null;
+      for (let i = 0; i < 120; i++) {
+        const afterSceneFiles = await listScenes();
+        const newFiles = afterSceneFiles.filter(name => !beforeSceneFiles.has(name));
+        if (newFiles.length === 1) {
+          savedFile = newFiles[0];
+          break;
+        }
+        await wait(125);
+      }
+      if (!savedFile) throw new Error('greenroom View setup did not create a saved scene target');
+      const savedBeforeView = await readScene(savedFile);
+
       document.querySelector('[data-tab="greenroom"]').click();
       let rows = [];
       for (let i = 0; i < 80; i++) {
@@ -888,7 +943,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
       }
       const greenroomRawName = value => String(value || '').trim().replace(/^raw\\s+/i, '');
       const greenroomIdentityKey = value => greenroomRawName(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
-      const rowState = rows.map(row => {
+      const grRowState = rows.map(row => {
         const title = row.querySelector('.gr-title')?.textContent?.trim() || null;
         const raw = row.querySelector('.gr-raw')?.textContent?.trim() || null;
         const rawName = greenroomRawName(raw);
@@ -905,8 +960,8 @@ async function runGreenroomPickerDisplayScenario(ws) {
           buttons: [...row.querySelectorAll('button')].map(button => button.textContent.trim()),
         };
       });
-      const humaneRows = rowState.filter(row => row.title && row.raw && row.titleIdentityKey !== row.rawIdentityKey);
-      const loadRow = rowState.find(row => row.rawName && row.buttons.includes('Load mesh'));
+      const humaneRows = grRowState.filter(row => row.title && row.raw && row.titleIdentityKey !== row.rawIdentityKey);
+      const loadRow = grRowState.find(row => row.rawName && row.buttons.includes('View') && row.buttons.includes('Import'));
       let loadProbe = null;
       if (loadRow) {
         const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(loadRow.rawName));
@@ -933,17 +988,58 @@ async function runGreenroomPickerDisplayScenario(ws) {
           loadProbe.outputBytes = outputBuffer.byteLength;
         }
       }
+      const actionRow = [...document.querySelectorAll('#greenroom-list .gr-entry')]
+        .find(row => row.querySelector('.gr-raw')?.textContent?.replace(/^raw\\s+/i, '').trim() === loadRow?.rawName);
+      const viewButton = actionRow ? [...actionRow.querySelectorAll('button')].find(button => button.textContent.trim() === 'View') : null;
+      const importButton = actionRow ? [...actionRow.querySelectorAll('button')].find(button => button.textContent.trim() === 'Import') : null;
+      if (viewButton) {
+        viewButton.click();
+        await waitForSceneRows(1);
+      }
+      const afterViewRows = rowState();
+      const filesBeforeViewSave = new Set(await listScenes());
+      await window.saveScene();
+      let viewSaveFile = null;
+      for (let i = 0; i < 120; i++) {
+        const afterFiles = await listScenes();
+        const newFiles = afterFiles.filter(name => !filesBeforeViewSave.has(name));
+        if (newFiles.length === 1) {
+          viewSaveFile = newFiles[0];
+          break;
+        }
+        await wait(125);
+      }
+      const savedAfterView = await readScene(savedFile);
+      const viewProtectedSaveTarget = !!viewSaveFile && JSON.stringify(savedBeforeView) === JSON.stringify(savedAfterView);
+      if (importButton) {
+        importButton.click();
+        await waitForSceneRows(2);
+      }
+      const afterImportRows = rowState();
+      for (const name of [savedFile, viewSaveFile].filter(Boolean)) {
+        await deleteScene(name);
+        const postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(name)) {
+          throw new Error('greenroom action cleanup did not delete scene file: ' + name);
+        }
+      }
       return {
         rowCount: rows.length,
-        rows: rowState.slice(0, 8),
+        rows: grRowState.slice(0, 8),
         humaneRowCount: humaneRows.length,
-        hasSubtitle: rowState.some(row => row.subtitle),
-        hasRaw: rowState.some(row => row.raw),
-        hasLoadMesh: rowState.some(row => row.buttons.includes('Load mesh')),
+        hasSubtitle: grRowState.some(row => row.subtitle),
+        hasRaw: grRowState.some(row => row.raw),
+        hasView: grRowState.some(row => row.buttons.includes('View')),
+        hasImport: grRowState.some(row => row.buttons.includes('Import')),
         loadProbe,
+        afterViewRows,
+        afterImportRows,
+        savedFile,
+        viewSaveFile,
+        viewProtectedSaveTarget,
       };
     })()
-  `, { timeoutMs: 45000 });
+  `, { timeoutMs: 90000 });
 
   if (lastEvidence.greenroomPickerDisplay.rowCount < 1) {
     throw new Error(`greenroom picker did not render any rows: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
@@ -954,12 +1050,21 @@ async function runGreenroomPickerDisplayScenario(ws) {
   if (!lastEvidence.greenroomPickerDisplay.hasSubtitle || !lastEvidence.greenroomPickerDisplay.hasRaw) {
     throw new Error(`greenroom picker did not expose subtitle and raw metadata: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
-  if (!lastEvidence.greenroomPickerDisplay.hasLoadMesh) {
-    throw new Error(`greenroom picker did not expose a mesh load affordance: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  if (!lastEvidence.greenroomPickerDisplay.hasView || !lastEvidence.greenroomPickerDisplay.hasImport) {
+    throw new Error(`greenroom picker did not expose View and Import mesh actions: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
   const loadProbe = lastEvidence.greenroomPickerDisplay.loadProbe;
   if (!loadProbe || !loadProbe.outputsOk || !loadProbe.mesh || !loadProbe.outputOk || loadProbe.outputBytes < 1) {
-    throw new Error(`greenroom picker mesh load route was not fetchable: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+    throw new Error(`greenroom picker mesh route was not fetchable: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (lastEvidence.greenroomPickerDisplay.afterViewRows?.length !== 1) {
+    throw new Error(`greenroom View did not replace the scene with one preview object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (lastEvidence.greenroomPickerDisplay.afterImportRows?.length !== 2) {
+    throw new Error(`greenroom Import did not append a second scene object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.viewProtectedSaveTarget) {
+    throw new Error(`greenroom View did not protect the previous save target: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
 }
 

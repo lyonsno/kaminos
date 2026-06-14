@@ -74,7 +74,10 @@ assert.match(witness, /greenroomIdentityKey/, 'Green Room picker witness normali
 assert.match(witness, /replace\(\s*\/\^raw/, 'Green Room picker witness strips raw metadata prefixes before comparing identities');
 assert.match(witness, /titleIdentityKey !== row\.rawIdentityKey/, 'Green Room picker witness rejects case-only and prefix-only raw-id title changes');
 assert.match(witness, /greenroom picker did not expose subtitle and raw metadata/, 'Green Room picker witness requires display subtitle and raw metadata');
-assert.match(witness, /greenroom picker did not expose a mesh load affordance/, 'Green Room picker witness requires the mesh load action to stay visible');
-assert.match(witness, /greenroom picker mesh load route was not fetchable/, 'Green Room picker witness proves visible Load mesh actions can fetch the advertised route');
+assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');
+assert.match(witness, /greenroom picker mesh route was not fetchable/, 'Green Room picker witness proves visible mesh actions can fetch the advertised route');
+assert.match(witness, /greenroom View did not replace the scene with one preview object/, 'Green Room action witness proves View replaces rather than appends');
+assert.match(witness, /greenroom Import did not append a second scene object/, 'Green Room action witness proves Import appends without ambient checkbox state');
+assert.match(witness, /greenroom View did not protect the previous save target/, 'Green Room action witness proves View does not overwrite an existing scene target');
 assert.match(witness, /job-output\?job_id=/, 'Green Room picker witness probes the same job-output route used by the Load mesh button');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
