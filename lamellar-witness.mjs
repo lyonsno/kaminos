@@ -215,7 +215,23 @@ async function main() {
         if (firstPopulationId) window.__kaminosLamellarNudgeSelectedPopulationCount?.(1);
         const afterCountState = w ? w.debugState() : selectedPopulationState;
         if (firstPopulationId) window.__kaminosLamellarFlipSelectedPopulationChirality?.();
-        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1.25, bearingOffset: 1.2 });
+        const sliderSweep = [];
+        for (const bearingVariance of [0.15, 1, 2]) {
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance, bearingOffset: 0.23 });
+          const sweepState = w ? w.debugState() : afterCountState;
+          const sweepPopulation = (sweepState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+          const sweepStrips = (sweepState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
+          sliderSweep.push({
+            bearingVariance,
+            coverageSpan: sweepPopulation?.coverageSpan ?? null,
+            shellLaneSpacing: sweepPopulation?.shellLaneSpacing ?? null,
+            laneOffsetRange: sweepStrips.length ? [
+              Math.min(...sweepStrips.map(strip => strip.shellLaneOffset ?? 0)),
+              Math.max(...sweepStrips.map(strip => strip.shellLaneOffset ?? 0)),
+            ] : [],
+          });
+        }
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23 });
         const populationState = w ? w.debugState() : afterCountState;
         const afterPopulation = (populationState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
         const populationToolhead = document.getElementById('lamellar-population-toolhead');
@@ -239,6 +255,13 @@ async function main() {
           afterBearingOffset: afterPopulation?.bearingOffset ?? null,
           layoutPreset: afterPopulation?.layoutPreset || null,
           coverageSpacing: afterPopulation?.coverageSpacing ?? null,
+          coverageSpan: afterPopulation?.coverageSpan ?? null,
+          shellLaneSpacing: afterPopulation?.shellLaneSpacing ?? null,
+        };
+        const populationSliderSweepReceipt = {
+          mode: 'selected-population-toolhead-slider-sweep-v0',
+          populationId: firstPopulationId,
+          samples: sliderSweep,
         };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
@@ -260,6 +283,7 @@ async function main() {
           populationToolheadUi,
           selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
           populationControlReceipt,
+          populationSliderSweepReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
             selectedLayerSpecId: state.selectedLayerSpecId,
@@ -342,10 +366,16 @@ async function main() {
       -(state.populationControlReceipt?.beforeChirality || 1),
       'Lamellar population chirality control did not mutate selected population chirality'
     );
-    assert.equal(state.populationControlReceipt?.afterBearingVariance, 1.25, 'Lamellar population spread control did not mutate bearing variance');
-    assert.equal(state.populationControlReceipt?.afterBearingOffset, 1.2, 'Lamellar population rotate control did not mutate bearing offset');
+    assert.equal(state.populationControlReceipt?.afterBearingVariance, 1, 'Lamellar population spread control did not mutate bearing variance');
+    assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.23, 'Lamellar population rotate control did not mutate bearing offset');
     assert.equal(state.populationControlReceipt?.layoutPreset, 'coverage', 'Lamellar selected population did not preserve coverage layout');
     assert.ok((state.populationControlReceipt?.coverageSpacing || 0) > 0.6, 'Lamellar selected population did not preserve useful coverage spacing');
+    assert.ok((state.populationControlReceipt?.coverageSpan || 0) >= 0.66, 'Lamellar selected population did not preserve visible shell coverage span');
+    assert.equal(state.populationSliderSweepReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep spread endpoints and midpoint');
+    assert.ok(
+      state.populationSliderSweepReceipt.samples[2].coverageSpan > state.populationSliderSweepReceipt.samples[0].coverageSpan,
+      'Lamellar spread slider sweep did not increase visible coverage span'
+    );
     assert.equal(state.stripDrilldownUi?.selectionLevel, 'strip', 'Lamellar drilldown did not select a strip');
     assert.ok(state.stripDrilldownUi?.selectedStripInstanceId, 'Lamellar strip drilldown did not carry a strip instance id');
     assert.notEqual(state.stripDrilldownUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls did not appear after strip drilldown');
@@ -395,6 +425,7 @@ async function main() {
       populationToolheadUi: state.populationToolheadUi,
       selectedPopulationObject: state.selectedPopulationObject,
       populationControlReceipt: state.populationControlReceipt,
+      populationSliderSweepReceipt: state.populationSliderSweepReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,
       selectionUi: state.selectionUi,

@@ -1319,7 +1319,7 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     return;
   }
   toolhead.style.display = 'block';
-  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · gap ${selectedPopulation.gapPattern} · spacing ${(selectedPopulation.coverageSpacing || 0).toFixed(2)}`;
+  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)}`;
   spread.value = String(selectedPopulation.bearingVariance ?? 0);
   offset.value = String(selectedPopulation.bearingOffset ?? 0);
   spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);

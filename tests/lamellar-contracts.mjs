@@ -174,7 +174,9 @@ assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar cor
 assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
 assert.match(core, /layoutPreset/, 'Lamellar strip population descriptors record their layout preset');
 assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverage spacing for overlap diagnostics');
+assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
 assert.match(core, /bearingPhase/, 'Lamellar strip instances carry actual shell bearing phase, not tiny jitter only');
+assert.match(core, /shellLaneOffset/, 'Lamellar strip instances carry shell-lane offsets for visible coverage sets');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
 assert.match(core, /thicknessVariance/, 'Lamellar core supports strip-local thickness variance independent of layer thickness');
@@ -239,6 +241,7 @@ assert.match(witness, /selectionPopoverUi/, 'witness records the floating select
 assert.match(witness, /populationToolheadUi/, 'witness records selected-population toolhead state');
 assert.match(witness, /selectedPopulationObject/, 'witness records selected population object state');
 assert.match(witness, /populationControlReceipt/, 'witness records a selected-population control mutation receipt');
+assert.match(witness, /populationSliderSweepReceipt/, 'witness records selected-population slider sweep behavior');
 assert.match(witness, /selectionLevel/, 'witness records selection level in browser receipts');
 assert.match(witness, /selectedLamellarObject/, 'witness records selected Lamellar object state');
 assert.match(witness, /viewportPickReceipt/, 'witness records viewport pick receipt');
@@ -446,9 +449,12 @@ for (const count of [4, 5, 6]) {
   const descriptorsForPopulation = covered.descriptors.filter(descriptor => descriptor.populationId === population?.id);
   assert.equal(population?.layoutPreset, 'coverage', `count ${count} population records coverage layout preset`);
   assert.ok(population?.coverageSpacing >= (Math.PI * 2 / count) * 0.95, `count ${count} records near-even coverage spacing`);
+  assert.ok(population?.coverageSpan >= 0.66, `count ${count} records a visible shell coverage span`);
   assert.equal(strips.length, count, `count ${count} emits exactly one strip per coverage slot`);
   assert.ok(circularMinGap(strips.map(strip => strip.bearingPhase)) >= (Math.PI * 2 / count) * 0.95, `count ${count} strips are evenly phase-spaced around the shell`);
-  assert.ok(circularMinGap(descriptorsForPopulation.map(descriptor => descriptor.theta0)) >= (Math.PI * 2 / count) * 0.85, `count ${count} descriptors move actual shell centerlines instead of only jittering waviness`);
+  assert.ok(Math.max(...strips.map(strip => strip.shellLaneOffset)) - Math.min(...strips.map(strip => strip.shellLaneOffset)) >= 0.66, `count ${count} strips occupy visible shell lanes`);
+  assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.theta0)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.theta0)) > 0.25, `count ${count} descriptors retain smooth rotational authority`);
+  assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) >= 0.45, `count ${count} descriptors occupy visible shell-lane centerlines`);
 }
 assert.ok(
   populated.stripPopulationDescriptors.every(population =>

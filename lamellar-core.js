@@ -17,6 +17,7 @@ const GAP_PATTERNS = new Set(["solid", "single-window", "dashed", "crosscut"]);
 const POPULATION_LAYOUT_PRESETS = new Set(["coverage", "cluster"]);
 const MAX_LAYER_COUNT = 12;
 const TAU = Math.PI * 2;
+const MAX_COVERAGE_LANE_SPAN = 1.44;
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -156,6 +157,12 @@ function normalizeStripPopulations(populations) {
     const coverageSpacing = normalizedCount > 1 && layoutPreset === "coverage"
       ? Number((TAU * coverageSpread / normalizedCount).toFixed(4))
       : 0;
+    const coverageSpan = normalizedCount > 1 && layoutPreset === "coverage"
+      ? Number(clamp(coverageSpread * 0.84, 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
+      : 0;
+    const shellLaneSpacing = normalizedCount > 1 && layoutPreset === "coverage"
+      ? Number((coverageSpan / (normalizedCount - 1)).toFixed(4))
+      : 0;
     const fallbackId = `strip-population-${Number.isFinite(layerIndex) ? Math.round(layerIndex) : 0}-${role}-${index}`;
     return {
       kind: "StripPopulationDescriptor",
@@ -170,6 +177,8 @@ function normalizeStripPopulations(populations) {
       bearingOffset: Number.isFinite(bearingOffset) ? Number(clamp(bearingOffset, -TAU, TAU).toFixed(4)) : 0,
       bearingVariance: coverageSpread,
       coverageSpacing,
+      coverageSpan,
+      shellLaneSpacing,
       gapPattern: normalizeGapPattern(population?.gapPattern),
       source: "macro-strip-population",
     };
@@ -349,6 +358,8 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         bearingOffset: 0,
         bearingVariance: 1,
         coverageSpacing: spec.stripCount > 1 ? Number((TAU / spec.stripCount).toFixed(4)) : 0,
+        coverageSpan: spec.stripCount > 1 ? 0.84 : 0,
+        shellLaneSpacing: spec.stripCount > 1 ? Number((0.84 / (spec.stripCount - 1)).toFixed(4)) : 0,
         layoutPreset: "coverage",
         gapPattern: "solid",
         source: "layer-shell-default-population",
@@ -369,6 +380,12 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const coverageSpacing = population.count > 1 && layoutPreset === "coverage"
           ? Number((TAU * populationSpread / population.count).toFixed(4))
           : 0;
+        const coverageSpan = population.count > 1 && layoutPreset === "coverage"
+          ? Number(clamp((population.coverageSpan ?? populationSpread * 0.84), 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
+          : 0;
+        const shellLaneSpacing = population.count > 1 && layoutPreset === "coverage"
+          ? Number((coverageSpan / (population.count - 1)).toFixed(4))
+          : 0;
         const centeredPopulationSlot = population.count > 1 ? populationIndex - (population.count - 1) / 2 : 0;
         const clusterJitter = population.count > 1
           ? ((populationIndex / Math.max(1, population.count - 1)) - 0.5) * populationSpread
@@ -376,6 +393,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const bearingPhase = Number((population.bearingOffset + (layoutPreset === "coverage"
           ? centeredPopulationSlot * coverageSpacing
           : clusterJitter)).toFixed(4));
+        const shellLaneOffset = Number((layoutPreset === "coverage"
+          ? centeredPopulationSlot * shellLaneSpacing
+          : centeredPopulationSlot * 0.024).toFixed(4));
         const baseStrip = {
           id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
           layerIndex: spec.layerIndex,
@@ -410,6 +430,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           populationIndex,
           layoutPreset,
           coverageSpacing,
+          coverageSpan,
+          shellLaneSpacing,
+          shellLaneOffset,
           coverageSlot: populationIndex,
           bearingPhase,
           stripCount: authoredCount,
@@ -496,6 +519,9 @@ export function generateLamellarSectionSegments(input = {}) {
         populationIndex: strip.populationIndex,
         layoutPreset: strip.layoutPreset,
         coverageSpacing: strip.coverageSpacing,
+        coverageSpan: strip.coverageSpan,
+        shellLaneSpacing: strip.shellLaneSpacing,
+        shellLaneOffset: strip.shellLaneOffset,
         coverageSlot: strip.coverageSlot,
         bearingPhase: strip.bearingPhase,
         source: strip.sliceParticipation === "primary-cut-target" ? "procedural-composer" : "layer-shell-strip-assemblage",
@@ -511,9 +537,9 @@ export function generateLamellarSectionSegments(input = {}) {
         interval: [start, end],
         curveLaw: composerDescriptor.curveLaw,
         capLaw: composerDescriptor.capLaw,
-        theta0: selectedShape.theta0 + strip.bearingPhase,
+        theta0: selectedShape.theta0 + strip.bearingPhase * 0.22,
         thetaTwist: selectedShape.thetaTwist,
-        phi0: selectedShape.phi0 + strip.intervalOffset * 0.16 + Math.sin(strip.bearingPhase) * 0.16,
+        phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
         phiSlope: selectedShape.phiSlope,
         phase: selectedPhase + strip.phaseOffset,
         radius: 1 + spec.depth,
@@ -549,6 +575,9 @@ export function generateLamellarSectionSegments(input = {}) {
       populationIndex: strip.populationIndex,
       layoutPreset: strip.layoutPreset,
       coverageSpacing: strip.coverageSpacing,
+      coverageSpan: strip.coverageSpan,
+      shellLaneSpacing: strip.shellLaneSpacing,
+      shellLaneOffset: strip.shellLaneOffset,
       coverageSlot: strip.coverageSlot,
       bearingPhase: strip.bearingPhase,
       source: "layer-shell-strip-assemblage",
@@ -567,9 +596,9 @@ export function generateLamellarSectionSegments(input = {}) {
       ],
       curveLaw: composerDescriptor.curveLaw,
       capLaw: composerDescriptor.capLaw,
-      theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase + (isCutAuthor ? 0 : 0.04),
+      theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase * 0.22 + (isCutAuthor ? 0 : 0.04),
       thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
-      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.18 + Math.sin(strip.bearingPhase) * 0.12,
+      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
       phiSlope: 0.86 + strip.stripIndex * 0.04,
       phase: spec.phase + strip.phaseOffset,
       radius: Number((1 + spec.depth).toFixed(4)),
@@ -957,6 +986,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       populationRole: population?.role || firstMesh?.userData.populationRole || null,
       layoutPreset: population?.layoutPreset || null,
       coverageSpacing: population?.coverageSpacing ?? null,
+      coverageSpan: population?.coverageSpan ?? null,
       count: population?.count ?? populationStripIds.length,
       chirality: population?.chirality ?? null,
       bearingOffset: population?.bearingOffset ?? null,
@@ -1216,6 +1246,9 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       populationIndex: d.populationIndex,
       layoutPreset: d.layoutPreset,
       coverageSpacing: d.coverageSpacing,
+      coverageSpan: d.coverageSpan,
+      shellLaneSpacing: d.shellLaneSpacing,
+      shellLaneOffset: d.shellLaneOffset,
       coverageSlot: d.coverageSlot,
       bearingPhase: d.bearingPhase,
       stripProfileKind: d.stripProfileKind,
@@ -1286,6 +1319,9 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         populationIndex: descriptor.populationIndex ?? null,
         layoutPreset: descriptor.layoutPreset || null,
         coverageSpacing: descriptor.coverageSpacing ?? null,
+        coverageSpan: descriptor.coverageSpan ?? null,
+        shellLaneSpacing: descriptor.shellLaneSpacing ?? null,
+        shellLaneOffset: descriptor.shellLaneOffset ?? null,
         coverageSlot: descriptor.coverageSlot ?? null,
         bearingPhase: descriptor.bearingPhase ?? null,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
