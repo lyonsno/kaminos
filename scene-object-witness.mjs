@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
@@ -29,6 +29,7 @@ function delay(ms) {
 }
 
 function writeReport(report) {
+  mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, JSON.stringify({
     requestedUrl: url,
     effectiveUrl: effectiveUrl,
@@ -50,9 +51,20 @@ function assertPngScreenshot(buffer) {
 }
 
 async function cdpFetch(path, options) {
-  const resp = await fetch(`http://127.0.0.1:${port}${path}`, options);
+  const { timeoutMs = 5000, ...fetchOptions } = options || {};
+  if (!fetchOptions.signal) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
+  const resp = await fetch(`http://127.0.0.1:${port}${path}`, fetchOptions);
   if (!resp.ok) throw new Error(`CDP ${path} failed ${resp.status}`);
   return resp.json();
+}
+
+async function isCdpEndpointOpen() {
+  try {
+    await cdpFetch('/json/version', { timeoutMs: 300 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function waitForCdp() {
@@ -70,9 +82,14 @@ function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveReq, rejectReq) => {
+    const timer = setTimeout(() => {
+      ws.removeEventListener('message', onMessage);
+      rejectReq(new Error(`${method}: CDP request timed out`));
+    }, 10000);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
+      clearTimeout(timer);
       ws.removeEventListener('message', onMessage);
       if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
       else resolveReq(msg.result);
@@ -100,6 +117,29 @@ async function evaluate(ws, expression) {
   return result.result.value;
 }
 
+function normalizeUrlForWitness(value) {
+  try {
+    return new URL(value).href;
+  } catch {
+    return value;
+  }
+}
+
+function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
+  const rows = evidence || [];
+  const activeRows = rows.filter(row => row.active && row.pressed === 'true');
+  if (activeRows.length !== 1) {
+    throw new Error(`${phaseLabel} selection not exclusive: ${JSON.stringify(rows)}`);
+  }
+  if (activeRows[0].id !== clickedId) {
+    throw new Error(`${phaseLabel} selection did not activate the clicked row: ${JSON.stringify({ clickedId, rows })}`);
+  }
+  const other = rows.find(row => row.id === otherId);
+  if (!other || other.active || other.pressed !== 'false') {
+    throw new Error(`${phaseLabel} selection did not deactivate other rows: ${JSON.stringify({ otherId, rows })}`);
+  }
+}
+
 async function runAppendSelectRemoveKeyboardScenario(ws) {
   phase = 'scenario-default-replace';
   lastEvidence.defaultReplace = await evaluate(ws, `
@@ -113,6 +153,9 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
       }
       const initialRows = [...document.querySelectorAll('[data-scene-object-id]')];
       const initialIds = initialRows.map(row => row.dataset.sceneObjectId);
+      if (initialRows.length !== 1) {
+        throw new Error('default replace did not start from exactly one row: ' + JSON.stringify({ rowCount: initialRows.length, ids: initialIds }));
+      }
       const append = document.getElementById('append-import-toggle');
       if (!append) throw new Error('append import toggle missing');
       append.checked = false;
@@ -182,11 +225,20 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   if (lastEvidence.appendSelection.rowCount !== 2 || lastEvidence.appendSelection.uniqueIds !== 2) {
     throw new Error(`append import did not produce two unique rows: ${JSON.stringify(lastEvidence.appendSelection)}`);
   }
-  if (lastEvidence.appendSelection.afterFirst.filter(row => row.active && row.pressed === 'true').length !== 1) {
-    throw new Error(`first selection not exclusive: ${JSON.stringify(lastEvidence.appendSelection.afterFirst)}`);
-  }
-  if (lastEvidence.appendSelection.afterSecond.filter(row => row.active && row.pressed === 'true').length !== 1) {
-    throw new Error(`second selection not exclusive: ${JSON.stringify(lastEvidence.appendSelection.afterSecond)}`);
+  assertClickedSelection(
+    lastEvidence.appendSelection.afterFirst,
+    'first',
+    lastEvidence.appendSelection.firstId,
+    lastEvidence.appendSelection.secondId,
+  );
+  assertClickedSelection(
+    lastEvidence.appendSelection.afterSecond,
+    'second',
+    lastEvidence.appendSelection.secondId,
+    lastEvidence.appendSelection.firstId,
+  );
+  if (!lastEvidence.appendSelection.transformBarVisible) {
+    throw new Error(`append selection did not preserve transform toolbar: ${JSON.stringify(lastEvidence.appendSelection)}`);
   }
 
   phase = 'scenario-mouse-remove';
@@ -211,6 +263,12 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   `);
   if (lastEvidence.mouseRemove.rows.length !== 1 || lastEvidence.mouseRemove.rows.filter(row => row.active && row.pressed === 'true').length !== 1) {
     throw new Error(`mouse remove did not leave one active row: ${JSON.stringify(lastEvidence.mouseRemove)}`);
+  }
+  if (!lastEvidence.mouseRemove.info.startsWith('Removed:')) {
+    throw new Error(`mouse remove did not report removal: ${JSON.stringify(lastEvidence.mouseRemove)}`);
+  }
+  if (!lastEvidence.mouseRemove.transformBarVisible) {
+    throw new Error(`mouse remove did not preserve transform toolbar: ${JSON.stringify(lastEvidence.mouseRemove)}`);
   }
 
   phase = 'scenario-keyboard-remove';
@@ -254,12 +312,20 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   if (!lastEvidence.keyboardRemove.info.startsWith('Removed:')) {
     throw new Error(`keyboard remove did not report removal: ${JSON.stringify(lastEvidence.keyboardRemove)}`);
   }
+  if (!lastEvidence.keyboardRemove.transformBarVisible) {
+    throw new Error(`keyboard remove did not preserve transform toolbar: ${JSON.stringify(lastEvidence.keyboardRemove)}`);
+  }
 }
 
 let chromeProcess = null;
 let ws = null;
 
 try {
+  phase = 'checking-debug-port';
+  if (await isCdpEndpointOpen()) {
+    throw new Error(`CDP debug port already in use before launch: ${port}`);
+  }
+
   phase = 'launching-chrome';
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
@@ -272,9 +338,23 @@ try {
     url,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
+  const chromeLaunchSignal = new Promise(resolveLaunch => {
+    chromeProcess.once('error', error => resolveLaunch({ error }));
+    chromeProcess.once('exit', (code, signal) => resolveLaunch({ exit: { code, signal } }));
+  });
 
   phase = 'waiting-for-cdp';
-  browserVersion = await waitForCdp();
+  const launchResult = await Promise.race([
+    waitForCdp().then(version => ({ version })),
+    chromeLaunchSignal,
+  ]);
+  if (launchResult.error) {
+    throw new Error(`Chrome launch failed: ${launchResult.error.message}`);
+  }
+  if (launchResult.exit) {
+    throw new Error(`Chrome exited before DevTools opened: ${JSON.stringify(launchResult.exit)}`);
+  }
+  browserVersion = launchResult.version;
 
   phase = 'opening-target';
   const targets = await cdpFetch('/json/list');
@@ -287,6 +367,11 @@ try {
   await wsRequest(ws, 'Page.bringToFront');
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'location.href');
+  const requestedHref = normalizeUrlForWitness(url);
+  const effectiveHref = normalizeUrlForWitness(effectiveUrl);
+  if (requestedHref !== effectiveHref) {
+    throw new Error(`effective URL mismatch: requested ${requestedHref} but browser loaded ${effectiveHref}`);
+  }
 
   if (scenario !== 'append-select-remove-keyboard') {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
@@ -297,6 +382,7 @@ try {
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
   const png = Buffer.from(shot.data, 'base64');
   assertPngScreenshot(png);
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, png);
 
   phase = 'writing-report';
