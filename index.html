@@ -3276,16 +3276,28 @@ async function saveToServer(sceneData, filename) {
   return false;
 }
 
+function sceneIsEmpty() {
+  return !currentMesh && volumePrimitives.length === 0;
+}
+
 // Save: overwrite current scene file, or create new if none
 window.saveScene = async function() {
+  if (sceneIsEmpty()) {
+    setInfo('Nothing to save');
+    return false;
+  }
   const data = buildSceneData();
-  await saveToServer(data, currentSceneFile);
+  return saveToServer(data, currentSceneFile);
 };
 
 // Save As: always create a new scene file
 window.saveSceneAs = async function() {
+  if (sceneIsEmpty()) {
+    setInfo('Nothing to save');
+    return false;
+  }
   const data = buildSceneData();
-  await saveToServer(data, null);
+  return saveToServer(data, null);
 };
 
 function getMaterialState() {
@@ -3314,7 +3326,14 @@ function applyMaterialState(state) {
   applyMaterialStateToObject(currentMesh, state);
 }
 
+function claimLoadedSceneFile(file) {
+  if (file.name && file.name.endsWith('.kaminos.json')) {
+    currentSceneFile = file.name;
+  }
+}
+
 async function loadSceneFile(file) {
+  const previousSceneFile = currentSceneFile;
   const text = await file.text();
   let data;
   try {
@@ -3322,10 +3341,6 @@ async function loadSceneFile(file) {
   } catch {
     setInfo('Invalid scene file');
     return;
-  }
-  // Track the scene file for overwrite
-  if (file.name && file.name.endsWith('.kaminos.json')) {
-    currentSceneFile = file.name;
   }
   let restorePlan;
   try {
@@ -3367,19 +3382,24 @@ async function loadSceneFile(file) {
     updateBackground();
   }
 
+  setVolumePrimitivesState(restorePlan.volumePrimitives);
   if (hasVolumePrimitiveScene) {
-    setVolumePrimitivesState(restorePlan.volumePrimitives);
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
+  } else {
+    await volumePrototype?.setActive?.(false);
   }
 
   if (objectRecords.length > 0) {
     try {
       await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
     } catch (e) {
+      currentSceneFile = previousSceneFile;
       setInfo('Scene load failed: ' + e.message);
       return;
     }
+  } else {
+    clearScene();
   }
 
   // Apply camera
@@ -3452,6 +3472,7 @@ async function loadSceneFile(file) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
+  claimLoadedSceneFile(file);
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
   } else {
@@ -3473,7 +3494,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
-    if (!currentMesh && volumePrimitives.length === 0) return;
+    if (sceneIsEmpty()) return;
     if (e.shiftKey) saveSceneAs();
     else saveScene();
   }

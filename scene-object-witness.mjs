@@ -17,11 +17,13 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
+const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 
 let phase = 'initializing';
 let stderr = '';
 let lastEvidence = {};
 let effectiveUrl = null;
+let effectiveServerRoots = null;
 let browserVersion = null;
 
 function delay(ms) {
@@ -33,6 +35,8 @@ function writeReport(report) {
   writeFileSync(reportPath, JSON.stringify({
     requestedUrl: url,
     effectiveUrl: effectiveUrl,
+    effectiveServerRoots: effectiveServerRoots,
+    expectedServerRoot: expectedServerRoot,
     scenario,
     debugPort: port,
     chrome,
@@ -125,6 +129,25 @@ function normalizeUrlForWitness(value) {
   }
 }
 
+async function fetchServerRoots(baseUrl) {
+  const resp = await fetch(new URL('/api/roots', baseUrl));
+  const roots = await resp.json();
+  if (!resp.ok || roots.error) {
+    throw new Error(`server root identity unavailable: ${roots.error || resp.status}`);
+  }
+  return roots;
+}
+
+function assertExpectedServerRoot(roots) {
+  const scenesPath = roots?.scenes?.path;
+  if (!scenesPath) throw new Error('server root identity unavailable: missing scenes root');
+  if (!expectedServerRoot) return;
+  const effectiveServerRoot = resolve(scenesPath, '..');
+  if (effectiveServerRoot !== expectedServerRoot) {
+    throw new Error(`effective server root mismatch: expected ${expectedServerRoot} but server reported ${effectiveServerRoot}`);
+  }
+}
+
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   const rows = evidence || [];
   const activeRows = rows.filter(row => row.active && row.pressed === 'true');
@@ -159,7 +182,9 @@ async function runSaveLoadRoundtripScenario(ws) {
       };
       const deleteScene = async name => {
         const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
-        return resp.json();
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
       };
       const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
         id: row.dataset.sceneObjectId,
@@ -274,6 +299,13 @@ async function runSaveLoadRoundtripScenario(ws) {
 
       document.querySelector('[data-tab="assets"]').click();
       const cleanup = await deleteScene(savedFile);
+      if (cleanup.deleted !== savedFile) {
+        throw new Error('cleanup did not delete saved scene file: ' + JSON.stringify({ savedFile, cleanup }));
+      }
+      const postCleanupFiles = await listScenes();
+      if (postCleanupFiles.includes(savedFile)) {
+        throw new Error('post-cleanup scene listing still includes saved scene file: ' + JSON.stringify({ savedFile, postCleanupFiles }));
+      }
       return {
         savedFile,
         firstId,
@@ -291,9 +323,209 @@ async function runSaveLoadRoundtripScenario(ws) {
         infoAfterLoad,
         transformBarVisible,
         cleanup,
+        postCleanupFileCount: postCleanupFiles.length,
       };
     })()
   `, { timeoutMs: 60000 });
+}
+
+async function runSceneBoundaryRoundtripScenario(ws) {
+  phase = 'scenario-scene-boundary-roundtrip';
+  lastEvidence.sceneBoundaryRoundtrip = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const schema = 'kaminos.volume-primitives.v0';
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const saveFixtureToServer = async doc => {
+        const resp = await fetch('/api/save-scene', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error || !data.saved) throw new Error('fixture scene save failed: ' + JSON.stringify(data));
+        return data.saved;
+      };
+      const loadSceneDocument = async (doc, name) => {
+        const input = document.getElementById('scene-file-input');
+        const file = new File([JSON.stringify(doc)], name, { type: 'application/json' });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const waitForInfo = async expected => {
+        let info = '';
+        for (let i = 0; i < 160; i++) {
+          info = document.getElementById('info-bar').textContent.trim();
+          if (info === expected) return info;
+          await wait(125);
+        }
+        return info;
+      };
+      const saveSceneAsAndRead = async () => {
+        const before = new Set(await listScenes());
+        const saved = await window.saveSceneAs();
+        if (!saved) throw new Error('scene boundary save-as did not report success');
+        let newFiles = [];
+        for (let i = 0; i < 120; i++) {
+          const after = await listScenes();
+          newFiles = after.filter(name => !before.has(name));
+          if (newFiles.length === 1) break;
+          await wait(125);
+        }
+        if (newFiles.length !== 1) throw new Error('scene boundary save-as did not create exactly one file: ' + JSON.stringify({ newFiles, before: [...before] }));
+        return { savedFile: newFiles[0], savedScene: await readScene(newFiles[0]) };
+      };
+
+      for (let i = 0; i < 80; i++) {
+        if (rowState().length === 1) break;
+        await wait(125);
+      }
+      const initialRows = rowState();
+      if (initialRows.length !== 1) throw new Error('scene boundary setup did not start with one default object row: ' + JSON.stringify(initialRows));
+
+      const timestamp = new Date().toISOString();
+      const volumeScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp,
+        objects: [],
+        activeObjectId: null,
+        model: null,
+        volumePrimitives: {
+          schema,
+          primitives: [{
+            id: 'boundary-volume',
+            kind: 'fire_smoke',
+            shape: 'sphere',
+            transform: { position: [0, -0.74, 0], rotation: [0, 0, 0], scale: [0.12, 0.12, 0.12] },
+            simulation: { sourceRadius: 0.12, flowRate: 0.15, vorticity: 2.65 },
+          }],
+        },
+      };
+      await loadSceneDocument(volumeScene, 'boundary-volume.kaminos.json');
+      const volumeInfo = await waitForInfo('Volume scene loaded');
+      const rowsAfterVolume = rowState();
+      const toolbarAfterVolume = document.getElementById('transform-bar').classList.contains('visible');
+      if (rowsAfterVolume.length !== 0 || toolbarAfterVolume) {
+        throw new Error('scene load did not clear stale object rows for volume-only scene: ' + JSON.stringify({ rowsAfterVolume, toolbarAfterVolume, volumeInfo }));
+      }
+      const volumeSave = await saveSceneAsAndRead();
+      if ((volumeSave.savedScene.objects || []).length !== 0) {
+        throw new Error('volume-only save after load retained stale objects: ' + JSON.stringify(volumeSave.savedScene.objects));
+      }
+      if (volumeSave.savedScene.volumePrimitives?.primitives?.length !== 1) {
+        throw new Error('volume-only save after load did not retain volume primitive: ' + JSON.stringify(volumeSave.savedScene.volumePrimitives));
+      }
+      await deleteScene(volumeSave.savedFile);
+
+      const localPreviewScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp: new Date().toISOString(),
+        objects: [{
+          id: 'failed-local-preview-object',
+          source: 'material-preview',
+          type: 'pbr',
+          fileName: 'Failed Local Preview',
+          label: 'Failed Local Preview',
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+          materials: { side: 0, transparent: false, opacity: 1 },
+        }],
+        activeObjectId: 'failed-local-preview-object',
+        model: { source: 'material-preview', type: 'pbr', fileName: 'Failed Local Preview' },
+        volumePrimitives: { schema, primitives: [] },
+      };
+      const localPreviewFile = await saveFixtureToServer(localPreviewScene);
+      await loadSceneDocument(localPreviewScene, localPreviewFile);
+      let failedInfo = '';
+      for (let i = 0; i < 120; i++) {
+        failedInfo = document.getElementById('info-bar').textContent.trim();
+        if (failedInfo.startsWith('Scene load failed:')) break;
+        await wait(125);
+      }
+      if (!failedInfo.startsWith('Scene load failed:')) {
+        throw new Error('local-preview scene load did not fail as expected: ' + failedInfo);
+      }
+      const protectedSave = await window.saveScene();
+      if (protectedSave !== false) {
+        throw new Error('failed local-preview scene load did not protect save target: ' + JSON.stringify({ protectedSave, failedInfo }));
+      }
+      const localPreviewAfterSaveAttempt = await readScene(localPreviewFile);
+      if (localPreviewAfterSaveAttempt.objects?.[0]?.source !== 'material-preview') {
+        throw new Error('failed local-preview scene load overwrote its source file: ' + JSON.stringify(localPreviewAfterSaveAttempt.objects));
+      }
+      await deleteScene(localPreviewFile);
+
+      const objectScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp: new Date().toISOString(),
+        objects: [{
+          id: 'boundary-object',
+          source: 'demos/supermat-ring/',
+          type: 'pbr',
+          fileName: 'Boundary Object',
+          label: 'Boundary Object',
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+          materials: { side: 0, transparent: false, opacity: 1 },
+        }],
+        activeObjectId: 'boundary-object',
+        model: { source: 'demos/supermat-ring/', type: 'pbr', fileName: 'Boundary Object' },
+        volumePrimitives: { schema, primitives: [] },
+      };
+      await loadSceneDocument(objectScene, 'boundary-object.kaminos.json');
+      const objectInfo = await waitForInfo('Scene loaded: 1 object');
+      const rowsAfterObject = rowState();
+      if (rowsAfterObject.length !== 1 || rowsAfterObject[0].id !== 'boundary-object') {
+        throw new Error('scene boundary object-only load did not restore one expected row: ' + JSON.stringify({ rowsAfterObject, objectInfo }));
+      }
+      const objectSave = await saveSceneAsAndRead();
+      if (objectSave.savedScene.volumePrimitives?.primitives?.length !== 0) {
+        throw new Error('scene load did not clear stale volume primitives for object-only scene: ' + JSON.stringify(objectSave.savedScene.volumePrimitives));
+      }
+      await deleteScene(objectSave.savedFile);
+
+      document.querySelector('[data-tab="assets"]').click();
+      return {
+        initialRows,
+        rowsAfterVolume,
+        toolbarAfterVolume,
+        volumeInfo,
+        volumeSavedObjectCount: (volumeSave.savedScene.objects || []).length,
+        volumeSavedPrimitiveCount: volumeSave.savedScene.volumePrimitives?.primitives?.length || 0,
+        failedLocalPreviewInfo: failedInfo,
+        failedLocalPreviewProtectedSave: protectedSave,
+        rowsAfterObject,
+        objectInfo,
+        objectSavedPrimitiveCount: objectSave.savedScene.volumePrimitives?.primitives?.length || 0,
+      };
+    })()
+  `, { timeoutMs: 90000 });
 }
 
 async function runAppendSelectRemoveKeyboardScenario(ws) {
@@ -528,11 +760,16 @@ try {
   if (requestedHref !== effectiveHref) {
     throw new Error(`effective URL mismatch: requested ${requestedHref} but browser loaded ${effectiveHref}`);
   }
+  phase = 'checking-server-root';
+  effectiveServerRoots = await fetchServerRoots(effectiveHref);
+  assertExpectedServerRoot(effectiveServerRoots);
 
   if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
+  } else if (scenario === 'scene-boundary-roundtrip') {
+    await runSceneBoundaryRoundtripScenario(ws);
   } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }

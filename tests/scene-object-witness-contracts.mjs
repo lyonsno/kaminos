@@ -11,8 +11,11 @@ const witness = readFileSync(witnessPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
+assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
+assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
+assert.match(witness, /expectedServerRoot/, 'witness can validate the expected server root');
 assert.match(witness, /debugPort:\s*port/, 'witness report records effective debug port');
 assert.match(witness, /process\.pid/, 'witness uses an isolated default Chrome profile for each run');
 assert.match(witness, /phase\s*=/, 'witness tracks failure phase for report-on-failure');
@@ -51,4 +54,9 @@ assert.match(witness, /scene load did not restore two object rows/, 'save/load w
 assert.match(witness, /scene load did not restore active object id/, 'save/load witness proves browser load restores active selection');
 assert.match(witness, /scene load did not preserve transform toolbar/, 'save/load witness proves transform controls survive scene load');
 assert.match(witness, /scene load did not report two loaded objects/, 'save/load witness proves load status reflects multi-object restore');
+assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
+assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');
+assert.match(witness, /scene load did not clear stale object rows for volume-only scene/, 'scene boundary witness proves volume-only loads clear prior objects');
+assert.match(witness, /scene load did not clear stale volume primitives for object-only scene/, 'scene boundary witness proves object-only loads clear prior volume state');
+assert.match(witness, /failed local-preview scene load did not protect save target/, 'scene boundary witness proves failed local-preview loads do not become overwrite targets');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
