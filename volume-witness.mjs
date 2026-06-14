@@ -44,6 +44,10 @@ const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
 const expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
   : 0.35;
+const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
+const expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
+  ? Math.max(0, Math.min(1, requestedMajorantSkip))
+  : 0.70;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -274,6 +278,10 @@ async function main() {
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
     assert.ok(Math.abs((state.controls?.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'occupancy skip route/control did not apply');
     assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
+    assert.ok(Math.abs((state.controls?.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'majorant skip route/control did not apply');
+    assert.ok(Math.abs((state.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'effective majorant skip state did not match route/control');
+    assert.equal(state.majorantGrid, 24, 'coarse majorant grid identity did not apply');
+    assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
@@ -292,6 +300,9 @@ async function main() {
     }
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (!sample.majorantReadback || sample.majorantReadback.grid !== 24 || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
+      throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
     const sampleTiming = sample.timing || stateTiming;
     if (!Number.isFinite(sampleTiming.rafFps) || sampleTiming.rafFps <= 0 || !Number.isFinite(sampleTiming.frameP95Ms) || sampleTiming.frameP95Ms <= 0) {
@@ -362,10 +373,14 @@ async function main() {
       simGrid: sample.simGrid,
       simGridLabel: sample.simGridLabel,
       simReadback: sample.simReadback,
+      majorantReadback: sample.majorantReadback,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
       adaptiveRaymarch: sample.adaptiveRaymarch,
       occupancySkip: sample.occupancySkip,
+      majorantSkip: sample.majorantSkip,
+      majorantGrid: sample.majorantGrid,
+      majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       timing: sample.timing || stateTiming,
       controls: reportControls,

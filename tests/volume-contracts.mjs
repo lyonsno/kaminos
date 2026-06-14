@@ -40,6 +40,9 @@ assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sam
 assert.match(index, /id="volume-occupancy-skip"/, 'Volume tab exposes occupancy/importance skipping control');
 assert.match(index, /volume_occupancy_skip/, 'URL route can override occupancy/importance skipping');
 assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance skip strength into the renderer');
+assert.match(index, /id="volume-majorant-skip"/, 'Volume tab exposes coarse majorant skip control');
+assert.match(index, /volume_majorant_skip/, 'URL route can override coarse majorant skipping');
+assert.match(index, /majorantSkip/, 'Volume controls carry coarse majorant skip strength into the renderer');
 assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
 assert.match(index, /id="volume-ray-budget-handle"/, 'ray-budget gamut exposes a draggable handle');
 assert.match(index, /id="volume-ray-budget-readout"/, 'ray-budget gamut exposes a compact effective budget readout');
@@ -87,6 +90,15 @@ assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records
 assert.match(core, /DEFAULT_GRID_SIZE\s*=\s*96/, 'smoke route defaults to the operator-found 96^3 grid size');
 assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolution choices');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');
+assert.match(core, /MAJORANT_GRID_SIZE\s*=\s*24/, 'volume route declares a fixed coarse majorant grid');
+assert.match(core, /majorantBufferBytes/, 'coarse majorant field has an explicit storage-buffer byte size');
+assert.match(core, /majorantBuffer/, 'coarse majorant field lives in a GPU storage buffer');
+assert.match(core, /csMajorant/, 'coarse majorant field is built by a dedicated GPU compute entry point');
+assert.match(core, /majorantComputePipeline/, 'coarse majorant field has a dedicated compute pipeline');
+assert.match(core, /encodeMajorant/, 'frame encoding builds the coarse majorant field after sim update');
+assert.match(core, /sampleWorldMajorant/, 'fragment raymarch samples the coarse majorant field');
+assert.match(core, /majorantCellExitDistance/, 'raymarch can skip toward the next coarse majorant cell boundary');
+assert.match(core, /sampleMajorantReadback/, 'witness readback can prove nonzero coarse majorant contents');
 assert.match(core, /rebuildFluidState/, 'fluid sim can rebuild GPU state when resolution changes');
 assert.match(core, /gridOverlay/, 'fluid renderer exposes grid overlay state');
 assert.match(core, /gridLine/, 'fragment shader renders an active grid overlay');
@@ -110,6 +122,8 @@ assert.match(core, /raymarchOccupancySignal/, 'raymarch computes a named low-occ
 assert.match(core, /occupancySkipStepScale/, 'raymarch can skip/coarsen low-occupancy spans before spending dense samples');
 assert.match(core, /occupancySkipStrength/, 'shader gives occupancy skipping an explicit bounded strength');
 assert.match(core, /state\.occupancySkip/, 'debug state exposes effective occupancy skip strength');
+assert.match(core, /state\.majorantSkip/, 'debug state exposes effective coarse majorant skip strength');
+assert.match(core, /state\.majorantGrid/, 'debug state exposes coarse majorant grid identity');
 assert.match(core, /adaptiveRaymarch/, 'debug state exposes effective adaptive raymarch strength');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
@@ -166,8 +180,12 @@ assert.match(witness, /effectiveRoute/, 'witness records effective route identit
 assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires the compute-backed fluid route identity');
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
 assert.match(witness, /expectedOccupancySkip/, 'witness verifies occupancy skip route/control identity');
+assert.match(witness, /expectedMajorantSkip/, 'witness verifies coarse majorant route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /occupancySkip/, 'witness records effective occupancy skip strength');
+assert.match(witness, /majorantSkip/, 'witness records effective coarse majorant skip strength');
+assert.match(witness, /majorantReadback/, 'witness records coarse majorant readback evidence');
+assert.match(witness, /occupiedBricks/, 'witness requires nonzero occupied coarse majorant bricks');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
 assert.match(witness, /timing/, 'witness records route-local timing evidence');
 assert.match(witness, /queueDoneMs/, 'witness records GPU queue completion timing when available');
