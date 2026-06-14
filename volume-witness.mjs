@@ -36,8 +36,11 @@ const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
 const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].includes(expectedPrimitiveFixture);
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
+const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
+const expectedSecondPrimitiveId = 'authored-fire-smoke-witness-b';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
+const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
   : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
@@ -305,6 +308,18 @@ async function main() {
           authoring.select('${expectedAuthoredPrimitiveId}');
           authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
           const moved = authoring.moveSelectedTo([${expectedAuthoredMovedPosition.join(', ')}]);
+          const second = ${expectedMultiPrimitiveProbe
+            ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
+                id: '${expectedSecondPrimitiveId}',
+                radius: 0.16,
+                flowRate: 0.32,
+                radiance: 1.9,
+              })`
+            : "null"};
+          if (second) {
+            authoring.select('${expectedSecondPrimitiveId}');
+            authoring.updateSelected({ radius: 0.16, flowRate: 0.32, radiance: 1.9 });
+          }
           const roundTrip = ${expectedSaveLoadProbe
             ? "await window.__kaminosScenePersistence.saveLoadRoundTrip(null)"
             : "null"};
@@ -317,14 +332,19 @@ async function main() {
       assert.equal(authoringProbe?.ok, true, 'authored volume primitive probe did not run');
       volumeAuthoring = authoringProbe.state;
       saveLoadRoundTrip = authoringProbe.roundTrip || null;
-      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive was not selected');
-      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive did not attach to the transform target');
+      const expectedProbeSelection = expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
+      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedProbeSelection, 'authored volume primitive was not selected');
+      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedProbeSelection, 'authored volume primitive did not attach to the transform target');
       assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored volume primitive target identity regressed');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored volume primitive marker was not created');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored volume primitive marker regressed to a solid affordance');
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored volume primitive marker must not claim full raymarch bounds');
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored volume primitive marker opacity is too visually dominant');
       assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored volume primitive marker must not be a solid filled body');
+      if (expectedMultiPrimitiveProbe) {
+        assert.equal(volumeAuthoring?.volumePrimitiveCount, 2, 'multi-primitive probe did not create two authored primitives');
+        assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedSecondPrimitiveId), 'second authored primitive marker was not created');
+      }
       if (expectedSaveLoadProbe) {
         assert.equal(saveLoadRoundTrip?.identity, 'kaminos-volume-save-load-roundtrip-v0', 'save/load round-trip did not report stable identity');
         assert.ok(saveLoadRoundTrip?.savedSceneFile?.endsWith('.kaminos.json'), 'save/load round-trip did not save a Kaminos scene file');
@@ -400,9 +420,11 @@ async function main() {
       volumeAuthoring = authoringStateEval.result.value;
       const primitive = state.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
       const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+      const secondPrimitive = state.volumePrimitives?.find(item => item.id === expectedSecondPrimitiveId);
       assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
-      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive selection was not retained');
-      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive transform target was not retained');
+      const expectedSelectedPrimitiveId = expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
+      assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedSelectedPrimitiveId, 'authored primitive selection was not retained');
+      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedSelectedPrimitiveId, 'authored primitive transform target was not retained');
       assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored primitive transform target identity was not retained');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored primitive marker id was not retained');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored primitive marker did not preserve wire/halo affordance');
@@ -412,6 +434,19 @@ async function main() {
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
       assertVectorClose(primitive?.transform?.position, expectedAuthoredMovedPosition, 'renderer authored primitive transform position');
       assertVectorClose(authoredPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'authoring authored primitive transform position');
+      if (expectedMultiPrimitiveProbe) {
+        assert.equal(state.volumePrimitiveCount, 2, 'renderer did not retain two authored volume primitives');
+        assert.equal(state.primitiveSourceCount, 2, 'renderer did not publish two effective primitive sources');
+        assert.ok(state.volumePrimitiveIds?.includes(expectedSecondPrimitiveId), 'renderer primitive ids did not include the second authored primitive');
+        assert.ok(Array.isArray(state.primitiveSources), 'renderer did not expose primitive source records');
+        const firstSource = state.primitiveSources.find(source => source.id === expectedAuthoredPrimitiveId);
+        const secondSource = state.primitiveSources.find(source => source.id === expectedSecondPrimitiveId);
+        assertVectorClose(firstSource?.position, expectedAuthoredMovedPosition, 'first effective primitive source position');
+        assertVectorClose(secondSource?.position, expectedSecondPrimitivePosition, 'second effective primitive source position');
+        assert.equal(firstSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'first source did not preserve primitive-centered mode');
+        assert.equal(secondSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'second source did not preserve primitive-centered mode');
+        assert.equal(secondPrimitive?.couplingSource, 'manual', 'second authored primitive did not preserve manual coupling source');
+      }
       if (expectedSaveLoadProbe) {
         assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'save/load round-trip selection evidence missing from report');
         assert.equal(saveLoadRoundTrip?.volumeState?.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'save/load round-trip did not restore primitive-centered body mode');

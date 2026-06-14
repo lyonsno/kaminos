@@ -4,6 +4,7 @@ const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const MAX_VOLUME_PRIMITIVE_SOURCES = 4;
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -22,6 +23,7 @@ function fluidBufferBytes(gridSize) {
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 const SLOTS_PER_CELL: u32 = 4u;
+const MAX_VOLUME_PRIMITIVE_SOURCES: u32 = 4u;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -32,6 +34,9 @@ struct Uniforms {
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
   primitive_source: vec4<f32>,
+  primitive_sources: array<vec4<f32>, MAX_VOLUME_PRIMITIVE_SOURCES>,
+  primitive_source_params: array<vec4<f32>, MAX_VOLUME_PRIMITIVE_SOURCES>,
+  primitive_source_meta: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -452,11 +457,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
-  let inputRadius = max(0.04, u.source_controls.x);
-  let inputFlow = max(0.0, u.source_controls.y);
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
-  let primitiveCenteredBody = clamp(u.primitive_source.w, 0.0, 1.0);
-  let primitiveBodyVelocityDamping = mix(1.0, 0.48, primitiveCenteredBody);
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
   let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 5.0);
   let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 5.0);
@@ -483,12 +484,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var emberFleck = microLayer.w * 0.934;
 
   let radial = length(p.xz);
-  let sourceCenter = p - u.primitive_source.xyz;
-  let sourceRadial = length(sourceCenter.xz);
-  let sourceDistance = length(sourceCenter);
-  let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.68, 1.08, sourceCenter.y));
-  let primitiveBodyBand = 1.0 - smoothstep(inputRadius * 0.82, inputRadius * 1.62, sourceDistance);
-  let effectiveSourceBand = mix(sourceBand, primitiveBodyBand, primitiveCenteredBody);
   let breakup = clamp(
     0.64
       + 0.24 * sin(p.x * 19.0 + p.z * 7.0 + time * 1.7)
@@ -497,19 +492,46 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.16,
     1.22
   );
-  let sourceFalloff = 1.0 / max(0.0064, inputRadius * inputRadius);
-  let plumeSource = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
-  let primitiveBodySource = exp(-sourceDistance * sourceDistance * sourceFalloff * 0.78) * primitiveBodyBand * breakup * inputFlow;
-  let source = mix(plumeSource, primitiveBodySource, primitiveCenteredBody);
-  let emberRingRadius = inputRadius * 0.94;
-  let emberRingWidth = max(0.045, inputRadius * 0.22);
-  let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * effectiveSourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
-  let fireBirthBand = smoothstep(-0.25, -0.08, sourceCenter.y) * (1.0 - smoothstep(0.30, 0.70, sourceCenter.y));
-  let primitiveFireBirthBand = 1.0 - smoothstep(inputRadius * 0.62, inputRadius * 1.30, sourceDistance);
-  let effectiveFireBirthBand = mix(fireBirthBand, primitiveFireBirthBand, primitiveCenteredBody);
-  let plumeFireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
-  let primitiveFireBirth = exp(-sourceDistance * sourceDistance * sourceFalloff * 1.18) * effectiveFireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
-  let fireBirth = mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody);
+  let sourceCount = u32(clamp(u.primitive_source_meta.x, 1.0, f32(MAX_VOLUME_PRIMITIVE_SOURCES)));
+  var source = 0.0;
+  var fireBirth = 0.0;
+  var emberRing = 0.0;
+  var primitiveCenteredInfluence = 0.0;
+  for (var sourceIndex = 0u; sourceIndex < MAX_VOLUME_PRIMITIVE_SOURCES; sourceIndex = sourceIndex + 1u) {
+    if (sourceIndex < sourceCount) {
+      let sourceVector = u.primitive_sources[sourceIndex];
+      let sourceParams = u.primitive_source_params[sourceIndex];
+      let inputRadius = max(0.04, sourceParams.x);
+      let inputFlow = max(0.0, sourceParams.y);
+      let primitiveCenteredBody = clamp(sourceVector.w, 0.0, 1.0);
+      let sourceCenter = p - sourceVector.xyz;
+      let sourceRadial = length(sourceCenter.xz);
+      let sourceDistance = length(sourceCenter);
+      let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.68, 1.08, sourceCenter.y));
+      let primitiveBodyBand = 1.0 - smoothstep(inputRadius * 0.82, inputRadius * 1.62, sourceDistance);
+      let effectiveSourceBand = mix(sourceBand, primitiveBodyBand, primitiveCenteredBody);
+      let sourceFalloff = 1.0 / max(0.0064, inputRadius * inputRadius);
+      let plumeSource = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
+      let primitiveBodySource = exp(-sourceDistance * sourceDistance * sourceFalloff * 0.78) * primitiveBodyBand * breakup * inputFlow;
+      let localSource = mix(plumeSource, primitiveBodySource, primitiveCenteredBody);
+      let emberRingRadius = inputRadius * 0.94;
+      let emberRingWidth = max(0.045, inputRadius * 0.22);
+      let localEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * effectiveSourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+      let fireBirthBand = smoothstep(-0.25, -0.08, sourceCenter.y) * (1.0 - smoothstep(0.30, 0.70, sourceCenter.y));
+      let primitiveFireBirthBand = 1.0 - smoothstep(inputRadius * 0.62, inputRadius * 1.30, sourceDistance);
+      let effectiveFireBirthBand = mix(fireBirthBand, primitiveFireBirthBand, primitiveCenteredBody);
+      let plumeFireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+      let primitiveFireBirth = exp(-sourceDistance * sourceDistance * sourceFalloff * 1.18) * effectiveFireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+      source = source + localSource;
+      fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody);
+      emberRing = emberRing + localEmberRing;
+      primitiveCenteredInfluence = max(primitiveCenteredInfluence, primitiveCenteredBody * smoothstep(0.0008, 0.035, localSource));
+    }
+  }
+  source = min(source, 2.5);
+  fireBirth = min(fireBirth, 2.5);
+  emberRing = min(emberRing, 2.0);
+  let primitiveBodyVelocityDamping = mix(1.0, 0.48, clamp(primitiveCenteredInfluence, 0.0, 1.0));
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
@@ -685,7 +707,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(44);
+  const uniforms = new Float32Array(44 + MAX_VOLUME_PRIMITIVE_SOURCES * 8 + 4);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -705,6 +727,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumePrimitiveCount: 0,
     volumePrimitiveIds: [],
     volumePrimitives: [],
+    primitiveSourceCount: 0,
+    primitiveSources: [],
     textureMirror: {
       identity: 'webgpu-canvas-drawImage-2d-mirror-v0',
       sourceCanvas: 'kaminos-volume-canvas',
@@ -744,23 +768,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function makeInitialFluid(nextGridSize) {
     const data = new Float32Array(gridCellCount(nextGridSize) * FLUID_COMPONENTS);
-    const sourcePrimitive = getPrimitiveSource();
+    const sourcePrimitives = getPrimitiveSources();
     for (let z = 0; z < nextGridSize; z += 1) {
       for (let y = 0; y < nextGridSize; y += 1) {
         for (let x = 0; x < nextGridSize; x += 1) {
           const fx = (x + 0.5) / nextGridSize * 2 - 1;
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
-          const dx = fx - sourcePrimitive.position[0];
-          const dy = fy - sourcePrimitive.position[1];
-          const dz = fz - sourcePrimitive.position[2];
-          const radial = Math.hypot(dx, dz);
-          const distance = Math.hypot(dx, dy, dz);
-          const inputRadius = sourcePrimitive.radius;
-          const inputFlow = sourcePrimitive.flowRate;
-          const plumeSource = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(dy - 0.22) * 4.2) * inputFlow;
-          const primitiveBodySource = Math.exp(-(distance * distance) / Math.max(0.0064, inputRadius * inputRadius * 1.28)) * Math.max(0, 1 - distance / Math.max(0.04, inputRadius * 1.55)) * inputFlow;
-          const source = sourcePrimitive.primitiveCenteredBody ? primitiveBodySource : plumeSource;
+          let source = 0;
+          for (const sourcePrimitive of sourcePrimitives) {
+            const dx = fx - sourcePrimitive.position[0];
+            const dy = fy - sourcePrimitive.position[1];
+            const dz = fz - sourcePrimitive.position[2];
+            const radial = Math.hypot(dx, dz);
+            const distance = Math.hypot(dx, dy, dz);
+            const inputRadius = sourcePrimitive.radius;
+            const inputFlow = sourcePrimitive.flowRate;
+            const plumeSource = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(dy - 0.22) * 4.2) * inputFlow;
+            const primitiveBodySource = Math.exp(-(distance * distance) / Math.max(0.0064, inputRadius * inputRadius * 1.28)) * Math.max(0, 1 - distance / Math.max(0.04, inputRadius * 1.55)) * inputFlow;
+            source += sourcePrimitive.primitiveCenteredBody ? primitiveBodySource : plumeSource;
+          }
+          source = Math.min(source, 2.5);
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
@@ -843,19 +871,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }));
   }
 
-  function getPrimitiveSource() {
-    const primitive = volumePrimitives[0];
-    if (!primitive) {
-      return {
-        position: [0, -0.74, 0],
-        radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
-        flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
-        primitiveCenteredBody: false,
-        bodyMode: 'legacy-plume-source-v0',
-      };
-    }
+  function sourceFromPrimitive(primitive) {
     const primitiveCenteredBody = primitive.volumeBodyMode === 'primitive-centered-sphere-volume-v0' || primitive.couplingSource === 'manual';
     return {
+      id: primitive.id,
       position: primitive.transform.position,
       radius: Math.max(0.04, primitive.simulation.sourceRadius),
       flowRate: Math.max(0, primitive.simulation.flowRate),
@@ -864,13 +883,45 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  function publishPrimitiveSourceState(sourcePrimitive = getPrimitiveSource()) {
-    state.primitiveSource = {
+  function getLegacyPrimitiveSource() {
+    return {
+      id: 'legacy-plume-source',
+      position: [0, -0.74, 0],
+      radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
+      flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      primitiveCenteredBody: false,
+      bodyMode: 'legacy-plume-source-v0',
+    };
+  }
+
+  function getPrimitiveSources() {
+    if (volumePrimitives.length === 0) return [getLegacyPrimitiveSource()];
+    return volumePrimitives.slice(0, MAX_VOLUME_PRIMITIVE_SOURCES).map(sourceFromPrimitive);
+  }
+
+  function getPrimitiveSource() {
+    return getPrimitiveSources()[0];
+  }
+
+  function serializePrimitiveSource(sourcePrimitive) {
+    return {
+      id: sourcePrimitive.id,
       position: [...sourcePrimitive.position],
       radius: sourcePrimitive.radius,
       flowRate: sourcePrimitive.flowRate,
       primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,
       bodyMode: sourcePrimitive.bodyMode,
+    };
+  }
+
+  function publishPrimitiveSourceState(sourcePrimitives = getPrimitiveSources()) {
+    const sources = Array.isArray(sourcePrimitives) ? sourcePrimitives : [sourcePrimitives];
+    const effectiveSources = sources.length > 0 ? sources : [getLegacyPrimitiveSource()];
+    const primarySource = effectiveSources[0];
+    state.primitiveSourceCount = effectiveSources.length;
+    state.primitiveSources = effectiveSources.map(serializePrimitiveSource);
+    state.primitiveSource = {
+      ...serializePrimitiveSource(primarySource),
     };
   }
 
@@ -1082,7 +1133,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[29] = controlsSnapshot.microdetail ?? 1.55;
     uniforms[30] = controlsSnapshot.interfaceShred ?? 1.55;
     uniforms[31] = controlsSnapshot.fireLicks ?? 1.65;
-    const sourcePrimitive = getPrimitiveSource();
+    const sourcePrimitives = getPrimitiveSources();
+    const sourcePrimitive = sourcePrimitives[0];
     uniforms[32] = sourcePrimitive.radius;
     uniforms[33] = sourcePrimitive.flowRate;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
@@ -1095,10 +1147,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[41] = sourcePrimitive.position[1];
     uniforms[42] = sourcePrimitive.position[2];
     uniforms[43] = sourcePrimitive.primitiveCenteredBody ? 1 : 0;
+    const primitiveSourceBase = 44;
+    const primitiveSourceParamsBase = primitiveSourceBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
+    const primitiveSourceMetaBase = primitiveSourceParamsBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
+    for (let i = 0; i < MAX_VOLUME_PRIMITIVE_SOURCES; i += 1) {
+      const source = sourcePrimitives[i];
+      const sourceOffset = primitiveSourceBase + i * 4;
+      const paramsOffset = primitiveSourceParamsBase + i * 4;
+      uniforms[sourceOffset] = source?.position?.[0] ?? sourcePrimitive.position[0];
+      uniforms[sourceOffset + 1] = source?.position?.[1] ?? sourcePrimitive.position[1];
+      uniforms[sourceOffset + 2] = source?.position?.[2] ?? sourcePrimitive.position[2];
+      uniforms[sourceOffset + 3] = source?.primitiveCenteredBody ? 1 : 0;
+      uniforms[paramsOffset] = source?.radius ?? sourcePrimitive.radius;
+      uniforms[paramsOffset + 1] = source?.flowRate ?? 0;
+      uniforms[paramsOffset + 2] = source ? 1 : 0;
+      uniforms[paramsOffset + 3] = 0;
+    }
+    uniforms[primitiveSourceMetaBase] = sourcePrimitives.length;
+    uniforms[primitiveSourceMetaBase + 1] = MAX_VOLUME_PRIMITIVE_SOURCES;
+    uniforms[primitiveSourceMetaBase + 2] = volumePrimitives.length;
+    uniforms[primitiveSourceMetaBase + 3] = 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
-    publishPrimitiveSourceState(sourcePrimitive);
+    publishPrimitiveSourceState(sourcePrimitives);
   }
 
   function encodeSim(encoder) {

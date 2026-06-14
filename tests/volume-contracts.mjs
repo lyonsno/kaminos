@@ -182,10 +182,16 @@ assert.match(core, /source_controls/, 'fluid uniforms carry source radius and fl
 assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/projection strength');
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
 assert.match(core, /primitive_source/, 'fluid uniforms carry an explicit primitive source transform');
+assert.match(core, /MAX_VOLUME_PRIMITIVE_SOURCES/, 'fluid shader declares a bounded multi-primitive source budget');
+assert.match(core, /primitive_sources:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry multiple primitive source transforms');
+assert.match(core, /primitive_source_params:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry per-primitive radius and flow parameters');
+assert.match(core, /primitiveSourceCount/, 'debug state reports effective primitive source count');
+assert.match(core, /primitiveSources/, 'debug state reports effective primitive source records');
+assert.doesNotMatch(core, /const primitive = volumePrimitives\[0\];/, 'volume renderer must not collapse authored primitives to the first source only');
 assert.match(core, /primitiveCenteredBody/, 'fluid source records distinguish primitive-centered manual bodies from legacy plume sources');
 assert.match(core, /primitive-centered-sphere-volume-v0/, 'fluid debug state preserves primitive-centered body mode identity');
 assert.match(core, /publishPrimitiveSourceState/, 'fluid debug state publishes primitive source immediately when primitives change');
-assert.match(core, /u\.primitive_source\.w/, 'fluid shader receives primitive-centered body mode in primitive_source.w');
+assert.match(core, /sourceVector\.w/, 'fluid shader receives primitive-centered body mode in each primitive source vector');
 assert.match(core, /length\(sourceCenter\)/, 'manual primitive volume body is born from distance to the primitive center');
 assert.match(core, /primitiveBodyVelocityDamping/, 'manual primitive-centered volume damps legacy plume velocity so the body stays inside the handle');
 assert.match(core, /let ndc = vec2<f32>\(in\.uv\.x \* 2\.0 - 1\.0, in\.uv\.y \* 2\.0 - 1\.0\)/, 'raymarch screen rays use the same vertical projection convention as the Three.js scene marker');
@@ -194,7 +200,7 @@ assert.match(core, /assertNoPlaceholderTopologyClaim/, 'volume prototype fails l
 assert.match(core, /placeholderContract/, 'volume prototype preserves placeholder topology contracts in debug state');
 assert.match(core, /volumePrimitiveCount/, 'debug state records the number of consumed volume primitives');
 assert.match(core, /volumePrimitiveIds/, 'debug state records stable primitive ids');
-assert.match(core, /let sourceCenter = p - u\.primitive_source\.xyz;/, 'fluid source is centered from the selected primitive transform');
+assert.match(core, /let sourceCenter = p - sourceVector\.xyz;/, 'fluid source is centered from each authored primitive transform');
 assert.doesNotMatch(core, /let sourceCenter = p\.xz;/, 'fluid source must not fall back to the old implicit centered source');
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
 assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU storage buffers');
@@ -219,6 +225,8 @@ assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive id
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
 assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored volume primitive placement');
 assert.match(witness, /volume_save_load_probe/, 'witness can exercise authored moved primitive save/load round-trip');
+assert.match(witness, /volume_multi_primitive_probe/, 'witness can exercise two authored live volume primitive sources');
+assert.match(witness, /expectedSecondPrimitiveId/, 'witness uses a stable second authored primitive id');
 assert.match(witness, /saveLoadRoundTrip/, 'witness report carries save/load round-trip evidence');
 assert.match(witness, /authored-fire-smoke-witness/, 'witness uses a stable authored primitive id');
 assert.match(witness, /volumeAuthoring/, 'witness report carries authoring state evidence');
