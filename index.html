@@ -958,16 +958,18 @@ function syncVolumePrimitiveMarkers() {
       const material = new THREE.MeshBasicMaterial({
         color: 0xffa53d,
         transparent: true,
-        opacity: 0.82,
+        opacity: 0.38,
         depthTest: false,
         depthWrite: false,
         toneMapped: false,
+        wireframe: true,
       });
       marker = new THREE.Mesh(geometry, material);
       marker.name = 'volume-primitive-marker-v0';
       marker.renderOrder = 9200;
       marker.userData.kaminosVolumePrimitiveMarker = {
         identity: 'volume-primitive-marker-v0',
+        markerAffordance: 'volume-primitive-marker-wire-halo-v0',
         primitiveId: primitive.id,
       };
       scene.add(marker);
@@ -978,7 +980,8 @@ function syncVolumePrimitiveMarkers() {
     const selected = primitive.id === selectedVolumePrimitiveId;
     marker.scale.setScalar(Math.max(0.035, radius * (selected ? 0.72 : 0.5)));
     marker.material.color.setHex(selected ? 0xffd25c : 0xff8f33);
-    marker.material.opacity = selected ? 0.95 : 0.7;
+    marker.material.opacity = selected ? 0.5 : 0.3;
+    marker.material.wireframe = true;
     marker.visible = true;
   }
 }
@@ -2632,8 +2635,12 @@ async function initKaminosVolumeRoute() {
         identity: 'volume-authoring-loop-v0',
         mode: volumeAuthoringMode,
         selectedVolumePrimitiveId,
+        markerAffordance: 'volume-primitive-marker-wire-halo-v0',
         markerCount: volumePrimitiveMarkers.size,
         markerIds: Array.from(volumePrimitiveMarkers.keys()),
+        solidMarkerCount: Array.from(volumePrimitiveMarkers.values())
+          .filter(marker => marker.material && marker.material.wireframe !== true)
+          .length,
         volumePrimitiveCount: volumePrimitives.length,
         volumePrimitiveIds: volumePrimitives.map(primitive => primitive.id),
         volumePrimitives: getVolumePrimitiveState().primitives,

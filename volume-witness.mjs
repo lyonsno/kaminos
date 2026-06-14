@@ -290,6 +290,8 @@ async function main() {
       volumeAuthoring = authoringProbe.state;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive was not selected');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored volume primitive marker was not created');
+      assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored volume primitive marker regressed to a solid affordance');
+      assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored volume primitive marker must not be a solid filled body');
       await delay(Math.max(600, Math.floor(settleMs / 2)));
     }
     phase = 'identity';
@@ -352,6 +354,8 @@ async function main() {
       assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive selection was not retained');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored primitive marker id was not retained');
+      assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored primitive marker did not preserve wire/halo affordance');
+      assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored primitive marker became a solid filled body');
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
       assert.equal(primitive?.coupling?.authoringTool, 'volume-add-fire-smoke', 'authored primitive did not preserve authoring tool identity');
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');

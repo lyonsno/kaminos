@@ -46,6 +46,9 @@ assert.match(index, /armVolumePrimitiveTool/, 'Volume tab can arm primitive plac
 assert.match(index, /placeVolumePrimitiveFromEvent/, 'viewport click placement routes through a named primitive placement helper');
 assert.match(index, /selectVolumePrimitive/, 'authored volume primitives can be selected for editing');
 assert.match(index, /volume-primitive-marker-v0/, 'main-renderer primitive markers carry stable identity');
+assert.match(index, /volume-primitive-marker-wire-halo-v0/, 'volume primitive markers render as wire/halo handles instead of solid fake bodies');
+assert.match(index, /wireframe:\s*true/, 'volume primitive markers must not be solid filled spheres');
+assert.match(index, /markerAffordance/, 'authoring debug state reports marker visual affordance');
 assert.match(index, /window\.__kaminosVolumeAuthoring/, 'witnesses can drive and inspect the volume primitive authoring loop');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');
@@ -187,6 +190,7 @@ assert.match(witness, /volumePrimitives/, 'witness report carries primitive reco
 assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored volume primitive placement');
 assert.match(witness, /authored-fire-smoke-witness/, 'witness uses a stable authored primitive id');
 assert.match(witness, /volumeAuthoring/, 'witness report carries authoring state evidence');
+assert.match(witness, /volume-primitive-marker-wire-halo-v0/, 'witness rejects solid marker affordance regression');
 assert.match(witness, /assertNoPlaceholderTopologyClaim/, 'witness fails loudly on placeholder topology production claims');
 assert.match(witness, /expectedLamellarHookFixture/, 'witness knows when the route expects a Lamellar hook fixture');
 assert.match(witness, /effectiveRoute/, 'witness records effective route identity');
