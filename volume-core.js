@@ -455,6 +455,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let inputRadius = max(0.04, u.source_controls.x);
   let inputFlow = max(0.0, u.source_controls.y);
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
+  let primitiveCenteredBody = clamp(u.primitive_source.w, 0.0, 1.0);
+  let primitiveBodyVelocityDamping = mix(1.0, 0.48, primitiveCenteredBody);
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
   let shredAmount = clamp(u.grid_overlay_debug.z, 0.0, 5.0);
   let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 5.0);
@@ -483,7 +485,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let radial = length(p.xz);
   let sourceCenter = p - u.primitive_source.xyz;
   let sourceRadial = length(sourceCenter.xz);
+  let sourceDistance = length(sourceCenter);
   let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.68, 1.08, sourceCenter.y));
+  let primitiveBodyBand = 1.0 - smoothstep(inputRadius * 0.82, inputRadius * 1.62, sourceDistance);
+  let effectiveSourceBand = mix(sourceBand, primitiveBodyBand, primitiveCenteredBody);
   let breakup = clamp(
     0.64
       + 0.24 * sin(p.x * 19.0 + p.z * 7.0 + time * 1.7)
@@ -493,12 +498,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     1.22
   );
   let sourceFalloff = 1.0 / max(0.0064, inputRadius * inputRadius);
-  let source = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
+  let plumeSource = exp(-sourceRadial * sourceRadial * sourceFalloff) * sourceBand * breakup * inputFlow;
+  let primitiveBodySource = exp(-sourceDistance * sourceDistance * sourceFalloff * 0.78) * primitiveBodyBand * breakup * inputFlow;
+  let source = mix(plumeSource, primitiveBodySource, primitiveCenteredBody);
   let emberRingRadius = inputRadius * 0.94;
   let emberRingWidth = max(0.045, inputRadius * 0.22);
-  let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * effectiveSourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
   let fireBirthBand = smoothstep(-0.25, -0.08, sourceCenter.y) * (1.0 - smoothstep(0.30, 0.70, sourceCenter.y));
-  let fireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+  let primitiveFireBirthBand = 1.0 - smoothstep(inputRadius * 0.62, inputRadius * 1.30, sourceDistance);
+  let effectiveFireBirthBand = mix(fireBirthBand, primitiveFireBirthBand, primitiveCenteredBody);
+  let plumeFireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+  let primitiveFireBirth = exp(-sourceDistance * sourceDistance * sourceFalloff * 1.18) * effectiveFireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
+  let fireBirth = mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
@@ -509,15 +520,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let shredForce = interfaceShreddingForce(cellI, p, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let projectionCorrection = pressureProjectionCorrection(cellI, projection);
-  vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
+  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * primitiveBodyVelocityDamping;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
   vel = vel + microForce;
   vel = vel + shredForce;
   vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
-  vel = vel + heatExpansion;
-  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed);
-  vel.y = vel.y + source * (0.022 + speed * 0.006) + smoke * 0.003;
+  vel = vel + heatExpansion * primitiveBodyVelocityDamping;
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * primitiveBodyVelocityDamping;
+  vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * primitiveBodyVelocityDamping;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
@@ -552,7 +563,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, heatTopFade);
   emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
-  vel = vel * mix(0.55, 1.0, wallFade);
+  vel = vel * mix(0.55, 1.0, wallFade) * primitiveBodyVelocityDamping;
   vel.y = max(vel.y, -0.015);
   fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
@@ -562,7 +573,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, (1.0 - in.uv.y) * 2.0 - 1.0);
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
   let nearWorldRaw = u.invViewProj * nearClip;
@@ -744,9 +755,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const dy = fy - sourcePrimitive.position[1];
           const dz = fz - sourcePrimitive.position[2];
           const radial = Math.hypot(dx, dz);
+          const distance = Math.hypot(dx, dy, dz);
           const inputRadius = sourcePrimitive.radius;
           const inputFlow = sourcePrimitive.flowRate;
-          const source = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(dy - 0.22) * 4.2) * inputFlow;
+          const plumeSource = Math.exp(-(radial * radial) / Math.max(0.0064, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(dy - 0.22) * 4.2) * inputFlow;
+          const primitiveBodySource = Math.exp(-(distance * distance) / Math.max(0.0064, inputRadius * inputRadius * 1.28)) * Math.max(0, 1 - distance / Math.max(0.04, inputRadius * 1.55)) * inputFlow;
+          const source = sourcePrimitive.primitiveCenteredBody ? primitiveBodySource : plumeSource;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * 0.11;
           data[i + 1] = source * 0.22;
@@ -781,6 +795,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       id: String(source.id || 'volume-primitive-0'),
       kind: String(source.kind || 'fire_smoke'),
       shape: String(source.shape || 'sphere'),
+      volumeBodyMode: String(source.volumeBodyMode || ''),
       transform: {
         position: Array.isArray(transform.position) ? transform.position.map(Number) : [0, -0.74, 0],
         rotation: Array.isArray(transform.rotation) ? transform.rotation.map(Number) : [0, 0, 0],
@@ -813,6 +828,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       kind: primitive.kind,
       shape: primitive.shape,
       couplingSource: primitive.couplingSource,
+      volumeBodyMode: primitive.volumeBodyMode,
       targetHookId: primitive.targetHookId,
       topologyAuthority: primitive.topologyAuthority,
       placeholderContract: primitive.placeholderContract,
@@ -834,12 +850,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         position: [0, -0.74, 0],
         radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
         flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+        primitiveCenteredBody: false,
+        bodyMode: 'legacy-plume-source-v0',
       };
     }
+    const primitiveCenteredBody = primitive.volumeBodyMode === 'primitive-centered-sphere-volume-v0' || primitive.couplingSource === 'manual';
     return {
       position: primitive.transform.position,
       radius: Math.max(0.04, primitive.simulation.sourceRadius),
       flowRate: Math.max(0, primitive.simulation.flowRate),
+      primitiveCenteredBody,
+      bodyMode: primitiveCenteredBody ? 'primitive-centered-sphere-volume-v0' : 'legacy-plume-source-v0',
+    };
+  }
+
+  function publishPrimitiveSourceState(sourcePrimitive = getPrimitiveSource()) {
+    state.primitiveSource = {
+      position: [...sourcePrimitive.position],
+      radius: sourcePrimitive.radius,
+      flowRate: sourcePrimitive.flowRate,
+      primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,
+      bodyMode: sourcePrimitive.bodyMode,
     };
   }
 
@@ -1063,10 +1094,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[40] = sourcePrimitive.position[0];
     uniforms[41] = sourcePrimitive.position[1];
     uniforms[42] = sourcePrimitive.position[2];
-    uniforms[43] = volumePrimitives.length > 0 ? 1 : 0;
+    uniforms[43] = sourcePrimitive.primitiveCenteredBody ? 1 : 0;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
+    publishPrimitiveSourceState(sourcePrimitive);
   }
 
   function encodeSim(encoder) {
@@ -1273,6 +1305,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let litPixels = 0;
     let fireLikePixels = 0;
     let emissiveLikePixels = 0;
+    let warmEmissivePixels = 0;
     let smokeLikePixels = 0;
     let totalLuma = 0;
     let samples = 0;
@@ -1292,6 +1325,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         if (luma > 20) litPixels += 1;
         if (r > 120 && g > 70 && b < 90) fireLikePixels += 1;
         if (r > 170 && g > 120 && b < 115 && luma > 130) emissiveLikePixels += 1;
+        if (r > 150 && g > 125 && Math.min(r, g) > b + 18) warmEmissivePixels += 1;
         if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) smokeLikePixels += 1;
       }
     }
@@ -1319,6 +1353,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       litPixels,
       fireLikePixels,
       emissiveLikePixels,
+      warmEmissivePixels,
       smokeLikePixels,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
@@ -1357,6 +1392,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
+      publishPrimitiveSourceState();
       if (device) rebuildFluidState(gridSize);
     },
     async setActive(active) {

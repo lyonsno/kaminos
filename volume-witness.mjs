@@ -158,6 +158,7 @@ function measureScreenshot(buffer) {
   const png = parsePngRgba(buffer);
   let lit = 0;
   let fireLike = 0;
+  let warmEmissive = 0;
   let smokeLike = 0;
   let totalLum = 0;
   let samples = 0;
@@ -173,6 +174,7 @@ function measureScreenshot(buffer) {
       samples++;
       if (lum > 20) lit++;
       if (r > 120 && g > 70 && b < 80) fireLike++;
+      if (r > 150 && g > 125 && Math.min(r, g) > b + 18) warmEmissive++;
       if (b > 28 && g > 28 && r < 95 && Math.abs(g - b) < 55) smokeLike++;
     }
   }
@@ -182,6 +184,7 @@ function measureScreenshot(buffer) {
     meanLuma: totalLum / Math.max(1, samples),
     litPixels: lit,
     fireLikePixels: fireLike,
+    warmEmissivePixels: warmEmissive,
     smokeLikePixels: smokeLike,
   };
 }
@@ -225,6 +228,16 @@ function writeRgbaPng(path, width, height, rgba) {
     pngChunk('IDAT', deflateSync(raw)),
     pngChunk('IEND', Buffer.alloc(0)),
   ]));
+}
+
+async function captureMainRendererScreenshot(ws, screenshotPath) {
+  const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+  });
+  const buffer = Buffer.from(pageShot.data, 'base64');
+  writeFileSync(screenshotPath, buffer);
+  return measureScreenshot(buffer);
 }
 
 async function main() {
@@ -357,6 +370,9 @@ async function main() {
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored primitive marker did not preserve wire/halo affordance');
       assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored primitive marker became a solid filled body');
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
+      assert.equal(primitive?.volumeBodyMode, 'primitive-centered-sphere-volume-v0', 'authored primitive did not request a primitive-centered volume body');
+      assert.equal(state.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'fluid renderer did not use the primitive-centered body mode');
+      assert.equal(state.primitiveSource?.primitiveCenteredBody, true, 'fluid renderer did not enable primitive-centered source shaping');
       assert.equal(primitive?.coupling?.authoringTool, 'volume-add-fire-smoke', 'authored primitive did not preserve authoring tool identity');
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
@@ -377,7 +393,12 @@ async function main() {
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
+    writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
+    const captureBackend = 'webgpu-copy-src-readback';
+    const primitiveCenteredLiveVelocityThreshold = state.primitiveSource?.bodyMode === 'primitive-centered-sphere-volume-v0'
+      ? 0.00005
+      : 0.001;
+    if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= primitiveCenteredLiveVelocityThreshold || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
     }
     if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
@@ -414,22 +435,19 @@ async function main() {
       litPixels: sample.litPixels,
       fireLikePixels: sample.fireLikePixels,
       emissiveLikePixels: sample.emissiveLikePixels,
+      warmEmissivePixels: sample.warmEmissivePixels,
       smokeLikePixels: sample.smokeLikePixels,
     };
-    writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
-    const captureBackend = 'webgpu-copy-src-readback';
     if (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
-    const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-    });
-    const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
-    writeFileSync(mainRendererScreenshot, mainRendererBuffer);
-    const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
-    if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+    const mainRendererMetrics = await captureMainRendererScreenshot(ws, mainRendererScreenshot);
+    const primitiveCenteredBodyVisual = state.primitiveSource?.bodyMode === 'primitive-centered-sphere-volume-v0';
+    const missingMainRendererVolume = primitiveCenteredBodyVisual
+      ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.warmEmissivePixels < 500 || mainRendererMetrics.meanLuma < 8
+      : mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8;
+    if (missingMainRendererVolume) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const report = {
@@ -452,6 +470,7 @@ async function main() {
       volumePrimitiveCount: state.volumePrimitiveCount,
       volumePrimitiveIds: state.volumePrimitiveIds,
       volumePrimitives: state.volumePrimitives,
+      primitiveSource: state.primitiveSource,
       volumeAuthoring,
       controls: state.controls,
       screenshot: out,
@@ -466,6 +485,8 @@ async function main() {
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     let state = null;
+    let failureMainRendererScreenshot = null;
+    let failureMainRendererMetrics = null;
     try {
       const targets = await cdpFetch('/json/list');
       const page = targets.find(t => t.type === 'page' && t.url.includes('kaminos_volume_smoke=1')) || targets.find(t => t.type === 'page');
@@ -477,6 +498,8 @@ async function main() {
           returnByValue: true,
         });
         state = stateEval.result.value || null;
+        failureMainRendererScreenshot = out.replace(/\.png$/i, '.failure-main-renderer.png');
+        failureMainRendererMetrics = await captureMainRendererScreenshot(ws, failureMainRendererScreenshot);
         ws.close();
       }
     } catch {
@@ -488,6 +511,8 @@ async function main() {
       error: err?.message || String(err),
       state,
       screenshot: out,
+      failureMainRendererScreenshot,
+      failureMainRendererMetrics,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     proc.kill('SIGTERM');

@@ -841,6 +841,7 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
     id: String(options.id || makeSceneObjectId('manual-fire-smoke')),
     kind: 'fire_smoke',
     shape: 'sphere',
+    volumeBodyMode: 'primitive-centered-sphere-volume-v0',
     couplingSource: 'manual',
     transform: {
       position: clampedPosition,
@@ -978,7 +979,7 @@ function syncVolumePrimitiveMarkers() {
     marker.position.fromArray(volumePrimitivePosition(primitive));
     const radius = volumePrimitiveRadius(primitive);
     const selected = primitive.id === selectedVolumePrimitiveId;
-    marker.scale.setScalar(Math.max(0.035, radius * (selected ? 0.72 : 0.5)));
+    marker.scale.setScalar(Math.max(0.035, radius * (selected ? 1.35 : 1.05)));
     marker.material.color.setHex(selected ? 0xffd25c : 0xff8f33);
     marker.material.opacity = selected ? 0.5 : 0.3;
     marker.material.wireframe = true;
@@ -1052,6 +1053,22 @@ function selectVolumePrimitiveFromEvent(event) {
   const hit = volumePrimitiveRaycaster.intersectObjects(markers, false)[0];
   const id = hit?.object?.userData?.kaminosVolumePrimitiveMarker?.primitiveId;
   return id ? selectVolumePrimitive(id) : null;
+}
+
+function selectedMarkerProjection() {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive || !camera || !renderer?.domElement) return null;
+  const markerCenter = new THREE.Vector3(...volumePrimitivePosition(primitive));
+  markerCenter.project(camera);
+  return {
+    primitiveId: primitive.id,
+    ndc: [markerCenter.x, markerCenter.y, markerCenter.z],
+    canvas: [
+      (markerCenter.x * 0.5 + 0.5) * renderer.domElement.width,
+      (-markerCenter.y * 0.5 + 0.5) * renderer.domElement.height,
+    ],
+    canvasSize: [renderer.domElement.width, renderer.domElement.height],
+  };
 }
 
 function handleVolumeViewportPointerDown(event) {
@@ -2644,6 +2661,7 @@ async function initKaminosVolumeRoute() {
         volumePrimitiveCount: volumePrimitives.length,
         volumePrimitiveIds: volumePrimitives.map(primitive => primitive.id),
         volumePrimitives: getVolumePrimitiveState().primitives,
+        selectedMarkerProjection: selectedMarkerProjection(),
       };
     },
   };
