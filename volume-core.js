@@ -124,41 +124,98 @@ fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f
   return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
 }
 
-fn temporalReactiveMask(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32) -> f32 {
+fn materialTemporalClassification(smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32) -> vec4<f32> {
+  let fireHistoryProtect = clamp(
+    smoothstep(0.010, 0.105, fireAlpha)
+      + smoothstep(0.40, 1.18, temp) * 0.70
+      + smoothstep(0.045, 0.36, fireLick) * 0.36,
+    0.0,
+    1.0
+  );
+  let interfaceHistoryProtect = clamp(
+    smoothstep(0.035, 0.52, interfaceShred * 1.30 + fireLick * 0.34 + majorantEdge * 0.82)
+      + smoothstep(0.22, 1.18, microTextureSignal + interest * 0.16) * 0.30,
+    0.0,
+    1.0
+  );
+  let detailHistoryProtect = clamp(
+    smoothstep(0.24, 1.35, microTextureSignal + interest * 0.22) * 0.74
+      + interfaceHistoryProtect * 0.26,
+    0.0,
+    1.0
+  );
+  let smokeBody = smoothstep(0.012, 0.13, smokeAlpha) * (1.0 - smoothstep(0.006, 0.075, fireAlpha));
+  let smokeHistoryTrust = clamp(
+    smokeBody * (1.0 - fireHistoryProtect * 0.82) * (1.0 - interfaceHistoryProtect * 0.52)
+      + smoothstep(0.025, 0.22, smokeAlpha) * 0.12,
+    0.0,
+    1.0
+  );
+  return vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect);
+}
+
+fn materialAwareImportanceWeight(alpha: f32, smokeAlpha: f32, fireAlpha: f32, interest: f32, materialTemporal: vec4<f32>, trans: f32) -> f32 {
+  let protectedDetail = max(materialTemporal.y, max(materialTemporal.z, materialTemporal.w));
+  let smokeCarrier = smokeAlpha * (1.35 + materialTemporal.x * 0.68);
+  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
+  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
+  return clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
+}
+
+fn materialAwareTemporalWeights(smokeHistoryTrustSum: f32, fireHistoryProtectSum: f32, interfaceHistoryProtectSum: f32, detailHistoryProtectSum: f32, materialWeight: f32) -> vec4<f32> {
+  let inv = 1.0 / max(materialWeight, 0.0001);
+  let fireHistoryProtect = clamp(fireHistoryProtectSum * inv, 0.0, 1.0);
+  let interfaceHistoryProtect = clamp(interfaceHistoryProtectSum * inv, 0.0, 1.0);
+  let detailHistoryProtect = clamp(detailHistoryProtectSum * inv, 0.0, 1.0);
+  let smokeHistoryTrust = clamp(smokeHistoryTrustSum * inv * (1.0 - fireHistoryProtect * 0.58) * (1.0 - interfaceHistoryProtect * 0.40), 0.0, 1.0);
+  return vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect);
+}
+
+fn temporalReactiveMask(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> f32 {
   let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
   let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
   let currentHot = max(current.r, current.g);
   let historyHot = max(history.r, history.g);
+  let smokeHistoryTrust = materialTemporalWeights.x;
+  let fireHistoryProtect = materialTemporalWeights.y;
+  let interfaceHistoryProtect = materialTemporalWeights.z;
+  let detailHistoryProtect = materialTemporalWeights.w;
   let hotMismatch = smoothstep(0.055, 0.27, abs(historyHot - currentHot));
   let colorMismatch = smoothstep(0.045, 0.24, length(history - current));
-  let fireReactive = smoothstep(0.22, 0.76, currentHot) * 0.78 + smoothstep(0.30, 1.10, reactiveSignal) * 0.82;
-  let smokeBodyLoss = smoothstep(0.025, 0.16, historyLuma - currentLuma);
-  let edgeReactive = smoothstep(0.08, 0.34, majorantEdge);
+  let fireReactive = smoothstep(0.22, 0.76, currentHot) * 0.78 + smoothstep(0.30, 1.10, reactiveSignal) * 0.82 + fireHistoryProtect * 0.76;
+  let smokeBodyLoss = smoothstep(0.025, 0.16, historyLuma - currentLuma) * (1.0 - smokeHistoryTrust * 0.42);
+  let edgeReactive = smoothstep(0.08, 0.34, majorantEdge) + interfaceHistoryProtect * 0.58 + detailHistoryProtect * 0.28;
   let invalid = 1.0 - historyUvValid * step(0.03, confidence);
   return clamp(max(max(hotMismatch, colorMismatch), max(fireReactive, max(smokeBodyLoss, edgeReactive))) + invalid, 0.0, 1.0);
 }
 
-fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveMask: f32) -> f32 {
+fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveMask: f32, materialTemporalWeights: vec4<f32>) -> f32 {
   let temporalAccum = clamp(u.temporal_controls.x, 0.0, 0.90);
   let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
   let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
   let currentHot = max(current.r, current.g);
   let historyHot = max(history.r, history.g);
-  let fireProtect = smoothstep(0.38, 0.82, currentHot);
+  let smokeHistoryTrust = materialTemporalWeights.x;
+  let fireHistoryProtect = materialTemporalWeights.y;
+  let interfaceHistoryProtect = materialTemporalWeights.z;
+  let detailHistoryProtect = materialTemporalWeights.w;
+  let fireProtect = max(smoothstep(0.38, 0.82, currentHot), fireHistoryProtect);
   let hotMismatch = smoothstep(0.08, 0.34, abs(historyHot - currentHot));
   let colorMismatch = smoothstep(0.05, 0.28, length(history - current));
-  let currentSupport = smoothstep(0.035, 0.18, currentLuma);
+  let currentSupport = max(smoothstep(0.035, 0.18, currentLuma), smokeHistoryTrust * 0.26);
   let fadingTrailReject = 1.0 - smoothstep(0.018, 0.12, historyLuma - currentLuma);
-  return temporalAccum * confidence * currentSupport * fadingTrailReject * (1.0 - reactiveMask) * (1.0 - fireProtect * 0.82) * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
+  let smokeHistoryGain = mix(0.34, 1.08, smokeHistoryTrust);
+  let materialProtection = (1.0 - fireProtect * 0.90) * (1.0 - interfaceHistoryProtect * 0.68) * (1.0 - detailHistoryProtect * 0.34);
+  return temporalAccum * confidence * currentSupport * smokeHistoryGain * fadingTrailReject * (1.0 - reactiveMask) * materialProtection * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
 }
 
-fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32) -> vec3<f32> {
+fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> vec3<f32> {
   let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
   let uv = mix(sameScreenUv, reprojectedUv, smoothstep(0.04, 0.30, reprojectionConfidence) * historyUvValid);
   let history = sampleHistoryColor(uv);
   let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
-  let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid);
-  let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask);
+  let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid, materialTemporalWeights);
+  let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask, materialTemporalWeights);
   return mix(current, clampedHistory, historyWeight);
 }
 
@@ -842,6 +899,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var temporalVelocitySum = vec3<f32>(0.0);
   var temporalReactiveSignal = 0.0;
   var temporalMajorantEdge = 0.0;
+  var temporalSmokeHistoryTrustSum = 0.0;
+  var temporalFireHistoryProtectSum = 0.0;
+  var temporalInterfaceHistoryProtectSum = 0.0;
+  var temporalDetailHistoryProtectSum = 0.0;
 
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
@@ -917,11 +978,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16);
     let fireAlpha = clamp((flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26) * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
-    let temporalSampleWeight = clamp((alpha * 3.2 + smokeAlpha * 1.8 + fireAlpha * 3.6 + interest * 0.035) * trans, 0.0, 1.0);
+    let materialTemporal = materialTemporalClassification(smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest);
+    let temporalSampleWeight = materialAwareImportanceWeight(alpha, smokeAlpha, fireAlpha, interest, materialTemporal, trans);
     temporalMaterialWeight = temporalMaterialWeight + temporalSampleWeight;
     temporalWorldSum = temporalWorldSum + p * temporalSampleWeight;
     temporalVelocitySum = temporalVelocitySum + state.xyz * temporalSampleWeight;
-    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16, 0.0, 2.2));
+    temporalSmokeHistoryTrustSum = temporalSmokeHistoryTrustSum + materialTemporal.x * temporalSampleWeight;
+    temporalFireHistoryProtectSum = temporalFireHistoryProtectSum + materialTemporal.y * temporalSampleWeight;
+    temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
+    temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
+    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16 + materialTemporal.y * 0.36 + materialTemporal.z * 0.22, 0.0, 2.2));
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;
@@ -951,7 +1017,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let temporalVelocity = temporalVelocitySum * temporalInvWeight;
   let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
   let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
-  return vec4<f32>(temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z), 1.0);
+  let materialTemporalWeights = materialAwareTemporalWeights(temporalSmokeHistoryTrustSum, temporalFireHistoryProtectSum, temporalInterfaceHistoryProtectSum, temporalDetailHistoryProtectSum, temporalMaterialWeight);
+  return vec4<f32>(temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights), 1.0);
 }
 `;
 
@@ -997,6 +1064,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
     temporalRejectedHistory: 1,
+    temporalSmokeHistoryTrust: 0,
+    temporalFireHistoryProtect: 0,
+    temporalInterfaceHistoryProtect: 0,
     temporalHistoryFrames: 0,
     temporalHistoryResetCount: 0,
     temporalHistoryResetReason: 'initial',
@@ -1190,6 +1260,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalReprojectionConfidence = 0;
     state.temporalHistoryWeight = 0;
     state.temporalRejectedHistory = 1;
+    state.temporalSmokeHistoryTrust = 0;
+    state.temporalFireHistoryProtect = 0;
+    state.temporalInterfaceHistoryProtect = 0;
     state.temporalHistoryResetCount += 1;
     state.temporalHistoryResetReason = reason;
   }
@@ -1611,9 +1684,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       0.08 * Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.2)) +
       0.06 * Math.max(0, Math.min(1, (controlsSnapshot.fireLicks ?? 1.65) / 5))
     );
-    state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * (1 - temporalReactiveEstimate);
-    state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence;
-    state.temporalRejectedHistory = Math.max(0, 1 - state.temporalReprojectionConfidence);
+    const smokeHistoryTrust = Math.max(0, Math.min(1,
+      ((controlsSnapshot.smoke ?? 2.8) / 3.2) *
+      (1 - Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.4)) * 0.42) *
+      (1 - Math.max(0, Math.min(1, (controlsSnapshot.interfaceShred ?? 2.5) / 5)) * 0.28)
+    ));
+    const fireHistoryProtect = Math.max(0, Math.min(1,
+      (controlsSnapshot.fire ?? 1.4) / 2.2 * 0.48 +
+      (controlsSnapshot.radiance ?? 1.65) / 3.0 * 0.26 +
+      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.26
+    ));
+    const interfaceHistoryProtect = Math.max(0, Math.min(1,
+      (controlsSnapshot.interfaceShred ?? 2.5) / 5.0 * 0.52 +
+      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.24 +
+      (controlsSnapshot.majorantGuard ?? 0.75) * 0.24
+    ));
+    const materialTemporalProtection = fireHistoryProtect * 0.46 + interfaceHistoryProtect * 0.34;
+    state.temporalSmokeHistoryTrust = smokeHistoryTrust;
+    state.temporalFireHistoryProtect = fireHistoryProtect;
+    state.temporalInterfaceHistoryProtect = interfaceHistoryProtect;
+    state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * Math.max(0, 1 - temporalReactiveEstimate - materialTemporalProtection * 0.18);
+    state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence * (0.34 + smokeHistoryTrust * 0.66) * (1 - fireHistoryProtect * 0.55) * (1 - interfaceHistoryProtect * 0.36);
+    state.temporalRejectedHistory = Math.max(0, Math.min(1, 1 - (state.temporalHistoryWeight / Math.max(0.0001, uniforms[44]))));
     state.temporalHistoryValid = historyValid;
   }
 
@@ -1932,6 +2024,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalReprojectionConfidence: state.temporalReprojectionConfidence,
         temporalHistoryWeight: state.temporalHistoryWeight,
         temporalRejectedHistory: state.temporalRejectedHistory,
+        temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
+        temporalFireHistoryProtect: state.temporalFireHistoryProtect,
+        temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
         temporalHistoryFrames: state.temporalHistoryFrames,
         temporalHistoryResetCount: state.temporalHistoryResetCount,
         temporalHistoryResetReason: state.temporalHistoryResetReason,
@@ -2017,6 +2112,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalReprojectionConfidence: state.temporalReprojectionConfidence,
       temporalHistoryWeight: state.temporalHistoryWeight,
       temporalRejectedHistory: state.temporalRejectedHistory,
+      temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
+      temporalFireHistoryProtect: state.temporalFireHistoryProtect,
+      temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
       temporalHistoryFrames: state.temporalHistoryFrames,
       temporalHistoryResetCount: state.temporalHistoryResetCount,
       temporalHistoryResetReason: state.temporalHistoryResetReason,

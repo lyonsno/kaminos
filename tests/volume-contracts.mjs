@@ -179,6 +179,12 @@ assert.match(core, /temporalReprojectionUv/, 'fragment shader computes a reproje
 assert.match(core, /temporalReprojectionConfidence/, 'fragment shader computes material/velocity confidence for temporal reprojection');
 assert.match(core, /temporalReactiveMask/, 'fragment shader rejects temporal history near reactive fire/smoke changes and skip edges');
 assert.match(core, /temporalHistoryWeight/, 'fragment shader names the final confidence/reactive history weight');
+assert.match(core, /materialTemporalClassification/, 'fragment shader classifies smoke, fire, interface, and detail for temporal reuse');
+assert.match(core, /materialAwareTemporalWeights/, 'fragment shader derives material-aware history weights from accumulated ray samples');
+assert.match(core, /materialAwareImportanceWeight/, 'raymarch weights temporal representative samples by material importance');
+assert.match(core, /smokeHistoryTrust/, 'temporal weighting names the low-frequency smoke history trust lane');
+assert.match(core, /fireHistoryProtect/, 'temporal weighting names the hot-fire history protection lane');
+assert.match(core, /interfaceHistoryProtect/, 'temporal weighting names the fire/smoke interface protection lane');
 assert.match(core, /resetTemporalHistory/, 'renderer can reset temporal history on camera/control/grid changes');
 assert.match(core, /copyTextureToTexture/, 'renderer copies the resolved current frame into temporal history');
 assert.match(core, /state\.temporalAccum/, 'debug state exposes effective temporal accumulation strength');
@@ -187,6 +193,9 @@ assert.match(core, /state\.historyClamp/, 'debug state exposes effective tempora
 assert.match(core, /state\.temporalReprojectionConfidence/, 'debug state exposes temporal reprojection confidence evidence');
 assert.match(core, /state\.temporalHistoryWeight/, 'debug state exposes effective temporal history weight evidence');
 assert.match(core, /state\.temporalRejectedHistory/, 'debug state exposes temporal history rejection evidence');
+assert.match(core, /state\.temporalSmokeHistoryTrust/, 'debug state exposes smoke-history trust evidence');
+assert.match(core, /state\.temporalFireHistoryProtect/, 'debug state exposes fire-history protection evidence');
+assert.match(core, /state\.temporalInterfaceHistoryProtect/, 'debug state exposes interface-history protection evidence');
 assert.match(core, /state\.temporalHistoryFrames/, 'debug state exposes accumulated temporal history frame count');
 assert.match(core, /state\.temporalHistoryResetCount/, 'debug state exposes temporal history reset/rejection count');
 assert.match(core, /scale_controls/, 'volume uniforms carry fire/detail/plume scale controls');
@@ -271,6 +280,9 @@ assert.match(witness, /temporalHistoryResetCount/, 'witness records temporal res
 assert.match(witness, /temporalReprojectionConfidence/, 'witness records temporal reprojection confidence evidence');
 assert.match(witness, /temporalHistoryWeight/, 'witness records effective temporal history weight evidence');
 assert.match(witness, /temporalRejectedHistory/, 'witness records temporal history rejection evidence');
+assert.match(witness, /temporalSmokeHistoryTrust/, 'witness records smoke-history trust evidence');
+assert.match(witness, /temporalFireHistoryProtect/, 'witness records fire-history protection evidence');
+assert.match(witness, /temporalInterfaceHistoryProtect/, 'witness records interface-history protection evidence');
 assert.match(witness, /expectedFireScale/, 'witness verifies apparent fire/world scale route/control identity');
 assert.match(witness, /expectedDetailScale/, 'witness verifies fine-detail scale route/control identity');
 assert.match(witness, /expectedPlumeHeight/, 'witness verifies plume height/world-rise route/control identity');

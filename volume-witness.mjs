@@ -338,6 +338,9 @@ async function main() {
       assert.ok(Number.isFinite(state.temporalReprojectionConfidence), 'temporal reprojection confidence did not reach debug state');
       assert.ok(Number.isFinite(state.temporalHistoryWeight), 'temporal history weight did not reach debug state');
       assert.ok(Number.isFinite(state.temporalRejectedHistory), 'temporal history rejection did not reach debug state');
+      assert.ok(Number.isFinite(state.temporalSmokeHistoryTrust), 'material-aware smoke history trust did not reach debug state');
+      assert.ok(Number.isFinite(state.temporalFireHistoryProtect), 'material-aware fire history protection did not reach debug state');
+      assert.ok(Number.isFinite(state.temporalInterfaceHistoryProtect), 'material-aware interface history protection did not reach debug state');
     }
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
@@ -455,6 +458,9 @@ async function main() {
       temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
       temporalHistoryWeight: sample.temporalHistoryWeight,
       temporalRejectedHistory: sample.temporalRejectedHistory,
+      temporalSmokeHistoryTrust: sample.temporalSmokeHistoryTrust,
+      temporalFireHistoryProtect: sample.temporalFireHistoryProtect,
+      temporalInterfaceHistoryProtect: sample.temporalInterfaceHistoryProtect,
       temporalHistoryFrames: sample.temporalHistoryFrames,
       temporalHistoryResetCount: sample.temporalHistoryResetCount,
       temporalHistoryResetReason: sample.temporalHistoryResetReason,
