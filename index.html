@@ -808,14 +808,18 @@ function normalizeVolumePrimitive(primitive) {
 function getVolumePrimitiveState() {
   return {
     schema: VOLUME_PRIMITIVE_SCHEMA,
+    selectedVolumePrimitiveId: selectedVolumePrimitiveId,
     primitives: volumePrimitives.map(cloneVolumePrimitive),
   };
 }
 
 function setVolumePrimitivesState(state) {
   const primitiveList = Array.isArray(state) ? state : state?.primitives;
+  const requestedSelectedId = !Array.isArray(state) ? state?.selectedVolumePrimitiveId : null;
   volumePrimitives = Array.isArray(primitiveList) ? primitiveList.map(normalizeVolumePrimitive) : [];
-  if (selectedVolumePrimitiveId && !volumePrimitives.some(primitive => primitive.id === selectedVolumePrimitiveId)) {
+  if (requestedSelectedId && volumePrimitives.some(primitive => primitive.id === requestedSelectedId)) {
+    selectedVolumePrimitiveId = requestedSelectedId;
+  } else if (selectedVolumePrimitiveId && !volumePrimitives.some(primitive => primitive.id === selectedVolumePrimitiveId)) {
     selectedVolumePrimitiveId = null;
   }
   if (!selectedVolumePrimitiveId && volumePrimitives.length > 0) {
@@ -824,8 +828,18 @@ function setVolumePrimitivesState(state) {
   volumePrototype?.setVolumePrimitives?.(volumePrimitives);
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
   syncVolumePrimitiveMarkers();
+  attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
   refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
+}
+
+function getVolumeAuthoringState() {
+  return {
+    identity: 'kaminos.volume-authoring.v0',
+    selectedVolumePrimitiveId: selectedVolumePrimitiveId,
+    activeVolumeTransformPrimitiveId: activeVolumeTransformPrimitiveId,
+    markerControls: readVolumeMarkerControls(),
+  };
 }
 
 function clampVolumePrimitivePosition(position = [0, -0.58, 0]) {
@@ -4544,6 +4558,8 @@ function buildSceneData() {
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
     volumePrimitives: getVolumePrimitiveState(),
+    volumeAuthoring: getVolumeAuthoringState(),
+    materials: activeObject?.materials || null,
     postprocessing: {
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
@@ -4652,32 +4668,42 @@ function applyMaterialState(state) {
   applyMaterialStateToObject(currentMesh, state);
 }
 
-function claimLoadedSceneFile(file) {
-  if (file.name && file.name.endsWith('.kaminos.json')) {
-    currentSceneFile = file.name;
+function claimLoadedSceneFile(source) {
+  const name = typeof source === 'string' ? source : source?.name;
+  if (name && (name.endsWith('.kaminos.json') || name.endsWith('.kaminos'))) {
+    currentSceneFile = name;
   }
 }
 
 async function loadSceneFile(file) {
-  const previousSceneFile = currentSceneFile;
-  const previousVolumePrimitiveState = getVolumePrimitiveState();
   const text = await file.text();
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     setInfo('Invalid scene file');
-    return;
+    return false;
   }
+  return loadSceneData(data, file.name || '');
+}
+
+async function loadSceneData(data, sourceName = '') {
+  const previousVolumePrimitiveState = getVolumePrimitiveState();
   let restorePlan;
   try {
     restorePlan = planSceneRestore(data);
   } catch {
     setInfo('Invalid scene format');
-    return;
+    return false;
   }
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
+  const restoredVolumePrimitiveState = {
+    ...restorePlan.volumePrimitives,
+    selectedVolumePrimitiveId: data.volumePrimitives?.selectedVolumePrimitiveId
+      || data.volumeAuthoring?.selectedVolumePrimitiveId
+      || null,
+  };
 
   try {
     assertSceneObjectsReloadable(objectRecords);
@@ -4726,13 +4752,13 @@ async function loadSceneFile(file) {
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;
       setInfo('Scene load failed: ' + e.message);
-      return;
+      return false;
     }
   } else {
     clearScene();
   }
 
-  setVolumePrimitivesState(restorePlan.volumePrimitives);
+  setVolumePrimitivesState(restoredVolumePrimitiveState);
   if (hasVolumePrimitiveScene) {
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
@@ -4819,14 +4845,52 @@ async function loadSceneFile(file) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
-  claimLoadedSceneFile(file);
+  claimLoadedSceneFile(sourceName);
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
   } else {
     setInfo('Volume scene loaded');
   }
+  return true;
 }
+
+async function saveLoadRoundTrip(filename = null) {
+  const savedSceneData = buildSceneData();
+  const savedOk = await saveToServer(savedSceneData, filename);
+  if (!savedOk || !currentSceneFile) throw new Error('save/load round-trip could not save the scene');
+  const savedSceneFile = currentSceneFile;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, selectedVolumePrimitiveId: null, primitives: [] });
+  const loadedSceneData = await grFetchApi('read', { root: 'scenes', path: savedSceneFile });
+  if (!loadedSceneData || loadedSceneData.error) {
+    throw new Error(`save/load round-trip could not read ${savedSceneFile}: ${loadedSceneData?.error || 'unknown error'}`);
+  }
+  const loadedOk = await loadSceneData(loadedSceneData, savedSceneFile);
+  if (!loadedOk) throw new Error(`save/load round-trip could not load ${savedSceneFile}`);
+  let cleanup = null;
+  try {
+    const resp = await fetch(`/api/delete-scene?name=${encodeURIComponent(savedSceneFile)}`);
+    cleanup = await resp.json();
+  } catch (error) {
+    cleanup = { error: error?.message || 'cleanup failed' };
+  }
+  return {
+    identity: 'kaminos-volume-save-load-roundtrip-v0',
+    savedSceneFile,
+    savedSceneData,
+    loadedSceneData,
+    cleanup,
+    volumeAuthoring: window.__kaminosVolumeAuthoring?.debugState?.() || null,
+    volumeState: window.__kaminosVolumePrototype?.debugState?.() || null,
+  };
+}
+
+window.__kaminosScenePersistence = {
+  identity: 'kaminos-scene-persistence-v0',
+  build: buildSceneData,
+  load: loadSceneData,
+  saveLoadRoundTrip,
+};
 
 // File input handler for Load Scene
 document.getElementById('scene-file-input').addEventListener('change', e => {

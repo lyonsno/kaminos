@@ -35,6 +35,7 @@ const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.i
 const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
 const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].includes(expectedPrimitiveFixture);
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
+const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
 const expectedPrimitiveId = expectedLamellarHookFixture
@@ -278,6 +279,7 @@ async function main() {
     await wsRequest(ws, 'Page.bringToFront');
     await delay(settleMs);
     let volumeAuthoring = null;
+    let saveLoadRoundTrip = null;
     if (expectedAuthoringProbe) {
       phase = 'authoring-probe';
       let authoringReady = false;
@@ -292,7 +294,7 @@ async function main() {
       }
       assert.equal(authoringReady, true, 'volume authoring debug route did not initialize');
       const authoringEval = await wsRequest(ws, 'Runtime.evaluate', {
-        expression: `(() => {
+        expression: `(async () => {
           const authoring = window.__kaminosVolumeAuthoring;
           const primitive = authoring.placeAt([0.24, -0.58, 0.12], {
             id: '${expectedAuthoredPrimitiveId}',
@@ -303,13 +305,18 @@ async function main() {
           authoring.select('${expectedAuthoredPrimitiveId}');
           authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
           const moved = authoring.moveSelectedTo([${expectedAuthoredMovedPosition.join(', ')}]);
-          return { ok: true, primitive: moved || primitive, state: authoring.debugState() };
+          const roundTrip = ${expectedSaveLoadProbe
+            ? "await window.__kaminosScenePersistence.saveLoadRoundTrip(null)"
+            : "null"};
+          return { ok: true, primitive: moved || primitive, state: authoring.debugState(), roundTrip };
         })()`,
         returnByValue: true,
+        awaitPromise: true,
       });
       const authoringProbe = authoringEval.result.value;
       assert.equal(authoringProbe?.ok, true, 'authored volume primitive probe did not run');
       volumeAuthoring = authoringProbe.state;
+      saveLoadRoundTrip = authoringProbe.roundTrip || null;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive was not selected');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive did not attach to the transform target');
       assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored volume primitive target identity regressed');
@@ -318,6 +325,22 @@ async function main() {
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored volume primitive marker must not claim full raymarch bounds');
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored volume primitive marker opacity is too visually dominant');
       assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored volume primitive marker must not be a solid filled body');
+      if (expectedSaveLoadProbe) {
+        assert.equal(saveLoadRoundTrip?.identity, 'kaminos-volume-save-load-roundtrip-v0', 'save/load round-trip did not report stable identity');
+        assert.ok(saveLoadRoundTrip?.savedSceneFile?.endsWith('.kaminos.json'), 'save/load round-trip did not save a Kaminos scene file');
+        assert.equal(saveLoadRoundTrip?.cleanup?.deleted, saveLoadRoundTrip?.savedSceneFile, 'save/load round-trip did not clean up its saved scene file');
+        const savedPrimitive = saveLoadRoundTrip?.savedSceneData?.volumePrimitives?.primitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+        const loadedPrimitive = saveLoadRoundTrip?.loadedSceneData?.volumePrimitives?.primitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+        const roundTripPrimitive = saveLoadRoundTrip?.volumeState?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+        assert.equal(saveLoadRoundTrip?.savedSceneData?.volumePrimitives?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'saved scene did not preserve selected volume primitive id');
+        assert.equal(saveLoadRoundTrip?.loadedSceneData?.volumePrimitives?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'loaded scene did not preserve selected volume primitive id');
+        assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'round-tripped authoring state did not restore selected primitive');
+        assert.equal(saveLoadRoundTrip?.volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'round-tripped authoring state did not restore transform target');
+        assertVectorClose(savedPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'saved scene primitive transform position');
+        assertVectorClose(loadedPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'loaded scene primitive transform position');
+        assertVectorClose(roundTripPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'round-tripped renderer primitive transform position');
+        assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.position, expectedAuthoredMovedPosition, 'round-tripped primitive source position');
+      }
       await delay(Math.max(600, Math.floor(settleMs / 2)));
     }
     phase = 'identity';
@@ -389,6 +412,10 @@ async function main() {
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
       assertVectorClose(primitive?.transform?.position, expectedAuthoredMovedPosition, 'renderer authored primitive transform position');
       assertVectorClose(authoredPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'authoring authored primitive transform position');
+      if (expectedSaveLoadProbe) {
+        assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'save/load round-trip selection evidence missing from report');
+        assert.equal(saveLoadRoundTrip?.volumeState?.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'save/load round-trip did not restore primitive-centered body mode');
+      }
       assert.equal(primitive?.volumeBodyMode, 'primitive-centered-sphere-volume-v0', 'authored primitive did not request a primitive-centered volume body');
       assert.equal(state.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'fluid renderer did not use the primitive-centered body mode');
       assert.equal(state.primitiveSource?.primitiveCenteredBody, true, 'fluid renderer did not enable primitive-centered source shaping');
@@ -491,6 +518,7 @@ async function main() {
       volumePrimitives: state.volumePrimitives,
       primitiveSource: state.primitiveSource,
       volumeAuthoring,
+      saveLoadRoundTrip,
       controls: state.controls,
       screenshot: out,
       metrics,

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const serve = readFileSync(join(root, 'serve.py'), 'utf8');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -32,6 +33,12 @@ assert.match(index, /temporary-aesthetic-composition-primitive-not-final-lamella
 assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume primitive schema explicitly');
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
+assert.match(index, /selectedVolumePrimitiveId:\s*selectedVolumePrimitiveId/, 'scene save preserves selected volume primitive identity');
+assert.match(index, /function getVolumeAuthoringState/, 'scene save exposes volume authoring state for round-trip restoration');
+assert.match(index, /async function loadSceneData/, 'scene loading can restore parsed scene data without a file input transcription step');
+assert.match(index, /window\.__kaminosScenePersistence/, 'witnesses can drive scene persistence without manual copy/paste');
+assert.match(index, /saveLoadRoundTrip/, 'witnesses can exercise server save/read/load round-trips for moved volume primitives');
+assert.match(serve, /model = data\.get\("model"\) or \{\}/, 'volume-only scene saves must not crash when model is null');
 assert.match(index, /id="volume-add-fire-smoke"/, 'Volume tab exposes an Add Fire+Smoke primitive tool');
 assert.match(index, /id="volume-selected-primitive"/, 'Volume tab exposes selected volume primitive identity');
 assert.match(index, /id="volume-primitive-select"/, 'Volume tab exposes a primitive selector independent of viewport marker visibility');
@@ -211,6 +218,8 @@ assert.match(witness, /volumePrimitiveCount/, 'witness requires effective volume
 assert.match(witness, /volumePrimitiveIds/, 'witness records stable primitive ids');
 assert.match(witness, /volumePrimitives/, 'witness report carries primitive records');
 assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored volume primitive placement');
+assert.match(witness, /volume_save_load_probe/, 'witness can exercise authored moved primitive save/load round-trip');
+assert.match(witness, /saveLoadRoundTrip/, 'witness report carries save/load round-trip evidence');
 assert.match(witness, /authored-fire-smoke-witness/, 'witness uses a stable authored primitive id');
 assert.match(witness, /volumeAuthoring/, 'witness report carries authoring state evidence');
 assert.match(witness, /volume-primitive-marker-wire-halo-v0/, 'witness rejects solid marker affordance regression');
