@@ -5,7 +5,11 @@ const SUPPORTED_GRID_SIZES = [32, 48, 64, 96];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const MAX_VOLUME_PRIMITIVE_SOURCES = 4;
-const VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY = 'volume-primitive-scene-to-native-source-clamp-v0';
+const VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY = 'volume-primitive-scene-bounds-source-domain-v1';
+const VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS = Object.freeze({
+  min: [-5, -2.5, -5],
+  max: [5, 3, 5],
+});
 const VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS = Object.freeze({
   min: [-0.86, -0.58, -0.86],
   max: [0.86, 0.74, 0.86],
@@ -25,19 +29,44 @@ function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function clampFinite(value, fallback, min, max) {
+function finiteOrFallback(value, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
-  return Math.max(min, Math.min(max, numeric));
+  return numeric;
+}
+
+function normalizeUnitRange(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function mapSceneCoordinateToNativeSource(value, fallback, axis) {
+  const sceneMin = VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS.min[axis];
+  const sceneMax = VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS.max[axis];
+  const nativeMin = VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[axis];
+  const nativeMax = VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[axis];
+  const sceneValue = finiteOrFallback(value, fallback);
+  const t = normalizeUnitRange((sceneValue - sceneMin) / Math.max(0.0001, sceneMax - sceneMin));
+  return nativeMin + t * (nativeMax - nativeMin);
 }
 
 function normalizePrimitiveNativeSourcePosition(position = []) {
   const source = Array.isArray(position) ? position : [];
   return [
-    clampFinite(source[0], 0, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[0], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[0]),
-    clampFinite(source[1], -0.58, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[1], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[1]),
-    clampFinite(source[2], 0, VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.min[2], VOLUME_PRIMITIVE_NATIVE_SOURCE_BOUNDS.max[2]),
+    mapSceneCoordinateToNativeSource(source[0], 0, 0),
+    mapSceneCoordinateToNativeSource(source[1], -0.58, 1),
+    mapSceneCoordinateToNativeSource(source[2], 0, 2),
   ];
+}
+
+function mapNativePositionToScenePosition(position = []) {
+  const native = Array.isArray(position) ? position : [];
+  return [0, 1, 2].map(axis => {
+    const nativeValue = finiteOrFallback(native[axis], 0);
+    const t = normalizeUnitRange(nativeValue * 0.5 + 0.5);
+    const sceneMin = VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS.min[axis];
+    const sceneMax = VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS.max[axis];
+    return sceneMin + t * (sceneMax - sceneMin);
+  });
 }
 
 const WGSL = /* wgsl */`
@@ -130,23 +159,36 @@ fn sampleFluidSlot(p: vec3<f32>, slot: u32) -> vec4<f32> {
   return mix(y0, y1, f.z);
 }
 
+const VOLUME_SCENE_MIN: vec3<f32> = vec3<f32>(-5.0, -2.5, -5.0);
+const VOLUME_SCENE_MAX: vec3<f32> = vec3<f32>(5.0, 3.0, 5.0);
+
+fn nativeToScene(p: vec3<f32>) -> vec3<f32> {
+  let t = p * 0.5 + vec3<f32>(0.5);
+  return VOLUME_SCENE_MIN + t * (VOLUME_SCENE_MAX - VOLUME_SCENE_MIN);
+}
+
+fn sceneToCell(p: vec3<f32>) -> vec3<f32> {
+  let t = (p - VOLUME_SCENE_MIN) / (VOLUME_SCENE_MAX - VOLUME_SCENE_MIN);
+  return clamp(t, vec3<f32>(0.0), vec3<f32>(1.0)) * (f32(GRID) - 1.0);
+}
+
 fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = sceneToCell(p);
   return sampleFluidSlot(cell, 0u);
 }
 
 fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = sceneToCell(p);
   return sampleFluidSlot(cell, 1u);
 }
 
 fn sampleWorldFireLayer(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = sceneToCell(p);
   return sampleFluidSlot(cell, 2u);
 }
 
 fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = sceneToCell(p);
   return sampleFluidSlot(cell, 3u);
 }
 
@@ -365,10 +407,29 @@ fn slabAxis(origin: f32, dir: f32, halfSize: f32) -> vec2<f32> {
   return vec2<f32>(min(a, b), max(a, b));
 }
 
+fn slabMinMax(origin: f32, dir: f32, minB: f32, maxB: f32) -> vec2<f32> {
+  if (abs(dir) < 0.00001) {
+    if (origin < minB || origin > maxB) {
+      return vec2<f32>(1.0, -1.0);
+    }
+    return vec2<f32>(-1.0e6, 1.0e6);
+  }
+  let a = (minB - origin) / dir;
+  let b = (maxB - origin) / dir;
+  return vec2<f32>(min(a, b), max(a, b));
+}
+
 fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
   let sx = slabAxis(ro.x, rd.x, b.x);
   let sy = slabAxis(ro.y, rd.y, b.y);
   let sz = slabAxis(ro.z, rd.z, b.z);
+  return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
+}
+
+fn sceneBoxHit(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
+  let sx = slabMinMax(ro.x, rd.x, VOLUME_SCENE_MIN.x, VOLUME_SCENE_MAX.x);
+  let sy = slabMinMax(ro.y, rd.y, VOLUME_SCENE_MIN.y, VOLUME_SCENE_MAX.y);
+  let sz = slabMinMax(ro.z, rd.z, VOLUME_SCENE_MIN.z, VOLUME_SCENE_MAX.z);
   return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
 }
 
@@ -474,6 +535,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
   let p = (cell / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let sceneP = nativeToScene(p);
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
@@ -524,7 +586,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let inputRadius = max(0.04, sourceParams.x);
       let inputFlow = max(0.0, sourceParams.y);
       let primitiveCenteredBody = clamp(sourceVector.w, 0.0, 1.0);
-      let sourceCenter = p - sourceVector.xyz;
+      let sourceCenter = sceneP - sourceVector.xyz;
       let sourceRadial = length(sourceCenter.xz);
       let sourceDistance = length(sourceCenter);
       let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.68, 1.08, sourceCenter.y));
@@ -624,7 +686,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
+  let hit = sceneBoxHit(ro, rd);
   if (hit.y <= max(hit.x, 0.0)) {
     return vec4<f32>(0.004, 0.005, 0.006, 1.0);
   }
@@ -665,7 +727,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
-    let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+    let sampleCell = vec3<i32>(floor(sceneToCell(p)));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
@@ -781,6 +843,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let raf = 0;
   let controlsSnapshot = getControls();
   let volumePrimitives = [];
+  let volumePrimitiveSignature = '[]';
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
@@ -795,11 +858,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const fx = (x + 0.5) / nextGridSize * 2 - 1;
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
           const fz = (z + 0.5) / nextGridSize * 2 - 1;
+          const scenePoint = mapNativePositionToScenePosition([fx, fy, fz]);
           let source = 0;
           for (const sourcePrimitive of sourcePrimitives) {
-            const dx = fx - sourcePrimitive.position[0];
-            const dy = fy - sourcePrimitive.position[1];
-            const dz = fz - sourcePrimitive.position[2];
+            const dx = scenePoint[0] - sourcePrimitive.position[0];
+            const dy = scenePoint[1] - sourcePrimitive.position[1];
+            const dz = scenePoint[2] - sourcePrimitive.position[2];
             const radial = Math.hypot(dx, dz);
             const distance = Math.hypot(dx, dy, dz);
             const inputRadius = sourcePrimitive.radius;
@@ -891,17 +955,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }));
   }
 
+  function primitiveStateSignature(primitives = []) {
+    return JSON.stringify(primitives.map(primitive => ({
+      id: primitive.id,
+      kind: primitive.kind,
+      shape: primitive.shape,
+      couplingSource: primitive.couplingSource,
+      volumeBodyMode: primitive.volumeBodyMode,
+      transform: primitive.transform,
+      simulation: primitive.simulation,
+      render: primitive.render,
+      channels: primitive.channels,
+      targetHookId: primitive.targetHookId,
+    })));
+  }
+
   function sourceFromPrimitive(primitive) {
     const primitiveCenteredBody = primitive.volumeBodyMode === 'primitive-centered-sphere-volume-v0' || primitive.couplingSource === 'manual';
     const scenePosition = Array.isArray(primitive.transform?.position) ? primitive.transform.position : [0, -0.58, 0];
     const nativeSourcePosition = normalizePrimitiveNativeSourcePosition(scenePosition);
     return {
       id: primitive.id,
-      position: nativeSourcePosition,
+      position: [...scenePosition],
       scenePosition: [...scenePosition],
       nativeSourcePosition,
       sourceMappingIdentity: VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY,
-      radius: Math.max(0.04, primitive.simulation.sourceRadius),
+      radius: Math.max(0.32, primitive.simulation.sourceRadius * 2.0),
       flowRate: Math.max(0, primitive.simulation.flowRate),
       primitiveCenteredBody,
       bodyMode: primitiveCenteredBody ? 'primitive-centered-sphere-volume-v0' : 'legacy-plume-source-v0',
@@ -913,8 +992,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       id: 'legacy-plume-source',
       position: [0, -0.74, 0],
       scenePosition: [0, -0.74, 0],
-      nativeSourcePosition: [0, -0.74, 0],
-      sourceMappingIdentity: 'legacy-plume-source-native-v0',
+      nativeSourcePosition: normalizePrimitiveNativeSourcePosition([0, -0.74, 0]),
+      sourceMappingIdentity: 'legacy-plume-source-scene-domain-v0',
       radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
       flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
       primitiveCenteredBody: false,
@@ -937,7 +1016,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       position: [...sourcePrimitive.position],
       scenePosition: [...(sourcePrimitive.scenePosition || sourcePrimitive.position)],
       nativeSourcePosition: [...(sourcePrimitive.nativeSourcePosition || sourcePrimitive.position)],
-      sourceMappingIdentity: sourcePrimitive.sourceMappingIdentity || 'legacy-plume-source-native-v0',
+      sourceMappingIdentity: sourcePrimitive.sourceMappingIdentity || 'legacy-plume-source-scene-domain-v0',
       radius: sourcePrimitive.radius,
       flowRate: sourcePrimitive.flowRate,
       primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,
@@ -1234,15 +1313,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function render(now) {
     if (!state.active) return;
     raf = requestAnimationFrame(render);
-    controls?.update?.();
-    updateUniforms(now);
-    const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
-    encodeSim(encoder);
-    encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
-    device.queue.submit([encoder.finish()]);
-    syncTextureMirror();
-    state.frameCount += 1;
-    state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
+    try {
+      controls?.update?.();
+      updateUniforms(now);
+      const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+      encodeSim(encoder);
+      encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos volume canvas pass');
+      device.queue.submit([encoder.finish()]);
+      syncTextureMirror();
+      state.frameCount += 1;
+      state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
+    } catch (err) {
+      state.error = err?.message || String(err);
+      emitStatus({ phase: 'render-error', error: state.error });
+      cancelAnimationFrame(raf);
+    }
   }
 
   async function sampleSimReadback() {
@@ -1493,10 +1578,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setVolumePrimitives(next) {
       const incoming = Array.isArray(next) ? next : [];
-      volumePrimitives = incoming.map(normalizePrimitiveRecord);
+      const nextPrimitives = incoming.map(normalizePrimitiveRecord);
+      const nextSignature = primitiveStateSignature(nextPrimitives);
+      const primitivesChanged = nextSignature !== volumePrimitiveSignature;
+      volumePrimitives = nextPrimitives;
+      volumePrimitiveSignature = nextSignature;
       publishVolumePrimitiveState();
       publishPrimitiveSourceState();
-      if (device) rebuildFluidState(gridSize);
+      if (device && primitivesChanged) rebuildFluidState(gridSize);
     },
     async setActive(active) {
       if (active) {
