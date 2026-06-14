@@ -27,6 +27,130 @@ BROWSE_ROOTS = {
 }
 
 
+def _clean_label(value, fallback="Untitled"):
+    text = str(value or "").strip()
+    if not text:
+        return fallback
+    stem = Path(text).stem if ("/" in text or "\\" in text or "." in Path(text).name) else text
+    words = []
+    for token in stem.replace("-", " ").replace("_", " ").split():
+        if token.isupper() and len(token) <= 4:
+            words.append(token)
+        elif token.lower() in {"mlx", "qem", "glb", "obj", "vs3d"}:
+            words.append(token.upper() if token.lower() in {"mlx", "glb", "obj"} else token.capitalize())
+        else:
+            words.append(token.capitalize())
+    return " ".join(words) or fallback
+
+
+def _receipt_params(receipt):
+    params = receipt.get("params") if isinstance(receipt, dict) else None
+    return params if isinstance(params, dict) else {}
+
+
+def _first_present(*values):
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _count_mesh_outputs(output_files):
+    return len([
+        name for name in (output_files or [])
+        if Path(str(name)).suffix.lower() in {".glb", ".gltf", ".obj"}
+    ])
+
+
+def _output_count_label(count):
+    if count == 1:
+        return "1 output"
+    return f"{count} outputs"
+
+
+def build_display_metadata(entry_name, *, entry_type, receipt=None, output_files=None, size=None):
+    """Build deterministic human-facing labels while preserving raw identity."""
+    receipt = receipt if isinstance(receipt, dict) else {}
+    params = _receipt_params(receipt)
+    input_value = _first_present(
+        receipt.get("input_name"),
+        receipt.get("input_path"),
+        receipt.get("prompt"),
+        receipt.get("name"),
+        receipt.get("output_dir"),
+        entry_name,
+    )
+    job_type = receipt.get("job_type")
+    job_type_label = _clean_label(job_type, "Job") if job_type else None
+    title = _clean_label(input_value, _clean_label(entry_name, "Untitled"))
+    seed = _first_present(params.get("seed"), receipt.get("seed"))
+    timestamp = _first_present(receipt.get("finished_at"), receipt.get("created_at"), receipt.get("started_at"))
+    output_count = len(output_files or [])
+
+    subtitle_parts = []
+    if job_type_label:
+        subtitle_parts.append(job_type_label)
+    if seed is not None:
+        subtitle_parts.append(f"seed {seed}")
+    if output_count:
+        subtitle_parts.append(_output_count_label(output_count))
+    if timestamp:
+        subtitle_parts.append(str(timestamp)[:19].replace("T", " "))
+    if size is not None and entry_type == "file":
+        subtitle_parts.append(str(size))
+
+    mesh_count = _count_mesh_outputs(output_files)
+    return {
+        "title": title,
+        "subtitle": " / ".join(subtitle_parts),
+        "meta": f"raw {entry_name}",
+        "raw_name": entry_name,
+        "job_type": job_type,
+        "job_type_label": job_type_label,
+        "input_label": _clean_label(input_value, ""),
+        "seed": str(seed) if seed is not None else None,
+        "output_count": output_count,
+        "mesh_output_count": mesh_count,
+        "load_label": "Load mesh" if mesh_count or Path(entry_name).suffix.lower() in {".glb", ".gltf", ".obj"} else "Open",
+    }
+
+
+def build_output_display_metadata(entry_name, *, job_display=None, size=None):
+    job_display = job_display if isinstance(job_display, dict) else {}
+    ext = Path(entry_name).suffix.lower().lstrip(".").upper() or "FILE"
+    seed = job_display.get("seed")
+    title_root = job_display.get("title") or _clean_label(entry_name)
+    is_mesh = Path(entry_name).suffix.lower() in {".glb", ".gltf", ".obj"}
+    if is_mesh and Path(entry_name).stem.lower().startswith("seed-") and title_root:
+        title = f"{title_root} Mesh"
+    else:
+        title = _clean_label(entry_name)
+    subtitle_parts = [ext]
+    if seed:
+        subtitle_parts.append(f"seed {seed}")
+    if size is not None:
+        subtitle_parts.append(_format_size(size))
+    return {
+        "title": title,
+        "subtitle": " / ".join(subtitle_parts),
+        "meta": f"raw {entry_name}",
+        "raw_name": entry_name,
+        "load_label": "Load mesh" if is_mesh else "Open",
+    }
+
+
+def _format_size(size):
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        return ""
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -181,7 +305,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         k: receipt.get(k) for k in [
                             "status", "job_type", "exit_code",
                             "started_at", "finished_at", "failure_phase",
-                            "output_dir", "input_path",
+                            "output_dir", "input_path", "input_name",
                         ]
                     }
                     # List output files if output_dir exists
@@ -191,8 +315,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                             f.name for f in sorted(Path(out_dir).iterdir())
                             if f.is_file() and not f.name.startswith(".")
                         ]
+                    info["display"] = build_display_metadata(
+                        entry.name,
+                        entry_type=info["type"],
+                        receipt=receipt,
+                        output_files=info.get("output_files") or [],
+                        size=info["size"],
+                    )
                 except Exception:
                     pass
+            if "display" not in info:
+                status_receipt = None
+                if info.get("job_type") or info.get("input_path") or info.get("job_status"):
+                    status_receipt = {
+                        "status": info.get("job_status"),
+                        "job_type": info.get("job_type"),
+                        "input_path": info.get("input_path"),
+                    }
+                info["display"] = build_display_metadata(
+                    entry.name,
+                    entry_type=info["type"],
+                    receipt=status_receipt,
+                    size=info["size"],
+                )
             entries.append(info)
 
         self.send_json({
@@ -281,16 +426,24 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "output_dir outside home directory"}, 403)
             return
 
+        job_display = build_display_metadata(
+            job_id,
+            entry_type="dir",
+            receipt=receipt_data,
+            output_files=[f.name for f in sorted(Path(output_dir).iterdir()) if f.is_file() and not f.name.startswith(".")],
+        )
         entries = []
         for f in sorted(Path(output_dir).iterdir()):
             if f.name.startswith("."):
                 continue
+            size = f.stat().st_size if f.is_file() else None
             entries.append({
                 "name": f.name,
                 "type": "dir" if f.is_dir() else "file",
-                "size": f.stat().st_size if f.is_file() else None,
+                "size": size,
+                "display": build_output_display_metadata(f.name, job_display=job_display, size=size),
             })
-        self.send_json({"entries": entries, "output_dir": output_dir})
+        self.send_json({"entries": entries, "output_dir": output_dir, "job_display": job_display})
 
     def handle_job_output(self, params):
         """Serve files from a completed job's output_dir. ?job_id=xxx&file=output.glb

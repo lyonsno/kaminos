@@ -107,6 +107,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-entry:hover { background: #222; }
 .gr-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
 .gr-name { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gr-title { color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.gr-subtitle { color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.gr-raw { color: #4f4f4f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-family: 'SF Mono', monospace; }
 .gr-meta { font-size: 9px; color: #555; font-family: 'SF Mono', monospace; }
 .gr-status { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
 .gr-status.done { background: #1b3a1b; color: #66bb6a; }
@@ -2646,6 +2650,71 @@ async function grFetchApi(endpoint, params = {}) {
 
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
 
+function greenroomHumanizeName(value, fallback = 'Untitled') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  const basename = raw.split(/[\\/]/).pop() || raw;
+  const stem = basename.replace(/\.[^.]+$/, '');
+  const tokens = stem.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!tokens.length) return fallback;
+  return tokens.map(token => {
+    const lower = token.toLowerCase();
+    if (['mlx', 'glb', 'obj'].includes(lower)) return lower.toUpperCase();
+    if (['qem', 'vs3d'].includes(lower)) return lower[0].toUpperCase() + lower.slice(1);
+    if (/^[A-Z0-9]{2,5}$/.test(token)) return token;
+    return lower[0].toUpperCase() + lower.slice(1);
+  }).join(' ');
+}
+
+function greenroomEntryDisplay(entry = {}) {
+  const raw = entry.name || 'item';
+  const receipt = entry.receipt || {};
+  const outputCount = Array.isArray(entry.output_files) ? entry.output_files.length : 0;
+  const titleSource = receipt.input_name || receipt.input_path || receipt.output_dir || raw;
+  const subtitleParts = [];
+  if (receipt.job_type) subtitleParts.push(greenroomHumanizeName(receipt.job_type, receipt.job_type));
+  if (receipt.status) subtitleParts.push(receipt.status);
+  if (outputCount) subtitleParts.push(outputCount === 1 ? '1 output' : `${outputCount} outputs`);
+  if (entry.type === 'file' && Number.isFinite(entry.size)) subtitleParts.push(formatSize(entry.size));
+  return {
+    title: greenroomHumanizeName(titleSource, greenroomHumanizeName(raw)),
+    subtitle: subtitleParts.join(' / '),
+    meta: `raw ${raw}`,
+    raw_name: raw,
+    load_label: /\.(glb|gltf|obj)$/i.test(raw) || outputCount ? 'Load mesh' : 'Open',
+  };
+}
+
+function renderGreenroomEntryIdentity(container, entry, options = {}) {
+  const display = entry.display || greenroomEntryDisplay(entry);
+  const main = document.createElement('span');
+  main.className = 'gr-entry-main';
+
+  const title = document.createElement('span');
+  title.className = 'gr-title';
+  title.textContent = display.title || display.raw_name || entry.name || 'Untitled';
+  title.title = display.raw_name || entry.name || '';
+  main.appendChild(title);
+
+  if (display.subtitle || options.forceSubtitle) {
+    const subtitle = document.createElement('span');
+    subtitle.className = 'gr-subtitle';
+    subtitle.textContent = display.subtitle || '';
+    main.appendChild(subtitle);
+  }
+
+  if (display.raw_name && display.raw_name !== display.title) {
+    const raw = document.createElement('span');
+    raw.className = 'gr-raw';
+    raw.textContent = display.meta || `raw ${display.raw_name}`;
+    raw.title = display.raw_name;
+    main.appendChild(raw);
+  }
+
+  container.appendChild(main);
+  return display;
+}
+
 async function grInit() {
   const rootBtns = document.getElementById('greenroom-root-buttons');
 
@@ -2719,12 +2788,8 @@ async function grBrowse() {
     icon.className = 'gr-icon';
     icon.textContent = entry.type === 'dir' ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
 
-    const name = document.createElement('span');
-    name.className = 'gr-name';
-    name.textContent = entry.name;
-
     div.appendChild(icon);
-    div.appendChild(name);
+    const display = renderGreenroomEntryIdentity(div, entry);
 
     if (entry.receipt) {
       const status = document.createElement('span');
@@ -2732,12 +2797,6 @@ async function grBrowse() {
       status.textContent = entry.receipt.status || '';
       div.appendChild(status);
 
-      if (entry.receipt.job_type) {
-        const meta = document.createElement('span');
-        meta.className = 'gr-meta';
-        meta.textContent = entry.receipt.job_type;
-        div.appendChild(meta);
-      }
     } else if (entry.job_status) {
       const status = document.createElement('span');
       status.className = 'gr-status ' + entry.job_status;
@@ -2758,13 +2817,13 @@ async function grBrowse() {
       for (const glb of glbs) {
         const btn = document.createElement('button');
         btn.className = 'btn';
-        btn.textContent = glbs.length > 1 ? glb : 'Load';
+        btn.textContent = glbs.length > 1 ? greenroomHumanizeName(glb, glb) : (display.load_label || 'Load mesh');
         btn.onclick = (e) => {
           e.stopPropagation();
           const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
           showGLB(url);
           glbFileName = glb;
-          setInfo(`Greenroom: ${entry.name} / ${glb}`);
+          setInfo(`Greenroom: ${display.title || entry.name} / ${glb}`);
         };
         div.appendChild(btn);
       }
@@ -2774,7 +2833,7 @@ async function grBrowse() {
     if (entry.type === 'file' && /\.(glb|gltf|obj)$/i.test(entry.name)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
-      btn.textContent = 'Load';
+      btn.textContent = entry.display?.load_label || 'Load';
       btn.onclick = (e) => {
         e.stopPropagation();
         const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
@@ -2785,7 +2844,7 @@ async function grBrowse() {
           showGLB(url);
         }
         glbFileName = entry.name;
-        setInfo(`${grCurrentRoot}: ${entry.name}`);
+        setInfo(`${grCurrentRoot}: ${entry.display?.title || entry.name}`);
       };
       div.appendChild(btn);
     }
@@ -2833,11 +2892,8 @@ async function grOpenJobDir(path) {
     const icon = document.createElement('span');
     icon.className = 'gr-icon';
     icon.textContent = '\uD83D\uDCC4';
-    const name = document.createElement('span');
-    name.className = 'gr-name';
-    name.textContent = entry.name;
     div.appendChild(icon);
-    div.appendChild(name);
+    const display = renderGreenroomEntryIdentity(div, entry);
 
     if (entry.size !== null) {
       const meta = document.createElement('span');
@@ -2851,18 +2907,18 @@ async function grOpenJobDir(path) {
     if (['glb', 'gltf'].includes(ext)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
-      btn.textContent = 'Load GLB';
+      btn.textContent = display.load_label || 'Load mesh';
       btn.onclick = async (e) => {
         e.stopPropagation();
         const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
         showGLB(url);
-        setInfo(`GLB: ${entry.name}`);
+        setInfo(`GLB: ${display.title || entry.name}`);
       };
       div.appendChild(btn);
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
-      btn.textContent = 'View';
+      btn.textContent = display.load_label || 'View';
       btn.onclick = (e) => {
         e.stopPropagation();
         const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
@@ -2889,11 +2945,8 @@ async function grOpenJobDir(path) {
       const icon = document.createElement('span');
       icon.className = 'gr-icon';
       icon.textContent = '\uD83D\uDCC4';
-      const name = document.createElement('span');
-      name.className = 'gr-name';
-      name.textContent = out.name;
       div.appendChild(icon);
-      div.appendChild(name);
+      const display = renderGreenroomEntryIdentity(div, out);
 
       if (out.size !== null) {
         const meta = document.createElement('span');
@@ -2906,19 +2959,19 @@ async function grOpenJobDir(path) {
       if (['glb', 'gltf'].includes(ext)) {
         const btn = document.createElement('button');
         btn.className = 'btn';
-        btn.textContent = 'Load GLB';
+        btn.textContent = display.load_label || 'Load mesh';
         btn.onclick = (e) => {
           e.stopPropagation();
           const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
           showGLB(url);
           glbFileName = out.name;
-          setInfo(`Greenroom: ${jobId} / ${out.name}`);
+          setInfo(`Greenroom: ${display.title || out.name}`);
         };
         div.appendChild(btn);
       } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
         const btn = document.createElement('button');
         btn.className = 'btn';
-        btn.textContent = 'View';
+        btn.textContent = display.load_label || 'View';
         btn.onclick = (e) => {
           e.stopPropagation();
           window.open(`/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`, '_blank');

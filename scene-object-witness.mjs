@@ -874,6 +874,51 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   }
 }
 
+async function runGreenroomPickerDisplayScenario(ws) {
+  phase = 'scenario-greenroom-picker-display';
+  lastEvidence.greenroomPickerDisplay = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      document.querySelector('[data-tab="greenroom"]').click();
+      let rows = [];
+      for (let i = 0; i < 80; i++) {
+        rows = [...document.querySelectorAll('#greenroom-list .gr-entry')];
+        if (rows.length) break;
+        await wait(125);
+      }
+      const rowState = rows.map(row => ({
+        title: row.querySelector('.gr-title')?.textContent?.trim() || null,
+        subtitle: row.querySelector('.gr-subtitle')?.textContent?.trim() || null,
+        raw: row.querySelector('.gr-raw')?.textContent?.trim() || null,
+        status: row.querySelector('.gr-status')?.textContent?.trim() || null,
+        buttons: [...row.querySelectorAll('button')].map(button => button.textContent.trim()),
+      }));
+      const humaneRows = rowState.filter(row => row.title && row.raw && !row.raw.endsWith(row.title));
+      return {
+        rowCount: rows.length,
+        rows: rowState.slice(0, 8),
+        humaneRowCount: humaneRows.length,
+        hasSubtitle: rowState.some(row => row.subtitle),
+        hasRaw: rowState.some(row => row.raw),
+        hasLoadMesh: rowState.some(row => row.buttons.includes('Load mesh')),
+      };
+    })()
+  `, { timeoutMs: 45000 });
+
+  if (lastEvidence.greenroomPickerDisplay.rowCount < 1) {
+    throw new Error(`greenroom picker did not render any rows: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (lastEvidence.greenroomPickerDisplay.humaneRowCount < 1) {
+    throw new Error(`greenroom picker titles still look raw-id-first: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.hasSubtitle || !lastEvidence.greenroomPickerDisplay.hasRaw) {
+    throw new Error(`greenroom picker did not expose subtitle and raw metadata: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.hasLoadMesh) {
+    throw new Error(`greenroom picker did not expose a mesh load affordance: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -939,6 +984,8 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'scene-boundary-roundtrip') {
     await runSceneBoundaryRoundtripScenario(ws);
+  } else if (scenario === 'greenroom-picker-display') {
+    await runGreenroomPickerDisplayScenario(ws);
   } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }

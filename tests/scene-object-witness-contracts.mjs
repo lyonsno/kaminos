@@ -12,6 +12,7 @@ const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
+assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
@@ -68,4 +69,7 @@ assert.match(witness, /demos\/missing\//, 'scene boundary witness covers syntact
 assert.match(witness, /syntactically reloadable failed scene load overwrote previous save target after import/, 'scene boundary witness proves actual object-load failure cannot overwrite a previous scene after later import');
 assert.match(witness, /boundary cleanup did not delete scene file/, 'scene boundary witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes boundary scene file/, 'scene boundary witness proves cleanup removes temporary scene files');
+assert.match(witness, /greenroom picker titles still look raw-id-first/, 'Green Room picker witness fails if titles regress to raw job ids');
+assert.match(witness, /greenroom picker did not expose subtitle and raw metadata/, 'Green Room picker witness requires display subtitle and raw metadata');
+assert.match(witness, /greenroom picker did not expose a mesh load affordance/, 'Green Room picker witness requires the mesh load action to stay visible');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
