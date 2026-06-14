@@ -580,6 +580,7 @@ let sceneObjects = [];
 let activeSceneObjectId = null;
 let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
+let greenroomPreviewGeneration = 0;
 let sceneMutationToken = 0;
 
 function cloneVolumePrimitive(primitive) {
@@ -758,6 +759,12 @@ function greenroomPreviewIsActive() {
 }
 
 window.greenroomPreviewIsActive = greenroomPreviewIsActive;
+
+function nextGreenroomPreviewGeneration() {
+  sceneMutationToken++;
+  greenroomPreviewGeneration += 1;
+  return greenroomPreviewGeneration;
+}
 
 function captureAuthoredSceneStateForPreview() {
   return {
@@ -1413,7 +1420,10 @@ async function showGLB(file, options = {}) {
 	    if (isBlob) URL.revokeObjectURL(url);
 	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
-      if (loadToken !== sceneMutationToken || (greenroomPreviewIsActive() && options.register !== false)) {
+      const stalePreviewLoad = options.register === false
+        && options.previewGeneration !== undefined
+        && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
+      if (loadToken !== sceneMutationToken || stalePreviewLoad || (greenroomPreviewIsActive() && options.register !== false)) {
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
         return;
@@ -2859,9 +2869,11 @@ async function greenroomViewMesh(url, fileName, display) {
   } else {
     detachAuthoredSceneForPreview(authored);
   }
+  const previewGeneration = nextGreenroomPreviewGeneration();
   greenroomPreviewState = {
     authored,
     preview: { url, fileName, display, metadata },
+    previewGeneration: previewGeneration,
     previewObject: null,
   };
   updateGreenroomPreviewControls();
@@ -2870,11 +2882,28 @@ async function greenroomViewMesh(url, fileName, display) {
     const previewObject = await showGLB(url, {
       clear: false,
       register: false,
+      previewGeneration,
       metadata,
     });
-    if (greenroomPreviewState) greenroomPreviewState.previewObject = previewObject;
+    if (greenroomPreviewState?.previewGeneration === previewGeneration) {
+      greenroomPreviewState.previewObject = previewObject;
+    } else {
+      scene.remove(previewObject);
+      if (transformControls && currentMesh === previewObject) {
+        transformControls.detach();
+        transformControls.visible = false;
+      }
+      if (currentMesh === previewObject) currentMesh = null;
+      disposeObjectTree(previewObject);
+      return;
+    }
   } catch (error) {
-    await restoreAuthoredSceneFromPreview({ silent: true });
+    if (greenroomPreviewState?.previewGeneration === previewGeneration) {
+      await restoreAuthoredSceneFromPreview({ silent: true });
+    } else {
+      console.warn('stale Greenroom preview load ignored', error);
+      return;
+    }
     throw error;
   }
   updateGreenroomPreviewControls();

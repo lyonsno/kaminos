@@ -32,6 +32,12 @@ assert.match(index, /async function restoreAuthoredSceneFromPreview\(/, 'Greenro
 assert.match(index, /async function importGreenroomPreviewToScene\(/, 'Greenroom Preview imports back into the restored authored scene');
 assert.match(index, /function greenroomPreviewIsActive\(/, 'save guards can detect temporary Greenroom Preview mode');
 assert.match(index, /let sceneMutationToken\s*=\s*0/, 'async asset loads have a scene mutation token for stale registration guards');
+assert.match(index, /let greenroomPreviewGeneration\s*=\s*0/, 'Greenroom preview replacements have a generation token distinct from authored scene state');
+assert.match(index, /function nextGreenroomPreviewGeneration\([\s\S]*sceneMutationToken\+\+[\s\S]*greenroomPreviewGeneration \+= 1[\s\S]*return greenroomPreviewGeneration/, 'every Greenroom preview replacement invalidates older async preview loads');
+assert.match(index, /previewGeneration:[\s\S]*previewGeneration/, 'Greenroom preview state records the active preview generation');
+assert.match(index, /showGLB\(url,[\s\S]*previewGeneration/, 'Greenroom View passes its preview generation into the async GLB load');
+assert.match(index, /const stalePreviewLoad = options\.register === false[\s\S]*greenroomPreviewState\?\.previewGeneration !== options\.previewGeneration/, 'preview GLB loads reject stale completion into a newer active preview generation');
+assert.match(index, /catch \(error\) \{[\s\S]*greenroomPreviewState\?\.previewGeneration === previewGeneration[\s\S]*restoreAuthoredSceneFromPreview/, 'a stale superseded preview load must not restore over a newer active preview');
 assert.match(index, /sceneMutationToken\+\+/, 'scene replacement and preview transitions invalidate older async load completions');
 assert.match(index, /const loadToken = sceneMutationToken[\s\S]*stale async PBR preview load ignored/, 'PBR preview imports ignore stale async completions after preview or scene replacement');
 assert.match(index, /const loadToken = sceneMutationToken[\s\S]*stale async GLB load ignored/, 'GLB imports ignore stale async completions after preview or scene replacement');
