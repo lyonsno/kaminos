@@ -19,10 +19,14 @@ assert.match(index, /id="scene-object-empty"/, 'scene object list has an explici
 assert.match(index, /function renderSceneObjectList\(/, 'scene object registry renders to the editor surface');
 assert.match(index, /function sceneObjectReloadabilityLabel\(/, 'scene object list exposes reloadability/source status');
 assert.match(index, /window\.selectSceneObject\s*=/, 'object list can select an authored object');
+assert.match(index, /window\.removeSceneObject\s*=/, 'object list can remove an authored object');
 assert.match(index, /renderSceneObjectList\(\);[\s\S]*if \(!transformControls\) return;/, 'active object selection refreshes list state before transform gizmo retargeting');
 assert.match(index, /registerSceneObject\(mesh,[\s\S]*type: 'pbr'[\s\S]*document\.getElementById\('transform-bar'\)\.classList\.add\('visible'\);[\s\S]*setInfo\('PBR Material Preview/, 'PBR material previews surface the transform toolbar after registering the selected scene object');
 assert.match(index, /scene-object-row active/, 'active object row has a stable visual state');
 assert.match(index, /data-scene-object-id/, 'object list buttons expose stable object ids for browser witnesses');
+assert.match(index, /data-scene-object-remove-id/, 'object list exposes stable remove ids for browser witnesses');
+assert.match(index, /event\.stopPropagation\(\);[\s\S]*window\.removeSceneObject/, 'remove controls must not also trigger row selection');
+assert.match(index, /window\.removeSceneObject\s*=\s*function\(id\)[\s\S]*scene\.remove\(entry\.object\);[\s\S]*disposeObjectTree\(entry\.object\);[\s\S]*setActiveSceneObject\(fallback\?\.id \|\| null\);/, 'removing an object must remove and dispose it while retargeting active selection');
 assert.match(index, /id="append-import-toggle"/, 'Assets tab exposes an explicit append import toggle for authoring multi-object scenes');
 assert.match(index, /function shouldClearSceneForImport\(/, 'direct import paths share one append-aware clear/replace decision');
 assert.match(index, /async function showGLB\(file, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'GLB imports can append instead of replacing the scene');

@@ -123,6 +123,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .scene-object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
 .scene-object-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
 .scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.scene-object-actions { display: flex; align-items: center; gap: 6px; }
+.scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
+.scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
 .scene-object-empty { font-size: 11px; color: #555; }
 
 /* Volume prototype */
@@ -745,17 +748,32 @@ function renderSceneObjectList() {
     const reloadability = sceneObjectReloadabilityLabel(record);
     const source = record.source || 'no source';
     return `
-      <button type="button" class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" aria-pressed="${active ? 'true' : 'false'}">
+      <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
         <span>
           <span class="scene-object-name">${escapeHtml(label)}</span>
           <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
         </span>
-        <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
-      </button>
+        <span class="scene-object-actions">
+          <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+          <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
+        </span>
+      </div>
     `;
   }).join('');
   list.querySelectorAll('[data-scene-object-id]').forEach(button => {
     button.addEventListener('click', () => window.selectSceneObject(button.dataset.sceneObjectId));
+    button.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.selectSceneObject(button.dataset.sceneObjectId);
+      }
+    });
+  });
+  list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      window.removeSceneObject(button.dataset.sceneObjectRemoveId);
+    });
   });
 }
 
@@ -809,6 +827,27 @@ window.selectSceneObject = function(id) {
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
     window._kaminosDirty?.();
   }
+};
+
+window.removeSceneObject = function(id) {
+  const index = sceneObjects.findIndex(obj => obj.id === id);
+  if (index < 0) return;
+  const [entry] = sceneObjects.splice(index, 1);
+  const wasActive = activeSceneObjectId === entry.id;
+  if (transformControls && currentMesh === entry.object) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  scene.remove(entry.object);
+  disposeObjectTree(entry.object);
+  const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
+  if (wasActive || !fallback) {
+    setActiveSceneObject(fallback?.id || null);
+  } else {
+    renderSceneObjectList();
+  }
+  setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
+  window._kaminosDirty?.();
 };
 
 // --- HDR Environments ---
