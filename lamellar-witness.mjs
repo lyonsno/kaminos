@@ -192,6 +192,7 @@ async function main() {
     assert.ok(state.composerDescriptor?.mode, 'Lamellar witness did not export composer descriptor');
     assert.ok(state.layerStackDescriptor?.mode, 'Lamellar witness did not export layer-stack descriptor');
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
+    assert.ok((state.stripInstances || []).length > (state.layerSpecs || []).length, 'Lamellar witness did not export layer-owned strip assemblages');
     assert.ok(state.sliceToolDescriptor?.mode, 'Lamellar witness did not export slice tool descriptor');
     assert.ok(state.sliceApplicationReceipt?.mode, 'Lamellar witness did not export slice application receipt');
     assert.ok(state.cutAuthorEnvelopeDescriptor?.mode, 'Lamellar witness did not export cut-author envelope descriptor');
@@ -218,6 +219,7 @@ async function main() {
       composerDescriptor: state.composerDescriptor,
       layerStackDescriptor: state.layerStackDescriptor,
       layerSpecs: state.layerSpecs,
+      stripInstances: state.stripInstances,
       layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,

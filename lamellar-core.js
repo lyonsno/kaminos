@@ -5,6 +5,7 @@ const END_CAP_SEALING_MODE = "zero-lift-closed-terminal-cap-slab";
 const PLACEHOLDER_CONTRACT = "temporary-aesthetic-composition-primitive-not-final-lamellar-topology";
 const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
 const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
+const LAYER_SHELL_MODE = "authored-lamellar-layer-shell-assemblage-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
 const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
@@ -55,8 +56,12 @@ function descriptorCurveOptions(descriptor) {
 }
 
 function createChannelCutReceipt(descriptors, cutRadius, lower, upper) {
-  const neighbor = descriptors.find(descriptor => descriptor.materialRole === "neighbor-envelope") || null;
-  const selected = descriptors.find(descriptor => descriptor.materialRole === "selected-source") || null;
+  const neighbor = descriptors.find(descriptor => descriptor.sliceParticipation === "cut-author-envelope")
+    || descriptors.find(descriptor => descriptor.materialRole === "neighbor-envelope")
+    || null;
+  const selected = descriptors.find(descriptor => descriptor.sliceParticipation === "primary-cut-target")
+    || descriptors.find(descriptor => descriptor.materialRole === "selected-source")
+    || null;
   const gap = Number(clamp(cutRadius * 0.78, 0.018, 0.075).toFixed(4));
   const terminalRailStopCount = 30;
   const sampledClearanceBand = [Number((-gap * 0.02).toFixed(4)), Number((gap * 1.13).toFixed(4))];
@@ -71,6 +76,7 @@ function createChannelCutReceipt(descriptors, cutRadius, lower, upper) {
     witnessAnchorMode: CHANNEL_WITNESS_ANCHOR_MODE,
     sourceSegmentId: neighbor?.id || null,
     sourceLayerSpecId: neighbor?.layerSpecId || null,
+    sourceStripInstanceId: neighbor?.stripInstanceId || null,
     affectedSegmentIds,
     capTValues: [lower, upper],
   };
@@ -85,6 +91,8 @@ function createCutAuthorEnvelopeDescriptor(descriptor, channelCutReceipt) {
     sourceRole: descriptor.materialRole,
     sourceSegmentId: descriptor.id,
     sourceLayerSpecId: descriptor.layerSpecId,
+    sourceStripInstanceId: descriptor.stripInstanceId,
+    stripIndex: descriptor.stripIndex,
     layerIndex: descriptor.layerIndex,
     chunkiness: descriptor.chunkiness,
     authoredLayerWidth: descriptor.width,
@@ -108,12 +116,20 @@ function normalizeLayerOverrides(overrides) {
   return overrides.map((override, layerIndex) => {
     const chirality = Number(override?.chirality);
     const chunkiness = Number(override?.chunkiness);
+    const stripCount = Number(override?.stripCount);
     return {
       layerIndex: Number.isFinite(Number(override?.layerIndex)) ? Math.round(Number(override.layerIndex)) : layerIndex,
       chirality: chirality < 0 ? -1 : 1,
       chunkiness: Number.isFinite(chunkiness) ? clamp(chunkiness, 0.05, 1) : null,
+      stripCount: Number.isFinite(stripCount) ? Math.round(clamp(stripCount, 1, 4)) : null,
     };
   });
+}
+
+function defaultStripCountForLayer(layerIndex, role) {
+  if (role === "selected-source") return 2;
+  if (role === "neighbor-envelope") return 2;
+  return layerIndex === 2 ? 2 : 1;
 }
 
 export function generateLamellarLayerSpecs(input = {}) {
@@ -136,8 +152,12 @@ export function generateLamellarLayerSpecs(input = {}) {
     const layerWeight = layerIndex === 0 ? 0.15 : layerIndex === 1 ? 0.05 : -0.04 * layerIndex;
     const variance = (rand() * 2 - 1) * chunkinessVariance;
     const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
+    const stripCount = layerOverride?.stripCount ?? defaultStripCountForLayer(layerIndex, role);
+    const stripIds = Array.from({ length: stripCount }, (_, stripIndex) => `seed-${seed}-layer-${layerIndex}-strip-${stripIndex}`);
     layerSpecs.push({
       kind: "LamellarLayerSpec",
+      shellKind: "LayerShellDescriptor",
+      shellMode: LAYER_SHELL_MODE,
       id: `seed-${seed}-layer-${layerIndex}-spec`,
       layerIndex,
       enabled: true,
@@ -148,7 +168,9 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkiness,
       width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
       thickness: Number((0.006 + chunkiness * 0.022).toFixed(4)),
-      segmentCount: 1,
+      stripCount,
+      stripIds,
+      segmentCount: stripCount,
       intervalBias: Number(((rand() - 0.5) * (0.12 + overlapBias * 0.1)).toFixed(4)),
       phase: Number((layerIndex * 0.57 + rand() * 0.9).toFixed(4)),
       overlapBias: Number(overlapBias.toFixed(4)),
@@ -170,22 +192,64 @@ export function generateLamellarLayerSpecs(input = {}) {
       overlapBias: Number(overlapBias.toFixed(4)),
       layerOverrides: layerOverrides.slice(0, numLayers),
       layerSpecIds: layerSpecs.map(spec => spec.id),
-      authoringModel: "per-layer-specs-before-section-generation",
+      layerShellKind: "LayerShellDescriptor",
+      stripInstanceKind: "LamellarStripInstance",
+      stripInstanceIds: layerSpecs.flatMap(spec => spec.stripIds),
+      authoringModel: "layer-shells-own-strip-instances-before-section-generation",
     },
     layerSpecs,
   };
+}
+
+export function generateLamellarStripInstances(layerSpecs, input = {}) {
+  const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const stripInstances = [];
+
+  for (const spec of layerSpecs) {
+    for (let stripIndex = 0; stripIndex < spec.stripCount; stripIndex++) {
+      const isPrimarySelected = spec.materialRole === "selected-source" && stripIndex === 0;
+      const isCutAuthor = spec.materialRole === "neighbor-envelope" && stripIndex === 0;
+      const role = isCutAuthor ? "neighbor-envelope"
+        : spec.materialRole === "neighbor-envelope" ? "neighbor-companion"
+        : spec.materialRole;
+      const localOffset = stripIndex - (spec.stripCount - 1) / 2;
+      stripInstances.push({
+        kind: "LamellarStripInstance",
+        id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
+        layerSpecId: spec.id,
+        layerIndex: spec.layerIndex,
+        stripIndex,
+        stripCount: spec.stripCount,
+        materialRole: role,
+        layerMaterialRole: spec.materialRole,
+        sliceParticipation: isPrimarySelected ? "primary-cut-target" : isCutAuthor ? "cut-author-envelope" : "same-shell-companion",
+        chirality: spec.chirality,
+        chunkiness: spec.chunkiness,
+        depth: spec.depth,
+        width: Number((spec.width * (1 - Math.abs(localOffset) * 0.08)).toFixed(4)),
+        thickness: spec.thickness,
+        intervalOffset: Number((localOffset * 0.045 + stripIndex * 0.012).toFixed(4)),
+        phaseOffset: Number((localOffset * 0.34 + stripIndex * 0.19).toFixed(4)),
+      });
+    }
+  }
+
+  return stripInstances;
 }
 
 export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const layerStack = generateLamellarLayerSpecs(input);
   const { layerStackDescriptor, layerSpecs } = layerStack;
+  const stripInstances = generateLamellarStripInstances(layerSpecs, { seed });
   const rand = mulberry32(seed);
   const descriptors = [];
   const composerDescriptor = {
     mode: COMPOSER_MODE,
     segmentKind: "LamellarSectionSegment",
     layerStackKind: "LayerStackDescriptor",
+    layerShellKind: "LayerShellDescriptor",
+    stripInstanceKind: "LamellarStripInstance",
     proceduralSeed: seed,
     chiralityPattern: layerStackDescriptor.chiralityPattern,
     layerCount: layerStackDescriptor.numLayers,
@@ -201,71 +265,96 @@ export function generateLamellarSectionSegments(input = {}) {
 
   const selectedSpec = layerSpecs[0];
   const selectedPhase = 0.24 + rand() * 0.72;
-  descriptors.push({
-    kind: "LamellarSectionSegment",
-    id: `seed-${seed}-layer-0-selected-source`,
-    layerSpecId: selectedSpec.id,
-    source: "procedural-composer",
-    materialRole: selectedSpec.materialRole,
-    layerIndex: selectedSpec.layerIndex,
-    depth: selectedSpec.depth,
-    chirality: selectedSpec.chirality,
-    chunkiness: selectedSpec.chunkiness,
-    segmentCount: selectedSpec.segmentCount,
-    interval: [0.12, 0.9],
-    curveLaw: composerDescriptor.curveLaw,
-    capLaw: composerDescriptor.capLaw,
+  const selectedShape = {
     theta0: -1.18 + (rand() - 0.5) * 0.16,
     thetaTwist: 4.42 + rand() * 0.42,
     phi0: -0.38 + (rand() - 0.5) * 0.08,
     phiSlope: 0.94 + rand() * 0.18,
-    phase: selectedPhase,
-    radius: 1 + selectedSpec.depth,
-    width: selectedSpec.width,
-    thickness: selectedSpec.thickness,
-    edgeLift: 0.018,
-    waviness: 0.085,
-  });
+  };
 
-  for (const spec of layerSpecs.slice(1)) {
-    const isNeighbor = spec.materialRole === "neighbor-envelope";
-    const segmentCount = spec.segmentCount;
-    for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex++) {
-      const baseStart = isNeighbor ? 0.24 + (0.42 - spec.overlapBias) * 0.18 : 0.08 + rand() * 0.12;
-      const baseEnd = isNeighbor ? 0.72 + spec.overlapBias * 0.18 : 0.82 + rand() * 0.12;
-      const stagger = segmentCount > 1 ? segmentIndex * 0.08 : 0;
+  for (const strip of stripInstances) {
+    const spec = layerSpecs.find(layerSpec => layerSpec.id === strip.layerSpecId) || selectedSpec;
+    if (strip.layerIndex === 0) {
+      const start = Number(clamp(0.12 + strip.intervalOffset, 0.08, 0.38).toFixed(4));
+      const end = Number(clamp(0.9 + strip.intervalOffset * 0.4, 0.58, 0.94).toFixed(4));
       descriptors.push({
         kind: "LamellarSectionSegment",
-        id: `seed-${seed}-layer-${spec.layerIndex}-${spec.materialRole}-${segmentIndex}`,
+        stripKind: "LamellarStripInstance",
+        id: strip.sliceParticipation === "primary-cut-target" ? `seed-${seed}-layer-0-selected-source` : `${strip.id}-selected-companion`,
         layerSpecId: spec.id,
-        source: "layer-stack-composer",
-        materialRole: spec.materialRole,
-        layerIndex: spec.layerIndex,
-        depth: spec.depth,
-        chirality: spec.chirality,
-        chunkiness: spec.chunkiness,
+        stripInstanceId: strip.id,
+        stripIndex: strip.stripIndex,
+        source: strip.sliceParticipation === "primary-cut-target" ? "procedural-composer" : "layer-shell-strip-assemblage",
+        materialRole: strip.materialRole,
+        layerMaterialRole: strip.layerMaterialRole,
+        sliceParticipation: strip.sliceParticipation,
+        layerIndex: strip.layerIndex,
+        depth: strip.depth,
+        chirality: strip.chirality,
+        chunkiness: strip.chunkiness,
         segmentCount: spec.segmentCount,
-        interval: [
-          Number(clamp(baseStart + spec.intervalBias + stagger, 0.08, 0.44).toFixed(4)),
-          Number(clamp(baseEnd + spec.intervalBias + stagger, 0.62, 0.94).toFixed(4)),
-        ],
+        stripCount: spec.stripCount,
+        interval: [start, end],
         curveLaw: composerDescriptor.curveLaw,
         capLaw: composerDescriptor.capLaw,
-        theta0: -0.98 + spec.layerIndex * 0.28 + (rand() - 0.5) * 0.22,
-        thetaTwist: spec.chirality * (4.36 + rand() * 0.35),
-        phi0: -0.3 + spec.layerIndex * 0.035 + (rand() - 0.5) * 0.16,
-        phiSlope: 0.86 + rand() * 0.2,
-        phase: spec.phase + segmentIndex * 0.44,
-        radius: Number((1 + spec.depth).toFixed(4)),
-        width: spec.width,
-        thickness: spec.thickness,
-        edgeLift: spec.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
+        theta0: selectedShape.theta0 + strip.stripIndex * 0.08,
+        thetaTwist: selectedShape.thetaTwist,
+        phi0: selectedShape.phi0 + strip.intervalOffset * 0.28,
+        phiSlope: selectedShape.phiSlope,
+        phase: selectedPhase + strip.phaseOffset,
+        radius: 1 + spec.depth,
+        width: strip.width,
+        thickness: strip.thickness,
+        edgeLift: 0.018 + strip.stripIndex * 0.002,
         waviness: 0.085,
       });
+      continue;
     }
+
+    const isCutAuthor = strip.sliceParticipation === "cut-author-envelope";
+    const baseStart = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
+      ? 0.24 + (0.42 - spec.overlapBias) * 0.18
+      : 0.08 + (strip.stripIndex % 2) * 0.04;
+    const baseEnd = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
+      ? 0.72 + spec.overlapBias * 0.18
+      : 0.82 + (strip.stripIndex % 2) * 0.04;
+    descriptors.push({
+      kind: "LamellarSectionSegment",
+      stripKind: "LamellarStripInstance",
+      id: `${strip.id}-${strip.materialRole}`,
+      layerSpecId: spec.id,
+      stripInstanceId: strip.id,
+      stripIndex: strip.stripIndex,
+      source: "layer-shell-strip-assemblage",
+      materialRole: strip.materialRole,
+      layerMaterialRole: strip.layerMaterialRole,
+      sliceParticipation: strip.sliceParticipation,
+      layerIndex: strip.layerIndex,
+      depth: strip.depth,
+      chirality: strip.chirality,
+      chunkiness: strip.chunkiness,
+      segmentCount: spec.segmentCount,
+      stripCount: spec.stripCount,
+      interval: [
+        Number(clamp(baseStart + spec.intervalBias + strip.intervalOffset, 0.08, 0.44).toFixed(4)),
+        Number(clamp(baseEnd + spec.intervalBias + strip.intervalOffset * 0.6, 0.62, 0.94).toFixed(4)),
+      ],
+      curveLaw: composerDescriptor.curveLaw,
+      capLaw: composerDescriptor.capLaw,
+      theta0: -0.98 + spec.layerIndex * 0.28 + strip.stripIndex * 0.1 + (isCutAuthor ? 0 : 0.04),
+      thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
+      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.42,
+      phiSlope: 0.86 + strip.stripIndex * 0.04,
+      phase: spec.phase + strip.phaseOffset,
+      radius: Number((1 + spec.depth).toFixed(4)),
+      width: strip.width,
+      thickness: strip.thickness,
+      edgeLift: strip.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
+      waviness: 0.085,
+    });
   }
 
-  return { composerDescriptor, layerStackDescriptor, layerSpecs, descriptors };
+  return { composerDescriptor, layerStackDescriptor, layerSpecs, stripInstances, descriptors };
 }
 
 export function sliceLamellarSectionSegments(descriptors, input = {}) {
@@ -284,7 +373,7 @@ export function sliceLamellarSectionSegments(descriptors, input = {}) {
   );
 
   for (const descriptor of descriptors) {
-    if (descriptor.materialRole !== "selected-source") {
+    if (descriptor.sliceParticipation !== "primary-cut-target") {
       sliced.push(descriptor);
       continue;
     }
@@ -525,6 +614,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     composerDescriptor: null,
     layerStackDescriptor: null,
     layerSpecs: [],
+    stripInstances: [],
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
     sliceApplicationReceipt: null,
@@ -542,6 +632,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     selected: new THREE.MeshStandardMaterial({ color: 0xd6a33d, metalness: 0.72, roughness: 0.34, side: THREE.DoubleSide }),
     continuation: new THREE.MeshStandardMaterial({ color: 0xf2c86b, metalness: 0.64, roughness: 0.38, side: THREE.DoubleSide }),
     neighbor: new THREE.MeshStandardMaterial({ color: 0x10c9c1, emissive: 0x073330, emissiveIntensity: 0.18, metalness: 0.34, roughness: 0.36, side: THREE.DoubleSide }),
+    neighborCompanion: new THREE.MeshStandardMaterial({ color: 0x5d807d, metalness: 0.34, roughness: 0.5, side: THREE.DoubleSide }),
     cuttingEdge: new THREE.MeshStandardMaterial({ color: 0xff5d46, emissive: 0x3a0b04, emissiveIntensity: 0.35, metalness: 0.18, roughness: 0.32, side: THREE.DoubleSide }),
     cap: new THREE.MeshStandardMaterial({ color: 0xffcf76, metalness: 0.52, roughness: 0.3, side: THREE.DoubleSide }),
     gauge: new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
@@ -578,11 +669,16 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.composerDescriptor = generated.composerDescriptor;
     state.layerStackDescriptor = generated.layerStackDescriptor;
     state.layerSpecs = generated.layerSpecs;
+    state.stripInstances = generated.stripInstances;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
       id: d.id,
       kind: d.kind,
       layerSpecId: d.layerSpecId,
+      stripInstanceId: d.stripInstanceId,
+      stripIndex: d.stripIndex,
       materialRole: d.materialRole,
+      layerMaterialRole: d.layerMaterialRole,
+      sliceParticipation: d.sliceParticipation,
       layerIndex: d.layerIndex,
       depth: d.depth,
       chirality: d.chirality,
@@ -603,15 +699,16 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.lightHooks = [];
 
     sliced.descriptors.forEach((descriptor, index) => {
-      const isCutAuthorEnvelope = descriptor.materialRole === "neighbor-envelope";
+      const isCutAuthorEnvelope = descriptor.sliceParticipation === "cut-author-envelope";
       const opts = descriptorCurveOptions(descriptor);
       const built = isCutAuthorEnvelope && state.cutAuthorEnvelopeDescriptor
         ? makeCutAuthorEnvelopeGeometry(THREE, descriptor, state.cutAuthorEnvelopeDescriptor)
         : makeRibbonGeometry(THREE, descriptor.interval, opts);
       const { geometry, centerline } = built;
       let material = materials.neighbor;
-      if (descriptor.materialRole === "selected-pre-cut") material = materials.selected;
+      if (descriptor.materialRole === "selected-source" || descriptor.materialRole === "selected-pre-cut") material = materials.selected;
       if (descriptor.materialRole === "selected-continuation") material = materials.continuation;
+      if (descriptor.materialRole === "neighbor-companion") material = materials.neighborCompanion;
       if (descriptor.materialRole === "nested-placeholder-shell") {
         material = descriptor.layerIndex % 2 ? materials.placeholderA : materials.placeholderB;
       }
@@ -623,8 +720,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         id: descriptor.id,
         kind: descriptor.kind,
         layerSpecId: descriptor.layerSpecId,
+        stripInstanceId: descriptor.stripInstanceId,
+        stripIndex: descriptor.stripIndex,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
         sourceRole: isCutAuthorEnvelope ? descriptor.materialRole : null,
+        sliceParticipation: descriptor.sliceParticipation,
         channelCutMode: isCutAuthorEnvelope ? CHANNEL_CUT_MODE : null,
         envelopeDisplayWidth: isCutAuthorEnvelope ? state.cutAuthorEnvelopeDescriptor?.envelopeDisplayWidth : null,
         layerIndex: descriptor.layerIndex,

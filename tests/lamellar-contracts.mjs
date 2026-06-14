@@ -24,6 +24,7 @@ assert.match(index, /id="lamellar-chunkiness-variance"/, 'Lamellar tab exposes c
 assert.match(index, /id="lamellar-layer-rows"/, 'Lamellar tab exposes per-layer authoring rows');
 assert.match(index, /id="lamellar-layer-0-chirality"/, 'Lamellar tab exposes layer 0 chirality override');
 assert.match(index, /id="lamellar-layer-0-chunkiness"/, 'Lamellar tab exposes layer 0 chunkiness override');
+assert.match(index, /id="lamellar-layer-0-strip-count"/, 'Lamellar tab exposes layer 0 strip-count override');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -38,6 +39,7 @@ assert.match(index, /lamellar_chunkiness/, 'URL route can override Lamellar laye
 assert.match(index, /lamellar_chunkiness_variance/, 'URL route can override Lamellar chunkiness variance');
 assert.match(index, /lamellar_layer_chiralities/, 'URL route can override per-layer chirality values');
 assert.match(index, /lamellar_layer_chunkiness/, 'URL route can override per-layer chunkiness values');
+assert.match(index, /lamellar_layer_strip_counts/, 'URL route can override per-layer strip counts');
 assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar overlap bias');
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
@@ -75,18 +77,25 @@ assert.match(core, /zero-lift-closed-terminal-cap-slab/, 'Lamellar module preser
 assert.match(core, /temporary-aesthetic-composition-primitive-not-final-lamellar-topology/, 'Lamellar module marks nested shells as placeholder composition only');
 assert.match(core, /LamellarSectionSegment/, 'Lamellar core names procedural section descriptors explicitly');
 assert.match(core, /LayerStackDescriptor/, 'Lamellar core names the authored layer-stack descriptor explicitly');
+assert.match(core, /LayerShellDescriptor/, 'Lamellar core names layer shells as assemblages explicitly');
 assert.match(core, /LamellarLayerSpec/, 'Lamellar core names per-layer specs explicitly');
+assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip instances explicitly');
 assert.match(core, /generateLamellarLayerSpecs/, 'Lamellar core generates per-layer specs before section descriptors');
+assert.match(core, /generateLamellarStripInstances/, 'Lamellar core expands layer specs into strip instances before mesh emission');
 assert.match(core, /generateLamellarSectionSegments/, 'Lamellar core generates data-first section descriptors before mesh emission');
 assert.match(core, /sliceLamellarSectionSegments/, 'Lamellar core slices section descriptors before mesh emission');
 assert.match(core, /composerDescriptor/, 'Lamellar debug state reports procedural composer descriptor');
 assert.match(core, /layerStackDescriptor/, 'Lamellar debug state reports authored layer-stack descriptor');
 assert.match(core, /layerSpecs/, 'Lamellar debug state reports per-layer specs');
+assert.match(core, /stripInstances/, 'Lamellar debug state reports layer-owned strip instances');
+assert.match(core, /stripIds/, 'Lamellar layer specs report their owned strip ids');
+assert.match(core, /stripCount/, 'Lamellar layer specs report their authored strip count');
 assert.match(core, /chiralityPattern/, 'Lamellar debug state reports chirality pattern through layers');
 assert.match(core, /chunkinessBase/, 'Lamellar debug state reports layer chunkiness base');
 assert.match(core, /chunkinessVariance/, 'Lamellar debug state reports layer chunkiness variance');
 assert.match(core, /layerOverrides/, 'Lamellar debug state reports per-layer override inputs');
 assert.match(core, /layerSpecId/, 'Lamellar section descriptors carry layer-spec ancestry');
+assert.match(core, /stripInstanceId/, 'Lamellar section descriptors carry strip-instance ancestry');
 assert.match(core, /sliceToolDescriptor/, 'Lamellar debug state reports slicing tool descriptor');
 assert.match(core, /sliceApplicationReceipt/, 'Lamellar debug state reports effective slice application receipt');
 assert.match(core, /generatedSegmentDescriptors/, 'Lamellar debug state reports generated segment descriptors');
@@ -115,6 +124,7 @@ assert.match(witness, /channelCutReceipt/, 'witness records channel-cut receipt'
 assert.match(witness, /composerDescriptor/, 'witness records procedural composer descriptor');
 assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descriptor');
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
+assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -147,6 +157,8 @@ function shapeSignature(generated) {
   return generated.descriptors.map(d => ({
     id: d.id,
     layerSpecId: d.layerSpecId,
+    stripInstanceId: d.stripInstanceId,
+    stripIndex: d.stripIndex,
     role: d.materialRole,
     layerIndex: d.layerIndex,
     chirality: d.chirality,
@@ -166,6 +178,8 @@ function massSignature(generated) {
   return generated.descriptors.map(d => ({
     id: d.id,
     layerSpecId: d.layerSpecId,
+    stripInstanceId: d.stripInstanceId,
+    stripIndex: d.stripIndex,
     chunkiness: d.chunkiness,
     width: d.width,
     thickness: d.thickness,
@@ -181,6 +195,37 @@ assert.notDeepEqual(
   massSignature(lowChunk),
   massSignature(highChunk),
   'chunkiness still changes authored layer mass fields'
+);
+
+const assembled = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 4,
+  chiralityPattern: 'alternating',
+  depthSpacing: 0.09,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  overlapBias: 1,
+  layerOverrides: [
+    { layerIndex: 0, chirality: 1, chunkiness: 0.22, stripCount: 3 },
+    { layerIndex: 1, chirality: -1, chunkiness: 1, stripCount: 2 },
+    { layerIndex: 2, chirality: 1, chunkiness: 0.36, stripCount: 2 },
+    { layerIndex: 3, chirality: -1, chunkiness: 0.58, stripCount: 1 },
+  ],
+});
+assert.equal(assembled.layerSpecs.length, 4, 'assembler preserves requested layer count');
+assert.ok(assembled.stripInstances.length > assembled.layerSpecs.length, 'layer shells expand to more strip instances than layer specs');
+assert.deepEqual(
+  assembled.layerSpecs.map(layer => layer.stripIds.length),
+  [3, 2, 2, 1],
+  'each layer spec owns the requested strip ids'
+);
+assert.ok(
+  assembled.stripInstances.every(strip => strip.kind === 'LamellarStripInstance' && strip.layerSpecId && Number.isInteger(strip.stripIndex)),
+  'every strip instance carries kind, layer ancestry, and strip index'
+);
+assert.ok(
+  assembled.descriptors.every(descriptor => descriptor.stripInstanceId && Number.isInteger(descriptor.stripIndex)),
+  'every emitted descriptor carries strip-instance ancestry'
 );
 
 const sliced = coreModule.sliceLamellarSectionSegments(highChunk.descriptors, {
@@ -211,4 +256,9 @@ assert.equal(
   sliced.channelCutReceipt.witnessAnchorMode,
   'selected-neighbor-channel-closeup',
   'slice receipt records the cut-author witness anchor mode'
+);
+assert.match(
+  sliced.channelCutReceipt.sourceStripInstanceId,
+  /^seed-31-layer-1-strip-/,
+  'channel-cut receipt points at a specific cut-author strip instance'
 );
