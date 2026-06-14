@@ -44,6 +44,17 @@ assert.match(index, /id="lamellar-selection-popover"/, 'Lamellar viewport expose
 assert.match(index, /id="lamellar-popover-title"/, 'Lamellar selection popover has a compact title');
 assert.match(index, /id="lamellar-popover-meta"/, 'Lamellar selection popover has compact metadata');
 assert.match(index, /id="lamellar-popover-actions"/, 'Lamellar selection popover has local contextual actions');
+assert.match(index, /id="lamellar-popover-populations"/, 'Lamellar selection popover exposes same-layer population chips');
+assert.match(index, /data-action="add-population"/, 'Lamellar layer toolhead can add a same-layer strip population');
+assert.match(index, /data-action="add-cutter"/, 'Lamellar layer toolhead can add a same-layer cutter population');
+assert.match(index, /data-action="solo-layer"/, 'Lamellar layer toolhead can solo the selected layer locally');
+assert.match(index, /data-action="fit-selection"/, 'Lamellar layer toolhead can fit the selected composition locally');
+assert.match(index, /data-population-id/, 'Lamellar layer toolhead population chips carry population ids');
+assert.match(index, /data-action="population-count-minus"/, 'Lamellar population toolhead can reduce selected population count');
+assert.match(index, /data-action="population-count-plus"/, 'Lamellar population toolhead can increase selected population count');
+assert.match(index, /data-action="population-flip-chirality"/, 'Lamellar population toolhead can flip selected population chirality');
+assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar population toolhead exposes bearing spread control');
+assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
 assert.doesNotMatch(index, /id="lamellar-strip-select"/, 'Lamellar strip selection is viewport-driven rather than dropdown-driven');
 assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
@@ -87,6 +98,13 @@ assert.match(index, /function installLamellarViewportSelection\(/, 'Lamellar UI 
 assert.match(index, /function selectLamellarObject\(/, 'Lamellar UI can select Lamellar objects from scene picks');
 assert.match(index, /function selectLamellarLayerFromStrip\(/, 'Lamellar UI single-click selection resolves picked strips to owning layer');
 assert.match(index, /function drillIntoLamellarStrip\(/, 'Lamellar UI double-click selection drills into a specific strip');
+assert.match(index, /function selectLamellarPopulation\(/, 'Lamellar UI can select a same-layer strip population from the viewport toolhead');
+assert.match(index, /function syncLamellarPopulationToolhead\(/, 'Lamellar UI syncs selected population controls into the viewport toolhead');
+assert.match(index, /function applyLamellarPopulationOverride\(/, 'Lamellar UI writes selected-population authoring overrides');
+assert.match(index, /function nudgeSelectedPopulationCount\(/, 'Lamellar UI can nudge selected population count');
+assert.match(index, /function flipSelectedPopulationChirality\(/, 'Lamellar UI can flip selected population chirality');
+assert.match(index, /function fitLamellarSelection\(/, 'Lamellar UI exposes local fit action for the selected layer toolhead');
+assert.match(index, /function soloSelectedLamellarLayer\(/, 'Lamellar UI exposes local solo action for the selected layer toolhead');
 assert.match(index, /lamellarCameraInteracted/, 'Lamellar UI tracks whether the human has already moved the camera');
 assert.match(index, /shouldFrameLamellarOnEnable\(/, 'Lamellar manual Enable can frame only when no human camera view exists yet');
 assert.match(index, /function syncLamellarContextInspector\(/, 'Lamellar UI syncs selected-object context inspector controls');
@@ -112,11 +130,15 @@ assert.match(core, /return \{[\s\S]*frameCamera[\s\S]*debugState[\s\S]*selectByS
 assert.match(core, /selectionLevel/, 'Lamellar debug state distinguishes layer selection from strip drilldown');
 assert.match(core, /selectedLayerSpecId/, 'Lamellar debug state records selected layer spec id');
 assert.match(core, /selectedStripInstanceId/, 'Lamellar debug state records selected strip instance id');
+assert.match(core, /selectedPopulationId/, 'Lamellar debug state records selected same-layer population id');
 assert.match(core, /selectionAnchor/, 'Lamellar debug state records a 3D selection anchor for popover placement');
 assert.match(core, /selectLayerByStripInstanceId/, 'Lamellar core exposes layer selection from a picked strip');
 assert.match(core, /selectStripByStripInstanceId/, 'Lamellar core exposes explicit strip drilldown selection');
+assert.match(core, /selectPopulationByPopulationId/, 'Lamellar core exposes same-layer population selection');
 assert.match(core, /layer-selection-highlight/, 'Lamellar core marks layer-level selection highlights distinctly');
 assert.match(core, /strip-selection-highlight/, 'Lamellar core marks strip-level selection highlights distinctly');
+assert.match(core, /population-selection-highlight/, 'Lamellar core marks population-level selection highlights distinctly');
+assert.match(core, /populationStripIds/, 'Lamellar core selection object carries selected population strip ids');
 assert.match(core, /kaminos-lamellar-witness-v0/, 'Lamellar module exposes stable witness identity');
 assert.match(core, /sphere-domain-section-segment-witness-v0/, 'Lamellar module records effective route identity');
 assert.match(core, /cap_profile/, 'Lamellar module supports the cap-profile witness view');
@@ -205,6 +227,9 @@ assert.match(witness, /selectionUi/, 'witness records viewport/context selection
 assert.match(witness, /layerSelectionUi/, 'witness records layer-first viewport selection state');
 assert.match(witness, /stripDrilldownUi/, 'witness records explicit strip drilldown state');
 assert.match(witness, /selectionPopoverUi/, 'witness records the floating selection popover state');
+assert.match(witness, /populationToolheadUi/, 'witness records selected-population toolhead state');
+assert.match(witness, /selectedPopulationObject/, 'witness records selected population object state');
+assert.match(witness, /populationControlReceipt/, 'witness records a selected-population control mutation receipt');
 assert.match(witness, /selectionLevel/, 'witness records selection level in browser receipts');
 assert.match(witness, /selectedLamellarObject/, 'witness records selected Lamellar object state');
 assert.match(witness, /viewportPickReceipt/, 'witness records viewport pick receipt');
@@ -387,6 +412,16 @@ const populated = coreModule.generateLamellarSectionSegments({
     { layerIndex: 0, role: 'cutter', count: 2, chirality: -1, bearingOffset: 0.44, bearingVariance: 0.12, gapPattern: 'crosscut' },
   ],
 });
+assert.ok(
+  populated.stripPopulationDescriptors.every(population =>
+    populated.stripInstances.some(strip => strip.populationId === population.id)
+  ),
+  'each population descriptor owns at least one emitted strip instance'
+);
+assert.ok(
+  populated.stripInstances.filter(strip => strip.populationId === populated.stripPopulationDescriptors[0]?.id).length > 1,
+  'population ids group multiple same-shell strip instances for population-level selection'
+);
 assert.ok(
   populated.stripPopulationDescriptors.some(population =>
     population.kind === 'StripPopulationDescriptor'

@@ -200,11 +200,43 @@ async function main() {
           selectionLevel: layerState.selectionLevel,
           selectedLayerSpecId: layerState.selectedLayerSpecId,
           selectedStripInstanceId: layerState.selectedStripInstanceId,
+          selectedPopulationId: layerState.selectedPopulationId,
           selectedObjectKind: layerState.selectedLamellarObject?.objectKind || '',
           selectedLayerStripIds: layerState.selectedLamellarObject?.stripIds || [],
           contextProfileDisplay: getComputedStyle(document.getElementById('lamellar-context-profile')).display,
           popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
           popoverDisplay: getComputedStyle(layerPopover).display,
+          populationChipCount: document.querySelectorAll('#lamellar-popover-populations [data-population-id]').length,
+        };
+        const firstPopulationId = document.querySelector('#lamellar-popover-populations [data-population-id]')?.dataset.populationId || '';
+        const beforePopulation = (layerState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+        if (firstPopulationId) window.__kaminosLamellarSelectPopulationById?.(firstPopulationId);
+        const selectedPopulationState = w ? w.debugState() : layerState;
+        if (firstPopulationId) window.__kaminosLamellarNudgeSelectedPopulationCount?.(1);
+        const afterCountState = w ? w.debugState() : selectedPopulationState;
+        if (firstPopulationId) window.__kaminosLamellarFlipSelectedPopulationChirality?.();
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 0.37, bearingOffset: 0.21 });
+        const populationState = w ? w.debugState() : afterCountState;
+        const afterPopulation = (populationState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+        const populationToolhead = document.getElementById('lamellar-population-toolhead');
+        const populationToolheadUi = {
+          selectionLevel: selectedPopulationState.selectionLevel,
+          selectedPopulationId: selectedPopulationState.selectedPopulationId,
+          selectedPopulationObject: selectedPopulationState.selectedLamellarObject,
+          populationChipCount: document.querySelectorAll('#lamellar-popover-populations [data-population-id]').length,
+          toolheadDisplay: populationToolhead ? getComputedStyle(populationToolhead).display : 'missing',
+          popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
+          spreadValue: Number(document.getElementById('lamellar-population-bearing-spread')?.value || 0),
+          offsetValue: Number(document.getElementById('lamellar-population-bearing-offset')?.value || 0),
+        };
+        const populationControlReceipt = {
+          populationId: firstPopulationId,
+          beforeCount: beforePopulation?.count ?? null,
+          afterCount: afterPopulation?.count ?? null,
+          beforeChirality: beforePopulation?.chirality ?? null,
+          afterChirality: afterPopulation?.chirality ?? null,
+          afterBearingVariance: afterPopulation?.bearingVariance ?? null,
+          afterBearingOffset: afterPopulation?.bearingOffset ?? null,
         };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
@@ -223,6 +255,9 @@ async function main() {
           ...state,
           manualEnableUi,
           layerSelectionUi,
+          populationToolheadUi,
+          selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
+          populationControlReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
             selectedLayerSpecId: state.selectedLayerSpecId,
@@ -290,6 +325,23 @@ async function main() {
     assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
     assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
     assert.equal(state.layerSelectionUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls should stay hidden for layer selection');
+    assert.ok((state.layerSelectionUi?.populationChipCount || 0) >= 1, 'Lamellar layer toolhead did not render population chips');
+    assert.equal(state.populationToolheadUi?.selectionLevel, 'population', 'Lamellar population chip did not select population level');
+    assert.ok(state.populationToolheadUi?.selectedPopulationId, 'Lamellar population selection did not carry a population id');
+    assert.notEqual(state.populationToolheadUi?.toolheadDisplay, 'none', 'Lamellar population toolhead controls did not render');
+    assert.ok((state.selectedPopulationObject?.populationStripIds || []).length >= 1, 'Lamellar selected population did not carry strip ids');
+    assert.equal(
+      state.populationControlReceipt?.afterCount,
+      (state.populationControlReceipt?.beforeCount || 0) + 1,
+      'Lamellar population count control did not mutate selected population count'
+    );
+    assert.equal(
+      state.populationControlReceipt?.afterChirality,
+      -(state.populationControlReceipt?.beforeChirality || 1),
+      'Lamellar population chirality control did not mutate selected population chirality'
+    );
+    assert.equal(state.populationControlReceipt?.afterBearingVariance, 0.37, 'Lamellar population spread control did not mutate bearing variance');
+    assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.21, 'Lamellar population rotate control did not mutate bearing offset');
     assert.equal(state.stripDrilldownUi?.selectionLevel, 'strip', 'Lamellar drilldown did not select a strip');
     assert.ok(state.stripDrilldownUi?.selectedStripInstanceId, 'Lamellar strip drilldown did not carry a strip instance id');
     assert.notEqual(state.stripDrilldownUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls did not appear after strip drilldown');
@@ -305,6 +357,12 @@ async function main() {
     assert.ok((state.stripPopulationDescriptors || []).some(population => population.role === 'cutter'), 'Lamellar witness did not export cutter population descriptors');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
+    if (state.populationControlReceipt?.populationId) {
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosLamellarSelectPopulationById?.(${JSON.stringify(state.populationControlReceipt.populationId)})`,
+      });
+      await delay(250);
+    }
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
     const buffer = Buffer.from(screenshot.data, 'base64');
     writeFileSync(out, buffer);
@@ -330,6 +388,9 @@ async function main() {
       selectedStripUi: state.selectedStripUi,
       manualEnableUi: state.manualEnableUi,
       layerSelectionUi: state.layerSelectionUi,
+      populationToolheadUi: state.populationToolheadUi,
+      selectedPopulationObject: state.selectedPopulationObject,
+      populationControlReceipt: state.populationControlReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,
       selectionUi: state.selectionUi,
