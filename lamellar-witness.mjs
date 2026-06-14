@@ -16,6 +16,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lamellar-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1000);
 const requested = new URL(url).searchParams;
+const manualEnable = args.get('--manual-enable') === '1';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -175,6 +176,17 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     await wsRequest(ws, 'Page.bringToFront');
     await delay(settleMs);
+    if (manualEnable) {
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          document.querySelector('[data-tab="lamellar"]')?.click();
+          if (document.getElementById('lamellar-toggle')?.textContent !== 'Disable') {
+            document.getElementById('lamellar-toggle')?.click();
+          }
+        })()`,
+      });
+      await delay(600);
+    }
 
     const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
       expression: `(() => {
@@ -199,8 +211,17 @@ async function main() {
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
         const popover = document.getElementById('lamellar-selection-popover');
         const popoverRect = popover?.getBoundingClientRect();
+        const manualEnableUi = {
+          mode: 'plain-load-tab-enable',
+          activeTab: document.querySelector('.tab.active')?.dataset.tab || '',
+          toggleText: document.getElementById('lamellar-toggle')?.textContent || '',
+          cameraPosition: state.cameraPosition || [],
+          cameraTarget: state.cameraTarget || [],
+          childCount: state.childCount || 0,
+        };
         return {
           ...state,
+          manualEnableUi,
           layerSelectionUi,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
@@ -247,6 +268,12 @@ async function main() {
     assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
     assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
     assert.ok(state.active, 'Lamellar witness route was not active');
+    if (manualEnable) {
+      assert.equal(state.manualEnableUi?.activeTab, 'lamellar', 'manual Enable witness did not activate the Lamellar tab');
+      assert.equal(state.manualEnableUi?.toggleText, 'Disable', 'manual Enable witness did not activate the Lamellar toggle');
+      assert.ok((state.manualEnableUi?.childCount || 0) > 0, 'manual Enable built no Lamellar children');
+      assert.notDeepEqual(state.manualEnableUi?.cameraPosition, [0, 0.6, 3], 'manual Enable from untouched camera stayed on the blank default view');
+    }
     assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar witness did not build section segments');
     assert.ok((state.segmentDescriptorCount || 0) >= 3, 'Lamellar witness did not export generated section descriptors');
     assert.ok(state.composerDescriptor?.mode, 'Lamellar witness did not export composer descriptor');
@@ -301,6 +328,7 @@ async function main() {
       stripInstances: state.stripInstances,
       selectedLayerUi: state.selectedLayerUi,
       selectedStripUi: state.selectedStripUi,
+      manualEnableUi: state.manualEnableUi,
       layerSelectionUi: state.layerSelectionUi,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,

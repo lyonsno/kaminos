@@ -626,6 +626,7 @@ let lamellarWitness = null;
 let selectedLamellarLayerIndex = 0;
 let selectedLamellarStripIndex = 0;
 let selectedLamellarObject = null;
+let lamellarCameraInteracted = false;
 const lamellarStripProfileOverrides = {};
 
 // --- Settings Persistence ---
@@ -847,10 +848,15 @@ async function initScene() {
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
+  const markLamellarCameraInteracted = () => { lamellarCameraInteracted = true; };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', markDirty);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
+  renderer.domElement.addEventListener('pointerdown', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('mousedown', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('touchstart', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('wheel', markLamellarCameraInteracted);
   window._kaminosDirty = markDirty;
 
   // FPS counter
@@ -974,6 +980,12 @@ function drillIntoLamellarStrip(stripInstanceId = null) {
   syncLamellarReadout();
   window._kaminosDirty?.();
   return selection;
+}
+
+function shouldFrameLamellarOnEnable(wasActive) {
+  const atDefaultCamera = Math.hypot(camera.position.x, camera.position.y - 0.6, camera.position.z - 3) < 0.001
+    && Math.hypot(controls.target.x, controls.target.y, controls.target.z) < 0.001;
+  return !wasActive && !lamellarCameraInteracted && !currentMesh && atDefaultCamera;
 }
 
 function selectLamellarObject(selection) {
@@ -1417,8 +1429,10 @@ async function initLamellarRoute() {
     window._kaminosDirty?.();
   });
   document.getElementById('lamellar-toggle').addEventListener('click', () => {
-    const active = !lamellarWitness.debugState().active;
+    const wasActive = lamellarWitness.debugState().active;
+    const active = !wasActive;
     lamellarWitness.setActive(active);
+    if (active && shouldFrameLamellarOnEnable(wasActive)) lamellarWitness.frameCamera();
     syncLamellarReadout();
   });
   document.getElementById('lamellar-frame').addEventListener('click', () => {

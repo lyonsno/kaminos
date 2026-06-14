@@ -87,6 +87,8 @@ assert.match(index, /function installLamellarViewportSelection\(/, 'Lamellar UI 
 assert.match(index, /function selectLamellarObject\(/, 'Lamellar UI can select Lamellar objects from scene picks');
 assert.match(index, /function selectLamellarLayerFromStrip\(/, 'Lamellar UI single-click selection resolves picked strips to owning layer');
 assert.match(index, /function drillIntoLamellarStrip\(/, 'Lamellar UI double-click selection drills into a specific strip');
+assert.match(index, /lamellarCameraInteracted/, 'Lamellar UI tracks whether the human has already moved the camera');
+assert.match(index, /shouldFrameLamellarOnEnable\(/, 'Lamellar manual Enable can frame only when no human camera view exists yet');
 assert.match(index, /function syncLamellarContextInspector\(/, 'Lamellar UI syncs selected-object context inspector controls');
 assert.match(index, /function syncLamellarSelectionPopover\(/, 'Lamellar UI syncs the viewport selection popover');
 assert.match(index, /function positionLamellarSelectionPopover\(/, 'Lamellar UI positions the popover from the 3D selection anchor');
@@ -216,6 +218,8 @@ assert.match(witness, /segmentDescriptorCount/, 'witness records generated descr
 assert.match(witness, /lightHookCount/, 'witness records exported light hook count');
 assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual output');
 assert.match(witness, /assertVisualDiversity/, 'witness checks screenshot pixel diversity, not only file size');
+assert.match(witness, /manualEnable/, 'witness can exercise the plain-load Lamellar tab Enable path');
+assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera and visibility state');
 
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
 const lowChunk = coreModule.generateLamellarSectionSegments({
