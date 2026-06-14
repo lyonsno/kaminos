@@ -77,6 +77,13 @@ canvas { display: block; }
 .tb-btn.primary { background: #1565c0; border-color: #1976d2; color: #fff; }
 .tb-btn.primary:hover { background: #1976d2; }
 .tb-sep { width: 1px; height: 18px; background: #333; margin: 0 4px; }
+#greenroom-preview-controls { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); min-width: min(520px, calc(100% - 32px)); background: rgba(20,20,20,0.9); border: 1px solid #5d4822; border-radius: 8px; padding: 10px 12px; z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+#greenroom-preview-controls[hidden] { display: none; }
+.greenroom-preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.greenroom-preview-kicker { color: #f0b85a; font: 10px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.8px; }
+.greenroom-preview-title { color: #eee; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.greenroom-preview-source { color: #777; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 8px; }
+.greenroom-preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 #viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
@@ -491,6 +498,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene (Ctrl+O)">Load</button>
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
+  <div id="greenroom-preview-controls" hidden>
+    <div class="greenroom-preview-head">
+      <span class="greenroom-preview-kicker">Temporary Preview</span>
+      <span class="greenroom-preview-title" id="greenroom-preview-title"></span>
+    </div>
+    <div class="greenroom-preview-source" id="greenroom-preview-source"></div>
+    <div class="greenroom-preview-actions">
+      <button class="tb-btn primary" data-greenroom-preview-action="import" onclick="importGreenroomPreviewToScene()">Import to Scene</button>
+      <button class="tb-btn" data-greenroom-preview-action="back" onclick="restoreAuthoredSceneFromPreview()">Back to Scene</button>
+    </div>
+  </div>
   <div id="info-bar">No asset loaded</div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
@@ -561,6 +579,8 @@ let volumePrimitives = [];
 let sceneObjects = [];
 let activeSceneObjectId = null;
 let sceneSaveBlockedByFailedRestore = false;
+let greenroomPreviewState = null;
+let sceneMutationToken = 0;
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
@@ -733,9 +753,113 @@ function shouldClearSceneForImport(options = {}) {
   return !document.getElementById('append-import-toggle')?.checked;
 }
 
-function clearSceneSaveTargetForPreview() {
-  currentSceneFile = null;
+function greenroomPreviewIsActive() {
+  return !!greenroomPreviewState;
 }
+
+window.greenroomPreviewIsActive = greenroomPreviewIsActive;
+
+function captureAuthoredSceneStateForPreview() {
+  return {
+    sceneObjects: [...sceneObjects],
+    activeSceneObjectId,
+    currentMesh,
+    currentSceneFile,
+    sceneSaveBlockedByFailedRestore,
+    volumePrimitives: getVolumePrimitiveState(),
+    modelSourceUrl,
+    modelSourceType,
+    glbFileName,
+  };
+}
+
+function detachAuthoredSceneForPreview(authored) {
+  sceneMutationToken++;
+  for (const entry of authored.sceneObjects) scene.remove(entry.object);
+  sceneObjects = [];
+  activeSceneObjectId = null;
+  currentMesh = null;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] });
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  renderSceneObjectList();
+}
+
+function updateGreenroomPreviewControls() {
+  const panel = document.getElementById('greenroom-preview-controls');
+  if (!panel) return;
+  if (!greenroomPreviewState) {
+    panel.hidden = true;
+    return;
+  }
+  const preview = greenroomPreviewState.preview || {};
+  document.getElementById('greenroom-preview-title').textContent = preview.display?.title || preview.fileName || 'Greenroom output';
+  document.getElementById('greenroom-preview-source').textContent = preview.url || '';
+  panel.hidden = false;
+}
+
+function removeGreenroomPreviewObject({ dispose = true } = {}) {
+  const previewObject = greenroomPreviewState?.previewObject;
+  if (!previewObject) return null;
+  if (transformControls && currentMesh === previewObject) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  scene.remove(previewObject);
+  if (dispose) disposeObjectTree(previewObject);
+  if (currentMesh === previewObject) currentMesh = null;
+  greenroomPreviewState.previewObject = null;
+  return previewObject;
+}
+
+function previewTransformState(object) {
+  return {
+    transform: {
+      position: object.position.toArray(),
+      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+      scale: object.scale.toArray(),
+    },
+    materials: getMaterialStateForObject(object),
+  };
+}
+
+function applyPreviewTransformState(object, state) {
+  if (!object || !state) return;
+  object.position.fromArray(state.transform?.position || [0, 0, 0]);
+  object.rotation.set(...(state.transform?.rotation || [0, 0, 0]));
+  object.scale.fromArray(state.transform?.scale || [1, 1, 1]);
+  applyMaterialStateToObject(object, state.materials);
+}
+
+async function restoreAuthoredSceneFromPreview(options = {}) {
+  if (!greenroomPreviewState) return false;
+  const state = greenroomPreviewState;
+  const authored = state.authored;
+  removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
+  sceneMutationToken++;
+  greenroomPreviewState = null;
+  updateGreenroomPreviewControls();
+  sceneObjects = [...authored.sceneObjects];
+  for (const entry of sceneObjects) scene.add(entry.object);
+  activeSceneObjectId = authored.activeSceneObjectId;
+  currentSceneFile = authored.currentSceneFile;
+  sceneSaveBlockedByFailedRestore = authored.sceneSaveBlockedByFailedRestore;
+  modelSourceUrl = authored.modelSourceUrl;
+  modelSourceType = authored.modelSourceType;
+  glbFileName = authored.glbFileName;
+  setVolumePrimitivesState(authored.volumePrimitives);
+  setActiveSceneObject(activeSceneObjectId);
+  if (!sceneObjects.length) {
+    renderSceneObjectList();
+    document.getElementById('transform-bar').classList.remove('visible');
+  }
+  if (!options.silent) setInfo('Returned to scene');
+  return true;
+}
+
+window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
 
 function sceneObjectReloadabilityLabel(record) {
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
@@ -1175,6 +1299,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene() {
+  sceneMutationToken++;
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
@@ -1218,6 +1343,7 @@ function loadTextureLinear(file) {
 // --- PBR Material Preview ---
 async function showPBRPreview(options = {}) {
   if (shouldClearSceneForImport(options)) clearScene();
+  const loadToken = sceneMutationToken;
   const metadata = options.metadata || {};
   modelSourceUrl = metadata.source ?? modelSourceUrl ?? 'material-preview';
   modelSourceType = 'pbr';
@@ -1255,6 +1381,11 @@ async function showPBRPreview(options = {}) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.position.y = 0;
+  if (loadToken !== sceneMutationToken || greenroomPreviewIsActive()) {
+    disposeObjectTree(mesh);
+    console.warn('stale async PBR preview load ignored');
+    return null;
+  }
   scene.add(mesh);
   registerSceneObject(mesh, {
     ...metadata,
@@ -1270,17 +1401,23 @@ async function showPBRPreview(options = {}) {
 // --- GLB Inspector ---
 async function showGLB(file, options = {}) {
   if (shouldClearSceneForImport(options)) clearScene();
+  const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
-  return new Promise((resolve, reject) => {
-    loader.load(url, gltf => {
-      if (isBlob) URL.revokeObjectURL(url);
-      glbSourceScene = gltf.scene;
-      const model = gltf.scene;
+	return new Promise((resolve, reject) => {
+	  loader.load(url, gltf => {
+	    if (isBlob) URL.revokeObjectURL(url);
+	    glbSourceScene = gltf.scene;
+	    const model = gltf.scene;
+      if (loadToken !== sceneMutationToken || (greenroomPreviewIsActive() && options.register !== false)) {
+        disposeObjectTree(model);
+        reject(new Error('stale async GLB load ignored'));
+        return;
+      }
       if (options.normalize !== false) {
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
@@ -1299,12 +1436,27 @@ async function showGLB(file, options = {}) {
         }
       });
       scene.add(model);
-      registerSceneObject(model, {
-        ...(options.metadata || {}),
-        source: options.metadata?.source ?? modelSourceUrl,
-        type: options.metadata?.type ?? 'glb',
-        fileName: options.metadata?.fileName ?? glbFileName,
-      });
+      if (options.register === false) {
+        const metadata = options.metadata || {};
+        model.userData.kaminosSceneObject = {
+          source: metadata.source ?? modelSourceUrl,
+          type: metadata.type ?? 'glb',
+          fileName: metadata.fileName ?? glbFileName,
+          label: metadata.label ?? metadata.fileName ?? glbFileName,
+        };
+        currentMesh = model;
+        if (transformControls) {
+          transformControls.attach(model);
+          transformControls.visible = true;
+        }
+      } else {
+        registerSceneObject(model, {
+          ...(options.metadata || {}),
+          source: options.metadata?.source ?? modelSourceUrl,
+          type: options.metadata?.type ?? 'glb',
+          fileName: options.metadata?.fileName ?? glbFileName,
+        });
+      }
       document.getElementById('transform-bar').classList.add('visible');
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(model);
@@ -2699,16 +2851,40 @@ function greenroomMeshMetadata(display, fileName, source) {
 }
 
 async function greenroomViewMesh(url, fileName, display) {
-  clearSceneSaveTargetForPreview();
   glbFileName = fileName;
-  await showGLB(url, {
-    clear: true,
-    metadata: greenroomMeshMetadata(display, fileName, url),
-  });
+  const metadata = greenroomMeshMetadata(display, fileName, url);
+  const authored = greenroomPreviewState?.authored || captureAuthoredSceneStateForPreview();
+  if (greenroomPreviewState) {
+    removeGreenroomPreviewObject();
+  } else {
+    detachAuthoredSceneForPreview(authored);
+  }
+  greenroomPreviewState = {
+    authored,
+    preview: { url, fileName, display, metadata },
+    previewObject: null,
+  };
+  updateGreenroomPreviewControls();
+  setInfo(`Greenroom preview: ${display?.title || fileName}`);
+  try {
+    const previewObject = await showGLB(url, {
+      clear: false,
+      register: false,
+      metadata,
+    });
+    if (greenroomPreviewState) greenroomPreviewState.previewObject = previewObject;
+  } catch (error) {
+    await restoreAuthoredSceneFromPreview({ silent: true });
+    throw error;
+  }
+  updateGreenroomPreviewControls();
   setInfo(`Greenroom view: ${display?.title || fileName}`);
 }
 
 async function greenroomImportMesh(url, fileName, display) {
+  if (greenroomPreviewIsActive()) {
+    await restoreAuthoredSceneFromPreview({ silent: true });
+  }
   glbFileName = fileName;
   await showGLB(url, {
     clear: false,
@@ -2716,6 +2892,23 @@ async function greenroomImportMesh(url, fileName, display) {
   });
   setInfo(`Greenroom import: ${display?.title || fileName}`);
 }
+
+async function importGreenroomPreviewToScene() {
+  if (!greenroomPreviewState?.previewObject) return false;
+  const preview = greenroomPreviewState.preview;
+  const transformState = previewTransformState(greenroomPreviewState.previewObject);
+  await restoreAuthoredSceneFromPreview({ silent: true });
+  glbFileName = preview.fileName;
+  const imported = await showGLB(preview.url, {
+    clear: false,
+    metadata: preview.metadata,
+  });
+  applyPreviewTransformState(imported, transformState);
+  setInfo(`Greenroom import: ${preview.display?.title || preview.fileName}`);
+  return true;
+}
+
+window.importGreenroomPreviewToScene = importGreenroomPreviewToScene;
 
 function addGreenroomMeshActions(container, url, fileName, display) {
   const viewBtn = document.createElement('button');
@@ -3377,6 +3570,10 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if (greenroomPreviewIsActive()) {
+    setInfo('Greenroom preview is temporary; import or go back before saving');
+    return true;
+  }
   if (!sceneSaveBlockedByFailedRestore) return false;
   setInfo('Scene save blocked until a scene loads successfully');
   return true;

@@ -906,6 +906,17 @@ async function runGreenroomPickerDisplayScenario(ws) {
         label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
+      const infoText = () => document.getElementById('info-bar')?.textContent?.trim() || '';
+      const previewState = () => {
+        const panel = document.getElementById('greenroom-preview-controls');
+        return {
+          active: !!window.greenroomPreviewIsActive?.(),
+          visible: !!panel && !panel.hidden,
+          title: document.getElementById('greenroom-preview-title')?.textContent?.trim() || null,
+          source: document.getElementById('greenroom-preview-source')?.textContent?.trim() || null,
+          actions: [...document.querySelectorAll('[data-greenroom-preview-action]')].map(button => button.textContent.trim()),
+        };
+      };
       const waitForSceneRows = async count => {
         for (let i = 0; i < 120; i++) {
           const rows = rowState();
@@ -914,6 +925,16 @@ async function runGreenroomPickerDisplayScenario(ws) {
         }
         return rowState();
       };
+      const waitForPreviewActive = async active => {
+        for (let i = 0; i < 120; i++) {
+          const state = previewState();
+          if (state.active === active && state.visible === active) return state;
+          await wait(125);
+        }
+        return previewState();
+      };
+      const sameRows = (a, b) => JSON.stringify(a.map(row => [row.id, row.label, row.source, row.active, row.pressed]))
+        === JSON.stringify(b.map(row => [row.id, row.label, row.source, row.active, row.pressed]));
       const ensureBaseObject = async () => {
         if (rowState().length) return rowState();
         const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
@@ -997,35 +1018,58 @@ async function runGreenroomPickerDisplayScenario(ws) {
       const importButton = actionRow ? [...actionRow.querySelectorAll('button')].find(button => button.textContent.trim() === 'Import') : null;
       if (viewButton) {
         viewButton.click();
-        await waitForSceneRows(1);
+        await waitForPreviewActive(true);
+        await wait(1000);
       }
       const afterViewRows = rowState();
+      const afterViewPreview = previewState();
+      const afterViewInfo = infoText();
       const filesBeforeViewSave = new Set(await listScenes());
-      await window.saveScene();
-      let viewSaveFile = null;
-      for (let i = 0; i < 120; i++) {
-        const afterFiles = await listScenes();
-        const newFiles = afterFiles.filter(name => !filesBeforeViewSave.has(name));
-        if (newFiles.length === 1) {
-          viewSaveFile = newFiles[0];
-          break;
-        }
-        await wait(125);
+      const previewSaveResult = await window.saveScene();
+      await wait(500);
+      const filesAfterViewSave = await listScenes();
+      const viewSaveFiles = filesAfterViewSave.filter(name => !filesBeforeViewSave.has(name));
+      const previewSaveBlocked = previewSaveResult === false
+        && viewSaveFiles.length === 0
+        && infoText().includes('Greenroom preview is temporary');
+      const previewEnteredTemporaryMode = afterViewPreview.active
+        && afterViewPreview.visible
+        && afterViewPreview.actions.includes('Import to Scene')
+        && afterViewPreview.actions.includes('Back to Scene')
+        && afterViewPreview.source?.includes(loadProbe?.route)
+        && afterViewInfo.includes('Greenroom');
+      const previewDidNotMutateAuthoredRows = afterViewRows.length === 0;
+      const backButton = document.querySelector('[data-greenroom-preview-action="back"]');
+      if (backButton) {
+        backButton.click();
+        await waitForPreviewActive(false);
+        await waitForSceneRows(setupRows.length);
+      }
+      const afterBackRows = rowState();
+      const backRestoredAuthoredRows = sameRows(setupRows, afterBackRows);
+      if (viewButton) {
+        viewButton.click();
+        await waitForPreviewActive(true);
+        await wait(250);
+      }
+      window.rotateAxis?.('y');
+      const previewImportButton = document.querySelector('[data-greenroom-preview-action="import"]');
+      if (previewImportButton) {
+        previewImportButton.click();
+        await waitForPreviewActive(false);
+        await waitForSceneRows(setupRows.length + 1);
       }
       const savedAfterView = await readScene(savedFile);
-      const viewProtectedSaveTarget = !!viewSaveFile && JSON.stringify(savedBeforeView) === JSON.stringify(savedAfterView);
-      const viewReplacedWithGreenroomRoute = afterViewRows.length === 1
-        && afterViewRows[0].label === loadRow?.title
-        && afterViewRows[0].source?.includes(loadProbe?.route)
-        && afterViewRows[0].source !== setupRows[0]?.source;
-      if (importButton) {
-        importButton.click();
-        await waitForSceneRows(2);
-      }
-      const afterImportRows = rowState();
-      const importRowsGreenroomSourced = afterImportRows.length === 2
-        && afterImportRows.every(row => row.label === loadRow?.title && row.source?.includes(loadProbe?.route));
-      for (const name of [savedFile, viewSaveFile].filter(Boolean)) {
+      const afterPreviewImportRows = rowState();
+      const viewProtectedSaveTarget = JSON.stringify(savedBeforeView) === JSON.stringify(savedAfterView);
+      const authoredRowsAfterPreviewImport = afterPreviewImportRows.filter(row => setupRows.some(setup => setup.id === row.id));
+      const previewImportedRows = afterPreviewImportRows.filter(row => row.label === loadRow?.title && row.source?.includes(loadProbe?.route));
+      const previewImportRestoredAndAppended = authoredRowsAfterPreviewImport.length === setupRows.length
+        && previewImportedRows.length === 1
+        && afterPreviewImportRows.length === setupRows.length + 1;
+      const previewImportRowsGreenroomSourced = previewImportedRows.length === 1
+        && previewImportedRows.every(row => row.source?.includes(loadProbe?.route));
+      for (const name of [savedFile, ...viewSaveFiles].filter(Boolean)) {
         await deleteScene(name);
         const postCleanupFiles = await listScenes();
         if (postCleanupFiles.includes(name)) {
@@ -1042,13 +1086,20 @@ async function runGreenroomPickerDisplayScenario(ws) {
         hasImport: grRowState.some(row => row.buttons.includes('Import')),
         loadProbe,
         afterViewRows,
-        afterImportRows,
+        afterViewPreview,
+        afterViewInfo,
+        afterBackRows,
+        afterPreviewImportRows,
         savedFile,
-        viewSaveFile,
+        viewSaveFiles,
         viewProtectedSaveTarget,
         setupRows,
-        viewReplacedWithGreenroomRoute,
-        importRowsGreenroomSourced,
+        previewSaveBlocked,
+        previewEnteredTemporaryMode,
+        previewDidNotMutateAuthoredRows,
+        backRestoredAuthoredRows,
+        previewImportRestoredAndAppended,
+        previewImportRowsGreenroomSourced,
       };
     })()
   `, { timeoutMs: 90000 });
@@ -1069,17 +1120,23 @@ async function runGreenroomPickerDisplayScenario(ws) {
   if (!loadProbe || !loadProbe.outputsOk || !loadProbe.mesh || !loadProbe.outputOk || loadProbe.outputBytes < 1) {
     throw new Error(`greenroom picker mesh route was not fetchable: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
-  if (lastEvidence.greenroomPickerDisplay.afterViewRows?.length !== 1) {
-    throw new Error(`greenroom View did not replace the scene with one preview object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  if (!lastEvidence.greenroomPickerDisplay.previewEnteredTemporaryMode) {
+    throw new Error(`greenroom View did not enter temporary preview mode: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
-  if (!lastEvidence.greenroomPickerDisplay.viewReplacedWithGreenroomRoute) {
-    throw new Error(`greenroom View did not replace the setup object with the Greenroom route: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  if (!lastEvidence.greenroomPickerDisplay.previewDidNotMutateAuthoredRows) {
+    throw new Error(`greenroom View mutated authored scene rows: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
-  if (lastEvidence.greenroomPickerDisplay.afterImportRows?.length !== 2) {
-    throw new Error(`greenroom Import did not append a second scene object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  if (!lastEvidence.greenroomPickerDisplay.previewSaveBlocked) {
+    throw new Error(`greenroom preview save was not blocked: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
-  if (!lastEvidence.greenroomPickerDisplay.importRowsGreenroomSourced) {
-    throw new Error(`greenroom Import did not append Greenroom-sourced scene objects: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  if (!lastEvidence.greenroomPickerDisplay.backRestoredAuthoredRows) {
+    throw new Error(`greenroom preview Back did not restore authored scene rows: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.previewImportRestoredAndAppended) {
+    throw new Error(`greenroom preview Import to Scene did not restore and append into the authored scene: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  if (!lastEvidence.greenroomPickerDisplay.previewImportRowsGreenroomSourced) {
+    throw new Error(`greenroom preview import did not preserve Greenroom route source: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
   if (!lastEvidence.greenroomPickerDisplay.viewProtectedSaveTarget) {
     throw new Error(`greenroom View did not protect the previous save target: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
