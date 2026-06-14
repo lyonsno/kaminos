@@ -158,6 +158,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-context-menu { position: fixed; z-index: 30; min-width: 150px; padding: 5px; background: rgba(24,24,24,0.96); border: 1px solid #333; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.35); display: none; }
+.volume-context-menu.open { display: grid; gap: 3px; }
+.volume-context-menu .menu-item { width: 100%; padding: 6px 8px; background: transparent; border: 0; border-radius: 4px; color: #aaa; text-align: left; font-size: 11px; cursor: pointer; }
+.volume-context-menu .menu-item:hover { background: #2b2b2b; color: #fff; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 </style>
 </head>
@@ -361,6 +365,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Primitive</span><select class="select-input" id="volume-primitive-select"></select></div>
       <div class="volume-actions">
         <button class="btn" id="volume-add-fire-smoke">Add Fire+Smoke</button>
+        <button class="btn" id="volume-primitive-context-button">Actions</button>
+      </div>
+      <div class="volume-context-menu" id="volume-primitive-context-menu">
+        <button class="menu-item" id="volume-primitive-duplicate">Duplicate</button>
+        <button class="menu-item" id="volume-primitive-toggle-handle">Hide Handle</button>
+        <button class="menu-item" id="volume-primitive-delete">Delete</button>
       </div>
       <div class="slider-row">
         <span class="slider-label">Prim Radius</span>
@@ -666,6 +676,7 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
+const VOLUME_PRIMITIVE_LOCAL_SETTINGS_IDENTITY = 'volume-primitive-local-settings-v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const VOLUME_PRIMITIVE_SCENE_BOUNDS = Object.freeze({
   identity: 'volume-primitive-shared-scene-bounds-v0',
@@ -789,11 +800,23 @@ function createLamellarHookVolumePrimitiveFixture() {
   };
 }
 
+function normalizeVolumePrimitiveAuthoring(authoring = {}) {
+  const source = authoring && typeof authoring === 'object' ? authoring : {};
+  const opacity = Number(source.handleOpacity ?? source.markerOpacity ?? 0.16);
+  return {
+    ...source,
+    settingsIdentity: VOLUME_PRIMITIVE_LOCAL_SETTINGS_IDENTITY,
+    handleVisible: source.handleVisible !== false,
+    handleOpacity: Number.isFinite(opacity) ? THREE.MathUtils.clamp(opacity, 0, 0.45) : 0.16,
+  };
+}
+
 function normalizeVolumePrimitive(primitive) {
   const source = primitive && typeof primitive === 'object' ? primitive : {};
   const fixture = createVolumePrimitiveFixture();
   const transform = source.transform && typeof source.transform === 'object' ? source.transform : fixture.transform;
   const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : fixture.simulation;
+  const render = source.render && typeof source.render === 'object' ? source.render : fixture.render;
   return {
     ...fixture,
     ...source,
@@ -809,6 +832,11 @@ function normalizeVolumePrimitive(primitive) {
       ...fixture.simulation,
       ...simulation,
     },
+    render: {
+      ...(fixture.render || {}),
+      ...render,
+    },
+    authoring: normalizeVolumePrimitiveAuthoring(source.authoring),
   };
 }
 
@@ -903,6 +931,7 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
       radiance,
       glow,
     },
+    authoring: normalizeVolumePrimitiveAuthoring(options.authoring),
   };
 }
 
@@ -930,15 +959,19 @@ function selectedVolumePrimitiveMarker() {
 function readVolumeMarkerControls() {
   const opacity = Number(document.getElementById('volume-marker-opacity')?.value ?? 0.16);
   return {
-    markerVisible: document.getElementById('volume-marker-visible')?.checked !== false,
-    markerOpacity: Number.isFinite(opacity) ? THREE.MathUtils.clamp(opacity, 0, 0.45) : 0.16,
+    handleVisible: document.getElementById('volume-marker-visible')?.checked !== false,
+    handleOpacity: Number.isFinite(opacity) ? THREE.MathUtils.clamp(opacity, 0, 0.45) : 0.16,
   };
+}
+
+function volumePrimitiveMarkerSettings(primitive) {
+  return normalizeVolumePrimitiveAuthoring(primitive?.authoring);
 }
 
 function updateVolumeMarkerControlLabels() {
   const controlsState = readVolumeMarkerControls();
   const opacityVal = document.getElementById('volume-marker-opacity-val');
-  if (opacityVal) opacityVal.textContent = controlsState.markerOpacity.toFixed(2);
+  if (opacityVal) opacityVal.textContent = controlsState.handleOpacity.toFixed(2);
 }
 
 function refreshVolumePrimitiveSelector() {
@@ -962,24 +995,35 @@ function refreshVolumePrimitivePanel() {
   const flowVal = document.getElementById('volume-primitive-flow-rate-val');
   const radianceEl = document.getElementById('volume-primitive-radiance');
   const radianceVal = document.getElementById('volume-primitive-radiance-val');
+  const handleVisibleEl = document.getElementById('volume-marker-visible');
+  const handleOpacityEl = document.getElementById('volume-marker-opacity');
   refreshVolumePrimitiveSelector();
   updateVolumeMarkerControlLabels();
   if (!selectedEl || !radiusEl || !flowEl || !radianceEl) return;
   selectedEl.textContent = primitive ? primitive.id : 'none';
   selectedEl.title = primitive ? primitive.id : '';
-  for (const el of [radiusEl, flowEl, radianceEl]) el.disabled = !primitive;
+  for (const el of [radiusEl, flowEl, radianceEl, handleVisibleEl, handleOpacityEl]) {
+    if (el) el.disabled = !primitive;
+  }
   if (!primitive) {
     radiusVal.textContent = Number(radiusEl.value).toFixed(2);
     flowVal.textContent = Number(flowEl.value).toFixed(2);
     radianceVal.textContent = Number(radianceEl.value).toFixed(2);
+    updateVolumeMarkerControlLabels();
+    refreshVolumePrimitiveContextMenu();
     return;
   }
+  const markerSettings = volumePrimitiveMarkerSettings(primitive);
   radiusEl.value = String(volumePrimitiveRadius(primitive));
   flowEl.value = String(Number(primitive.simulation?.flowRate ?? 0.15));
   radianceEl.value = String(Number(primitive.render?.radiance ?? 1.65));
+  if (handleVisibleEl) handleVisibleEl.checked = markerSettings.handleVisible;
+  if (handleOpacityEl) handleOpacityEl.value = String(markerSettings.handleOpacity);
   radiusVal.textContent = Number(radiusEl.value).toFixed(2);
   flowVal.textContent = Number(flowEl.value).toFixed(2);
   radianceVal.textContent = Number(radianceEl.value).toFixed(2);
+  updateVolumeMarkerControlLabels();
+  refreshVolumePrimitiveContextMenu();
 }
 
 function applySelectedVolumePrimitiveControls() {
@@ -991,10 +1035,15 @@ function applySelectedVolumePrimitiveControls() {
   const radius = Number(document.getElementById('volume-primitive-radius')?.value ?? primitive.simulation?.sourceRadius ?? 0.12);
   const flowRate = Number(document.getElementById('volume-primitive-flow-rate')?.value ?? primitive.simulation?.flowRate ?? 0.15);
   const radiance = Number(document.getElementById('volume-primitive-radiance')?.value ?? primitive.render?.radiance ?? 1.65);
+  const panelMarkerSettings = readVolumeMarkerControls();
   primitive.transform = primitive.transform || { position: [0, -0.58, 0], rotation: [0, 0, 0], scale: [radius, radius, radius] };
   primitive.transform.scale = [radius, radius, radius];
   primitive.simulation = { ...(primitive.simulation || {}), sourceRadius: radius, flowRate };
   primitive.render = { ...(primitive.render || {}), radiance };
+  primitive.authoring = normalizeVolumePrimitiveAuthoring({
+    ...(primitive.authoring || {}),
+    ...panelMarkerSettings,
+  });
   volumePrototype?.setVolumePrimitives?.(volumePrimitives);
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
   syncVolumePrimitiveMarkers();
@@ -1010,6 +1059,94 @@ function selectVolumePrimitive(id) {
   refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
   return selectedVolumePrimitive();
+}
+
+function closeVolumePrimitiveContextMenu() {
+  document.getElementById('volume-primitive-context-menu')?.classList.remove('open');
+}
+
+function refreshVolumePrimitiveContextMenu() {
+  const primitive = selectedVolumePrimitive();
+  const button = document.getElementById('volume-primitive-context-button');
+  const toggle = document.getElementById('volume-primitive-toggle-handle');
+  if (button) button.disabled = !primitive;
+  if (toggle && primitive) {
+    toggle.textContent = volumePrimitiveMarkerSettings(primitive).handleVisible ? 'Hide Handle' : 'Show Handle';
+  }
+}
+
+function openVolumePrimitiveContextMenu(event = null) {
+  const primitive = selectedVolumePrimitive();
+  const menu = document.getElementById('volume-primitive-context-menu');
+  if (!primitive || !menu) return null;
+  refreshVolumePrimitiveContextMenu();
+  const rect = event?.currentTarget?.getBoundingClientRect?.();
+  const x = Number.isFinite(event?.clientX) ? event.clientX : (rect ? rect.left : 24);
+  const y = Number.isFinite(event?.clientY) ? event.clientY : (rect ? rect.bottom + 4 : 24);
+  menu.style.left = `${Math.max(6, Math.min(window.innerWidth - 170, x))}px`;
+  menu.style.top = `${Math.max(6, Math.min(window.innerHeight - 120, y))}px`;
+  menu.classList.add('open');
+  return primitive;
+}
+
+function duplicateSelectedVolumePrimitive() {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive) return null;
+  const duplicate = normalizeVolumePrimitive(cloneVolumePrimitive(primitive));
+  duplicate.id = makeSceneObjectId('manual-fire-smoke');
+  const position = volumePrimitivePosition(primitive);
+  duplicate.transform.position = normalizeVolumePrimitiveScenePosition([
+    position[0] + 0.32,
+    position[1],
+    position[2] + 0.18,
+  ]);
+  setVolumePrimitivesState({
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    selectedVolumePrimitiveId: duplicate.id,
+    primitives: [...volumePrimitives, duplicate],
+  });
+  setInfo(`Duplicated volume primitive ${primitive.id}`);
+  closeVolumePrimitiveContextMenu();
+  return selectedVolumePrimitive();
+}
+
+function deleteSelectedVolumePrimitive() {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive) return null;
+  const remaining = volumePrimitives.filter(item => item.id !== primitive.id);
+  const nextSelected = remaining[remaining.length - 1]?.id || null;
+  setVolumePrimitivesState({
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    selectedVolumePrimitiveId: nextSelected,
+    primitives: remaining,
+  });
+  setInfo(`Deleted volume primitive ${primitive.id}`);
+  closeVolumePrimitiveContextMenu();
+  return selectedVolumePrimitive();
+}
+
+function toggleSelectedVolumePrimitiveHandle(forceVisible = null) {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive) return null;
+  const current = volumePrimitiveMarkerSettings(primitive);
+  const nextVisible = forceVisible === false || forceVisible === 'false'
+    ? false
+    : forceVisible === true || forceVisible === 'true'
+      ? true
+      : !current.handleVisible;
+  primitive.authoring = normalizeVolumePrimitiveAuthoring({
+    ...current,
+    handleVisible: nextVisible,
+  });
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  syncVolumePrimitiveMarkers();
+  attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
+  refreshVolumePrimitivePanel();
+  closeVolumePrimitiveContextMenu();
+  window._kaminosDirty?.();
+  const updatedPrimitive = selectedVolumePrimitive();
+  return updatedPrimitive ? cloneVolumePrimitive(updatedPrimitive) : null;
 }
 
 function clearVolumePrimitiveTransformTarget() {
@@ -1127,12 +1264,12 @@ function syncVolumePrimitiveMarkers() {
     marker.position.fromArray(volumePrimitivePosition(primitive));
     const radius = volumePrimitiveRadius(primitive);
     const selected = primitive.id === selectedVolumePrimitiveId;
-    const markerControls = readVolumeMarkerControls();
+    const markerSettings = volumePrimitiveMarkerSettings(primitive);
     const belowGround = marker.position.y < VOLUME_PRIMITIVE_SCENE_BOUNDS.groundY;
     marker.scale.setScalar(volumePrimitiveMarkerScale(radius, selected));
     marker.material.color.setHex(belowGround ? (selected ? 0xd0d4d8 : 0x8b9298) : (selected ? 0x9aa0a6 : 0x555b60));
     marker.material.opacity = Math.max(
-      markerControls.markerOpacity * (selected ? 1 : 0.65),
+      markerSettings.handleOpacity * (selected ? 1 : 0.65),
       belowGround ? 0.28 : 0,
     );
     marker.material.depthTest = false;
@@ -1140,7 +1277,9 @@ function syncVolumePrimitiveMarkers() {
     marker.material.wireframe = true;
     marker.renderOrder = belowGround ? 9800 : 9200;
     marker.userData.kaminosVolumePrimitiveMarker.markerUnderFloorVisibilityMode = VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE;
-    marker.visible = markerControls.markerVisible;
+    marker.userData.kaminosVolumePrimitiveMarker.handleVisible = markerSettings.handleVisible;
+    marker.userData.kaminosVolumePrimitiveMarker.handleOpacity = markerSettings.handleOpacity;
+    marker.visible = markerSettings.handleVisible;
   }
 }
 
@@ -1241,6 +1380,29 @@ function handleVolumeViewportPointerDown(event) {
     event.stopImmediatePropagation();
     setInfo(`Selected volume primitive ${selected.id}`);
   }
+}
+
+function handleVolumeViewportContextMenu(event) {
+  const selected = selectVolumePrimitiveFromEvent(event);
+  if (!selected) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  setInfo(`Selected volume primitive ${selected.id}`);
+  openVolumePrimitiveContextMenu(event);
+}
+
+function volumePrimitiveMarkerStates() {
+  return volumePrimitives.map(primitive => {
+    const marker = volumePrimitiveMarkers.get(primitive.id);
+    const settings = volumePrimitiveMarkerSettings(primitive);
+    return {
+      id: primitive.id,
+      handleVisible: settings.handleVisible,
+      handleOpacity: settings.handleOpacity,
+      visible: marker?.visible ?? null,
+      materialOpacity: marker?.material?.opacity ?? null,
+    };
+  });
 }
 
 function seedVolumePrimitiveFixture(name) {
@@ -2014,6 +2176,7 @@ async function initScene() {
   viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
   viewportEl.addEventListener('mousedown', handleViewportPointerDown);
   viewportEl.addEventListener('click', handleViewportSelectionClick);
+  renderer.domElement.addEventListener('contextmenu', handleVolumeViewportContextMenu, { capture: true });
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
@@ -2793,14 +2956,21 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-primitive-select').addEventListener('change', event => {
     selectVolumePrimitive(event.target.value || null);
   });
-  const syncMarkerControls = () => {
-    updateVolumeMarkerControlLabels();
-    syncVolumePrimitiveMarkers();
-    window._kaminosDirty?.();
-  };
-  document.getElementById('volume-marker-visible').addEventListener('change', syncMarkerControls);
-  document.getElementById('volume-marker-opacity').addEventListener('input', syncMarkerControls);
-  document.getElementById('volume-marker-opacity').addEventListener('change', syncMarkerControls);
+  document.getElementById('volume-marker-visible').addEventListener('change', applySelectedVolumePrimitiveControls);
+  document.getElementById('volume-marker-opacity').addEventListener('input', applySelectedVolumePrimitiveControls);
+  document.getElementById('volume-marker-opacity').addEventListener('change', applySelectedVolumePrimitiveControls);
+  document.getElementById('volume-primitive-context-button').addEventListener('click', event => {
+    event.stopPropagation();
+    openVolumePrimitiveContextMenu(event);
+  });
+  document.getElementById('volume-primitive-duplicate').addEventListener('click', duplicateSelectedVolumePrimitive);
+  document.getElementById('volume-primitive-delete').addEventListener('click', deleteSelectedVolumePrimitive);
+  document.getElementById('volume-primitive-toggle-handle').addEventListener('click', () => toggleSelectedVolumePrimitiveHandle());
+  document.addEventListener('pointerdown', event => {
+    if (!event.target?.closest?.('#volume-primitive-context-menu, #volume-primitive-context-button')) {
+      closeVolumePrimitiveContextMenu();
+    }
+  });
   for (const id of ['volume-primitive-radius', 'volume-primitive-flow-rate', 'volume-primitive-radiance']) {
     document.getElementById(id).addEventListener('input', applySelectedVolumePrimitiveControls);
     document.getElementById(id).addEventListener('change', applySelectedVolumePrimitiveControls);
@@ -2823,12 +2993,18 @@ async function initKaminosVolumeRoute() {
       if (values.radius !== undefined) document.getElementById('volume-primitive-radius').value = String(values.radius);
       if (values.flowRate !== undefined) document.getElementById('volume-primitive-flow-rate').value = String(values.flowRate);
       if (values.radiance !== undefined) document.getElementById('volume-primitive-radiance').value = String(values.radiance);
+      if (values.handleOpacity !== undefined) document.getElementById('volume-marker-opacity').value = String(values.handleOpacity);
+      if (values.handleVisible !== undefined) document.getElementById('volume-marker-visible').checked = !!values.handleVisible;
       applySelectedVolumePrimitiveControls();
       return selectedVolumePrimitive();
     },
+    duplicateSelected: duplicateSelectedVolumePrimitive,
+    deleteSelected: deleteSelectedVolumePrimitive,
+    toggleSelectedHandle: toggleSelectedVolumePrimitiveHandle,
     debugState() {
       const selectedMarker = selectedVolumePrimitiveMarker();
       const selectedMarkerBelowGround = !!selectedMarker && selectedMarker.position.y < VOLUME_PRIMITIVE_SCENE_BOUNDS.groundY;
+      const selectedMarkerSettings = volumePrimitiveMarkerSettings(selectedVolumePrimitive());
       return {
         identity: 'volume-authoring-loop-v0',
         mode: volumeAuthoringMode,
@@ -2844,8 +3020,8 @@ async function initKaminosVolumeRoute() {
         markerAffordance: 'volume-primitive-marker-wire-halo-v0',
         markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
         markerUnderFloorVisibilityMode: VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE,
-        markerOpacity: readVolumeMarkerControls().markerOpacity,
-        markerVisible: readVolumeMarkerControls().markerVisible,
+        markerOpacity: selectedMarkerSettings.handleOpacity,
+        markerVisible: selectedMarkerSettings.handleVisible,
         selectedMarkerBelowGround,
         selectedMarkerDepthTest: selectedMarker?.material?.depthTest ?? null,
         selectedMarkerRenderOrder: selectedMarker?.renderOrder ?? null,
@@ -2857,6 +3033,7 @@ async function initKaminosVolumeRoute() {
         solidMarkerCount: Array.from(volumePrimitiveMarkers.values())
           .filter(marker => marker.material && marker.material.wireframe !== true)
           .length,
+        markerStates: volumePrimitiveMarkerStates(),
         volumePrimitiveCount: volumePrimitives.length,
         volumePrimitiveIds: volumePrimitives.map(primitive => primitive.id),
         volumePrimitives: getVolumePrimitiveState().primitives,

@@ -72,9 +72,19 @@ assert.match(index, /volume-primitive-source-handle-not-raymarch-bounds-v0/, 'vo
 assert.match(index, /0x9aa0a6/, 'selected volume primitive marker uses a neutral gray palette instead of bright fire yellow');
 assert.match(index, /selected\s*\?\s*1\.35\s*:\s*1\.05/, 'volume primitive marker halo should bound the visible primitive body instead of shrinking inside it');
 assert.match(index, /readVolumeMarkerControls/, 'volume marker visibility and opacity route through explicit controls');
+assert.match(index, /volume-primitive-local-settings-v0/, 'authored volume primitives carry a stable local-settings identity');
+assert.match(index, /function volumePrimitiveMarkerSettings/, 'marker visibility/opacity must resolve from the primitive record');
+assert.match(index, /function normalizeVolumePrimitiveAuthoring[\s\S]*handleVisible[\s\S]*handleOpacity/, 'volume primitive records persist local handle visibility and opacity settings');
+assert.doesNotMatch(index, /const markerControls = readVolumeMarkerControls\(\);[\s\S]*markerControls\.markerOpacity[\s\S]*markerControls\.markerVisible/, 'marker sync must not apply selected panel controls globally to every primitive marker');
+assert.match(index, /id="volume-primitive-context-button"/, 'selected volume primitive exposes a context actions menu');
+assert.match(index, /id="volume-primitive-context-menu"/, 'selected volume primitive context actions render through a menu surface');
+assert.match(index, /duplicateSelectedVolumePrimitive/, 'context actions can duplicate the selected volume primitive with its local settings');
+assert.match(index, /deleteSelectedVolumePrimitive/, 'context actions can remove the selected volume primitive');
+assert.match(index, /toggleSelectedVolumePrimitiveHandle/, 'context actions can hide or show only the selected primitive handle');
 assert.match(index, /markerAffordance/, 'authoring debug state reports marker visual affordance');
 assert.match(index, /markerSemantic/, 'authoring debug state reports that the marker is a source handle rather than raymarch bounds');
 assert.match(index, /markerOpacity/, 'authoring debug state reports effective marker opacity');
+assert.match(index, /markerStates/, 'authoring debug state reports per-marker local settings evidence');
 assert.match(index, /selectedMarkerProjection/, 'authoring debug state reports selected marker projection for volume/body alignment witnesses');
 assert.match(index, /transformTargetPrimitiveId/, 'authoring debug state reports which volume primitive owns the active transform target');
 assert.match(index, /window\.__kaminosVolumeAuthoring/, 'witnesses can drive and inspect the volume primitive authoring loop');
@@ -245,6 +255,7 @@ assert.match(witness, /volumePrimitives/, 'witness report carries primitive reco
 assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored volume primitive placement');
 assert.match(witness, /volume_save_load_probe/, 'witness can exercise authored moved primitive save/load round-trip');
 assert.match(witness, /volume_multi_primitive_probe/, 'witness can exercise two authored live volume primitive sources');
+assert.match(witness, /volume_context_probe/, 'witness can exercise selected primitive context actions');
 assert.match(witness, /volume_scene_source_probe/, 'witness can prove scene-scale primitive placement still produces a visible native source');
 assert.match(witness, /expectedAuthoredNativeSourcePosition/, 'witness distinguishes authored scene position from effective native source position');
 assert.match(witness, /expectedAuthoredSourceWallPosition/, 'witness moves a primitive past the old native source wall');
@@ -256,6 +267,8 @@ assert.match(witness, /volumeAuthoring/, 'witness report carries authoring state
 assert.match(witness, /volume-primitive-marker-wire-halo-v0/, 'witness rejects solid marker affordance regression');
 assert.match(witness, /volume-primitive-source-handle-not-raymarch-bounds-v0/, 'witness rejects marker semantics that imply full raymarch bounds');
 assert.match(witness, /markerOpacity/, 'witness records and checks marker opacity evidence');
+assert.match(witness, /handleOpacity/, 'witness verifies authored handle opacity persists per primitive');
+assert.match(witness, /markerStates/, 'witness verifies marker state is local to each primitive');
 assert.match(witness, /primitive-centered-sphere-volume-v0/, 'witness requires authored volume body to be centered in the primitive');
 assert.match(witness, /primitiveCenteredLiveVelocityThreshold/, 'witness uses a distinct liveness threshold for contained primitive-centered bodies');
 assert.match(witness, /warmEmissivePixels/, 'witness measures warm emissive primitive-centered bodies separately from red plume pixels');

@@ -37,6 +37,7 @@ const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
+const expectedContextProbe = routeParams.get('volume_context_probe') === '1';
 const expectedSceneBoundsProbe = routeParams.get('volume_scene_bounds_probe') === '1';
 const expectedSceneSourceProbe = routeParams.get('volume_scene_source_probe') === '1';
 const expectedScenePlacementProbe = expectedSceneBoundsProbe || expectedSceneSourceProbe;
@@ -299,6 +300,7 @@ async function main() {
     await delay(settleMs);
     let volumeAuthoring = null;
     let saveLoadRoundTrip = null;
+    let contextActionProbe = null;
     if (expectedAuthoringProbe) {
       phase = 'authoring-probe';
       let authoringReady = false;
@@ -322,7 +324,7 @@ async function main() {
             radiance: 2.1,
           });
           authoring.select('${expectedAuthoredPrimitiveId}');
-          authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
+          authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1, handleOpacity: 0.12, handleVisible: true });
           const moved = authoring.moveSelectedTo([${expectedAuthoredEffectivePosition.join(', ')}]);
           const second = ${expectedMultiPrimitiveProbe
             ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
@@ -334,12 +336,33 @@ async function main() {
             : "null"};
           if (second) {
             authoring.select('${expectedSecondPrimitiveId}');
-            authoring.updateSelected({ radius: 0.16, flowRate: 0.32, radiance: 1.9 });
+            authoring.updateSelected({ radius: 0.16, flowRate: 0.32, radiance: 1.9, handleOpacity: 0.05, handleVisible: true });
           }
+          const contextResult = ${expectedContextProbe
+            ? `(() => {
+                authoring.select('${expectedAuthoredPrimitiveId}');
+                const duplicate = authoring.duplicateSelected();
+                const duplicateId = duplicate?.id || null;
+                authoring.updateSelected({ handleOpacity: 0.07, handleVisible: true });
+                const hidden = authoring.toggleSelectedHandle();
+                const hiddenState = authoring.debugState();
+                const shown = authoring.toggleSelectedHandle();
+                const shownState = authoring.debugState();
+                const selectedAfterDelete = authoring.deleteSelected();
+                return {
+                  duplicateId,
+                  hiddenVisible: hidden?.authoring?.handleVisible,
+                  shownVisible: shown?.authoring?.handleVisible,
+                  hiddenMarkerState: hiddenState?.markerStates?.find(item => item.id === duplicateId),
+                  shownMarkerState: shownState?.markerStates?.find(item => item.id === duplicateId),
+                  selectedAfterDelete: selectedAfterDelete?.id || null,
+                };
+              })()`
+            : "null"};
           const roundTrip = ${expectedSaveLoadProbe
             ? "await window.__kaminosScenePersistence.saveLoadRoundTrip(null)"
             : "null"};
-          return { ok: true, primitive: moved || primitive, state: authoring.debugState(), roundTrip };
+          return { ok: true, primitive: moved || primitive, state: authoring.debugState(), roundTrip, contextResult };
         })()`,
         returnByValue: true,
         awaitPromise: true,
@@ -348,6 +371,16 @@ async function main() {
       assert.equal(authoringProbe?.ok, true, 'authored volume primitive probe did not run');
       volumeAuthoring = authoringProbe.state;
       saveLoadRoundTrip = authoringProbe.roundTrip || null;
+      const contextResult = authoringProbe.contextResult || null;
+      contextActionProbe = contextResult;
+      if (expectedContextProbe) {
+        assert.ok(contextResult?.duplicateId, 'context duplicate action did not create a duplicate primitive');
+        assert.equal(contextResult?.hiddenVisible, false, `context hide action did not hide the duplicate handle locally: ${JSON.stringify(contextResult)}`);
+        assert.equal(contextResult?.hiddenMarkerState?.handleVisible, false, `hidden context marker state was not local to the duplicate: ${JSON.stringify(contextResult)}`);
+        assert.equal(contextResult?.shownVisible, true, `context show action did not restore the duplicate handle locally: ${JSON.stringify(contextResult)}`);
+        assert.equal(contextResult?.shownMarkerState?.handleVisible, true, `shown context marker state was not local to the duplicate: ${JSON.stringify(contextResult)}`);
+        assert.equal(contextResult?.selectedAfterDelete, expectedAuthoredPrimitiveId, 'context delete action did not return selection to the surviving primitive');
+      }
       const expectedProbeSelection = expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedProbeSelection, 'authored volume primitive was not selected');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedProbeSelection, 'authored volume primitive did not attach to the transform target');
@@ -493,6 +526,20 @@ async function main() {
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
       assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - 2.1) < 0.001, 'authored primitive radiance setting was not applied');
+      assert.equal(authoredPrimitive?.authoring?.settingsIdentity, 'volume-primitive-local-settings-v0', 'authored primitive did not preserve local settings identity');
+      assert.ok(Math.abs((authoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.12) < 0.001, 'authored primitive handle opacity did not persist locally');
+      assert.equal(authoredPrimitive?.authoring?.handleVisible, true, 'authored primitive handle visibility did not persist locally');
+      const firstMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedAuthoredPrimitiveId);
+      assert.ok(Math.abs((firstMarkerState?.handleOpacity ?? 0) - 0.12) < 0.001, 'first marker did not use its own local handle opacity');
+      assert.equal(firstMarkerState?.handleVisible, true, 'first marker did not use its own local handle visibility');
+      if (expectedMultiPrimitiveProbe) {
+        const secondAuthoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedSecondPrimitiveId);
+        const secondMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedSecondPrimitiveId);
+        assert.equal(secondAuthoredPrimitive?.authoring?.settingsIdentity, 'volume-primitive-local-settings-v0', 'second primitive did not preserve local settings identity');
+        assert.ok(Math.abs((secondAuthoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.05) < 0.001, 'second primitive handle opacity did not persist locally');
+        assert.ok(Math.abs((secondMarkerState?.handleOpacity ?? 0) - 0.05) < 0.001, 'second marker did not use its own local handle opacity');
+        assert.notEqual(firstMarkerState?.handleOpacity, secondMarkerState?.handleOpacity, 'marker opacity remained global instead of per primitive');
+      }
     }
     if (!expectedSceneBoundsOnlyProbe) {
       for (let i = 0; i < 40 && (state?.simStepCount ?? 0) <= 5; i += 1) {
@@ -605,6 +652,7 @@ async function main() {
       volumePrimitives: state.volumePrimitives,
       primitiveSource: state.primitiveSource,
       volumeAuthoring,
+      contextActionProbe,
       saveLoadRoundTrip,
       controls: state.controls,
       screenshot: out,
