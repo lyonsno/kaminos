@@ -36,6 +36,7 @@ const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
 const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].includes(expectedPrimitiveFixture);
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
+const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
   : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
@@ -51,6 +52,13 @@ function assertNoPlaceholderTopologyClaim(primitives = []) {
     if (placeholderContract && claimsProduction) {
       throw new Error(`Volume primitive ${primitive?.id || '(unknown)'} carries placeholderContract=${placeholderContract} but claims production Lamellar topology`);
     }
+  }
+}
+
+function assertVectorClose(actual = [], expected = [], label = 'vector') {
+  assert.equal(actual.length, expected.length, `${label} length mismatch`);
+  for (let i = 0; i < expected.length; i++) {
+    assert.ok(Math.abs(Number(actual[i]) - expected[i]) < 0.001, `${label}[${i}] expected ${expected[i]}, got ${actual[i]}`);
   }
 }
 
@@ -294,7 +302,8 @@ async function main() {
           });
           authoring.select('${expectedAuthoredPrimitiveId}');
           authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
-          return { ok: true, primitive, state: authoring.debugState() };
+          const moved = authoring.moveSelectedTo([${expectedAuthoredMovedPosition.join(', ')}]);
+          return { ok: true, primitive: moved || primitive, state: authoring.debugState() };
         })()`,
         returnByValue: true,
       });
@@ -302,6 +311,8 @@ async function main() {
       assert.equal(authoringProbe?.ok, true, 'authored volume primitive probe did not run');
       volumeAuthoring = authoringProbe.state;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive was not selected');
+      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'authored volume primitive did not attach to the transform target');
+      assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored volume primitive target identity regressed');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored volume primitive marker was not created');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored volume primitive marker regressed to a solid affordance');
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored volume primitive marker must not claim full raymarch bounds');
@@ -368,12 +379,16 @@ async function main() {
       const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
       assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive selection was not retained');
+      assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'authored primitive transform target was not retained');
+      assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored primitive transform target identity was not retained');
       assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored primitive marker id was not retained');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored primitive marker did not preserve wire/halo affordance');
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored primitive marker did not preserve source-handle semantics');
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored primitive marker opacity became too visually dominant');
       assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored primitive marker became a solid filled body');
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
+      assertVectorClose(primitive?.transform?.position, expectedAuthoredMovedPosition, 'renderer authored primitive transform position');
+      assertVectorClose(authoredPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'authoring authored primitive transform position');
       assert.equal(primitive?.volumeBodyMode, 'primitive-centered-sphere-volume-v0', 'authored primitive did not request a primitive-centered volume body');
       assert.equal(state.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'fluid renderer did not use the primitive-centered body mode');
       assert.equal(state.primitiveSource?.primitiveCenteredBody, true, 'fluid renderer did not enable primitive-centered source shaping');

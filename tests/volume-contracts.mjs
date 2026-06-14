@@ -43,12 +43,16 @@ assert.match(index, /id="volume-marker-opacity"/, 'Volume tab exposes marker opa
 assert.match(index, /volumeAuthoringMode/, 'viewport keeps explicit volume primitive authoring mode state');
 assert.match(index, /selectedVolumePrimitiveId/, 'viewport keeps explicit selected volume primitive state');
 assert.match(index, /volumePrimitiveMarkers/, 'authored volume primitives have selectable main-renderer markers');
+assert.match(index, /activeVolumeTransformPrimitiveId/, 'viewport tracks when the transform gizmo is targeting a volume primitive');
 assert.match(index, /createManualFireSmokeVolumePrimitive/, 'manual Fire+Smoke primitive records are created through a named helper');
 assert.match(index, /clampVolumePrimitivePosition/, 'manual volume primitive placement clamps into the visible simulation source domain');
 assert.match(index, /volumeBodyMode:\s*'primitive-centered-sphere-volume-v0'/, 'manual volume primitives request a primitive-centered volume body');
 assert.match(index, /armVolumePrimitiveTool/, 'Volume tab can arm primitive placement');
 assert.match(index, /placeVolumePrimitiveFromEvent/, 'viewport click placement routes through a named primitive placement helper');
 assert.match(index, /selectVolumePrimitive/, 'authored volume primitives can be selected for editing');
+assert.match(index, /attachVolumePrimitiveTransform/, 'selected volume primitives attach to the existing transform gizmo');
+assert.match(index, /syncVolumePrimitiveFromTransformMarker/, 'transform gizmo movement syncs selected marker transforms back to the primitive record');
+assert.match(index, /volume-primitive-transform-target-v0/, 'volume primitive transform targets carry stable transform-target identity');
 assert.match(index, /volume-primitive-marker-v0/, 'main-renderer primitive markers carry stable identity');
 assert.match(index, /volume-primitive-marker-wire-halo-v0/, 'volume primitive markers render as wire/halo handles instead of solid fake bodies');
 assert.match(index, /wireframe:\s*true/, 'volume primitive markers must not be solid filled spheres');
@@ -60,6 +64,7 @@ assert.match(index, /markerAffordance/, 'authoring debug state reports marker vi
 assert.match(index, /markerSemantic/, 'authoring debug state reports that the marker is a source handle rather than raymarch bounds');
 assert.match(index, /markerOpacity/, 'authoring debug state reports effective marker opacity');
 assert.match(index, /selectedMarkerProjection/, 'authoring debug state reports selected marker projection for volume/body alignment witnesses');
+assert.match(index, /transformTargetPrimitiveId/, 'authoring debug state reports which volume primitive owns the active transform target');
 assert.match(index, /window\.__kaminosVolumeAuthoring/, 'witnesses can drive and inspect the volume primitive authoring loop');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');

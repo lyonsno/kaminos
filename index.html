@@ -670,6 +670,7 @@ const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive
 let volumePrimitives = [];
 let volumeAuthoringMode = null;
 let selectedVolumePrimitiveId = null;
+let activeVolumeTransformPrimitiveId = null;
 let volumePrimitiveMarkers = new Map();
 let volumePrimitiveRaycaster = null;
 let volumePlacementPlane = null;
@@ -893,8 +894,16 @@ function volumePrimitiveRadius(primitive) {
   return Number.isFinite(radius) ? radius : 0.12;
 }
 
+function volumePrimitiveMarkerScale(radius, selected = false) {
+  return Math.max(0.035, radius * (selected ? 1.35 : 1.05));
+}
+
 function selectedVolumePrimitive() {
   return volumePrimitives.find(primitive => primitive.id === selectedVolumePrimitiveId) || null;
+}
+
+function selectedVolumePrimitiveMarker() {
+  return selectedVolumePrimitiveId ? volumePrimitiveMarkers.get(selectedVolumePrimitiveId) || null : null;
 }
 
 function readVolumeMarkerControls() {
@@ -968,12 +977,86 @@ function applySelectedVolumePrimitiveControls() {
   volumePrototype?.setVolumePrimitives?.(volumePrimitives);
   window.__kaminosVolumePrimitives = getVolumePrimitiveState();
   syncVolumePrimitiveMarkers();
+  attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
   refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
 }
 
 function selectVolumePrimitive(id) {
   selectedVolumePrimitiveId = volumePrimitives.some(primitive => primitive.id === id) ? id : null;
+  syncVolumePrimitiveMarkers();
+  attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
+  refreshVolumePrimitivePanel();
+  window._kaminosDirty?.();
+  return selectedVolumePrimitive();
+}
+
+function clearVolumePrimitiveTransformTarget() {
+  const targetWasVolume = currentMesh?.userData?.kaminosVolumePrimitiveMarker;
+  activeVolumeTransformPrimitiveId = null;
+  if (targetWasVolume) {
+    currentMesh = null;
+    if (transformControls) {
+      transformControls.detach();
+      transformControls.visible = false;
+    }
+    document.getElementById('transform-bar')?.classList.remove('visible');
+    document.getElementById('tb-gizmo-off')?.classList.add('active');
+  }
+}
+
+function attachVolumePrimitiveTransform(id) {
+  const primitive = volumePrimitives.find(item => item.id === id);
+  const marker = primitive ? volumePrimitiveMarkers.get(primitive.id) : null;
+  if (!transformControls || !marker) {
+    clearVolumePrimitiveTransformTarget();
+    return null;
+  }
+  activeVolumeTransformPrimitiveId = primitive.id;
+  activeSceneObjectId = null;
+  currentMesh = marker;
+  marker.userData.kaminosVolumeTransformTarget = {
+    identity: 'volume-primitive-transform-target-v0',
+    primitiveId: primitive.id,
+  };
+  transformControls.detach();
+  transformControls.attach(marker);
+  transformControls.setMode('translate');
+  transformControls.visible = true;
+  document.getElementById('transform-bar')?.classList.add('visible');
+  for (const mode of ['translate', 'rotate', 'scale']) {
+    document.getElementById(`tb-gizmo-${mode}`)?.classList.toggle('active', mode === 'translate');
+  }
+  document.getElementById('tb-gizmo-off')?.classList.remove('active');
+  return primitive;
+}
+
+function syncVolumePrimitiveFromTransformMarker(marker = currentMesh) {
+  const markerMeta = marker?.userData?.kaminosVolumePrimitiveMarker;
+  if (!markerMeta) return null;
+  const primitive = volumePrimitives.find(item => item.id === markerMeta.primitiveId);
+  if (!primitive) return null;
+  const position = clampVolumePrimitivePosition(marker.position.toArray());
+  marker.position.fromArray(position);
+  const selected = primitive.id === selectedVolumePrimitiveId;
+  const markerScale = (Math.abs(marker.scale.x) + Math.abs(marker.scale.y) + Math.abs(marker.scale.z)) / 3;
+  const radiusFromMarker = markerScale / (selected ? 1.35 : 1.05);
+  const radius = THREE.MathUtils.clamp(
+    Number.isFinite(radiusFromMarker) && radiusFromMarker > 0 ? radiusFromMarker : volumePrimitiveRadius(primitive),
+    0.06,
+    0.5,
+  );
+  primitive.transform = primitive.transform || {};
+  primitive.transform.position = position;
+  primitive.transform.rotation = [marker.rotation.x, marker.rotation.y, marker.rotation.z]
+    .map(value => Number.isFinite(value) ? value : 0);
+  primitive.transform.scale = [radius, radius, radius];
+  primitive.simulation = {
+    ...(primitive.simulation || {}),
+    sourceRadius: radius,
+  };
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
   syncVolumePrimitiveMarkers();
   refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
@@ -1013,6 +1096,10 @@ function syncVolumePrimitiveMarkers() {
         markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
         primitiveId: primitive.id,
       };
+      marker.userData.kaminosVolumeTransformTarget = {
+        identity: 'volume-primitive-transform-target-v0',
+        primitiveId: primitive.id,
+      };
       scene.add(marker);
       volumePrimitiveMarkers.set(primitive.id, marker);
     }
@@ -1020,7 +1107,7 @@ function syncVolumePrimitiveMarkers() {
     const radius = volumePrimitiveRadius(primitive);
     const selected = primitive.id === selectedVolumePrimitiveId;
     const markerControls = readVolumeMarkerControls();
-    marker.scale.setScalar(Math.max(0.035, radius * (selected ? 1.35 : 1.05)));
+    marker.scale.setScalar(volumePrimitiveMarkerScale(radius, selected));
     marker.material.color.setHex(selected ? 0x9aa0a6 : 0x555b60);
     marker.material.opacity = markerControls.markerOpacity * (selected ? 1 : 0.65);
     marker.material.wireframe = true;
@@ -1457,6 +1544,7 @@ function clearActiveSceneObjectSelection() {
 
 function setActiveSceneObject(id) {
   const entry = sceneObjects.find(obj => obj.id === id);
+  activeVolumeTransformPrimitiveId = null;
   if (!entry) {
     clearActiveSceneObjectSelection();
     return;
@@ -1819,6 +1907,9 @@ async function initScene() {
     transformGizmoDragging = e.value;
     controls.enabled = !e.value; // disable orbit while dragging gizmo
   });
+  transformControls.addEventListener('objectChange', () => {
+    syncVolumePrimitiveFromTransformMarker();
+  });
   transformControls.setSize(0.75);
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
@@ -2040,6 +2131,7 @@ function clearScene() {
   }
   sceneObjects = [];
   activeSceneObjectId = null;
+  activeVolumeTransformPrimitiveId = null;
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -2690,6 +2782,12 @@ async function initKaminosVolumeRoute() {
     disarm: disarmVolumePrimitiveTool,
     placeAt: placeVolumePrimitiveAt,
     select: selectVolumePrimitive,
+    moveSelectedTo(position = [0, -0.58, 0]) {
+      const marker = selectedVolumePrimitiveMarker();
+      if (!marker) return null;
+      marker.position.fromArray(clampVolumePrimitivePosition(position));
+      return syncVolumePrimitiveFromTransformMarker(marker);
+    },
     updateSelected(values = {}) {
       const primitive = selectedVolumePrimitive();
       if (!primitive) return null;
@@ -2704,6 +2802,8 @@ async function initKaminosVolumeRoute() {
         identity: 'volume-authoring-loop-v0',
         mode: volumeAuthoringMode,
         selectedVolumePrimitiveId,
+        transformTargetPrimitiveId: activeVolumeTransformPrimitiveId,
+        transformTargetIdentity: activeVolumeTransformPrimitiveId ? 'volume-primitive-transform-target-v0' : null,
         markerAffordance: 'volume-primitive-marker-wire-halo-v0',
         markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
         markerOpacity: readVolumeMarkerControls().markerOpacity,
@@ -3577,6 +3677,7 @@ window.setGizmoMode = function(mode) {
   document.getElementById('tb-gizmo-off')?.classList.remove('active');
 
   if (!mode) {
+    if (currentMesh?.userData?.kaminosVolumePrimitiveMarker) activeVolumeTransformPrimitiveId = null;
     transformControls.detach();
     transformControls.visible = false;
     document.getElementById('tb-gizmo-off')?.classList.add('active');
