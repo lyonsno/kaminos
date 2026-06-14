@@ -18,6 +18,8 @@ const POPULATION_LAYOUT_PRESETS = new Set(["coverage", "cluster"]);
 const MAX_LAYER_COUNT = 12;
 const TAU = Math.PI * 2;
 const MAX_COVERAGE_LANE_SPAN = 1.44;
+const DEFAULT_POPULATION_RADIAL_SPACING = 0.04;
+const MAX_POPULATION_RADIAL_SPACING = 0.14;
 const DIAGNOSTIC_LAYER_SEPARATION_SCALE = 2.15;
 
 const VIEW_PRESETS = {
@@ -146,6 +148,7 @@ function normalizeStripPopulations(populations) {
     const chirality = Number(population?.chirality);
     const bearingOffset = Number(population?.bearingOffset);
     const bearingVariance = Number(population?.bearingVariance);
+    const radialSpacingInput = Number(population?.radialSpacing);
     const role = ["lamella", "cutter", "accent"].includes(population?.role) ? population.role : "lamella";
     const layoutPreset = POPULATION_LAYOUT_PRESETS.has(population?.layoutPreset || population?.layout)
       ? (population.layoutPreset || population.layout)
@@ -164,6 +167,11 @@ function normalizeStripPopulations(populations) {
     const shellLaneSpacing = normalizedCount > 1 && layoutPreset === "coverage"
       ? Number((coverageSpan / (normalizedCount - 1)).toFixed(4))
       : 0;
+    const radialSpacing = normalizedCount > 1
+      ? Number((Number.isFinite(radialSpacingInput)
+        ? clamp(radialSpacingInput, 0, MAX_POPULATION_RADIAL_SPACING)
+        : DEFAULT_POPULATION_RADIAL_SPACING).toFixed(4))
+      : 0;
     const fallbackId = `strip-population-${Number.isFinite(layerIndex) ? Math.round(layerIndex) : 0}-${role}-${index}`;
     return {
       kind: "StripPopulationDescriptor",
@@ -180,6 +188,7 @@ function normalizeStripPopulations(populations) {
       coverageSpacing,
       coverageSpan,
       shellLaneSpacing,
+      radialSpacing,
       gapPattern: normalizeGapPattern(population?.gapPattern),
       source: "macro-strip-population",
     };
@@ -364,6 +373,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         coverageSpacing: spec.stripCount > 1 ? Number((TAU / spec.stripCount).toFixed(4)) : 0,
         coverageSpan: spec.stripCount > 1 ? 0.84 : 0,
         shellLaneSpacing: spec.stripCount > 1 ? Number((0.84 / (spec.stripCount - 1)).toFixed(4)) : 0,
+        radialSpacing: spec.stripCount > 1 ? DEFAULT_POPULATION_RADIAL_SPACING : 0,
         layoutPreset: "coverage",
         gapPattern: "solid",
         source: "layer-shell-default-population",
@@ -390,6 +400,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const shellLaneSpacing = population.count > 1 && layoutPreset === "coverage"
           ? Number((coverageSpan / (population.count - 1)).toFixed(4))
           : 0;
+        const radialSpacing = population.count > 1
+          ? Number(clamp(population.radialSpacing ?? DEFAULT_POPULATION_RADIAL_SPACING, 0, MAX_POPULATION_RADIAL_SPACING).toFixed(4))
+          : 0;
         const centeredPopulationSlot = population.count > 1 ? populationIndex - (population.count - 1) / 2 : 0;
         const clusterJitter = population.count > 1
           ? ((populationIndex / Math.max(1, population.count - 1)) - 0.5) * populationSpread
@@ -400,6 +413,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const shellLaneOffset = Number((layoutPreset === "coverage"
           ? centeredPopulationSlot * shellLaneSpacing
           : centeredPopulationSlot * 0.024).toFixed(4));
+        const radialOffset = Number((centeredPopulationSlot * radialSpacing).toFixed(4));
         const baseStrip = {
           id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
           layerIndex: spec.layerIndex,
@@ -437,6 +451,8 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           coverageSpan,
           shellLaneSpacing,
           shellLaneOffset,
+          radialSpacing,
+          radialOffset,
           coverageSlot: populationIndex,
           bearingPhase,
           stripCount: authoredCount,
@@ -446,6 +462,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           chirality: population.chirality,
           chunkiness: spec.chunkiness,
           depth: spec.depth,
+          effectiveDepth: Number((spec.depth + radialOffset).toFixed(4)),
           profileKind: "StripProfileDescriptor",
           stripProfileDescriptor,
           width: stripProfileDescriptor.width,
@@ -526,6 +543,8 @@ export function generateLamellarSectionSegments(input = {}) {
         coverageSpan: strip.coverageSpan,
         shellLaneSpacing: strip.shellLaneSpacing,
         shellLaneOffset: strip.shellLaneOffset,
+        radialSpacing: strip.radialSpacing,
+        radialOffset: strip.radialOffset,
         coverageSlot: strip.coverageSlot,
         bearingPhase: strip.bearingPhase,
         source: strip.sliceParticipation === "primary-cut-target" ? "procedural-composer" : "layer-shell-strip-assemblage",
@@ -534,6 +553,7 @@ export function generateLamellarSectionSegments(input = {}) {
         sliceParticipation: strip.sliceParticipation,
         layerIndex: strip.layerIndex,
         depth: strip.depth,
+        effectiveDepth: strip.effectiveDepth,
         chirality: strip.chirality,
         chunkiness: strip.chunkiness,
         segmentCount: spec.segmentCount,
@@ -546,7 +566,7 @@ export function generateLamellarSectionSegments(input = {}) {
         phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
         phiSlope: selectedShape.phiSlope,
         phase: selectedPhase + strip.phaseOffset,
-        radius: 1 + spec.depth,
+        radius: Number((1 + strip.effectiveDepth).toFixed(4)),
         width: strip.width,
         thickness: strip.thickness,
         widthVariance: strip.widthVariance,
@@ -582,6 +602,8 @@ export function generateLamellarSectionSegments(input = {}) {
       coverageSpan: strip.coverageSpan,
       shellLaneSpacing: strip.shellLaneSpacing,
       shellLaneOffset: strip.shellLaneOffset,
+      radialSpacing: strip.radialSpacing,
+      radialOffset: strip.radialOffset,
       coverageSlot: strip.coverageSlot,
       bearingPhase: strip.bearingPhase,
       source: "layer-shell-strip-assemblage",
@@ -590,6 +612,7 @@ export function generateLamellarSectionSegments(input = {}) {
       sliceParticipation: strip.sliceParticipation,
       layerIndex: strip.layerIndex,
       depth: strip.depth,
+      effectiveDepth: strip.effectiveDepth,
       chirality: strip.chirality,
       chunkiness: strip.chunkiness,
       segmentCount: spec.segmentCount,
@@ -605,7 +628,7 @@ export function generateLamellarSectionSegments(input = {}) {
       phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
       phiSlope: 0.86 + strip.stripIndex * 0.04,
       phase: spec.phase + strip.phaseOffset,
-      radius: Number((1 + spec.depth).toFixed(4)),
+      radius: Number((1 + strip.effectiveDepth).toFixed(4)),
       width: strip.width,
       thickness: strip.thickness,
       widthVariance: strip.widthVariance,
@@ -992,6 +1015,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       layoutPreset: population?.layoutPreset || null,
       coverageSpacing: population?.coverageSpacing ?? null,
       coverageSpan: population?.coverageSpan ?? null,
+      radialSpacing: population?.radialSpacing ?? null,
       count: population?.count ?? populationStripIds.length,
       chirality: population?.chirality ?? null,
       bearingOffset: population?.bearingOffset ?? null,
@@ -1254,6 +1278,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       coverageSpan: d.coverageSpan,
       shellLaneSpacing: d.shellLaneSpacing,
       shellLaneOffset: d.shellLaneOffset,
+      radialSpacing: d.radialSpacing,
+      radialOffset: d.radialOffset,
       coverageSlot: d.coverageSlot,
       bearingPhase: d.bearingPhase,
       stripProfileKind: d.stripProfileKind,
@@ -1263,6 +1289,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       sliceParticipation: d.sliceParticipation,
       layerIndex: d.layerIndex,
       depth: d.depth,
+      effectiveDepth: d.effectiveDepth,
+      radius: d.radius,
       chirality: d.chirality,
       chunkiness: d.chunkiness,
       width: d.width,
@@ -1327,6 +1355,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         coverageSpan: descriptor.coverageSpan ?? null,
         shellLaneSpacing: descriptor.shellLaneSpacing ?? null,
         shellLaneOffset: descriptor.shellLaneOffset ?? null,
+        radialSpacing: descriptor.radialSpacing ?? null,
+        radialOffset: descriptor.radialOffset ?? null,
         coverageSlot: descriptor.coverageSlot ?? null,
         bearingPhase: descriptor.bearingPhase ?? null,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
@@ -1336,6 +1366,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         envelopeDisplayWidth: isCutAuthorEnvelope ? state.cutAuthorEnvelopeDescriptor?.envelopeDisplayWidth : null,
         layerIndex: descriptor.layerIndex,
         depth: descriptor.depth,
+        effectiveDepth: descriptor.effectiveDepth,
+        radius: descriptor.radius,
         chirality: descriptor.chirality,
         chunkiness: descriptor.chunkiness,
         width: descriptor.width,

@@ -246,7 +246,27 @@ async function main() {
             ] : [],
           });
         }
-        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23 });
+        const radialSweep = [];
+        for (const radialSpacing of [0, 0.04, 0.1]) {
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { radialSpacing });
+          const radialState = w ? w.debugState() : afterCountState;
+          const radialPopulation = (radialState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+          const radialStrips = (radialState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
+          const radialDescriptors = (radialState.generatedSegmentDescriptors || []).filter(descriptor => descriptor.populationId === firstPopulationId);
+          radialSweep.push({
+            radialSpacing,
+            populationRadialSpacing: radialPopulation?.radialSpacing ?? null,
+            radialOffsetRange: radialStrips.length ? [
+              Math.min(...radialStrips.map(strip => strip.radialOffset ?? 0)),
+              Math.max(...radialStrips.map(strip => strip.radialOffset ?? 0)),
+            ] : [],
+            radiusRange: radialDescriptors.length ? [
+              Math.min(...radialDescriptors.map(descriptor => descriptor.radius ?? 0)),
+              Math.max(...radialDescriptors.map(descriptor => descriptor.radius ?? 0)),
+            ] : [],
+          });
+        }
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, radialSpacing: 0.07 });
         const populationState = w ? w.debugState() : afterCountState;
         const afterPopulation = (populationState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
         const populationToolhead = document.getElementById('lamellar-population-toolhead');
@@ -261,6 +281,7 @@ async function main() {
           popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
           spreadValue: Number(document.getElementById('lamellar-population-bearing-spread')?.value || 0),
           offsetValue: Number(document.getElementById('lamellar-population-bearing-offset')?.value || 0),
+          radialSpacingValue: Number(document.getElementById('lamellar-population-radial-spacing')?.value || 0),
         };
         const populationControlReceipt = {
           populationId: firstPopulationId,
@@ -270,10 +291,16 @@ async function main() {
           afterChirality: afterPopulation?.chirality ?? null,
           afterBearingVariance: afterPopulation?.bearingVariance ?? null,
           afterBearingOffset: afterPopulation?.bearingOffset ?? null,
+          afterRadialSpacing: afterPopulation?.radialSpacing ?? null,
           layoutPreset: afterPopulation?.layoutPreset || null,
           coverageSpacing: afterPopulation?.coverageSpacing ?? null,
           coverageSpan: afterPopulation?.coverageSpan ?? null,
           shellLaneSpacing: afterPopulation?.shellLaneSpacing ?? null,
+        };
+        const populationRadialSpacingReceipt = {
+          mode: 'selected-population-radial-shell-spacing-v0',
+          populationId: firstPopulationId,
+          samples: radialSweep,
         };
         const populationSliderSweepReceipt = {
           mode: 'selected-population-toolhead-slider-sweep-v0',
@@ -301,6 +328,7 @@ async function main() {
           selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
           populationControlReceipt,
           populationSliderSweepReceipt,
+          populationRadialSpacingReceipt,
           popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
@@ -394,6 +422,7 @@ async function main() {
     );
     assert.equal(state.populationControlReceipt?.afterBearingVariance, 1, 'Lamellar population spread control did not mutate bearing variance');
     assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.23, 'Lamellar population rotate control did not mutate bearing offset');
+    assert.equal(state.populationControlReceipt?.afterRadialSpacing, 0.07, 'Lamellar population radius control did not mutate radial spacing');
     assert.equal(state.populationControlReceipt?.layoutPreset, 'coverage', 'Lamellar selected population did not preserve coverage layout');
     assert.ok((state.populationControlReceipt?.coverageSpacing || 0) > 0.6, 'Lamellar selected population did not preserve useful coverage spacing');
     assert.ok((state.populationControlReceipt?.coverageSpan || 0) >= 0.66, 'Lamellar selected population did not preserve visible shell coverage span');
@@ -401,6 +430,12 @@ async function main() {
     assert.ok(
       state.populationSliderSweepReceipt.samples[2].coverageSpan > state.populationSliderSweepReceipt.samples[0].coverageSpan,
       'Lamellar spread slider sweep did not increase visible coverage span'
+    );
+    assert.equal(state.populationRadialSpacingReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep radial spacing');
+    assert.ok(
+      state.populationRadialSpacingReceipt.samples[2].radiusRange[1] - state.populationRadialSpacingReceipt.samples[2].radiusRange[0]
+        > state.populationRadialSpacingReceipt.samples[0].radiusRange[1] - state.populationRadialSpacingReceipt.samples[0].radiusRange[0],
+      'Lamellar radial spacing sweep did not increase emitted radius separation'
     );
     assert.equal(state.stripDrilldownUi?.selectionLevel, 'strip', 'Lamellar drilldown did not select a strip');
     assert.ok(state.stripDrilldownUi?.selectedStripInstanceId, 'Lamellar strip drilldown did not carry a strip instance id');
@@ -452,6 +487,7 @@ async function main() {
       selectedPopulationObject: state.selectedPopulationObject,
       populationControlReceipt: state.populationControlReceipt,
       populationSliderSweepReceipt: state.populationSliderSweepReceipt,
+      populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,

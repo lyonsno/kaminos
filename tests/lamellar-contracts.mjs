@@ -64,6 +64,7 @@ assert.match(index, /pinLamellarSelectionPopover/, 'Lamellar population toolhead
 assert.match(index, /data-popover-pinned/, 'Lamellar population toolhead exposes pinned state for witness/operator diagnostics');
 assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar population toolhead exposes bearing spread control');
 assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
+assert.match(index, /id="lamellar-population-radial-spacing"/, 'Lamellar population toolhead exposes radial shell spacing control');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
 assert.doesNotMatch(index, /id="lamellar-strip-select"/, 'Lamellar strip selection is viewport-driven rather than dropdown-driven');
 assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
@@ -186,6 +187,8 @@ assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverag
 assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
 assert.match(core, /bearingPhase/, 'Lamellar strip instances carry actual shell bearing phase, not tiny jitter only');
 assert.match(core, /shellLaneOffset/, 'Lamellar strip instances carry shell-lane offsets for visible coverage sets');
+assert.match(core, /radialSpacing/, 'Lamellar strip populations report radial spacing for same-population clearance');
+assert.match(core, /radialOffset/, 'Lamellar strip instances carry radial offsets so same-population strips can separate by shell radius');
 assert.match(core, /diagnosticLayerSeparationScale/, 'Lamellar core reports diagnostic layer separation exaggeration while authoring shells');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
@@ -253,6 +256,7 @@ assert.match(witness, /popoverPinnedDuringSliderReceipt/, 'witness records that 
 assert.match(witness, /selectedPopulationObject/, 'witness records selected population object state');
 assert.match(witness, /populationControlReceipt/, 'witness records a selected-population control mutation receipt');
 assert.match(witness, /populationSliderSweepReceipt/, 'witness records selected-population slider sweep behavior');
+assert.match(witness, /populationRadialSpacingReceipt/, 'witness records selected-population radial shell spacing behavior');
 assert.match(witness, /selectionLevel/, 'witness records selection level in browser receipts');
 assert.match(witness, /selectedLamellarObject/, 'witness records selected Lamellar object state');
 assert.match(witness, /viewportPickReceipt/, 'witness records viewport pick receipt');
@@ -464,8 +468,10 @@ for (const count of [4, 5, 6]) {
   assert.equal(strips.length, count, `count ${count} emits exactly one strip per coverage slot`);
   assert.ok(circularMinGap(strips.map(strip => strip.bearingPhase)) >= (Math.PI * 2 / count) * 0.95, `count ${count} strips are evenly phase-spaced around the shell`);
   assert.ok(Math.max(...strips.map(strip => strip.shellLaneOffset)) - Math.min(...strips.map(strip => strip.shellLaneOffset)) >= 0.66, `count ${count} strips occupy visible shell lanes`);
+  assert.ok(Math.max(...strips.map(strip => strip.radialOffset)) - Math.min(...strips.map(strip => strip.radialOffset)) >= 0.12, `count ${count} strips occupy separated radial shells`);
   assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.theta0)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.theta0)) > 0.25, `count ${count} descriptors retain smooth rotational authority`);
   assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) >= 0.45, `count ${count} descriptors occupy visible shell-lane centerlines`);
+  assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.radius)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.radius)) >= 0.12, `count ${count} descriptors expose radial clearance in emitted shell radius`);
 }
 assert.ok(
   populated.stripPopulationDescriptors.every(population =>

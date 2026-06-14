@@ -586,6 +586,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-population-bearing-offset" min="-6.283" max="6.283" step="0.01" value="0">
         <span class="slider-val" id="lamellar-population-bearing-offset-val">0.00</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Radius</span>
+        <input type="range" id="lamellar-population-radial-spacing" min="0" max="0.14" step="0.001" value="0.04">
+        <span class="slider-val" id="lamellar-population-radial-spacing-val">0.040</span>
+      </div>
     </div>
     <div id="lamellar-popover-actions"></div>
   </div>
@@ -1031,6 +1036,7 @@ function ensureLamellarPopulationOverrides(state = null) {
       chirality: population.chirality,
       bearingOffset: population.bearingOffset,
       bearingVariance: population.bearingVariance,
+      radialSpacing: population.radialSpacing,
       layoutPreset: population.layoutPreset || 'coverage',
       gapPattern: population.gapPattern || 'solid',
     };
@@ -1099,6 +1105,7 @@ function addLamellarPopulation(role = 'lamella') {
     layoutPreset: 'coverage',
     bearingOffset: normalizedRole === 'cutter' ? 0.42 : 0,
     bearingVariance: normalizedRole === 'cutter' ? 0.7 : 1,
+    radialSpacing: normalizedRole === 'cutter' ? 0.025 : 0.04,
     gapPattern: normalizedRole === 'cutter' ? 'crosscut' : 'solid',
   };
   lamellarWitness.setControls(readLamellarControls());
@@ -1339,9 +1346,11 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   const summary = document.getElementById('lamellar-population-summary');
   const spread = document.getElementById('lamellar-population-bearing-spread');
   const offset = document.getElementById('lamellar-population-bearing-offset');
+  const radial = document.getElementById('lamellar-population-radial-spacing');
   const spreadVal = document.getElementById('lamellar-population-bearing-spread-val');
   const offsetVal = document.getElementById('lamellar-population-bearing-offset-val');
-  if (!populations || !toolhead || !summary || !spread || !offset || !spreadVal || !offsetVal) return;
+  const radialVal = document.getElementById('lamellar-population-radial-spacing-val');
+  if (!populations || !toolhead || !summary || !spread || !offset || !radial || !spreadVal || !offsetVal || !radialVal) return;
   const layerIndex = Number.isFinite(object?.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
   const layerPopulations = lamellarPopulationsForLayer(current, layerIndex);
   selectedLamellarPopulationId = object?.selectionLevel === 'population' ? object.populationId : selectedLamellarPopulationId;
@@ -1359,11 +1368,13 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     return;
   }
   toolhead.style.display = 'block';
-  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)}`;
+  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)} · radius ${(selectedPopulation.radialSpacing || 0).toFixed(3)}`;
   spread.value = String(selectedPopulation.bearingVariance ?? 0);
   offset.value = String(selectedPopulation.bearingOffset ?? 0);
+  radial.value = String(selectedPopulation.radialSpacing ?? 0);
   spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);
   offsetVal.textContent = Number(selectedPopulation.bearingOffset ?? 0).toFixed(2);
+  radialVal.textContent = Number(selectedPopulation.radialSpacing ?? 0).toFixed(3);
   spread.oninput = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
@@ -1374,6 +1385,11 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) });
   };
   offset.onchange = offset.oninput;
+  radial.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) });
+  };
+  radial.onchange = radial.oninput;
 }
 
 function installLamellarViewportSelection() {
