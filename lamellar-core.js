@@ -9,6 +9,8 @@ const LAYER_SHELL_MODE = "authored-lamellar-layer-shell-assemblage-v0";
 const STRIP_POPULATION_MODE = "same-shell-direction-population-authoring-v0";
 const POPULATION_COVERAGE_LAYOUT_MODE = "even-shell-coverage-layout-v0";
 const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
+const SPHERE_CURVE_MODE = "sphere-curve-source-before-strip-mesh-v0";
+const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
 const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
@@ -481,6 +483,265 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
   return stripInstances;
 }
 
+function curveIntervalForStrip(strip, spec) {
+  if (strip.layerIndex === 0) {
+    const start = Number(clamp(0.12 + strip.intervalOffset, 0.08, 0.38).toFixed(4));
+    const end = Number(clamp(0.9 + strip.intervalOffset * 0.4, 0.58, 0.94).toFixed(4));
+    return [start, end];
+  }
+  const baseStart = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
+    ? 0.24 + (0.42 - spec.overlapBias) * 0.18
+    : 0.08 + (strip.stripIndex % 2) * 0.04;
+  const baseEnd = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
+    ? 0.72 + spec.overlapBias * 0.18
+    : 0.82 + (strip.stripIndex % 2) * 0.04;
+  return [
+    Number(clamp(baseStart + spec.intervalBias + strip.intervalOffset, 0.08, 0.44).toFixed(4)),
+    Number(clamp(baseEnd + spec.intervalBias + strip.intervalOffset * 0.6, 0.62, 0.94).toFixed(4)),
+  ];
+}
+
+function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
+  if (strip.layerIndex === 0) {
+    return {
+      theta0: selectedShape.theta0 + strip.bearingPhase * 0.22,
+      thetaTwist: selectedShape.thetaTwist,
+      phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
+      phiSlope: selectedShape.phiSlope,
+      phase: selectedPhase + strip.phaseOffset,
+      edgeLift: 0.018 + strip.stripIndex * 0.002,
+      waviness: 0.085,
+    };
+  }
+  const isCutAuthor = strip.sliceParticipation === "cut-author-envelope";
+  return {
+    theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase * 0.22 + (isCutAuthor ? 0 : 0.04),
+    thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
+    phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
+    phiSlope: 0.86 + strip.stripIndex * 0.04,
+    phase: spec.phase + strip.phaseOffset,
+    edgeLift: strip.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
+    waviness: 0.085,
+  };
+}
+
+export function generateSphereCurveDescriptors(input = {}) {
+  const {
+    seed = 17,
+    layerSpecs = [],
+    stripInstances = [],
+    composerDescriptor = {},
+    selectedShape = {},
+    selectedPhase = 0,
+  } = input;
+  const selectedSpec = layerSpecs[0] || {};
+  return stripInstances.map(strip => {
+    const spec = layerSpecs.find(layerSpec => layerSpec.id === strip.layerSpecId) || selectedSpec;
+    const shape = curveShapeForStrip(strip, spec, selectedShape, selectedPhase);
+    const interval = curveIntervalForStrip(strip, spec);
+    return {
+      kind: "SphereCurveDescriptor",
+      mode: SPHERE_CURVE_MODE,
+      id: `${strip.id}-sphere-curve`,
+      sourceStripInstanceId: strip.id,
+      sourcePopulationId: strip.populationId,
+      sourceLayerSpecId: spec.id,
+      sourceStripKind: strip.kind,
+      sourcePopulationRole: strip.populationRole,
+      layerSpecId: spec.id,
+      stripInstanceId: strip.id,
+      stripIndex: strip.stripIndex,
+      populationId: strip.populationId,
+      populationRole: strip.populationRole,
+      populationIndex: strip.populationIndex,
+      layoutPreset: strip.layoutPreset,
+      coverageSpacing: strip.coverageSpacing,
+      coverageSpan: strip.coverageSpan,
+      shellLaneSpacing: strip.shellLaneSpacing,
+      shellLaneOffset: strip.shellLaneOffset,
+      radialSpacing: strip.radialSpacing,
+      radialOffset: strip.radialOffset,
+      coverageSlot: strip.coverageSlot,
+      bearingPhase: strip.bearingPhase,
+      materialRole: strip.materialRole,
+      layerMaterialRole: strip.layerMaterialRole,
+      sliceParticipation: strip.sliceParticipation,
+      source: strip.layerIndex === 0 && strip.sliceParticipation === "primary-cut-target"
+        ? "procedural-composer"
+        : "layer-shell-strip-assemblage",
+      layerIndex: strip.layerIndex,
+      depth: strip.depth,
+      effectiveDepth: strip.effectiveDepth,
+      chirality: strip.chirality,
+      chunkiness: strip.chunkiness,
+      segmentCount: spec.segmentCount,
+      stripCount: spec.stripCount,
+      interval,
+      curveLaw: composerDescriptor.curveLaw || "poloxodromic-sphere-strip-v0",
+      capLaw: composerDescriptor.capLaw || END_CAP_SEALING_MODE,
+      theta0: shape.theta0,
+      thetaTwist: shape.thetaTwist,
+      phi0: shape.phi0,
+      phiSlope: shape.phiSlope,
+      phase: shape.phase,
+      radius: Number((1 + strip.effectiveDepth).toFixed(4)),
+      width: strip.width,
+      thickness: strip.thickness,
+      widthVariance: strip.widthVariance,
+      thicknessVariance: strip.thicknessVariance,
+      gapPattern: strip.gapPattern,
+      stripProfileKind: "StripProfileDescriptor",
+      stripProfileDescriptor: strip.stripProfileDescriptor,
+      edgeLift: shape.edgeLift,
+      waviness: shape.waviness,
+      proceduralSeed: seed,
+    };
+  });
+}
+
+function angularDelta(a, b) {
+  const diff = Math.abs(a - b) % TAU;
+  return diff > Math.PI ? TAU - diff : diff;
+}
+
+function intervalOverlapAmount(a, b) {
+  return Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]));
+}
+
+function curvePointAt(curve, t) {
+  const theta = curve.theta0 + curve.thetaTwist * t;
+  const phi = curve.phi0 + curve.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + curve.phase) * (curve.waviness ?? 0.08);
+  return spherePoint(theta, phi, curve.radius || 1);
+}
+
+function pointDistance(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function curveInteractionKind(a, b) {
+  if (a.layerIndex !== b.layerIndex) return "cross-layer-proximity";
+  if (a.sourcePopulationId === b.sourcePopulationId) return "same-population-proximity";
+  return "same-layer-cross-population-proximity";
+}
+
+function createCurveInteractionReceipt(sphereCurveDescriptors) {
+  const closeApproaches = [];
+  for (let i = 0; i < sphereCurveDescriptors.length; i++) {
+    for (let j = i + 1; j < sphereCurveDescriptors.length; j++) {
+      const a = sphereCurveDescriptors[i];
+      const b = sphereCurveDescriptors[j];
+      const radiusDelta = Math.abs((a.radius || 0) - (b.radius || 0));
+      const phiDelta = Math.abs((a.phi0 || 0) - (b.phi0 || 0));
+      const thetaDelta = angularDelta(a.theta0 || 0, b.theta0 || 0);
+      const intervalOverlap = intervalOverlapAmount(a.interval, b.interval);
+      if (intervalOverlap <= 0.08) continue;
+      const overlapStart = Math.max(a.interval[0], b.interval[0]);
+      const overlapEnd = Math.min(a.interval[1], b.interval[1]);
+      let closestDistance = Infinity;
+      let closestT = overlapStart;
+      for (let sampleIndex = 0; sampleIndex <= 6; sampleIndex++) {
+        const t = overlapStart + (overlapEnd - overlapStart) * (sampleIndex / 6);
+        const distance = pointDistance(curvePointAt(a, t), curvePointAt(b, t));
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestT = t;
+        }
+      }
+      const domainClearance = radiusDelta + phiDelta + thetaDelta * 0.12;
+      const minimumUsefulClearance = Math.max(0.035, (a.width + b.width) * 0.75);
+      if (closestDistance < minimumUsefulClearance || domainClearance < minimumUsefulClearance) {
+        closeApproaches.push({
+          curveIds: [a.id, b.id],
+          interactionKind: curveInteractionKind(a, b),
+          populationIds: [a.sourcePopulationId, b.sourcePopulationId],
+          layerIndexes: [a.layerIndex, b.layerIndex],
+          radiusDelta: Number(radiusDelta.toFixed(4)),
+          phiDelta: Number(phiDelta.toFixed(4)),
+          thetaDelta: Number(thetaDelta.toFixed(4)),
+          intervalOverlap: Number(intervalOverlap.toFixed(4)),
+          closestDistance: Number(closestDistance.toFixed(4)),
+          closestT: Number(closestT.toFixed(4)),
+          minimumUsefulClearance: Number(minimumUsefulClearance.toFixed(4)),
+          policyStatus: "observed-only-needs-topological-resolution",
+        });
+      }
+    }
+  }
+  return {
+    kind: "CurveInteractionReceipt",
+    mode: CURVE_INTERACTION_MODE,
+    policy: "detect-before-mesh-emission",
+    curveSourceMode: SPHERE_CURVE_MODE,
+    curveCount: sphereCurveDescriptors.length,
+    populationIds: Array.from(new Set(sphereCurveDescriptors.map(curve => curve.sourcePopulationId).filter(Boolean))),
+    closeApproachCount: closeApproaches.length,
+    closeApproaches,
+  };
+}
+
+function emitCurveSectionDescriptor(output, curve, seed) {
+  emitStripDescriptors(output, {
+    kind: "LamellarSectionSegment",
+    stripKind: "LamellarStripInstance",
+    stripProfileKind: "StripProfileDescriptor",
+    sourceCurveKind: "SphereCurveDescriptor",
+    sourceCurveId: curve.id,
+    curveSourceMode: curve.mode,
+    meshSource: "sphere-curve-descriptor",
+    id: curve.layerIndex === 0 && curve.sliceParticipation === "primary-cut-target"
+      ? `seed-${seed}-layer-0-selected-source`
+      : curve.layerIndex === 0
+        ? `${curve.stripInstanceId}-selected-companion`
+        : `${curve.stripInstanceId}-${curve.materialRole}`,
+    layerSpecId: curve.layerSpecId,
+    stripInstanceId: curve.stripInstanceId,
+    stripIndex: curve.stripIndex,
+    populationId: curve.populationId,
+    populationRole: curve.populationRole,
+    populationIndex: curve.populationIndex,
+    layoutPreset: curve.layoutPreset,
+    coverageSpacing: curve.coverageSpacing,
+    coverageSpan: curve.coverageSpan,
+    shellLaneSpacing: curve.shellLaneSpacing,
+    shellLaneOffset: curve.shellLaneOffset,
+    radialSpacing: curve.radialSpacing,
+    radialOffset: curve.radialOffset,
+    coverageSlot: curve.coverageSlot,
+    bearingPhase: curve.bearingPhase,
+    source: curve.source,
+    materialRole: curve.materialRole,
+    layerMaterialRole: curve.layerMaterialRole,
+    sliceParticipation: curve.sliceParticipation,
+    layerIndex: curve.layerIndex,
+    depth: curve.depth,
+    effectiveDepth: curve.effectiveDepth,
+    chirality: curve.chirality,
+    chunkiness: curve.chunkiness,
+    segmentCount: curve.segmentCount,
+    stripCount: curve.stripCount,
+    interval: curve.interval,
+    curveLaw: curve.curveLaw,
+    capLaw: curve.capLaw,
+    theta0: curve.theta0,
+    thetaTwist: curve.thetaTwist,
+    phi0: curve.phi0,
+    phiSlope: curve.phiSlope,
+    phase: curve.phase,
+    radius: curve.radius,
+    width: curve.width,
+    thickness: curve.thickness,
+    widthVariance: curve.widthVariance,
+    thicknessVariance: curve.thicknessVariance,
+    gapPattern: curve.gapPattern,
+    stripProfileDescriptor: curve.stripProfileDescriptor,
+    edgeLift: curve.edgeLift,
+    waviness: curve.waviness,
+  });
+}
+
 export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const layerStack = generateLamellarLayerSpecs(input);
@@ -510,10 +771,13 @@ export function generateLamellarSectionSegments(input = {}) {
     overlapBias: layerStackDescriptor.overlapBias,
     curveLaw: "poloxodromic-sphere-strip-v0",
     capLaw: END_CAP_SEALING_MODE,
-    meshEmission: "descriptor-solved-before-ribbon-geometry",
+    sphereCurveKind: "SphereCurveDescriptor",
+    curveInteractionKind: "CurveInteractionReceipt",
+    sphereCurveMode: SPHERE_CURVE_MODE,
+    curveInteractionMode: CURVE_INTERACTION_MODE,
+    meshEmission: "sphere-curve-solved-before-ribbon-geometry",
   };
 
-  const selectedSpec = layerSpecs[0];
   const selectedPhase = 0.24 + rand() * 0.72;
   const selectedShape = {
     theta0: -1.18 + (rand() - 0.5) * 0.16,
@@ -522,122 +786,18 @@ export function generateLamellarSectionSegments(input = {}) {
     phiSlope: 0.94 + rand() * 0.18,
   };
 
-  for (const strip of stripInstances) {
-    const spec = layerSpecs.find(layerSpec => layerSpec.id === strip.layerSpecId) || selectedSpec;
-    if (strip.layerIndex === 0) {
-      const start = Number(clamp(0.12 + strip.intervalOffset, 0.08, 0.38).toFixed(4));
-      const end = Number(clamp(0.9 + strip.intervalOffset * 0.4, 0.58, 0.94).toFixed(4));
-      emitStripDescriptors(descriptors, {
-        kind: "LamellarSectionSegment",
-        stripKind: "LamellarStripInstance",
-        stripProfileKind: "StripProfileDescriptor",
-        id: strip.sliceParticipation === "primary-cut-target" ? `seed-${seed}-layer-0-selected-source` : `${strip.id}-selected-companion`,
-        layerSpecId: spec.id,
-        stripInstanceId: strip.id,
-        stripIndex: strip.stripIndex,
-        populationId: strip.populationId,
-        populationRole: strip.populationRole,
-        populationIndex: strip.populationIndex,
-        layoutPreset: strip.layoutPreset,
-        coverageSpacing: strip.coverageSpacing,
-        coverageSpan: strip.coverageSpan,
-        shellLaneSpacing: strip.shellLaneSpacing,
-        shellLaneOffset: strip.shellLaneOffset,
-        radialSpacing: strip.radialSpacing,
-        radialOffset: strip.radialOffset,
-        coverageSlot: strip.coverageSlot,
-        bearingPhase: strip.bearingPhase,
-        source: strip.sliceParticipation === "primary-cut-target" ? "procedural-composer" : "layer-shell-strip-assemblage",
-        materialRole: strip.materialRole,
-        layerMaterialRole: strip.layerMaterialRole,
-        sliceParticipation: strip.sliceParticipation,
-        layerIndex: strip.layerIndex,
-        depth: strip.depth,
-        effectiveDepth: strip.effectiveDepth,
-        chirality: strip.chirality,
-        chunkiness: strip.chunkiness,
-        segmentCount: spec.segmentCount,
-        stripCount: spec.stripCount,
-        interval: [start, end],
-        curveLaw: composerDescriptor.curveLaw,
-        capLaw: composerDescriptor.capLaw,
-        theta0: selectedShape.theta0 + strip.bearingPhase * 0.22,
-        thetaTwist: selectedShape.thetaTwist,
-        phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
-        phiSlope: selectedShape.phiSlope,
-        phase: selectedPhase + strip.phaseOffset,
-        radius: Number((1 + strip.effectiveDepth).toFixed(4)),
-        width: strip.width,
-        thickness: strip.thickness,
-        widthVariance: strip.widthVariance,
-        thicknessVariance: strip.thicknessVariance,
-        gapPattern: strip.gapPattern,
-        stripProfileDescriptor: strip.stripProfileDescriptor,
-        edgeLift: 0.018 + strip.stripIndex * 0.002,
-        waviness: 0.085,
-      });
-      continue;
-    }
+  const sphereCurveDescriptors = generateSphereCurveDescriptors({
+    seed,
+    layerSpecs,
+    stripInstances,
+    composerDescriptor,
+    selectedShape,
+    selectedPhase,
+  });
+  const curveInteractionReceipt = createCurveInteractionReceipt(sphereCurveDescriptors);
 
-    const isCutAuthor = strip.sliceParticipation === "cut-author-envelope";
-    const baseStart = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
-      ? 0.24 + (0.42 - spec.overlapBias) * 0.18
-      : 0.08 + (strip.stripIndex % 2) * 0.04;
-    const baseEnd = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
-      ? 0.72 + spec.overlapBias * 0.18
-      : 0.82 + (strip.stripIndex % 2) * 0.04;
-    emitStripDescriptors(descriptors, {
-      kind: "LamellarSectionSegment",
-      stripKind: "LamellarStripInstance",
-      stripProfileKind: "StripProfileDescriptor",
-      id: `${strip.id}-${strip.materialRole}`,
-      layerSpecId: spec.id,
-      stripInstanceId: strip.id,
-      stripIndex: strip.stripIndex,
-      populationId: strip.populationId,
-      populationRole: strip.populationRole,
-      populationIndex: strip.populationIndex,
-      layoutPreset: strip.layoutPreset,
-      coverageSpacing: strip.coverageSpacing,
-      coverageSpan: strip.coverageSpan,
-      shellLaneSpacing: strip.shellLaneSpacing,
-      shellLaneOffset: strip.shellLaneOffset,
-      radialSpacing: strip.radialSpacing,
-      radialOffset: strip.radialOffset,
-      coverageSlot: strip.coverageSlot,
-      bearingPhase: strip.bearingPhase,
-      source: "layer-shell-strip-assemblage",
-      materialRole: strip.materialRole,
-      layerMaterialRole: strip.layerMaterialRole,
-      sliceParticipation: strip.sliceParticipation,
-      layerIndex: strip.layerIndex,
-      depth: strip.depth,
-      effectiveDepth: strip.effectiveDepth,
-      chirality: strip.chirality,
-      chunkiness: strip.chunkiness,
-      segmentCount: spec.segmentCount,
-      stripCount: spec.stripCount,
-      interval: [
-        Number(clamp(baseStart + spec.intervalBias + strip.intervalOffset, 0.08, 0.44).toFixed(4)),
-        Number(clamp(baseEnd + spec.intervalBias + strip.intervalOffset * 0.6, 0.62, 0.94).toFixed(4)),
-      ],
-      curveLaw: composerDescriptor.curveLaw,
-      capLaw: composerDescriptor.capLaw,
-      theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase * 0.22 + (isCutAuthor ? 0 : 0.04),
-      thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
-      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
-      phiSlope: 0.86 + strip.stripIndex * 0.04,
-      phase: spec.phase + strip.phaseOffset,
-      radius: Number((1 + strip.effectiveDepth).toFixed(4)),
-      width: strip.width,
-      thickness: strip.thickness,
-      widthVariance: strip.widthVariance,
-      thicknessVariance: strip.thicknessVariance,
-      gapPattern: strip.gapPattern,
-      stripProfileDescriptor: strip.stripProfileDescriptor,
-      edgeLift: strip.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
-      waviness: 0.085,
-    });
+  for (const curve of sphereCurveDescriptors) {
+    emitCurveSectionDescriptor(descriptors, curve, seed);
   }
 
   return {
@@ -648,6 +808,8 @@ export function generateLamellarSectionSegments(input = {}) {
     stripProfileOverrides,
     stripPopulationDescriptors,
     stripProfileDescriptors: stripInstances.map(strip => strip.stripProfileDescriptor),
+    sphereCurveDescriptors,
+    curveInteractionReceipt,
     descriptors,
   };
 }
@@ -922,6 +1084,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     stripInstances: [],
     stripPopulationDescriptors: [],
     stripProfileDescriptors: [],
+    sphereCurveDescriptors: [],
+    curveInteractionReceipt: null,
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
     sliceApplicationReceipt: null,
@@ -1264,9 +1428,15 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.stripPopulationDescriptors = generated.stripPopulationDescriptors;
     state.stripProfileOverrides = generated.stripProfileOverrides;
     state.stripProfileDescriptors = generated.stripProfileDescriptors;
+    state.sphereCurveDescriptors = generated.sphereCurveDescriptors;
+    state.curveInteractionReceipt = generated.curveInteractionReceipt;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
       id: d.id,
       kind: d.kind,
+      sourceCurveId: d.sourceCurveId,
+      sourceCurveKind: d.sourceCurveKind || null,
+      curveSourceMode: d.curveSourceMode || null,
+      meshSource: d.meshSource || null,
       layerSpecId: d.layerSpecId,
       stripInstanceId: d.stripInstanceId,
       stripIndex: d.stripIndex,
@@ -1334,6 +1504,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       mesh.userData.lamellarObjectKind = "LamellarSectionSegment";
       mesh.userData.lamellarRole = isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole;
       mesh.userData.lamellarSectionId = descriptor.id;
+      mesh.userData.sourceCurveId = descriptor.sourceCurveId || null;
       mesh.userData.layerSpecId = descriptor.layerSpecId;
       mesh.userData.stripInstanceId = descriptor.stripInstanceId;
       mesh.userData.layerIndex = descriptor.layerIndex;
@@ -1344,6 +1515,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       state.sectionSegments.push({
         id: descriptor.id,
         kind: descriptor.kind,
+        sourceCurveId: descriptor.sourceCurveId || null,
+        sourceCurveKind: descriptor.sourceCurveKind || null,
+        curveSourceMode: descriptor.curveSourceMode || null,
+        meshSource: descriptor.meshSource || null,
         layerSpecId: descriptor.layerSpecId,
         stripInstanceId: descriptor.stripInstanceId,
         stripIndex: descriptor.stripIndex,

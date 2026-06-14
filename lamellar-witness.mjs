@@ -389,6 +389,12 @@ async function main() {
     assert.ok(state.layerStackDescriptor?.mode, 'Lamellar witness did not export layer-stack descriptor');
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
     assert.ok((state.stripInstances || []).length > (state.layerSpecs || []).length, 'Lamellar witness did not export layer-owned strip assemblages');
+    assert.ok((state.sphereCurveDescriptors || []).length >= (state.stripInstances || []).length, 'Lamellar witness did not export sphere-curve descriptors before mesh descriptors');
+    assert.equal(state.curveInteractionReceipt?.mode, 'sphere-curve-proximity-interaction-v0', 'Lamellar witness did not export curve interaction receipt');
+    assert.ok(
+      (state.generatedSegmentDescriptors || []).every(descriptor => descriptor.sourceCurveId),
+      'Lamellar generated segment descriptors did not cite source sphere curves'
+    );
     assert.ok(state.sliceToolDescriptor?.mode, 'Lamellar witness did not export slice tool descriptor');
     assert.ok(state.sliceApplicationReceipt?.mode, 'Lamellar witness did not export slice application receipt');
     assert.ok(state.cutAuthorEnvelopeDescriptor?.mode, 'Lamellar witness did not export cut-author envelope descriptor');
@@ -479,6 +485,8 @@ async function main() {
       layerStackDescriptor: state.layerStackDescriptor,
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,
+      sphereCurveDescriptors: state.sphereCurveDescriptors,
+      curveInteractionReceipt: state.curveInteractionReceipt,
       selectedLayerUi: state.selectedLayerUi,
       selectedStripUi: state.selectedStripUi,
       manualEnableUi: state.manualEnableUi,

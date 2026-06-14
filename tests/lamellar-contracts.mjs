@@ -177,6 +177,9 @@ assert.match(core, /LayerStackDescriptor/, 'Lamellar core names the authored lay
 assert.match(core, /LayerShellDescriptor/, 'Lamellar core names layer shells as assemblages explicitly');
 assert.match(core, /LamellarLayerSpec/, 'Lamellar core names per-layer specs explicitly');
 assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip instances explicitly');
+assert.match(core, /SphereCurveDescriptor/, 'Lamellar core names sphere curves as the upstream authored geometry primitive');
+assert.match(core, /generateSphereCurveDescriptors/, 'Lamellar core generates sphere curves before section mesh descriptors');
+assert.match(core, /CurveInteractionReceipt/, 'Lamellar core records curve-space interaction receipts before meshing');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
 assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
@@ -206,6 +209,9 @@ assert.match(core, /composerDescriptor/, 'Lamellar debug state reports procedura
 assert.match(core, /layerStackDescriptor/, 'Lamellar debug state reports authored layer-stack descriptor');
 assert.match(core, /layerSpecs/, 'Lamellar debug state reports per-layer specs');
 assert.match(core, /stripInstances/, 'Lamellar debug state reports layer-owned strip instances');
+assert.match(core, /sphereCurveDescriptors/, 'Lamellar debug state reports upstream sphere curve descriptors');
+assert.match(core, /curveInteractionReceipt/, 'Lamellar debug state reports curve-space interaction receipt');
+assert.match(core, /sourceCurveId/, 'Lamellar emitted descriptors carry source curve ancestry');
 assert.match(core, /stripIds/, 'Lamellar layer specs report their owned strip ids');
 assert.match(core, /stripCount/, 'Lamellar layer specs report their authored strip count');
 assert.match(core, /chiralityPattern/, 'Lamellar debug state reports chirality pattern through layers');
@@ -243,6 +249,8 @@ assert.match(witness, /composerDescriptor/, 'witness records procedural composer
 assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descriptor');
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
 assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
+assert.match(witness, /sphereCurveDescriptors/, 'witness records upstream sphere curve descriptors');
+assert.match(witness, /curveInteractionReceipt/, 'witness records curve-space interaction receipt');
 assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI state');
 assert.match(witness, /lamellar-selected-layer-strips/, 'witness inspects selected-layer strip readout');
 assert.match(witness, /selectedStripUi/, 'witness records selected-strip profile UI state');
@@ -366,6 +374,59 @@ assert.ok(
 assert.ok(
   assembled.descriptors.every(descriptor => descriptor.stripInstanceId && Number.isInteger(descriptor.stripIndex)),
   'every emitted descriptor carries strip-instance ancestry'
+);
+assert.ok(
+  assembled.sphereCurveDescriptors.length >= assembled.stripInstances.length,
+  'sphere-curve substrate emits at least one upstream curve for each strip instance'
+);
+assert.ok(
+  assembled.sphereCurveDescriptors.every(curve =>
+    curve.kind === 'SphereCurveDescriptor'
+    && curve.sourceStripInstanceId
+    && curve.sourcePopulationId
+    && Array.isArray(curve.interval)
+    && Number.isFinite(curve.radius)
+    && Number.isFinite(curve.theta0)
+    && Number.isFinite(curve.phi0)
+  ),
+  'sphere curves carry source strip/population ancestry and solved sphere-domain fields'
+);
+assert.ok(
+  assembled.descriptors.every(descriptor =>
+    descriptor.sourceCurveId
+    && assembled.sphereCurveDescriptors.some(curve => curve.id === descriptor.sourceCurveId)
+  ),
+  'every emitted descriptor cites an upstream sphere curve'
+);
+assert.equal(
+  assembled.curveInteractionReceipt?.mode,
+  'sphere-curve-proximity-interaction-v0',
+  'curve interaction receipt is emitted before mesh descriptors'
+);
+assert.ok(
+  Number.isInteger(assembled.curveInteractionReceipt?.curveCount)
+    && assembled.curveInteractionReceipt.curveCount === assembled.sphereCurveDescriptors.length,
+  'curve interaction receipt counts the generated sphere curves'
+);
+
+const crossLayerProximity = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 2,
+  chiralityPattern: 'same',
+  depthSpacing: 0.015,
+  chunkinessBase: 0.8,
+  chunkinessVariance: 0,
+  overlapBias: 1,
+  layerOverrides: [
+    { layerIndex: 0, chirality: 1, chunkiness: 0.8, stripCount: 1 },
+    { layerIndex: 1, chirality: 1, chunkiness: 0.8, stripCount: 1 },
+  ],
+});
+assert.ok(
+  crossLayerProximity.curveInteractionReceipt.closeApproaches.some(approach =>
+    approach.interactionKind === 'cross-layer-proximity'
+  ),
+  'curve interaction receipt detects close cross-layer sphere curves before meshing'
 );
 
 const profiled = coreModule.generateLamellarSectionSegments({
