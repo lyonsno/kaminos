@@ -95,6 +95,7 @@ assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input rad
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
 assert.match(index, /tall_plume/, 'Volume tab exposes a tall plume scale-test scene');
+assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
 assert.match(index, /volume_scene/, 'URL route can select a named volume scene');
 assert.match(index, /applyVolumeScenePreset/, 'Volume route applies stable scene presets before per-control overrides');
 assert.match(index, /id="volume-input-radius"[^>]+value="0\.12"/, 'smoke route defaults to the accepted input radius');
@@ -268,6 +269,10 @@ assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/proje
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
 assert.match(core, /state\.volumeScene/, 'debug state exposes the effective volume scene identity');
 assert.match(core, /volumeScene/, 'renderer controls carry named scene identity for witness/debug routing');
+assert.match(core, /scene_controls/, 'fluid uniforms carry scene-shaping controls into the shader');
+assert.match(core, /bonfireScene/, 'fluid source shaping names the bottom-fireball scene branch');
+assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
+assert.match(core, /bonfireSmokeSource/, 'fluid source shaping creates smoke from the bottom fireball before plume rise');
 assert.match(core, /let sourceCenter = p\.xz;/, 'fluid source is centered in sim XZ coordinates');
 assert.doesNotMatch(core, /sourceCenter = p\.xz \+ vec2/, 'fluid source must not wobble off-center in XZ');
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
@@ -360,6 +365,8 @@ assert.match(witness, /radianceMean/, 'witness requires fire radiance evidence')
 assert.match(witness, /extinctionMean/, 'witness requires smoke extinction evidence');
 assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visual evidence separately from generic fire color');
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
+assert.match(witness, /fireBounds/, 'witness records visual fire bounds for bottom-fireball scene checks');
+assert.match(witness, /smokeBounds/, 'witness records visual smoke bounds for rising plume scene checks');
 assert.match(witness, /verticalFillRatio/, 'witness records vertical fill ratio for tall-plume scale checks');
 assert.match(witness, /microdetailMean/, 'witness requires transported microdetail evidence');
 assert.match(witness, /interfaceShredMean/, 'witness requires interface shredding evidence');

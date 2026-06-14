@@ -130,6 +130,23 @@ const COMPACT_MATRIX_SCENARIOS = [
     temporalJitter: 0.40,
     historyClamp: 0.75,
   },
+  {
+    id: 'bonfire-plume-scale',
+    label: 'Bonfire Plume Scale',
+    volumeScene: 'bonfire_plume',
+    simGrid: 128,
+    majorantGrid: 48,
+    raySteps: 96,
+    renderScale: 0.85,
+    adaptiveRays: 0.65,
+    occupancySkip: 0.45,
+    majorantSkip: 0.55,
+    majorantSmooth: 0.80,
+    majorantGuard: 0.80,
+    temporalAccum: 0.30,
+    temporalJitter: 0.40,
+    historyClamp: 0.78,
+  },
 ];
 
 function numberList(value, fallback) {

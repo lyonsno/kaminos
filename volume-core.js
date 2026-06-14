@@ -9,7 +9,7 @@ const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
-const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'tall_plume']);
+const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'tall_plume', 'bonfire_plume']);
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -31,6 +31,13 @@ function normalizeRenderScale(value) {
 
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
+}
+
+function volumeSceneMode(value) {
+  const scene = normalizeVolumeScene(value);
+  if (scene === 'tall_plume') return 1;
+  if (scene === 'bonfire_plume') return 2;
+  return 0;
 }
 
 function gridCellCount(gridSize) {
@@ -152,6 +159,7 @@ struct Uniforms {
   occupancy_controls: vec4<f32>,
   temporal_controls: vec4<f32>,
   scale_controls: vec4<f32>,
+  scene_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -981,6 +989,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let radial = length(p.xz);
   let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
+  let bonfireScene = step(1.5, sceneMode);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
   let breakup = clamp(
     0.64
@@ -992,12 +1002,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let source = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let bonfireVertical = (p.y - 0.62) / 0.23;
+  let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
+  let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
+  let bonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
+  let bonfireSmokeBand = smoothstep(0.30, 0.52, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
+  let bonfireSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.72 + 0.44 * breakup) * inputFlow;
+  let source = mix(columnSource, max(bonfireSmokeSource, bonfireFireball * inputFlow * 0.84), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
-  let emberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let bonfireEmberRing = exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * inputFlow * (0.32 + 0.22 * sin(time * 2.4 + p.x * 11.0 + p.z * 7.0));
+  let emberRing = mix(columnEmberRing, bonfireEmberRing, bonfireScene);
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
-  let fireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
+  let columnFireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
+  let bonfireFireBirth = (bonfireFireball * (1.08 + 0.58 * breakup) + bonfireEmberRing * 0.42) * inputFlow * sourceScaleCompensation;
+  let fireBirth = mix(columnFireBirth, bonfireFireBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
@@ -1017,8 +1038,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
-  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale;
-  vel.y = vel.y + source * (0.022 + speed * 0.006) * plumeRiseScale + smoke * 0.003 * plumeRiseScale;
+  let bonfireLiftDirection = mix(1.0, -1.0, bonfireScene);
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireLiftDirection;
+  vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireLiftDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.009 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
@@ -1027,7 +1049,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   smoke = max(smoke, externalInjection.material.x * 0.76);
   heat = max(heat, source * 0.86 + emberRing * 0.22);
   heat = max(heat, externalInjection.material.y * 0.92);
-  fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
+  let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), smoothstep(0.28, 0.58, p.y), bonfireScene);
+  fuel = max(fuel, source * 0.88 * sourceFuelMask);
   fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
   materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
@@ -1048,6 +1071,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * breakup) + lickBirth.z + fireLick * 0.34);
   flameDetail = max(flameDetail, externalInjection.fire.z);
 
+  let bonfireFireCeiling = mix(1.0, smoothstep(0.18, 0.58, p.y), bonfireScene);
+  flame = flame * bonfireFireCeiling;
+  ember = ember * mix(1.0, max(0.24, bonfireFireCeiling), bonfireScene);
+  flameDetail = flameDetail * bonfireFireCeiling;
+  fireLick = fireLick * mix(1.0, max(0.18, bonfireFireCeiling), bonfireScene);
+
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
   let smokeTopFade = 1.0 - smoothstep(mix(0.66, 0.84, plumeHeight01), 0.995, p.y);
@@ -1065,7 +1094,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
-  vel.y = max(vel.y, -0.015);
+  vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
   fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), 0.0);
@@ -1243,7 +1272,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(68);
+  const uniforms = new Float32Array(72);
   let controlsSnapshot = getControls();
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -1958,7 +1987,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
     updateExternalEmitterDebug(now);
     uniforms[51] = state.externalEmitterCount;
-    uniforms.set(previousViewProj.elements, 52);
+    uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
+    uniforms[53] = 0;
+    uniforms[54] = 0;
+    uniforms[55] = 0;
+    uniforms.set(previousViewProj.elements, 56);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -2366,12 +2399,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       horizontalFillRatio: 0,
       verticalFillRatio: 0,
     };
-    const includeVolumePixel = (x, y) => {
-      volumeBounds.minX = Math.min(volumeBounds.minX, x);
-      volumeBounds.minY = Math.min(volumeBounds.minY, y);
-      volumeBounds.maxX = Math.max(volumeBounds.maxX, x);
-      volumeBounds.maxY = Math.max(volumeBounds.maxY, y);
-      volumeBounds.pixelCount += 1;
+    const fireBounds = { ...volumeBounds };
+    const smokeBounds = { ...volumeBounds };
+    const includeBoundPixel = (bounds, x, y) => {
+      bounds.minX = Math.min(bounds.minX, x);
+      bounds.minY = Math.min(bounds.minY, y);
+      bounds.maxX = Math.max(bounds.maxX, x);
+      bounds.maxY = Math.max(bounds.maxY, y);
+      bounds.pixelCount += 1;
+    };
+    const finalizeBounds = bounds => {
+      if (bounds.pixelCount > 0) {
+        bounds.width = bounds.maxX - bounds.minX + 1;
+        bounds.height = bounds.maxY - bounds.minY + 1;
+        bounds.horizontalFillRatio = bounds.width / Math.max(1, state.width);
+        bounds.verticalFillRatio = bounds.height / Math.max(1, state.height);
+      } else {
+        bounds.minX = 0;
+        bounds.minY = 0;
+        bounds.maxX = 0;
+        bounds.maxY = 0;
+      }
     };
     const previewWidth = 256;
     const previewHeight = Math.max(1, Math.round(previewWidth * state.height / state.width));
@@ -2388,27 +2436,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         samples += 1;
         if (luma > 20) {
           litPixels += 1;
-          includeVolumePixel(x, y);
+          includeBoundPixel(volumeBounds, x, y);
         }
-        if (r > 120 && g > 70 && b < 90) fireLikePixels += 1;
-        if (r > 170 && g > 120 && b < 115 && luma > 130) emissiveLikePixels += 1;
+        if (r > 120 && g > 70 && b < 90) {
+          fireLikePixels += 1;
+          includeBoundPixel(fireBounds, x, y);
+        }
+        if (r > 170 && g > 120 && b < 115 && luma > 130) {
+          emissiveLikePixels += 1;
+          includeBoundPixel(fireBounds, x, y);
+        }
         if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) {
           smokeLikePixels += 1;
-          includeVolumePixel(x, y);
+          includeBoundPixel(volumeBounds, x, y);
+          includeBoundPixel(smokeBounds, x, y);
         }
       }
     }
-    if (volumeBounds.pixelCount > 0) {
-      volumeBounds.width = volumeBounds.maxX - volumeBounds.minX + 1;
-      volumeBounds.height = volumeBounds.maxY - volumeBounds.minY + 1;
-      volumeBounds.horizontalFillRatio = volumeBounds.width / Math.max(1, state.width);
-      volumeBounds.verticalFillRatio = volumeBounds.height / Math.max(1, state.height);
-    } else {
-      volumeBounds.minX = 0;
-      volumeBounds.minY = 0;
-      volumeBounds.maxX = 0;
-      volumeBounds.maxY = 0;
-    }
+    finalizeBounds(volumeBounds);
+    finalizeBounds(fireBounds);
+    finalizeBounds(smokeBounds);
     for (let py = 0; py < previewHeight; py += 1) {
       const srcY = Math.min(state.height - 1, Math.floor(py / previewHeight * state.height));
       const row = srcY * bytesPerRow;
@@ -2444,6 +2491,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emissiveLikePixels,
       smokeLikePixels,
       volumeBounds,
+      fireBounds,
+      smokeBounds,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       simGrid: state.simGrid,

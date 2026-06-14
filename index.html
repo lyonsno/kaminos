@@ -286,6 +286,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <select id="volume-scene" class="select-input">
         <option value="compact_plume" selected>Compact plume</option>
         <option value="tall_plume">Tall plume</option>
+        <option value="bonfire_plume">Bonfire plume</option>
       </select>
       <span class="slider-val" id="volume-scene-val">compact</span>
     </div>
@@ -1290,6 +1291,26 @@ const VOLUME_SCENE_PRESETS = {
     flowRate: 0.45,
     fireScale: 0.35,
     detailScale: 3.20,
+    plumeHeight: 2.20,
+  },
+  bonfire_plume: {
+    label: 'bonfire',
+    density: 4.80,
+    fire: 0.95,
+    radiance: 1.90,
+    absorption: 1.45,
+    glow: 1.05,
+    smoke: 2.80,
+    curl: 3.40,
+    microdetail: 2.50,
+    interfaceShred: 1.85,
+    fireLicks: 4.25,
+    projection: 0.85,
+    speed: 5.00,
+    inputRadius: 0.16,
+    flowRate: 0.24,
+    fireScale: 0.78,
+    detailScale: 2.75,
     plumeHeight: 2.20,
   },
 };

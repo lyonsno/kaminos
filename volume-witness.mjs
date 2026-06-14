@@ -26,6 +26,11 @@ const VOLUME_SCENE_PRESETS = {
     detailScale: 3.20,
     plumeHeight: 2.20,
   },
+  bonfire_plume: {
+    fireScale: 0.78,
+    detailScale: 2.75,
+    plumeHeight: 2.20,
+  },
 };
 const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
@@ -466,6 +471,8 @@ async function main() {
       emissiveLikePixels: sample.emissiveLikePixels,
       smokeLikePixels: sample.smokeLikePixels,
       volumeBounds: sample.volumeBounds,
+      fireBounds: sample.fireBounds,
+      smokeBounds: sample.smokeBounds,
       verticalFillRatio: sample.volumeBounds?.verticalFillRatio ?? 0,
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
