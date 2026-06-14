@@ -26,6 +26,9 @@ BROWSE_ROOTS = {
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }
 
+GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
+MESH_EXTENSIONS = {".glb", ".gltf", ".obj"}
+
 
 def _clean_label(value, fallback="Untitled"):
     text = str(value or "").strip()
@@ -58,7 +61,7 @@ def _first_present(*values):
 def _count_mesh_outputs(output_files):
     return len([
         name for name in (output_files or [])
-        if Path(str(name)).suffix.lower() in {".glb", ".gltf", ".obj"}
+        if Path(str(name)).suffix.lower() in MESH_EXTENSIONS
     ])
 
 
@@ -111,7 +114,7 @@ def build_display_metadata(entry_name, *, entry_type, receipt=None, output_files
         "seed": str(seed) if seed is not None else None,
         "output_count": output_count,
         "mesh_output_count": mesh_count,
-        "load_label": "Load mesh" if mesh_count or Path(entry_name).suffix.lower() in {".glb", ".gltf", ".obj"} else "Open",
+        "load_label": "Load mesh" if mesh_count or Path(entry_name).suffix.lower() in MESH_EXTENSIONS else "Open",
     }
 
 
@@ -120,7 +123,7 @@ def build_output_display_metadata(entry_name, *, job_display=None, size=None):
     ext = Path(entry_name).suffix.lower().lstrip(".").upper() or "FILE"
     seed = job_display.get("seed")
     title_root = job_display.get("title") or _clean_label(entry_name)
-    is_mesh = Path(entry_name).suffix.lower() in {".glb", ".gltf", ".obj"}
+    is_mesh = Path(entry_name).suffix.lower() in MESH_EXTENSIONS
     if is_mesh and Path(entry_name).stem.lower().startswith("seed-") and title_root:
         title = f"{title_root} Mesh"
     else:
@@ -149,6 +152,51 @@ def _format_size(size):
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size / (1024 * 1024):.1f} MB"
+
+
+def greenroom_output_roots():
+    """Roots that can lawfully serve receipt output_dir files."""
+    roots = [Path.home().resolve()]
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if greenroom:
+        roots.append(greenroom.resolve())
+    return roots
+
+
+def resolve_greenroom_output_dir(output_dir):
+    """Resolve a receipt output_dir only if it is under a serving root."""
+    if not output_dir:
+        return None
+    output_resolved = Path(output_dir).resolve()
+    if not output_resolved.is_dir():
+        return None
+    if any(output_resolved.is_relative_to(root) for root in greenroom_output_roots()):
+        return output_resolved
+    return None
+
+
+def list_greenroom_output_files(receipt):
+    output_dir = resolve_greenroom_output_dir((receipt or {}).get("output_dir"))
+    if not output_dir:
+        return []
+    return [
+        f.name for f in sorted(output_dir.iterdir())
+        if f.is_file() and not f.name.startswith(".")
+    ]
+
+
+def find_greenroom_receipt(job_id):
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if not greenroom or not greenroom.exists():
+        return None
+    for status_dir in GREENROOM_STATUS_DIRS:
+        receipt_path = (greenroom / status_dir / job_id / "receipt.json").resolve()
+        status_root = (greenroom / status_dir).resolve()
+        if not receipt_path.is_relative_to(status_root):
+            continue
+        if receipt_path.exists():
+            return json.loads(receipt_path.read_text())
+    return None
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
@@ -308,18 +356,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                             "output_dir", "input_path", "input_name",
                         ]
                     }
-                    # List output files if output_dir exists
-                    out_dir = receipt.get("output_dir")
-                    if out_dir and Path(out_dir).is_dir():
-                        info["output_files"] = [
-                            f.name for f in sorted(Path(out_dir).iterdir())
-                            if f.is_file() and not f.name.startswith(".")
-                        ]
+                    output_files = list_greenroom_output_files(receipt)
+                    if output_files:
+                        info["output_files"] = output_files
                     info["display"] = build_display_metadata(
                         entry.name,
                         entry_type=info["type"],
                         receipt=receipt,
-                        output_files=info.get("output_files") or [],
+                        output_files=output_files,
                         size=info["size"],
                     )
                 except Exception:
@@ -403,37 +447,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Greenroom not available"}, 404)
             return
 
-        receipt_data = None
-        for status_dir in ("done", "failed", "running", "pending", "cancelled"):
-            receipt_path = greenroom / status_dir / job_id / "receipt.json"
-            if receipt_path.exists():
-                receipt_data = json.loads(receipt_path.read_text())
-                break
+        receipt_data = find_greenroom_receipt(job_id)
 
         if not receipt_data:
             self.send_json({"error": f"Job {job_id} not found"}, 404)
             return
 
         output_dir = receipt_data.get("output_dir")
-        if not output_dir or not Path(output_dir).is_dir():
+        if not output_dir:
             self.send_json({"entries": [], "output_dir": output_dir})
             return
 
-        # Verify output_dir is under a known root or home directory
-        output_resolved = Path(output_dir).resolve()
-        home = Path.home().resolve()
-        if not output_resolved.is_relative_to(home):
-            self.send_json({"error": "output_dir outside home directory"}, 403)
+        output_resolved = resolve_greenroom_output_dir(output_dir)
+        if not output_resolved:
+            self.send_json({"error": "output_dir outside serving roots"}, 403)
             return
 
+        output_files = list_greenroom_output_files(receipt_data)
         job_display = build_display_metadata(
             job_id,
             entry_type="dir",
             receipt=receipt_data,
-            output_files=[f.name for f in sorted(Path(output_dir).iterdir()) if f.is_file() and not f.name.startswith(".")],
+            output_files=output_files,
         )
         entries = []
-        for f in sorted(Path(output_dir).iterdir()):
+        for f in sorted(output_resolved.iterdir()):
             if f.name.startswith("."):
                 continue
             size = f.stat().st_size if f.is_file() else None
@@ -461,13 +499,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Greenroom not available"}, 404)
             return
 
-        # Find the job in any status directory
-        receipt_data = None
-        for status_dir in ("done", "failed", "running", "pending", "cancelled"):
-            receipt_path = greenroom / status_dir / job_id / "receipt.json"
-            if receipt_path.exists():
-                receipt_data = json.loads(receipt_path.read_text())
-                break
+        receipt_data = find_greenroom_receipt(job_id)
 
         if not receipt_data:
             self.send_json({"error": f"Job {job_id} not found"}, 404)
@@ -478,14 +510,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "No output_dir in receipt"}, 404)
             return
 
-        # Verify output_dir is under home directory
-        output_resolved = Path(output_dir).resolve()
-        home = Path.home().resolve()
-        if not output_resolved.is_relative_to(home):
-            self.send_json({"error": "output_dir outside home directory"}, 403)
+        output_resolved = resolve_greenroom_output_dir(output_dir)
+        if not output_resolved:
+            self.send_json({"error": "output_dir outside serving roots"}, 403)
             return
 
-        target = (Path(output_dir) / filename).resolve()
+        target = (output_resolved / filename).resolve()
         # Security: must be under the receipt's output_dir
         if not target.is_relative_to(output_resolved):
             self.send_json({"error": "Path traversal"}, 403)

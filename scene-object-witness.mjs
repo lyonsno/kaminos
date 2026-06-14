@@ -886,14 +886,53 @@ async function runGreenroomPickerDisplayScenario(ws) {
         if (rows.length) break;
         await wait(125);
       }
-      const rowState = rows.map(row => ({
-        title: row.querySelector('.gr-title')?.textContent?.trim() || null,
-        subtitle: row.querySelector('.gr-subtitle')?.textContent?.trim() || null,
-        raw: row.querySelector('.gr-raw')?.textContent?.trim() || null,
-        status: row.querySelector('.gr-status')?.textContent?.trim() || null,
-        buttons: [...row.querySelectorAll('button')].map(button => button.textContent.trim()),
-      }));
-      const humaneRows = rowState.filter(row => row.title && row.raw && !row.raw.endsWith(row.title));
+      const greenroomRawName = value => String(value || '').trim().replace(/^raw\\s+/i, '');
+      const greenroomIdentityKey = value => greenroomRawName(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const rowState = rows.map(row => {
+        const title = row.querySelector('.gr-title')?.textContent?.trim() || null;
+        const raw = row.querySelector('.gr-raw')?.textContent?.trim() || null;
+        const rawName = greenroomRawName(raw);
+        const titleIdentityKey = greenroomIdentityKey(title);
+        const rawIdentityKey = greenroomIdentityKey(raw);
+        return {
+          title,
+          subtitle: row.querySelector('.gr-subtitle')?.textContent?.trim() || null,
+          raw,
+          rawName,
+          titleIdentityKey,
+          rawIdentityKey,
+          status: row.querySelector('.gr-status')?.textContent?.trim() || null,
+          buttons: [...row.querySelectorAll('button')].map(button => button.textContent.trim()),
+        };
+      });
+      const humaneRows = rowState.filter(row => row.title && row.raw && row.titleIdentityKey !== row.rawIdentityKey);
+      const loadRow = rowState.find(row => row.rawName && row.buttons.includes('Load mesh'));
+      let loadProbe = null;
+      if (loadRow) {
+        const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(loadRow.rawName));
+        const outputsData = await outputsResp.json().catch(() => ({}));
+        const mesh = (outputsData.entries || []).find(entry => /\\.(glb|gltf|obj)$/i.test(entry.name));
+        loadProbe = {
+          jobId: loadRow.rawName,
+          outputsStatus: outputsResp.status,
+          outputsOk: outputsResp.ok,
+          outputsError: outputsData.error || null,
+          mesh: mesh?.name || null,
+          route: mesh ? '/api/job-output?job_id=' + encodeURIComponent(loadRow.rawName) + '&file=' + encodeURIComponent(mesh.name) : null,
+          outputStatus: null,
+          outputOk: false,
+          outputContentType: null,
+          outputBytes: 0,
+        };
+        if (mesh) {
+          const outputResp = await fetch(loadProbe.route);
+          const outputBuffer = await outputResp.arrayBuffer();
+          loadProbe.outputStatus = outputResp.status;
+          loadProbe.outputOk = outputResp.ok;
+          loadProbe.outputContentType = outputResp.headers.get('content-type');
+          loadProbe.outputBytes = outputBuffer.byteLength;
+        }
+      }
       return {
         rowCount: rows.length,
         rows: rowState.slice(0, 8),
@@ -901,6 +940,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
         hasSubtitle: rowState.some(row => row.subtitle),
         hasRaw: rowState.some(row => row.raw),
         hasLoadMesh: rowState.some(row => row.buttons.includes('Load mesh')),
+        loadProbe,
       };
     })()
   `, { timeoutMs: 45000 });
@@ -916,6 +956,10 @@ async function runGreenroomPickerDisplayScenario(ws) {
   }
   if (!lastEvidence.greenroomPickerDisplay.hasLoadMesh) {
     throw new Error(`greenroom picker did not expose a mesh load affordance: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
+  const loadProbe = lastEvidence.greenroomPickerDisplay.loadProbe;
+  if (!loadProbe || !loadProbe.outputsOk || !loadProbe.mesh || !loadProbe.outputOk || loadProbe.outputBytes < 1) {
+    throw new Error(`greenroom picker mesh load route was not fetchable: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
 }
 

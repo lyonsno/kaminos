@@ -70,6 +70,11 @@ assert.match(witness, /syntactically reloadable failed scene load overwrote prev
 assert.match(witness, /boundary cleanup did not delete scene file/, 'scene boundary witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes boundary scene file/, 'scene boundary witness proves cleanup removes temporary scene files');
 assert.match(witness, /greenroom picker titles still look raw-id-first/, 'Green Room picker witness fails if titles regress to raw job ids');
+assert.match(witness, /greenroomIdentityKey/, 'Green Room picker witness normalizes title/raw identity before judging title humanity');
+assert.match(witness, /replace\(\s*\/\^raw/, 'Green Room picker witness strips raw metadata prefixes before comparing identities');
+assert.match(witness, /titleIdentityKey !== row\.rawIdentityKey/, 'Green Room picker witness rejects case-only and prefix-only raw-id title changes');
 assert.match(witness, /greenroom picker did not expose subtitle and raw metadata/, 'Green Room picker witness requires display subtitle and raw metadata');
 assert.match(witness, /greenroom picker did not expose a mesh load affordance/, 'Green Room picker witness requires the mesh load action to stay visible');
+assert.match(witness, /greenroom picker mesh load route was not fetchable/, 'Green Room picker witness proves visible Load mesh actions can fetch the advertised route');
+assert.match(witness, /job-output\?job_id=/, 'Green Room picker witness probes the same job-output route used by the Load mesh button');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
