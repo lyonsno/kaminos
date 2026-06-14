@@ -556,6 +556,7 @@ const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive
 let volumePrimitives = [];
 let sceneObjects = [];
 let activeSceneObjectId = null;
+let sceneSaveBlockedByFailedRestore = false;
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
@@ -796,6 +797,7 @@ function setActiveSceneObject(id) {
 }
 
 function registerSceneObject(object, metadata = {}) {
+  sceneSaveBlockedByFailedRestore = false;
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
   const record = {
     id,
@@ -3188,6 +3190,14 @@ async function addSceneObjectFromSource(record) {
   throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
 }
 
+function assertSceneObjectsReloadable(records) {
+  for (const record of records) {
+    if (!isReloadableSceneObjectRecord(record)) {
+      throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
+    }
+  }
+}
+
 async function loadSceneObjects(records, activeId) {
   clearScene();
   const loaded = [];
@@ -3280,8 +3290,15 @@ function sceneIsEmpty() {
   return !currentMesh && volumePrimitives.length === 0;
 }
 
+function sceneSaveIsBlocked() {
+  if (!sceneSaveBlockedByFailedRestore) return false;
+  setInfo('Scene save blocked until a scene loads successfully');
+  return true;
+}
+
 // Save: overwrite current scene file, or create new if none
 window.saveScene = async function() {
+  if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
@@ -3292,6 +3309,7 @@ window.saveScene = async function() {
 
 // Save As: always create a new scene file
 window.saveSceneAs = async function() {
+  if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
@@ -3352,6 +3370,15 @@ async function loadSceneFile(file) {
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
 
+  try {
+    assertSceneObjectsReloadable(objectRecords);
+  } catch (e) {
+    sceneSaveBlockedByFailedRestore = true;
+    currentSceneFile = previousSceneFile;
+    setInfo('Scene load failed: ' + e.message);
+    return;
+  }
+
   setInfo('Loading scene...');
 
   // Load environment first
@@ -3394,6 +3421,7 @@ async function loadSceneFile(file) {
     try {
       await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
     } catch (e) {
+      sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = previousSceneFile;
       setInfo('Scene load failed: ' + e.message);
       return;
@@ -3473,6 +3501,7 @@ async function loadSceneFile(file) {
   }
 
   claimLoadedSceneFile(file);
+  sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
   } else {

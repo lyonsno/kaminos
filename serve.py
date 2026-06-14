@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).parent.resolve()
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -118,7 +118,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         roots = {}
         for name, path in BROWSE_ROOTS.items():
             roots[name] = {
-                "path": str(path),
+                "path": str(path.resolve()),
                 "exists": path.exists(),
             }
         self.send_json(roots)

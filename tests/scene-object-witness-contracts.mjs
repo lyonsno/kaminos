@@ -16,6 +16,8 @@ assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested U
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
 assert.match(witness, /expectedServerRoot/, 'witness can validate the expected server root');
+assert.match(witness, /isAbsolute\(scenesPath\)/, 'witness rejects relative server root paths instead of resolving them against its own cwd');
+assert.match(witness, /server root identity is not absolute/, 'witness names relative server-root identity failures');
 assert.match(witness, /debugPort:\s*port/, 'witness report records effective debug port');
 assert.match(witness, /process\.pid/, 'witness uses an isolated default Chrome profile for each run');
 assert.match(witness, /phase\s*=/, 'witness tracks failure phase for report-on-failure');
@@ -56,7 +58,12 @@ assert.match(witness, /scene load did not preserve transform toolbar/, 'save/loa
 assert.match(witness, /scene load did not report two loaded objects/, 'save/load witness proves load status reflects multi-object restore');
 assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');
+assert.match(witness, /assertSceneDeleted\(/, 'witness shares exact cleanup proof across scenarios');
 assert.match(witness, /scene load did not clear stale object rows for volume-only scene/, 'scene boundary witness proves volume-only loads clear prior objects');
 assert.match(witness, /scene load did not clear stale volume primitives for object-only scene/, 'scene boundary witness proves object-only loads clear prior volume state');
 assert.match(witness, /failed local-preview scene load did not protect save target/, 'scene boundary witness proves failed local-preview loads do not become overwrite targets');
+assert.match(witness, /mixed failed scene load did not protect previous save target/, 'scene boundary witness covers mixed volume plus non-reloadable object load failure');
+assert.match(witness, /mixed failed scene load overwrote previous save target/, 'scene boundary witness proves failed mixed restore cannot overwrite the prior scene file');
+assert.match(witness, /boundary cleanup did not delete scene file/, 'scene boundary witness makes cleanup deletion load-bearing');
+assert.match(witness, /post-cleanup scene listing still includes boundary scene file/, 'scene boundary witness proves cleanup removes temporary scene files');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');

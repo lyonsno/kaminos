@@ -45,10 +45,17 @@ assert.match(index, /addSceneObjectFromSource/, 'multi-object loading reuses the
 assert.match(index, /registerSceneObject\(model,[\s\S]*source:/, 'GLB load registers source identity for persistence');
 assert.match(index, /registerSceneObject\(obj,[\s\S]*source:/, 'OBJ load registers source identity for persistence');
 assert.match(index, /function sceneIsEmpty\(\)[\s\S]*!currentMesh && volumePrimitives\.length === 0/, 'shared save guard rejects truly empty scenes while allowing volume-only scenes');
+assert.match(index, /let sceneSaveBlockedByFailedRestore\s*=\s*false/, 'failed scene restores latch a save block instead of leaving prior scene targets writable');
+assert.match(index, /function sceneSaveIsBlocked\(\)[\s\S]*Scene save blocked until a scene loads successfully/, 'save routes report failed-restore save blocking');
+assert.match(index, /window\.saveScene\s*=\s*async function\(\) \{[\s\S]*if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save refuses to write after a failed scene restore');
+assert.match(index, /window\.saveSceneAs\s*=\s*async function\(\) \{[\s\S]*if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save As refuses to write after a failed scene restore');
 assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the shared empty-scene guard');
 assert.match(index, /setInfo\('Volume scene loaded'\);/, 'volume-only scene loads report success after shared camera/postprocessing/backdrop restoration');
 assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\);[\s\S]*\}/, 'volume-only scene loads clear stale object state');
 assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene\)/, 'object-only scene loads clear stale volume primitive state');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');
+assert.match(index, /function assertSceneObjectsReloadable\(/, 'scene load preflights object reloadability before mutating scene state');
+assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load rejects non-reloadable objects before applying volume state');
+assert.match(index, /catch \(e\) \{[\s\S]*sceneSaveBlockedByFailedRestore = true;[\s\S]*currentSceneFile = previousSceneFile;[\s\S]*Scene load failed/, 'failed scene restore blocks later saves while preserving the previous target');
 assert.doesNotMatch(index, /if \(!data\.version \|\| \(!data\.model\?\.source && !hasVolumePrimitiveScene\)\)/, 'scene validation must not reject object-only multi-object scenes');

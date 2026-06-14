@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
@@ -141,6 +141,7 @@ async function fetchServerRoots(baseUrl) {
 function assertExpectedServerRoot(roots) {
   const scenesPath = roots?.scenes?.path;
   if (!scenesPath) throw new Error('server root identity unavailable: missing scenes root');
+  if (!isAbsolute(scenesPath)) throw new Error(`server root identity is not absolute: ${scenesPath}`);
   if (!expectedServerRoot) return;
   const effectiveServerRoot = resolve(scenesPath, '..');
   if (effectiveServerRoot !== expectedServerRoot) {
@@ -185,6 +186,17 @@ async function runSaveLoadRoundtripScenario(ws) {
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
         return data;
+      };
+      const assertSceneDeleted = async (name, label = 'saved') => {
+        const cleanup = await deleteScene(name);
+        if (cleanup.deleted !== name) {
+          throw new Error('cleanup did not delete saved scene file: ' + JSON.stringify({ savedFile: name, cleanup }));
+        }
+        const postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(name)) {
+          throw new Error('post-cleanup scene listing still includes saved scene file: ' + JSON.stringify({ savedFile: name, postCleanupFiles }));
+        }
+        return { cleanup, postCleanupFiles };
       };
       const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
         id: row.dataset.sceneObjectId,
@@ -298,14 +310,7 @@ async function runSaveLoadRoundtripScenario(ws) {
       }
 
       document.querySelector('[data-tab="assets"]').click();
-      const cleanup = await deleteScene(savedFile);
-      if (cleanup.deleted !== savedFile) {
-        throw new Error('cleanup did not delete saved scene file: ' + JSON.stringify({ savedFile, cleanup }));
-      }
-      const postCleanupFiles = await listScenes();
-      if (postCleanupFiles.includes(savedFile)) {
-        throw new Error('post-cleanup scene listing still includes saved scene file: ' + JSON.stringify({ savedFile, postCleanupFiles }));
-      }
+      const { cleanup, postCleanupFiles } = await assertSceneDeleted(savedFile);
       return {
         savedFile,
         firstId,
@@ -358,6 +363,17 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
         return data;
+      };
+      const assertSceneDeleted = async name => {
+        const cleanup = await deleteScene(name);
+        if (cleanup.deleted !== name) {
+          throw new Error('boundary cleanup did not delete scene file: ' + JSON.stringify({ name, cleanup }));
+        }
+        const postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(name)) {
+          throw new Error('post-cleanup scene listing still includes boundary scene file: ' + JSON.stringify({ name, postCleanupFiles }));
+        }
+        return { cleanup, postCleanupFiles };
       };
       const saveFixtureToServer = async doc => {
         const resp = await fetch('/api/save-scene', {
@@ -441,7 +457,7 @@ async function runSceneBoundaryRoundtripScenario(ws) {
       if (volumeSave.savedScene.volumePrimitives?.primitives?.length !== 1) {
         throw new Error('volume-only save after load did not retain volume primitive: ' + JSON.stringify(volumeSave.savedScene.volumePrimitives));
       }
-      await deleteScene(volumeSave.savedFile);
+      const volumeCleanup = await assertSceneDeleted(volumeSave.savedFile);
 
       const localPreviewScene = {
         schema: 'kaminos.scene.v1',
@@ -479,7 +495,76 @@ async function runSceneBoundaryRoundtripScenario(ws) {
       if (localPreviewAfterSaveAttempt.objects?.[0]?.source !== 'material-preview') {
         throw new Error('failed local-preview scene load overwrote its source file: ' + JSON.stringify(localPreviewAfterSaveAttempt.objects));
       }
-      await deleteScene(localPreviewFile);
+      const localPreviewCleanup = await assertSceneDeleted(localPreviewFile);
+
+      const previousScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp: new Date().toISOString(),
+        objects: [],
+        activeObjectId: null,
+        model: null,
+        volumePrimitives: {
+          schema,
+          primitives: [{
+            id: 'previous-volume',
+            kind: 'fire_smoke',
+            shape: 'sphere',
+            transform: { position: [0.4, -0.74, 0], rotation: [0, 0, 0], scale: [0.08, 0.08, 0.08] },
+            simulation: { sourceRadius: 0.08, flowRate: 0.08, vorticity: 1.25 },
+          }],
+        },
+      };
+      const previousFile = await saveFixtureToServer(previousScene);
+      await loadSceneDocument(previousScene, previousFile);
+      await waitForInfo('Volume scene loaded');
+      const previousBeforeMixedFailure = await readScene(previousFile);
+
+      const mixedFailedScene = {
+        schema: 'kaminos.scene.v1',
+        version: 3,
+        timestamp: new Date().toISOString(),
+        objects: [{
+          id: 'mixed-failed-local-preview-object',
+          source: 'material-preview',
+          type: 'pbr',
+          fileName: 'Mixed Failed Local Preview',
+          label: 'Mixed Failed Local Preview',
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+          materials: { side: 0, transparent: false, opacity: 1 },
+        }],
+        activeObjectId: 'mixed-failed-local-preview-object',
+        model: { source: 'material-preview', type: 'pbr', fileName: 'Mixed Failed Local Preview' },
+        volumePrimitives: {
+          schema,
+          primitives: [{
+            id: 'failed-mixed-volume',
+            kind: 'fire_smoke',
+            shape: 'sphere',
+            transform: { position: [-0.4, -0.74, 0], rotation: [0, 0, 0], scale: [0.16, 0.16, 0.16] },
+            simulation: { sourceRadius: 0.16, flowRate: 0.22, vorticity: 3.1 },
+          }],
+        },
+      };
+      await loadSceneDocument(mixedFailedScene, 'mixed-failed-local-preview.kaminos.json');
+      let mixedFailedInfo = '';
+      for (let i = 0; i < 120; i++) {
+        mixedFailedInfo = document.getElementById('info-bar').textContent.trim();
+        if (mixedFailedInfo.startsWith('Scene load failed:')) break;
+        await wait(125);
+      }
+      if (!mixedFailedInfo.startsWith('Scene load failed:')) {
+        throw new Error('mixed failed scene load did not fail as expected: ' + mixedFailedInfo);
+      }
+      const mixedProtectedSave = await window.saveScene();
+      if (mixedProtectedSave !== false) {
+        throw new Error('mixed failed scene load did not protect previous save target: ' + JSON.stringify({ mixedProtectedSave, mixedFailedInfo }));
+      }
+      const previousAfterMixedFailure = await readScene(previousFile);
+      if (JSON.stringify(previousAfterMixedFailure.volumePrimitives) !== JSON.stringify(previousBeforeMixedFailure.volumePrimitives)) {
+        throw new Error('mixed failed scene load overwrote previous save target: ' + JSON.stringify({ previousBeforeMixedFailure, previousAfterMixedFailure }));
+      }
+      const mixedCleanup = await assertSceneDeleted(previousFile);
 
       const objectScene = {
         schema: 'kaminos.scene.v1',
@@ -508,7 +593,7 @@ async function runSceneBoundaryRoundtripScenario(ws) {
       if (objectSave.savedScene.volumePrimitives?.primitives?.length !== 0) {
         throw new Error('scene load did not clear stale volume primitives for object-only scene: ' + JSON.stringify(objectSave.savedScene.volumePrimitives));
       }
-      await deleteScene(objectSave.savedFile);
+      const objectCleanup = await assertSceneDeleted(objectSave.savedFile);
 
       document.querySelector('[data-tab="assets"]').click();
       return {
@@ -518,11 +603,18 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         volumeInfo,
         volumeSavedObjectCount: (volumeSave.savedScene.objects || []).length,
         volumeSavedPrimitiveCount: volumeSave.savedScene.volumePrimitives?.primitives?.length || 0,
+        volumeCleanupDeleted: volumeCleanup.cleanup.deleted,
         failedLocalPreviewInfo: failedInfo,
         failedLocalPreviewProtectedSave: protectedSave,
+        localPreviewCleanupDeleted: localPreviewCleanup.cleanup.deleted,
+        mixedFailedInfo,
+        mixedProtectedSave,
+        mixedPreviousPrimitiveIds: previousAfterMixedFailure.volumePrimitives?.primitives?.map(primitive => primitive.id) || [],
+        mixedCleanupDeleted: mixedCleanup.cleanup.deleted,
         rowsAfterObject,
         objectInfo,
         objectSavedPrimitiveCount: objectSave.savedScene.volumePrimitives?.primitives?.length || 0,
+        objectCleanupDeleted: objectCleanup.cleanup.deleted,
       };
     })()
   `, { timeoutMs: 90000 });
