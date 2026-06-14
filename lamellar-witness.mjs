@@ -179,7 +179,18 @@ async function main() {
     const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
       expression: `(() => {
         const w = window.__kaminosLamellarWitness;
-        return w ? w.debugState() : { active: false, missing: true };
+        const state = w ? w.debugState() : { active: false, missing: true };
+        const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
+        return {
+          ...state,
+          selectedLayerUi: {
+            activeLayer: Number(activeLayerButton?.dataset.layer ?? -1),
+            selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
+            selectedStripCount: Number(document.getElementById('lamellar-selected-layer-strip-count')?.value || 0),
+            selectedStripReadout: document.getElementById('lamellar-selected-layer-strips')?.textContent || '',
+            selectedStripIds: Array.from(document.querySelectorAll('#lamellar-selected-layer-strips [data-strip-id]')).map(el => el.dataset.stripId),
+          },
+        };
       })()`,
       returnByValue: true,
     });
@@ -197,6 +208,8 @@ async function main() {
     assert.ok(state.sliceApplicationReceipt?.mode, 'Lamellar witness did not export slice application receipt');
     assert.ok(state.cutAuthorEnvelopeDescriptor?.mode, 'Lamellar witness did not export cut-author envelope descriptor');
     assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
+    assert.equal(state.selectedLayerUi?.activeLayer, 0, 'Lamellar witness did not expose selected layer UI');
+    assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -220,6 +233,7 @@ async function main() {
       layerStackDescriptor: state.layerStackDescriptor,
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,
+      selectedLayerUi: state.selectedLayerUi,
       layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,

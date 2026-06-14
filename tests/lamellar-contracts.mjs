@@ -25,6 +25,14 @@ assert.match(index, /id="lamellar-layer-rows"/, 'Lamellar tab exposes per-layer 
 assert.match(index, /id="lamellar-layer-0-chirality"/, 'Lamellar tab exposes layer 0 chirality override');
 assert.match(index, /id="lamellar-layer-0-chunkiness"/, 'Lamellar tab exposes layer 0 chunkiness override');
 assert.match(index, /id="lamellar-layer-0-strip-count"/, 'Lamellar tab exposes layer 0 strip-count override');
+assert.match(index, /id="lamellar-layer-detail"/, 'Lamellar tab exposes selected-layer authoring detail panel');
+assert.match(index, /id="lamellar-layer-select-0"/, 'Lamellar tab exposes layer 0 selection control');
+assert.match(index, /id="lamellar-layer-select-3"/, 'Lamellar tab exposes layer 3 selection control');
+assert.match(index, /id="lamellar-selected-layer-index"/, 'Lamellar tab reports the selected layer identity');
+assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab exposes selected-layer strip-count editor');
+assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
+assert.match(index, /id="lamellar-remove-strip"/, 'Lamellar tab exposes remove-strip control for the selected layer');
+assert.match(index, /id="lamellar-selected-layer-strips"/, 'Lamellar tab reports selected-layer strip instances');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -44,6 +52,10 @@ assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar ov
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
 assert.match(index, /function isLamellarRouteActive\(/, 'Lamellar route active check is centralized');
+assert.match(index, /selectedLamellarLayerIndex/, 'Lamellar UI tracks selected layer state');
+assert.match(index, /function setSelectedLamellarLayer\(/, 'Lamellar UI can switch selected layer explicitly');
+assert.match(index, /function syncSelectedLamellarLayer\(/, 'Lamellar UI syncs selected-layer authoring controls');
+assert.match(index, /function nudgeSelectedLayerStripCount\(/, 'Lamellar UI can add or remove strips from the selected layer');
 assert.match(index, /if \(!isLamellarRouteActive\(\)\) restoreSettings\(\)/, 'Lamellar route starts blank instead of restoring persisted scene/material state');
 assert.doesNotMatch(index, /loadDemo\(DEMO_ASSETS\[0\]\)/, 'Kaminos starts blank and only loads demo assets by explicit user action');
 assert.match(index, /kaminos-lamellar-witness-v0/, 'UI carries stable Lamellar witness identity');
@@ -125,6 +137,8 @@ assert.match(witness, /composerDescriptor/, 'witness records procedural composer
 assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descriptor');
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
 assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
+assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI state');
+assert.match(witness, /lamellar-selected-layer-strips/, 'witness inspects selected-layer strip readout');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
