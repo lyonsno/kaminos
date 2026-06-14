@@ -763,6 +763,7 @@ function renderSceneObjectList() {
   list.querySelectorAll('[data-scene-object-id]').forEach(button => {
     button.addEventListener('click', () => window.selectSceneObject(button.dataset.sceneObjectId));
     button.addEventListener('keydown', event => {
+      if (event.target !== button) return;
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         window.selectSceneObject(button.dataset.sceneObjectId);

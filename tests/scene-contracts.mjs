@@ -26,6 +26,7 @@ assert.match(index, /scene-object-row active/, 'active object row has a stable v
 assert.match(index, /data-scene-object-id/, 'object list buttons expose stable object ids for browser witnesses');
 assert.match(index, /data-scene-object-remove-id/, 'object list exposes stable remove ids for browser witnesses');
 assert.match(index, /event\.stopPropagation\(\);[\s\S]*window\.removeSceneObject/, 'remove controls must not also trigger row selection');
+assert.match(index, /if \(event\.target !== button\) return;[\s\S]*event\.preventDefault\(\);[\s\S]*window\.selectSceneObject/, 'row keyboard selection must ignore events from child remove controls');
 assert.match(index, /window\.removeSceneObject\s*=\s*function\(id\)[\s\S]*scene\.remove\(entry\.object\);[\s\S]*disposeObjectTree\(entry\.object\);[\s\S]*setActiveSceneObject\(fallback\?\.id \|\| null\);/, 'removing an object must remove and dispose it while retargeting active selection');
 assert.match(index, /id="append-import-toggle"/, 'Assets tab exposes an explicit append import toggle for authoring multi-object scenes');
 assert.match(index, /function shouldClearSceneForImport\(/, 'direct import paths share one append-aware clear/replace decision');
