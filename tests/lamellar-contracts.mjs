@@ -15,6 +15,7 @@ assert.match(index, /function setActiveTab\(/, 'route initialization can activat
 assert.match(index, /id="lamellar-cut-radius"/, 'Lamellar tab exposes cut radius control');
 assert.match(index, /id="lamellar-view"/, 'Lamellar tab exposes witness view selector');
 assert.match(index, /id="lamellar-layer-count"/, 'Lamellar tab exposes layer count control');
+assert.match(index, /id="lamellar-layer-count"[^>]*max="12"/, 'Lamellar macro layer count supports more than four layers');
 assert.match(index, /id="lamellar-seed"/, 'Lamellar tab exposes procedural seed control');
 assert.match(index, /id="lamellar-chirality"/, 'Lamellar tab exposes chirality control');
 assert.match(index, /id="lamellar-chirality-pattern"/, 'Lamellar tab exposes chirality pattern through layers');
@@ -33,14 +34,22 @@ assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab ex
 assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
 assert.match(index, /id="lamellar-remove-strip"/, 'Lamellar tab exposes remove-strip control for the selected layer');
 assert.match(index, /id="lamellar-selected-layer-strips"/, 'Lamellar tab reports selected-layer strip instances');
+assert.match(index, /id="lamellar-context-inspector"/, 'Lamellar tab exposes a contextual inspector for viewport-selected objects');
+assert.match(index, /id="lamellar-selected-object-kind"/, 'Lamellar context inspector reports selected object kind');
+assert.match(index, /id="lamellar-selected-object-id"/, 'Lamellar context inspector reports selected object identity');
+assert.match(index, /id="lamellar-selected-object-role"/, 'Lamellar context inspector reports selected object role');
+assert.match(index, /id="lamellar-context-profile"/, 'Lamellar profile controls are scoped inside the selected-object context inspector');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
-assert.match(index, /id="lamellar-strip-select"/, 'Lamellar tab exposes selected-strip selector');
+assert.doesNotMatch(index, /id="lamellar-strip-select"/, 'Lamellar strip selection is viewport-driven rather than dropdown-driven');
 assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
 assert.match(index, /id="lamellar-selected-strip-width"/, 'Lamellar tab exposes selected-strip width control');
 assert.match(index, /id="lamellar-selected-strip-thickness"/, 'Lamellar tab exposes selected-strip thickness control');
 assert.match(index, /id="lamellar-selected-strip-width-variance"/, 'Lamellar tab exposes selected-strip width variance control');
 assert.match(index, /id="lamellar-selected-strip-thickness-variance"/, 'Lamellar tab exposes selected-strip thickness variance control');
 assert.match(index, /id="lamellar-selected-strip-gap-pattern"/, 'Lamellar tab exposes selected-strip gap pattern preset');
+assert.match(index, /id="lamellar-population-count"/, 'Lamellar tab exposes macro same-layer population count');
+assert.match(index, /id="lamellar-cutter-count"/, 'Lamellar tab exposes macro same-layer cutter population count');
+assert.match(index, /id="lamellar-population-bearing-variance"/, 'Lamellar tab exposes macro same-layer direction variance');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -56,16 +65,23 @@ assert.match(index, /lamellar_chunkiness_variance/, 'URL route can override Lame
 assert.match(index, /lamellar_layer_chiralities/, 'URL route can override per-layer chirality values');
 assert.match(index, /lamellar_layer_chunkiness/, 'URL route can override per-layer chunkiness values');
 assert.match(index, /lamellar_layer_strip_counts/, 'URL route can override per-layer strip counts');
+assert.match(index, /lamellar_population_count/, 'URL route can override macro strip population count');
+assert.match(index, /lamellar_cutter_count/, 'URL route can override macro cutter population count');
+assert.match(index, /lamellar_population_bearing_variance/, 'URL route can override macro direction variance');
 assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar overlap bias');
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
 assert.match(index, /function isLamellarRouteActive\(/, 'Lamellar route active check is centralized');
 assert.match(index, /selectedLamellarLayerIndex/, 'Lamellar UI tracks selected layer state');
 assert.match(index, /selectedLamellarStripIndex/, 'Lamellar UI tracks selected strip state');
+assert.match(index, /selectedLamellarObject/, 'Lamellar UI tracks viewport-selected Lamellar object state');
 assert.match(index, /function setSelectedLamellarLayer\(/, 'Lamellar UI can switch selected layer explicitly');
 assert.match(index, /function syncSelectedLamellarLayer\(/, 'Lamellar UI syncs selected-layer authoring controls');
 assert.match(index, /function nudgeSelectedLayerStripCount\(/, 'Lamellar UI can add or remove strips from the selected layer');
-assert.match(index, /function setSelectedLamellarStrip\(/, 'Lamellar UI can switch selected strip explicitly');
+assert.match(index, /function installLamellarViewportSelection\(/, 'Lamellar UI installs viewport picking for visible strip selection');
+assert.match(index, /function selectLamellarObject\(/, 'Lamellar UI can select Lamellar objects from scene picks');
+assert.match(index, /function syncLamellarContextInspector\(/, 'Lamellar UI syncs selected-object context inspector controls');
+assert.match(index, /function setSelectedLamellarStripById\(/, 'Lamellar UI can switch selected strip from a picked strip instance id');
 assert.match(index, /function syncSelectedLamellarStrip\(/, 'Lamellar UI syncs selected-strip profile controls');
 assert.match(index, /function applySelectedStripProfileOverride\(/, 'Lamellar UI writes selected-strip profile overrides');
 assert.match(index, /if \(!isLamellarRouteActive\(\)\) restoreSettings\(\)/, 'Lamellar route starts blank instead of restoring persisted scene/material state');
@@ -80,7 +96,7 @@ assert.match(core, /export function createKaminosLamellarWitness/, 'Lamellar mod
 assert.match(core, /build\(\{ frame = false \} = \{\}\)/, 'Lamellar rebuild can preserve the current human camera');
 assert.match(core, /setControls[\s\S]*build\(\{ frame: false \}\)/, 'slider/control changes rebuild without reframing the camera');
 assert.match(core, /setActive[\s\S]*build\(\{ frame: false \}\)/, 'enabling Lamellar builds without moving the current human camera');
-assert.match(core, /return \{ setActive, setControls, update, frameCamera, debugState \}/, 'explicit Frame button remains the only camera-framing command');
+assert.match(core, /return \{[\s\S]*frameCamera[\s\S]*debugState[\s\S]*selectBySectionId[\s\S]*selectByStripInstanceId[\s\S]*pickFromClientPoint[\s\S]*\}/, 'explicit Frame button remains the only camera-framing command while selection APIs are exposed');
 assert.match(core, /kaminos-lamellar-witness-v0/, 'Lamellar module exposes stable witness identity');
 assert.match(core, /sphere-domain-section-segment-witness-v0/, 'Lamellar module records effective route identity');
 assert.match(core, /cap_profile/, 'Lamellar module supports the cap-profile witness view');
@@ -105,11 +121,17 @@ assert.match(core, /LayerShellDescriptor/, 'Lamellar core names layer shells as 
 assert.match(core, /LamellarLayerSpec/, 'Lamellar core names per-layer specs explicitly');
 assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip instances explicitly');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
+assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
+assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
+assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar core names same-shell direction population authoring mode');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
 assert.match(core, /thicknessVariance/, 'Lamellar core supports strip-local thickness variance independent of layer thickness');
 assert.match(core, /gapPattern/, 'Lamellar core supports strip-local gap pattern presets');
 assert.match(core, /splitStripByGapPattern/, 'Lamellar core splits selected strip descriptors by gap-pattern presets before mesh emission');
+assert.match(core, /selectBySectionId/, 'Lamellar witness exposes section-id selection for viewport picking');
+assert.match(core, /pickFromClientPoint/, 'Lamellar witness exposes raycast picking from the viewport');
+assert.match(core, /selectedLamellarObject/, 'Lamellar debug state reports selected viewport object');
 assert.match(core, /generateLamellarLayerSpecs/, 'Lamellar core generates per-layer specs before section descriptors');
 assert.match(core, /generateLamellarStripInstances/, 'Lamellar core expands layer specs into strip instances before mesh emission');
 assert.match(core, /generateLamellarSectionSegments/, 'Lamellar core generates data-first section descriptors before mesh emission');
@@ -159,8 +181,12 @@ assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI stat
 assert.match(witness, /lamellar-selected-layer-strips/, 'witness inspects selected-layer strip readout');
 assert.match(witness, /selectedStripUi/, 'witness records selected-strip profile UI state');
 assert.match(witness, /lamellar-selected-strip-width/, 'witness inspects selected-strip width control');
+assert.match(witness, /selectionUi/, 'witness records viewport/context selection UI state');
+assert.match(witness, /selectedLamellarObject/, 'witness records selected Lamellar object state');
+assert.match(witness, /viewportPickReceipt/, 'witness records viewport pick receipt');
 assert.match(witness, /stripProfileOverrides/, 'witness records selected-strip profile override inputs');
 assert.match(witness, /stripProfileDescriptors/, 'witness records selected-strip profile descriptors');
+assert.match(witness, /stripPopulationDescriptors/, 'witness records macro strip population descriptors');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -308,6 +334,50 @@ assert.ok(
     && descriptor.gapPattern === 'dashed'
   ),
   'profiled descriptors carry selected-strip width, thickness, variance, and gap pattern receipts'
+);
+
+const macroStack = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 8,
+  chiralityPattern: 'alternating',
+  depthSpacing: 0.05,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  overlapBias: 0.5,
+});
+assert.equal(macroStack.layerSpecs.length, 8, 'macro composer supports more than four layers');
+assert.equal(macroStack.layerStackDescriptor.numLayers, 8, 'layer stack descriptor records expanded macro layer count');
+
+const populated = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 3,
+  chiralityPattern: 'same',
+  depthSpacing: 0.05,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  overlapBias: 0.5,
+  stripPopulations: [
+    { layerIndex: 0, role: 'lamella', count: 4, chirality: 1, bearingOffset: 0, bearingVariance: 0.28 },
+    { layerIndex: 0, role: 'cutter', count: 2, chirality: -1, bearingOffset: 0.44, bearingVariance: 0.12, gapPattern: 'crosscut' },
+  ],
+});
+assert.ok(
+  populated.stripPopulationDescriptors.some(population =>
+    population.kind === 'StripPopulationDescriptor'
+    && population.layerIndex === 0
+    && population.role === 'cutter'
+    && population.count === 2
+    && population.bearingVariance === 0.12
+  ),
+  'macro same-layer cutter population descriptor is preserved'
+);
+assert.ok(
+  populated.stripInstances.some(strip => strip.populationRole === 'cutter' && strip.chirality === -1),
+  'same-layer cutter population emits opposite-direction strip instances'
+);
+assert.ok(
+  populated.descriptors.some(descriptor => descriptor.populationRole === 'cutter' && descriptor.gapPattern === 'crosscut'),
+  'same-layer cutter population reaches emitted descriptors with gap/crosscut intent'
 );
 
 const sliced = coreModule.sliceLamellarSectionSegments(highChunk.descriptors, {

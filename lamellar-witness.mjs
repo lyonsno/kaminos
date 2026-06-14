@@ -179,7 +179,10 @@ async function main() {
     const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
       expression: `(() => {
         const w = window.__kaminosLamellarWitness;
-        const state = w ? w.debugState() : { active: false, missing: true };
+        const preState = w ? w.debugState() : { active: false, missing: true };
+        const firstStrip = (preState.sectionSegments || []).find(segment => segment.stripInstanceId);
+        if (firstStrip) window.__kaminosLamellarSelectByStripInstanceId?.(firstStrip.stripInstanceId);
+        const state = w ? w.debugState() : preState;
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
         return {
           ...state,
@@ -192,12 +195,18 @@ async function main() {
           },
           selectedStripUi: {
             selectedStripText: document.getElementById('lamellar-selected-strip-index')?.textContent || '',
-            selectedStripIndex: Number(document.getElementById('lamellar-strip-select')?.value || 0),
+            selectedStripIndex: Number(state.selectedLamellarObject?.stripIndex ?? 0),
             width: Number(document.getElementById('lamellar-selected-strip-width')?.value || 0),
             thickness: Number(document.getElementById('lamellar-selected-strip-thickness')?.value || 0),
             widthVariance: Number(document.getElementById('lamellar-selected-strip-width-variance')?.value || 0),
             thicknessVariance: Number(document.getElementById('lamellar-selected-strip-thickness-variance')?.value || 0),
             gapPattern: document.getElementById('lamellar-selected-strip-gap-pattern')?.value || '',
+          },
+          selectionUi: {
+            kind: document.getElementById('lamellar-selected-object-kind')?.textContent || '',
+            objectId: document.getElementById('lamellar-selected-object-id')?.textContent || '',
+            role: document.getElementById('lamellar-selected-object-role')?.textContent || '',
+            contextProfileDisplay: getComputedStyle(document.getElementById('lamellar-context-profile')).display,
           },
         };
       })()`,
@@ -221,7 +230,11 @@ async function main() {
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
     assert.ok(state.selectedStripUi?.selectedStripText, 'Lamellar witness did not expose selected strip UI');
     assert.ok((state.selectedStripUi?.width || 0) > 0, 'Lamellar selected-strip width control did not carry a positive value');
+    assert.ok(state.selectedLamellarObject?.stripInstanceId, 'Lamellar witness did not select a viewport/context object');
+    assert.notEqual(state.selectionUi?.kind, 'none', 'Lamellar context inspector did not reflect selected object kind');
+    assert.notEqual(state.selectionUi?.contextProfileDisplay, 'none', 'Lamellar context inspector did not reveal profile controls for selected strip');
     assert.ok((state.stripProfileDescriptors || []).length >= (state.stripInstances || []).length, 'Lamellar witness did not export strip profile descriptors');
+    assert.ok((state.stripPopulationDescriptors || []).some(population => population.role === 'cutter'), 'Lamellar witness did not export cutter population descriptors');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -247,8 +260,12 @@ async function main() {
       stripInstances: state.stripInstances,
       selectedLayerUi: state.selectedLayerUi,
       selectedStripUi: state.selectedStripUi,
+      selectionUi: state.selectionUi,
+      selectedLamellarObject: state.selectedLamellarObject,
+      viewportPickReceipt: state.viewportPickReceipt,
       stripProfileOverrides: state.stripProfileOverrides,
       stripProfileDescriptors: state.stripProfileDescriptors,
+      stripPopulationDescriptors: state.stripPopulationDescriptors,
       layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,

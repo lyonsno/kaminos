@@ -333,7 +333,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Layers</span>
-      <input type="range" id="lamellar-layer-count" min="1" max="4" step="1" value="2">
+      <input type="range" id="lamellar-layer-count" min="1" max="12" step="1" value="2">
       <span class="slider-val" id="lamellar-layer-count-val">2</span>
     </div>
     <h2>Composer</h2>
@@ -378,17 +378,36 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-overlap-bias" min="0" max="1" step="0.01" value="0.38">
         <span class="slider-val" id="lamellar-overlap-bias-val">0.38</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Population</span>
+        <input type="range" id="lamellar-population-count" min="1" max="16" step="1" value="4">
+        <span class="slider-val" id="lamellar-population-count-val">4</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Cutters</span>
+        <input type="range" id="lamellar-cutter-count" min="0" max="8" step="1" value="1">
+        <span class="slider-val" id="lamellar-cutter-count-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Bearing Var</span>
+        <input type="range" id="lamellar-population-bearing-variance" min="0" max="1" step="0.01" value="0.20">
+        <span class="slider-val" id="lamellar-population-bearing-variance-val">0.20</span>
+      </div>
       <button class="btn" id="lamellar-generate">Generate</button>
     </div>
-    <h2>Layer Detail</h2>
-    <div class="panel" id="lamellar-layer-detail">
-      <div class="slider-row" id="lamellar-layer-selectors">
-        <span class="slider-label">Layer</span>
-        <button class="btn active" id="lamellar-layer-select-0" data-layer="0">L0</button>
-        <button class="btn" id="lamellar-layer-select-1" data-layer="1">L1</button>
-        <button class="btn" id="lamellar-layer-select-2" data-layer="2">L2</button>
-        <button class="btn" id="lamellar-layer-select-3" data-layer="3">L3</button>
-      </div>
+    <h2>Context</h2>
+    <div class="panel" id="lamellar-context-inspector" data-contextual-inspector="viewport-selection">
+      <div class="field"><span class="field-key">Kind</span><span class="field-val" id="lamellar-selected-object-kind">none</span></div>
+      <div class="field"><span class="field-key">Object</span><span class="field-val" id="lamellar-selected-object-id">none</span></div>
+      <div class="field"><span class="field-key">Role</span><span class="field-val" id="lamellar-selected-object-role">none</span></div>
+      <div id="lamellar-layer-detail" style="display:none">
+        <div class="slider-row" id="lamellar-layer-selectors" style="display:none">
+          <span class="slider-label">Layer</span>
+          <button class="btn active" id="lamellar-layer-select-0" data-layer="0">L0</button>
+          <button class="btn" id="lamellar-layer-select-1" data-layer="1">L1</button>
+          <button class="btn" id="lamellar-layer-select-2" data-layer="2">L2</button>
+          <button class="btn" id="lamellar-layer-select-3" data-layer="3">L3</button>
+        </div>
       <div class="field"><span class="field-key">Selected</span><span class="field-val" id="lamellar-selected-layer-index">L0 shell</span></div>
       <div class="slider-row">
         <span class="slider-label">Strips</span>
@@ -397,14 +416,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="lamellar-add-strip">+</button>
       </div>
       <div class="field"><span class="field-key">Strip IDs</span><span class="field-val" id="lamellar-selected-layer-strips">none</span></div>
-    </div>
-    <h2>Strip Profile</h2>
-    <div class="panel" id="lamellar-strip-profile">
-      <div class="slider-row">
-        <span class="slider-label">Strip</span>
-        <select id="lamellar-strip-select" class="select-input"></select>
-        <span class="slider-val" id="lamellar-selected-strip-index">s0</span>
       </div>
+      <div id="lamellar-context-profile">
+        <div class="field"><span class="field-key">Strip</span><span class="field-val" id="lamellar-selected-strip-index">none</span></div>
+        <div id="lamellar-strip-profile">
       <div class="slider-row">
         <span class="slider-label">Width</span>
         <input type="range" id="lamellar-selected-strip-width" min="0.006" max="0.18" step="0.001" value="0.06">
@@ -434,6 +449,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <option value="crosscut">crosscut</option>
         </select>
         <span class="slider-val" id="lamellar-selected-strip-gap-pattern-val">solid</span>
+      </div>
+        </div>
       </div>
     </div>
     <h2>Layer Rows</h2>
@@ -597,6 +614,7 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let lamellarWitness = null;
 let selectedLamellarLayerIndex = 0;
 let selectedLamellarStripIndex = 0;
+let selectedLamellarObject = null;
 const lamellarStripProfileOverrides = {};
 
 // --- Settings Persistence ---
@@ -878,6 +896,9 @@ function readLamellarControls() {
     chunkinessBase: parseFloat(document.getElementById('lamellar-chunkiness').value),
     chunkinessVariance: parseFloat(document.getElementById('lamellar-chunkiness-variance').value),
     overlapBias: parseFloat(document.getElementById('lamellar-overlap-bias').value),
+    populationCount: parseInt(document.getElementById('lamellar-population-count').value, 10),
+    cutterCount: parseInt(document.getElementById('lamellar-cutter-count').value, 10),
+    populationBearingVariance: parseFloat(document.getElementById('lamellar-population-bearing-variance').value),
     sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
     sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
     layerOverrides,
@@ -886,7 +907,7 @@ function readLamellarControls() {
 }
 
 function setSelectedLamellarLayer(layerIndex) {
-  selectedLamellarLayerIndex = Math.max(0, Math.min(3, Math.round(Number(layerIndex) || 0)));
+  selectedLamellarLayerIndex = Math.max(0, Math.min(11, Math.round(Number(layerIndex) || 0)));
   selectedLamellarStripIndex = 0;
   syncSelectedLamellarLayer();
 }
@@ -908,6 +929,24 @@ function setSelectedLamellarStrip(stripIndex) {
   syncSelectedLamellarStrip();
 }
 
+function setSelectedLamellarStripById(stripInstanceId) {
+  const current = lamellarWitness?.debugState?.() || {};
+  const strip = (current.stripInstances || []).find(candidate => candidate.id === stripInstanceId);
+  if (!strip) return null;
+  selectedLamellarLayerIndex = strip.layerIndex;
+  selectedLamellarStripIndex = strip.stripIndex;
+  syncSelectedLamellarLayer(current);
+  syncSelectedLamellarStrip(current);
+  return strip;
+}
+
+function selectLamellarObject(selection) {
+  selectedLamellarObject = selection || null;
+  if (selection?.stripInstanceId) setSelectedLamellarStripById(selection.stripInstanceId);
+  else syncLamellarContextInspector(lamellarWitness?.debugState?.() || {});
+  return selectedLamellarObject;
+}
+
 function profileForSelectedStrip(strip, state) {
   if (!strip) return null;
   return lamellarStripProfileOverrides[strip.id]
@@ -918,7 +957,7 @@ function profileForSelectedStrip(strip, state) {
 
 function syncSelectedLamellarLayer(state = null) {
   const current = state || lamellarWitness?.debugState?.() || {};
-  const maxLayer = Math.max(0, Math.min(3, Number(current.layerCount ?? document.getElementById('lamellar-layer-count').value) - 1));
+  const maxLayer = Math.max(0, Math.min(11, Number(current.layerCount ?? document.getElementById('lamellar-layer-count').value) - 1));
   if (selectedLamellarLayerIndex > maxLayer) selectedLamellarLayerIndex = maxLayer;
   for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
     const button = document.getElementById(`lamellar-layer-select-${layerIndex}`);
@@ -944,14 +983,8 @@ function syncSelectedLamellarLayer(state = null) {
 function syncSelectedLamellarStrip(state = null) {
   const current = state || lamellarWitness?.debugState?.() || {};
   const strips = selectedLamellarStrips(current);
-  const stripSelect = document.getElementById('lamellar-strip-select');
   const maxStrip = Math.max(0, strips.length - 1);
   selectedLamellarStripIndex = Math.max(0, Math.min(maxStrip, Math.round(Number(selectedLamellarStripIndex) || 0)));
-  if (stripSelect) {
-    stripSelect.innerHTML = strips.map(strip => `<option value="${strip.stripIndex}">s${strip.stripIndex}</option>`).join('');
-    stripSelect.value = String(selectedLamellarStripIndex);
-    stripSelect.disabled = strips.length === 0;
-  }
   const strip = selectedLamellarStrip(current);
   const profile = profileForSelectedStrip(strip, current);
   const width = Number(profile?.width ?? strip?.width ?? 0.06);
@@ -972,6 +1005,38 @@ function syncSelectedLamellarStrip(state = null) {
   document.getElementById('lamellar-selected-strip-width-variance-val').textContent = widthVariance.toFixed(2);
   document.getElementById('lamellar-selected-strip-thickness-variance-val').textContent = thicknessVariance.toFixed(2);
   document.getElementById('lamellar-selected-strip-gap-pattern-val').textContent = gapPattern;
+}
+
+function syncLamellarContextInspector(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  selectedLamellarObject = current.selectedLamellarObject || selectedLamellarObject;
+  const object = selectedLamellarObject;
+  document.getElementById('lamellar-selected-object-kind').textContent = object?.objectKind || 'none';
+  document.getElementById('lamellar-selected-object-id').textContent = object?.sectionId || object?.stripInstanceId || 'none';
+  document.getElementById('lamellar-selected-object-role').textContent = object?.role || 'none';
+  const profile = document.getElementById('lamellar-context-profile');
+  if (profile) profile.style.display = object?.stripInstanceId ? '' : 'none';
+}
+
+function installLamellarViewportSelection() {
+  const canvas = renderer?.domElement;
+  if (!canvas || canvas.dataset.lamellarSelectionInstalled === '1') return;
+  canvas.dataset.lamellarSelectionInstalled = '1';
+  let down = null;
+  canvas.addEventListener('pointerdown', event => {
+    down = { x: event.clientX, y: event.clientY };
+  });
+  canvas.addEventListener('pointerup', event => {
+    if (!lamellarWitness?.debugState?.().active || !down) return;
+    const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+    down = null;
+    if (moved > 4) return;
+    const receipt = lamellarWitness.pickFromClientPoint(event.clientX, event.clientY, canvas);
+    if (receipt?.hit) selectLamellarObject(lamellarWitness.debugState().selectedLamellarObject);
+    else selectLamellarObject(null);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
 }
 
 function applySelectedStripProfileOverride() {
@@ -1021,6 +1086,9 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-chunkiness-val').textContent = c.chunkinessBase.toFixed(2);
   document.getElementById('lamellar-chunkiness-variance-val').textContent = c.chunkinessVariance.toFixed(2);
   document.getElementById('lamellar-overlap-bias-val').textContent = c.overlapBias.toFixed(2);
+  document.getElementById('lamellar-population-count-val').textContent = String(c.populationCount);
+  document.getElementById('lamellar-cutter-count-val').textContent = String(c.cutterCount);
+  document.getElementById('lamellar-population-bearing-variance-val').textContent = c.populationBearingVariance.toFixed(2);
   document.getElementById('lamellar-slice-t-val').textContent = c.sliceT.toFixed(3);
   document.getElementById('lamellar-slice-angle-val').textContent = String(Math.round(c.sliceAngle));
   if (!lamellarWitness) return;
@@ -1029,6 +1097,8 @@ function syncLamellarReadout() {
     const chiralityEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-chirality`);
     const chunkinessEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-chunkiness`);
     const stripCountEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-strip-count`);
+    const valEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-val`);
+    if (!valEl) continue;
     if (chiralityEl && chunkinessEl && stripCountEl && chiralityEl.dataset.overridden !== '1' && chunkinessEl.dataset.overridden !== '1' && stripCountEl.dataset.overridden !== '1') {
       chiralityEl.value = layer.chirality > 0 ? '1' : '-1';
       chunkinessEl.value = String(layer.chunkiness);
@@ -1037,7 +1107,7 @@ function syncLamellarReadout() {
     const sign = (chiralityEl?.value || layer.chirality) > 0 ? '+' : '-';
     const chunkiness = Number(chunkinessEl?.value ?? layer.chunkiness);
     const stripCount = Number(stripCountEl?.value ?? layer.stripCount);
-    document.getElementById(`lamellar-layer-${layer.layerIndex}-val`).textContent = `${sign} ${chunkiness.toFixed(2)} s${stripCount}`;
+    valEl.textContent = `${sign} ${chunkiness.toFixed(2)} s${stripCount}`;
   }
   document.getElementById('lamellar-identity').textContent = state.witnessIdentity || 'kaminos-lamellar-witness-v0';
   document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
@@ -1050,6 +1120,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-slice-receipt').textContent = state.sliceApplicationReceipt?.affectedSegmentIds?.join(',') || 'none';
   document.getElementById('lamellar-cut-author').textContent = state.channelCutReceipt?.mode || 'none';
   syncSelectedLamellarLayer(state);
+  syncLamellarContextInspector(state);
   document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
   document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
 }
@@ -1066,7 +1137,7 @@ function applyLamellarRouteParams() {
   }
   const layers = Number(params.get('lamellar_layers'));
   if (params.has('lamellar_layers') && Number.isFinite(layers)) {
-    document.getElementById('lamellar-layer-count').value = String(Math.max(1, Math.min(4, Math.round(layers))));
+    document.getElementById('lamellar-layer-count').value = String(Math.max(1, Math.min(12, Math.round(layers))));
   }
   const seed = Number(params.get('lamellar_seed'));
   if (params.has('lamellar_seed') && Number.isFinite(seed)) {
@@ -1123,6 +1194,18 @@ function applyLamellarRouteParams() {
       }
     });
   }
+  const populationCount = Number(params.get('lamellar_population_count'));
+  if (params.has('lamellar_population_count') && Number.isFinite(populationCount)) {
+    document.getElementById('lamellar-population-count').value = String(Math.max(1, Math.min(16, Math.round(populationCount))));
+  }
+  const cutterCount = Number(params.get('lamellar_cutter_count'));
+  if (params.has('lamellar_cutter_count') && Number.isFinite(cutterCount)) {
+    document.getElementById('lamellar-cutter-count').value = String(Math.max(0, Math.min(8, Math.round(cutterCount))));
+  }
+  const populationBearingVariance = Number(params.get('lamellar_population_bearing_variance'));
+  if (params.has('lamellar_population_bearing_variance') && Number.isFinite(populationBearingVariance)) {
+    document.getElementById('lamellar-population-bearing-variance').value = String(Math.max(0, Math.min(1, populationBearingVariance)));
+  }
   const overlapBias = Number(params.get('lamellar_overlap_bias'));
   if (params.has('lamellar_overlap_bias') && Number.isFinite(overlapBias)) {
     document.getElementById('lamellar-overlap-bias').value = String(Math.max(0, Math.min(1, overlapBias)));
@@ -1141,6 +1224,14 @@ async function initLamellarRoute() {
   const params = new URLSearchParams(window.location.search);
   lamellarWitness = createKaminosLamellarWitness({ THREE, scene, camera, controls });
   window.__kaminosLamellarWitness = lamellarWitness;
+  window.__kaminosLamellarSelectByStripInstanceId = stripInstanceId => {
+    const selection = lamellarWitness.selectByStripInstanceId(stripInstanceId, 'ui-selection-helper');
+    selectLamellarObject(selection);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+    return selection;
+  };
+  window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
   const composerControlIds = [
@@ -1153,6 +1244,9 @@ async function initLamellarRoute() {
     'lamellar-depth-spacing',
     'lamellar-chunkiness',
     'lamellar-chunkiness-variance',
+    'lamellar-population-count',
+    'lamellar-cutter-count',
+    'lamellar-population-bearing-variance',
     'lamellar-overlap-bias',
     'lamellar-slice-t',
     'lamellar-slice-angle',
@@ -1196,9 +1290,6 @@ async function initLamellarRoute() {
   });
   document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
   document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));
-  document.getElementById('lamellar-strip-select').addEventListener('change', event => {
-    setSelectedLamellarStrip(event.target.value);
-  });
   const stripProfileControlIds = [
     'lamellar-selected-strip-width',
     'lamellar-selected-strip-thickness',
@@ -1231,6 +1322,7 @@ async function initLamellarRoute() {
     lamellarWitness.frameCamera();
     syncLamellarReadout();
   });
+  installLamellarViewportSelection();
   if (params.get('kaminos_lamellar_witness') === '1') {
     setActiveTab('lamellar');
     lamellarWitness.setActive(true);
