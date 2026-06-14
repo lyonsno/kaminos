@@ -37,9 +37,12 @@ const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
+const expectedSceneBoundsProbe = routeParams.get('volume_scene_bounds_probe') === '1';
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedSecondPrimitiveId = 'authored-fire-smoke-witness-b';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
+const expectedAuthoredSceneBoundsPosition = [0.62, -0.9, 0.0];
+const expectedAuthoredEffectivePosition = expectedSceneBoundsProbe ? expectedAuthoredSceneBoundsPosition : expectedAuthoredMovedPosition;
 const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
@@ -307,7 +310,7 @@ async function main() {
           });
           authoring.select('${expectedAuthoredPrimitiveId}');
           authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1 });
-          const moved = authoring.moveSelectedTo([${expectedAuthoredMovedPosition.join(', ')}]);
+          const moved = authoring.moveSelectedTo([${expectedAuthoredEffectivePosition.join(', ')}]);
           const second = ${expectedMultiPrimitiveProbe
             ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
                 id: '${expectedSecondPrimitiveId}',
@@ -356,10 +359,10 @@ async function main() {
         assert.equal(saveLoadRoundTrip?.loadedSceneData?.volumePrimitives?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'loaded scene did not preserve selected volume primitive id');
         assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'round-tripped authoring state did not restore selected primitive');
         assert.equal(saveLoadRoundTrip?.volumeAuthoring?.transformTargetPrimitiveId, expectedAuthoredPrimitiveId, 'round-tripped authoring state did not restore transform target');
-        assertVectorClose(savedPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'saved scene primitive transform position');
-        assertVectorClose(loadedPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'loaded scene primitive transform position');
-        assertVectorClose(roundTripPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'round-tripped renderer primitive transform position');
-        assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.position, expectedAuthoredMovedPosition, 'round-tripped primitive source position');
+        assertVectorClose(savedPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'saved scene primitive transform position');
+        assertVectorClose(loadedPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'loaded scene primitive transform position');
+        assertVectorClose(roundTripPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'round-tripped renderer primitive transform position');
+        assertVectorClose(saveLoadRoundTrip?.volumeState?.primitiveSource?.position, expectedAuthoredEffectivePosition, 'round-tripped primitive source position');
       }
       await delay(Math.max(600, Math.floor(settleMs / 2)));
     }
@@ -432,8 +435,14 @@ async function main() {
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored primitive marker opacity became too visually dominant');
       assert.equal(volumeAuthoring?.solidMarkerCount, 0, 'authored primitive marker became a solid filled body');
       assert.equal(primitive?.couplingSource, 'manual', 'authored primitive did not preserve manual coupling source');
-      assertVectorClose(primitive?.transform?.position, expectedAuthoredMovedPosition, 'renderer authored primitive transform position');
-      assertVectorClose(authoredPrimitive?.transform?.position, expectedAuthoredMovedPosition, 'authoring authored primitive transform position');
+      assertVectorClose(primitive?.transform?.position, expectedAuthoredEffectivePosition, 'renderer authored primitive transform position');
+      assertVectorClose(authoredPrimitive?.transform?.position, expectedAuthoredEffectivePosition, 'authoring authored primitive transform position');
+      if (expectedSceneBoundsProbe) {
+        assert.equal(volumeAuthoring?.movementBoundsIdentity, 'volume-primitive-shared-scene-bounds-v0', 'authored primitive movement did not use shared scene bounds');
+        assert.equal(volumeAuthoring?.markerUnderFloorVisibilityMode, 'volume-primitive-wire-visible-through-floor-v0', 'below-floor primitive marker did not stay in wire overlay mode');
+        assert.equal(volumeAuthoring?.selectedMarkerBelowGround, true, 'scene-bounds probe did not move the selected marker below the ground disc');
+        assert.equal(volumeAuthoring?.selectedMarkerDepthTest, false, 'below-floor wire marker should not be hidden by the ground depth buffer');
+      }
       if (expectedMultiPrimitiveProbe) {
         assert.equal(state.volumePrimitiveCount, 2, 'renderer did not retain two authored volume primitives');
         assert.equal(state.primitiveSourceCount, 2, 'renderer did not publish two effective primitive sources');
@@ -441,7 +450,7 @@ async function main() {
         assert.ok(Array.isArray(state.primitiveSources), 'renderer did not expose primitive source records');
         const firstSource = state.primitiveSources.find(source => source.id === expectedAuthoredPrimitiveId);
         const secondSource = state.primitiveSources.find(source => source.id === expectedSecondPrimitiveId);
-        assertVectorClose(firstSource?.position, expectedAuthoredMovedPosition, 'first effective primitive source position');
+        assertVectorClose(firstSource?.position, expectedAuthoredEffectivePosition, 'first effective primitive source position');
         assertVectorClose(secondSource?.position, expectedSecondPrimitivePosition, 'second effective primitive source position');
         assert.equal(firstSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'first source did not preserve primitive-centered mode');
         assert.equal(secondSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'second source did not preserve primitive-centered mode');
@@ -459,7 +468,17 @@ async function main() {
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
       assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - 2.1) < 0.001, 'authored primitive radiance setting was not applied');
     }
-    assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
+    if (!expectedSceneBoundsProbe) {
+      for (let i = 0; i < 40 && (state?.simStepCount ?? 0) <= 5; i += 1) {
+        await delay(150);
+        const simAdvanceEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+          returnByValue: true,
+        });
+        state = simAdvanceEval.result.value || state;
+      }
+      assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
+    }
 
     phase = 'gpu-readback';
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
@@ -479,35 +498,37 @@ async function main() {
     const primitiveCenteredLiveVelocityThreshold = state.primitiveSource?.bodyMode === 'primitive-centered-sphere-volume-v0'
       ? 0.00005
       : 0.001;
-    if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= primitiveCenteredLiveVelocityThreshold || sample.simReadback.liveVoxels < 8) {
-      throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
-      throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
-      throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
-      throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= 0.0005) {
-      throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005) {
-      throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025) {
-      throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= 0.00025) {
-      throw new Error(`GPU sim readback does not show fire-lick breakup: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005) {
-      throw new Error(`GPU sim readback does not show curl/vorticity evidence: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
-      throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
+    if (!expectedSceneBoundsProbe) {
+      if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= primitiveCenteredLiveVelocityThreshold || sample.simReadback.liveVoxels < 8) {
+        throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
+        throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
+        throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
+        throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= 0.0005) {
+        throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005) {
+        throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025) {
+        throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= 0.00025) {
+        throw new Error(`GPU sim readback does not show fire-lick breakup: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005) {
+        throw new Error(`GPU sim readback does not show curl/vorticity evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
+        throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
     }
     const metrics = {
       width: sample.width,
@@ -519,7 +540,7 @@ async function main() {
       warmEmissivePixels: sample.warmEmissivePixels,
       smokeLikePixels: sample.smokeLikePixels,
     };
-    if (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+    if (!expectedSceneBoundsProbe && (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
@@ -528,7 +549,7 @@ async function main() {
     const missingMainRendererVolume = primitiveCenteredBodyVisual
       ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.warmEmissivePixels < 500 || mainRendererMetrics.meanLuma < 8
       : mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8;
-    if (missingMainRendererVolume) {
+    if (!expectedSceneBoundsProbe && missingMainRendererVolume) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const report = {

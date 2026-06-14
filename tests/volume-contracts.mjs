@@ -52,7 +52,10 @@ assert.match(index, /selectedVolumePrimitiveId/, 'viewport keeps explicit select
 assert.match(index, /volumePrimitiveMarkers/, 'authored volume primitives have selectable main-renderer markers');
 assert.match(index, /activeVolumeTransformPrimitiveId/, 'viewport tracks when the transform gizmo is targeting a volume primitive');
 assert.match(index, /createManualFireSmokeVolumePrimitive/, 'manual Fire+Smoke primitive records are created through a named helper');
-assert.match(index, /clampVolumePrimitivePosition/, 'manual volume primitive placement clamps into the visible simulation source domain');
+assert.match(index, /VOLUME_PRIMITIVE_SCENE_BOUNDS/, 'manual volume primitive movement uses a shared scene-scale bounds contract');
+assert.match(index, /volume-primitive-shared-scene-bounds-v0/, 'volume primitive movement bounds carry stable scene-bounds identity');
+assert.match(index, /normalizeVolumePrimitiveScenePosition/, 'volume primitive movement normalizes through shared scene bounds instead of source-local placement');
+assert.doesNotMatch(index, /-0\.55,\s*0\.55/, 'volume primitive movement must not be trapped in the old source-local x/z clamp');
 assert.match(index, /volumeBodyMode:\s*'primitive-centered-sphere-volume-v0'/, 'manual volume primitives request a primitive-centered volume body');
 assert.match(index, /armVolumePrimitiveTool/, 'Volume tab can arm primitive placement');
 assert.match(index, /placeVolumePrimitiveFromEvent/, 'viewport click placement routes through a named primitive placement helper');
@@ -63,6 +66,8 @@ assert.match(index, /volume-primitive-transform-target-v0/, 'volume primitive tr
 assert.match(index, /volume-primitive-marker-v0/, 'main-renderer primitive markers carry stable identity');
 assert.match(index, /volume-primitive-marker-wire-halo-v0/, 'volume primitive markers render as wire/halo handles instead of solid fake bodies');
 assert.match(index, /wireframe:\s*true/, 'volume primitive markers must not be solid filled spheres');
+assert.match(index, /volume-primitive-wire-visible-through-floor-v0/, 'below-floor volume primitive handles stay visible as wire overlays');
+assert.match(index, /markerUnderFloorVisibilityMode/, 'authoring debug state reports under-floor marker visibility mode');
 assert.match(index, /volume-primitive-source-handle-not-raymarch-bounds-v0/, 'volume primitive markers must identify as source handles, not full raymarch bounds');
 assert.match(index, /0x9aa0a6/, 'selected volume primitive marker uses a neutral gray palette instead of bright fire yellow');
 assert.match(index, /selected\s*\?\s*1\.35\s*:\s*1\.05/, 'volume primitive marker halo should bound the visible primitive body instead of shrinking inside it');

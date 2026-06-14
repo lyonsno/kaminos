@@ -667,6 +667,13 @@ let volumePrototype = null;
 let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
+const VOLUME_PRIMITIVE_SCENE_BOUNDS = Object.freeze({
+  identity: 'volume-primitive-shared-scene-bounds-v0',
+  min: [-5, -2.5, -5],
+  max: [5, 3, 5],
+  groundY: -0.85,
+});
+const VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE = 'volume-primitive-wire-visible-through-floor-v0';
 let volumePrimitives = [];
 let volumeAuthoringMode = null;
 let selectedVolumePrimitiveId = null;
@@ -842,21 +849,21 @@ function getVolumeAuthoringState() {
   };
 }
 
-function clampVolumePrimitivePosition(position = [0, -0.58, 0]) {
+function normalizeVolumePrimitiveScenePosition(position = [0, -0.58, 0]) {
   const source = Array.isArray(position) ? position : [0, -0.58, 0];
   const x = Number(source[0]);
   const y = Number(source[1]);
   const z = Number(source[2]);
   return [
-    THREE.MathUtils.clamp(Number.isFinite(x) ? x : 0, -0.55, 0.55),
-    THREE.MathUtils.clamp(Number.isFinite(y) ? y : -0.58, -0.74, 0.45),
-    THREE.MathUtils.clamp(Number.isFinite(z) ? z : 0, -0.55, 0.55),
+    THREE.MathUtils.clamp(Number.isFinite(x) ? x : 0, VOLUME_PRIMITIVE_SCENE_BOUNDS.min[0], VOLUME_PRIMITIVE_SCENE_BOUNDS.max[0]),
+    THREE.MathUtils.clamp(Number.isFinite(y) ? y : -0.58, VOLUME_PRIMITIVE_SCENE_BOUNDS.min[1], VOLUME_PRIMITIVE_SCENE_BOUNDS.max[1]),
+    THREE.MathUtils.clamp(Number.isFinite(z) ? z : 0, VOLUME_PRIMITIVE_SCENE_BOUNDS.min[2], VOLUME_PRIMITIVE_SCENE_BOUNDS.max[2]),
   ];
 }
 
 function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options = {}) {
   const controlsSnapshot = typeof readVolumeControls === 'function' ? readVolumeControls() : {};
-  const clampedPosition = clampVolumePrimitivePosition(position);
+  const scenePosition = normalizeVolumePrimitiveScenePosition(position);
   const radius = Number(options.radius ?? controlsSnapshot.inputRadius ?? 0.12);
   const flowRate = Number(options.flowRate ?? controlsSnapshot.flowRate ?? 0.15);
   const radiance = Number(options.radiance ?? controlsSnapshot.radiance ?? 1.65);
@@ -870,7 +877,7 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
     volumeBodyMode: 'primitive-centered-sphere-volume-v0',
     couplingSource: 'manual',
     transform: {
-      position: clampedPosition,
+      position: scenePosition,
       rotation: [0, 0, 0],
       scale: [radius, radius, radius],
     },
@@ -1050,7 +1057,7 @@ function syncVolumePrimitiveFromTransformMarker(marker = currentMesh) {
   if (!markerMeta) return null;
   const primitive = volumePrimitives.find(item => item.id === markerMeta.primitiveId);
   if (!primitive) return null;
-  const position = clampVolumePrimitivePosition(marker.position.toArray());
+  const position = normalizeVolumePrimitiveScenePosition(marker.position.toArray());
   marker.position.fromArray(position);
   const selected = primitive.id === selectedVolumePrimitiveId;
   const markerScale = (Math.abs(marker.scale.x) + Math.abs(marker.scale.y) + Math.abs(marker.scale.z)) / 3;
@@ -1121,10 +1128,18 @@ function syncVolumePrimitiveMarkers() {
     const radius = volumePrimitiveRadius(primitive);
     const selected = primitive.id === selectedVolumePrimitiveId;
     const markerControls = readVolumeMarkerControls();
+    const belowGround = marker.position.y < VOLUME_PRIMITIVE_SCENE_BOUNDS.groundY;
     marker.scale.setScalar(volumePrimitiveMarkerScale(radius, selected));
-    marker.material.color.setHex(selected ? 0x9aa0a6 : 0x555b60);
-    marker.material.opacity = markerControls.markerOpacity * (selected ? 1 : 0.65);
+    marker.material.color.setHex(belowGround ? (selected ? 0xd0d4d8 : 0x8b9298) : (selected ? 0x9aa0a6 : 0x555b60));
+    marker.material.opacity = Math.max(
+      markerControls.markerOpacity * (selected ? 1 : 0.65),
+      belowGround ? 0.28 : 0,
+    );
+    marker.material.depthTest = false;
+    marker.material.depthWrite = false;
     marker.material.wireframe = true;
+    marker.renderOrder = belowGround ? 9800 : 9200;
+    marker.userData.kaminosVolumePrimitiveMarker.markerUnderFloorVisibilityMode = VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE;
     marker.visible = markerControls.markerVisible;
   }
 }
@@ -2799,7 +2814,7 @@ async function initKaminosVolumeRoute() {
     moveSelectedTo(position = [0, -0.58, 0]) {
       const marker = selectedVolumePrimitiveMarker();
       if (!marker) return null;
-      marker.position.fromArray(clampVolumePrimitivePosition(position));
+      marker.position.fromArray(normalizeVolumePrimitiveScenePosition(position));
       return syncVolumePrimitiveFromTransformMarker(marker);
     },
     updateSelected(values = {}) {
@@ -2812,16 +2827,28 @@ async function initKaminosVolumeRoute() {
       return selectedVolumePrimitive();
     },
     debugState() {
+      const selectedMarker = selectedVolumePrimitiveMarker();
+      const selectedMarkerBelowGround = !!selectedMarker && selectedMarker.position.y < VOLUME_PRIMITIVE_SCENE_BOUNDS.groundY;
       return {
         identity: 'volume-authoring-loop-v0',
         mode: volumeAuthoringMode,
         selectedVolumePrimitiveId,
         transformTargetPrimitiveId: activeVolumeTransformPrimitiveId,
         transformTargetIdentity: activeVolumeTransformPrimitiveId ? 'volume-primitive-transform-target-v0' : null,
+        movementBoundsIdentity: VOLUME_PRIMITIVE_SCENE_BOUNDS.identity,
+        movementBounds: {
+          min: [...VOLUME_PRIMITIVE_SCENE_BOUNDS.min],
+          max: [...VOLUME_PRIMITIVE_SCENE_BOUNDS.max],
+          groundY: VOLUME_PRIMITIVE_SCENE_BOUNDS.groundY,
+        },
         markerAffordance: 'volume-primitive-marker-wire-halo-v0',
         markerSemantic: 'volume-primitive-source-handle-not-raymarch-bounds-v0',
+        markerUnderFloorVisibilityMode: VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE,
         markerOpacity: readVolumeMarkerControls().markerOpacity,
         markerVisible: readVolumeMarkerControls().markerVisible,
+        selectedMarkerBelowGround,
+        selectedMarkerDepthTest: selectedMarker?.material?.depthTest ?? null,
+        selectedMarkerRenderOrder: selectedMarker?.renderOrder ?? null,
         markerCount: volumePrimitiveMarkers.size,
         markerIds: Array.from(volumePrimitiveMarkers.keys()),
         visibleMarkerCount: Array.from(volumePrimitiveMarkers.values())
