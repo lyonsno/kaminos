@@ -33,6 +33,14 @@ assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab ex
 assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
 assert.match(index, /id="lamellar-remove-strip"/, 'Lamellar tab exposes remove-strip control for the selected layer');
 assert.match(index, /id="lamellar-selected-layer-strips"/, 'Lamellar tab reports selected-layer strip instances');
+assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
+assert.match(index, /id="lamellar-strip-select"/, 'Lamellar tab exposes selected-strip selector');
+assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
+assert.match(index, /id="lamellar-selected-strip-width"/, 'Lamellar tab exposes selected-strip width control');
+assert.match(index, /id="lamellar-selected-strip-thickness"/, 'Lamellar tab exposes selected-strip thickness control');
+assert.match(index, /id="lamellar-selected-strip-width-variance"/, 'Lamellar tab exposes selected-strip width variance control');
+assert.match(index, /id="lamellar-selected-strip-thickness-variance"/, 'Lamellar tab exposes selected-strip thickness variance control');
+assert.match(index, /id="lamellar-selected-strip-gap-pattern"/, 'Lamellar tab exposes selected-strip gap pattern preset');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -53,9 +61,13 @@ assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice p
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
 assert.match(index, /function isLamellarRouteActive\(/, 'Lamellar route active check is centralized');
 assert.match(index, /selectedLamellarLayerIndex/, 'Lamellar UI tracks selected layer state');
+assert.match(index, /selectedLamellarStripIndex/, 'Lamellar UI tracks selected strip state');
 assert.match(index, /function setSelectedLamellarLayer\(/, 'Lamellar UI can switch selected layer explicitly');
 assert.match(index, /function syncSelectedLamellarLayer\(/, 'Lamellar UI syncs selected-layer authoring controls');
 assert.match(index, /function nudgeSelectedLayerStripCount\(/, 'Lamellar UI can add or remove strips from the selected layer');
+assert.match(index, /function setSelectedLamellarStrip\(/, 'Lamellar UI can switch selected strip explicitly');
+assert.match(index, /function syncSelectedLamellarStrip\(/, 'Lamellar UI syncs selected-strip profile controls');
+assert.match(index, /function applySelectedStripProfileOverride\(/, 'Lamellar UI writes selected-strip profile overrides');
 assert.match(index, /if \(!isLamellarRouteActive\(\)\) restoreSettings\(\)/, 'Lamellar route starts blank instead of restoring persisted scene/material state');
 assert.doesNotMatch(index, /loadDemo\(DEMO_ASSETS\[0\]\)/, 'Kaminos starts blank and only loads demo assets by explicit user action');
 assert.match(index, /kaminos-lamellar-witness-v0/, 'UI carries stable Lamellar witness identity');
@@ -92,6 +104,12 @@ assert.match(core, /LayerStackDescriptor/, 'Lamellar core names the authored lay
 assert.match(core, /LayerShellDescriptor/, 'Lamellar core names layer shells as assemblages explicitly');
 assert.match(core, /LamellarLayerSpec/, 'Lamellar core names per-layer specs explicitly');
 assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip instances explicitly');
+assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
+assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
+assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
+assert.match(core, /thicknessVariance/, 'Lamellar core supports strip-local thickness variance independent of layer thickness');
+assert.match(core, /gapPattern/, 'Lamellar core supports strip-local gap pattern presets');
+assert.match(core, /splitStripByGapPattern/, 'Lamellar core splits selected strip descriptors by gap-pattern presets before mesh emission');
 assert.match(core, /generateLamellarLayerSpecs/, 'Lamellar core generates per-layer specs before section descriptors');
 assert.match(core, /generateLamellarStripInstances/, 'Lamellar core expands layer specs into strip instances before mesh emission');
 assert.match(core, /generateLamellarSectionSegments/, 'Lamellar core generates data-first section descriptors before mesh emission');
@@ -139,6 +157,10 @@ assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
 assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
 assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI state');
 assert.match(witness, /lamellar-selected-layer-strips/, 'witness inspects selected-layer strip readout');
+assert.match(witness, /selectedStripUi/, 'witness records selected-strip profile UI state');
+assert.match(witness, /lamellar-selected-strip-width/, 'witness inspects selected-strip width control');
+assert.match(witness, /stripProfileOverrides/, 'witness records selected-strip profile override inputs');
+assert.match(witness, /stripProfileDescriptors/, 'witness records selected-strip profile descriptors');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -240,6 +262,52 @@ assert.ok(
 assert.ok(
   assembled.descriptors.every(descriptor => descriptor.stripInstanceId && Number.isInteger(descriptor.stripIndex)),
   'every emitted descriptor carries strip-instance ancestry'
+);
+
+const profiled = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 4,
+  chiralityPattern: 'alternating',
+  depthSpacing: 0.09,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  overlapBias: 1,
+  layerOverrides: [
+    { layerIndex: 0, chirality: 1, chunkiness: 0.22, stripCount: 3 },
+    { layerIndex: 1, chirality: -1, chunkiness: 1, stripCount: 2 },
+    { layerIndex: 2, chirality: 1, chunkiness: 0.36, stripCount: 2 },
+    { layerIndex: 3, chirality: -1, chunkiness: 0.58, stripCount: 1 },
+  ],
+  stripProfileOverrides: [
+    {
+      stripInstanceId: 'seed-31-layer-0-strip-1',
+      width: 0.044,
+      thickness: 0.031,
+      widthVariance: 0.4,
+      thicknessVariance: 0.2,
+      gapPattern: 'dashed',
+    },
+  ],
+});
+const profiledStrip = profiled.stripInstances.find(strip => strip.id === 'seed-31-layer-0-strip-1');
+assert.equal(profiledStrip?.stripProfileDescriptor?.kind, 'StripProfileDescriptor', 'profiled strip carries a named strip profile descriptor');
+assert.equal(profiledStrip.stripProfileDescriptor.width, 0.044, 'strip profile width override is preserved independently');
+assert.equal(profiledStrip.stripProfileDescriptor.thickness, 0.031, 'strip profile thickness override is preserved independently');
+assert.equal(profiledStrip.stripProfileDescriptor.widthVariance, 0.4, 'strip profile width variance override is preserved independently');
+assert.equal(profiledStrip.stripProfileDescriptor.thicknessVariance, 0.2, 'strip profile thickness variance override is preserved independently');
+assert.equal(profiledStrip.stripProfileDescriptor.gapPattern, 'dashed', 'strip profile gap pattern override is preserved');
+const profiledDescriptors = profiled.descriptors.filter(descriptor => descriptor.stripInstanceId === 'seed-31-layer-0-strip-1');
+assert.ok(profiledDescriptors.length > 1, 'dashed selected-strip profile emits multiple descriptor spans for authored gaps');
+assert.ok(
+  profiledDescriptors.every(descriptor =>
+    descriptor.stripProfileDescriptor?.kind === 'StripProfileDescriptor'
+    && descriptor.width === 0.044
+    && descriptor.thickness === 0.031
+    && descriptor.widthVariance === 0.4
+    && descriptor.thicknessVariance === 0.2
+    && descriptor.gapPattern === 'dashed'
+  ),
+  'profiled descriptors carry selected-strip width, thickness, variance, and gap pattern receipts'
 );
 
 const sliced = coreModule.sliceLamellarSectionSegments(highChunk.descriptors, {

@@ -398,6 +398,44 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div class="field"><span class="field-key">Strip IDs</span><span class="field-val" id="lamellar-selected-layer-strips">none</span></div>
     </div>
+    <h2>Strip Profile</h2>
+    <div class="panel" id="lamellar-strip-profile">
+      <div class="slider-row">
+        <span class="slider-label">Strip</span>
+        <select id="lamellar-strip-select" class="select-input"></select>
+        <span class="slider-val" id="lamellar-selected-strip-index">s0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Width</span>
+        <input type="range" id="lamellar-selected-strip-width" min="0.006" max="0.18" step="0.001" value="0.06">
+        <span class="slider-val" id="lamellar-selected-strip-width-val">0.060</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thickness</span>
+        <input type="range" id="lamellar-selected-strip-thickness" min="0.002" max="0.07" step="0.001" value="0.018">
+        <span class="slider-val" id="lamellar-selected-strip-thickness-val">0.018</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">W Var</span>
+        <input type="range" id="lamellar-selected-strip-width-variance" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="lamellar-selected-strip-width-variance-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">T Var</span>
+        <input type="range" id="lamellar-selected-strip-thickness-variance" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="lamellar-selected-strip-thickness-variance-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Gaps</span>
+        <select id="lamellar-selected-strip-gap-pattern" class="select-input">
+          <option value="solid" selected>solid</option>
+          <option value="single-window">single-window</option>
+          <option value="dashed">dashed</option>
+          <option value="crosscut">crosscut</option>
+        </select>
+        <span class="slider-val" id="lamellar-selected-strip-gap-pattern-val">solid</span>
+      </div>
+    </div>
     <h2>Layer Rows</h2>
     <div class="panel" id="lamellar-layer-rows">
       <div class="slider-row">
@@ -558,6 +596,8 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let lamellarWitness = null;
 let selectedLamellarLayerIndex = 0;
+let selectedLamellarStripIndex = 0;
+const lamellarStripProfileOverrides = {};
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -841,12 +881,39 @@ function readLamellarControls() {
     sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
     sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
     layerOverrides,
+    stripProfileOverrides: Object.values(lamellarStripProfileOverrides),
   };
 }
 
 function setSelectedLamellarLayer(layerIndex) {
   selectedLamellarLayerIndex = Math.max(0, Math.min(3, Math.round(Number(layerIndex) || 0)));
+  selectedLamellarStripIndex = 0;
   syncSelectedLamellarLayer();
+}
+
+function selectedLamellarStrips(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  return (current.stripInstances || []).filter(strip => strip.layerIndex === selectedLamellarLayerIndex);
+}
+
+function selectedLamellarStrip(state = null) {
+  const strips = selectedLamellarStrips(state);
+  const maxStrip = Math.max(0, strips.length - 1);
+  selectedLamellarStripIndex = Math.max(0, Math.min(maxStrip, Math.round(Number(selectedLamellarStripIndex) || 0)));
+  return strips.find(strip => strip.stripIndex === selectedLamellarStripIndex) || strips[selectedLamellarStripIndex] || null;
+}
+
+function setSelectedLamellarStrip(stripIndex) {
+  selectedLamellarStripIndex = Math.max(0, Math.round(Number(stripIndex) || 0));
+  syncSelectedLamellarStrip();
+}
+
+function profileForSelectedStrip(strip, state) {
+  if (!strip) return null;
+  return lamellarStripProfileOverrides[strip.id]
+    || (state.stripProfileOverrides || []).find(profile => profile.stripInstanceId === strip.id)
+    || strip.stripProfileDescriptor
+    || null;
 }
 
 function syncSelectedLamellarLayer(state = null) {
@@ -871,6 +938,60 @@ function syncSelectedLamellarLayer(state = null) {
   document.getElementById('lamellar-selected-layer-strips').innerHTML = strips.length
     ? strips.map(strip => `<span data-strip-id="${escapeHtml(strip.id)}">${escapeHtml(`s${strip.stripIndex} ${strip.sliceParticipation}`)}</span>`).join(' ')
     : 'none';
+  syncSelectedLamellarStrip(current);
+}
+
+function syncSelectedLamellarStrip(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const strips = selectedLamellarStrips(current);
+  const stripSelect = document.getElementById('lamellar-strip-select');
+  const maxStrip = Math.max(0, strips.length - 1);
+  selectedLamellarStripIndex = Math.max(0, Math.min(maxStrip, Math.round(Number(selectedLamellarStripIndex) || 0)));
+  if (stripSelect) {
+    stripSelect.innerHTML = strips.map(strip => `<option value="${strip.stripIndex}">s${strip.stripIndex}</option>`).join('');
+    stripSelect.value = String(selectedLamellarStripIndex);
+    stripSelect.disabled = strips.length === 0;
+  }
+  const strip = selectedLamellarStrip(current);
+  const profile = profileForSelectedStrip(strip, current);
+  const width = Number(profile?.width ?? strip?.width ?? 0.06);
+  const thickness = Number(profile?.thickness ?? strip?.thickness ?? 0.018);
+  const widthVariance = Number(profile?.widthVariance ?? strip?.widthVariance ?? 0);
+  const thicknessVariance = Number(profile?.thicknessVariance ?? strip?.thicknessVariance ?? 0);
+  const gapPattern = profile?.gapPattern || strip?.gapPattern || 'solid';
+  document.getElementById('lamellar-selected-strip-index').textContent = strip
+    ? `L${strip.layerIndex} s${strip.stripIndex}`
+    : 'none';
+  document.getElementById('lamellar-selected-strip-width').value = String(width);
+  document.getElementById('lamellar-selected-strip-thickness').value = String(thickness);
+  document.getElementById('lamellar-selected-strip-width-variance').value = String(widthVariance);
+  document.getElementById('lamellar-selected-strip-thickness-variance').value = String(thicknessVariance);
+  document.getElementById('lamellar-selected-strip-gap-pattern').value = gapPattern;
+  document.getElementById('lamellar-selected-strip-width-val').textContent = width.toFixed(3);
+  document.getElementById('lamellar-selected-strip-thickness-val').textContent = thickness.toFixed(3);
+  document.getElementById('lamellar-selected-strip-width-variance-val').textContent = widthVariance.toFixed(2);
+  document.getElementById('lamellar-selected-strip-thickness-variance-val').textContent = thicknessVariance.toFixed(2);
+  document.getElementById('lamellar-selected-strip-gap-pattern-val').textContent = gapPattern;
+}
+
+function applySelectedStripProfileOverride() {
+  const current = lamellarWitness?.debugState?.() || {};
+  const strip = selectedLamellarStrip(current);
+  if (!strip) return;
+  const override = {
+    stripInstanceId: strip.id,
+    layerIndex: strip.layerIndex,
+    stripIndex: strip.stripIndex,
+    width: parseFloat(document.getElementById('lamellar-selected-strip-width').value),
+    thickness: parseFloat(document.getElementById('lamellar-selected-strip-thickness').value),
+    widthVariance: parseFloat(document.getElementById('lamellar-selected-strip-width-variance').value),
+    thicknessVariance: parseFloat(document.getElementById('lamellar-selected-strip-thickness-variance').value),
+    gapPattern: document.getElementById('lamellar-selected-strip-gap-pattern').value,
+  };
+  lamellarStripProfileOverrides[strip.id] = override;
+  lamellarWitness.setControls(readLamellarControls());
+  syncLamellarReadout();
+  window._kaminosDirty?.();
 }
 
 function applySelectedLayerStripCount(value) {
@@ -1075,6 +1196,20 @@ async function initLamellarRoute() {
   });
   document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
   document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));
+  document.getElementById('lamellar-strip-select').addEventListener('change', event => {
+    setSelectedLamellarStrip(event.target.value);
+  });
+  const stripProfileControlIds = [
+    'lamellar-selected-strip-width',
+    'lamellar-selected-strip-thickness',
+    'lamellar-selected-strip-width-variance',
+    'lamellar-selected-strip-thickness-variance',
+    'lamellar-selected-strip-gap-pattern',
+  ];
+  for (const id of stripProfileControlIds) {
+    document.getElementById(id).addEventListener('input', applySelectedStripProfileOverride);
+    document.getElementById(id).addEventListener('change', applySelectedStripProfileOverride);
+  }
   document.getElementById('lamellar-generate').addEventListener('click', () => {
     const seedInput = document.getElementById('lamellar-seed');
     seedInput.value = String((parseInt(seedInput.value || '0', 10) + 1) % 100000);

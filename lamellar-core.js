@@ -6,10 +6,12 @@ const PLACEHOLDER_CONTRACT = "temporary-aesthetic-composition-primitive-not-fina
 const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
 const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
 const LAYER_SHELL_MODE = "authored-lamellar-layer-shell-assemblage-v0";
+const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
 const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
 const CHANNEL_WITNESS_ANCHOR_MODE = "selected-neighbor-channel-closeup";
+const GAP_PATTERNS = new Set(["solid", "single-window", "dashed", "crosscut"]);
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -50,6 +52,9 @@ function descriptorCurveOptions(descriptor) {
     phase: descriptor.phase,
     radius: descriptor.radius,
     width: descriptor.width,
+    thickness: descriptor.thickness,
+    widthVariance: descriptor.widthVariance,
+    thicknessVariance: descriptor.thicknessVariance,
     edgeLift: descriptor.edgeLift,
     waviness: descriptor.waviness,
   };
@@ -123,6 +128,69 @@ function normalizeLayerOverrides(overrides) {
       chunkiness: Number.isFinite(chunkiness) ? clamp(chunkiness, 0.05, 1) : null,
       stripCount: Number.isFinite(stripCount) ? Math.round(clamp(stripCount, 1, 4)) : null,
     };
+  });
+}
+
+function normalizeGapPattern(pattern) {
+  return GAP_PATTERNS.has(pattern) ? pattern : "solid";
+}
+
+function normalizeStripProfileOverrides(overrides) {
+  const list = Array.isArray(overrides) ? overrides : Object.values(overrides || {});
+  return list.map(override => {
+    const width = Number(override?.width);
+    const thickness = Number(override?.thickness);
+    const widthVariance = Number(override?.widthVariance);
+    const thicknessVariance = Number(override?.thicknessVariance);
+    const layerIndex = Number(override?.layerIndex);
+    const stripIndex = Number(override?.stripIndex);
+    return {
+      kind: "StripProfileDescriptor",
+      mode: STRIP_PROFILE_MODE,
+      stripInstanceId: typeof override?.stripInstanceId === "string" ? override.stripInstanceId : null,
+      layerIndex: Number.isFinite(layerIndex) ? Math.round(clamp(layerIndex, 0, 3)) : null,
+      stripIndex: Number.isFinite(stripIndex) ? Math.round(clamp(stripIndex, 0, 7)) : null,
+      width: Number.isFinite(width) ? Number(clamp(width, 0.006, 0.18).toFixed(4)) : null,
+      thickness: Number.isFinite(thickness) ? Number(clamp(thickness, 0.002, 0.07).toFixed(4)) : null,
+      widthVariance: Number.isFinite(widthVariance) ? Number(clamp(widthVariance, 0, 1).toFixed(4)) : 0,
+      thicknessVariance: Number.isFinite(thicknessVariance) ? Number(clamp(thicknessVariance, 0, 1).toFixed(4)) : 0,
+      gapPattern: normalizeGapPattern(override?.gapPattern),
+      overrideSource: "ui-selected-strip-profile",
+    };
+  }).filter(override => override.stripInstanceId || (override.layerIndex !== null && override.stripIndex !== null));
+}
+
+function profileOverrideForStrip(overrides, strip) {
+  return overrides.find(override => override.stripInstanceId === strip.id)
+    || overrides.find(override => override.layerIndex === strip.layerIndex && override.stripIndex === strip.stripIndex)
+    || null;
+}
+
+function splitStripByGapPattern(interval, gapPattern) {
+  const [start, end] = interval;
+  const span = end - start;
+  const at = fraction => Number((start + span * fraction).toFixed(4));
+  if (gapPattern === "single-window") return [[start, at(0.42)], [at(0.58), end]];
+  if (gapPattern === "dashed") return [[start, at(0.22)], [at(0.38), at(0.62)], [at(0.78), end]];
+  if (gapPattern === "crosscut") return [[start, at(0.34)], [at(0.4), at(0.6)], [at(0.66), end]];
+  return [interval];
+}
+
+function emitStripDescriptors(output, descriptor) {
+  const spans = splitStripByGapPattern(descriptor.interval, descriptor.gapPattern);
+  if (spans.length === 1) {
+    output.push(descriptor);
+    return;
+  }
+  spans.forEach((span, gapIndex) => {
+    output.push({
+      ...descriptor,
+      id: `${descriptor.id}-gap-${gapIndex}`,
+      interval: span,
+      gapIndex,
+      gapSpanCount: spans.length,
+      sourceSegmentId: descriptor.id,
+    });
   });
 }
 
@@ -203,6 +271,7 @@ export function generateLamellarLayerSpecs(input = {}) {
 
 export function generateLamellarStripInstances(layerSpecs, input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const stripProfileOverrides = normalizeStripProfileOverrides(input.stripProfileOverrides);
   const stripInstances = [];
 
   for (const spec of layerSpecs) {
@@ -213,9 +282,31 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         : spec.materialRole === "neighbor-envelope" ? "neighbor-companion"
         : spec.materialRole;
       const localOffset = stripIndex - (spec.stripCount - 1) / 2;
+      const baseStrip = {
+        id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
+        layerIndex: spec.layerIndex,
+        stripIndex,
+      };
+      const override = profileOverrideForStrip(stripProfileOverrides, baseStrip);
+      const baseWidth = Number((spec.width * (1 - Math.abs(localOffset) * 0.08)).toFixed(4));
+      const baseThickness = spec.thickness;
+      const stripProfileDescriptor = {
+        kind: "StripProfileDescriptor",
+        mode: STRIP_PROFILE_MODE,
+        stripInstanceId: baseStrip.id,
+        layerSpecId: spec.id,
+        layerIndex: spec.layerIndex,
+        stripIndex,
+        width: override?.width ?? baseWidth,
+        thickness: override?.thickness ?? baseThickness,
+        widthVariance: override?.widthVariance ?? 0,
+        thicknessVariance: override?.thicknessVariance ?? 0,
+        gapPattern: override?.gapPattern ?? "solid",
+        overrideSource: override ? override.overrideSource : "layer-shell-derived-profile",
+      };
       stripInstances.push({
         kind: "LamellarStripInstance",
-        id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
+        id: baseStrip.id,
         layerSpecId: spec.id,
         layerIndex: spec.layerIndex,
         stripIndex,
@@ -226,8 +317,13 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         chirality: spec.chirality,
         chunkiness: spec.chunkiness,
         depth: spec.depth,
-        width: Number((spec.width * (1 - Math.abs(localOffset) * 0.08)).toFixed(4)),
-        thickness: spec.thickness,
+        profileKind: "StripProfileDescriptor",
+        stripProfileDescriptor,
+        width: stripProfileDescriptor.width,
+        thickness: stripProfileDescriptor.thickness,
+        widthVariance: stripProfileDescriptor.widthVariance,
+        thicknessVariance: stripProfileDescriptor.thicknessVariance,
+        gapPattern: stripProfileDescriptor.gapPattern,
         intervalOffset: Number((localOffset * 0.045 + stripIndex * 0.012).toFixed(4)),
         phaseOffset: Number((localOffset * 0.34 + stripIndex * 0.19).toFixed(4)),
       });
@@ -241,7 +337,8 @@ export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const layerStack = generateLamellarLayerSpecs(input);
   const { layerStackDescriptor, layerSpecs } = layerStack;
-  const stripInstances = generateLamellarStripInstances(layerSpecs, { seed });
+  const stripProfileOverrides = normalizeStripProfileOverrides(input.stripProfileOverrides);
+  const stripInstances = generateLamellarStripInstances(layerSpecs, { seed, stripProfileOverrides });
   const rand = mulberry32(seed);
   const descriptors = [];
   const composerDescriptor = {
@@ -250,6 +347,7 @@ export function generateLamellarSectionSegments(input = {}) {
     layerStackKind: "LayerStackDescriptor",
     layerShellKind: "LayerShellDescriptor",
     stripInstanceKind: "LamellarStripInstance",
+    stripProfileKind: "StripProfileDescriptor",
     proceduralSeed: seed,
     chiralityPattern: layerStackDescriptor.chiralityPattern,
     layerCount: layerStackDescriptor.numLayers,
@@ -277,9 +375,10 @@ export function generateLamellarSectionSegments(input = {}) {
     if (strip.layerIndex === 0) {
       const start = Number(clamp(0.12 + strip.intervalOffset, 0.08, 0.38).toFixed(4));
       const end = Number(clamp(0.9 + strip.intervalOffset * 0.4, 0.58, 0.94).toFixed(4));
-      descriptors.push({
+      emitStripDescriptors(descriptors, {
         kind: "LamellarSectionSegment",
         stripKind: "LamellarStripInstance",
+        stripProfileKind: "StripProfileDescriptor",
         id: strip.sliceParticipation === "primary-cut-target" ? `seed-${seed}-layer-0-selected-source` : `${strip.id}-selected-companion`,
         layerSpecId: spec.id,
         stripInstanceId: strip.id,
@@ -305,6 +404,10 @@ export function generateLamellarSectionSegments(input = {}) {
         radius: 1 + spec.depth,
         width: strip.width,
         thickness: strip.thickness,
+        widthVariance: strip.widthVariance,
+        thicknessVariance: strip.thicknessVariance,
+        gapPattern: strip.gapPattern,
+        stripProfileDescriptor: strip.stripProfileDescriptor,
         edgeLift: 0.018 + strip.stripIndex * 0.002,
         waviness: 0.085,
       });
@@ -318,9 +421,10 @@ export function generateLamellarSectionSegments(input = {}) {
     const baseEnd = spec.layerMaterialRole === "neighbor-envelope" || spec.materialRole === "neighbor-envelope"
       ? 0.72 + spec.overlapBias * 0.18
       : 0.82 + (strip.stripIndex % 2) * 0.04;
-    descriptors.push({
+    emitStripDescriptors(descriptors, {
       kind: "LamellarSectionSegment",
       stripKind: "LamellarStripInstance",
+      stripProfileKind: "StripProfileDescriptor",
       id: `${strip.id}-${strip.materialRole}`,
       layerSpecId: spec.id,
       stripInstanceId: strip.id,
@@ -349,12 +453,24 @@ export function generateLamellarSectionSegments(input = {}) {
       radius: Number((1 + spec.depth).toFixed(4)),
       width: strip.width,
       thickness: strip.thickness,
+      widthVariance: strip.widthVariance,
+      thicknessVariance: strip.thicknessVariance,
+      gapPattern: strip.gapPattern,
+      stripProfileDescriptor: strip.stripProfileDescriptor,
       edgeLift: strip.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
       waviness: 0.085,
     });
   }
 
-  return { composerDescriptor, layerStackDescriptor, layerSpecs, stripInstances, descriptors };
+  return {
+    composerDescriptor,
+    layerStackDescriptor,
+    layerSpecs,
+    stripInstances,
+    stripProfileOverrides,
+    stripProfileDescriptors: stripInstances.map(strip => strip.stripProfileDescriptor),
+    descriptors,
+  };
 }
 
 export function sliceLamellarSectionSegments(descriptors, input = {}) {
@@ -453,9 +569,12 @@ function makeRibbonGeometry(THREE, span, opts) {
     const tangent = new THREE.Vector3(p2.x - p.x, p2.y - p.y, p2.z - p.z).normalize();
     const normal = new THREE.Vector3(p.x, p.y, p.z).normalize();
     const side = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-    const edgeLift = opts.edgeLift || 0.015;
-    const left = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, -width).addScaledVector(normal, edgeLift);
-    const right = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, width).addScaledVector(normal, edgeLift * 0.45);
+    const widthPulse = Math.sin(t * Math.PI * 4 + (opts.phase || 0)) * (opts.widthVariance || 0) * 0.22;
+    const thicknessPulse = Math.sin(t * Math.PI * 3 + (opts.phase || 0) * 0.7) * (opts.thicknessVariance || 0) * (opts.thickness || 0.012) * 0.38;
+    const widthAtT = width * (1 + widthPulse);
+    const edgeLift = (opts.edgeLift || 0.015) + thicknessPulse;
+    const left = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, -widthAtT).addScaledVector(normal, edgeLift);
+    const right = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, widthAtT).addScaledVector(normal, edgeLift * 0.45);
     vertices.push(left.x, left.y, left.z, right.x, right.y, right.z);
     normals.push(normal.x, normal.y, normal.z, normal.x, normal.y, normal.z);
     centerline.push([Number(p.x.toFixed(5)), Number(p.y.toFixed(5)), Number(p.z.toFixed(5))]);
@@ -604,6 +723,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     chunkinessBase: 0.48,
     chunkinessVariance: 0.22,
     layerOverrides: [],
+    stripProfileOverrides: [],
     overlapBias: 0.38,
     sliceT: 0.47,
     sliceAngle: 0,
@@ -615,6 +735,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     layerStackDescriptor: null,
     layerSpecs: [],
     stripInstances: [],
+    stripProfileDescriptors: [],
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
     sliceApplicationReceipt: null,
@@ -659,6 +780,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       chunkinessBase: state.chunkinessBase,
       chunkinessVariance: state.chunkinessVariance,
       layerOverrides: state.layerOverrides,
+      stripProfileOverrides: state.stripProfileOverrides,
       overlapBias: state.overlapBias,
     });
     const sliced = sliceLamellarSectionSegments(generated.descriptors, {
@@ -670,12 +792,16 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.layerStackDescriptor = generated.layerStackDescriptor;
     state.layerSpecs = generated.layerSpecs;
     state.stripInstances = generated.stripInstances;
+    state.stripProfileOverrides = generated.stripProfileOverrides;
+    state.stripProfileDescriptors = generated.stripProfileDescriptors;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
       id: d.id,
       kind: d.kind,
       layerSpecId: d.layerSpecId,
       stripInstanceId: d.stripInstanceId,
       stripIndex: d.stripIndex,
+      stripProfileKind: d.stripProfileKind,
+      stripProfileDescriptor: d.stripProfileDescriptor,
       materialRole: d.materialRole,
       layerMaterialRole: d.layerMaterialRole,
       sliceParticipation: d.sliceParticipation,
@@ -683,6 +809,13 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       depth: d.depth,
       chirality: d.chirality,
       chunkiness: d.chunkiness,
+      width: d.width,
+      thickness: d.thickness,
+      widthVariance: d.widthVariance,
+      thicknessVariance: d.thicknessVariance,
+      gapPattern: d.gapPattern,
+      gapIndex: d.gapIndex ?? null,
+      gapSpanCount: d.gapSpanCount ?? 1,
       segmentCount: d.segmentCount,
       interval: d.interval,
       curveLaw: d.curveLaw,
@@ -731,6 +864,14 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         depth: descriptor.depth,
         chirality: descriptor.chirality,
         chunkiness: descriptor.chunkiness,
+        width: descriptor.width,
+        thickness: descriptor.thickness,
+        widthVariance: descriptor.widthVariance,
+        thicknessVariance: descriptor.thicknessVariance,
+        gapPattern: descriptor.gapPattern,
+        gapIndex: descriptor.gapIndex ?? null,
+        gapSpanCount: descriptor.gapSpanCount ?? 1,
+        stripProfileDescriptor: descriptor.stripProfileDescriptor,
         span: descriptor.interval,
         curveLaw: descriptor.curveLaw,
         openEdgeCount: 0,
@@ -789,6 +930,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.chunkinessBase = clamp(Number(next.chunkinessBase ?? state.chunkinessBase), 0.05, 1);
     state.chunkinessVariance = clamp(Number(next.chunkinessVariance ?? state.chunkinessVariance), 0, 0.65);
     state.layerOverrides = normalizeLayerOverrides(next.layerOverrides ?? state.layerOverrides).slice(0, 4);
+    state.stripProfileOverrides = normalizeStripProfileOverrides(next.stripProfileOverrides ?? state.stripProfileOverrides);
     state.overlapBias = clamp(Number(next.overlapBias ?? state.overlapBias), 0, 1);
     state.sliceT = clamp(Number(next.sliceT ?? state.sliceT), 0.2, 0.8);
     state.sliceAngle = clamp(Number(next.sliceAngle ?? state.sliceAngle), -70, 70);

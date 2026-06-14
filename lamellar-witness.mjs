@@ -190,6 +190,15 @@ async function main() {
             selectedStripReadout: document.getElementById('lamellar-selected-layer-strips')?.textContent || '',
             selectedStripIds: Array.from(document.querySelectorAll('#lamellar-selected-layer-strips [data-strip-id]')).map(el => el.dataset.stripId),
           },
+          selectedStripUi: {
+            selectedStripText: document.getElementById('lamellar-selected-strip-index')?.textContent || '',
+            selectedStripIndex: Number(document.getElementById('lamellar-strip-select')?.value || 0),
+            width: Number(document.getElementById('lamellar-selected-strip-width')?.value || 0),
+            thickness: Number(document.getElementById('lamellar-selected-strip-thickness')?.value || 0),
+            widthVariance: Number(document.getElementById('lamellar-selected-strip-width-variance')?.value || 0),
+            thicknessVariance: Number(document.getElementById('lamellar-selected-strip-thickness-variance')?.value || 0),
+            gapPattern: document.getElementById('lamellar-selected-strip-gap-pattern')?.value || '',
+          },
         };
       })()`,
       returnByValue: true,
@@ -210,6 +219,9 @@ async function main() {
     assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
     assert.equal(state.selectedLayerUi?.activeLayer, 0, 'Lamellar witness did not expose selected layer UI');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
+    assert.ok(state.selectedStripUi?.selectedStripText, 'Lamellar witness did not expose selected strip UI');
+    assert.ok((state.selectedStripUi?.width || 0) > 0, 'Lamellar selected-strip width control did not carry a positive value');
+    assert.ok((state.stripProfileDescriptors || []).length >= (state.stripInstances || []).length, 'Lamellar witness did not export strip profile descriptors');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
 
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -234,6 +246,9 @@ async function main() {
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,
       selectedLayerUi: state.selectedLayerUi,
+      selectedStripUi: state.selectedStripUi,
+      stripProfileOverrides: state.stripProfileOverrides,
+      stripProfileDescriptors: state.stripProfileDescriptors,
       layerOverrides: state.layerOverrides,
       sliceToolDescriptor: state.sliceToolDescriptor,
       sliceApplicationReceipt: state.sliceApplicationReceipt,
