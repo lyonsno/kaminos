@@ -66,6 +66,11 @@ assert.match(index, /id="lamellar-selected-strip-gap-pattern"/, 'Lamellar tab ex
 assert.match(index, /id="lamellar-population-count"/, 'Lamellar tab exposes macro same-layer population count');
 assert.match(index, /id="lamellar-cutter-count"/, 'Lamellar tab exposes macro same-layer cutter population count');
 assert.match(index, /id="lamellar-population-bearing-variance"/, 'Lamellar tab exposes macro same-layer direction variance');
+assert.match(index, /id="lamellar-population-bearing-variance"[^>]*max="2"/, 'Lamellar macro population spread has enough range for coverage layouts');
+assert.match(index, /id="lamellar-population-bearing-variance"[^>]*value="1/, 'Lamellar macro population spread defaults to shell coverage, not clustering');
+assert.match(index, /id="lamellar-population-bearing-spread"[^>]*max="2"/, 'Lamellar population toolhead spread has enough range for coverage layouts');
+assert.match(index, /id="lamellar-population-bearing-offset"[^>]*min="-6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
+assert.match(index, /id="lamellar-population-bearing-offset"[^>]*max="6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
 assert.match(index, /id="lamellar-overlap-bias"/, 'Lamellar tab exposes overlap bias control');
 assert.match(index, /id="lamellar-slice-t"/, 'Lamellar tab exposes slice position control');
 assert.match(index, /id="lamellar-slice-angle"/, 'Lamellar tab exposes slice angle control');
@@ -166,6 +171,10 @@ assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
 assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
 assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar core names same-shell direction population authoring mode');
+assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
+assert.match(core, /layoutPreset/, 'Lamellar strip population descriptors record their layout preset');
+assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverage spacing for overlap diagnostics');
+assert.match(core, /bearingPhase/, 'Lamellar strip instances carry actual shell bearing phase, not tiny jitter only');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
 assert.match(core, /thicknessVariance/, 'Lamellar core supports strip-local thickness variance independent of layer thickness');
@@ -412,6 +421,35 @@ const populated = coreModule.generateLamellarSectionSegments({
     { layerIndex: 0, role: 'cutter', count: 2, chirality: -1, bearingOffset: 0.44, bearingVariance: 0.12, gapPattern: 'crosscut' },
   ],
 });
+function circularMinGap(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const gaps = sorted.map((value, index) => {
+    const next = sorted[(index + 1) % sorted.length] + (index === sorted.length - 1 ? Math.PI * 2 : 0);
+    return next - value;
+  });
+  return Math.min(...gaps);
+}
+
+for (const count of [4, 5, 6]) {
+  const covered = coreModule.generateLamellarSectionSegments({
+    seed: 31,
+    layerCount: 2,
+    chiralityPattern: 'same',
+    chunkinessBase: 0.4,
+    chunkinessVariance: 0,
+    stripPopulations: [
+      { layerIndex: 0, role: 'lamella', count, chirality: 1, bearingOffset: 0, bearingVariance: 1, layoutPreset: 'coverage' },
+    ],
+  });
+  const population = covered.stripPopulationDescriptors.find(candidate => candidate.role === 'lamella');
+  const strips = covered.stripInstances.filter(strip => strip.populationId === population?.id);
+  const descriptorsForPopulation = covered.descriptors.filter(descriptor => descriptor.populationId === population?.id);
+  assert.equal(population?.layoutPreset, 'coverage', `count ${count} population records coverage layout preset`);
+  assert.ok(population?.coverageSpacing >= (Math.PI * 2 / count) * 0.95, `count ${count} records near-even coverage spacing`);
+  assert.equal(strips.length, count, `count ${count} emits exactly one strip per coverage slot`);
+  assert.ok(circularMinGap(strips.map(strip => strip.bearingPhase)) >= (Math.PI * 2 / count) * 0.95, `count ${count} strips are evenly phase-spaced around the shell`);
+  assert.ok(circularMinGap(descriptorsForPopulation.map(descriptor => descriptor.theta0)) >= (Math.PI * 2 / count) * 0.85, `count ${count} descriptors move actual shell centerlines instead of only jittering waviness`);
+}
 assert.ok(
   populated.stripPopulationDescriptors.every(population =>
     populated.stripInstances.some(strip => strip.populationId === population.id)

@@ -7,13 +7,16 @@ const COMPOSER_MODE = "data-first-poloxodromic-lamellar-section-composer-v0";
 const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
 const LAYER_SHELL_MODE = "authored-lamellar-layer-shell-assemblage-v0";
 const STRIP_POPULATION_MODE = "same-shell-direction-population-authoring-v0";
+const POPULATION_COVERAGE_LAYOUT_MODE = "even-shell-coverage-layout-v0";
 const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
 const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
 const CHANNEL_WITNESS_ANCHOR_MODE = "selected-neighbor-channel-closeup";
 const GAP_PATTERNS = new Set(["solid", "single-window", "dashed", "crosscut"]);
+const POPULATION_LAYOUT_PRESETS = new Set(["coverage", "cluster"]);
 const MAX_LAYER_COUNT = 12;
+const TAU = Math.PI * 2;
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -142,17 +145,31 @@ function normalizeStripPopulations(populations) {
     const bearingOffset = Number(population?.bearingOffset);
     const bearingVariance = Number(population?.bearingVariance);
     const role = ["lamella", "cutter", "accent"].includes(population?.role) ? population.role : "lamella";
+    const layoutPreset = POPULATION_LAYOUT_PRESETS.has(population?.layoutPreset || population?.layout)
+      ? (population.layoutPreset || population.layout)
+      : "coverage";
+    const normalizedCount = Number.isFinite(count) ? Math.round(clamp(count, 0, 16)) : 0;
+    const spreadFallback = layoutPreset === "coverage" ? 1 : 0;
+    const coverageSpread = Number.isFinite(bearingVariance)
+      ? Number(clamp(bearingVariance, 0, 2).toFixed(4))
+      : spreadFallback;
+    const coverageSpacing = normalizedCount > 1 && layoutPreset === "coverage"
+      ? Number((TAU * coverageSpread / normalizedCount).toFixed(4))
+      : 0;
     const fallbackId = `strip-population-${Number.isFinite(layerIndex) ? Math.round(layerIndex) : 0}-${role}-${index}`;
     return {
       kind: "StripPopulationDescriptor",
       mode: STRIP_POPULATION_MODE,
+      coverageLayoutMode: POPULATION_COVERAGE_LAYOUT_MODE,
       id: typeof population?.id === "string" && population.id ? population.id : fallbackId,
       layerIndex: Number.isFinite(layerIndex) ? Math.round(clamp(layerIndex, 0, MAX_LAYER_COUNT - 1)) : 0,
       role,
-      count: Number.isFinite(count) ? Math.round(clamp(count, 0, 16)) : 0,
+      layoutPreset,
+      count: normalizedCount,
       chirality: chirality < 0 ? -1 : 1,
-      bearingOffset: Number.isFinite(bearingOffset) ? Number(clamp(bearingOffset, -1, 1).toFixed(4)) : 0,
-      bearingVariance: Number.isFinite(bearingVariance) ? Number(clamp(bearingVariance, 0, 1).toFixed(4)) : 0,
+      bearingOffset: Number.isFinite(bearingOffset) ? Number(clamp(bearingOffset, -TAU, TAU).toFixed(4)) : 0,
+      bearingVariance: coverageSpread,
+      coverageSpacing,
       gapPattern: normalizeGapPattern(population?.gapPattern),
       source: "macro-strip-population",
     };
@@ -166,12 +183,12 @@ function stripPopulationsFromMacroControls(input = {}) {
   if (!Number.isFinite(populationCount) && !Number.isFinite(cutterCount) && !Number.isFinite(bearingVariance)) return [];
   const baseCount = Number.isFinite(populationCount) ? Math.round(clamp(populationCount, 1, 16)) : 4;
   const cutters = Number.isFinite(cutterCount) ? Math.round(clamp(cutterCount, 0, 8)) : 0;
-  const variance = Number.isFinite(bearingVariance) ? clamp(bearingVariance, 0, 1) : 0;
+  const variance = Number.isFinite(bearingVariance) ? clamp(bearingVariance, 0.15, 2) : 1;
   const populations = [
-    { layerIndex: 0, role: "lamella", count: baseCount, chirality: 1, bearingOffset: 0, bearingVariance: variance, gapPattern: "solid" },
+    { layerIndex: 0, role: "lamella", count: baseCount, chirality: 1, layoutPreset: "coverage", bearingOffset: 0, bearingVariance: variance, gapPattern: "solid" },
   ];
   if (cutters > 0) {
-    populations.push({ layerIndex: 0, role: "cutter", count: cutters, chirality: -1, bearingOffset: 0.44, bearingVariance: variance * 0.55, gapPattern: "crosscut" });
+    populations.push({ layerIndex: 0, role: "cutter", count: cutters, chirality: -1, layoutPreset: "coverage", bearingOffset: 0.44, bearingVariance: Math.max(0.15, variance * 0.55), gapPattern: "crosscut" });
   }
   return normalizeStripPopulations(populations);
 }
@@ -330,7 +347,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         count: spec.stripCount,
         chirality: spec.chirality,
         bearingOffset: 0,
-        bearingVariance: 0,
+        bearingVariance: 1,
+        coverageSpacing: spec.stripCount > 1 ? Number((TAU / spec.stripCount).toFixed(4)) : 0,
+        layoutPreset: "coverage",
         gapPattern: "solid",
         source: "layer-shell-default-population",
       }];
@@ -345,9 +364,18 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           : spec.materialRole;
         const authoredCount = populations.reduce((sum, item) => sum + item.count, 0);
         const localOffset = stripIndex - (authoredCount - 1) / 2;
-        const bearingJitter = population.count > 1
-          ? ((populationIndex / Math.max(1, population.count - 1)) - 0.5) * population.bearingVariance
+        const layoutPreset = population.layoutPreset || "coverage";
+        const populationSpread = Number(population.bearingVariance ?? 1);
+        const coverageSpacing = population.count > 1 && layoutPreset === "coverage"
+          ? Number((TAU * populationSpread / population.count).toFixed(4))
           : 0;
+        const centeredPopulationSlot = population.count > 1 ? populationIndex - (population.count - 1) / 2 : 0;
+        const clusterJitter = population.count > 1
+          ? ((populationIndex / Math.max(1, population.count - 1)) - 0.5) * populationSpread
+          : 0;
+        const bearingPhase = Number((population.bearingOffset + (layoutPreset === "coverage"
+          ? centeredPopulationSlot * coverageSpacing
+          : clusterJitter)).toFixed(4));
         const baseStrip = {
           id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
           layerIndex: spec.layerIndex,
@@ -380,6 +408,10 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           populationId: population.id,
           populationRole: population.role,
           populationIndex,
+          layoutPreset,
+          coverageSpacing,
+          coverageSlot: populationIndex,
+          bearingPhase,
           stripCount: authoredCount,
           materialRole: role,
           layerMaterialRole: spec.materialRole,
@@ -395,7 +427,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           thicknessVariance: stripProfileDescriptor.thicknessVariance,
           gapPattern,
           intervalOffset: Number((localOffset * 0.045 + stripIndex * 0.012).toFixed(4)),
-          phaseOffset: Number((localOffset * 0.34 + stripIndex * 0.19 + population.bearingOffset + bearingJitter).toFixed(4)),
+          phaseOffset: Number((localOffset * 0.12 + bearingPhase).toFixed(4)),
         });
         shellStripIndex += 1;
       }
@@ -462,6 +494,10 @@ export function generateLamellarSectionSegments(input = {}) {
         populationId: strip.populationId,
         populationRole: strip.populationRole,
         populationIndex: strip.populationIndex,
+        layoutPreset: strip.layoutPreset,
+        coverageSpacing: strip.coverageSpacing,
+        coverageSlot: strip.coverageSlot,
+        bearingPhase: strip.bearingPhase,
         source: strip.sliceParticipation === "primary-cut-target" ? "procedural-composer" : "layer-shell-strip-assemblage",
         materialRole: strip.materialRole,
         layerMaterialRole: strip.layerMaterialRole,
@@ -475,9 +511,9 @@ export function generateLamellarSectionSegments(input = {}) {
         interval: [start, end],
         curveLaw: composerDescriptor.curveLaw,
         capLaw: composerDescriptor.capLaw,
-        theta0: selectedShape.theta0 + strip.stripIndex * 0.08,
+        theta0: selectedShape.theta0 + strip.bearingPhase,
         thetaTwist: selectedShape.thetaTwist,
-        phi0: selectedShape.phi0 + strip.intervalOffset * 0.28,
+        phi0: selectedShape.phi0 + strip.intervalOffset * 0.16 + Math.sin(strip.bearingPhase) * 0.16,
         phiSlope: selectedShape.phiSlope,
         phase: selectedPhase + strip.phaseOffset,
         radius: 1 + spec.depth,
@@ -511,6 +547,10 @@ export function generateLamellarSectionSegments(input = {}) {
       populationId: strip.populationId,
       populationRole: strip.populationRole,
       populationIndex: strip.populationIndex,
+      layoutPreset: strip.layoutPreset,
+      coverageSpacing: strip.coverageSpacing,
+      coverageSlot: strip.coverageSlot,
+      bearingPhase: strip.bearingPhase,
       source: "layer-shell-strip-assemblage",
       materialRole: strip.materialRole,
       layerMaterialRole: strip.layerMaterialRole,
@@ -527,9 +567,9 @@ export function generateLamellarSectionSegments(input = {}) {
       ],
       curveLaw: composerDescriptor.curveLaw,
       capLaw: composerDescriptor.capLaw,
-      theta0: -0.98 + spec.layerIndex * 0.28 + strip.stripIndex * 0.1 + (isCutAuthor ? 0 : 0.04),
+      theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase + (isCutAuthor ? 0 : 0.04),
       thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
-      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.42,
+      phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.18 + Math.sin(strip.bearingPhase) * 0.12,
       phiSlope: 0.86 + strip.stripIndex * 0.04,
       phase: spec.phase + strip.phaseOffset,
       radius: Number((1 + spec.depth).toFixed(4)),
@@ -915,6 +955,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       role: population?.role || firstMesh?.userData.populationRole || "population",
       populationId: population?.id || firstMesh?.userData.populationId || null,
       populationRole: population?.role || firstMesh?.userData.populationRole || null,
+      layoutPreset: population?.layoutPreset || null,
+      coverageSpacing: population?.coverageSpacing ?? null,
       count: population?.count ?? populationStripIds.length,
       chirality: population?.chirality ?? null,
       bearingOffset: population?.bearingOffset ?? null,
@@ -1172,6 +1214,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       populationId: d.populationId,
       populationRole: d.populationRole,
       populationIndex: d.populationIndex,
+      layoutPreset: d.layoutPreset,
+      coverageSpacing: d.coverageSpacing,
+      coverageSlot: d.coverageSlot,
+      bearingPhase: d.bearingPhase,
       stripProfileKind: d.stripProfileKind,
       stripProfileDescriptor: d.stripProfileDescriptor,
       materialRole: d.materialRole,
@@ -1238,6 +1284,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         populationId: descriptor.populationId || null,
         populationRole: descriptor.populationRole || null,
         populationIndex: descriptor.populationIndex ?? null,
+        layoutPreset: descriptor.layoutPreset || null,
+        coverageSpacing: descriptor.coverageSpacing ?? null,
+        coverageSlot: descriptor.coverageSlot ?? null,
+        bearingPhase: descriptor.bearingPhase ?? null,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
         sourceRole: isCutAuthorEnvelope ? descriptor.materialRole : null,
         sliceParticipation: descriptor.sliceParticipation,
