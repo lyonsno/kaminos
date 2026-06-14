@@ -113,6 +113,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-status.running { background: #1b2a3a; color: #42a5f5; }
 .gr-status.cancelled { background: #2a2a2a; color: #777; }
 
+/* Scene objects */
+.scene-object-list { display: flex; flex-direction: column; gap: 6px; }
+.scene-object-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #202020; border: 1px solid #303030; border-radius: 6px; color: #bbb; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
+.scene-object-row:hover { background: #262626; border-color: #3a3a3a; }
+.scene-object-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
+.scene-object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.scene-object-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.scene-object-empty { font-size: 11px; color: #555; }
+
 /* Volume prototype */
 .route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
 .volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
@@ -140,6 +150,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
       Drop a receipt directory here<br>or click to browse
       <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+    </div>
+
+    <h2>Scene Objects</h2>
+    <div class="panel">
+      <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
+      <div id="scene-object-list" class="scene-object-list"></div>
     </div>
 
     <div id="demo-buttons">
@@ -698,10 +714,45 @@ function disposeObjectTree(object) {
   });
 }
 
+function sceneObjectReloadabilityLabel(record) {
+  if (isReloadableSceneObjectRecord(record)) return 'reloadable';
+  if (!record.source) return 'unsourced';
+  if (record.type === 'pbr') return 'procedural';
+  return 're-drop required';
+}
+
+function renderSceneObjectList() {
+  const list = document.getElementById('scene-object-list');
+  const empty = document.getElementById('scene-object-empty');
+  if (!list || !empty) return;
+  empty.style.display = sceneObjects.length ? 'none' : '';
+  list.innerHTML = sceneObjects.map(record => {
+    const active = record.id === activeSceneObjectId;
+    const rowClass = active ? 'scene-object-row active' : 'scene-object-row';
+    const label = record.label || record.fileName || record.id;
+    const typeLabel = record.type || 'object';
+    const reloadability = sceneObjectReloadabilityLabel(record);
+    const source = record.source || 'no source';
+    return `
+      <button type="button" class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" aria-pressed="${active ? 'true' : 'false'}">
+        <span>
+          <span class="scene-object-name">${escapeHtml(label)}</span>
+          <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
+        </span>
+        <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+      </button>
+    `;
+  }).join('');
+  list.querySelectorAll('[data-scene-object-id]').forEach(button => {
+    button.addEventListener('click', () => window.selectSceneObject(button.dataset.sceneObjectId));
+  });
+}
+
 function setActiveSceneObject(id) {
   const entry = sceneObjects.find(obj => obj.id === id);
   activeSceneObjectId = entry ? entry.id : null;
   currentMesh = entry ? entry.object : null;
+  renderSceneObjectList();
   if (!transformControls) return;
   transformControls.detach();
   transformControls.visible = false;
@@ -739,6 +790,15 @@ function registerSceneObject(object, metadata = {}) {
   window._kaminosDirty?.();
   return record;
 }
+
+window.selectSceneObject = function(id) {
+  setActiveSceneObject(id);
+  if (currentMesh) {
+    const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
+    setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
+    window._kaminosDirty?.();
+  }
+};
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1067,6 +1127,7 @@ function clearScene() {
     transformControls.visible = false;
   }
   document.getElementById('transform-bar').classList.remove('visible');
+  renderSceneObjectList();
 }
 
 function loadTexture(file) {
@@ -1135,6 +1196,7 @@ async function showPBRPreview() {
     type: 'pbr',
     fileName: glbFileName || 'pbr-material-preview',
   });
+  document.getElementById('transform-bar').classList.add('visible');
   setInfo('PBR Material Preview — orbit to inspect');
 }
 

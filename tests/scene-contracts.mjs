@@ -14,6 +14,15 @@ assert.match(index, /function registerSceneObject\(/, 'load paths register autho
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
 assert.match(index, /function setActiveSceneObject\(/, 'selection/gizmo can target one object in a multi-object scene');
+assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
+assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');
+assert.match(index, /function renderSceneObjectList\(/, 'scene object registry renders to the editor surface');
+assert.match(index, /function sceneObjectReloadabilityLabel\(/, 'scene object list exposes reloadability/source status');
+assert.match(index, /window\.selectSceneObject\s*=/, 'object list can select an authored object');
+assert.match(index, /renderSceneObjectList\(\);[\s\S]*if \(!transformControls\) return;/, 'active object selection refreshes list state before transform gizmo retargeting');
+assert.match(index, /registerSceneObject\(mesh,[\s\S]*type: 'pbr'[\s\S]*document\.getElementById\('transform-bar'\)\.classList\.add\('visible'\);[\s\S]*setInfo\('PBR Material Preview/, 'PBR material previews surface the transform toolbar after registering the selected scene object');
+assert.match(index, /scene-object-row active/, 'active object row has a stable visual state');
+assert.match(index, /data-scene-object-id/, 'object list buttons expose stable object ids for browser witnesses');
 assert.match(index, /buildSceneDocument\(\{[\s\S]*objects,/ , 'scene save writes all authored objects through the shared document builder');
 assert.match(index, /activeObjectId:\s*activeSceneObjectId/, 'scene save preserves the active object id');
 assert.match(index, /volumePrimitives:\s*getVolumePrimitiveState\(\)/, 'scene save keeps Beaming volume primitives alongside objects');
