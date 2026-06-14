@@ -476,6 +476,13 @@ async function main() {
       const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
       const secondPrimitive = state.volumePrimitives?.find(item => item.id === expectedSecondPrimitiveId);
       assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
+      assert.equal(volumeAuthoring?.parameterOwnership?.identity, 'volume-parameter-ownership-taxonomy-v0', 'wrong parameter ownership taxonomy identity');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-radius'), 'primitive radius ownership was not marked backend-applied local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-flow-rate'), 'primitive flow ownership was not marked backend-applied local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAuthoredControlIds?.includes('volume-primitive-radiance'), 'primitive radiance was not marked authored-local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-density'), 'density was not marked renderer-global');
+      assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-smoke'), 'smoke was not marked renderer-global');
+      assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-steps'), 'ray steps were not marked renderer-global');
       const expectedSelectedPrimitiveId = expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedSelectedPrimitiveId, 'authored primitive selection was not retained');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedSelectedPrimitiveId, 'authored primitive transform target was not retained');
@@ -652,6 +659,7 @@ async function main() {
       volumePrimitives: state.volumePrimitives,
       primitiveSource: state.primitiveSource,
       volumeAuthoring,
+      parameterOwnership: volumeAuthoring?.parameterOwnership || null,
       contextActionProbe,
       saveLoadRoundTrip,
       controls: state.controls,

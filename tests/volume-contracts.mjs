@@ -47,6 +47,14 @@ assert.match(index, /id="volume-primitive-flow-rate"/, 'Volume tab exposes selec
 assert.match(index, /id="volume-primitive-radiance"/, 'Volume tab exposes selected primitive radiance editing');
 assert.match(index, /id="volume-marker-visible"/, 'Volume tab exposes a marker visibility toggle');
 assert.match(index, /id="volume-marker-opacity"/, 'Volume tab exposes marker opacity control');
+assert.match(index, /volume-parameter-ownership-taxonomy-v0/, 'Volume tab carries a stable parameter ownership taxonomy identity');
+assert.match(index, /data-parameter-ownership="primitive-local-applied"/, 'Volume tab visibly groups backend-applied primitive-local source controls');
+assert.match(index, /data-parameter-ownership="primitive-local-authored"/, 'Volume tab visibly separates authored primitive-local controls from backend-applied controls');
+assert.match(index, /data-parameter-ownership="renderer-global"/, 'Volume tab visibly groups renderer-wide global controls');
+assert.match(index, /function volumeParameterOwnershipState/, 'authoring debug state exposes parameter ownership taxonomy');
+assert.match(index, /primitiveAppliedControlIds[\s\S]*volume-primitive-radius[\s\S]*volume-primitive-flow-rate/, 'ownership taxonomy names primitive controls currently applied by the backend');
+assert.match(index, /primitiveAuthoredControlIds[\s\S]*volume-primitive-radiance[\s\S]*volume-marker-visible[\s\S]*volume-marker-opacity/, 'ownership taxonomy names primitive controls that are authored/persisted locally');
+assert.match(index, /rendererGlobalControlIds[\s\S]*volume-density[\s\S]*volume-fire[\s\S]*volume-smoke[\s\S]*volume-steps/, 'ownership taxonomy names renderer/global controls');
 assert.match(index, /volumeAuthoringMode/, 'viewport keeps explicit volume primitive authoring mode state');
 assert.match(index, /selectedVolumePrimitiveId/, 'viewport keeps explicit selected volume primitive state');
 assert.match(index, /volumePrimitiveMarkers/, 'authored volume primitives have selectable main-renderer markers');
@@ -269,6 +277,9 @@ assert.match(witness, /volume-primitive-source-handle-not-raymarch-bounds-v0/, '
 assert.match(witness, /markerOpacity/, 'witness records and checks marker opacity evidence');
 assert.match(witness, /handleOpacity/, 'witness verifies authored handle opacity persists per primitive');
 assert.match(witness, /markerStates/, 'witness verifies marker state is local to each primitive');
+assert.match(witness, /parameterOwnership/, 'witness verifies parameter ownership evidence');
+assert.match(witness, /primitiveAppliedControlIds/, 'witness records backend-applied primitive-local controls');
+assert.match(witness, /rendererGlobalControlIds/, 'witness records renderer-global controls');
 assert.match(witness, /primitive-centered-sphere-volume-v0/, 'witness requires authored volume body to be centered in the primitive');
 assert.match(witness, /primitiveCenteredLiveVelocityThreshold/, 'witness uses a distinct liveness threshold for contained primitive-centered bodies');
 assert.match(witness, /warmEmissivePixels/, 'witness measures warm emissive primitive-centered bodies separately from red plume pixels');

@@ -158,6 +158,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-section-title { margin: 12px 0 6px; padding-top: 8px; border-top: 1px solid #2a2a2a; color: #777; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; }
 .volume-context-menu { position: fixed; z-index: 30; min-width: 150px; padding: 5px; background: rgba(24,24,24,0.96); border: 1px solid #333; border-radius: 6px; box-shadow: 0 8px 22px rgba(0,0,0,0.35); display: none; }
 .volume-context-menu.open { display: grid; gap: 3px; }
 .volume-context-menu .menu-item { width: 100%; padding: 6px 8px; background: transparent; border: 0; border-radius: 4px; color: #aaa; text-align: left; font-size: 11px; cursor: pointer; }
@@ -372,113 +373,116 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="menu-item" id="volume-primitive-toggle-handle">Hide Handle</button>
         <button class="menu-item" id="volume-primitive-delete">Delete</button>
       </div>
-      <div class="slider-row">
+      <div class="volume-section-title" data-parameter-ownership="primitive-local-applied">Primitive Source</div>
+      <div class="slider-row" data-parameter-ownership="primitive-local-applied">
         <span class="slider-label">Prim Radius</span>
         <input type="range" id="volume-primitive-radius" min="0.06" max="0.5" step="0.01" value="0.12">
         <span class="slider-val" id="volume-primitive-radius-val">0.12</span>
       </div>
-      <div class="slider-row">
+      <div class="slider-row" data-parameter-ownership="primitive-local-applied">
         <span class="slider-label">Prim Flow</span>
         <input type="range" id="volume-primitive-flow-rate" min="0" max="2.5" step="0.05" value="0.15">
         <span class="slider-val" id="volume-primitive-flow-rate-val">0.15</span>
       </div>
-      <div class="slider-row">
-        <span class="slider-label">Prim Radiance</span>
+      <div class="volume-section-title" data-parameter-ownership="primitive-local-authored">Primitive Authored</div>
+      <div class="slider-row" data-parameter-ownership="primitive-local-authored">
+        <span class="slider-label">Prim Radiance Intent</span>
         <input type="range" id="volume-primitive-radiance" min="0" max="3" step="0.05" value="1.65">
         <span class="slider-val" id="volume-primitive-radiance-val">1.65</span>
       </div>
-      <div class="slider-row">
+      <div class="slider-row" data-parameter-ownership="primitive-local-authored">
         <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
           <input type="checkbox" id="volume-marker-visible" checked> Show Handle
         </label>
       </div>
-      <div class="slider-row">
+      <div class="slider-row" data-parameter-ownership="primitive-local-authored">
         <span class="slider-label">Handle Opacity</span>
         <input type="range" id="volume-marker-opacity" min="0" max="0.45" step="0.01" value="0.16">
         <span class="slider-val" id="volume-marker-opacity-val">0.16</span>
       </div>
     </div>
-    <div class="slider-row">
+    <div class="volume-section-title" data-parameter-ownership="renderer-global">Renderer Globals</div>
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Density</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
       <span class="slider-val" id="volume-density-val">4.20</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Fire</span>
       <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="1.4">
       <span class="slider-val" id="volume-fire-val">1.40</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Radiance</span>
       <input type="range" id="volume-radiance" min="0" max="3" step="0.05" value="1.65">
       <span class="slider-val" id="volume-radiance-val">1.65</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Absorption</span>
       <input type="range" id="volume-absorption" min="0" max="2" step="0.05" value="0.85">
       <span class="slider-val" id="volume-absorption-val">0.85</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Glow</span>
       <input type="range" id="volume-glow" min="0" max="2.5" step="0.05" value="1.15">
       <span class="slider-val" id="volume-glow-val">1.15</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Smoke</span>
       <input type="range" id="volume-smoke" min="0.1" max="2.8" step="0.05" value="2.8">
       <span class="slider-val" id="volume-smoke-val">2.80</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Curl</span>
       <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="2.65">
       <span class="slider-val" id="volume-curl-val">2.65</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Microdetail</span>
       <input type="range" id="volume-microdetail" min="0" max="2.5" step="0.05" value="2.5">
       <span class="slider-val" id="volume-microdetail-val">2.50</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Shred</span>
       <input type="range" id="volume-interface-shred" min="0" max="5" step="0.05" value="2.5">
       <span class="slider-val" id="volume-interface-shred-val">2.50</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Fire Licks</span>
       <input type="range" id="volume-fire-licks" min="0" max="5" step="0.05" value="1.65">
       <span class="slider-val" id="volume-fire-licks-val">1.65</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Projection</span>
       <input type="range" id="volume-projection" min="0" max="1.5" step="0.05" value="0.65">
       <span class="slider-val" id="volume-projection-val">0.65</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Speed</span>
       <input type="range" id="volume-speed" min="0.1" max="5" step="0.05" value="5">
       <span class="slider-val" id="volume-speed-val">5.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Ray Steps</span>
       <input type="range" id="volume-steps" min="24" max="160" step="4" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Adaptive Rays</span>
       <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Input Radius</span>
       <input type="range" id="volume-input-radius" min="0.08" max="0.7" step="0.01" value="0.12">
       <span class="slider-val" id="volume-input-radius-val">0.12</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Flow Rate</span>
       <input type="range" id="volume-flow-rate" min="0" max="2.5" step="0.05" value="0.15">
       <span class="slider-val" id="volume-flow-rate-val">0.15</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Grid</span>
       <select id="volume-resolution" class="select-input">
         <option value="32">32^3</option>
@@ -488,12 +492,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </select>
       <span class="slider-val" id="volume-resolution-val">96^3</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-parameter-ownership="renderer-global">
       <span class="slider-label">Flow Debug</span>
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
@@ -677,6 +681,39 @@ let volumePrototype = null;
 let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const VOLUME_PRIMITIVE_LOCAL_SETTINGS_IDENTITY = 'volume-primitive-local-settings-v0';
+const VOLUME_PARAMETER_OWNERSHIP = Object.freeze({
+  identity: 'volume-parameter-ownership-taxonomy-v0',
+  primitiveAppliedControlIds: [
+    'volume-primitive-radius',
+    'volume-primitive-flow-rate',
+  ],
+  primitiveAuthoredControlIds: [
+    'volume-primitive-radiance',
+    'volume-marker-visible',
+    'volume-marker-opacity',
+  ],
+  rendererGlobalControlIds: [
+    'volume-density',
+    'volume-fire',
+    'volume-radiance',
+    'volume-absorption',
+    'volume-glow',
+    'volume-smoke',
+    'volume-curl',
+    'volume-microdetail',
+    'volume-interface-shred',
+    'volume-fire-licks',
+    'volume-projection',
+    'volume-speed',
+    'volume-steps',
+    'volume-adaptive-rays',
+    'volume-input-radius',
+    'volume-flow-rate',
+    'volume-resolution',
+    'volume-grid-overlay',
+    'volume-flow-debug',
+  ],
+});
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const VOLUME_PRIMITIVE_SCENE_BOUNDS = Object.freeze({
   identity: 'volume-primitive-shared-scene-bounds-v0',
@@ -1403,6 +1440,15 @@ function volumePrimitiveMarkerStates() {
       materialOpacity: marker?.material?.opacity ?? null,
     };
   });
+}
+
+function volumeParameterOwnershipState() {
+  return {
+    identity: VOLUME_PARAMETER_OWNERSHIP.identity,
+    primitiveAppliedControlIds: [...VOLUME_PARAMETER_OWNERSHIP.primitiveAppliedControlIds],
+    primitiveAuthoredControlIds: [...VOLUME_PARAMETER_OWNERSHIP.primitiveAuthoredControlIds],
+    rendererGlobalControlIds: [...VOLUME_PARAMETER_OWNERSHIP.rendererGlobalControlIds],
+  };
 }
 
 function seedVolumePrimitiveFixture(name) {
@@ -3022,6 +3068,7 @@ async function initKaminosVolumeRoute() {
         markerUnderFloorVisibilityMode: VOLUME_PRIMITIVE_UNDER_FLOOR_VISIBILITY_MODE,
         markerOpacity: selectedMarkerSettings.handleOpacity,
         markerVisible: selectedMarkerSettings.handleVisible,
+        parameterOwnership: volumeParameterOwnershipState(),
         selectedMarkerBelowGround,
         selectedMarkerDepthTest: selectedMarker?.material?.depthTest ?? null,
         selectedMarkerRenderOrder: selectedMarker?.renderOrder ?? null,
