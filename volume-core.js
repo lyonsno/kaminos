@@ -46,6 +46,7 @@ struct Uniforms {
   radiance_controls: vec4<f32>,
   occupancy_controls: vec4<f32>,
   temporal_controls: vec4<f32>,
+  previousViewProj: mat4x4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -84,6 +85,26 @@ fn sampleHistoryColor(uv: vec2<f32>) -> vec3<f32> {
   return textureSampleLevel(historyTexture, historySampler, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0).rgb;
 }
 
+fn temporalReprojectionUv(worldPos: vec3<f32>, velocity: vec3<f32>, confidence: f32) -> vec3<f32> {
+  let historyLag = mix(0.012, 0.042, clamp(confidence, 0.0, 1.0));
+  let previousWorld = worldPos - velocity * historyLag;
+  let clip = u.previousViewProj * vec4<f32>(previousWorld, 1.0);
+  let safeW = max(abs(clip.w), 0.0001);
+  let ndc = clip.xy / safeW;
+  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
+  let validX = step(0.0, uv.x) * step(uv.x, 1.0);
+  let validY = step(0.0, uv.y) * step(uv.y, 1.0);
+  let validW = step(0.0001, clip.w);
+  return vec3<f32>(uv, validX * validY * validW);
+}
+
+fn temporalReprojectionConfidence(materialWeight: f32, majorantEdge: f32, reactiveSignal: f32) -> f32 {
+  let materialConfidence = smoothstep(0.012, 0.18, materialWeight);
+  let edgePenalty = 1.0 - smoothstep(0.05, 0.34, majorantEdge);
+  let reactivePenalty = 1.0 - smoothstep(0.18, 1.15, reactiveSignal);
+  return clamp(materialConfidence * edgePenalty * reactivePenalty, 0.0, 1.0);
+}
+
 fn temporalJitterOffset(uv: vec2<f32>, dtBase: f32) -> f32 {
   let temporalJitter = clamp(u.temporal_controls.y, 0.0, 1.0);
   let temporalFrame = u.temporal_controls.w;
@@ -102,11 +123,22 @@ fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f
   return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
 }
 
-fn temporalResolveColor(current: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+fn temporalReactiveMask(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32) -> f32 {
+  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let currentHot = max(current.r, current.g);
+  let historyHot = max(history.r, history.g);
+  let hotMismatch = smoothstep(0.055, 0.27, abs(historyHot - currentHot));
+  let colorMismatch = smoothstep(0.045, 0.24, length(history - current));
+  let fireReactive = smoothstep(0.22, 0.76, currentHot) * 0.78 + smoothstep(0.30, 1.10, reactiveSignal) * 0.82;
+  let smokeBodyLoss = smoothstep(0.025, 0.16, historyLuma - currentLuma);
+  let edgeReactive = smoothstep(0.08, 0.34, majorantEdge);
+  let invalid = 1.0 - historyUvValid * step(0.03, confidence);
+  return clamp(max(max(hotMismatch, colorMismatch), max(fireReactive, max(smokeBodyLoss, edgeReactive))) + invalid, 0.0, 1.0);
+}
+
+fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveMask: f32) -> f32 {
   let temporalAccum = clamp(u.temporal_controls.x, 0.0, 0.90);
-  let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
-  let history = sampleHistoryColor(uv);
-  let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
   let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
   let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
   let currentHot = max(current.r, current.g);
@@ -116,7 +148,16 @@ fn temporalResolveColor(current: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
   let colorMismatch = smoothstep(0.05, 0.28, length(history - current));
   let currentSupport = smoothstep(0.035, 0.18, currentLuma);
   let fadingTrailReject = 1.0 - smoothstep(0.018, 0.12, historyLuma - currentLuma);
-  let historyWeight = temporalAccum * currentSupport * fadingTrailReject * (1.0 - fireProtect * 0.70) * (1.0 - hotMismatch * 0.78) * (1.0 - colorMismatch * 0.64);
+  return temporalAccum * confidence * currentSupport * fadingTrailReject * (1.0 - reactiveMask) * (1.0 - fireProtect * 0.82) * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
+}
+
+fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32) -> vec3<f32> {
+  let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
+  let uv = mix(sameScreenUv, reprojectedUv, smoothstep(0.04, 0.30, reprojectionConfidence) * historyUvValid);
+  let history = sampleHistoryColor(uv);
+  let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
+  let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid);
+  let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask);
   return mix(current, clampedHistory, historyWeight);
 }
 
@@ -779,6 +820,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
+  var temporalMaterialWeight = 0.0;
+  var temporalWorldSum = vec3<f32>(0.0);
+  var temporalVelocitySum = vec3<f32>(0.0);
+  var temporalReactiveSignal = 0.0;
+  var temporalMajorantEdge = 0.0;
 
   for (var i = 0; i < 192; i = i + 1) {
     if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
@@ -796,6 +842,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
     let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
     let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
+    temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
     if (majorantSkipGate > 0.42) {
       let cellExit = majorantCellExitDistance(p, rd);
       let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
@@ -852,6 +899,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16);
     let fireAlpha = clamp((flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26) * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18), 0.0, 0.20);
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
+    let temporalSampleWeight = clamp((alpha * 3.2 + smokeAlpha * 1.8 + fireAlpha * 3.6 + interest * 0.035) * trans, 0.0, 1.0);
+    temporalMaterialWeight = temporalMaterialWeight + temporalSampleWeight;
+    temporalWorldSum = temporalWorldSum + p * temporalSampleWeight;
+    temporalVelocitySum = temporalVelocitySum + state.xyz * temporalSampleWeight;
+    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16, 0.0, 2.2));
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;
@@ -876,7 +928,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
-  return vec4<f32>(temporalResolveColor(current, in.uv), 1.0);
+  let temporalInvWeight = 1.0 / max(temporalMaterialWeight, 0.0001);
+  let temporalWorld = temporalWorldSum * temporalInvWeight;
+  let temporalVelocity = temporalVelocitySum * temporalInvWeight;
+  let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
+  let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
+  return vec4<f32>(temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z), 1.0);
 }
 `;
 
@@ -889,7 +946,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(48);
+  const previousViewProj = new THREE.Matrix4();
+  const uniforms = new Float32Array(64);
   let gridSize = normalizeGridSize(getControls().resolution);
   let majorantGridSize = normalizeMajorantGridSize(getControls().majorantGrid);
   const state = {
@@ -915,6 +973,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalJitter: 0.85,
     historyClamp: 0.70,
     temporalAccumEffective: 0,
+    temporalReprojectionConfidence: 0,
+    temporalHistoryWeight: 0,
+    temporalRejectedHistory: 1,
     temporalHistoryFrames: 0,
     temporalHistoryResetCount: 0,
     temporalHistoryResetReason: 'initial',
@@ -964,6 +1025,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let historyTextureSize = '';
   let historySampler = null;
   let historyValid = false;
+  let previousViewProjReady = false;
   let lastTemporalCameraSignature = '';
   let lastTemporalControlSignature = '';
   let format = null;
@@ -1096,10 +1158,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function resetTemporalHistory(reason = 'reset') {
     historyValid = false;
+    previousViewProjReady = false;
     state.temporalHistoryValid = false;
     state.temporalHistoryFrames = 0;
+    state.temporalReprojectionConfidence = 0;
+    state.temporalHistoryWeight = 0;
+    state.temporalRejectedHistory = 1;
     state.temporalHistoryResetCount += 1;
     state.temporalHistoryResetReason = reason;
+  }
+
+  function commitPreviousViewProjection() {
+    previousViewProj.copy(viewProj);
+    previousViewProjReady = true;
   }
 
   function destroyTemporalHistory() {
@@ -1446,6 +1517,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ensureTemporalHistoryTexture();
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     invViewProj.copy(viewProj).invert();
+    if (!previousViewProjReady) {
+      previousViewProj.copy(viewProj);
+      previousViewProjReady = true;
+    }
     uniforms.set(invViewProj.elements, 0);
     uniforms[16] = camera.position.x;
     uniforms[17] = camera.position.y;
@@ -1480,6 +1555,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
     uniforms[47] = state.frameCount % 4096;
+    uniforms.set(previousViewProj.elements, 48);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.adaptiveRaymarch = uniforms[39];
@@ -1491,6 +1567,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalJitter = uniforms[45];
     state.historyClamp = uniforms[46];
     state.temporalAccumEffective = uniforms[44];
+    const temporalSettled = historyValid ? Math.min(1, Math.max(0, state.temporalHistoryFrames / 12)) : 0;
+    const temporalMotionTrust = previousViewProjReady ? 1 : 0;
+    const temporalReactiveEstimate = Math.min(0.82,
+      0.18 * Math.max(0, Math.min(1, controlsSnapshot.majorantSkip ?? 0.70)) +
+      0.12 * Math.max(0, Math.min(1, controlsSnapshot.adaptiveRays ?? 0.65)) +
+      0.08 * Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.2)) +
+      0.06 * Math.max(0, Math.min(1, (controlsSnapshot.fireLicks ?? 1.65) / 5))
+    );
+    state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * (1 - temporalReactiveEstimate);
+    state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence;
+    state.temporalRejectedHistory = Math.max(0, 1 - state.temporalReprojectionConfidence);
     state.temporalHistoryValid = historyValid;
   }
 
@@ -1558,6 +1645,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
     encodeHistoryCopy(encoder, currentTexture);
     device.queue.submit([encoder.finish()]);
+    commitPreviousViewProjection();
     state.frameCount += 1;
     state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
     recordVolumeFrameTiming(now, performance.now() - cpuStart);
@@ -1802,6 +1890,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalJitter: state.temporalJitter,
         historyClamp: state.historyClamp,
         temporalAccumEffective: state.temporalAccumEffective,
+        temporalReprojectionConfidence: state.temporalReprojectionConfidence,
+        temporalHistoryWeight: state.temporalHistoryWeight,
+        temporalRejectedHistory: state.temporalRejectedHistory,
         temporalHistoryFrames: state.temporalHistoryFrames,
         temporalHistoryResetCount: state.temporalHistoryResetCount,
         temporalHistoryResetReason: state.temporalHistoryResetReason,
@@ -1881,6 +1972,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalJitter: state.temporalJitter,
       historyClamp: state.historyClamp,
       temporalAccumEffective: state.temporalAccumEffective,
+      temporalReprojectionConfidence: state.temporalReprojectionConfidence,
+      temporalHistoryWeight: state.temporalHistoryWeight,
+      temporalRejectedHistory: state.temporalRejectedHistory,
       temporalHistoryFrames: state.temporalHistoryFrames,
       temporalHistoryResetCount: state.temporalHistoryResetCount,
       temporalHistoryResetReason: state.temporalHistoryResetReason,

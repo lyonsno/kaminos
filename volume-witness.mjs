@@ -317,6 +317,9 @@ async function main() {
       assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
       assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
       assert.ok((state.temporalHistoryResetCount ?? 0) >= 1, 'temporal history did not record reset/rejection state');
+      assert.ok(Number.isFinite(state.temporalReprojectionConfidence), 'temporal reprojection confidence did not reach debug state');
+      assert.ok(Number.isFinite(state.temporalHistoryWeight), 'temporal history weight did not reach debug state');
+      assert.ok(Number.isFinite(state.temporalRejectedHistory), 'temporal history rejection did not reach debug state');
     }
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
@@ -425,6 +428,9 @@ async function main() {
       temporalJitter: sample.temporalJitter,
       historyClamp: sample.historyClamp,
       temporalAccumEffective: sample.temporalAccumEffective,
+      temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
+      temporalHistoryWeight: sample.temporalHistoryWeight,
+      temporalRejectedHistory: sample.temporalRejectedHistory,
       temporalHistoryFrames: sample.temporalHistoryFrames,
       temporalHistoryResetCount: sample.temporalHistoryResetCount,
       temporalHistoryResetReason: sample.temporalHistoryResetReason,
