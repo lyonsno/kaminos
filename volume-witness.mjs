@@ -266,6 +266,10 @@ async function main() {
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
+    const stateTiming = state.timing || {};
+    assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
+    assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
+    assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
 
     phase = 'gpu-readback';
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
@@ -279,6 +283,15 @@ async function main() {
     }
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
+    }
+    const sampleTiming = sample.timing || stateTiming;
+    if (!Number.isFinite(sampleTiming.rafFps) || sampleTiming.rafFps <= 0 || !Number.isFinite(sampleTiming.frameP95Ms) || sampleTiming.frameP95Ms <= 0) {
+      throw new Error(`Route-local timing did not survive GPU readback: ${JSON.stringify(sampleTiming)}`);
+    }
+    if (sampleTiming.queueTimingAvailable === true && sampleTiming.queueSamples > 0) {
+      if (!Number.isFinite(sampleTiming.queueDoneMs) || !Number.isFinite(sampleTiming.queueDoneP95Ms)) {
+        throw new Error(`GPU queue completion timing was sampled but did not report finite latency: ${JSON.stringify(sampleTiming)}`);
+      }
     }
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
@@ -344,6 +357,7 @@ async function main() {
       raySteps: state.controls?.raySteps,
       adaptiveRaymarch: sample.adaptiveRaymarch,
       rayBudgetPreset: reportControls.rayBudgetPreset,
+      timing: sample.timing || stateTiming,
       controls: reportControls,
       screenshot: out,
       metrics,

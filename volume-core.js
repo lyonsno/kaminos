@@ -687,6 +687,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     lastFrameEnergy: 0,
+    timing: {
+      rafFps: 0,
+      frameDeltaMs: 0,
+      frameP95Ms: 0,
+      cpuFrameMs: 0,
+      cpuFrameP95Ms: 0,
+      queueDoneMs: null,
+      queueDoneP95Ms: null,
+      queueProbePending: false,
+      queueSamples: 0,
+      queueTimingAvailable: false,
+    },
     error: null,
   };
 
@@ -708,6 +720,78 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let format = null;
   let raf = 0;
   let controlsSnapshot = getControls();
+  const timingSamples = {
+    rafDelta: [],
+    cpuFrame: [],
+    queueDone: [],
+  };
+  let lastRafNow = 0;
+  let queueProbePending = false;
+
+  function pushTimingSample(name, value, maxSamples = 120) {
+    if (!Number.isFinite(value)) return;
+    const samples = timingSamples[name];
+    samples.push(value);
+    if (samples.length > maxSamples) samples.shift();
+  }
+
+  function percentileTiming(samples, percentile) {
+    if (!samples.length) return null;
+    const sorted = [...samples].sort((a, b) => a - b);
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(percentile * sorted.length) - 1));
+    return sorted[index];
+  }
+
+  function recordVolumeFrameTiming(now, cpuFrameMs) {
+    if (lastRafNow > 0) pushTimingSample('rafDelta', now - lastRafNow);
+    lastRafNow = now;
+    pushTimingSample('cpuFrame', cpuFrameMs);
+    const rafP95 = percentileTiming(timingSamples.rafDelta, 0.95);
+    const cpuP95 = percentileTiming(timingSamples.cpuFrame, 0.95);
+    state.timing = {
+      ...state.timing,
+      rafFps: rafP95 ? 1000 / rafP95 : 0,
+      frameDeltaMs: timingSamples.rafDelta.at(-1) ?? 0,
+      frameP95Ms: rafP95 ?? 0,
+      cpuFrameMs,
+      cpuFrameP95Ms: cpuP95 ?? 0,
+      queueProbePending,
+      queueSamples: timingSamples.queueDone.length,
+    };
+  }
+
+  function recordVolumeQueueTiming(submittedAt) {
+    const queueDoneMs = performance.now() - submittedAt;
+    pushTimingSample('queueDone', queueDoneMs, 80);
+    state.timing = {
+      ...state.timing,
+      queueDoneMs,
+      queueDoneP95Ms: percentileTiming(timingSamples.queueDone, 0.95),
+      queueProbePending: queueProbePending,
+      queueSamples: timingSamples.queueDone.length,
+      queueTimingAvailable: true,
+    };
+  }
+
+  function probeVolumeQueueTiming() {
+    if (queueProbePending || !device?.queue?.onSubmittedWorkDone) return;
+    queueProbePending = true;
+    state.timing = { ...state.timing, queueProbePending: true, queueTimingAvailable: true };
+    const submittedAt = performance.now();
+    device.queue.onSubmittedWorkDone()
+      .then(() => recordVolumeQueueTiming(submittedAt))
+      .catch(error => {
+        state.timing = {
+          ...state.timing,
+          queueTimingAvailable: false,
+          queueTimingError: error?.message || String(error),
+        };
+      })
+      .finally(() => {
+        queueProbePending = false;
+        state.timing = { ...state.timing, queueProbePending: false };
+      });
+  }
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
@@ -965,6 +1049,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function render(now) {
     if (!state.active) return;
     raf = requestAnimationFrame(render);
+    const cpuStart = performance.now();
     controls?.update?.();
     updateUniforms(now);
     const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
@@ -973,6 +1058,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.submit([encoder.finish()]);
     state.frameCount += 1;
     state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
+    recordVolumeFrameTiming(now, performance.now() - cpuStart);
+    if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
   }
 
   async function sampleSimReadback() {
@@ -1128,6 +1215,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simGridLabel: state.simGridLabel,
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
+        timing: { ...state.timing },
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -1191,6 +1279,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simGridLabel: state.simGridLabel,
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
+      timing: { ...state.timing },
       simReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,

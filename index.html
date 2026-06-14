@@ -115,8 +115,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 /* Volume prototype */
 .route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
-.volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
-.volume-readout .field { margin: 0; padding: 0; }
+.volume-readout { display: grid; grid-template-columns: 1fr; gap: 3px; margin-top: 8px; }
+.volume-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
+.volume-readout .field-key { white-space: nowrap; }
+.volume-readout .field-val { max-width: 220px; text-align: right; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -402,6 +404,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Grid</span><span class="field-val" id="volume-grid">96^3</span></div>
       <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-compute-fluid-raymarch-v0</span></div>
       <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
+      <div class="field"><span class="field-key">Volume timing</span><span class="field-val" id="volume-raf-fps">-- RAF</span></div>
+      <div class="field"><span class="field-key">Frame p95</span><span class="field-val" id="volume-frame-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">Queue done</span><span class="field-val" id="volume-queue-ms">-- ms</span></div>
+      <div class="field"><span class="field-key">Queue p95</span><span class="field-val" id="volume-queue-p95">-- ms</span></div>
     </div>
   </div>
 
@@ -761,7 +767,7 @@ async function initScene() {
       const elapsed = performance.now() - fpsLast;
       if (elapsed >= 500) {
         const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-        fpsEl.textContent = `${fps} fps · ${frameMs.toFixed(1)}ms`;
+        fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
         fpsFrames = 0;
         fpsLast = performance.now();
       }
@@ -1290,12 +1296,17 @@ function updateVolumeControlLabels() {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  const timing = s.timing || {};
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
   document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
+  document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
+  document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
+  document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
+  document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
 }

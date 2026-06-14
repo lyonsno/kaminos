@@ -12,6 +12,11 @@ assert.match(index, /volume-core\.js/, 'index imports the volume prototype modul
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');
 assert.match(index, /id="volume-resolution"/, 'Volume tab exposes a fluid grid resolution control');
 assert.match(index, /id="volume-grid-overlay"/, 'Volume tab exposes a grid overlay control');
+assert.match(index, /id="volume-raf-fps"/, 'Volume tab exposes route-local RAF cadence separate from app FPS');
+assert.match(index, /id="volume-frame-p95"/, 'Volume tab exposes route-local frame-time percentile');
+assert.match(index, /id="volume-queue-ms"/, 'Volume tab exposes GPU queue completion latency');
+assert.match(index, /id="volume-queue-p95"/, 'Volume tab exposes GPU queue latency percentile');
+assert.match(index, /volume timing/i, 'Volume readout labels timing as route-local volume timing');
 assert.match(index, /volume_resolution/, 'URL route can override fluid sim resolution');
 assert.match(index, /volume_grid/, 'URL route can enable the fluid grid overlay');
 assert.match(index, /id="volume-density"[^>]+max="6"/, 'Density exposes enough headroom to compensate lower ray-step budgets');
@@ -133,6 +138,11 @@ assert.match(core, /createComputePipeline/, 'fluid state advances through a WebG
 assert.match(core, /dispatchWorkgroups/, 'fluid sim dispatches compute workgroups each frame');
 assert.match(core, /simStepCount/, 'debug state exposes simulation step count');
 assert.match(core, /simGrid/, 'debug state exposes simulation grid identity');
+assert.match(core, /recordVolumeFrameTiming/, 'volume core records route-local frame timing');
+assert.match(core, /percentileTiming/, 'volume core computes timing percentiles rather than only instant FPS');
+assert.match(core, /queue\.onSubmittedWorkDone/, 'volume core samples WebGPU queue completion timing');
+assert.match(core, /queueProbePending/, 'volume core exposes whether GPU queue timing is currently pending');
+assert.match(core, /timing:/, 'debug state exposes a timing object');
 assert.match(core, /curlMean/, 'sim readback reports curl evidence');
 assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection evidence');
 assert.doesNotMatch(core, /screenGridLine/, 'grid overlay must not fall back to a fake screen-space lattice');
@@ -149,6 +159,8 @@ assert.match(witness, /native-3d-compute-fluid-raymarch-v0/, 'witness requires t
 assert.match(witness, /expectedAdaptiveRays/, 'witness verifies adaptive raymarch route/control identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
+assert.match(witness, /timing/, 'witness records route-local timing evidence');
+assert.match(witness, /queueDoneMs/, 'witness records GPU queue completion timing when available');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
