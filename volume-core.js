@@ -8,6 +8,7 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
+const HAND_POSE_STALE_MS = 250;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
 const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'tall_plume', 'bonfire_plume']);
 
@@ -151,6 +152,109 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
     timestampMs,
     frameId: payload.frameId ?? null,
     ageMs: Math.max(0, nowMs - timestampMs),
+  };
+}
+
+function normalizeHandPosePoint(point, coordinateSpace, warnings) {
+  if (!Array.isArray(point) || point.length < 2) {
+    warnings.push('invalid-hand-point');
+    return [0, -0.72, 0];
+  }
+  const x = Number(point[0]);
+  const y = Number(point[1]);
+  const z = Number(point[2]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    warnings.push('nonfinite-hand-point');
+    return [0, -0.72, 0];
+  }
+  if (coordinateSpace === 'volume-local') {
+    return [
+      clampFinite(x, -1.5, 1.5, 0),
+      clampFinite(y, -1.5, 1.5, -0.72),
+      clampFinite(z, -1.5, 1.5, 0),
+    ];
+  }
+  return [
+    clampFinite((x - 0.5) * 1.25, -1.5, 1.5, 0),
+    clampFinite((0.5 - y) * 1.25, -1.5, 1.5, -0.72),
+    clampFinite(Number.isFinite(z) ? z * 0.45 : 0, -1.5, 1.5, 0),
+  ];
+}
+
+export function normalizeHandPoseEmitters(payload = {}, nowMs = externalEmitterNowMs()) {
+  const warnings = [];
+  const requestedHandPoseBackend = String(payload.requestedBackend || payload.requestedHandPoseBackend || 'unspecified');
+  const effectiveHandPoseBackend = String(payload.effectiveBackend || payload.effectiveHandPoseBackend || payload.backend || 'unknown');
+  const handPoseEvidenceKind = String(payload.evidenceKind || payload.handPoseEvidenceKind || 'unverified');
+  const timestampMs = clampFinite(payload.timestampMs, 0, Number.MAX_SAFE_INTEGER, nowMs);
+  const ageMs = Math.max(0, nowMs - timestampMs);
+  const handPoseStale = handPoseEvidenceKind === 'live' && ageMs > HAND_POSE_STALE_MS;
+  const coordinateSpace = payload.coordinateSpace === 'volume-local' ? 'volume-local' : 'image-normalized';
+  const rawHands = Array.isArray(payload.hands) ? payload.hands : [];
+  const emitters = [];
+  let handPoseHandCount = 0;
+
+  if (effectiveHandPoseBackend === 'unknown') warnings.push('missing-effective-hand-pose-backend');
+  if (!['live', 'captured', 'fallback', 'synthetic', 'unverified'].includes(handPoseEvidenceKind)) {
+    warnings.push(`unknown-hand-pose-evidence-kind:${handPoseEvidenceKind}`);
+  }
+  if (handPoseStale) warnings.push('stale-live-hand-pose-frame');
+
+  for (const hand of rawHands) {
+    if (!hand || hand.active === false) continue;
+    const points = Array.isArray(hand.keypoints_3d) && hand.keypoints_3d.length >= 21
+      ? hand.keypoints_3d
+      : hand.keypoints3d && Array.isArray(hand.keypoints3d) && hand.keypoints3d.length >= 21
+        ? hand.keypoints3d
+        : Array.isArray(hand.keypoints_2d) && hand.keypoints_2d.length >= 21
+          ? hand.keypoints_2d
+          : Array.isArray(hand.keypoints2d) && hand.keypoints2d.length >= 21
+            ? hand.keypoints2d
+            : [];
+    if (!points.length) {
+      warnings.push('hand-missing-21-keypoints');
+      continue;
+    }
+    handPoseHandCount += 1;
+    const wrist = normalizeHandPosePoint(points[0], coordinateSpace, warnings);
+    for (const tipIndex of [4, 8, 12, 16, 20]) {
+      if (emitters.length >= MAX_EXTERNAL_EMITTERS) break;
+      const tip = normalizeHandPosePoint(points[tipIndex], coordinateSpace, warnings);
+      emitters.push({
+        start: wrist,
+        end: tip,
+        radius: clampFinite(hand.radius, 0.010, 0.08, 0.024),
+        strength: handPoseStale ? 0 : clampFinite(hand.strength, 0.05, 3.2, 1.05),
+        velocity: Array.isArray(hand.velocity) ? hand.velocity : [0, 0.16, 0],
+        smoke: clampFinite(hand.smoke, 0, 3, 0.44),
+        heat: clampFinite(hand.heat, 0, 4, 1.15),
+        fuel: clampFinite(hand.fuel, 0, 3, 0.62),
+        flame: clampFinite(hand.flame, 0, 4, 1.28),
+        detail: clampFinite(hand.detail, 0, 3, 0.88),
+        lifetime: clampFinite(hand.lifetime, 0.016, 8, 0.42),
+        ageSeconds: ageMs / 1000,
+        active: !handPoseStale,
+      });
+    }
+  }
+
+  const normalized = normalizeExternalEmitters({
+    mode: `hand_pose:${effectiveHandPoseBackend}`,
+    timestampMs,
+    frameId: payload.frameId ?? payload.handPoseFrameId ?? null,
+    emitters,
+  }, nowMs);
+
+  return {
+    ...normalized,
+    requestedHandPoseBackend,
+    effectiveHandPoseBackend,
+    handPoseEvidenceKind,
+    handPoseStale,
+    handPoseFrameId: payload.frameId ?? payload.handPoseFrameId ?? null,
+    handPoseHandCount,
+    handPoseSegmentCount: normalized.count,
+    handPoseAdapterWarnings: warnings,
   };
 }
 
@@ -1492,6 +1596,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    requestedHandPoseBackend: 'none',
+    effectiveHandPoseBackend: 'none',
+    handPoseEvidenceKind: 'none',
+    handPoseStale: false,
+    handPoseFrameId: null,
+    handPoseHandCount: 0,
+    handPoseSegmentCount: 0,
+    handPoseAdapterWarnings: [],
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -1658,6 +1770,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.externalEmitterCount = externalEmitterState.count;
     state.externalEmitterFrameId = externalEmitterState.frameId;
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
+  }
+
+  function updateHandPoseDebug(nextHandPoseState) {
+    state.requestedHandPoseBackend = nextHandPoseState?.requestedHandPoseBackend ?? 'none';
+    state.effectiveHandPoseBackend = nextHandPoseState?.effectiveHandPoseBackend ?? 'none';
+    state.handPoseEvidenceKind = nextHandPoseState?.handPoseEvidenceKind ?? 'none';
+    state.handPoseStale = Boolean(nextHandPoseState?.handPoseStale);
+    state.handPoseFrameId = nextHandPoseState?.handPoseFrameId ?? null;
+    state.handPoseHandCount = nextHandPoseState?.handPoseHandCount ?? 0;
+    state.handPoseSegmentCount = nextHandPoseState?.handPoseSegmentCount ?? 0;
+    state.handPoseAdapterWarnings = Array.isArray(nextHandPoseState?.handPoseAdapterWarnings)
+      ? [...nextHandPoseState.handPoseAdapterWarnings]
+      : [];
   }
 
   function ensureExternalEmitterBuffer() {
@@ -2892,6 +3017,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       externalEmitterCount: state.externalEmitterCount,
       externalEmitterAgeMs: state.externalEmitterAgeMs,
       externalEmitterFrameId: state.externalEmitterFrameId,
+      requestedHandPoseBackend: state.requestedHandPoseBackend,
+      effectiveHandPoseBackend: state.effectiveHandPoseBackend,
+      handPoseEvidenceKind: state.handPoseEvidenceKind,
+      handPoseStale: state.handPoseStale,
+      handPoseFrameId: state.handPoseFrameId,
+      handPoseHandCount: state.handPoseHandCount,
+      handPoseSegmentCount: state.handPoseSegmentCount,
+      handPoseAdapterWarnings: [...state.handPoseAdapterWarnings],
       temporalAccumEffective: state.temporalAccumEffective,
       temporalReprojectionConfidence: state.temporalReprojectionConfidence,
       temporalHistoryWeight: state.temporalHistoryWeight,
@@ -2964,6 +3097,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);
+      updateHandPoseDebug(null);
       updateExternalEmitterDebug();
       writeExternalEmitterBuffer();
       emitStatus({ phase: 'external-emitters' });
@@ -2973,6 +3107,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         count: state.externalEmitterCount,
         ageMs: state.externalEmitterAgeMs,
         frameId: state.externalEmitterFrameId,
+      };
+    },
+    setHandPoseFrame(payload = {}) {
+      externalEmitterState = normalizeHandPoseEmitters(payload);
+      updateHandPoseDebug(externalEmitterState);
+      updateExternalEmitterDebug();
+      writeExternalEmitterBuffer();
+      emitStatus({ phase: 'hand-pose-frame' });
+      return {
+        mode: state.externalEmitterMode,
+        coordinateSpace: state.externalEmitterCoordinateSpace,
+        count: state.externalEmitterCount,
+        ageMs: state.externalEmitterAgeMs,
+        frameId: state.externalEmitterFrameId,
+        requestedHandPoseBackend: state.requestedHandPoseBackend,
+        effectiveHandPoseBackend: state.effectiveHandPoseBackend,
+        handPoseEvidenceKind: state.handPoseEvidenceKind,
+        handPoseStale: state.handPoseStale,
+        handPoseHandCount: state.handPoseHandCount,
+        handPoseSegmentCount: state.handPoseSegmentCount,
+        handPoseAdapterWarnings: [...state.handPoseAdapterWarnings],
       };
     },
     syntheticHandTrailEmitters,

@@ -293,6 +293,11 @@ function effectiveConfig(witness) {
     externalEmitterMode: witness.externalEmitterMode,
     externalEmitterCount: witness.externalEmitterCount,
     externalEmitterCoordinateSpace: witness.externalEmitterCoordinateSpace,
+    requestedHandPoseBackend: witness.requestedHandPoseBackend,
+    effectiveHandPoseBackend: witness.effectiveHandPoseBackend,
+    handPoseEvidenceKind: witness.handPoseEvidenceKind,
+    handPoseStale: witness.handPoseStale,
+    handPoseSegmentCount: witness.handPoseSegmentCount,
   };
 }
 
@@ -414,6 +419,11 @@ for (let i = 0; i < runs.length; i += 1) {
       renderHeight: witness.renderHeight,
       externalEmitterMode: witness.externalEmitterMode,
       externalEmitterCount: witness.externalEmitterCount,
+      requestedHandPoseBackend: witness.requestedHandPoseBackend,
+      effectiveHandPoseBackend: witness.effectiveHandPoseBackend,
+      handPoseEvidenceKind: witness.handPoseEvidenceKind,
+      handPoseStale: witness.handPoseStale,
+      handPoseSegmentCount: witness.handPoseSegmentCount,
       temporalEvidenceSource: witness.temporalEvidenceSource,
       timingEvidenceSource: witness.timingEvidenceSource,
       timingDisclaimer: witness.timingDisclaimer,

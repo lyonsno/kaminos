@@ -1780,6 +1780,33 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
 
   let syntheticEmitterTimer = 0;
+  const handPoseFixtureFrame = timestampMs => {
+    const keypoints = Array.from({ length: 21 }, (_, i) => {
+      const finger = Math.floor((i - 1) / 4);
+      const joint = i === 0 ? 0 : ((i - 1) % 4) + 1;
+      const spread = i === 0 ? 0 : (finger - 2) * 0.075;
+      return [
+        spread + Math.sin(timestampMs * 0.0016 + i * 0.23) * 0.018,
+        -0.66 + joint * 0.072 + Math.cos(timestampMs * 0.0013 + i * 0.19) * 0.014,
+        Math.sin(timestampMs * 0.0011 + finger * 0.41) * 0.045,
+      ];
+    });
+    return {
+      requestedBackend: 'mlx',
+      effectiveBackend: 'wilor-mlx-fixture',
+      evidenceKind: 'synthetic',
+      coordinateSpace: 'volume-local',
+      timestampMs,
+      frameId: `hand-pose-fixture-${Math.round(timestampMs)}`,
+      hands: [{
+        hand_side: 'right',
+        confidence: 1,
+        keypoints_3d: keypoints,
+        radius: 0.024,
+        strength: 1.05,
+      }],
+    };
+  };
   const refreshSyntheticExternalEmitters = () => {
     if (routeExternalEmitters !== 'synthetic_hand_trails' || !volumePrototype) return;
     const timestampMs = performance.now();
@@ -1791,14 +1818,22 @@ async function initKaminosVolumeRoute() {
       emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
     });
   };
+  const refreshHandPoseFixtureEmitters = () => {
+    if (routeExternalEmitters !== 'hand_pose_fixture' || !volumePrototype) return;
+    volumePrototype.setHandPoseFrame(handPoseFixtureFrame(performance.now()));
+  };
 
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');
     frameVolumeCamera();
     await volumePrototype.setActive(true);
     refreshSyntheticExternalEmitters();
+    refreshHandPoseFixtureEmitters();
     if (routeExternalEmitters === 'synthetic_hand_trails') {
       syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
+    }
+    if (routeExternalEmitters === 'hand_pose_fixture') {
+      syntheticEmitterTimer = window.setInterval(refreshHandPoseFixtureEmitters, 100);
     }
     setInfo('Volume renderer — native WebGPU compute fluid raymarch');
   }

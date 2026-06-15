@@ -148,6 +148,10 @@ const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isF
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
   : 0.85;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
+const expectedEffectiveExternalEmitterMode = expectedExternalEmitterMode === 'hand_pose_fixture'
+  ? 'hand_pose:wilor-mlx-fixture'
+  : expectedExternalEmitterMode;
+const expectedHandPoseEvidenceKind = expectedExternalEmitterMode === 'hand_pose_fixture' ? 'synthetic' : 'none';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -368,6 +372,35 @@ async function main() {
       });
       await delay(750);
     }
+    if (expectedExternalEmitterMode === 'hand_pose_fixture') {
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const prototype = window.__kaminosVolumePrototype;
+          const timestampMs = performance.now();
+          const keypoints = Array.from({ length: 21 }, (_, i) => {
+            const finger = Math.floor((i - 1) / 4);
+            const joint = i === 0 ? 0 : ((i - 1) % 4) + 1;
+            const spread = i === 0 ? 0 : (finger - 2) * 0.075;
+            return [
+              spread + Math.sin(timestampMs * 0.0016 + i * 0.23) * 0.018,
+              -0.66 + joint * 0.072 + Math.cos(timestampMs * 0.0013 + i * 0.19) * 0.014,
+              Math.sin(timestampMs * 0.0011 + finger * 0.41) * 0.045,
+            ];
+          });
+          return prototype?.setHandPoseFrame?.({
+            requestedBackend: 'mlx',
+            effectiveBackend: 'wilor-mlx-fixture',
+            evidenceKind: 'synthetic',
+            coordinateSpace: 'volume-local',
+            timestampMs,
+            frameId: 'witness-hand-pose-fixture',
+            hands: [{ hand_side: 'right', confidence: 1, keypoints_3d: keypoints }],
+          });
+        })()`,
+        returnByValue: true,
+      });
+      await delay(750);
+    }
     phase = 'identity';
     let state = null;
     for (let i = 0; i < 40; i++) {
@@ -431,10 +464,18 @@ async function main() {
     assert.ok((state.displayHeight ?? 0) >= (state.renderHeight ?? 0), 'internal render height exceeded display height');
     assert.ok(Math.abs((state.renderPixelRatio ?? 0) - expectedRenderScale) < 0.015, 'render-to-display pixel ratio did not match render scale');
     if (expectedExternalEmitterMode) {
-      assert.equal(state.externalEmitterMode, expectedExternalEmitterMode, 'external emitter route identity did not apply');
+      assert.equal(state.externalEmitterMode, expectedEffectiveExternalEmitterMode, 'external emitter route identity did not apply');
       assert.equal(state.externalEmitterCoordinateSpace, 'volume-local', 'external emitter coordinate space did not reach debug state');
       assert.ok((state.externalEmitterCount ?? 0) > 0, 'external emitter route did not seed any emitters');
       assert.ok(Number.isFinite(state.externalEmitterAgeMs), 'external emitter age did not reach debug state');
+    }
+    if (expectedExternalEmitterMode === 'hand_pose_fixture') {
+      assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach debug state');
+      assert.equal(state.effectiveHandPoseBackend, 'wilor-mlx-fixture', 'effective hand-pose backend did not reach debug state');
+      assert.equal(state.handPoseEvidenceKind, expectedHandPoseEvidenceKind, 'hand-pose evidence kind did not reach debug state');
+      assert.equal(state.handPoseStale, false, 'fresh hand-pose fixture was marked stale');
+      assert.equal(state.handPoseHandCount, 1, 'hand-pose fixture did not report one hand');
+      assert.equal(state.handPoseSegmentCount, 5, 'hand-pose fixture did not emit fingertip trail segments');
     }
     if (expectedTemporalAccum > 0) {
       assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
@@ -625,6 +666,15 @@ async function main() {
       externalEmitterCount: sample.externalEmitterCount,
       externalEmitterAgeMs: sample.externalEmitterAgeMs,
       externalEmitterFrameId: sample.externalEmitterFrameId,
+      requestedHandPoseBackend: sample.requestedHandPoseBackend,
+      effectiveHandPoseBackend: sample.effectiveHandPoseBackend,
+      handPoseEvidenceKind: sample.handPoseEvidenceKind,
+      expectedHandPoseEvidenceKind,
+      handPoseStale: sample.handPoseStale,
+      handPoseFrameId: sample.handPoseFrameId,
+      handPoseHandCount: sample.handPoseHandCount,
+      handPoseSegmentCount: sample.handPoseSegmentCount,
+      handPoseAdapterWarnings: sample.handPoseAdapterWarnings,
       temporalAccumEffective: sample.temporalAccumEffective,
       temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
       temporalHistoryWeight: sample.temporalHistoryWeight,
