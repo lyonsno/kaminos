@@ -279,7 +279,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         if not hint:
             # Generate new filename from model name and timestamp
-            model_name = (data.get("model") or {}).get("fileName", "scene")
+            model = data.get("model") or {}
+            model_name = model.get("fileName", "scene")
             model_name = Path(model_name).stem
             timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
             filename = f"{model_name}_{timestamp}.kaminos.json"
