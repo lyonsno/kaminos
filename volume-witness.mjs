@@ -25,6 +25,10 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.35,
     detailScale: 3.20,
     plumeHeight: 2.20,
+    curl: 3.80,
+    microdetail: 2.50,
+    interfaceShred: 1.20,
+    fireLicks: 5.00,
     windStrength: 0,
     windAngle: 0,
     windHeight: 0.15,
@@ -33,6 +37,10 @@ const VOLUME_SCENE_PRESETS = {
     fireScale: 0.78,
     detailScale: 2.75,
     plumeHeight: 2.20,
+    curl: 3.40,
+    microdetail: 2.50,
+    interfaceShred: 1.85,
+    fireLicks: 4.25,
     windStrength: 0,
     windAngle: 0,
     windHeight: 0.15,
@@ -107,6 +115,22 @@ const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
   : scenePreset.plumeHeight ?? 1.45;
+const requestedCurl = Number(routeParams.get('volume_curl'));
+const expectedCurl = routeParams.has('volume_curl') && Number.isFinite(requestedCurl)
+  ? Math.max(0, Math.min(5, requestedCurl))
+  : scenePreset.curl ?? 2.65;
+const requestedMicrodetail = Number(routeParams.get('volume_microdetail'));
+const expectedMicrodetail = routeParams.has('volume_microdetail') && Number.isFinite(requestedMicrodetail)
+  ? Math.max(0, Math.min(2.5, requestedMicrodetail))
+  : scenePreset.microdetail ?? 2.50;
+const requestedInterfaceShred = Number(routeParams.get('volume_interface_shred'));
+const expectedInterfaceShred = routeParams.has('volume_interface_shred') && Number.isFinite(requestedInterfaceShred)
+  ? Math.max(0, Math.min(5, requestedInterfaceShred))
+  : scenePreset.interfaceShred ?? 2.50;
+const requestedFireLicks = Number(routeParams.get('volume_fire_licks'));
+const expectedFireLicks = routeParams.has('volume_fire_licks') && Number.isFinite(requestedFireLicks)
+  ? Math.max(0, Math.min(5, requestedFireLicks))
+  : scenePreset.fireLicks ?? 1.65;
 const requestedWindStrength = Number(routeParams.get('volume_wind_strength'));
 const expectedWindStrength = routeParams.has('volume_wind_strength') && Number.isFinite(requestedWindStrength)
   ? Math.max(0, Math.min(1.5, requestedWindStrength))
@@ -391,6 +415,10 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
+    assert.ok(Math.abs((state.controls?.curl ?? 0) - expectedCurl) < 0.001, 'curl route/control did not apply');
+    assert.ok(Math.abs((state.controls?.microdetail ?? 0) - expectedMicrodetail) < 0.001, 'microdetail route/control did not apply');
+    assert.ok(Math.abs((state.controls?.interfaceShred ?? 0) - expectedInterfaceShred) < 0.001, 'interface shred route/control did not apply');
+    assert.ok(Math.abs((state.controls?.fireLicks ?? 0) - expectedFireLicks) < 0.001, 'fire licks route/control did not apply');
     assert.ok(Math.abs((state.controls?.windStrength ?? 0) - expectedWindStrength) < 0.001, 'wind strength route/control did not apply');
     assert.ok(Math.abs((state.windStrength ?? 0) - expectedWindStrength) < 0.001, 'effective wind strength state did not match route/control');
     assert.ok(Math.abs((state.controls?.windAngle ?? 0) - expectedWindAngle) < 0.001, 'wind direction route/control did not apply');
@@ -471,16 +499,20 @@ async function main() {
     if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= 0.0005) {
       throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005) {
+    const expectsMicrodetailEvidence = (state.controls?.microdetail ?? expectedMicrodetail) > 0.01;
+    const expectsCurlEvidence = (state.controls?.curl ?? expectedCurl) > 0.01;
+    if (expectsMicrodetailEvidence && (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025) {
+    const expectsInterfaceShredEvidence = (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
+    const expectsFireLickEvidence = (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
+    if (expectsInterfaceShredEvidence && (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025)) {
       throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= 0.00025) {
+    if (expectsFireLickEvidence && (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= 0.00025)) {
       throw new Error(`GPU sim readback does not show fire-lick breakup: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005) {
+    if (expectsCurlEvidence && (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005)) {
       throw new Error(`GPU sim readback does not show curl/vorticity evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
@@ -502,6 +534,7 @@ async function main() {
       screenDriftX: sample.volumeBounds?.screenDriftX ?? 0,
       smokeScreenDriftX: sample.smokeBounds?.screenDriftX ?? 0,
       fireScreenDriftX: sample.fireBounds?.screenDriftX ?? 0,
+      plumeHeightBins: sample.simReadback?.plumeHeightBins ?? [],
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
@@ -547,6 +580,10 @@ async function main() {
       expectedFireScale,
       expectedDetailScale,
       expectedPlumeHeight,
+      expectedCurl,
+      expectedMicrodetail,
+      expectedInterfaceShred,
+      expectedFireLicks,
       expectedWindStrength,
       expectedWindAngle,
       expectedWindHeight,
@@ -582,6 +619,10 @@ async function main() {
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
       controls: reportControls,
+      expectsMicrodetailEvidence,
+      expectsCurlEvidence,
+      expectsInterfaceShredEvidence,
+      expectsFireLickEvidence,
       screenshot: out,
       metrics,
     };

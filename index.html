@@ -1589,6 +1589,10 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
     document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
   }
+  const routeCurl = Number(params.get('volume_curl'));
+  if (params.has('volume_curl') && Number.isFinite(routeCurl)) {
+    document.getElementById('volume-curl').value = String(Math.max(0, Math.min(5, routeCurl)));
+  }
   const routeInterfaceShred = Number(params.get('volume_interface_shred'));
   if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
     document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(5, routeInterfaceShred)));
