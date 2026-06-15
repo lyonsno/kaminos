@@ -645,9 +645,10 @@ fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
   ) * 0.5;
 }
 
-fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32) -> vec4<f32> {
+fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055), 0.0);
-  let slip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
+  let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
+  let slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
   let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
 }
@@ -678,6 +679,21 @@ fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32
   let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
   let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.06 + lick * 0.34);
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
+}
+
+fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+  let interfaceEnergy = length(materialInterfaceGradient(c));
+  let radial = length(p.xz);
+  let radialWarp = (hash31(vec3<f32>(floor(radial * 19.0), floor((p.y + 1.0) * 17.0), floor(time * 3.0))) - 0.5) * 0.085;
+  let qRadius = max(0.0, radial + radialWarp * (0.30 + source * 0.42 + heat * 0.18));
+  let combA = sin(p.y * 24.0 + qRadius * 31.0 + time * 3.0 + source * 2.4);
+  let combB = cos(p.y * 9.0 - qRadius * 23.0 - time * 4.0 + flameDetail * 1.6);
+  let combC = hash31(vec3<f32>(floor(qRadius * 26.0), floor((p.y + 1.0) * 22.0), floor(time * 3.0)));
+  let verticalComb = clamp(0.56 + 0.22 * combA + 0.16 * combB + 0.08 * (combC - 0.5), 0.14, 1.06);
+  let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
+  let lick = hotEdge * verticalComb * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
+  let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.055 + lick * 0.30);
+  return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
 fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
@@ -725,13 +741,14 @@ fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> Externa
   return influence;
 }
 
-fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32) -> vec4<f32> {
+fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32) -> vec4<f32> {
   let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055), 0.0);
-  let thermalSlip = vec3<f32>(
+  let rawThermalSlip = vec3<f32>(
     sin(cell.z * 0.41 + localHeat * 2.7),
     0.0,
     cos(cell.x * 0.37 - localHeat * 2.1)
   ) * localHeat * 0.032;
+  let thermalSlip = vec3<f32>(rawThermalSlip.x * lateralSlipScale, rawThermalSlip.y, rawThermalSlip.z * lateralSlipScale);
   let backCell = cell - (velocity + thermalLift + thermalSlip) * (2.30 + speed * 0.46);
   return sampleFluidSlot(backCell, 1u);
 }
@@ -765,13 +782,14 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
   return coolingBand * upperAir * 0.064 + fuelSmoke;
 }
 
-fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32) -> vec4<f32> {
+fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13), 0.0);
-  let lick = vec3<f32>(
+  let rawLick = vec3<f32>(
     sin(cell.y * 0.44 + cell.z * 0.19 + heat * 3.8),
     0.0,
     cos(cell.y * 0.38 - cell.x * 0.21 - heat * 3.1)
   ) * heat * 0.070;
+  let lick = vec3<f32>(rawLick.x * lateralSlipScale, rawLick.y, rawLick.z * lateralSlipScale);
   let backCell = cell - (velocity + fastLift + lick) * (1.82 + speed * 0.34);
   return sampleFluidSlot(backCell, 2u);
 }
@@ -979,12 +997,32 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.18, plumeHeight01), scaledDetailFrequency);
   let time = u.cameraPos_time.w;
-  let backCell = cell - prev.xyz * (2.55 + speed * 0.55);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
+  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
+  let windAngle = u.scene_controls.z;
+  let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
+  let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
+  let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
+  let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
+  let bonfireScene = step(1.5, sceneMode);
+  let bonfireAdvectionLateralDamping = mix(1.0, mix(0.12, 1.0, explicitWindAuthority), bonfireScene);
+  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, prev.xyz, speed, localMaterial.y);
-  var fireLayer = fireLayerAdvection(cell, prev.xyz, speed, localMaterial.y);
-  var microLayer = transportedMicrodetailAdvection(cell, prev.xyz, speed, localMaterial.y, localMaterial.x, fireLayer.x);
+  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping);
+  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireAdvectionLateralDamping);
+  let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
+  let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
+  let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
+  let bonfireNoWindSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.16;
+  let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
+  let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
+  let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
+  material = mix(material, symmetricMaterial, bonfireNoWindSymmetryBlend);
+  fireLayer = mix(fireLayer, symmetricFireLayer, bonfireNoWindSymmetryBlend * 0.45);
+  microLayer = mix(microLayer, symmetricMicroLayer, bonfireNoWindSymmetryBlend * 0.70);
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
@@ -1001,13 +1039,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let radial = length(p.xz);
   let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
-  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
-  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
-  let windAngle = u.scene_controls.z;
-  let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
-  let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
-  let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
-  let bonfireScene = step(1.5, sceneMode);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
   let breakup = clamp(
     0.64
@@ -1047,20 +1078,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
-  let lickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
-  let detailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
-  let microForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
-  let shredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
+  let bonfireDetailLateralDamping = mix(1.0, mix(0.22, 0.68, explicitWindAuthority), bonfireScene);
+  let rawDetailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
+  let rawMicroForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
+  let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
+  let detailForce = vec3<f32>(rawDetailForce.x * bonfireDetailLateralDamping, rawDetailForce.y, rawDetailForce.z * bonfireDetailLateralDamping);
+  let microForce = vec3<f32>(rawMicroForce.x * bonfireDetailLateralDamping, rawMicroForce.y, rawMicroForce.z * bonfireDetailLateralDamping);
+  let shredForce = vec3<f32>(rawShredForce.x * bonfireDetailLateralDamping, rawShredForce.y, rawShredForce.z * bonfireDetailLateralDamping);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
+  let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
+  let fineBreakup = vec3<f32>(rawFineBreakup.x * bonfireDetailLateralDamping, rawFineBreakup.y, rawFineBreakup.z * bonfireDetailLateralDamping);
   let projectionCorrection = pressureProjectionCorrection(cellI, projection);
-  vel = vel + swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012;
+  let bonfireSwirlSymmetryGain = mix(1.0, mix(0.16, 1.0, explicitWindAuthority), bonfireScene);
+  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
   vel = vel + microForce;
   vel = vel + shredForce;
-  vel = vel + fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
+  vel = vel + fineBreakup;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   let bonfireLiftDirection = mix(1.0, -1.0, bonfireScene);
@@ -1068,13 +1108,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireLiftDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
-  let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
-  let bonfireNonWindLateralDamping = mix(1.0, mix(0.28, 0.78, explicitWindAuthority), bonfireScene);
+  let bonfireNonWindLateralDamping = mix(1.0, mix(0.18, 0.78, explicitWindAuthority), bonfireScene);
   vel.x = vel.x * bonfireNonWindLateralDamping;
   vel.z = vel.z * bonfireNonWindLateralDamping;
   let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
   let bonfireCenteringCarrier = clamp(source * 0.72 + smoke * 0.46 + heat * 0.28, 0.0, 1.5);
-  let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * (0.026 + speed * 0.006);
+  let bonfireNonWindRecenteringGain = 0.048 + speed * 0.010;
+  let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * bonfireNonWindRecenteringGain;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);

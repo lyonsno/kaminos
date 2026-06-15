@@ -105,6 +105,7 @@ assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-r
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
 assert.match(index, /tall_plume/, 'Volume tab exposes a tall plume scale-test scene');
 assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
+assert.match(index, /BONFIRE_VOLUME_CAMERA_FRAME/, 'Bonfire scene has a straight-on camera frame that does not make vertical smoke look wind-blown');
 assert.match(index, /volume_scene/, 'URL route can select a named volume scene');
 assert.match(index, /applyVolumeScenePreset/, 'Volume route applies stable scene presets before per-control overrides');
 assert.match(index, /id="volume-input-radius"[^>]+value="0\.12"/, 'smoke route defaults to the accepted input radius');
@@ -182,6 +183,11 @@ assert.match(core, /fineScaleBreakup/, 'fluid compute shader applies controllabl
 assert.match(core, /transportedMicrodetailAdvection/, 'fluid compute shader advects a distinct microdetail field');
 assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke/fire interfaces from transported gradients');
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
+assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
+assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
+assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
+assert.match(core, /bonfireSwirlSymmetryGain/, 'bonfire scene damps one-handed global swirl at zero wind so liveliness does not read as wind drift');
+assert.match(core, /bonfireNoWindSymmetryBlend/, 'bonfire scene softly recenters accumulated material around the source when explicit wind is off');
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
 assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step optical thickness');
@@ -291,6 +297,7 @@ assert.match(core, /windMaterialCoupling/, 'fluid compute shader applies wind th
 assert.match(core, /bonfireWindResponseGain/, 'bonfire scene gives explicit wind enough authority to steer the plume');
 assert.match(core, /bonfireNonWindLateralDamping/, 'bonfire scene damps non-wind lateral drift before explicit wind is applied');
 assert.match(core, /bonfireNonWindCenteringForce/, 'bonfire scene recenters low-wind plume drift around the source before explicit wind is applied');
+assert.match(core, /bonfireNonWindRecenteringGain/, 'bonfire scene names its zero-wind recentering gain so lively detail cannot impersonate wind drift');
 assert.match(core, /state\.windStrength/, 'debug state exposes effective explicit wind strength');
 assert.match(core, /state\.windAngle/, 'debug state exposes effective explicit wind direction');
 assert.match(core, /state\.windHeight/, 'debug state exposes effective explicit wind height/ramp');

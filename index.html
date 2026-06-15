@@ -1339,6 +1339,16 @@ const VOLUME_SCENE_PRESETS = {
   },
 };
 
+const DEFAULT_VOLUME_CAMERA_FRAME = {
+  position: [1.18, 0.28, 2.05],
+  target: [0, 0.02, 0],
+};
+
+const BONFIRE_VOLUME_CAMERA_FRAME = {
+  position: [0, 0.10, 2.55],
+  target: [0, 0.10, 0],
+};
+
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
 
@@ -1537,8 +1547,10 @@ function refreshVolumeReadout() {
 }
 
 function frameVolumeCamera() {
-  camera.position.set(1.18, 0.28, 2.05);
-  controls.target.set(0, 0.02, 0);
+  const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
+  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  camera.position.set(...frame.position);
+  controls.target.set(...frame.target);
   controls.update();
   window._kaminosDirty?.();
 }
