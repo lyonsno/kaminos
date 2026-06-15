@@ -526,6 +526,8 @@ async function main() {
       fireLikePixels: sample.fireLikePixels,
       emissiveLikePixels: sample.emissiveLikePixels,
       smokeLikePixels: sample.smokeLikePixels,
+      fireRoughnessMean: sample.fireRoughnessMean,
+      fireEdgeEnergy: sample.fireEdgeEnergy,
       volumeBounds: sample.volumeBounds,
       fireBounds: sample.fireBounds,
       smokeBounds: sample.smokeBounds,

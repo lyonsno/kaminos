@@ -292,6 +292,11 @@ assert.match(core, /bonfireThermalRiseDirection/, 'bonfire thermal advection nam
 assert.doesNotMatch(core, /bonfireLiftDirection = mix\(1\.0, -1\.0, bonfireScene\)/, 'bonfire thermal rise must not be an implicit scene-mode Y-axis flip');
 assert.match(core, /bonfireSourceBreakup/, 'bonfire source shaping uses centered radial breakup instead of one-sided column breakup');
 assert.match(core, /bonfireDetailBreakup/, 'bonfire detail birth uses centered radial breakup under zero wind');
+assert.match(core, /bonfireCombustionCellField/, 'bonfire source uses a clustered combustion field rather than one smooth fireball');
+assert.match(core, /bonfireFlameTongues/, 'bonfire flame tongues structurally modulate fire and heat birth');
+assert.match(core, /bonfireInterfaceCombustion/, 'bonfire source creates smoke/detail at the fire/smoke combustion interface');
+assert.match(core, /bonfireZeroMeanLateralFlow/, 'bonfire no-wind liveness uses zero-mean local lateral flow instead of global drift');
+assert.match(core, /bonfireEntrainedLift/, 'bonfire plume has named vertical entrainment separate from scalar symmetry');
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
 assert.match(core, /bonfireSmokeSource/, 'fluid source shaping creates smoke from the bottom fireball before plume rise');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
@@ -343,6 +348,8 @@ assert.match(core, /fireCenterX/, 'sim readback reports fire center of mass in s
 assert.match(core, /smokeVelocityY/, 'sim readback reports smoke-weighted vertical transport');
 assert.match(core, /fireVelocityY/, 'sim readback reports fire-weighted vertical transport');
 assert.match(core, /smokeVisualRiseVelocity/, 'sim readback reports scene-aware visual upward smoke transport');
+assert.match(core, /fireRoughnessMean/, 'visual readback reports fire roughness so smooth glowing bulbs cannot close the bonfire attractor');
+assert.match(core, /fireEdgeEnergy/, 'visual readback reports fire edge energy for the bonfire combustion boundary');
 assert.match(core, /plumeHeightBins/, 'sim readback reports per-height plume drift bins');
 assert.match(core, /sampleGridStep/, 'sim readback samples the 3D grid with a per-axis lattice step');
 assert.match(core, /sampleGridAxis/, 'sim readback uses endpoint-balanced lattice coordinates on even grids');
@@ -434,6 +441,8 @@ assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visua
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
 assert.match(witness, /fireBounds/, 'witness records visual fire bounds for bottom-fireball scene checks');
 assert.match(witness, /smokeBounds/, 'witness records visual smoke bounds for rising plume scene checks');
+assert.match(witness, /fireRoughnessMean/, 'witness records fire roughness evidence for bonfire source shape');
+assert.match(witness, /fireEdgeEnergy/, 'witness records fire edge energy evidence for bonfire source shape');
 assert.match(witness, /normalizedCenterX/, 'witness records normalized screen-space center for drift/bias checks');
 assert.match(witness, /screenDriftX/, 'witness records signed screen-space drift from frame center');
 assert.match(witness, /verticalFillRatio/, 'witness records vertical fill ratio for tall-plume scale checks');

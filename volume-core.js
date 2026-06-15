@@ -696,6 +696,72 @@ fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
+fn bonfireCombustionCellField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
+  var field = 0.0;
+  var peak = 0.0;
+  var combustionInterface = 0.0;
+  var lift = 0.0;
+  let ringRadius = sourceRadius * (0.72 + detailFrequency * 0.045);
+  let verticalSpan = max(0.058, sourceRadius * 1.05);
+  for (var i = 0; i < 7; i = i + 1) {
+    let fi = f32(i);
+    let isCore = 1.0 - step(0.5, fi);
+    let angle = fi * 1.0471976 + sin(time * (0.31 + fi * 0.037)) * 0.22;
+    let spoke = vec2<f32>(cos(angle), sin(angle));
+    let cellJitter = vec2<f32>(
+      sin(time * 0.73 + fi * 2.17),
+      cos(time * 0.61 - fi * 1.91)
+    ) * sourceRadius * 0.10;
+    let offset = (spoke * ringRadius + cellJitter) * (1.0 - isCore);
+    let yOffset = (sin(time * 0.82 + fi * 1.31) * 0.045 + cos(time * 0.47 - fi * 0.73) * 0.024) * (1.0 - isCore);
+    let cellRadius = sourceRadius * mix(0.72, 0.32 + 0.040 * sin(time + fi), 1.0 - isCore);
+    let vertical = (p.y - sourceY - yOffset) / verticalSpan;
+    let delta = p.xz - offset;
+    let lobe = exp(-dot(delta, delta) / max(0.0024, cellRadius * cellRadius) - vertical * vertical * mix(0.70, 1.28, 1.0 - isCore));
+    let strength = mix(0.42, 0.46 + 0.22 * sin(time * 1.23 + fi * 0.97), 1.0 - isCore);
+    let weighted = lobe * strength;
+    field = field + weighted;
+    peak = max(peak, weighted);
+    combustionInterface = combustionInterface + smoothstep(0.18, 0.64, lobe) * (1.0 - smoothstep(0.70, 0.96, lobe)) * mix(0.56, 1.0, 1.0 - isCore);
+    lift = lift + weighted * smoothstep(-0.18, 0.42, -vertical) * mix(0.74, 1.0, 1.0 - isCore);
+  }
+  let normalized = clamp(field * 0.82, 0.0, 1.55);
+  let clusteredness = clamp(peak / max(field, 0.001) * 2.80 + combustionInterface * 0.075, 0.0, 1.55);
+  return vec4<f32>(
+    normalized,
+    clusteredness,
+    clamp(combustionInterface * 0.28, 0.0, 1.40),
+    clamp(lift * 0.36, 0.0, 1.30)
+  );
+}
+
+fn bonfireFlameTongues(combustion: vec4<f32>, fireLickAmount: f32, detailFrequency: f32) -> f32 {
+  let operatorGain = clamp(fireLickAmount * 0.13, 0.0, 1.0);
+  return clamp(combustion.y * (0.46 + operatorGain * 0.78) + combustion.z * 0.16 + detailFrequency * 0.018, 0.0, 1.6);
+}
+
+fn bonfireInterfaceCombustion(combustion: vec4<f32>, smoke: f32, heat: f32, flame: f32) -> f32 {
+  let hotBoundary = smoothstep(0.035, 0.82, heat + flame * 0.42 + combustion.x * 0.35);
+  let smokeCarrier = 0.36 + smoothstep(0.025, 0.70, smoke + combustion.z * 0.46) * 0.64;
+  return clamp(combustion.z * hotBoundary * smokeCarrier + combustion.y * combustion.x * 0.10, 0.0, 1.35);
+}
+
+fn bonfireZeroMeanLateralFlow(p: vec3<f32>, sourceY: f32, combustion: vec4<f32>, time: f32, strength: f32) -> vec3<f32> {
+  let radial = max(length(p.xz), 0.025);
+  let dir = p.xz / radial;
+  let tangent = vec2<f32>(-dir.y, dir.x);
+  let ring = smoothstep(0.045, 0.42, radial) * (1.0 - smoothstep(0.86, 1.16, radial));
+  let sourceBand = smoothstep(sourceY - 0.44, sourceY - 0.08, p.y) * (1.0 - smoothstep(sourceY + 0.08, sourceY + 0.42, p.y));
+  let quadrupole = sin((p.x * p.x - p.z * p.z) * 38.0 + time * 1.7) * cos(p.x * p.z * 44.0 - time * 1.1);
+  let eddy = tangent * quadrupole * ring * sourceBand * combustion.y * clamp(strength, 0.0, 1.0) * 0.018;
+  return vec3<f32>(eddy.x, 0.0, eddy.y);
+}
+
+fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combustion: vec4<f32>, plumeRiseScale: f32, speed: f32) -> f32 {
+  let carrier = clamp(source * 0.54 + smoke * 0.18 + heat * 0.24 + flame * 0.12 + combustion.w * 0.40, 0.0, 1.8);
+  return carrier * plumeRiseScale * (0.012 + speed * 0.0035);
+}
+
 fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
   var result: ExternalEmitterInfluence;
   result.material = vec4<f32>(0.0);
@@ -1064,18 +1130,41 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
   let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
-  let bonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
+  let bonfireCombustion = bonfireCombustionCellField(p, bonfireSourceY, bonfireCoreRadius, scaledDetailFrequency, time);
+  let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain, scaledDetailFrequency);
+  let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
+  let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
+  let bonfireEdgeBreakup = clamp(
+    0.58
+      + 0.24 * sin(p.x * 43.0 * scaledDetailFrequency + p.y * 13.0 - time * 1.9)
+      + 0.20 * cos(p.z * 47.0 * scaledDetailFrequency - p.y * 9.0 + time * 1.4)
+      + 0.20 * bonfireTongues,
+    0.18,
+    1.34
+  );
+  let bonfireFireball = max(smoothBonfireFireball * 0.24 * bonfireEdgeBreakup, bonfireCombustion.x * (0.82 + bonfireTongues * 0.34));
   let bonfireSmokeBand = smoothstep(bonfireSourceY - 0.32, bonfireSourceY - 0.10, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
-  let bonfireSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.72 + 0.44 * bonfireSourceBreakup) * inputFlow;
+  let bonfireSmokeSource = (
+    exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.36 + 0.22 * bonfireSourceBreakup)
+      + bonfireInterfaceBirth * 0.56
+      + bonfireCombustion.z * 0.18
+  ) * inputFlow;
   let source = mix(columnSource, max(bonfireSmokeSource, bonfireFireball * inputFlow * 0.84), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
   let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
-  let bonfireEmberRing = exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * inputFlow * (0.32 + 0.22 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency));
+  let bonfireEmberRing = (
+    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
+      + bonfireCombustion.z * 0.18
+  ) * inputFlow;
   let emberRing = mix(columnEmberRing, bonfireEmberRing, bonfireScene);
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
   let columnFireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
-  let bonfireFireBirth = (bonfireFireball * (1.08 + 0.58 * bonfireSourceBreakup) + bonfireEmberRing * 0.42) * inputFlow * sourceScaleCompensation;
+  let bonfireFireBirth = (
+    bonfireFireball * (0.82 + 0.26 * bonfireSourceBreakup + 0.62 * bonfireTongues)
+      + bonfireCombustion.x * (0.38 + 0.34 * bonfireTongues)
+      + bonfireEmberRing * 0.26
+  ) * inputFlow * sourceScaleCompensation * bonfireEdgeBreakup;
   let fireBirth = mix(columnFireBirth, bonfireFireBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
@@ -1107,7 +1196,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   let bonfireThermalRiseDirection = -1.0;
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection;
-  vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireThermalRiseDirection;
+  let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
+  let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
+  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse, bonfireScene) * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
   let bonfireNonWindLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
@@ -1117,37 +1208,39 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireCenteringCarrier = clamp(source * 0.72 + smoke * 0.46 + heat * 0.28, 0.0, 1.5);
   let bonfireNonWindRecenteringGain = 0.048 + speed * 0.010;
   let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * bonfireNonWindRecenteringGain;
+  let bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.16 + microAmount * 0.11 + shredAmount * 0.055 + fireLickAmount * 0.050);
+  vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
-  smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
+  smoke = max(smoke + smokeFromHeat, source * 0.46 + emberRing * 0.13 + bonfireInterfaceBirth * bonfireScene * 0.46);
   smoke = max(smoke, externalInjection.material.x * 0.76);
-  heat = max(heat, source * 0.86 + emberRing * 0.22);
+  heat = max(heat, source * 0.74 + emberRing * 0.18 + bonfireCombustion.x * bonfireScene * 0.34);
   heat = max(heat, externalInjection.material.y * 0.92);
   let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
   fuel = max(fuel, source * 0.88 * sourceFuelMask);
   fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
-  materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * bonfireDetailBreakup));
+  materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2 + bonfireInterfaceBirth * bonfireScene * 0.92) * (0.30 + 0.36 * bonfireDetailBreakup + 0.34 * bonfireTongues * bonfireScene));
   materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
-  microSmoke = max(microSmoke, (source * 0.26 + smokeFromHeat * 0.70 + materialDetail * 0.18) * microAmount * (0.48 + 0.52 * bonfireDetailBreakup));
+  microSmoke = max(microSmoke, (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18 + bonfireInterfaceBirth * bonfireScene * 0.52) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup + 0.34 * bonfireTongues * bonfireScene));
   microSmoke = max(microSmoke, externalInjection.micro.x);
-  interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + source * 0.30) * 1.72);
+  interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + source * 0.30 + bonfireInterfaceBirth * bonfireScene * 0.42) * 1.72);
   interfaceShred = max(interfaceShred, externalInjection.micro.y);
-  fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickOperatorGain * 0.34);
+  fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickOperatorGain * (0.25 + 0.16 * bonfireTongues * bonfireScene));
   fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
   emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
-  flame = max(flame, fireBirth * 1.58 + heat * fuel * 0.060 + fireLick * 0.48);
+  flame = max(flame, fireBirth * (1.40 + 0.26 * bonfireTongues * bonfireScene) + heat * fuel * 0.060 + fireLick * 0.48);
   flame = max(flame, externalInjection.fire.x);
   ember = max(ember, fireBirth * 0.78 + flame * 0.22 + emberFleck * 0.18);
   ember = max(ember, externalInjection.fire.y);
-  flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34);
+  flameDetail = max(flameDetail, (fireBirth * 1.08 + heatExpansion.y * 4.0 + bonfireCombustion.z * bonfireScene * 0.30) * (0.42 + 0.42 * bonfireDetailBreakup + 0.40 * bonfireTongues * bonfireScene) + lickBirth.z + fireLick * 0.34);
   flameDetail = max(flameDetail, externalInjection.fire.z);
 
   let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.44, bonfireSourceY - 0.04, p.y), bonfireScene);
@@ -2585,6 +2678,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let emissiveLikePixels = 0;
     let smokeLikePixels = 0;
     let totalLuma = 0;
+    let fireLumaSum = 0;
+    let fireLumaSqSum = 0;
+    let fireEdgeSum = 0;
+    let fireEdgeSamples = 0;
     let samples = 0;
     const volumeBounds = {
       minX: state.width,
@@ -2654,19 +2751,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const g = data[i + 1];
         const b = data[i + 2];
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        const isFireLike = r > 120 && g > 70 && b < 90;
+        const isEmissiveLike = r > 170 && g > 120 && b < 115 && luma > 130;
         totalLuma += luma;
         samples += 1;
         if (luma > 20) {
           litPixels += 1;
           includeBoundPixel(volumeBounds, x, y);
         }
-        if (r > 120 && g > 70 && b < 90) {
+        if (isFireLike) {
           fireLikePixels += 1;
           includeBoundPixel(fireBounds, x, y);
         }
-        if (r > 170 && g > 120 && b < 115 && luma > 130) {
+        if (isEmissiveLike) {
           emissiveLikePixels += 1;
           includeBoundPixel(fireBounds, x, y);
+        }
+        if (isFireLike || isEmissiveLike) {
+          const leftX = Math.max(Math.floor(state.width * 0.08), x - 2);
+          const upY = Math.max(Math.floor(state.height * 0.08), y - 2);
+          const leftI = row + leftX * bytesPerPixel;
+          const upI = upY * bytesPerRow + x * bytesPerPixel;
+          const leftLuma = 0.2126 * data[leftI] + 0.7152 * data[leftI + 1] + 0.0722 * data[leftI + 2];
+          const upLuma = 0.2126 * data[upI] + 0.7152 * data[upI + 1] + 0.0722 * data[upI + 2];
+          fireLumaSum += luma;
+          fireLumaSqSum += luma * luma;
+          fireEdgeSum += Math.abs(luma - leftLuma) + Math.abs(luma - upLuma);
+          fireEdgeSamples += 1;
         }
         if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) {
           smokeLikePixels += 1;
@@ -2695,6 +2806,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     buffer.destroy();
     const simReadback = await sampleSimReadback();
     const majorantReadback = await sampleMajorantReadback();
+    const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
+    const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
+    const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
     return {
       ok: true,
       width: state.width,
@@ -2712,6 +2826,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireLikePixels,
       emissiveLikePixels,
       smokeLikePixels,
+      fireRoughnessMean,
+      fireEdgeEnergy,
       volumeBounds,
       fireBounds,
       smokeBounds,
