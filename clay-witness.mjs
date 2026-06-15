@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=hand_pose_fixture&clay_steps=6';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=hand_pose_fixture&clay_steps=6&clay_debug_colliders=0';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -174,6 +174,7 @@ async function main() {
       if (
         (state?.persistentClayStepCount ?? 0) >= 6
         && (state?.persistentClayDeltaHistory?.length ?? 0) >= 3
+        && (state?.clayStepSampleCount ?? 0) >= 6
         && state?.clayDeformationCount > 0
       ) break;
       await delay(180);
@@ -213,6 +214,23 @@ async function main() {
     assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
     assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
+    assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
+    assert.equal(
+      state.clayTimingDisclaimer,
+      'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency',
+      'clay timing disclaimer did not reach debug state',
+    );
+    assert.ok(Array.isArray(state.clayStepDurationHistory) && state.clayStepDurationHistory.length >= 6, 'clay timing history did not record route steps');
+    assert.ok(Number.isFinite(state.clayStepLatestMs) && state.clayStepLatestMs > 0, 'clay latest step timing missing');
+    assert.ok(Number.isFinite(state.clayStepP95Ms) && state.clayStepP95Ms > 0, 'clay p95 step timing missing');
+    assert.ok((state.clayStepSampleCount ?? 0) >= 6, 'clay step timing sample count missing');
+    assert.ok((state.claySurfaceVertexCount ?? 0) >= 1000, 'clay surface vertex count is too small for quality witness');
+    assert.ok((state.claySurfaceTriangleCount ?? 0) >= 2500, 'clay surface triangle count is too small for quality witness');
+    assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
+    assert.ok((state.claySurfaceMeanAbsHeight ?? 0) > 0.01, 'clay mean absolute height did not show readable deformation');
+    if (url.includes('clay_debug_colliders=0')) {
+      assert.equal(state.clayDebugCollidersVisible, false, 'quality witness did not hide debug colliders');
+    }
     if (url.includes('hand_pose_fixture')) {
       assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach clay debug state');
       assert.equal(state.effectiveHandPoseBackend, 'wilor-mlx-fixture', 'effective hand-pose backend did not reach clay debug state');
@@ -269,6 +287,19 @@ async function main() {
       persistentClayInitialDelta: state.persistentClayInitialDelta,
       persistentClayLatestDelta: state.persistentClayLatestDelta,
       persistentClaySettlingRatio: state.persistentClaySettlingRatio,
+      clayTimingEvidenceSource: state.clayTimingEvidenceSource,
+      clayTimingDisclaimer: state.clayTimingDisclaimer,
+      clayStepDurationHistory: state.clayStepDurationHistory,
+      clayStepLatestMs: state.clayStepLatestMs,
+      clayStepP95Ms: state.clayStepP95Ms,
+      clayStepSampleCount: state.clayStepSampleCount,
+      claySurfaceMinY: state.claySurfaceMinY,
+      claySurfaceMaxY: state.claySurfaceMaxY,
+      claySurfaceHeightRange: state.claySurfaceHeightRange,
+      claySurfaceMeanAbsHeight: state.claySurfaceMeanAbsHeight,
+      claySurfaceVertexCount: state.claySurfaceVertexCount,
+      claySurfaceTriangleCount: state.claySurfaceTriangleCount,
+      clayDebugCollidersVisible: state.clayDebugCollidersVisible,
       requestedHandPoseBackend: state.requestedHandPoseBackend,
       effectiveHandPoseBackend: state.effectiveHandPoseBackend,
       handPoseEvidenceKind: state.handPoseEvidenceKind,

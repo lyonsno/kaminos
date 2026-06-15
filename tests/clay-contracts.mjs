@@ -24,7 +24,13 @@ assert.match(index, /clay-settling-ratio/, 'Clay panel exposes relaxation settli
 assert.match(index, /clay-hand-pose-backend/, 'Clay panel exposes hand-pose backend identity');
 assert.match(index, /clay-hand-pose-evidence/, 'Clay panel exposes hand-pose evidence kind');
 assert.match(index, /clay-hand-pose-frame/, 'Clay panel exposes hand-pose frame identity');
+assert.match(index, /clay-step-p95/, 'Clay panel exposes route-local step p95 timing');
+assert.match(index, /clay-step-latest/, 'Clay panel exposes latest route-local step timing');
+assert.match(index, /clay-surface-range/, 'Clay panel exposes surface height range');
+assert.match(index, /clay-surface-mean-abs/, 'Clay panel exposes mean absolute surface height');
+assert.match(index, /clay-topology/, 'Clay panel exposes clay grid topology');
 assert.match(index, /clay_steps/, 'clay route accepts witness-controlled step count');
+assert.match(index, /clay_debug_colliders/, 'clay route accepts debug-collider visibility control');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -61,6 +67,16 @@ assert.match(core, /handPoseStale/, 'clay debug state fails loud when hand-pose 
 assert.match(core, /handPoseFrameId/, 'clay debug state records hand-pose frame identity');
 assert.match(core, /handPoseColliderCount/, 'clay debug state records hand-pose-derived collider count');
 assert.match(core, /handPoseAdapterWarnings/, 'clay debug state preserves hand-pose adapter warnings');
+assert.match(core, /clayTimingEvidenceSource/, 'clay debug state records timing evidence source');
+assert.match(core, /clayTimingDisclaimer/, 'clay debug state records timing disclaimer');
+assert.match(core, /clayStepDurationHistory/, 'clay debug state records step timing history');
+assert.match(core, /clayStepP95Ms/, 'clay debug state records step p95 timing');
+assert.match(core, /claySurfaceHeightRange/, 'clay debug state records surface height range');
+assert.match(core, /claySurfaceMeanAbsHeight/, 'clay debug state records mean absolute surface height');
+assert.match(core, /claySurfaceVertexCount/, 'clay debug state records surface vertex count');
+assert.match(core, /claySurfaceTriangleCount/, 'clay debug state records surface triangle count');
+assert.match(core, /clayDebugCollidersVisible/, 'clay debug state records debug collider visibility');
+assert.match(core, /MeshStandardMaterial/, 'clay surface uses shaded material so deformation can read visually');
 assert.match(core, /clayRelaxationFactor/, 'clay debug state records relaxation factor');
 assert.match(core, /clayPlasticityFactor/, 'clay debug state records plasticity factor');
 assert.match(core, /clayColliderCount/, 'clay debug state records collider count');
@@ -102,6 +118,13 @@ assert.match(witness, /effectiveHandPoseBackend/, 'clay witness records effectiv
 assert.match(witness, /handPoseEvidenceKind/, 'clay witness records hand-pose evidence kind');
 assert.match(witness, /handPoseStale/, 'clay witness records whether hand-pose input was stale');
 assert.match(witness, /handPoseColliderCount/, 'clay witness records hand-pose-derived collider count');
+assert.match(witness, /clay_debug_colliders=0/, 'clay witness can capture clay surface quality without collider occlusion');
+assert.match(witness, /clayTimingEvidenceSource/, 'clay witness records timing evidence source');
+assert.match(witness, /clayTimingDisclaimer/, 'clay witness preserves timing disclaimer');
+assert.match(witness, /clayStepP95Ms/, 'clay witness records route-local step p95 timing');
+assert.match(witness, /claySurfaceHeightRange/, 'clay witness records surface height range');
+assert.match(witness, /claySurfaceMeanAbsHeight/, 'clay witness records mean absolute surface height');
+assert.match(witness, /claySurfaceTriangleCount/, 'clay witness records surface triangle count');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

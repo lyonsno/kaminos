@@ -37,6 +37,13 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+function percentile(values, q) {
+  if (!values.length) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * q) - 1));
+  return sorted[index];
+}
+
 function clayHandPoseNowMs() {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
@@ -227,6 +234,16 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let clayDeformationCount = 0;
   let clayContactCount = 0;
   let clayDeformationMax = 0;
+  let claySurfaceMinY = 0;
+  let claySurfaceMaxY = 0;
+  let claySurfaceHeightRange = 0;
+  let claySurfaceMeanAbsHeight = 0;
+  let clayDebugCollidersVisible = true;
+  const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
+  const clayTimingDisclaimer = 'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency';
+  const clayStepDurationHistory = [];
+  let clayStepLatestMs = 0;
+  let clayStepP95Ms = 0;
   let sharedPrimitiveProbeStatus = 'not-run';
   let sharedPrimitiveProbeDistanceSq = null;
   let sharedPrimitiveProbeFeature = null;
@@ -265,8 +282,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     if (mesh) return;
     const geometry = new THREE.PlaneGeometry(1.65, 1.05, GRID_X - 1, GRID_Z - 1);
     geometry.rotateX(-Math.PI / 2);
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0x8f6f4a,
+      roughness: 0.82,
+      metalness: 0,
       side: THREE.DoubleSide,
     });
     mesh = new THREE.Mesh(geometry, material);
@@ -289,13 +308,24 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
         color: 0x8eb6ff,
         wireframe: true,
         transparent: true,
-        opacity: 0.68,
+        opacity: clayDebugCollidersVisible ? 0.68 : 0.12,
         depthWrite: false,
       });
       const sphere = new THREE.Mesh(geometry, material);
       sphere.position.set(collider.center[0], 0.11, collider.center[2]);
+      sphere.visible = clayDebugCollidersVisible;
       sphere.name = `kaminos-clay-collider-${collider.id}`;
       colliderGroup.add(sphere);
+    }
+  }
+
+  function setDebugCollidersVisible(nextVisible) {
+    clayDebugCollidersVisible = !!nextVisible;
+    if (!colliderGroup) return;
+    colliderGroup.visible = active && clayDebugCollidersVisible;
+    for (const child of colliderGroup.children) {
+      child.visible = clayDebugCollidersVisible;
+      if (child.material) child.material.opacity = clayDebugCollidersVisible ? 0.68 : 0.12;
     }
   }
 
@@ -520,6 +550,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
 
   async function step() {
     if (!active) return;
+    const stepStartedAt = performance.now();
     await ensureGpu();
     ensureMesh();
     const primitiveColliders = await runPrimitiveContactPass();
@@ -549,6 +580,9 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     clayDeformationCount = 0;
     clayContactCount = 0;
     clayDeformationMax = 0;
+    claySurfaceMinY = Number.POSITIVE_INFINITY;
+    claySurfaceMaxY = Number.NEGATIVE_INFINITY;
+    let claySurfaceAbsSum = 0;
     persistentClayMaxDelta = 0;
     for (let i = 0; i < vertexCount; i += 1) {
       const y = values[i * 4 + 1];
@@ -557,10 +591,15 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       if (Math.abs(y) > 0.003) clayDeformationCount += 1;
       if (contact > 0.5) clayContactCount += 1;
       clayDeformationMax = Math.max(clayDeformationMax, Math.abs(y));
+      claySurfaceMinY = Math.min(claySurfaceMinY, y);
+      claySurfaceMaxY = Math.max(claySurfaceMaxY, y);
+      claySurfaceAbsSum += Math.abs(y);
       if (lastStateValues) {
         persistentClayMaxDelta = Math.max(persistentClayMaxDelta, Math.abs(y - lastStateValues[i * 4 + 1]));
       }
     }
+    claySurfaceHeightRange = claySurfaceMaxY - claySurfaceMinY;
+    claySurfaceMeanAbsHeight = claySurfaceAbsSum / vertexCount;
     if (!lastStateValues) persistentClayMaxDelta = clayDeformationMax;
     lastStateValues = values;
     persistentClayStepCount += 1;
@@ -579,6 +618,9 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     mesh.geometry.computeVertexNormals();
     gpuStepCount += 1;
     frameCount += 1;
+    clayStepLatestMs = performance.now() - stepStartedAt;
+    clayStepDurationHistory.push(clayStepLatestMs);
+    clayStepP95Ms = percentile(clayStepDurationHistory, 0.95);
     onStatus(debugState());
     globalThis._kaminosDirty?.();
   }
@@ -642,6 +684,19 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       persistentClayInitialDelta,
       persistentClayLatestDelta,
       persistentClaySettlingRatio,
+      clayTimingEvidenceSource,
+      clayTimingDisclaimer,
+      clayStepDurationHistory: clayStepDurationHistory.slice(),
+      clayStepLatestMs,
+      clayStepP95Ms,
+      clayStepSampleCount: clayStepDurationHistory.length,
+      claySurfaceMinY,
+      claySurfaceMaxY,
+      claySurfaceHeightRange,
+      claySurfaceMeanAbsHeight,
+      claySurfaceVertexCount: vertexCount,
+      claySurfaceTriangleCount: (GRID_X - 1) * (GRID_Z - 1) * 2,
+      clayDebugCollidersVisible,
       requestedHandPoseBackend: handPoseAdapterState.requestedHandPoseBackend,
       effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
       handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
@@ -675,12 +730,13 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       await ensureGpu();
       ensureMesh();
       mesh.visible = true;
-      colliderGroup.visible = true;
+      colliderGroup.visible = clayDebugCollidersVisible;
       refreshColliderMeshes();
       await step();
     },
     setColliders,
     setHandPoseFrame,
+    setDebugCollidersVisible,
     step,
     debugState,
   };
