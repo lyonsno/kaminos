@@ -18,6 +18,7 @@ const settleMs = Number(args.get('--settle-ms') || 1000);
 const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
+const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -370,6 +371,33 @@ async function main() {
           missingSourceCurveIds: afterLayerDescriptors.filter(descriptor => !descriptor.sourceCurveId).length,
         };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
+        let authoringRoundTripReceipt = null;
+        if (${authoringRoundTripSmoke ? 'true' : 'false'}) {
+          const saved = window.__kaminosLamellarSaveAuthoringState?.();
+          const savedSeed = saved?.controls?.seed;
+          const savedLayerCount = saved?.controls?.layerCount;
+          const savedPopulationCount = saved?.controls?.populationCount;
+          const savedLayerOverrides = JSON.stringify(saved?.controls?.layerOverrides || []);
+          document.getElementById('lamellar-seed').value = String((Number(savedSeed) + 37) % 100000);
+          document.getElementById('lamellar-layer-count').value = '1';
+          document.getElementById('lamellar-population-count').value = '1';
+          window.__kaminosLamellarLoadAuthoringState?.(saved);
+          const restored = window.__kaminosLamellarSaveAuthoringState?.();
+          authoringRoundTripReceipt = {
+            schema: saved?.schema,
+            mode: 'kaminos-lamellar-authoring-json-roundtrip-v0',
+            savedSeed,
+            restoredSeed: restored?.controls?.seed,
+            savedLayerCount,
+            restoredLayerCount: restored?.controls?.layerCount,
+            savedPopulationCount,
+            restoredPopulationCount: restored?.controls?.populationCount,
+            savedLayerOverrides,
+            restoredLayerOverrides: JSON.stringify(restored?.controls?.layerOverrides || []),
+            statusText: document.getElementById('lamellar-authoring-status')?.textContent || '',
+          };
+        }
+        if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
         const popover = document.getElementById('lamellar-selection-popover');
@@ -393,6 +421,7 @@ async function main() {
           populationRadialSpacingReceipt,
           populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
+          authoringRoundTripReceipt,
           popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
@@ -582,6 +611,13 @@ async function main() {
     assert.ok((state.stripProfileDescriptors || []).length >= (state.stripInstances || []).length, 'Lamellar witness did not export strip profile descriptors');
     assert.ok((state.stripPopulationDescriptors || []).some(population => population.role === 'cutter'), 'Lamellar witness did not export cutter population descriptors');
     assert.ok((state.lightHookCount || 0) >= 2, 'Lamellar witness did not export light hooks');
+    if (authoringRoundTripSmoke) {
+      assert.equal(state.authoringRoundTripReceipt?.schema, 'kaminos.lamellar-authoring.v0', 'Lamellar authoring round trip used the wrong schema');
+      assert.equal(state.authoringRoundTripReceipt?.restoredSeed, state.authoringRoundTripReceipt?.savedSeed, 'Lamellar authoring round trip did not restore seed');
+      assert.equal(state.authoringRoundTripReceipt?.restoredLayerCount, state.authoringRoundTripReceipt?.savedLayerCount, 'Lamellar authoring round trip did not restore layer count');
+      assert.equal(state.authoringRoundTripReceipt?.restoredPopulationCount, state.authoringRoundTripReceipt?.savedPopulationCount, 'Lamellar authoring round trip did not restore population count');
+      assert.equal(state.authoringRoundTripReceipt?.restoredLayerOverrides, state.authoringRoundTripReceipt?.savedLayerOverrides, 'Lamellar authoring round trip did not restore layer overrides');
+    }
 
     if (state.populationControlReceipt?.populationId) {
       await wsRequest(ws, 'Runtime.evaluate', {
@@ -624,6 +660,7 @@ async function main() {
       populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
       populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
+      authoringRoundTripReceipt: state.authoringRoundTripReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,

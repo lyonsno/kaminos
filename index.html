@@ -332,6 +332,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="lamellar-route-id">sphere-domain-section-segment-witness-v0</span></div>
       <button class="btn" id="lamellar-toggle">Enable</button>
       <button class="btn" id="lamellar-frame">Frame</button>
+      <button class="btn" id="lamellar-save-authoring">Save state</button>
+      <button class="btn" id="lamellar-load-authoring">Load state</button>
+      <input type="file" id="lamellar-authoring-file-input" accept=".json,.kaminos-lamellar,.kaminos-lamellar.json" style="display:none">
+      <div class="field"><span class="field-key">Authoring</span><span class="field-val" id="lamellar-authoring-status">unsaved</span></div>
     </div>
     <div class="slider-row">
       <span class="slider-label">View</span>
@@ -688,6 +692,7 @@ let lamellarControlsRebuildTimeout = 0;
 let lamellarLastControlsRebuildAt = 0;
 let lamellarPendingPopulationSelectionId = null;
 const LAMELLAR_REBUILD_MIN_INTERVAL_MS = 80;
+const LAMELLAR_AUTHORING_SCHEMA = 'kaminos.lamellar-authoring.v0';
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -995,6 +1000,142 @@ function readLamellarControls() {
   };
   if (stripPopulations.length) controls.stripPopulations = stripPopulations;
   return controls;
+}
+
+function setLamellarAuthoringStatus(text, tone = 'neutral') {
+  const el = document.getElementById('lamellar-authoring-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('present', tone === 'ok');
+  el.classList.toggle('missing', tone === 'error');
+}
+
+function collectLamellarAuthoringState() {
+  const debug = lamellarWitness?.debugState?.() || {};
+  return {
+    schema: LAMELLAR_AUTHORING_SCHEMA,
+    version: 1,
+    savedAtIso: new Date().toISOString(),
+    witnessIdentity: debug.witnessIdentity || 'kaminos-lamellar-witness-v0',
+    effectiveRoute: debug.effectiveRoute || 'sphere-domain-section-segment-witness-v0',
+    controls: readLamellarControls(),
+    selection: {
+      selectedLayerIndex: selectedLamellarLayerIndex,
+      selectedStripIndex: selectedLamellarStripIndex,
+      selectedPopulationId: selectedLamellarPopulationId,
+      selectedObject: selectedLamellarObject,
+    },
+    active: !!debug.active,
+  };
+}
+
+function setControlValue(id, value, overridden = false) {
+  const el = document.getElementById(id);
+  if (!el || value === undefined || value === null) return;
+  el.value = String(value);
+  if (overridden) el.dataset.overridden = '1';
+  else delete el.dataset.overridden;
+}
+
+function resetLamellarLayerOverrideControls() {
+  for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
+    for (const suffix of ['chirality', 'chunkiness', 'strip-count', 'radius']) {
+      const el = document.getElementById(`lamellar-layer-${layerIndex}-${suffix}`);
+      if (el) delete el.dataset.overridden;
+    }
+  }
+}
+
+function replaceObjectContents(target, entries) {
+  for (const key of Object.keys(target)) delete target[key];
+  for (const entry of entries || []) {
+    if (entry?.id) target[entry.id] = { ...entry };
+    else if (entry?.stripInstanceId) target[entry.stripInstanceId] = { ...entry };
+  }
+}
+
+function applyLamellarAuthoringState(payload, options = {}) {
+  const state = typeof payload === 'string' ? JSON.parse(payload) : payload;
+  if (!state || state.schema !== LAMELLAR_AUTHORING_SCHEMA) {
+    throw new Error(`Unsupported Lamellar authoring schema: ${state?.schema || 'missing'}`);
+  }
+  const controlsState = state.controls || {};
+  setControlValue('lamellar-view', controlsState.view);
+  setControlValue('lamellar-cut-radius', controlsState.cutRadius);
+  setControlValue('lamellar-layer-count', controlsState.layerCount);
+  setControlValue('lamellar-seed', controlsState.seed);
+  setControlValue('lamellar-chirality', controlsState.chirality);
+  setControlValue('lamellar-chirality-pattern', controlsState.chiralityPattern);
+  setControlValue('lamellar-depth-spacing', controlsState.depthSpacing);
+  setControlValue('lamellar-chunkiness', controlsState.chunkinessBase);
+  setControlValue('lamellar-chunkiness-variance', controlsState.chunkinessVariance);
+  setControlValue('lamellar-overlap-bias', controlsState.overlapBias);
+  setControlValue('lamellar-population-count', controlsState.populationCount);
+  setControlValue('lamellar-cutter-count', controlsState.cutterCount);
+  setControlValue('lamellar-population-bearing-variance', controlsState.populationBearingVariance);
+  setControlValue('lamellar-slice-t', controlsState.sliceT);
+  setControlValue('lamellar-slice-angle', controlsState.sliceAngle);
+  resetLamellarLayerOverrideControls();
+  for (const override of controlsState.layerOverrides || []) {
+    const layerIndex = override.layerIndex;
+    setControlValue(`lamellar-layer-${layerIndex}-chirality`, override.chirality, true);
+    setControlValue(`lamellar-layer-${layerIndex}-chunkiness`, override.chunkiness, true);
+    setControlValue(`lamellar-layer-${layerIndex}-strip-count`, override.stripCount, true);
+    setControlValue(`lamellar-layer-${layerIndex}-radius`, override.radiusOffset, true);
+  }
+  replaceObjectContents(lamellarStripPopulationOverrides, controlsState.stripPopulations || []);
+  replaceObjectContents(lamellarStripProfileOverrides, controlsState.stripProfileOverrides || []);
+  selectedLamellarLayerIndex = Math.max(0, Math.min(11, Math.round(Number(state.selection?.selectedLayerIndex) || 0)));
+  selectedLamellarStripIndex = Math.max(0, Math.round(Number(state.selection?.selectedStripIndex) || 0));
+  selectedLamellarPopulationId = state.selection?.selectedPopulationId || null;
+  selectedLamellarObject = state.selection?.selectedObject || null;
+  if (state.active) lamellarWitness?.setActive?.(true);
+  lamellarWitness?.setControls?.(readLamellarControls());
+  syncLamellarReadout();
+  if (selectedLamellarPopulationId && lamellarWitness?.selectPopulationByPopulationId) {
+    const selection = lamellarWitness.selectPopulationByPopulationId(selectedLamellarPopulationId, 'ui-authoring-load');
+    if (selection) selectLamellarObject(selection);
+  }
+  if (options.status !== false) setLamellarAuthoringStatus('loaded authoring state', 'ok');
+  window._kaminosDirty?.();
+  return {
+    schema: state.schema,
+    loaded: true,
+    seed: readLamellarControls().seed,
+    layerCount: readLamellarControls().layerCount,
+    populationCount: readLamellarControls().populationCount,
+    cutterCount: readLamellarControls().cutterCount,
+    stripPopulationOverrideCount: Object.keys(lamellarStripPopulationOverrides).length,
+    stripProfileOverrideCount: Object.keys(lamellarStripProfileOverrides).length,
+  };
+}
+
+function downloadLamellarAuthoringState() {
+  const payload = collectLamellarAuthoringState();
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `kaminos-lamellar-${payload.controls.seed || 0}.kaminos-lamellar.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  setLamellarAuthoringStatus(`saved seed ${payload.controls.seed}`, 'ok');
+  return payload;
+}
+
+async function loadLamellarAuthoringFile(file) {
+  try {
+    const text = await file.text();
+    const receipt = applyLamellarAuthoringState(JSON.parse(text));
+    setLamellarAuthoringStatus(`loaded ${file.name}`, 'ok');
+    return receipt;
+  } catch (error) {
+    setLamellarAuthoringStatus(error.message, 'error');
+    throw error;
+  }
 }
 
 function setSelectedLamellarLayer(layerIndex) {
@@ -1791,6 +1932,8 @@ async function initLamellarRoute() {
   window.__kaminosLamellarApplyPopulationOverride = (populationId, patch) => applyLamellarPopulationOverride(populationId, patch, { immediate: true });
   window.__kaminosLamellarPinSelectionPopover = () => pinLamellarSelectionPopover();
   window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
+  window.__kaminosLamellarSaveAuthoringState = () => collectLamellarAuthoringState();
+  window.__kaminosLamellarLoadAuthoringState = payload => applyLamellarAuthoringState(payload, { status: false });
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
@@ -1881,6 +2024,16 @@ async function initLamellarRoute() {
     lamellarWitness.setControls(readLamellarControls());
     syncLamellarReadout();
     window._kaminosDirty?.();
+  });
+  document.getElementById('lamellar-save-authoring').addEventListener('click', () => downloadLamellarAuthoringState());
+  document.getElementById('lamellar-load-authoring').addEventListener('click', () => {
+    document.getElementById('lamellar-authoring-file-input').click();
+  });
+  document.getElementById('lamellar-authoring-file-input').addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await loadLamellarAuthoringFile(file);
+    event.target.value = '';
   });
   document.getElementById('lamellar-toggle').addEventListener('click', () => {
     const wasActive = lamellarWitness.debugState().active;
