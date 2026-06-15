@@ -307,6 +307,32 @@ async function main() {
           populationId: firstPopulationId,
           samples: sliderSweep,
         };
+        const layerRadiusBeforeState = w ? w.debugState() : populationState;
+        const selectedLayerIndexForRadius = layerRadiusBeforeState.selectedLayerSpecId
+          ? (layerRadiusBeforeState.layerSpecs || []).find(layer => layer.id === layerRadiusBeforeState.selectedLayerSpecId)?.layerIndex ?? 0
+          : 0;
+        const beforeLayerCurves = (layerRadiusBeforeState.sphereCurveDescriptors || []).filter(curve => curve.layerIndex === selectedLayerIndexForRadius);
+        const selectedLayerRadiusEl = document.getElementById('lamellar-selected-layer-radius');
+        if (selectedLayerRadiusEl) {
+          selectedLayerRadiusEl.value = '0.11';
+          selectedLayerRadiusEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const layerRadiusAfterState = w ? w.debugState() : layerRadiusBeforeState;
+        const afterLayerCurves = (layerRadiusAfterState.sphereCurveDescriptors || []).filter(curve => curve.layerIndex === selectedLayerIndexForRadius);
+        const afterLayerDescriptors = (layerRadiusAfterState.generatedSegmentDescriptors || []).filter(descriptor => descriptor.layerIndex === selectedLayerIndexForRadius);
+        const radiusRange = values => values.length ? [
+          Number(Math.min(...values).toFixed(4)),
+          Number(Math.max(...values).toFixed(4)),
+        ] : [];
+        const selectedLayerRadiusReceipt = {
+          mode: 'selected-layer-shell-radius-before-curve-mesh-derivation-v0',
+          layerIndex: selectedLayerIndexForRadius,
+          beforeCurveRadiusRange: radiusRange(beforeLayerCurves.map(curve => curve.radius ?? 0)),
+          afterCurveRadiusRange: radiusRange(afterLayerCurves.map(curve => curve.radius ?? 0)),
+          afterDescriptorRadiusRange: radiusRange(afterLayerDescriptors.map(descriptor => descriptor.radius ?? 0)),
+          afterLayerSpecRadiusOffset: (layerRadiusAfterState.layerSpecs || []).find(layer => layer.layerIndex === selectedLayerIndexForRadius)?.radiusOffset ?? null,
+          missingSourceCurveIds: afterLayerDescriptors.filter(descriptor => !descriptor.sourceCurveId).length,
+        };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
@@ -329,6 +355,7 @@ async function main() {
           populationControlReceipt,
           populationSliderSweepReceipt,
           populationRadialSpacingReceipt,
+          selectedLayerRadiusReceipt,
           popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
@@ -351,6 +378,7 @@ async function main() {
             activeLayer: Number(activeLayerButton?.dataset.layer ?? -1),
             selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
             selectedStripCount: Number(document.getElementById('lamellar-selected-layer-strip-count')?.value || 0),
+            selectedRadius: Number(document.getElementById('lamellar-selected-layer-radius')?.value || 0),
             selectedStripReadout: document.getElementById('lamellar-selected-layer-strips')?.textContent || '',
             selectedStripIds: Array.from(document.querySelectorAll('#lamellar-selected-layer-strips [data-strip-id]')).map(el => el.dataset.stripId),
           },
@@ -401,6 +429,18 @@ async function main() {
     assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
     assert.equal(state.selectedLayerUi?.activeLayer, 0, 'Lamellar witness did not expose selected layer UI');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
+    assert.equal(state.selectedLayerRadiusReceipt?.mode, 'selected-layer-shell-radius-before-curve-mesh-derivation-v0', 'Lamellar witness did not record selected-layer radius mutation');
+    assert.equal(state.selectedLayerRadiusReceipt?.afterLayerSpecRadiusOffset, 0.11, 'Lamellar selected-layer radius control did not mutate layer shell radius');
+    assert.equal(state.selectedLayerRadiusReceipt?.missingSourceCurveIds, 0, 'Lamellar selected-layer radius descriptors lost source curve ancestry');
+    assert.ok(
+      (state.selectedLayerRadiusReceipt?.afterCurveRadiusRange?.[0] || 0) > (state.selectedLayerRadiusReceipt?.beforeCurveRadiusRange?.[0] || 0),
+      'Lamellar selected-layer radius did not shift source sphere curve radii'
+    );
+    assert.deepEqual(
+      state.selectedLayerRadiusReceipt?.afterDescriptorRadiusRange,
+      state.selectedLayerRadiusReceipt?.afterCurveRadiusRange,
+      'Lamellar selected-layer radius descriptors were not re-derived from shifted source curves'
+    );
     assert.equal(state.layerSelectionUi?.selectionLevel, 'layer', 'Lamellar single-click selection did not select the layer first');
     assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
     assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
@@ -496,6 +536,7 @@ async function main() {
       populationControlReceipt: state.populationControlReceipt,
       populationSliderSweepReceipt: state.populationSliderSweepReceipt,
       populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
+      selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,

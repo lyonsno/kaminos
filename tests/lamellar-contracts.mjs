@@ -26,11 +26,13 @@ assert.match(index, /id="lamellar-layer-rows"/, 'Lamellar tab exposes per-layer 
 assert.match(index, /id="lamellar-layer-0-chirality"/, 'Lamellar tab exposes layer 0 chirality override');
 assert.match(index, /id="lamellar-layer-0-chunkiness"/, 'Lamellar tab exposes layer 0 chunkiness override');
 assert.match(index, /id="lamellar-layer-0-strip-count"/, 'Lamellar tab exposes layer 0 strip-count override');
+assert.match(index, /id="lamellar-layer-0-radius"/, 'Lamellar tab exposes layer 0 shell radius override');
 assert.match(index, /id="lamellar-layer-detail"/, 'Lamellar tab exposes selected-layer authoring detail panel');
 assert.match(index, /id="lamellar-layer-select-0"/, 'Lamellar tab exposes layer 0 selection control');
 assert.match(index, /id="lamellar-layer-select-3"/, 'Lamellar tab exposes layer 3 selection control');
 assert.match(index, /id="lamellar-selected-layer-index"/, 'Lamellar tab reports the selected layer identity');
 assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab exposes selected-layer strip-count editor');
+assert.match(index, /id="lamellar-selected-layer-radius"/, 'Lamellar tab exposes selected-layer shell radius editor');
 assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
 assert.match(index, /id="lamellar-remove-strip"/, 'Lamellar tab exposes remove-strip control for the selected layer');
 assert.match(index, /id="lamellar-selected-layer-strips"/, 'Lamellar tab reports selected-layer strip instances');
@@ -96,6 +98,7 @@ assert.match(index, /lamellar_chunkiness_variance/, 'URL route can override Lame
 assert.match(index, /lamellar_layer_chiralities/, 'URL route can override per-layer chirality values');
 assert.match(index, /lamellar_layer_chunkiness/, 'URL route can override per-layer chunkiness values');
 assert.match(index, /lamellar_layer_strip_counts/, 'URL route can override per-layer strip counts');
+assert.match(index, /lamellar_layer_radii/, 'URL route can override per-layer shell radii');
 assert.match(index, /lamellar_population_count/, 'URL route can override macro strip population count');
 assert.match(index, /lamellar_cutter_count/, 'URL route can override macro cutter population count');
 assert.match(index, /lamellar_population_bearing_variance/, 'URL route can override macro direction variance');
@@ -192,6 +195,7 @@ assert.match(core, /bearingPhase/, 'Lamellar strip instances carry actual shell 
 assert.match(core, /shellLaneOffset/, 'Lamellar strip instances carry shell-lane offsets for visible coverage sets');
 assert.match(core, /radialSpacing/, 'Lamellar strip populations report radial spacing for same-population clearance');
 assert.match(core, /radialOffset/, 'Lamellar strip instances carry radial offsets so same-population strips can separate by shell radius');
+assert.match(core, /radiusOffset/, 'Lamellar layer specs carry shell radius offsets for whole-layer radius authoring');
 assert.match(core, /diagnosticLayerSeparationScale/, 'Lamellar core reports diagnostic layer separation exaggeration while authoring shells');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
@@ -252,6 +256,7 @@ assert.match(witness, /stripInstances/, 'witness records layer-owned strip insta
 assert.match(witness, /sphereCurveDescriptors/, 'witness records upstream sphere curve descriptors');
 assert.match(witness, /curveInteractionReceipt/, 'witness records curve-space interaction receipt');
 assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI state');
+assert.match(witness, /selectedLayerRadiusReceipt/, 'witness records selected-layer radius mutation behavior');
 assert.match(witness, /lamellar-selected-layer-strips/, 'witness inspects selected-layer strip readout');
 assert.match(witness, /selectedStripUi/, 'witness records selected-strip profile UI state');
 assert.match(witness, /lamellar-selected-strip-width/, 'witness inspects selected-strip width control');
@@ -427,6 +432,49 @@ assert.ok(
     approach.interactionKind === 'cross-layer-proximity'
   ),
   'curve interaction receipt detects close cross-layer sphere curves before meshing'
+);
+
+const baseLayerRadius = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 3,
+  chiralityPattern: 'same',
+  depthSpacing: 0.05,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  layerOverrides: [
+    { layerIndex: 1, chirality: -1, chunkiness: 0.4, stripCount: 2, radiusOffset: 0 },
+  ],
+});
+const liftedLayerRadius = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 3,
+  chiralityPattern: 'same',
+  depthSpacing: 0.05,
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  layerOverrides: [
+    { layerIndex: 1, chirality: -1, chunkiness: 0.4, stripCount: 2, radiusOffset: 0.12 },
+  ],
+});
+const baseLayerOneCurves = baseLayerRadius.sphereCurveDescriptors.filter(curve => curve.layerIndex === 1);
+const liftedLayerOneCurves = liftedLayerRadius.sphereCurveDescriptors.filter(curve => curve.layerIndex === 1);
+const liftedLayerOneDescriptors = liftedLayerRadius.descriptors.filter(descriptor => descriptor.layerIndex === 1);
+assert.ok(
+  liftedLayerRadius.layerSpecs.find(layer => layer.layerIndex === 1)?.radiusOffset === 0.12,
+  'layer shell radius override is recorded on the layer spec'
+);
+assert.ok(
+  liftedLayerOneCurves.every((curve, index) =>
+    Number((curve.radius - baseLayerOneCurves[index].radius).toFixed(4)) === 0.12
+  ),
+  'selected layer radius override shifts every source sphere curve on that layer together'
+);
+assert.ok(
+  liftedLayerOneDescriptors.every(descriptor =>
+    descriptor.sourceCurveId
+    && liftedLayerOneCurves.some(curve => curve.id === descriptor.sourceCurveId && curve.radius === descriptor.radius)
+  ),
+  'layer-radius-adjusted mesh descriptors are re-derived from shifted source curves'
 );
 
 const profiled = coreModule.generateLamellarSectionSegments({

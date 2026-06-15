@@ -133,11 +133,13 @@ function normalizeLayerOverrides(overrides) {
     const chirality = Number(override?.chirality);
     const chunkiness = Number(override?.chunkiness);
     const stripCount = Number(override?.stripCount);
+    const radiusOffset = Number(override?.radiusOffset ?? override?.radius);
     return {
       layerIndex: Number.isFinite(Number(override?.layerIndex)) ? Math.round(Number(override.layerIndex)) : layerIndex,
       chirality: chirality < 0 ? -1 : 1,
       chunkiness: Number.isFinite(chunkiness) ? clamp(chunkiness, 0.05, 1) : null,
       stripCount: Number.isFinite(stripCount) ? Math.round(clamp(stripCount, 1, 4)) : null,
+      radiusOffset: Number.isFinite(radiusOffset) ? Number(clamp(radiusOffset, -0.24, 0.24).toFixed(4)) : null,
     };
   });
 }
@@ -301,6 +303,7 @@ export function generateLamellarLayerSpecs(input = {}) {
     const role = layerIndex === 0 ? "selected-source" : layerIndex === 1 ? "neighbor-envelope" : "nested-placeholder-shell";
     const depthStep = layerIndex === 0 ? 0 : depthSpacing * (layerIndex === 1 ? -0.35 : layerIndex);
     const depth = Number((depthStep * DIAGNOSTIC_LAYER_SEPARATION_SCALE).toFixed(4));
+    const radiusOffset = Number((layerOverride?.radiusOffset ?? 0).toFixed(4));
     const layerWeight = layerIndex === 0 ? 0.15 : layerIndex === 1 ? 0.05 : -0.04 * layerIndex;
     const variance = (rand() * 2 - 1) * chunkinessVariance;
     const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
@@ -317,6 +320,7 @@ export function generateLamellarLayerSpecs(input = {}) {
       chirality,
       chiralityPattern,
       depth,
+      radiusOffset,
       diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
       chunkiness,
       width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
@@ -343,6 +347,7 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkinessVariance: Number(chunkinessVariance.toFixed(4)),
       depthSpacing: Number(depthSpacing.toFixed(4)),
       diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
+      layerRadiusMode: "layer-shell-radius-offset-before-curve-mesh-derivation",
       overlapBias: Number(overlapBias.toFixed(4)),
       layerOverrides: layerOverrides.slice(0, numLayers),
       layerSpecIds: layerSpecs.map(spec => spec.id),
@@ -464,7 +469,8 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           chirality: population.chirality,
           chunkiness: spec.chunkiness,
           depth: spec.depth,
-          effectiveDepth: Number((spec.depth + radialOffset).toFixed(4)),
+          radiusOffset: spec.radiusOffset || 0,
+          effectiveDepth: Number((spec.depth + (spec.radiusOffset || 0) + radialOffset).toFixed(4)),
           profileKind: "StripProfileDescriptor",
           stripProfileDescriptor,
           width: stripProfileDescriptor.width,
@@ -571,6 +577,7 @@ export function generateSphereCurveDescriptors(input = {}) {
         : "layer-shell-strip-assemblage",
       layerIndex: strip.layerIndex,
       depth: strip.depth,
+      radiusOffset: strip.radiusOffset || 0,
       effectiveDepth: strip.effectiveDepth,
       chirality: strip.chirality,
       chunkiness: strip.chunkiness,
@@ -709,6 +716,7 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     shellLaneOffset: curve.shellLaneOffset,
     radialSpacing: curve.radialSpacing,
     radialOffset: curve.radialOffset,
+    radiusOffset: curve.radiusOffset || 0,
     coverageSlot: curve.coverageSlot,
     bearingPhase: curve.bearingPhase,
     source: curve.source,
@@ -717,6 +725,7 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     sliceParticipation: curve.sliceParticipation,
     layerIndex: curve.layerIndex,
     depth: curve.depth,
+    radiusOffset: curve.radiusOffset || 0,
     effectiveDepth: curve.effectiveDepth,
     chirality: curve.chirality,
     chunkiness: curve.chunkiness,
@@ -1450,6 +1459,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       shellLaneOffset: d.shellLaneOffset,
       radialSpacing: d.radialSpacing,
       radialOffset: d.radialOffset,
+      radiusOffset: d.radiusOffset || 0,
       coverageSlot: d.coverageSlot,
       bearingPhase: d.bearingPhase,
       stripProfileKind: d.stripProfileKind,
@@ -1532,6 +1542,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         shellLaneOffset: descriptor.shellLaneOffset ?? null,
         radialSpacing: descriptor.radialSpacing ?? null,
         radialOffset: descriptor.radialOffset ?? null,
+        radiusOffset: descriptor.radiusOffset ?? null,
         coverageSlot: descriptor.coverageSlot ?? null,
         bearingPhase: descriptor.bearingPhase ?? null,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
