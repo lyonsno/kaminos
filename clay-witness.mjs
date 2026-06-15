@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=clay_fixture_hand';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=clay_fixture_hand&clay_steps=6';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -171,7 +171,11 @@ async function main() {
         returnByValue: true,
       });
       state = stateEval.result.value;
-      if (state?.gpuStepCount > 0 && state?.clayDeformationCount > 0) break;
+      if (
+        (state?.persistentClayStepCount ?? 0) >= 6
+        && (state?.persistentClayDeltaHistory?.length ?? 0) >= 3
+        && state?.clayDeformationCount > 0
+      ) break;
       await delay(180);
     }
     assert.ok(state, 'missing clay debug state');
@@ -199,8 +203,16 @@ async function main() {
     assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'primitive contact pass did not record a minimum distance');
     assert.ok((state.primitiveContactForceSum ?? 0) > 0, 'primitive contact pass did not derive positive force');
     assert.equal(state.persistentClayStateStatus, 'persistent');
-    assert.ok((state.persistentClayStepCount ?? 0) >= 2, 'persistent clay state did not survive multiple steps');
+    assert.ok((state.persistentClayStepCount ?? 0) >= 6, 'persistent clay state did not survive the multi-step relaxation route');
     assert.ok((state.persistentClayMaxDelta ?? 0) > 0, 'persistent clay state did not report step delta');
+    assert.ok(
+      Array.isArray(state.persistentClayDeltaHistory) && state.persistentClayDeltaHistory.length >= 3,
+      'persistent clay state did not report a multi-step delta history',
+    );
+    assert.ok((state.persistentClayInitialDelta ?? 0) > 0, 'persistent clay state did not record initial relaxation delta');
+    assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
+    assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
+    assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
     assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
     assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
     assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
@@ -243,6 +255,10 @@ async function main() {
       persistentClayStateStatus: state.persistentClayStateStatus,
       persistentClayStepCount: state.persistentClayStepCount,
       persistentClayMaxDelta: state.persistentClayMaxDelta,
+      persistentClayDeltaHistory: state.persistentClayDeltaHistory,
+      persistentClayInitialDelta: state.persistentClayInitialDelta,
+      persistentClayLatestDelta: state.persistentClayLatestDelta,
+      persistentClaySettlingRatio: state.persistentClaySettlingRatio,
       clayRelaxationFactor: state.clayRelaxationFactor,
       clayPlasticityFactor: state.clayPlasticityFactor,
       clayColliderCount: state.clayColliderCount,

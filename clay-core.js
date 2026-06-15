@@ -129,6 +129,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let persistentClayStateStatus = 'not-run';
   let persistentClayStepCount = 0;
   let persistentClayMaxDelta = 0;
+  const persistentClayDeltaHistory = [];
+  let persistentClayInitialDelta = null;
+  let persistentClayLatestDelta = null;
+  let persistentClaySettlingRatio = null;
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
   const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
   let lastError = '';
@@ -450,6 +454,16 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     lastStateValues = values;
     persistentClayStepCount += 1;
     persistentClayStateStatus = persistentClayStepCount > 1 ? 'persistent' : 'initialized';
+    if (persistentClayStepCount > 1) {
+      persistentClayDeltaHistory.push(persistentClayMaxDelta);
+      if (persistentClayInitialDelta === null && persistentClayMaxDelta > 0) {
+        persistentClayInitialDelta = persistentClayMaxDelta;
+      }
+      persistentClayLatestDelta = persistentClayMaxDelta;
+      persistentClaySettlingRatio = persistentClayInitialDelta > 0
+        ? persistentClayLatestDelta / persistentClayInitialDelta
+        : null;
+    }
     position.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     gpuStepCount += 1;
@@ -491,6 +505,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       persistentClayStateStatus,
       persistentClayStepCount,
       persistentClayMaxDelta,
+      persistentClayDeltaHistory: persistentClayDeltaHistory.slice(),
+      persistentClayInitialDelta,
+      persistentClayLatestDelta,
+      persistentClaySettlingRatio,
       clayRelaxationFactor,
       clayPlasticityFactor,
       clayGrid: `${GRID_X}x${GRID_Z}`,

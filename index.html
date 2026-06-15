@@ -533,6 +533,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Primitive force</span><span class="field-val" id="clay-primitive-force">0.00</span></div>
       <div class="field"><span class="field-key">State</span><span class="field-val" id="clay-persistent-state">not-run</span></div>
       <div class="field"><span class="field-key">State delta</span><span class="field-val" id="clay-state-delta">0.000</span></div>
+      <div class="field"><span class="field-key">Settling</span><span class="field-val" id="clay-settling-ratio">--</span></div>
     </div>
   </div>
 
@@ -1623,8 +1624,15 @@ function refreshClayReadout() {
   document.getElementById('clay-primitive-force').textContent = Number.isFinite(s.primitiveContactForceSum) ? s.primitiveContactForceSum.toFixed(2) : '0.00';
   document.getElementById('clay-persistent-state').textContent = s.persistentClayStateStatus || 'not-run';
   document.getElementById('clay-state-delta').textContent = Number.isFinite(s.persistentClayMaxDelta) ? s.persistentClayMaxDelta.toFixed(3) : '0.000';
+  document.getElementById('clay-settling-ratio').textContent = Number.isFinite(s.persistentClaySettlingRatio) ? s.persistentClaySettlingRatio.toFixed(3) : '--';
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
+}
+
+function clayRouteStepCount(params) {
+  const requested = Number(params.get('clay_steps') || 0);
+  if (!Number.isFinite(requested) || requested <= 0) return 0;
+  return Math.floor(requested);
 }
 
 function frameClayCamera() {
@@ -1675,6 +1683,10 @@ async function initKaminosClayRoute() {
     await clayPrototype.setActive(true);
     if ((params.get('clay_colliders') || 'clay_fixture_hand') === 'clay_fixture_hand') {
       await seedFixture();
+    }
+    const routeSteps = clayRouteStepCount(params);
+    for (let i = 0; i < routeSteps; i += 1) {
+      await clayPrototype.step();
     }
     setInfo('Clay sim - WebGPU surface lattice scaffold');
   }
