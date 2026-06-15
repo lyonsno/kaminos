@@ -8,7 +8,7 @@ const MAX_VOLUME_PRIMITIVE_SOURCES = 4;
 const VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY = 'volume-primitive-scene-bounds-source-domain-v1';
 const VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY = 'volume-source-type-taxonomy-v0';
 const VOLUME_SOURCE_TYPE_MIXES = Object.freeze({
-  fire: Object.freeze({ fire: 1, smoke: 0.12 }),
+  fire: Object.freeze({ fire: 1, smoke: 0 }),
   smoke: Object.freeze({ fire: 0, smoke: 1 }),
   fire_smoke: Object.freeze({ fire: 1, smoke: 1 }),
 });
@@ -619,7 +619,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       smokeSource = smokeSource + localSource * sourceSmokeMix;
       heatSource = heatSource + localSource * sourceFireMix;
       fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody) * sourceFireMix;
-      emberRing = emberRing + localEmberRing * max(sourceFireMix, sourceSmokeMix * 0.18);
+      emberRing = emberRing + localEmberRing * sourceFireMix;
       primitiveCenteredInfluence = max(primitiveCenteredInfluence, primitiveCenteredBody * smoothstep(0.0008, 0.035, localSource));
     }
   }
@@ -632,7 +632,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
-  let lickBirth = fireLickBreakup(cellI, p, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let lickBirth = fireLickBreakup(cellI, p, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, heatSource + fireBirth);
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let detailForce = turbulentDetailForce(p, time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
   let microForce = turbulentDetailForce(p * 2.85 + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;

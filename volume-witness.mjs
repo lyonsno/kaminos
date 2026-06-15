@@ -37,7 +37,11 @@ const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
-const expectedSourceTypeProbe = routeParams.get('volume_source_type_probe') === '1';
+const requestedSourceTypeProbe = routeParams.get('volume_source_type_probe');
+const expectedSourceTypeProbe = requestedSourceTypeProbe === '1';
+const expectedSingleSourceTypeProbe = ['fire', 'smoke', 'fire_smoke'].includes(requestedSourceTypeProbe);
+const expectedSmokeOnlySourceProbe = requestedSourceTypeProbe === 'smoke';
+const expectedFireOnlySourceProbe = requestedSourceTypeProbe === 'fire';
 const expectedContextProbe = routeParams.get('volume_context_probe') === '1';
 const expectedSceneBoundsProbe = routeParams.get('volume_scene_bounds_probe') === '1';
 const expectedSceneSourceProbe = routeParams.get('volume_scene_source_probe') === '1';
@@ -63,7 +67,7 @@ const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedSecondPrimitiveNativeSourcePosition = [-0.04128, -0.1048, -0.03096];
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
-  : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
+  : (expectedAuthoringProbe || expectedSingleSourceTypeProbe) ? expectedAuthoredPrimitiveId
   : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 
 function assertNoPlaceholderTopologyClaim(primitives = []) {
@@ -304,7 +308,7 @@ async function main() {
     let volumeAuthoring = null;
     let saveLoadRoundTrip = null;
     let contextActionProbe = null;
-    if (expectedAuthoringProbe) {
+    if (expectedAuthoringProbe || expectedSingleSourceTypeProbe) {
       phase = 'authoring-probe';
       let authoringReady = false;
       for (let i = 0; i < 40; i++) {
@@ -322,13 +326,13 @@ async function main() {
           const authoring = window.__kaminosVolumeAuthoring;
           const primitive = authoring.placeAt([0.24, -0.58, 0.12], {
             id: '${expectedAuthoredPrimitiveId}',
-            sourceType: '${expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
+            sourceType: '${expectedSingleSourceTypeProbe ? requestedSourceTypeProbe : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
             radius: 0.18,
             flowRate: 0.35,
-            radiance: 2.1,
+            radiance: ${expectedSmokeOnlySourceProbe ? '0.35' : '2.1'},
           });
           authoring.select('${expectedAuthoredPrimitiveId}');
-          authoring.updateSelected({ radius: 0.18, flowRate: 0.35, radiance: 2.1, handleOpacity: 0.12, handleVisible: true });
+          authoring.updateSelected({ sourceType: '${expectedSingleSourceTypeProbe ? requestedSourceTypeProbe : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}', radius: 0.18, flowRate: 0.35, radiance: ${expectedSmokeOnlySourceProbe ? '0.35' : '2.1'}, handleOpacity: 0.12, handleVisible: true });
           const moved = authoring.moveSelectedTo([${expectedAuthoredEffectivePosition.join(', ')}]);
           const second = ${expectedMultiPrimitiveProbe
             ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
@@ -489,7 +493,7 @@ async function main() {
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     assert.ok(Math.abs((state.adaptiveRaymarch ?? 0) - expectedAdaptiveRays) < 0.001, 'effective adaptive raymarch state did not match route/control');
-    if (expectedPrimitiveFixture || expectedAuthoringProbe) {
+    if (expectedPrimitiveFixture || expectedAuthoringProbe || expectedSingleSourceTypeProbe) {
       assert.ok(state.volumePrimitiveCount > 0, 'volume primitive fixture was not consumed by the renderer');
       assert.ok(state.volumePrimitiveIds?.includes(expectedPrimitiveId), `volume primitive ids did not include ${expectedPrimitiveId}`);
     }
@@ -502,7 +506,7 @@ async function main() {
       assert.equal(primitive?.coupling?.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar hook primitive did not preserve witness identity');
       assert.ok(Number.isFinite(primitive?.lamellarHook?.emissiveCatch), 'Lamellar hook primitive did not preserve scalar hook hints');
     }
-    if (expectedAuthoringProbe) {
+    if (expectedAuthoringProbe || expectedSingleSourceTypeProbe) {
       const authoringStateEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: 'window.__kaminosVolumeAuthoring?.debugState?.()',
         returnByValue: true,
@@ -579,11 +583,26 @@ async function main() {
         assert.equal(smokeSource?.sourceTaxonomyIdentity, 'volume-source-type-taxonomy-v0', 'Smoke source did not publish taxonomy identity');
         assert.equal(fireSmokeSource?.sourceTaxonomyIdentity, 'volume-source-type-taxonomy-v0', 'Fire+Smoke source did not publish taxonomy identity');
         assert.ok((fireSource?.fireSourceMix ?? 0) > 0.9, 'Fire source did not carry fire mix');
-        assert.ok((fireSource?.smokeSourceMix ?? 1) < 0.2, 'Fire source carried too much smoke mix');
+        assert.equal(fireSource?.smokeSourceMix, 0, 'Fire source carried direct smoke mix');
         assert.equal(smokeSource?.fireSourceMix, 0, 'Smoke source carried fire mix');
         assert.ok((smokeSource?.smokeSourceMix ?? 0) > 0.9, 'Smoke source did not carry smoke mix');
         assert.ok((fireSmokeSource?.fireSourceMix ?? 0) > 0.9, 'Fire+Smoke source did not carry fire mix');
         assert.ok((fireSmokeSource?.smokeSourceMix ?? 0) > 0.9, 'Fire+Smoke source did not carry smoke mix');
+      }
+      if (expectedSingleSourceTypeProbe) {
+        assert.equal(state.volumePrimitiveCount, 1, 'single source type probe did not retain exactly one authored primitive');
+        assert.equal(state.primitiveSourceCount, 1, 'single source type probe did not publish exactly one primitive source');
+        assert.equal(primitive?.sourceType, requestedSourceTypeProbe, 'single source primitive did not preserve requested source type');
+        assert.equal(state.primitiveSource?.sourceType, requestedSourceTypeProbe, 'single source record did not publish requested source type');
+        assert.equal(state.primitiveSource?.sourceTaxonomyIdentity, 'volume-source-type-taxonomy-v0', 'single source did not publish taxonomy identity');
+        if (expectedSmokeOnlySourceProbe) {
+          assert.equal(state.primitiveSource?.fireSourceMix, 0, 'Smoke-only source carried fire source mix');
+          assert.ok((state.primitiveSource?.smokeSourceMix ?? 0) > 0.9, 'Smoke-only source did not carry smoke source mix');
+        }
+        if (expectedFireOnlySourceProbe) {
+          assert.ok((state.primitiveSource?.fireSourceMix ?? 0) > 0.9, 'Fire-only source did not carry fire source mix');
+          assert.equal(state.primitiveSource?.smokeSourceMix, 0, 'Fire-only source carried direct smoke source mix');
+        }
       }
       if (expectedSaveLoadProbe) {
         assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'save/load round-trip selection evidence missing from report');
@@ -592,10 +611,13 @@ async function main() {
       assert.equal(primitive?.volumeBodyMode, 'primitive-centered-sphere-volume-v0', 'authored primitive did not request a primitive-centered volume body');
       assert.equal(state.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'fluid renderer did not use the primitive-centered body mode');
       assert.equal(state.primitiveSource?.primitiveCenteredBody, true, 'fluid renderer did not enable primitive-centered source shaping');
-      assert.equal(primitive?.coupling?.authoringTool, expectedSourceTypeProbe ? 'volume-add-fire' : 'volume-add-fire-smoke', 'authored primitive did not preserve authoring tool identity');
+      const expectedAuthoringTool = expectedSingleSourceTypeProbe ? `volume-add-${requestedSourceTypeProbe.replace('_', '-')}`
+        : expectedSourceTypeProbe ? 'volume-add-fire' : 'volume-add-fire-smoke';
+      assert.equal(primitive?.coupling?.authoringTool, expectedAuthoringTool, 'authored primitive did not preserve authoring tool identity');
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
-      assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - 2.1) < 0.001, 'authored primitive radiance setting was not applied');
+      const expectedPrimitiveRadiance = expectedSmokeOnlySourceProbe ? 0.35 : 2.1;
+      assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - expectedPrimitiveRadiance) < 0.001, 'authored primitive radiance setting was not applied');
       assert.equal(authoredPrimitive?.authoring?.settingsIdentity, 'volume-primitive-local-settings-v0', 'authored primitive did not preserve local settings identity');
       assert.ok(Math.abs((authoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.12) < 0.001, 'authored primitive handle opacity did not persist locally');
       assert.equal(authoredPrimitive?.authoring?.handleVisible, true, 'authored primitive handle visibility did not persist locally');
@@ -653,11 +675,17 @@ async function main() {
       if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= materialDetailReadbackThreshold) {
         throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
-        throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
-      }
-      if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
-        throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+      if (expectedSmokeOnlySourceProbe) {
+        if ((sample.simReadback.fireLayerMean ?? 1) > 0.00018 || (sample.simReadback.radianceMean ?? 1) > 0.0008) {
+          throw new Error(`Smoke-only source leaked fire/radiance transport: ${JSON.stringify(sample.simReadback)}`);
+        }
+      } else {
+        if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
+          throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
+        }
+        if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
+          throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+        }
       }
       if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= extinctionReadbackThreshold) {
         throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
@@ -665,10 +693,14 @@ async function main() {
       if (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= microdetailReadbackThreshold) {
         throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= interfaceShredReadbackThreshold) {
+      if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= (expectedSmokeOnlySourceProbe ? 0.00008 : interfaceShredReadbackThreshold)) {
         throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= fireLickReadbackThreshold) {
+      if (expectedSmokeOnlySourceProbe) {
+        if ((sample.simReadback.fireLickMean ?? 1) > 0.00012) {
+          throw new Error(`Smoke-only source leaked fire-lick transport: ${JSON.stringify(sample.simReadback)}`);
+        }
+      } else if (!Number.isFinite(sample.simReadback.fireLickMean) || sample.simReadback.fireLickMean <= fireLickReadbackThreshold) {
         throw new Error(`GPU sim readback does not show fire-lick breakup: ${JSON.stringify(sample.simReadback)}`);
       }
       if (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005) {
@@ -688,17 +720,23 @@ async function main() {
       warmEmissivePixels: sample.warmEmissivePixels,
       smokeLikePixels: sample.smokeLikePixels,
     };
-    if (!expectedSceneBoundsOnlyProbe && (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
+    if (expectedSmokeOnlySourceProbe) {
+      if (metrics.litPixels < 1500 || metrics.smokeLikePixels < 800 || metrics.fireLikePixels > 160 || metrics.emissiveLikePixels > 120) {
+        throw new Error(`smoke-only source visual leaked fire or lost smoke body: ${JSON.stringify(metrics)}`);
+      }
+    } else if (!expectedSceneBoundsOnlyProbe && (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
     const mainRendererMetrics = await captureMainRendererScreenshot(ws, mainRendererScreenshot);
     const primitiveCenteredBodyVisual = state.primitiveSource?.bodyMode === 'primitive-centered-sphere-volume-v0';
-    const missingMainRendererVolume = primitiveCenteredBodyVisual
+    const missingMainRendererVolume = expectedSmokeOnlySourceProbe
+      ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 800 || mainRendererMetrics.fireLikePixels > 500
+      : primitiveCenteredBodyVisual
       ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.warmEmissivePixels < 500 || mainRendererMetrics.meanLuma < 8
       : mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8;
     if (!expectedSceneBoundsOnlyProbe && missingMainRendererVolume) {
-      throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
+      throw new Error(`main renderer screenshot missing expected source-typed volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const report = {
       requestedRoute: url,

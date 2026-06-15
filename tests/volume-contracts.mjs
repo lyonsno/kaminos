@@ -56,6 +56,7 @@ assert.match(index, /VOLUME_SOURCE_TYPES/, 'source type taxonomy is declared as 
 assert.match(index, /sourceType:\s*'fire'/, 'source type taxonomy includes authored Fire primitives');
 assert.match(index, /sourceType:\s*'smoke'/, 'source type taxonomy includes authored Smoke primitives');
 assert.match(index, /sourceType:\s*'fire_smoke'/, 'source type taxonomy includes authored Fire+Smoke primitives');
+assert.match(index, /sourceMix:\s*Object\.freeze\(\{\s*fire:\s*1,\s*smoke:\s*0\s*\}\)/, 'Fire primitive source type must not directly birth smoke');
 assert.match(index, /function volumeSourceTypeTaxonomyState/, 'authoring debug state exposes source type taxonomy');
 assert.match(index, /function setSelectedVolumePrimitiveSourceType/, 'selected primitives can change source type without recreating the scene record');
 assert.match(index, /data-parameter-ownership="primitive-local-applied"/, 'Volume tab visibly groups backend-applied primitive-local source controls');
