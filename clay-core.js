@@ -16,6 +16,8 @@ const SHARED_PRIMITIVE_SOURCE_CONTRACT = POINT_TRIANGLE_SOURCE_CONTRACT;
 const GRID_X = 48;
 const GRID_Z = 32;
 const MAX_COLLIDERS = 8;
+const CLAY_RELAXATION_FACTOR = 0.32;
+const CLAY_PLASTICITY_FACTOR = 0.10;
 const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
@@ -57,8 +59,9 @@ struct Params {
 
 @group(0) @binding(0) var<storage, read> basePositions: array<vec4f>;
 @group(0) @binding(1) var<storage, read> colliders: array<vec4f>;
-@group(0) @binding(2) var<storage, read_write> deformedPositions: array<vec4f>;
-@group(0) @binding(3) var<uniform> params: Params;
+@group(0) @binding(2) var<storage, read> statePositions: array<vec4f>;
+@group(0) @binding(3) var<storage, read_write> deformedPositions: array<vec4f>;
+@group(0) @binding(4) var<uniform> params: Params;
 
 @compute @workgroup_size(64)
 fn clay_surface_lattice_main(@builtin(global_invocation_id) global_id: vec3u) {
@@ -85,8 +88,11 @@ fn clay_surface_lattice_main(@builtin(global_invocation_id) global_id: vec3u) {
     lift = lift + rim * rim * force * 0.035;
     contact = contact + select(0.0, 1.0, reach > 0.001);
   }
+  let previous = statePositions[i];
   let mound = 0.035 * exp(-2.2 * dot(base.xz, base.xz));
-  let y = mound + depression + lift;
+  let targetY = mound + depression + lift;
+  let relaxedY = previous.y + (targetY - previous.y) * ${CLAY_RELAXATION_FACTOR.toFixed(8)};
+  let y = clamp(relaxedY + depression * ${CLAY_PLASTICITY_FACTOR.toFixed(8)}, -0.32, 0.16);
   deformedPositions[i] = vec4f(base.x, y, base.z, contact);
 }
 `;
@@ -100,6 +106,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let baseBuffer = null;
   let colliderBuffer = null;
   let paramsBuffer = null;
+  let stateBuffer = null;
   let outputBuffer = null;
   let readbackBuffer = null;
   let mesh = null;
@@ -119,9 +126,15 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let primitiveContactActiveCount = 0;
   let primitiveContactMinDistance = null;
   let primitiveContactForceSum = 0;
+  let persistentClayStateStatus = 'not-run';
+  let persistentClayStepCount = 0;
+  let persistentClayMaxDelta = 0;
+  const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
+  const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
   let lastError = '';
   const vertexCount = GRID_X * GRID_Z;
   const basePositions = new Float32Array(vertexCount * 4);
+  let lastStateValues = null;
 
   for (let z = 0; z < GRID_Z; z += 1) {
     for (let x = 0; x < GRID_X; x += 1) {
@@ -353,6 +366,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       size: 4 * Uint32Array.BYTES_PER_ELEMENT,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    stateBuffer = device.createBuffer({
+      label: 'kaminos-clay-persistent-state',
+      size: basePositions.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
     outputBuffer = device.createBuffer({
       label: 'kaminos-clay-deformed-positions',
       size: basePositions.byteLength,
@@ -364,6 +382,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     device.queue.writeBuffer(baseBuffer, 0, basePositions);
+    device.queue.writeBuffer(stateBuffer, 0, basePositions);
     pipeline = device.createComputePipeline({
       label: SOLVER_IDENTITY,
       layout: 'auto',
@@ -377,8 +396,9 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       entries: [
         { binding: 0, resource: { buffer: baseBuffer } },
         { binding: 1, resource: { buffer: colliderBuffer } },
-        { binding: 2, resource: { buffer: outputBuffer } },
-        { binding: 3, resource: { buffer: paramsBuffer } },
+        { binding: 2, resource: { buffer: stateBuffer } },
+        { binding: 3, resource: { buffer: outputBuffer } },
+        { binding: 4, resource: { buffer: paramsBuffer } },
       ],
     });
   }
@@ -404,6 +424,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     pass.dispatchWorkgroups(Math.ceil(vertexCount / 64));
     pass.end();
     encoder.copyBufferToBuffer(outputBuffer, 0, readbackBuffer, 0, basePositions.byteLength);
+    encoder.copyBufferToBuffer(outputBuffer, 0, stateBuffer, 0, basePositions.byteLength);
     device.queue.submit([encoder.finish()]);
     await readbackBuffer.mapAsync(GPUMapMode.READ);
     const values = new Float32Array(readbackBuffer.getMappedRange()).slice();
@@ -413,6 +434,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     clayDeformationCount = 0;
     clayContactCount = 0;
     clayDeformationMax = 0;
+    persistentClayMaxDelta = 0;
     for (let i = 0; i < vertexCount; i += 1) {
       const y = values[i * 4 + 1];
       const contact = values[i * 4 + 3];
@@ -420,7 +442,14 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       if (Math.abs(y) > 0.003) clayDeformationCount += 1;
       if (contact > 0.5) clayContactCount += 1;
       clayDeformationMax = Math.max(clayDeformationMax, Math.abs(y));
+      if (lastStateValues) {
+        persistentClayMaxDelta = Math.max(persistentClayMaxDelta, Math.abs(y - lastStateValues[i * 4 + 1]));
+      }
     }
+    if (!lastStateValues) persistentClayMaxDelta = clayDeformationMax;
+    lastStateValues = values;
+    persistentClayStepCount += 1;
+    persistentClayStateStatus = persistentClayStepCount > 1 ? 'persistent' : 'initialized';
     position.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     gpuStepCount += 1;
@@ -459,6 +488,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       primitiveContactActiveCount,
       primitiveContactMinDistance,
       primitiveContactForceSum,
+      persistentClayStateStatus,
+      persistentClayStepCount,
+      persistentClayMaxDelta,
+      clayRelaxationFactor,
+      clayPlasticityFactor,
       clayGrid: `${GRID_X}x${GRID_Z}`,
       clayColliderCount: colliders.length,
       clayDeformationCount,

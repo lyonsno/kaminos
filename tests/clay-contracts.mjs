@@ -16,6 +16,8 @@ assert.match(index, /clay-primitive-probe/, 'Clay panel exposes package primitiv
 assert.match(index, /clay-primitive-commit/, 'Clay panel exposes package primitive commit identity');
 assert.match(index, /clay-primitive-contacts/, 'Clay panel exposes primitive-driven contact count');
 assert.match(index, /clay-primitive-force/, 'Clay panel exposes primitive-derived force');
+assert.match(index, /clay-persistent-state/, 'Clay panel exposes persistent state status');
+assert.match(index, /clay-state-delta/, 'Clay panel exposes persistent state delta');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -37,6 +39,11 @@ assert.match(core, /primitiveContactJobCount/, 'clay debug state records primiti
 assert.match(core, /primitiveContactActiveCount/, 'clay debug state records active primitive contacts');
 assert.match(core, /primitiveContactMinDistance/, 'clay debug state records primitive contact distance');
 assert.match(core, /primitiveContactForceSum/, 'clay debug state records primitive-derived force');
+assert.match(core, /persistentClayStateStatus/, 'clay debug state records persistent clay state status');
+assert.match(core, /persistentClayStepCount/, 'clay debug state records persistent state step count');
+assert.match(core, /persistentClayMaxDelta/, 'clay debug state records persistent state delta');
+assert.match(core, /clayRelaxationFactor/, 'clay debug state records relaxation factor');
+assert.match(core, /clayPlasticityFactor/, 'clay debug state records plasticity factor');
 assert.match(core, /clayColliderCount/, 'clay debug state records collider count');
 assert.match(core, /clayDeformationCount/, 'clay debug state records deformation count');
 assert.match(core, /clayContactCount/, 'clay debug state records contact count');
@@ -64,6 +71,9 @@ assert.match(witness, /sharedPrimitiveProbeTriangleIndex/, 'clay witness records
 assert.match(witness, /primitiveContactPassStatus/, 'clay witness requires primitive contact pass status');
 assert.match(witness, /primitiveContactActiveCount/, 'clay witness records active primitive contacts');
 assert.match(witness, /primitiveContactForceSum/, 'clay witness records primitive-derived force');
+assert.match(witness, /persistentClayStateStatus/, 'clay witness requires persistent state status');
+assert.match(witness, /persistentClayStepCount/, 'clay witness records persistent state step count');
+assert.match(witness, /persistentClayMaxDelta/, 'clay witness records persistent state delta');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

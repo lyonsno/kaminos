@@ -198,6 +198,11 @@ async function main() {
     assert.ok((state.primitiveContactActiveCount ?? 0) >= 5, 'primitive contact pass did not report active contacts');
     assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'primitive contact pass did not record a minimum distance');
     assert.ok((state.primitiveContactForceSum ?? 0) > 0, 'primitive contact pass did not derive positive force');
+    assert.equal(state.persistentClayStateStatus, 'persistent');
+    assert.ok((state.persistentClayStepCount ?? 0) >= 2, 'persistent clay state did not survive multiple steps');
+    assert.ok((state.persistentClayMaxDelta ?? 0) > 0, 'persistent clay state did not report step delta');
+    assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
+    assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
     assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
     assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
@@ -235,6 +240,11 @@ async function main() {
       primitiveContactActiveCount: state.primitiveContactActiveCount,
       primitiveContactMinDistance: state.primitiveContactMinDistance,
       primitiveContactForceSum: state.primitiveContactForceSum,
+      persistentClayStateStatus: state.persistentClayStateStatus,
+      persistentClayStepCount: state.persistentClayStepCount,
+      persistentClayMaxDelta: state.persistentClayMaxDelta,
+      clayRelaxationFactor: state.clayRelaxationFactor,
+      clayPlasticityFactor: state.clayPlasticityFactor,
       clayColliderCount: state.clayColliderCount,
       clayContactCount: state.clayContactCount,
       clayDeformationCount: state.clayDeformationCount,
