@@ -28,7 +28,13 @@ assert.match(index, /function clearActiveSceneObjectSelection\(/, 'empty viewpor
 assert.match(index, /clearActiveSceneObjectSelection\(\);[\s\S]*setInfo\('Selection cleared'\)/, 'empty viewport clicks clear active object selection');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
 assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');
+assert.match(index, /id="transform-inspector"/, 'Assets tab exposes a selected-object transform inspector');
+assert.match(index, /data-transform-field="position\.x"/, 'transform inspector exposes axis-addressable position fields');
+assert.match(index, /data-transform-field="rotation\.x"/, 'transform inspector exposes axis-addressable rotation fields');
+assert.match(index, /data-transform-field="scale\.x"/, 'transform inspector exposes axis-addressable scale fields');
 assert.match(index, /function renderSceneObjectList\(/, 'scene object registry renders to the editor surface');
+assert.match(index, /function updateTransformInspector\(/, 'selection changes refresh the transform inspector');
+assert.match(index, /function applyTransformInspectorField\(/, 'transform inspector fields mutate the selected object');
 assert.match(index, /function sceneObjectReloadabilityLabel\(/, 'scene object list exposes reloadability/source status');
 assert.match(index, /function greenroomEntryDisplay\(/, 'Greenroom rows use a shared display metadata fallback instead of raw filenames only');
 assert.match(index, /function renderGreenroomEntryIdentity\(/, 'Greenroom rows render display title and secondary metadata through one shared helper');

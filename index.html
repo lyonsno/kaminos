@@ -138,6 +138,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
 .scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
 .scene-object-empty { font-size: 11px; color: #555; }
+.transform-inspector { display: flex; flex-direction: column; gap: 9px; }
+.transform-inspector-empty { font-size: 11px; color: #555; }
+.transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
+.transform-inspector-head { min-width: 0; }
+.transform-inspector-name { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transform-inspector-id { color: #555; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.transform-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; }
+.transform-label { color: #777; font-size: 10px; }
+.transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
+.transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
+.transform-input { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #bbb; font: 10px 'SF Mono', monospace; padding: 2px 4px; outline: none; }
+.transform-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.transform-input:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Volume prototype */
 .route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
@@ -176,6 +190,41 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
+    </div>
+
+    <h2>Transform</h2>
+    <div class="panel transform-inspector" id="transform-inspector" data-selected-object-id="">
+      <div id="transform-inspector-empty" class="transform-inspector-empty">No object selected</div>
+      <div id="transform-inspector-fields" class="transform-inspector-fields" hidden>
+        <div class="transform-inspector-head">
+          <div class="transform-inspector-name" id="transform-inspector-name"></div>
+          <div class="transform-inspector-id" id="transform-inspector-id"></div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Position</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z"></label>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Rotation</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z"></label>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Scale</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="demo-buttons">
@@ -816,6 +865,7 @@ function detachAuthoredSceneForPreview(authored) {
     transformControls.visible = false;
   }
   renderSceneObjectList();
+  updateTransformInspector();
 }
 
 function updateGreenroomPreviewControls() {
@@ -858,6 +908,19 @@ function applySceneObjectTransformState(object, transform = {}) {
   object.position.fromArray(Array.isArray(transform.position) ? transform.position : [0, 0, 0]);
   object.rotation.set(...(Array.isArray(transform.rotation) ? transform.rotation : [0, 0, 0]));
   object.scale.fromArray(Array.isArray(transform.scale) ? transform.scale : [1, 1, 1]);
+}
+
+function degreesFromRadians(value) {
+  return value * 180 / Math.PI;
+}
+
+function radiansFromDegrees(value) {
+  return value * Math.PI / 180;
+}
+
+function formatInspectorNumber(value, digits = 3) {
+  if (!Number.isFinite(value)) return '';
+  return Number(value.toFixed(digits)).toString();
 }
 
 function previewTransformState(object) {
@@ -908,6 +971,81 @@ function sceneObjectReloadabilityLabel(record) {
   return 're-drop required';
 }
 
+function selectedSceneObjectEntry() {
+  return sceneObjects.find(obj => obj.id === activeSceneObjectId) || null;
+}
+
+function setTransformInspectorFieldsDisabled(disabled) {
+  document.querySelectorAll('[data-transform-field]').forEach(input => {
+    input.disabled = disabled;
+  });
+}
+
+function updateTransformInspector() {
+  const inspector = document.getElementById('transform-inspector');
+  const empty = document.getElementById('transform-inspector-empty');
+  const fields = document.getElementById('transform-inspector-fields');
+  if (!inspector || !empty || !fields) return;
+  const entry = selectedSceneObjectEntry();
+  inspector.dataset.selectedObjectId = entry?.id || '';
+  empty.hidden = !!entry;
+  fields.hidden = !entry;
+  setTransformInspectorFieldsDisabled(!entry);
+  if (!entry) return;
+
+  document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
+  document.getElementById('transform-inspector-id').textContent = entry.id;
+  const transform = sceneObjectTransformState(entry.object);
+  const values = {
+    'position.x': transform.position[0],
+    'position.y': transform.position[1],
+    'position.z': transform.position[2],
+    'rotation.x': degreesFromRadians(transform.rotation[0]),
+    'rotation.y': degreesFromRadians(transform.rotation[1]),
+    'rotation.z': degreesFromRadians(transform.rotation[2]),
+    'scale.x': transform.scale[0],
+    'scale.y': transform.scale[1],
+    'scale.z': transform.scale[2],
+  };
+  for (const [field, value] of Object.entries(values)) {
+    const input = document.querySelector(`[data-transform-field="${field}"]`);
+    if (input && document.activeElement !== input) {
+      input.value = formatInspectorNumber(value);
+    }
+  }
+}
+
+function applyTransformInspectorField(input) {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || !input?.dataset?.transformField) {
+    updateTransformInspector();
+    return;
+  }
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) return;
+  const [group, axis] = input.dataset.transformField.split('.');
+  const axisIndex = { x: 0, y: 1, z: 2 }[axis];
+  if (!['position', 'rotation', 'scale'].includes(group) || axisIndex === undefined) return;
+  const transform = sceneObjectTransformState(entry.object);
+  transform[group][axisIndex] = group === 'rotation' ? radiansFromDegrees(value) : value;
+  applySceneObjectTransformState(entry.object, transform);
+  if (transformControls && entry.object === currentMesh) {
+    transformControls.attach(entry.object);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
+  window._kaminosDirty?.();
+  setInfo(`Transform updated: ${entry.label || entry.fileName || entry.id}`);
+}
+
+function initTransformInspector() {
+  document.querySelectorAll('[data-transform-field]').forEach(input => {
+    input.addEventListener('input', () => applyTransformInspectorField(input));
+    input.addEventListener('change', () => updateTransformInspector());
+  });
+  updateTransformInspector();
+}
+
 function renderSceneObjectList() {
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
@@ -955,6 +1093,7 @@ function clearActiveSceneObjectSelection() {
   activeSceneObjectId = null;
   currentMesh = null;
   renderSceneObjectList();
+  updateTransformInspector();
   if (!transformControls) return;
   transformControls.detach();
   transformControls.visible = false;
@@ -970,6 +1109,7 @@ function setActiveSceneObject(id) {
   activeSceneObjectId = entry.id;
   currentMesh = entry.object;
   renderSceneObjectList();
+  updateTransformInspector();
   if (!transformControls) return;
   transformControls.detach();
   transformControls.visible = false;
@@ -1127,6 +1267,7 @@ window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
   applySceneObjectTransformState(entry.object, transform);
+  updateTransformInspector();
   if (entry.id === activeSceneObjectId && transformControls) {
     transformControls.detach();
     transformControls.attach(entry.object);
@@ -1153,6 +1294,7 @@ window.removeSceneObject = function(id) {
     setActiveSceneObject(fallback?.id || null);
   } else {
     renderSceneObjectList();
+    updateTransformInspector();
   }
   setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
   window._kaminosDirty?.();
@@ -1335,7 +1477,11 @@ async function initScene() {
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
   controls.addEventListener('change', markDirty);
-  transformControls.addEventListener('change', markDirty);
+  transformControls.addEventListener('change', () => {
+    markDirty();
+    updateTransformInspector();
+  });
+  initTransformInspector();
   const viewportEl = document.getElementById('viewport');
   renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
   renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
@@ -1500,6 +1646,7 @@ function clearScene() {
   }
   document.getElementById('transform-bar').classList.remove('visible');
   renderSceneObjectList();
+  updateTransformInspector();
 }
 
 function loadTexture(file) {

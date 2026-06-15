@@ -11,6 +11,7 @@ const witness = readFileSync(witnessPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
+assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
@@ -71,6 +72,14 @@ assert.match(witness, /scene load did not restore distinct object transforms/, '
 assert.match(witness, /kaminosSetSceneObjectTransform/, 'save/load witness uses an explicit transform setter instead of inferring from row state');
 assert.match(witness, /kaminosSceneObjectDebugState/, 'save/load witness captures scene-object transform debug state');
 assert.match(witness, /scene load did not report two loaded objects/, 'save/load witness proves load status reflects multi-object restore');
+assert.match(witness, /transform inspector panel missing/, 'transform inspector witness requires a visible selected-object transform panel');
+assert.match(witness, /transform inspector field missing/, 'transform inspector witness requires axis-addressable transform fields');
+assert.match(witness, /transform inspector did not bind to selected object/, 'transform inspector witness proves selected-object binding');
+assert.match(witness, /transform inspector did not update selected object transform/, 'transform inspector witness proves UI fields mutate the selected object');
+assert.match(witness, /transform inspector changed a non-selected object/, 'transform inspector witness proves UI edits do not bleed to other objects');
+assert.match(witness, /transform inspector saved scene did not preserve edited transform/, 'transform inspector witness proves UI edits persist into saved JSON');
+assert.match(witness, /transform inspector load did not restore edited transform/, 'transform inspector witness proves UI edits survive browser scene load');
+assert.match(witness, /transform inspector did not display restored rotation degrees/, 'transform inspector witness proves restored state is reflected in the UI');
 assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');
 assert.match(witness, /assertSceneDeleted\(/, 'witness shares exact cleanup proof across scenarios');

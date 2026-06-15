@@ -443,6 +443,220 @@ async function runSaveLoadRoundtripScenario(ws) {
   `, { timeoutMs: 60000 });
 }
 
+async function runTransformInspectorScenario(ws) {
+  phase = 'scenario-transform-inspector';
+  lastEvidence.transformInspector = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const assertSceneDeleted = async name => {
+        const cleanup = await deleteScene(name);
+        if (cleanup.deleted !== name) {
+          throw new Error('transform inspector cleanup did not delete saved scene file: ' + JSON.stringify({ savedFile: name, cleanup }));
+        }
+        const postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(name)) {
+          throw new Error('transform inspector post-cleanup scene listing still includes saved scene file: ' + JSON.stringify({ savedFile: name, postCleanupFiles }));
+        }
+        return { cleanup, postCleanupFiles };
+      };
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const waitForRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const roundTransformValue = value => Number(Number(value || 0).toFixed(4));
+      const normalizeTransform = transform => ({
+        position: (transform?.position || []).map(roundTransformValue),
+        rotation: (transform?.rotation || []).map(roundTransformValue),
+        scale: (transform?.scale || []).map(roundTransformValue),
+      });
+      const transformMatches = (actual, expected, epsilon = 0.001) => {
+        const normalizedActual = normalizeTransform(actual);
+        const normalizedExpected = normalizeTransform(expected);
+        for (const key of ['position', 'rotation', 'scale']) {
+          if (normalizedActual[key].length !== 3 || normalizedExpected[key].length !== 3) return false;
+          for (let i = 0; i < 3; i++) {
+            if (Math.abs(normalizedActual[key][i] - normalizedExpected[key][i]) > epsilon) return false;
+          }
+        }
+        return true;
+      };
+      const radians = degrees => degrees * Math.PI / 180;
+      const inspectorTransformPlan = {
+        position: [-0.42, 0.16, 0.24],
+        rotation: [radians(12), radians(-18), radians(27)],
+        scale: [1.15, 0.85, 1.05],
+      };
+      const fieldValuePlan = {
+        'position.x': -0.42,
+        'position.y': 0.16,
+        'position.z': 0.24,
+        'rotation.x': 12,
+        'rotation.y': -18,
+        'rotation.z': 27,
+        'scale.x': 1.15,
+        'scale.y': 0.85,
+        'scale.z': 1.05,
+      };
+      const setInspectorValue = (field, value) => {
+        const input = document.querySelector('[data-transform-field="' + field + '"]');
+        if (!input) throw new Error('transform inspector field missing: ' + field);
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const inspectorValues = () => Object.fromEntries([...document.querySelectorAll('[data-transform-field]')].map(input => [input.dataset.transformField, Number(input.value)]));
+
+      const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!demo) throw new Error('SuperMat Ring demo button missing');
+      for (let i = 0; i < 80; i++) {
+        if (document.querySelectorAll('[data-scene-object-id]').length === 1) break;
+        await wait(125);
+      }
+      const append = document.getElementById('append-import-toggle');
+      if (!append) throw new Error('append import toggle missing');
+      append.checked = true;
+      demo.click();
+      const appendedRows = await waitForRows(2);
+      if (appendedRows.length !== 2) throw new Error('transform inspector setup did not create two object rows: ' + JSON.stringify(appendedRows));
+      if (typeof window.kaminosSceneObjectDebugState !== 'function') throw new Error('transform inspector witness missing kaminosSceneObjectDebugState');
+      const firstId = appendedRows[0].id;
+      const secondId = appendedRows[1].id;
+      document.querySelector('[data-scene-object-id="' + firstId + '"]').click();
+      await wait(250);
+      const beforeEditDebug = window.kaminosSceneObjectDebugState();
+      const secondBeforeEdit = beforeEditDebug.find(object => object.id === secondId)?.transform;
+      if (!secondBeforeEdit) throw new Error('transform inspector setup could not capture second object transform: ' + JSON.stringify(beforeEditDebug));
+      const inspector = document.getElementById('transform-inspector');
+      if (!inspector) throw new Error('transform inspector panel missing');
+      if (inspector.dataset.selectedObjectId !== firstId) {
+        throw new Error('transform inspector did not bind to selected object: ' + JSON.stringify({ selectedObjectId: inspector.dataset.selectedObjectId, firstId, rows: rowState() }));
+      }
+      for (const [field, value] of Object.entries(fieldValuePlan)) setInspectorValue(field, value);
+      await wait(250);
+      const afterInspectorEditDebug = window.kaminosSceneObjectDebugState();
+      const firstAfterEdit = afterInspectorEditDebug.find(object => object.id === firstId);
+      const secondAfterEdit = afterInspectorEditDebug.find(object => object.id === secondId);
+      if (!transformMatches(firstAfterEdit?.transform, inspectorTransformPlan)) {
+        throw new Error('transform inspector did not update selected object transform: ' + JSON.stringify({ afterInspectorEditDebug, inspectorTransformPlan, inspectorValues: inspectorValues() }));
+      }
+      if (!transformMatches(secondAfterEdit?.transform, secondBeforeEdit)) {
+        throw new Error('transform inspector changed a non-selected object: ' + JSON.stringify({ secondBeforeEdit: normalizeTransform(secondBeforeEdit), secondAfterEdit: normalizeTransform(secondAfterEdit?.transform) }));
+      }
+      const infoAfterInspectorEdit = document.getElementById('info-bar').textContent.trim();
+      if (!infoAfterInspectorEdit.includes('Transform updated')) {
+        throw new Error('transform inspector did not report transform update: ' + JSON.stringify({ infoAfterInspectorEdit }));
+      }
+
+      const beforeSceneFiles = new Set(await listScenes());
+      await window.saveSceneAs();
+      let newFiles = [];
+      for (let i = 0; i < 120; i++) {
+        const afterSceneFiles = await listScenes();
+        newFiles = afterSceneFiles.filter(name => !beforeSceneFiles.has(name));
+        if (newFiles.length === 1) break;
+        await wait(125);
+      }
+      if (newFiles.length !== 1) throw new Error('transform inspector save did not create exactly one new scene file: ' + JSON.stringify({ newFiles, before: [...beforeSceneFiles] }));
+      const savedFile = newFiles[0];
+      const savedScene = await readScene(savedFile);
+      const savedFirst = savedScene.objects?.find(object => object.id === firstId);
+      const savedSecond = savedScene.objects?.find(object => object.id === secondId);
+      if (!transformMatches(savedFirst?.transform, inspectorTransformPlan)) {
+        throw new Error('transform inspector saved scene did not preserve edited transform: ' + JSON.stringify({ savedTransforms: savedScene.objects?.map(object => ({ id: object.id, transform: normalizeTransform(object.transform) })), inspectorTransformPlan }));
+      }
+      if (!transformMatches(savedSecond?.transform, secondBeforeEdit)) {
+        throw new Error('transform inspector saved scene mutated non-selected transform: ' + JSON.stringify({ savedSecond: normalizeTransform(savedSecond?.transform), secondBeforeEdit: normalizeTransform(secondBeforeEdit) }));
+      }
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      let sceneEntry = null;
+      for (let i = 0; i < 120; i++) {
+        sceneEntry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(entry => (
+          entry.querySelector('.gr-name')?.textContent?.trim() === savedFile.replace('.kaminos.json', '')
+        ));
+        if (sceneEntry) break;
+        await wait(125);
+      }
+      if (!sceneEntry) throw new Error('transform inspector saved scene did not appear in scene list: ' + savedFile);
+      const loadButton = [...sceneEntry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load');
+      if (!loadButton) throw new Error('transform inspector saved scene list entry missing Load button: ' + savedFile);
+      loadButton.click();
+      let restoredRows = [];
+      for (let i = 0; i < 160; i++) {
+        restoredRows = rowState();
+        const restoredDebug = window.kaminosSceneObjectDebugState();
+        const activeId = restoredRows.find(row => row.active && row.pressed === 'true')?.id || null;
+        const firstRestored = restoredDebug.find(object => object.id === firstId);
+        const info = document.getElementById('info-bar').textContent.trim();
+        if (restoredRows.length === 2 && activeId === firstId && transformMatches(firstRestored?.transform, inspectorTransformPlan) && info === 'Scene loaded: 2 objects') break;
+        await wait(125);
+      }
+      const restoredDebugState = window.kaminosSceneObjectDebugState();
+      const restoredFirst = restoredDebugState.find(object => object.id === firstId);
+      const restoredSecond = restoredDebugState.find(object => object.id === secondId);
+      if (!transformMatches(restoredFirst?.transform, inspectorTransformPlan)) {
+        throw new Error('transform inspector load did not restore edited transform: ' + JSON.stringify({ restoredDebugState, inspectorTransformPlan }));
+      }
+      if (!transformMatches(restoredSecond?.transform, secondBeforeEdit)) {
+        throw new Error('transform inspector load mutated non-selected transform: ' + JSON.stringify({ restoredSecond: normalizeTransform(restoredSecond?.transform), secondBeforeEdit: normalizeTransform(secondBeforeEdit) }));
+      }
+      document.querySelector('[data-tab="assets"]').click();
+      await wait(250);
+      if (document.getElementById('transform-inspector')?.dataset.selectedObjectId !== firstId) {
+        throw new Error('transform inspector did not rebind after scene load: ' + JSON.stringify({ selectedObjectId: document.getElementById('transform-inspector')?.dataset.selectedObjectId, firstId, restoredRows }));
+      }
+      const restoredInspectorValues = inspectorValues();
+      if (Math.abs(restoredInspectorValues['rotation.x'] - 12) > 0.01 || Math.abs(restoredInspectorValues['rotation.y'] + 18) > 0.01 || Math.abs(restoredInspectorValues['rotation.z'] - 27) > 0.01) {
+        throw new Error('transform inspector did not display restored rotation degrees: ' + JSON.stringify({ restoredInspectorValues }));
+      }
+      const { cleanup, postCleanupFiles } = await assertSceneDeleted(savedFile);
+      return {
+        savedFile,
+        firstId,
+        secondId,
+        inspectorValuesAfterEdit: inspectorValues(),
+        afterInspectorEditDebug,
+        savedScene: {
+          objectCount: savedScene.objects?.length || 0,
+          objectTransforms: savedScene.objects?.map(object => ({ id: object.id, transform: normalizeTransform(object.transform) })) || [],
+        },
+        restoredRows,
+        restoredDebugState,
+        cleanup,
+        postCleanupFileCount: postCleanupFiles.length,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+}
+
 async function runSceneBoundaryRoundtripScenario(ws) {
   phase = 'scenario-scene-boundary-roundtrip';
   lastEvidence.sceneBoundaryRoundtrip = await evaluate(ws, `
@@ -1631,6 +1845,8 @@ try {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
+  } else if (scenario === 'transform-inspector') {
+    await runTransformInspectorScenario(ws);
   } else if (scenario === 'scene-boundary-roundtrip') {
     await runSceneBoundaryRoundtripScenario(ws);
   } else if (scenario === 'greenroom-picker-display') {
