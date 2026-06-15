@@ -18,6 +18,9 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
+const fullScreenshot = args.has('--full-screenshot')
+  ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
+  : '';
 const routeParams = new URL(url).searchParams;
 const VOLUME_SCENE_PRESETS = {
   compact_plume: {},
@@ -91,6 +94,12 @@ const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
 const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
   ? Math.max(0, Math.min(1, requestedMajorantGuard))
   : 0.75;
+const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_stripe_ratio'));
+const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
+  ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
+  : expectedVolumeScene === 'bonfire_plume'
+    ? 1.85
+    : Infinity;
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
 const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
   ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
@@ -322,6 +331,17 @@ function writeRgbaPng(path, width, height, rgba) {
   ]));
 }
 
+async function captureViewportScreenshot(ws, path) {
+  if (!path) return '';
+  mkdirSync(dirname(path), { recursive: true });
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+  });
+  writeFileSync(path, Buffer.from(shot.data, 'base64'));
+  return path;
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -460,6 +480,7 @@ async function main() {
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
 
     phase = 'gpu-readback';
+    const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
       expression: 'window.__kaminosVolumePrototype.sampleFrame()',
       awaitPromise: true,
@@ -468,6 +489,9 @@ async function main() {
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
+    }
+    if (sample.preview?.rgba && Number.isFinite(sample.preview.width) && Number.isFinite(sample.preview.height)) {
+      writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     }
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
@@ -558,6 +582,21 @@ async function main() {
         throw new Error(`bonfire plume retained non-wind lateral drift: ${JSON.stringify({ simReadback: sample.simReadback, maxSmokeBinRadialDrift })}`);
       }
     }
+    if (
+      expectsBonfireVerticalTransport &&
+      Number.isFinite(expectedMaxSmokeStripeRatio) &&
+      (
+        !Number.isFinite(sample.smokeVerticalStripeRatio) ||
+        sample.smokeVerticalStripeRatio > expectedMaxSmokeStripeRatio
+      )
+    ) {
+      throw new Error(`bonfire plume retained vertical curtain striping: ${JSON.stringify({
+        smokeVerticalStripeRatio: sample.smokeVerticalStripeRatio,
+        maxSmokeStripeRatio: expectedMaxSmokeStripeRatio,
+        smokeHorizontalEnergy: sample.smokeHorizontalEnergy,
+        smokeVerticalEnergy: sample.smokeVerticalEnergy,
+      })}`);
+    }
     const metrics = {
       width: sample.width,
       height: sample.height,
@@ -568,6 +607,9 @@ async function main() {
       smokeLikePixels: sample.smokeLikePixels,
       fireRoughnessMean: sample.fireRoughnessMean,
       fireEdgeEnergy: sample.fireEdgeEnergy,
+      smokeHorizontalEnergy: sample.smokeHorizontalEnergy,
+      smokeVerticalEnergy: sample.smokeVerticalEnergy,
+      smokeVerticalStripeRatio: sample.smokeVerticalStripeRatio,
       volumeBounds: sample.volumeBounds,
       fireBounds: sample.fireBounds,
       smokeBounds: sample.smokeBounds,
@@ -674,6 +716,7 @@ async function main() {
       expectsBonfireVerticalTransport,
       expectsBonfireZeroDrift,
       screenshot: out,
+      fullScreenshot: fullScreenshotPath || null,
       metrics,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -688,6 +731,8 @@ async function main() {
       if (page?.webSocketDebuggerUrl) {
         const ws = new WebSocket(page.webSocketDebuggerUrl);
         await waitForWebSocketOpen(ws);
+        await wsRequest(ws, 'Page.enable');
+        await captureViewportScreenshot(ws, fullScreenshot);
         const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
           expression: 'window.__kaminosVolumePrototype?.debugState?.()',
           returnByValue: true,
@@ -705,6 +750,7 @@ async function main() {
       error: err?.message || String(err),
       state,
       screenshot: out,
+      fullScreenshot: fullScreenshot || null,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     proc.kill('SIGTERM');

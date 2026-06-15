@@ -64,6 +64,10 @@ function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function pressureBufferBytes(gridSize) {
+  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -198,6 +202,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(5) var historySampler: sampler;
 @group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
+@group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
+@group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -584,6 +590,72 @@ fn pressureProjectionCorrection(c: vec3<i32>, strength: f32) -> vec3<f32> {
   return (gradient * 0.46 + localDamping) * clamp(strength, 0.0, 1.5);
 }
 
+fn pressureIndexForCell(c: vec3<i32>) -> u32 {
+  return index3(clampCell(c));
+}
+
+fn pressureRead(c: vec3<i32>) -> vec4<f32> {
+  return pressureSrc[pressureIndexForCell(c)];
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let div = divergenceAtCell(c);
+  pressureDst[index3(gid)] = vec4<f32>(div, 0.0, 0.0, 0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let div = pressureRead(c).x;
+  let neighborPressure =
+    pressureRead(c + vec3<i32>(-1, 0, 0)).y +
+    pressureRead(c + vec3<i32>( 1, 0, 0)).y +
+    pressureRead(c + vec3<i32>(0, -1, 0)).y +
+    pressureRead(c + vec3<i32>(0,  1, 0)).y +
+    pressureRead(c + vec3<i32>(0, 0, -1)).y +
+    pressureRead(c + vec3<i32>(0, 0,  1)).y;
+  let pressure = (neighborPressure - div) * (1.0 / 6.0);
+  pressureDst[index3(gid)] = vec4<f32>(div, pressure * 0.985, 0.0, 0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  let c = vec3<i32>(gid);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
+  let bonfireScene = step(1.5, sceneMode);
+  let projection = clamp(u.source_controls.z, 0.0, 1.5);
+  let pressureGradient = vec3<f32>(
+    pressureRead(c + vec3<i32>(1, 0, 0)).y - pressureRead(c + vec3<i32>(-1, 0, 0)).y,
+    pressureRead(c + vec3<i32>(0, 1, 0)).y - pressureRead(c + vec3<i32>(0, -1, 0)).y,
+    pressureRead(c + vec3<i32>(0, 0, 1)).y - pressureRead(c + vec3<i32>(0, 0, -1)).y
+  ) * 0.5;
+  let velocityDensity = fluidSrc[base];
+  let density = velocityDensity.w;
+  let material = fluidSrc[base + 1u];
+  let fireLayer = fluidSrc[base + 2u];
+  let microLayer = fluidSrc[base + 3u];
+  let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
+  let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
+  let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
+  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base + 1u] = material;
+  fluidDst[base + 2u] = fireLayer;
+  fluidDst[base + 3u] = microLayer;
+}
+
 fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   // Vorticity confinement preserves small curl features that semi-Lagrangian advection damps away.
   let magX = curlMagnitudeAtCell(c + vec3<i32>(1, 0, 0)) - curlMagnitudeAtCell(c + vec3<i32>(-1, 0, 0));
@@ -734,6 +806,18 @@ fn bonfireSymmetricEdgeBreakup(p: vec3<f32>, scaledDetailFrequency: f32, bonfire
   );
 }
 
+fn bonfireAzimuthalBreakup(p: vec3<f32>, scaledDetailFrequency: f32, time: f32, phaseOffset: f32) -> f32 {
+  let radial = max(length(p.xz), 0.001);
+  let dir = p.xz / radial;
+  let rotA = vec2<f32>(cos(time * 0.37 + phaseOffset), sin(time * 0.37 + phaseOffset));
+  let rotB = vec2<f32>(-rotA.y, rotA.x);
+  let angularA = sin(dot(dir, rotA) * (8.0 + scaledDetailFrequency * 1.4) + radial * (17.0 + scaledDetailFrequency * 2.3) + p.y * 5.2 + time * 1.21);
+  let angularB = cos(dot(dir, rotB) * (11.0 + scaledDetailFrequency * 1.1) - radial * (13.0 + scaledDetailFrequency * 1.9) + p.y * 3.7 - time * 0.94);
+  let quadrupole = sin((dir.x * dir.x - dir.y * dir.y) * (13.0 + scaledDetailFrequency * 2.0) + p.x * p.z * 18.0 + time * 0.73 + phaseOffset);
+  let cellular = hash31(floor(vec3<f32>(p.x * 17.0 + p.y * 5.0, p.z * 19.0 - p.y * 4.0, p.y * 11.0 + time * 1.6 + phaseOffset) * max(1.0, scaledDetailFrequency * 0.42)));
+  return clamp(0.72 + angularA * 0.14 + angularB * 0.12 + quadrupole * 0.10 + (cellular - 0.5) * 0.12, 0.34, 1.18);
+}
+
 fn bonfireCombustionCellField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
   var field = 0.0;
   var peak = 0.0;
@@ -789,6 +873,52 @@ fn bonfireZeroMeanLateralFlow(p: vec3<f32>, sourceY: f32, combustion: vec4<f32>,
   let quadrupole = sin((p.x * p.x - p.z * p.z) * 38.0 + time * 1.7) * cos(p.x * p.z * 44.0 - time * 1.1);
   let eddy = tangent * quadrupole * ring * sourceBand * combustion.y * clamp(strength, 0.0, 1.0) * 0.018;
   return vec3<f32>(eddy.x, 0.0, eddy.y);
+}
+
+fn bonfireSymmetricLateralForce(p: vec3<f32>, time: f32, carrier: f32, strength: f32, phaseOffset: f32) -> vec2<f32> {
+  let radial = max(length(p.xz), 0.025);
+  let dir = p.xz / radial;
+  let tangent = vec2<f32>(-dir.y, dir.x);
+  let ring = smoothstep(0.035, 0.26, radial) * (1.0 - smoothstep(0.68, 1.04, radial));
+  let q = sin((p.x * p.x - p.z * p.z) * (26.0 + phaseOffset * 1.7) + p.y * (6.0 + phaseOffset) + time * (1.1 + phaseOffset * 0.13));
+  let r = cos(radial * (21.0 + phaseOffset * 2.3) - p.y * (5.0 + phaseOffset * 0.7) - time * (0.9 + phaseOffset * 0.11));
+  return (tangent * q * 0.72 + dir * r * 0.38) * ring * clamp(carrier, 0.0, 2.0) * strength;
+}
+
+fn bonfireZeroMeanPlumeRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
+  let radial = max(length(p.xz), 0.025);
+  let dir = p.xz / radial;
+  let tangent = vec2<f32>(-dir.y, dir.x);
+  let visualAboveSource = sourceY - p.y;
+  let riseBand = smoothstep(-0.04, 0.18, visualAboveSource) * (1.0 - smoothstep(1.08, 1.48, visualAboveSource));
+  let ring = smoothstep(0.035, 0.30, radial) * (1.0 - smoothstep(0.64, 1.03, radial));
+  let coreRoll = 1.0 - smoothstep(0.05, 0.38, radial);
+  let carrier = clamp(smoke * 0.70 + heat * 0.22 + flame * 0.15 + source * 0.20, 0.0, 1.6);
+  let rollPhase = visualAboveSource * 10.5 + radial * 15.0 + time * 1.35;
+  let quadrupole = sin((p.x * p.x - p.z * p.z) * 29.0 + visualAboveSource * 5.0 + time * 0.95);
+  let radialRoll = sin(rollPhase) * 0.66 + quadrupole * 0.22;
+  let verticalRoll = cos(rollPhase) * (0.40 + coreRoll * 0.58);
+  let horizontal = (dir * radialRoll + tangent * quadrupole * 0.34) * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.058;
+  let vertical = -verticalRoll * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.024;
+  return vec3<f32>(horizontal.x, vertical, horizontal.y);
+}
+
+fn bonfireConvectiveCellRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
+  let radial = max(length(p.xz), 0.025);
+  let dir = p.xz / radial;
+  let tangent = vec2<f32>(-dir.y, dir.x);
+  let visualAboveSource = sourceY - p.y;
+  let lowerPlume = smoothstep(0.16, 0.34, visualAboveSource) * (1.0 - smoothstep(0.86, 1.34, visualAboveSource));
+  let ringBand = smoothstep(0.055, 0.22, radial) * (1.0 - smoothstep(0.56, 0.92, radial));
+  let coreBand = 1.0 - smoothstep(0.02, 0.46, radial);
+  let bodyBand = clamp(ringBand + coreBand * 0.58, 0.0, 1.0);
+  let cellA = bonfireAzimuthalBreakup(p + vec3<f32>(0.11, -0.07, 0.05), 2.5, time * 1.18, 1.6) - 0.72;
+  let cellB = bonfireAzimuthalBreakup(p.yzx + vec3<f32>(-0.03, 0.09, 0.13), 2.1, time * 0.87, 2.9) - 0.72;
+  let overturn = sin(visualAboveSource * 16.0 + radial * 11.0 + time * 1.62);
+  let carrier = clamp(smoke * 0.62 + heat * 0.28 + flame * 0.13 + source * 0.18, 0.0, 1.7);
+  let lateral = (dir * (cellA * 0.86 + overturn * 0.42) + tangent * (cellB * 0.72)) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.084;
+  let vertical = (cellB * 0.38 - overturn * 0.34) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.026;
+  return vec3<f32>(lateral.x, vertical, lateral.y);
 }
 
 fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combustion: vec4<f32>, plumeRiseScale: f32, speed: f32) -> f32 {
@@ -1109,7 +1239,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let thermalAdvectionRiseDirection = bonfireThermalRiseDirection;
   let fireLayerRiseDirection = bonfireThermalRiseDirection;
   let microdetailRiseDirection = bonfireThermalRiseDirection;
-  let bonfireAdvectionLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
+  let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
+  let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
@@ -1117,10 +1248,38 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping, thermalAdvectionRiseDirection);
   var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping, fireLayerRiseDirection);
   var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireAdvectionLateralDamping, microdetailRiseDirection);
+  let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.030 + curl * 0.006 + microAmount * 0.004, 0.0, 0.075);
+  let diffuseMaterial = (
+    readSlot(cellI + vec3<i32>(-1, 0, 0), 1u) +
+    readSlot(cellI + vec3<i32>( 1, 0, 0), 1u) +
+    readSlot(cellI + vec3<i32>(0, -1, 0), 1u) +
+    readSlot(cellI + vec3<i32>(0,  1, 0), 1u) +
+    readSlot(cellI + vec3<i32>(0, 0, -1), 1u) +
+    readSlot(cellI + vec3<i32>(0, 0,  1), 1u)
+  ) * (1.0 / 6.0);
+  let diffuseFireLayer = (
+    readSlot(cellI + vec3<i32>(-1, 0, 0), 2u) +
+    readSlot(cellI + vec3<i32>( 1, 0, 0), 2u) +
+    readSlot(cellI + vec3<i32>(0, -1, 0), 2u) +
+    readSlot(cellI + vec3<i32>(0,  1, 0), 2u) +
+    readSlot(cellI + vec3<i32>(0, 0, -1), 2u) +
+    readSlot(cellI + vec3<i32>(0, 0,  1), 2u)
+  ) * (1.0 / 6.0);
+  let diffuseMicroLayer = (
+    readSlot(cellI + vec3<i32>(-1, 0, 0), 3u) +
+    readSlot(cellI + vec3<i32>( 1, 0, 0), 3u) +
+    readSlot(cellI + vec3<i32>(0, -1, 0), 3u) +
+    readSlot(cellI + vec3<i32>(0,  1, 0), 3u) +
+    readSlot(cellI + vec3<i32>(0, 0, -1), 3u) +
+    readSlot(cellI + vec3<i32>(0, 0,  1), 3u)
+  ) * (1.0 / 6.0);
+  material = mix(material, diffuseMaterial, bonfireTurbulentDiffusionMix);
+  fireLayer = mix(fireLayer, diffuseFireLayer, bonfireTurbulentDiffusionMix * 0.42);
+  microLayer = mix(microLayer, diffuseMicroLayer, bonfireTurbulentDiffusionMix * 0.75);
   let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
   let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
   let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
-  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.24;
+  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.0;
   let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
   let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
   let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
@@ -1152,15 +1311,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.16,
     1.22
   );
-  let bonfireSourceBreakup = clamp(
-    0.72
-      + 0.18 * sin(sourceRadial * 34.0 * scaledDetailFrequency + time * 1.45)
-      + 0.14 * cos(sourceRadial * 21.0 * scaledDetailFrequency - time * 1.18)
-      + 0.08 * hash31(vec3<f32>(sourceRadial * 17.0 * scaledDetailFrequency, p.y * 11.0, floor(time * 2.0))),
-    0.32,
-    1.14
-  );
-  let bonfireDetailBreakup = mix(breakup, bonfireSourceBreakup, bonfireScene);
+  let bonfireSourceBreakup = bonfireAzimuthalBreakup(p, scaledDetailFrequency, time, 0.0);
+  let bonfireDetailBreakup = mix(breakup, bonfireAzimuthalBreakup(p + vec3<f32>(0.17, 0.0, -0.13), scaledDetailFrequency, time * 1.07, 1.4), bonfireScene);
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
@@ -1174,18 +1326,21 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
   let bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
   let bonfireFireball = max(smoothBonfireFireball * 0.24 * bonfireEdgeBreakup, bonfireCombustion.x * (0.82 + bonfireTongues * 0.34));
-  let bonfireSmokeBand = smoothstep(bonfireSourceY - 0.54, bonfireSourceY - 0.26, p.y) * (1.0 - smoothstep(bonfireSourceY - 0.14, bonfireSourceY + 0.02, p.y));
+  let bonfireSourceCarrier = smoothBonfireFireball * (0.54 + 0.18 * bonfireEdgeBreakup) + bonfireCombustion.x * 0.24;
+  let bonfireVisualAboveSource = bonfireSourceY - p.y;
+  let bonfireInterfaceSmokeBand = smoothstep(-0.04, 0.06, bonfireVisualAboveSource) * (1.0 - smoothstep(0.28, 0.52, bonfireVisualAboveSource));
+  let bonfireInterfaceSmokeRadius = bonfireSmokeRadius * mix(1.18, 0.86, smoothstep(0.02, 0.42, bonfireVisualAboveSource));
   let bonfireSmokeSource = (
-    exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.36 + 0.22 * bonfireSourceBreakup)
-      + bonfireInterfaceBirth * 0.56
-      + bonfireCombustion.z * 0.18
+    exp(-sourceRadial * sourceRadial / max(0.0064, bonfireInterfaceSmokeRadius * bonfireInterfaceSmokeRadius)) * bonfireInterfaceSmokeBand * (0.42 + 0.16 * bonfireSourceBreakup)
+      + bonfireInterfaceBirth * 0.24
+      + bonfireCombustion.z * 0.07
   ) * inputFlow;
-  let source = mix(columnSource, max(bonfireSmokeSource, bonfireFireball * inputFlow * 0.84), bonfireScene);
+  let source = mix(columnSource, max(bonfireSmokeSource, bonfireSourceCarrier * inputFlow * 0.72), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
   let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
   let bonfireEmberRing = (
-    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
+    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireInterfaceSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
       + bonfireCombustion.z * 0.18
   ) * inputFlow;
   let emberRing = mix(columnEmberRing, bonfireEmberRing, bonfireScene);
@@ -1205,18 +1360,30 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
-  let bonfireDetailLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
-  let rawDetailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * (source + smoke * 0.26 + heat * 0.18) * (0.018 + curl * 0.010);
-  let rawMicroForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22) * 0.026;
+  let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
+  let bonfireLocalLateralForceGain = mix(1.0, max(explicitWindAuthority, 0.86), bonfireScene);
+  let bonfireDetailLateralDamping = bonfireLocalLateralForceGain;
+  let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
+  let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
+  let rawDetailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010);
+  let rawMicroForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let detailForce = vec3<f32>(rawDetailForce.x * bonfireDetailLateralDamping, rawDetailForce.y, rawDetailForce.z * bonfireDetailLateralDamping);
-  let microForce = vec3<f32>(rawMicroForce.x * bonfireDetailLateralDamping, rawMicroForce.y, rawMicroForce.z * bonfireDetailLateralDamping);
-  let shredForce = vec3<f32>(rawShredForce.x * bonfireDetailLateralDamping, rawShredForce.y, rawShredForce.z * bonfireDetailLateralDamping);
+  let symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
+  let symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
+  let symmetricShredForce = bonfireSymmetricLateralForce(p, time * 1.13, length(rawShredForce.xz), 1.0, 3.2);
+  let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
+  let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
+  let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
+  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y);
+  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y);
+  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y);
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
-  let fineBreakup = vec3<f32>(rawFineBreakup.x * bonfireDetailLateralDamping, rawFineBreakup.y, rawFineBreakup.z * bonfireDetailLateralDamping);
+  let symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
+  let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
+  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y);
   let projectionCorrection = pressureProjectionCorrection(cellI, projection);
-  let bonfireSwirlSymmetryGain = mix(1.0, explicitWindAuthority, bonfireScene);
+  let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + detailForce;
@@ -1231,15 +1398,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse, bonfireScene) * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
-  let bonfireNonWindLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
+  let bonfireNonWindLateralDamping = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
   vel.x = vel.x * bonfireNonWindLateralDamping;
   vel.z = vel.z * bonfireNonWindLateralDamping;
-  let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
   let bonfireCenteringCarrier = clamp(source * 0.72 + smoke * 0.46 + heat * 0.28, 0.0, 1.5);
-  let bonfireNonWindRecenteringGain = 0.048 + speed * 0.010;
+  let bonfireLowPlumeCentering = 1.0 + smoothstep(-0.06, 0.22, bonfireVisualAboveSource) * (1.0 - smoothstep(0.48, 0.82, bonfireVisualAboveSource)) * 0.38;
+  let bonfireNonWindRecenteringGain = (0.104 + speed * 0.020) * bonfireLowPlumeCentering;
   let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * bonfireNonWindRecenteringGain;
-  let bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.16 + microAmount * 0.11 + shredAmount * 0.055 + fireLickAmount * 0.050);
+  let bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.23 + microAmount * 0.15 + shredAmount * 0.070 + fireLickAmount * 0.060);
+  let bonfirePlumeRoll = bonfireZeroMeanPlumeRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.24 + microAmount * 0.13 + shredAmount * 0.080 + fireLickAmount * 0.060);
+  let bonfireCellRoll = bonfireConvectiveCellRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.22 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.055);
   vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
+  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
+  vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
@@ -1247,8 +1418,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
-  let bonfireRisingSmokeBirth = bonfireSmokeSource * 0.76 + bonfireInterfaceBirth * 0.82 + bonfireCombustion.z * 0.22 + smokeFromHeat * 0.40;
-  smoke = max(smoke + smokeFromHeat, mix(columnSmokeBirth, bonfireRisingSmokeBirth, bonfireScene));
+  let bonfireAdvectedSmokeBirth = bonfireSmokeSource * 0.10 + bonfireInterfaceBirth * 0.08 + bonfireCombustion.z * 0.014 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.055;
+  let columnSmokeTransport = max(smoke + smokeFromHeat, columnSmokeBirth);
+  let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth);
+  smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
   heat = max(heat, source * 0.74 + emberRing * 0.18 + bonfireCombustion.x * bonfireScene * 0.34);
   heat = max(heat, externalInjection.material.y * 0.92);
@@ -1257,11 +1430,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fuel = max(fuel, source * 0.88 * sourceFuelMask);
   fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
-  materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2 + bonfireInterfaceBirth * bonfireScene * 0.92) * (0.30 + 0.36 * bonfireDetailBreakup + 0.34 * bonfireTongues * bonfireScene));
+  let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.54 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.12 + bonfireInterfaceBirth * 0.24 + bonfireCombustion.z * 0.052 + smoke * 0.070;
+  let columnMaterialDetailBirth = (source + emberRing + smokeFromHeat * 3.2) * (0.30 + 0.36 * bonfireDetailBreakup);
+  let bonfireMaterialDetailBirth = (bonfireDetailBirthCarrier + emberRing * 0.04) * (0.12 + 0.12 * bonfireDetailBreakup + 0.08 * bonfireTongues);
+  materialDetail = mix(max(materialDetail, columnMaterialDetailBirth), min(2.6, materialDetail + bonfireMaterialDetailBirth), bonfireScene);
   materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
-  microSmoke = max(microSmoke, (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18 + bonfireInterfaceBirth * bonfireScene * 0.52) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup + 0.34 * bonfireTongues * bonfireScene));
+  let columnMicroSmokeBirth = (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup);
+  let bonfireMicroSmokeBirth = (bonfireAdvectedSmokeBirth * 0.22 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.08 + materialDetail * 0.055 + bonfireInterfaceBirth * 0.16 + smoke * 0.040) * microAmount * (0.15 + 0.10 * bonfireDetailBreakup + 0.08 * bonfireTongues);
+  microSmoke = mix(max(microSmoke, columnMicroSmokeBirth), min(2.4, microSmoke + bonfireMicroSmokeBirth), bonfireScene);
   microSmoke = max(microSmoke, externalInjection.micro.x);
-  interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + source * 0.30 + bonfireInterfaceBirth * bonfireScene * 0.42) * 1.72);
+  let interfaceSourceTerm = mix(source * 0.30, source * 0.08 + bonfireInterfaceBirth * 0.54 + smokeFromHeat * 0.32, bonfireScene);
+  interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + interfaceSourceTerm) * 1.72);
   interfaceShred = max(interfaceShred, externalInjection.micro.y);
   fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickOperatorGain * (0.25 + 0.16 * bonfireTongues * bonfireScene));
   fireLick = max(fireLick, externalInjection.micro.z);
@@ -1516,6 +1695,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
     windHeight: normalizeWindHeight(controlsSnapshot.windHeight),
+    pressureProjectionEnabled: false,
+    pressureProjectionIterations: 0,
     externalEmitterMode: 'off',
     externalEmitterCoordinateSpace: 'none',
     externalEmitterCount: 0,
@@ -1560,21 +1741,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pipeline = null;
   let readbackPipeline = null;
   let computePipeline = null;
+  let pressureDivergencePipeline = null;
+  let pressureJacobiPipeline = null;
+  let pressureProjectPipeline = null;
   let majorantComputePipeline = null;
   let bindGroups = [];
   let majorantFluidBindGroups = [];
+  let pressureWriteBindGroup = null;
+  let pressureJacobiBindGroups = [];
+  let pressureReadBindGroups = [];
   let majorantWriteBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
+  let pressureWriteBindGroupLayout = null;
+  let pressureJacobiBindGroupLayout = null;
+  let pressureReadBindGroupLayout = null;
+  let emptyBindGroupLayout = null;
   let pipelineLayout = null;
   let majorantPipelineLayout = null;
+  let pressureWritePipelineLayout = null;
+  let pressureJacobiPipelineLayout = null;
+  let pressureProjectPipelineLayout = null;
   let shader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
   let majorantBuffer = null;
   let fluidBuffers = [];
+  let pressureBuffers = [];
   let currentFluid = 0;
   let frameTexture = null;
   let frameTextureSize = '';
@@ -1723,21 +1918,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * (0.92 + (1.08 - 0.92) * plumeHeight01);
           const inputFlow = Math.max(0, controlsSnapshot.flowRate ?? 0.3);
           const source = Math.exp(-(radial * radial) / Math.max(0.0036, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(fy + 0.74) * 4.2) * inputFlow;
+          const angle = Math.atan2(fz, fx);
+          const azimuthalSeedA = 0.5 + 0.5 * Math.sin(angle * 5 + radial * 19 * scaledDetailFrequency + fy * 6);
+          const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * scaledDetailFrequency + fy * 4);
+          const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * scaledDetailFrequency - fy * 8);
           const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * scaledDetailFrequency) + (fy * 5)) ** 2;
           const seedMaterialDetail = isBonfireInitialScene
-            ? radialSeedDetail
+            ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
             : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
           const seedFlameDetail = isBonfireInitialScene
-            ? 0.30 + 0.70 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2
+            ? 0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC
             : 0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2;
           const seedMicroSmoke = isBonfireInitialScene
-            ? 0.22 + 0.78 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2
+            ? 0.20 + 0.30 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
             : 0.22 + 0.78 * Math.sin((fx * 31 * scaledDetailFrequency) - (fz * 19 * scaledDetailFrequency)) ** 2;
           const seedInterfaceShred = isBonfireInitialScene
-            ? 0.12 + 0.50 * Math.cos((radial * 27 * scaledDetailFrequency) + (fy * 17)) ** 2
+            ? 0.12 + 0.18 * Math.cos((radial * 27 * scaledDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
             : 0.12 + 0.50 * Math.cos((fx * 23 * scaledDetailFrequency) + (fy * 17) - (fz * 29 * scaledDetailFrequency)) ** 2;
           const seedFireLick = isBonfireInitialScene
-            ? 0.18 + 0.82 * Math.sin((fy * 27) + (radial * 21 * scaledDetailFrequency)) ** 2
+            ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * scaledDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
             : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * scaledDetailFrequency)) ** 2;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * seedLateralVelocity;
@@ -1764,9 +1963,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function destroyFluidState() {
     for (const buffer of fluidBuffers) buffer.destroy();
+    for (const buffer of pressureBuffers) buffer.destroy();
     fluidBuffers = [];
+    pressureBuffers = [];
     bindGroups = [];
     majorantFluidBindGroups = [];
+    pressureWriteBindGroup = null;
+    pressureJacobiBindGroups = [];
+    pressureReadBindGroups = [];
   }
 
   function destroyMajorantState() {
@@ -1936,6 +2140,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     destroyMajorantState();
     ensureMajorantBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
+    const nextPressureBufferBytes = pressureBufferBytes(gridSize);
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
@@ -1944,6 +2149,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
       device.queue.writeBuffer(buffer, 0, initialFluid);
+      return buffer;
+    });
+    pressureBuffers = [0, 1].map(i => {
+      const buffer = device.createBuffer({
+        label: `kaminos pressure/divergence field ${gridSize}^3 ${i}`,
+        size: nextPressureBufferBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
     const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
@@ -1962,6 +2176,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
+    });
+    pressureDivergencePipeline = device.createComputePipeline({
+      label: `kaminos divergence pressure compute pipeline ${gridSize}^3`,
+      layout: pressureWritePipelineLayout,
+      compute: { module: shader, entryPoint: 'csDivergencePressure', constants: computePipelineConstants },
+    });
+    pressureJacobiPipeline = device.createComputePipeline({
+      label: `kaminos pressure jacobi compute pipeline ${gridSize}^3`,
+      layout: pressureJacobiPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureJacobi', constants: computePipelineConstants },
+    });
+    pressureProjectPipeline = device.createComputePipeline({
+      label: `kaminos velocity projection compute pipeline ${gridSize}^3`,
+      layout: pressureProjectPipelineLayout,
+      compute: { module: shader, entryPoint: 'csProjectPressure', constants: computePipelineConstants },
     });
     majorantComputePipeline = device.createComputePipeline({
       label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
@@ -1983,6 +2212,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         layout: majorantFluidBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
+        ],
+      }),
+    ];
+    pressureWriteBindGroup = device.createBindGroup({
+      label: `kaminos pressure divergence write bind group ${gridSize}^3`,
+      layout: pressureWriteBindGroupLayout,
+      entries: [
+        { binding: 1, resource: { buffer: pressureBuffers[0] } },
+      ],
+    });
+    pressureJacobiBindGroups = [
+      device.createBindGroup({
+        label: `kaminos pressure jacobi bind group ${gridSize}^3 A to B`,
+        layout: pressureJacobiBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: pressureBuffers[0] } },
+          { binding: 1, resource: { buffer: pressureBuffers[1] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos pressure jacobi bind group ${gridSize}^3 B to A`,
+        layout: pressureJacobiBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: pressureBuffers[1] } },
+          { binding: 1, resource: { buffer: pressureBuffers[0] } },
+        ],
+      }),
+    ];
+    pressureReadBindGroups = [
+      device.createBindGroup({
+        label: `kaminos pressure read bind group ${gridSize}^3 A`,
+        layout: pressureReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: pressureBuffers[0] } },
+        ],
+      }),
+      device.createBindGroup({
+        label: `kaminos pressure read bind group ${gridSize}^3 B`,
+        layout: pressureReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: pressureBuffers[1] } },
         ],
       }),
     ];
@@ -2104,6 +2374,45 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    pressureWriteBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos pressure write bind group layout',
+      entries: [
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
+    pressureJacobiBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos pressure jacobi bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
+    pressureReadBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos pressure read bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+      ],
+    });
+    emptyBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos empty bind group layout',
+      entries: [],
+    });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
@@ -2111,6 +2420,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
       bindGroupLayouts: [majorantFluidBindGroupLayout, majorantWriteBindGroupLayout],
+    });
+    pressureWritePipelineLayout = device.createPipelineLayout({
+      label: 'kaminos divergence pressure pipeline layout',
+      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
+    });
+    pressureJacobiPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos pressure jacobi pipeline layout',
+      bindGroupLayouts: [emptyBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+    });
+    pressureProjectPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos pressure projection pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureReadBindGroupLayout],
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
@@ -2282,7 +2603,48 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
     currentFluid = 1 - currentFluid;
+    encodePressureProjection(encoder);
     state.simStepCount += 1;
+  }
+
+  function encodePressureProjection(encoder) {
+    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2) return;
+    const projection = Math.max(0, Math.min(1.5, controlsSnapshot.projection ?? 0.65));
+    if (projection <= 0.001) {
+      state.pressureProjectionEnabled = false;
+      state.pressureProjectionIterations = 0;
+      return;
+    }
+    const workgroups = Math.ceil(gridSize / 4);
+    {
+      const pass = encoder.beginComputePass({ label: 'kaminos divergence pressure pass' });
+      pass.setPipeline(pressureDivergencePipeline);
+      pass.setBindGroup(0, majorantFluidBindGroups[currentFluid]);
+      pass.setBindGroup(2, pressureWriteBindGroup);
+      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.end();
+    }
+    let pressureReadIndex = 0;
+    const pressureIterationCount = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume' ? 8 : 4;
+    for (let i = 0; i < pressureIterationCount; i += 1) {
+      const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi pass ${i + 1}` });
+      pass.setPipeline(pressureJacobiPipeline);
+      pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
+      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.end();
+      pressureReadIndex = 1 - pressureReadIndex;
+    }
+    {
+      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      pass.setPipeline(pressureProjectPipeline);
+      pass.setBindGroup(0, bindGroups[currentFluid]);
+      pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
+      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.end();
+      currentFluid = 1 - currentFluid;
+    }
+    state.pressureProjectionEnabled = true;
+    state.pressureProjectionIterations = pressureIterationCount;
   }
 
   function encodeMajorant(encoder) {
@@ -2757,6 +3119,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let fireLumaSqSum = 0;
     let fireEdgeSum = 0;
     let fireEdgeSamples = 0;
+    let smokeHorizontalGradient = 0;
+    let smokeVerticalGradient = 0;
+    let smokeStripeSamples = 0;
     let samples = 0;
     const volumeBounds = {
       minX: state.width,
@@ -2815,6 +3180,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bounds.screenDriftY = 0;
       }
     };
+    const lumaAt = (x, y) => {
+      const i = y * bytesPerRow + x * bytesPerPixel;
+      return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    };
+    const isSmokeLikeAt = (x, y) => {
+      const i = y * bytesPerRow + x * bytesPerPixel;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      return b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60;
+    };
     const previewWidth = 256;
     const previewHeight = Math.max(1, Math.round(previewWidth * state.height / state.width));
     const preview = new Uint8Array(previewWidth * previewHeight * 4);
@@ -2858,6 +3234,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           smokeLikePixels += 1;
           includeBoundPixel(volumeBounds, x, y);
           includeBoundPixel(smokeBounds, x, y);
+          const leftX = x - 2;
+          const upY = y - 2;
+          if (
+            leftX >= Math.floor(state.width * 0.08) &&
+            upY >= Math.floor(state.height * 0.08) &&
+            isSmokeLikeAt(leftX, y) &&
+            isSmokeLikeAt(x, upY)
+          ) {
+            smokeHorizontalGradient += Math.abs(luma - lumaAt(leftX, y));
+            smokeVerticalGradient += Math.abs(luma - lumaAt(x, upY));
+            smokeStripeSamples += 1;
+          }
         }
       }
     }
@@ -2884,6 +3272,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
     const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
+    const smokeHorizontalEnergy = smokeHorizontalGradient / Math.max(1, smokeStripeSamples * 255);
+    const smokeVerticalEnergy = smokeVerticalGradient / Math.max(1, smokeStripeSamples * 255);
+    const smokeVerticalStripeRatio = smokeHorizontalEnergy / Math.max(0.0035, smokeVerticalEnergy);
     return {
       ok: true,
       width: state.width,
@@ -2903,6 +3294,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeLikePixels,
       fireRoughnessMean,
       fireEdgeEnergy,
+      smokeHorizontalEnergy,
+      smokeVerticalEnergy,
+      smokeVerticalStripeRatio,
       volumeBounds,
       fireBounds,
       smokeBounds,
