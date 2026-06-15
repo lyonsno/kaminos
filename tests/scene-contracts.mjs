@@ -17,6 +17,8 @@ assert.match(index, /function setActiveSceneObject\(/, 'selection/gizmo can targ
 assert.match(index, /new THREE\.Raycaster\(\)/, 'viewport click selection uses a real scene raycaster');
 assert.match(index, /function pickSceneObjectFromViewportPointer\(/, 'viewport click selection resolves pointer hits to authored scene objects');
 assert.match(index, /function handleViewportSelectionClick\(/, 'viewport click selection has an explicit click handler distinct from orbit dirtying');
+assert.match(index, /viewportSuppressedClick/, 'viewport drag rejection suppresses the follow-up click fallback');
+assert.match(index, /if \(drift > 5\)[\s\S]*viewportSuppressedClick/, 'viewport drag rejection is recorded before returning');
 assert.match(index, /greenroomPreviewIsActive\(\)/, 'viewport click selection preserves temporary Greenroom preview mode');
 assert.match(index, /function clearActiveSceneObjectSelection\(/, 'empty viewport clicks share a clear-selection helper');
 assert.match(index, /clearActiveSceneObjectSelection\(\);[\s\S]*setInfo\('Selection cleared'\)/, 'empty viewport clicks clear active object selection');

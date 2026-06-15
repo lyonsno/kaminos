@@ -140,6 +140,32 @@ async function dispatchMouseClick(ws, point) {
   });
 }
 
+async function dispatchMouseDrag(ws, from, to) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: from.x,
+    y: from.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: to.x,
+    y: to.y,
+    button: 'left',
+    buttons: 1,
+  });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: to.x,
+    y: to.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+}
+
 function normalizeUrlForWitness(value) {
   try {
     return new URL(value).href;
@@ -946,6 +972,35 @@ async function runViewportClickSelectDeselectScenario(ws) {
   }
   if (!lastEvidence.viewportClickSelectionSetup.transformBarVisible) {
     throw new Error(`viewport click selection setup did not show transform toolbar: ${JSON.stringify(lastEvidence.viewportClickSelectionSetup)}`);
+  }
+
+  const dragStart = lastEvidence.viewportClickSelectionSetup.emptyPoint;
+  const dragEnd = {
+    x: dragStart.x + 24,
+    y: dragStart.y + 18,
+  };
+  await dispatchMouseDrag(ws, dragStart, dragEnd);
+  await delay(600);
+  lastEvidence.viewportClickSelectionAfterDrag = await evaluate(ws, `
+    (() => ({
+      rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      })),
+      transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      info: document.getElementById('info-bar').textContent.trim(),
+    }))()
+  `);
+  const dragActiveRows = lastEvidence.viewportClickSelectionAfterDrag.rows.filter(row => row.active && row.pressed === 'true');
+  if (dragActiveRows.length !== 1 || dragActiveRows[0].id !== lastEvidence.viewportClickSelectionSetup.selectedId) {
+    throw new Error(`viewport drag changed scene object selection: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterDrag)}`);
+  }
+  if (!lastEvidence.viewportClickSelectionAfterDrag.transformBarVisible) {
+    throw new Error(`viewport drag hid transform toolbar: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterDrag)}`);
+  }
+  if (lastEvidence.viewportClickSelectionAfterDrag.info === 'Selection cleared') {
+    throw new Error(`viewport drag reported selection cleared: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterDrag)}`);
   }
 
   await dispatchMouseClick(ws, lastEvidence.viewportClickSelectionSetup.emptyPoint);

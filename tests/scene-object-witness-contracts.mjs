@@ -53,6 +53,10 @@ assert.match(witness, /keyboard remove did not preserve transform toolbar/, 'wit
 assert.match(witness, /append selection did not preserve transform toolbar/, 'witness proves transform controls after append selection');
 assert.match(witness, /viewport empty click did not deselect scene object/, 'witness proves empty viewport clicks clear object selection');
 assert.match(witness, /viewport empty click did not hide transform toolbar/, 'witness proves empty viewport clicks hide the transform toolbar');
+assert.match(witness, /dispatchMouseDrag/, 'witness can exercise drag-shaped viewport input');
+assert.match(witness, /viewport drag changed scene object selection/, 'witness proves viewport drags do not clear active object selection');
+assert.match(witness, /viewport drag hid transform toolbar/, 'witness proves viewport drags do not detach transform controls');
+assert.match(witness, /viewport drag reported selection cleared/, 'witness rejects drag paths that masquerade as empty clicks');
 assert.match(witness, /viewport object click did not select scene object/, 'witness proves object viewport clicks select a scene object');
 assert.match(witness, /viewport object click did not restore transform toolbar/, 'witness proves object viewport clicks retarget transform controls');
 assert.match(witness, /scene save did not create exactly one new scene file/, 'save/load witness proves a server scene file was created');

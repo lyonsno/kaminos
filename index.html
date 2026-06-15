@@ -584,6 +584,7 @@ let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 let sceneMutationToken = 0;
 let viewportPointerDown = null;
+let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
 
 function cloneVolumePrimitive(primitive) {
@@ -1021,6 +1022,16 @@ function handleViewportPointerDown(event) {
 
 function handleViewportSelectionClick(event) {
   if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (event.type === 'click' && viewportSuppressedClick) {
+    const age = performance.now() - viewportSuppressedClick.at;
+    const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
+    if (age < 750 && distance < 8) {
+      viewportSuppressedClick = null;
+      event.stopPropagation?.();
+      return;
+    }
+    viewportSuppressedClick = null;
+  }
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) {
     viewportPointerDown = null;
     return;
@@ -1036,7 +1047,14 @@ function handleViewportSelectionClick(event) {
     return;
   }
   const drift = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-  if (drift > 5) return;
+  if (drift > 5) {
+    viewportSuppressedClick = {
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now(),
+    };
+    return;
+  }
 
   const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
