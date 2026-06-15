@@ -554,6 +554,29 @@ const populated = coreModule.generateLamellarSectionSegments({
     { layerIndex: 0, role: 'cutter', count: 2, chirality: -1, bearingOffset: 0.44, bearingVariance: 0.12, gapPattern: 'crosscut' },
   ],
 });
+{
+  const populationRadius = coreModule.generateLamellarSectionSegments({
+    seed: 31,
+    layerCount: 2,
+    chiralityPattern: 'same',
+    chunkinessBase: 0.4,
+    chunkinessVariance: 0,
+    stripPopulations: [
+      { id: 'inner-set', layerIndex: 0, role: 'lamella', count: 3, chirality: 1, bearingOffset: 0, bearingVariance: 1, radialSpacing: 0.04, radiusOffset: -0.06, layoutPreset: 'coverage' },
+      { id: 'outer-set', layerIndex: 0, role: 'cutter', count: 3, chirality: -1, bearingOffset: 0.44, bearingVariance: 0.5, radialSpacing: 0.04, radiusOffset: 0.09, layoutPreset: 'coverage' },
+    ],
+  });
+  const innerPopulation = populationRadius.stripPopulationDescriptors.find(population => population.id === 'inner-set');
+  const outerPopulation = populationRadius.stripPopulationDescriptors.find(population => population.id === 'outer-set');
+  const innerDescriptors = populationRadius.descriptors.filter(descriptor => descriptor.populationId === 'inner-set');
+  const outerDescriptors = populationRadius.descriptors.filter(descriptor => descriptor.populationId === 'outer-set');
+  const radiusAverage = descriptors => descriptors.reduce((sum, descriptor) => sum + descriptor.radius, 0) / Math.max(1, descriptors.length);
+  const radiusRange = descriptors => Math.max(...descriptors.map(descriptor => descriptor.radius)) - Math.min(...descriptors.map(descriptor => descriptor.radius));
+  assert.equal(innerPopulation?.radiusOffset, -0.06, 'inner population records its own set radius offset');
+  assert.equal(outerPopulation?.radiusOffset, 0.09, 'outer population records its own set radius offset');
+  assert.ok(radiusAverage(outerDescriptors) - radiusAverage(innerDescriptors) > 0.12, 'population radius offset moves whole same-layer sets apart');
+  assert.ok(Math.abs(radiusRange(outerDescriptors) - radiusRange(innerDescriptors)) < 0.001, 'population radius offset is independent from intra-set radial spacing');
+}
 function circularMinGap(values) {
   const sorted = values.slice().sort((a, b) => a - b);
   const gaps = sorted.map((value, index) => {

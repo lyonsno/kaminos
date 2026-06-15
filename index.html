@@ -88,9 +88,13 @@ canvas { display: block; }
 #lamellar-popover-actions .btn { margin: 0; padding: 5px 9px; font-size: 10px; }
 #lamellar-selection-popover .population-chip { max-width: 98px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-color: rgba(128,255,230,0.25); }
 #lamellar-selection-popover .population-chip.active { background: rgba(25,118,210,0.48); border-color: rgba(128,255,230,0.5); color: #fff; }
+#lamellar-layer-toolhead,
 #lamellar-population-toolhead { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
+#lamellar-layer-toolhead .slider-row,
 #lamellar-population-toolhead .slider-row { margin: 4px 0; gap: 6px; }
-#lamellar-population-toolhead .slider-label { min-width: 46px; }
+#lamellar-layer-toolhead .slider-label,
+#lamellar-population-toolhead .slider-label { min-width: 58px; }
+#lamellar-layer-toolhead input[type="range"],
 #lamellar-population-toolhead input[type="range"] { min-width: 96px; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
@@ -583,6 +587,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div id="lamellar-popover-title">none</div>
     <div id="lamellar-popover-meta">none</div>
     <div id="lamellar-popover-populations"></div>
+    <div id="lamellar-layer-toolhead">
+      <div id="lamellar-layer-summary" class="slider-val">none</div>
+      <div class="slider-row">
+        <span class="slider-label">Layer radius</span>
+        <input type="range" id="lamellar-popover-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-popover-layer-radius-val">0.000</span>
+      </div>
+    </div>
     <div id="lamellar-population-toolhead">
       <div id="lamellar-population-summary" class="slider-val">none</div>
       <div class="slider-row">
@@ -599,6 +611,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-label">Spacing</span>
         <input type="range" id="lamellar-population-radial-spacing" min="0" max="0.14" step="0.001" value="0.04">
         <span class="slider-val" id="lamellar-population-radial-spacing-val">0.040</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Set radius</span>
+        <input type="range" id="lamellar-population-radius-offset" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-population-radius-offset-val">0.000</span>
       </div>
     </div>
     <div id="lamellar-popover-actions"></div>
@@ -1055,6 +1072,7 @@ function ensureLamellarPopulationOverrides(state = null) {
       bearingOffset: population.bearingOffset,
       bearingVariance: population.bearingVariance,
       radialSpacing: population.radialSpacing,
+      radiusOffset: population.radiusOffset || 0,
       layoutPreset: population.layoutPreset || 'coverage',
       gapPattern: population.gapPattern || 'solid',
     };
@@ -1149,6 +1167,7 @@ function addLamellarPopulation(role = 'lamella') {
     bearingOffset: normalizedRole === 'cutter' ? 0.42 : 0,
     bearingVariance: normalizedRole === 'cutter' ? 0.7 : 1,
     radialSpacing: normalizedRole === 'cutter' ? 0.025 : 0.04,
+    radiusOffset: 0,
     gapPattern: normalizedRole === 'cutter' ? 'crosscut' : 'solid',
   };
   lamellarWitness.setControls(readLamellarControls());
@@ -1333,16 +1352,19 @@ function syncLamellarSelectionPopover(state = null) {
   const meta = document.getElementById('lamellar-popover-meta');
   const populations = document.getElementById('lamellar-popover-populations');
   const actions = document.getElementById('lamellar-popover-actions');
+  const layerToolhead = document.getElementById('lamellar-layer-toolhead');
   const toolhead = document.getElementById('lamellar-population-toolhead');
-  if (!popover || !title || !meta || !populations || !actions || !toolhead) return;
+  if (!popover || !title || !meta || !populations || !actions || !layerToolhead || !toolhead) return;
   if (!object || !current.active) {
     popover.style.display = 'none';
     populations.replaceChildren();
     actions.replaceChildren();
+    layerToolhead.style.display = 'none';
     toolhead.style.display = 'none';
     return;
   }
   popover.style.display = 'block';
+  syncLamellarLayerToolhead(current, object);
   syncLamellarPopulationToolhead(current, object);
   if (object.selectionLevel === 'layer') {
     title.textContent = `Layer L${object.layerIndex}`;
@@ -1388,6 +1410,37 @@ function syncLamellarSelectionPopover(state = null) {
   positionLamellarSelectionPopover(current);
 }
 
+function syncLamellarLayerToolhead(state = null, object = selectedLamellarObject) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const toolhead = document.getElementById('lamellar-layer-toolhead');
+  const summary = document.getElementById('lamellar-layer-summary');
+  const radius = document.getElementById('lamellar-popover-layer-radius');
+  const radiusVal = document.getElementById('lamellar-popover-layer-radius-val');
+  if (!toolhead || !summary || !radius || !radiusVal) return;
+  if (object?.selectionLevel !== 'layer') {
+    toolhead.style.display = 'none';
+    return;
+  }
+  const layerIndex = Number.isFinite(object.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
+  const layer = (current.layerSpecs || []).find(spec => spec.layerIndex === layerIndex);
+  const rowRadius = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+  const radiusOffset = Number(rowRadius?.value ?? layer?.radiusOffset ?? 0);
+  toolhead.style.display = 'block';
+  summary.textContent = `${layer?.materialRole || object.role || 'layer'} · ${object.stripCount || object.stripIds?.length || layer?.stripCount || 0} strips`;
+  radius.value = String(radiusOffset);
+  radiusVal.textContent = radiusOffset.toFixed(3);
+  radius.oninput = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerRadiusOffset(event.target.value);
+  };
+  radius.onchange = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
+  };
+}
+
 function syncLamellarPopulationToolhead(state = null, object = selectedLamellarObject) {
   const current = state || lamellarWitness?.debugState?.() || {};
   const populations = document.getElementById('lamellar-popover-populations');
@@ -1396,10 +1449,12 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   const spread = document.getElementById('lamellar-population-bearing-spread');
   const offset = document.getElementById('lamellar-population-bearing-offset');
   const radial = document.getElementById('lamellar-population-radial-spacing');
+  const radius = document.getElementById('lamellar-population-radius-offset');
   const spreadVal = document.getElementById('lamellar-population-bearing-spread-val');
   const offsetVal = document.getElementById('lamellar-population-bearing-offset-val');
   const radialVal = document.getElementById('lamellar-population-radial-spacing-val');
-  if (!populations || !toolhead || !summary || !spread || !offset || !radial || !spreadVal || !offsetVal || !radialVal) return;
+  const radiusVal = document.getElementById('lamellar-population-radius-offset-val');
+  if (!populations || !toolhead || !summary || !spread || !offset || !radial || !radius || !spreadVal || !offsetVal || !radialVal || !radiusVal) return;
   const layerIndex = Number.isFinite(object?.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
   const layerPopulations = lamellarPopulationsForLayer(current, layerIndex);
   selectedLamellarPopulationId = object?.selectionLevel === 'population' ? object.populationId : selectedLamellarPopulationId;
@@ -1417,13 +1472,15 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     return;
   }
   toolhead.style.display = 'block';
-  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)} · radius ${(selectedPopulation.radialSpacing || 0).toFixed(3)}`;
+  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)} · radius ${(selectedPopulation.radiusOffset || 0).toFixed(3)} · spacing ${(selectedPopulation.radialSpacing || 0).toFixed(3)}`;
   spread.value = String(selectedPopulation.bearingVariance ?? 0);
   offset.value = String(selectedPopulation.bearingOffset ?? 0);
   radial.value = String(selectedPopulation.radialSpacing ?? 0);
+  radius.value = String(selectedPopulation.radiusOffset ?? 0);
   spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);
   offsetVal.textContent = Number(selectedPopulation.bearingOffset ?? 0).toFixed(2);
   radialVal.textContent = Number(selectedPopulation.radialSpacing ?? 0).toFixed(3);
+  radiusVal.textContent = Number(selectedPopulation.radiusOffset ?? 0).toFixed(3);
   spread.oninput = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
@@ -1447,6 +1504,14 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   radial.onchange = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) }, { immediate: true });
+  };
+  radius.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radiusOffset: parseFloat(event.target.value) });
+  };
+  radius.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radiusOffset: parseFloat(event.target.value) }, { immediate: true });
   };
 }
 

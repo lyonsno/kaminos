@@ -206,6 +206,8 @@ async function main() {
           contextProfileDisplay: getComputedStyle(document.getElementById('lamellar-context-profile')).display,
           popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
           popoverDisplay: getComputedStyle(layerPopover).display,
+          layerToolheadDisplay: getComputedStyle(document.getElementById('lamellar-layer-toolhead')).display,
+          popoverLayerRadiusValue: Number(document.getElementById('lamellar-popover-layer-radius')?.value || 0),
           populationChipCount: document.querySelectorAll('#lamellar-popover-populations [data-population-id]').length,
         };
         const firstPopulationId = document.querySelector('#lamellar-popover-populations [data-population-id]')?.dataset.populationId || '';
@@ -271,7 +273,22 @@ async function main() {
             ] : [],
           });
         }
-        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, radialSpacing: 0.07 });
+        const populationRadiusSweep = [];
+        for (const radiusOffset of [-0.06, 0.09]) {
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { radiusOffset, radialSpacing: 0.04 });
+          const radiusState = w ? w.debugState() : afterCountState;
+          const radiusPopulation = (radiusState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+          const radiusDescriptors = (radiusState.generatedSegmentDescriptors || []).filter(descriptor => descriptor.populationId === firstPopulationId);
+          populationRadiusSweep.push({
+            radiusOffset,
+            populationRadiusOffset: radiusPopulation?.radiusOffset ?? null,
+            descriptorRadiusAverage: radiusDescriptors.length
+              ? Number((radiusDescriptors.reduce((sum, descriptor) => sum + (descriptor.radius ?? 0), 0) / radiusDescriptors.length).toFixed(4))
+              : null,
+            descriptorPopulationRadiusOffsets: Array.from(new Set(radiusDescriptors.map(descriptor => descriptor.populationRadiusOffset ?? null))),
+          });
+        }
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, radialSpacing: 0.07, radiusOffset: 0.05 });
         const populationState = w ? w.debugState() : afterCountState;
         const afterPopulation = (populationState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
         const populationToolhead = document.getElementById('lamellar-population-toolhead');
@@ -287,6 +304,7 @@ async function main() {
           spreadValue: Number(document.getElementById('lamellar-population-bearing-spread')?.value || 0),
           offsetValue: Number(document.getElementById('lamellar-population-bearing-offset')?.value || 0),
           radialSpacingValue: Number(document.getElementById('lamellar-population-radial-spacing')?.value || 0),
+          radiusOffsetValue: Number(document.getElementById('lamellar-population-radius-offset')?.value || 0),
         };
         const populationControlReceipt = {
           populationId: firstPopulationId,
@@ -301,6 +319,7 @@ async function main() {
           afterBearingVariance: afterPopulation?.bearingVariance ?? null,
           afterBearingOffset: afterPopulation?.bearingOffset ?? null,
           afterRadialSpacing: afterPopulation?.radialSpacing ?? null,
+          afterRadiusOffset: afterPopulation?.radiusOffset ?? null,
           layoutPreset: afterPopulation?.layoutPreset || null,
           coverageSpacing: afterPopulation?.coverageSpacing ?? null,
           coverageSpan: afterPopulation?.coverageSpan ?? null,
@@ -311,17 +330,23 @@ async function main() {
           populationId: firstPopulationId,
           samples: radialSweep,
         };
+        const populationRadiusOffsetReceipt = {
+          mode: 'selected-population-set-radius-offset-v0',
+          populationId: firstPopulationId,
+          samples: populationRadiusSweep,
+        };
         const populationSliderSweepReceipt = {
           mode: 'selected-population-toolhead-slider-sweep-v0',
           populationId: firstPopulationId,
           samples: sliderSweep,
         };
+        if (firstStrip) window.__kaminosLamellarSelectLayerByStripInstanceId?.(firstStrip.stripInstanceId);
         const layerRadiusBeforeState = w ? w.debugState() : populationState;
         const selectedLayerIndexForRadius = layerRadiusBeforeState.selectedLayerSpecId
           ? (layerRadiusBeforeState.layerSpecs || []).find(layer => layer.id === layerRadiusBeforeState.selectedLayerSpecId)?.layerIndex ?? 0
           : 0;
         const beforeLayerCurves = (layerRadiusBeforeState.sphereCurveDescriptors || []).filter(curve => curve.layerIndex === selectedLayerIndexForRadius);
-        const selectedLayerRadiusEl = document.getElementById('lamellar-selected-layer-radius');
+        const selectedLayerRadiusEl = document.getElementById('lamellar-popover-layer-radius');
         if (selectedLayerRadiusEl) {
           selectedLayerRadiusEl.value = '0.11';
           selectedLayerRadiusEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -365,6 +390,7 @@ async function main() {
           populationControlReceipt,
           populationSliderSweepReceipt,
           populationRadialSpacingReceipt,
+          populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
           popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
@@ -461,6 +487,7 @@ async function main() {
     assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
     assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
     assert.equal(state.layerSelectionUi?.contextProfileDisplay, 'none', 'Lamellar strip profile controls should stay hidden for layer selection');
+    assert.notEqual(state.layerSelectionUi?.layerToolheadDisplay, 'none', 'Lamellar layer selection did not expose the popup layer toolhead');
     assert.ok((state.layerSelectionUi?.populationChipCount || 0) >= 1, 'Lamellar layer toolhead did not render population chips');
     assert.equal(state.populationToolheadUi?.selectionLevel, 'population', 'Lamellar population chip did not select population level');
     assert.ok(state.populationToolheadUi?.selectedPopulationId, 'Lamellar population selection did not carry a population id');
@@ -501,6 +528,7 @@ async function main() {
     assert.equal(state.populationControlReceipt?.afterBearingVariance, 1, 'Lamellar population spread control did not mutate bearing variance');
     assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.23, 'Lamellar population rotate control did not mutate bearing offset');
     assert.equal(state.populationControlReceipt?.afterRadialSpacing, 0.07, 'Lamellar population radius control did not mutate radial spacing');
+    assert.equal(state.populationControlReceipt?.afterRadiusOffset, 0.05, 'Lamellar population set radius control did not mutate selected population radius offset');
     assert.equal(state.populationControlReceipt?.layoutPreset, 'coverage', 'Lamellar selected population did not preserve coverage layout');
     assert.ok((state.populationControlReceipt?.coverageSpacing || 0) > 0.6, 'Lamellar selected population did not preserve useful coverage spacing');
     assert.ok((state.populationControlReceipt?.coverageSpan || 0) >= 0.66, 'Lamellar selected population did not preserve visible shell coverage span');
@@ -514,6 +542,16 @@ async function main() {
       state.populationRadialSpacingReceipt.samples[2].radiusRange[1] - state.populationRadialSpacingReceipt.samples[2].radiusRange[0]
         > state.populationRadialSpacingReceipt.samples[0].radiusRange[1] - state.populationRadialSpacingReceipt.samples[0].radiusRange[0],
       'Lamellar radial spacing sweep did not increase emitted radius separation'
+    );
+    assert.equal(state.populationRadiusOffsetReceipt?.samples?.length, 2, 'Lamellar population witness did not sweep set radius offset');
+    assert.ok(
+      state.populationRadiusOffsetReceipt.samples[1].descriptorRadiusAverage - state.populationRadiusOffsetReceipt.samples[0].descriptorRadiusAverage > 0.12,
+      'Lamellar set radius offset sweep did not move the selected population as a coherent radial band'
+    );
+    assert.deepEqual(
+      state.populationRadiusOffsetReceipt.samples[1].descriptorPopulationRadiusOffsets,
+      [state.populationRadiusOffsetReceipt.samples[1].radiusOffset],
+      'Lamellar set radius offset did not reach emitted descriptors'
     );
     assert.equal(state.stripDrilldownUi?.selectionLevel, 'strip', 'Lamellar drilldown did not select a strip');
     assert.ok(state.stripDrilldownUi?.selectedStripInstanceId, 'Lamellar strip drilldown did not carry a strip instance id');
@@ -568,6 +606,7 @@ async function main() {
       populationControlReceipt: state.populationControlReceipt,
       populationSliderSweepReceipt: state.populationSliderSweepReceipt,
       populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
+      populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,

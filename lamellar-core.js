@@ -22,6 +22,7 @@ const TAU = Math.PI * 2;
 const MAX_COVERAGE_LANE_SPAN = 1.44;
 const DEFAULT_POPULATION_RADIAL_SPACING = 0.04;
 const MAX_POPULATION_RADIAL_SPACING = 0.14;
+const MAX_POPULATION_RADIUS_OFFSET = 0.24;
 const DIAGNOSTIC_LAYER_SEPARATION_SCALE = 2.15;
 
 const VIEW_PRESETS = {
@@ -153,6 +154,7 @@ function normalizeStripPopulations(populations) {
     const bearingOffset = Number(population?.bearingOffset);
     const bearingVariance = Number(population?.bearingVariance);
     const radialSpacingInput = Number(population?.radialSpacing);
+    const radiusOffsetInput = Number(population?.radiusOffset ?? population?.radius);
     const role = ["lamella", "cutter", "accent"].includes(population?.role) ? population.role : "lamella";
     const layoutPreset = POPULATION_LAYOUT_PRESETS.has(population?.layoutPreset || population?.layout)
       ? (population.layoutPreset || population.layout)
@@ -176,6 +178,9 @@ function normalizeStripPopulations(populations) {
         ? clamp(radialSpacingInput, 0, MAX_POPULATION_RADIAL_SPACING)
         : DEFAULT_POPULATION_RADIAL_SPACING).toFixed(4))
       : 0;
+    const radiusOffset = Number.isFinite(radiusOffsetInput)
+      ? Number(clamp(radiusOffsetInput, -MAX_POPULATION_RADIUS_OFFSET, MAX_POPULATION_RADIUS_OFFSET).toFixed(4))
+      : 0;
     const fallbackId = `strip-population-${Number.isFinite(layerIndex) ? Math.round(layerIndex) : 0}-${role}-${index}`;
     return {
       kind: "StripPopulationDescriptor",
@@ -193,6 +198,7 @@ function normalizeStripPopulations(populations) {
       coverageSpan,
       shellLaneSpacing,
       radialSpacing,
+      radiusOffset,
       gapPattern: normalizeGapPattern(population?.gapPattern),
       source: "macro-strip-population",
     };
@@ -381,6 +387,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         coverageSpan: spec.stripCount > 1 ? 0.84 : 0,
         shellLaneSpacing: spec.stripCount > 1 ? Number((0.84 / (spec.stripCount - 1)).toFixed(4)) : 0,
         radialSpacing: spec.stripCount > 1 ? DEFAULT_POPULATION_RADIAL_SPACING : 0,
+        radiusOffset: 0,
         layoutPreset: "coverage",
         gapPattern: "solid",
         source: "layer-shell-default-population",
@@ -421,6 +428,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           ? centeredPopulationSlot * shellLaneSpacing
           : centeredPopulationSlot * 0.024).toFixed(4));
         const radialOffset = Number((centeredPopulationSlot * radialSpacing).toFixed(4));
+        const populationRadiusOffset = Number(clamp(population.radiusOffset ?? 0, -MAX_POPULATION_RADIUS_OFFSET, MAX_POPULATION_RADIUS_OFFSET).toFixed(4));
+        const layerRadiusOffset = Number((spec.radiusOffset || 0).toFixed(4));
+        const totalRadiusOffset = Number((layerRadiusOffset + populationRadiusOffset).toFixed(4));
         const baseStrip = {
           id: spec.stripIds[stripIndex] || `seed-${seed}-layer-${spec.layerIndex}-strip-${stripIndex}`,
           layerIndex: spec.layerIndex,
@@ -460,6 +470,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           shellLaneOffset,
           radialSpacing,
           radialOffset,
+          populationRadiusOffset,
+          layerRadiusOffset,
+          totalRadiusOffset,
           coverageSlot: populationIndex,
           bearingPhase,
           stripCount: authoredCount,
@@ -469,8 +482,8 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           chirality: population.chirality,
           chunkiness: spec.chunkiness,
           depth: spec.depth,
-          radiusOffset: spec.radiusOffset || 0,
-          effectiveDepth: Number((spec.depth + (spec.radiusOffset || 0) + radialOffset).toFixed(4)),
+          radiusOffset: totalRadiusOffset,
+          effectiveDepth: Number((spec.depth + totalRadiusOffset + radialOffset).toFixed(4)),
           profileKind: "StripProfileDescriptor",
           stripProfileDescriptor,
           width: stripProfileDescriptor.width,
@@ -568,6 +581,9 @@ export function generateSphereCurveDescriptors(input = {}) {
       shellLaneOffset: strip.shellLaneOffset,
       radialSpacing: strip.radialSpacing,
       radialOffset: strip.radialOffset,
+      populationRadiusOffset: strip.populationRadiusOffset,
+      layerRadiusOffset: strip.layerRadiusOffset,
+      totalRadiusOffset: strip.totalRadiusOffset,
       coverageSlot: strip.coverageSlot,
       bearingPhase: strip.bearingPhase,
       materialRole: strip.materialRole,
@@ -579,6 +595,9 @@ export function generateSphereCurveDescriptors(input = {}) {
       layerIndex: strip.layerIndex,
       depth: strip.depth,
       radiusOffset: strip.radiusOffset || 0,
+      populationRadiusOffset: strip.populationRadiusOffset || 0,
+      layerRadiusOffset: strip.layerRadiusOffset || 0,
+      totalRadiusOffset: strip.totalRadiusOffset || strip.radiusOffset || 0,
       effectiveDepth: strip.effectiveDepth,
       chirality: strip.chirality,
       chunkiness: strip.chunkiness,
@@ -718,6 +737,9 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     radialSpacing: curve.radialSpacing,
     radialOffset: curve.radialOffset,
     radiusOffset: curve.radiusOffset || 0,
+    populationRadiusOffset: curve.populationRadiusOffset || 0,
+    layerRadiusOffset: curve.layerRadiusOffset || 0,
+    totalRadiusOffset: curve.totalRadiusOffset || curve.radiusOffset || 0,
     coverageSlot: curve.coverageSlot,
     bearingPhase: curve.bearingPhase,
     source: curve.source,
@@ -727,6 +749,9 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     layerIndex: curve.layerIndex,
     depth: curve.depth,
     radiusOffset: curve.radiusOffset || 0,
+    populationRadiusOffset: curve.populationRadiusOffset || 0,
+    layerRadiusOffset: curve.layerRadiusOffset || 0,
+    totalRadiusOffset: curve.totalRadiusOffset || curve.radiusOffset || 0,
     effectiveDepth: curve.effectiveDepth,
     chirality: curve.chirality,
     chunkiness: curve.chunkiness,
@@ -1190,6 +1215,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       coverageSpacing: population?.coverageSpacing ?? null,
       coverageSpan: population?.coverageSpan ?? null,
       radialSpacing: population?.radialSpacing ?? null,
+      radiusOffset: population?.radiusOffset ?? null,
       count: population?.count ?? populationStripIds.length,
       chirality: population?.chirality ?? null,
       bearingOffset: population?.bearingOffset ?? null,
@@ -1492,6 +1518,9 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       radialSpacing: d.radialSpacing,
       radialOffset: d.radialOffset,
       radiusOffset: d.radiusOffset || 0,
+      populationRadiusOffset: d.populationRadiusOffset || 0,
+      layerRadiusOffset: d.layerRadiusOffset || 0,
+      totalRadiusOffset: d.totalRadiusOffset || d.radiusOffset || 0,
       coverageSlot: d.coverageSlot,
       bearingPhase: d.bearingPhase,
       stripProfileKind: d.stripProfileKind,
@@ -1580,6 +1609,9 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         radialSpacing: descriptor.radialSpacing ?? null,
         radialOffset: descriptor.radialOffset ?? null,
         radiusOffset: descriptor.radiusOffset ?? null,
+        populationRadiusOffset: descriptor.populationRadiusOffset ?? null,
+        layerRadiusOffset: descriptor.layerRadiusOffset ?? null,
+        totalRadiusOffset: descriptor.totalRadiusOffset ?? descriptor.radiusOffset ?? null,
         coverageSlot: descriptor.coverageSlot ?? null,
         bearingPhase: descriptor.bearingPhase ?? null,
         role: isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole,
