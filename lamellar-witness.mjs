@@ -17,6 +17,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lamellar-witnes
 const settleMs = Number(args.get('--settle-ms') || 1000);
 const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
+const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -461,6 +462,16 @@ async function main() {
     assert.equal(state.lamellarEnvelopeDescriptors?.[0]?.mode, 'curve-family-envelope-loft-v0', 'Lamellar envelope descriptor did not use the curve-family loft mode');
     assert.ok((state.lamellarEnvelopeDescriptors?.[0]?.sourceCurveIds || []).length >= 3, 'Lamellar envelope descriptor did not preserve source curve ancestry');
     assert.ok((state.sectionSegments || []).some(segment => segment.kind === 'LamellarEnvelopeDescriptor'), 'Lamellar witness did not emit an envelope body section segment');
+    if (multiEnvelopeSmoke) {
+      const envelopeLayers = new Set((state.lamellarEnvelopeDescriptors || []).map(descriptor => descriptor.layerIndex));
+      assert.ok((state.lamellarEnvelopeDescriptors || []).length >= 3, 'multi-envelope smoke did not export multiple envelope bodies');
+      assert.ok(envelopeLayers.has(0) && envelopeLayers.has(2) && envelopeLayers.has(3), 'multi-envelope smoke did not include the expected eligible lamella layers');
+      assert.ok(!envelopeLayers.has(1), 'multi-envelope smoke incorrectly lofted the cutter layer as a lamella envelope');
+      assert.ok(
+        (state.sectionSegments || []).filter(segment => segment.kind === 'LamellarEnvelopeDescriptor').length >= 3,
+        'multi-envelope smoke did not render multiple envelope body section segments'
+      );
+    }
     assert.equal(state.curveInteractionReceipt?.mode, 'sphere-curve-proximity-interaction-v0', 'Lamellar witness did not export curve interaction receipt');
     assert.ok(
       (state.generatedSegmentDescriptors || []).every(descriptor => descriptor.sourceCurveId),

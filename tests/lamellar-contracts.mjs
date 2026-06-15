@@ -193,6 +193,8 @@ assert.match(core, /generateSphereCurveDescriptors/, 'Lamellar core generates sp
 assert.match(core, /CurveInteractionReceipt/, 'Lamellar core records curve-space interaction receipts before meshing');
 assert.match(core, /LamellarEnvelopeDescriptor/, 'Lamellar core names curve-family envelope bodies explicitly');
 assert.match(core, /curve-family-envelope-loft-v0/, 'Lamellar core records the curve-family envelope loft mode');
+assert.match(core, /multi-eligible-population-envelope-composition-v0/, 'Lamellar envelope generation records multi-population composition mode');
+assert.match(core, /smooth-envelope-body-crisp-rail-debug-v0/, 'Lamellar envelope geometry records smooth body plus crisp rail debug mode');
 assert.match(core, /ribbon-shell-angular-offset-v0/, 'Lamellar ribbon mesh emission records shell-angular width offsets instead of flat tangent-plane offsets');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
@@ -301,16 +303,26 @@ assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera an
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
 const envelopeGenerated = coreModule.generateLamellarSectionSegments({
   seed: 17,
-  layerCount: 2,
+  layerCount: 4,
   populationCount: 6,
   cutterCount: 1,
   populationBearingVariance: 1,
   chunkinessBase: 0.48,
+  layerOverrides: [
+    { layerIndex: 0, stripCount: 6 },
+    { layerIndex: 2, stripCount: 5 },
+    { layerIndex: 3, stripCount: 5 },
+  ],
 });
-assert.ok((envelopeGenerated.lamellarEnvelopeDescriptors || []).length >= 1, 'curve-family generation emits at least one lamellar envelope descriptor');
+assert.ok((envelopeGenerated.lamellarEnvelopeDescriptors || []).length >= 3, 'curve-family generation emits multiple lamellar envelope descriptors across eligible layer populations');
+const envelopeLayers = new Set(envelopeGenerated.lamellarEnvelopeDescriptors.map(envelope => envelope.layerIndex));
+assert.ok(envelopeLayers.has(0) && envelopeLayers.has(2) && envelopeLayers.has(3), 'multi-envelope composition includes all eligible lamella layers while leaving cutter layers out');
+assert.ok(!envelopeLayers.has(1), 'multi-envelope composition does not loft cutter/neighbor layers as lamella envelopes');
 const firstEnvelope = envelopeGenerated.lamellarEnvelopeDescriptors[0];
 assert.equal(firstEnvelope.kind, 'LamellarEnvelopeDescriptor', 'envelope descriptor carries explicit kind');
 assert.equal(firstEnvelope.mode, 'curve-family-envelope-loft-v0', 'envelope descriptor carries curve-family loft mode');
+assert.equal(firstEnvelope.compositionMode, 'multi-eligible-population-envelope-composition-v0', 'envelope descriptor records multi-population composition mode');
+assert.equal(firstEnvelope.edgeLegibilityMode, 'smooth-envelope-body-crisp-rail-debug-v0', 'envelope descriptor records smooth-body/crisp-rail debug intent');
 assert.ok((firstEnvelope.sourceCurveIds || []).length >= 3, 'envelope descriptor is derived from multiple source curves');
 assert.equal(firstEnvelope.sourceCurveIds.length, firstEnvelope.sourceStripInstanceIds.length, 'envelope curve ids stay aligned with source strip ids');
 assert.ok((firstEnvelope.sampleRows || []).length >= 8, 'envelope descriptor records sampled loft rows');

@@ -12,6 +12,8 @@ const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SPHERE_CURVE_MODE = "sphere-curve-source-before-strip-mesh-v0";
 const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
 const LAMELLAR_ENVELOPE_MODE = "curve-family-envelope-loft-v0";
+const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-composition-v0";
+const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
@@ -664,7 +666,7 @@ function sortedPopulationCurves(curves) {
   return curves.slice().sort((a, b) => (a.populationIndex ?? a.stripIndex ?? 0) - (b.populationIndex ?? b.stripIndex ?? 0));
 }
 
-function sampleEnvelopeRows(curves, interval, rowCount = 18) {
+function sampleEnvelopeRows(curves, interval, rowCount = 24) {
   const ordered = sortedPopulationCurves(curves);
   const rows = [];
   for (let rowIndex = 0; rowIndex <= rowCount; rowIndex++) {
@@ -700,7 +702,7 @@ export function generateLamellarEnvelopeDescriptors(sphereCurveDescriptors = [])
   const groups = new Map();
   for (const curve of sphereCurveDescriptors) {
     if (curve.populationRole !== "lamella") continue;
-    if (!curve.populationId || curve.layerIndex !== 0) continue;
+    if (!curve.populationId) continue;
     const key = `${curve.layerSpecId}:${curve.populationId}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(curve);
@@ -726,6 +728,8 @@ export function generateLamellarEnvelopeDescriptors(sphereCurveDescriptors = [])
     descriptors.push({
       kind: "LamellarEnvelopeDescriptor",
       mode: LAMELLAR_ENVELOPE_MODE,
+      compositionMode: LAMELLAR_ENVELOPE_COMPOSITION_MODE,
+      edgeLegibilityMode: LAMELLAR_ENVELOPE_EDGE_MODE,
       id: `${ordered[0].populationId}-envelope-loft`,
       sourceCurveMode: SPHERE_CURVE_MODE,
       meshSource: "curve-family-envelope-before-strip-mesh",
@@ -1224,8 +1228,32 @@ function makeLamellarEnvelopeGeometry(THREE, descriptor) {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
   geometry.setIndex(indices);
+  geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  return { geometry, centerline };
+  const railGeometries = columns
+    ? [
+      makePolylineGeometry(THREE, rows.map(row => row.points[0])),
+      makePolylineGeometry(THREE, rows.map(row => row.points[row.points.length - 1])),
+    ]
+    : [];
+  const capGeometries = rows.length
+    ? [
+      makePolylineGeometry(THREE, rows[0].points),
+      makePolylineGeometry(THREE, rows[rows.length - 1].points),
+    ]
+    : [];
+  return { geometry, centerline, railGeometries, capGeometries };
+}
+
+function makePolylineGeometry(THREE, pointArrays) {
+  const vertices = [];
+  for (const point of pointArrays || []) {
+    vertices.push(point[0], point[1], point[2]);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeBoundingSphere();
+  return geometry;
 }
 
 function lamellarFrame(THREE, t, opts) {
@@ -1405,7 +1433,14 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
 
   const materials = {
     selected: new THREE.MeshStandardMaterial({ color: 0xd6a33d, metalness: 0.72, roughness: 0.34, side: THREE.DoubleSide }),
-    selectedEnvelope: new THREE.MeshStandardMaterial({ color: 0xf0c46b, metalness: 0.54, roughness: 0.42, transparent: true, opacity: 0.46, depthWrite: false, side: THREE.DoubleSide }),
+    envelopeBodies: [
+      new THREE.MeshStandardMaterial({ color: 0xf0c46b, metalness: 0.5, roughness: 0.44, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshStandardMaterial({ color: 0x7fdad4, metalness: 0.26, roughness: 0.52, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshStandardMaterial({ color: 0xf2e6c7, metalness: 0.34, roughness: 0.5, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshStandardMaterial({ color: 0xe7a88e, metalness: 0.24, roughness: 0.54, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }),
+    ],
+    envelopeGuide: new THREE.MeshStandardMaterial({ color: 0x8fd4cf, metalness: 0.18, roughness: 0.62, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }),
+    envelopeRail: new THREE.LineBasicMaterial({ color: 0xffecb5, transparent: true, opacity: 0.92 }),
     continuation: new THREE.MeshStandardMaterial({ color: 0xf2c86b, metalness: 0.64, roughness: 0.38, side: THREE.DoubleSide }),
     neighbor: new THREE.MeshStandardMaterial({ color: 0x10c9c1, emissive: 0x073330, emissiveIntensity: 0.18, metalness: 0.34, roughness: 0.36, side: THREE.DoubleSide }),
     neighborCompanion: new THREE.MeshStandardMaterial({ color: 0x5d807d, metalness: 0.34, roughness: 0.5, side: THREE.DoubleSide }),
@@ -1824,9 +1859,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.sectionSegments = [];
     state.lightHooks = [];
 
+    const envelopeSourceStripIds = new Set(state.lamellarEnvelopeDescriptors.flatMap(descriptor => descriptor.sourceStripInstanceIds || []));
     state.lamellarEnvelopeDescriptors.forEach((descriptor, envelopeIndex) => {
-      const { geometry, centerline } = makeLamellarEnvelopeGeometry(THREE, descriptor);
-      const mesh = new THREE.Mesh(geometry, materials.selectedEnvelope);
+      const { geometry, centerline, railGeometries, capGeometries } = makeLamellarEnvelopeGeometry(THREE, descriptor);
+      const mesh = new THREE.Mesh(geometry, materials.envelopeBodies[descriptor.layerIndex % materials.envelopeBodies.length]);
       mesh.renderOrder = 12;
       mesh.userData.lamellarSelectable = true;
       mesh.userData.lamellarObjectKind = "LamellarEnvelopeDescriptor";
@@ -1839,6 +1875,18 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       mesh.userData.populationId = descriptor.populationId;
       mesh.userData.populationRole = descriptor.populationRole;
       group.add(mesh);
+      [...railGeometries, ...capGeometries].forEach((lineGeometry, railIndex) => {
+        const line = new THREE.Line(lineGeometry, materials.envelopeRail);
+        line.renderOrder = 13;
+        line.userData.lamellarSelectable = false;
+        line.userData.lamellarObjectKind = "LamellarEnvelopeRail";
+        line.userData.lamellarRole = railIndex < railGeometries.length ? "curve-family-envelope-rail" : "curve-family-envelope-cap";
+        line.userData.lamellarSectionId = descriptor.id;
+        line.userData.layerSpecId = descriptor.layerSpecId;
+        line.userData.layerIndex = descriptor.layerIndex;
+        line.userData.populationId = descriptor.populationId;
+        group.add(line);
+      });
       state.sectionSegments.push({
         id: descriptor.id,
         kind: descriptor.kind,
@@ -1851,6 +1899,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         populationRole: descriptor.populationRole,
         sourceCurveIds: descriptor.sourceCurveIds,
         sourceStripInstanceIds: descriptor.sourceStripInstanceIds,
+        compositionMode: descriptor.compositionMode,
+        edgeLegibilityMode: descriptor.edgeLegibilityMode,
         span: descriptor.interval,
         capTValues: descriptor.capTValues,
         rowCount: descriptor.rowCount,
@@ -1875,7 +1925,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       if (descriptor.materialRole === "nested-placeholder-shell") {
         material = descriptor.layerIndex % 2 ? materials.placeholderA : materials.placeholderB;
       }
+      const isEnvelopeGuideStrip = descriptor.stripInstanceId && envelopeSourceStripIds.has(descriptor.stripInstanceId);
+      if (isEnvelopeGuideStrip && descriptor.populationRole === "lamella") material = materials.envelopeGuide;
       const mesh = new THREE.Mesh(geometry, material);
+      if (isEnvelopeGuideStrip) mesh.renderOrder = 6;
       mesh.userData.lamellarSelectable = true;
       mesh.userData.lamellarObjectKind = "LamellarSectionSegment";
       mesh.userData.lamellarRole = isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole;
