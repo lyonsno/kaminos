@@ -413,8 +413,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Level</span><span class="field-val" id="lamellar-selected-object-level">none</span></div>
       <div class="field"><span class="field-key">Object</span><span class="field-val" id="lamellar-selected-object-id">none</span></div>
       <div class="field"><span class="field-key">Role</span><span class="field-val" id="lamellar-selected-object-role">none</span></div>
-      <div id="lamellar-layer-detail" style="display:none">
-        <div class="slider-row" id="lamellar-layer-selectors" style="display:none">
+      <div id="lamellar-layer-detail">
+        <div class="slider-row" id="lamellar-layer-selectors">
           <span class="slider-label">Layer</span>
           <button class="btn active" id="lamellar-layer-select-0" data-layer="0">L0</button>
           <button class="btn" id="lamellar-layer-select-1" data-layer="1">L1</button>
@@ -423,15 +423,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         </div>
       <div class="field"><span class="field-key">Selected</span><span class="field-val" id="lamellar-selected-layer-index">L0 shell</span></div>
       <div class="slider-row">
+        <span class="slider-label">Radius</span>
+        <input type="range" id="lamellar-selected-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-selected-layer-radius-val">0.000</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Strips</span>
         <button class="btn" id="lamellar-remove-strip">-</button>
         <input type="number" class="gen-input" id="lamellar-selected-layer-strip-count" min="1" max="4" step="1" value="2" style="width:56px; padding:4px 6px; margin-bottom:0">
         <button class="btn" id="lamellar-add-strip">+</button>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Radius</span>
-        <input type="range" id="lamellar-selected-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
-        <span class="slider-val" id="lamellar-selected-layer-radius-val">0.000</span>
       </div>
       <div class="field"><span class="field-key">Strip IDs</span><span class="field-val" id="lamellar-selected-layer-strips">none</span></div>
       </div>

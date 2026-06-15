@@ -376,6 +376,9 @@ async function main() {
           },
           selectedLayerUi: {
             activeLayer: Number(activeLayerButton?.dataset.layer ?? -1),
+            layerDetailDisplay: getComputedStyle(document.getElementById('lamellar-layer-detail')).display,
+            layerSelectorsDisplay: getComputedStyle(document.getElementById('lamellar-layer-selectors')).display,
+            selectedRadiusDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-radius')).display,
             selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
             selectedStripCount: Number(document.getElementById('lamellar-selected-layer-strip-count')?.value || 0),
             selectedRadius: Number(document.getElementById('lamellar-selected-layer-radius')?.value || 0),
@@ -428,6 +431,9 @@ async function main() {
     assert.ok(state.cutAuthorEnvelopeDescriptor?.mode, 'Lamellar witness did not export cut-author envelope descriptor');
     assert.equal(state.channelCutReceipt?.mode, 'neighbor-offset-envelope-terminal-channel-cut', 'Lamellar witness did not export neighbor envelope channel-cut receipt');
     assert.equal(state.selectedLayerUi?.activeLayer, 0, 'Lamellar witness did not expose selected layer UI');
+    assert.notEqual(state.selectedLayerUi?.layerDetailDisplay, 'none', 'Lamellar selected-layer authoring panel is hidden in the sidebar');
+    assert.notEqual(state.selectedLayerUi?.layerSelectorsDisplay, 'none', 'Lamellar layer selectors are hidden in the sidebar');
+    assert.notEqual(state.selectedLayerUi?.selectedRadiusDisplay, 'none', 'Lamellar selected-layer radius slider is hidden in the sidebar');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
     assert.equal(state.selectedLayerRadiusReceipt?.mode, 'selected-layer-shell-radius-before-curve-mesh-derivation-v0', 'Lamellar witness did not record selected-layer radius mutation');
     assert.equal(state.selectedLayerRadiusReceipt?.afterLayerSpecRadiusOffset, 0.11, 'Lamellar selected-layer radius control did not mutate layer shell radius');
