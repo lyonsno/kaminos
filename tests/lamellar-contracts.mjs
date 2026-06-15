@@ -130,6 +130,8 @@ assert.match(index, /shouldFrameLamellarOnEnable\(/, 'Lamellar manual Enable can
 assert.match(index, /function syncLamellarContextInspector\(/, 'Lamellar UI syncs selected-object context inspector controls');
 assert.match(index, /function syncLamellarSelectionPopover\(/, 'Lamellar UI syncs the viewport selection popover');
 assert.match(index, /function positionLamellarSelectionPopover\(/, 'Lamellar UI positions the popover from the 3D selection anchor');
+assert.match(index, /scheduleLamellarControlsRebuild/, 'Lamellar slider input rebuilds are coalesced to animation-frame cadence');
+assert.match(index, /flushLamellarControlsRebuild/, 'Lamellar slider change events can flush pending rebuilds immediately');
 assert.match(index, /function setSelectedLamellarStripById\(/, 'Lamellar UI can switch selected strip from a picked strip instance id');
 assert.match(index, /function syncSelectedLamellarStrip\(/, 'Lamellar UI syncs selected-strip profile controls');
 assert.match(index, /function applySelectedStripProfileOverride\(/, 'Lamellar UI writes selected-strip profile overrides');
@@ -158,6 +160,8 @@ assert.match(core, /selectPopulationByPopulationId/, 'Lamellar core exposes same
 assert.match(core, /layer-selection-highlight/, 'Lamellar core marks layer-level selection highlights distinctly');
 assert.match(core, /strip-selection-highlight/, 'Lamellar core marks strip-level selection highlights distinctly');
 assert.match(core, /population-selection-highlight/, 'Lamellar core marks population-level selection highlights distinctly');
+assert.match(core, /selection-anchor-highlight/, 'Lamellar layer and population selection use cheap anchor highlights');
+assert.match(core, /ownsHighlightGeometry/, 'Lamellar highlight cleanup tracks owned geometry instead of disposing shared mesh geometry');
 assert.match(core, /populationStripIds/, 'Lamellar core selection object carries selected population strip ids');
 assert.match(core, /kaminos-lamellar-witness-v0/, 'Lamellar module exposes stable witness identity');
 assert.match(core, /sphere-domain-section-segment-witness-v0/, 'Lamellar module records effective route identity');

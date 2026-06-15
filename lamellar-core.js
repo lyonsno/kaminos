@@ -1201,6 +1201,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
   function clearSelectionHighlights() {
     for (const highlight of selectionHighlights) {
       group.remove(highlight);
+      if (highlight.userData?.ownsHighlightGeometry) highlight.geometry?.dispose?.();
       highlight.material?.dispose?.();
     }
     selectionHighlights = [];
@@ -1230,6 +1231,36 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     const highlightRole = level === "layer" ? "layer-selection-highlight"
       : level === "population" ? "population-selection-highlight"
       : "strip-selection-highlight";
+    if (level === "layer" || level === "population") {
+      const box = new THREE.Box3();
+      let hasMesh = false;
+      for (const mesh of selectedMeshes) {
+        mesh.geometry.computeBoundingBox();
+        const meshBox = mesh.geometry.boundingBox.clone();
+        meshBox.applyMatrix4(mesh.matrixWorld);
+        box.union(meshBox);
+        hasMesh = true;
+      }
+      if (!hasMesh) return;
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const anchorGeometry = new THREE.SphereGeometry(level === "layer" ? 0.03 : 0.024, 12, 8);
+      const anchorMaterial = new THREE.MeshBasicMaterial({
+        color: level === "layer" ? 0xd9f4ff : 0x80ffe6,
+        transparent: true,
+        opacity: level === "layer" ? 0.68 : 0.82,
+        depthTest: false,
+      });
+      const anchor = new THREE.Mesh(anchorGeometry, anchorMaterial);
+      anchor.position.copy(center);
+      anchor.renderOrder = 999;
+      anchor.userData.lamellarRole = `${highlightRole}-selection-anchor-highlight`;
+      anchor.userData.lamellarSelectable = false;
+      anchor.userData.ownsHighlightGeometry = true;
+      selectionHighlights.push(anchor);
+      group.add(anchor);
+      return;
+    }
     const highlightMaterial = new THREE.MeshBasicMaterial({
       color: level === "layer" ? 0xd9f4ff : level === "population" ? 0x80ffe6 : 0xffffff,
       wireframe: true,

@@ -316,6 +316,7 @@ async function main() {
         if (selectedLayerRadiusEl) {
           selectedLayerRadiusEl.value = '0.11';
           selectedLayerRadiusEl.dispatchEvent(new Event('input', { bubbles: true }));
+          selectedLayerRadiusEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
         const layerRadiusAfterState = w ? w.debugState() : layerRadiusBeforeState;
         const afterLayerCurves = (layerRadiusAfterState.sphereCurveDescriptors || []).filter(curve => curve.layerIndex === selectedLayerIndexForRadius);

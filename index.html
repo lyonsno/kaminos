@@ -666,6 +666,8 @@ let lamellarCameraInteracted = false;
 const lamellarStripProfileOverrides = {};
 const lamellarStripPopulationOverrides = {};
 let lamellarPinnedPopoverSelectionKey = null;
+let lamellarControlsRebuildRaf = 0;
+let lamellarPendingPopulationSelectionId = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1070,7 +1072,35 @@ function selectLamellarPopulation(populationId, source = 'ui-population-selectio
   return selection;
 }
 
-function applyLamellarPopulationOverride(populationId = selectedLamellarPopulationId, patch = {}) {
+function flushLamellarControlsRebuild(options = {}) {
+  if (!lamellarWitness) return null;
+  if (lamellarControlsRebuildRaf) {
+    cancelAnimationFrame(lamellarControlsRebuildRaf);
+    lamellarControlsRebuildRaf = 0;
+  }
+  const populationId = options.populationId || lamellarPendingPopulationSelectionId;
+  lamellarPendingPopulationSelectionId = null;
+  lamellarWitness.setControls(readLamellarControls());
+  if (populationId) {
+    const selection = lamellarWitness.selectPopulationByPopulationId?.(populationId, 'ui-population-override');
+    if (selection) selectLamellarObject(selection);
+  }
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return lamellarWitness.debugState?.() || null;
+}
+
+function scheduleLamellarControlsRebuild(options = {}) {
+  if (options.populationId) lamellarPendingPopulationSelectionId = options.populationId;
+  if (lamellarControlsRebuildRaf) return null;
+  lamellarControlsRebuildRaf = requestAnimationFrame(() => {
+    lamellarControlsRebuildRaf = 0;
+    flushLamellarControlsRebuild();
+  });
+  return null;
+}
+
+function applyLamellarPopulationOverride(populationId = selectedLamellarPopulationId, patch = {}, options = {}) {
   if (!populationId || !lamellarWitness) return null;
   const state = lamellarWitness.debugState();
   ensureLamellarPopulationOverrides(state);
@@ -1078,11 +1108,8 @@ function applyLamellarPopulationOverride(populationId = selectedLamellarPopulati
   if (!existing) return null;
   lamellarStripPopulationOverrides[populationId] = { ...existing, ...patch, id: populationId };
   selectedLamellarPopulationId = populationId;
-  lamellarWitness.setControls(readLamellarControls());
-  const selection = lamellarWitness.selectPopulationByPopulationId?.(populationId, 'ui-population-override');
-  if (selection) selectLamellarObject(selection);
-  syncLamellarReadout();
-  window._kaminosDirty?.();
+  if (options.immediate) flushLamellarControlsRebuild({ populationId });
+  else scheduleLamellarControlsRebuild({ populationId });
   return lamellarStripPopulationOverrides[populationId];
 }
 
@@ -1093,7 +1120,7 @@ function nudgeSelectedPopulationCount(delta) {
   const population = (state.stripPopulationDescriptors || []).find(candidate => candidate.id === populationId)
     || lamellarStripPopulationOverrides[populationId];
   const nextCount = Math.max(1, Math.min(16, Math.round(Number(population?.count || 1) + delta)));
-  return applyLamellarPopulationOverride(populationId, { count: nextCount });
+  return applyLamellarPopulationOverride(populationId, { count: nextCount }, { immediate: true });
 }
 
 function flipSelectedPopulationChirality() {
@@ -1102,7 +1129,7 @@ function flipSelectedPopulationChirality() {
   const state = lamellarWitness?.debugState?.() || {};
   const population = (state.stripPopulationDescriptors || []).find(candidate => candidate.id === populationId)
     || lamellarStripPopulationOverrides[populationId];
-  return applyLamellarPopulationOverride(populationId, { chirality: (population?.chirality || 1) > 0 ? -1 : 1 });
+  return applyLamellarPopulationOverride(populationId, { chirality: (population?.chirality || 1) > 0 ? -1 : 1 }, { immediate: true });
 }
 
 function addLamellarPopulation(role = 'lamella') {
@@ -1401,17 +1428,26 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
   };
-  spread.onchange = spread.oninput;
+  spread.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) }, { immediate: true });
+  };
   offset.oninput = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) });
   };
-  offset.onchange = offset.oninput;
+  offset.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) }, { immediate: true });
+  };
   radial.oninput = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) });
   };
-  radial.onchange = radial.oninput;
+  radial.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) }, { immediate: true });
+  };
 }
 
 function installLamellarViewportSelection() {
@@ -1443,7 +1479,7 @@ function installLamellarViewportSelection() {
   });
 }
 
-function applySelectedStripProfileOverride() {
+function applySelectedStripProfileOverride(options = {}) {
   const current = lamellarWitness?.debugState?.() || {};
   const strip = selectedLamellarStrip(current);
   if (!strip) return;
@@ -1458,20 +1494,18 @@ function applySelectedStripProfileOverride() {
     gapPattern: document.getElementById('lamellar-selected-strip-gap-pattern').value,
   };
   lamellarStripProfileOverrides[strip.id] = override;
-  lamellarWitness.setControls(readLamellarControls());
-  syncLamellarReadout();
-  window._kaminosDirty?.();
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
 }
 
-function applySelectedLayerStripCount(value) {
+function applySelectedLayerStripCount(value, options = {}) {
   const next = Math.max(1, Math.min(4, Math.round(Number(value) || 1)));
   const rowInput = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-strip-count`);
   rowInput.value = String(next);
   rowInput.dataset.overridden = '1';
   document.getElementById('lamellar-selected-layer-strip-count').value = String(next);
-  lamellarWitness.setControls(readLamellarControls());
-  syncLamellarReadout();
-  window._kaminosDirty?.();
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
 }
 
 function nudgeSelectedLayerStripCount(delta) {
@@ -1479,16 +1513,15 @@ function nudgeSelectedLayerStripCount(delta) {
   applySelectedLayerStripCount(current + delta);
 }
 
-function applySelectedLayerRadiusOffset(value) {
+function applySelectedLayerRadiusOffset(value, options = {}) {
   const next = Math.max(-0.24, Math.min(0.24, Number(value) || 0));
   const rowInput = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-radius`);
   rowInput.value = String(next);
   rowInput.dataset.overridden = '1';
   document.getElementById('lamellar-selected-layer-radius').value = String(next);
   document.getElementById('lamellar-selected-layer-radius-val').textContent = next.toFixed(3);
-  lamellarWitness.setControls(readLamellarControls());
-  syncLamellarReadout();
-  window._kaminosDirty?.();
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
 }
 
 function syncLamellarReadout() {
@@ -1672,7 +1705,7 @@ async function initLamellarRoute() {
   window.__kaminosLamellarSelectPopulationById = populationId => selectLamellarPopulation(populationId, 'ui-population-selection-helper');
   window.__kaminosLamellarNudgeSelectedPopulationCount = delta => nudgeSelectedPopulationCount(delta);
   window.__kaminosLamellarFlipSelectedPopulationChirality = () => flipSelectedPopulationChirality();
-  window.__kaminosLamellarApplyPopulationOverride = (populationId, patch) => applyLamellarPopulationOverride(populationId, patch);
+  window.__kaminosLamellarApplyPopulationOverride = (populationId, patch) => applyLamellarPopulationOverride(populationId, patch, { immediate: true });
   window.__kaminosLamellarPinSelectionPopover = () => pinLamellarSelectionPopover();
   window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
   window.__kaminosLamellarSync = syncLamellarReadout;
@@ -1714,15 +1747,11 @@ async function initLamellarRoute() {
   for (const id of composerControlIds) {
     document.getElementById(id).addEventListener('input', () => {
       if (id.startsWith('lamellar-layer-')) document.getElementById(id).dataset.overridden = '1';
-      lamellarWitness.setControls(readLamellarControls());
-      syncLamellarReadout();
-      window._kaminosDirty?.();
+      scheduleLamellarControlsRebuild();
     });
     document.getElementById(id).addEventListener('change', () => {
       if (id.startsWith('lamellar-layer-')) document.getElementById(id).dataset.overridden = '1';
-      lamellarWitness.setControls(readLamellarControls());
-      syncLamellarReadout();
-      window._kaminosDirty?.();
+      flushLamellarControlsRebuild();
     });
   }
   for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
@@ -1734,13 +1763,13 @@ async function initLamellarRoute() {
     applySelectedLayerStripCount(event.target.value);
   });
   document.getElementById('lamellar-selected-layer-strip-count').addEventListener('change', event => {
-    applySelectedLayerStripCount(event.target.value);
+    applySelectedLayerStripCount(event.target.value, { immediate: true });
   });
   document.getElementById('lamellar-selected-layer-radius').addEventListener('input', event => {
     applySelectedLayerRadiusOffset(event.target.value);
   });
   document.getElementById('lamellar-selected-layer-radius').addEventListener('change', event => {
-    applySelectedLayerRadiusOffset(event.target.value);
+    applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
   });
   document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
   document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));
@@ -1755,8 +1784,8 @@ async function initLamellarRoute() {
     'lamellar-selected-strip-gap-pattern',
   ];
   for (const id of stripProfileControlIds) {
-    document.getElementById(id).addEventListener('input', applySelectedStripProfileOverride);
-    document.getElementById(id).addEventListener('change', applySelectedStripProfileOverride);
+    document.getElementById(id).addEventListener('input', () => applySelectedStripProfileOverride());
+    document.getElementById(id).addEventListener('change', () => applySelectedStripProfileOverride({ immediate: true }));
   }
   document.getElementById('lamellar-generate').addEventListener('click', () => {
     const seedInput = document.getElementById('lamellar-seed');
