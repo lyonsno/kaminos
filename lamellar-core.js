@@ -11,6 +11,7 @@ const POPULATION_COVERAGE_LAYOUT_MODE = "even-shell-coverage-layout-v0";
 const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SPHERE_CURVE_MODE = "sphere-curve-source-before-strip-mesh-v0";
 const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
+const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
 const CHANNEL_TERMINAL_CONTOUR_SOURCE = "neighbor-offset-envelope-rail-contour";
@@ -927,10 +928,131 @@ function spherePoint(theta, phi, radius = 1) {
   };
 }
 
+function vectorLength(v) {
+  return Math.hypot(v.x, v.y, v.z);
+}
+
+function normalizeVector(v) {
+  const length = vectorLength(v) || 1;
+  return { x: v.x / length, y: v.y / length, z: v.z / length };
+}
+
+function crossVector(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function scaleVector(v, scale) {
+  return { x: v.x * scale, y: v.y * scale, z: v.z * scale };
+}
+
+function addScaledVector(a, b, scale) {
+  return { x: a.x + b.x * scale, y: a.y + b.y * scale, z: a.z + b.z * scale };
+}
+
+function shellOffsetPoint(normal, side, angularOffset, radius) {
+  const shiftedUnit = normalizeVector(addScaledVector(
+    scaleVector(normal, Math.cos(angularOffset)),
+    side,
+    Math.sin(angularOffset)
+  ));
+  return scaleVector(shiftedUnit, radius);
+}
+
+function ribbonShellWidthSegments(opts) {
+  const explicit = Number(opts.widthSegments);
+  if (Number.isFinite(explicit) && explicit >= 2) return Math.round(explicit);
+  const width = opts.width || 0.06;
+  return Math.max(4, Math.min(5, Math.ceil(width / 0.055)));
+}
+
+function ribbonShellSurfacePoints(sample, widthSegments) {
+  const columns = [];
+  for (let column = 0; column <= widthSegments; column++) {
+    const u = column / widthSegments;
+    const angularOffset = sample.angularHalfWidth * (-1 + u * 2);
+    const point = shellOffsetPoint(sample.normal, sample.side, angularOffset, sample.shellRadius);
+    columns.push({ point, normal: normalizeVector(point), angularOffset });
+  }
+  return columns;
+}
+
+function ribbonShellSampleAt(t, opts) {
+  const radius = opts.radius || 1;
+  const width = opts.width || 0.06;
+  const theta = opts.theta0 + opts.thetaTwist * t;
+  const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
+  const p = spherePoint(theta, phi, radius);
+  const p2 = spherePoint(theta + 0.018, phi + 0.012, radius);
+  const tangent = normalizeVector({ x: p2.x - p.x, y: p2.y - p.y, z: p2.z - p.z });
+  const normal = normalizeVector(p);
+  const side = normalizeVector(crossVector(normal, tangent));
+  const widthPulse = Math.sin(t * Math.PI * 4 + (opts.phase || 0)) * (opts.widthVariance || 0) * 0.22;
+  const thicknessPulse = Math.sin(t * Math.PI * 3 + (opts.phase || 0) * 0.7) * (opts.thicknessVariance || 0) * (opts.thickness || 0.012) * 0.38;
+  const widthAtT = width * (1 + widthPulse);
+  const edgeLift = (opts.edgeLift || 0.015) + thicknessPulse;
+  const shellRadius = radius + edgeLift;
+  const angularHalfWidth = widthAtT / Math.max(0.001, shellRadius);
+  const left = shellOffsetPoint(normal, side, -angularHalfWidth, shellRadius);
+  const right = shellOffsetPoint(normal, side, angularHalfWidth, shellRadius);
+  return {
+    mode: RIBBON_SHELL_OFFSET_MODE,
+    t,
+    center: p,
+    left,
+    right,
+    leftNormal: normalizeVector(left),
+    rightNormal: normalizeVector(right),
+    normal,
+    side,
+    shellRadius,
+    angularHalfWidth,
+  };
+}
+
+export function sampleLamellarRibbonShellRadii(span, opts, samples = 16) {
+  const shellSamples = [];
+  let maxShellRadiusError = 0;
+  let maxSurfaceRadiusError = 0;
+  const widthSegments = ribbonShellWidthSegments(opts);
+  for (let i = 0; i <= samples; i++) {
+    const t = span[0] + (span[1] - span[0]) * (i / samples);
+    const sample = ribbonShellSampleAt(t, opts);
+    const leftRadius = vectorLength(sample.left);
+    const rightRadius = vectorLength(sample.right);
+    const leftError = Math.abs(leftRadius - sample.shellRadius);
+    const rightError = Math.abs(rightRadius - sample.shellRadius);
+    maxShellRadiusError = Math.max(maxShellRadiusError, leftError, rightError);
+    const surfaceRadii = ribbonShellSurfacePoints(sample, widthSegments).map(({ point }) => {
+      const radius = vectorLength(point);
+      maxSurfaceRadiusError = Math.max(maxSurfaceRadiusError, Math.abs(radius - sample.shellRadius));
+      return Number(radius.toFixed(6));
+    });
+    shellSamples.push({
+      t: Number(t.toFixed(4)),
+      shellRadius: Number(sample.shellRadius.toFixed(6)),
+      leftRadius: Number(leftRadius.toFixed(6)),
+      rightRadius: Number(rightRadius.toFixed(6)),
+      angularHalfWidth: Number(sample.angularHalfWidth.toFixed(6)),
+      surfaceRadii,
+    });
+  }
+  return {
+    mode: RIBBON_SHELL_OFFSET_MODE,
+    surfaceColumnCount: widthSegments + 1,
+    samples: shellSamples,
+    maxShellRadiusError,
+    maxSurfaceRadiusError,
+  };
+}
+
 function makeRibbonGeometry(THREE, span, opts) {
   const samples = opts.samples || 64;
-  const width = opts.width || 0.06;
-  const radius = opts.radius || 1;
+  const widthSegments = ribbonShellWidthSegments(opts);
+  const columns = widthSegments + 1;
   const vertices = [];
   const normals = [];
   const indices = [];
@@ -938,25 +1060,24 @@ function makeRibbonGeometry(THREE, span, opts) {
 
   for (let i = 0; i <= samples; i++) {
     const t = span[0] + (span[1] - span[0]) * (i / samples);
-    const theta = opts.theta0 + opts.thetaTwist * t;
-    const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
-    const p = spherePoint(theta, phi, radius);
-    const p2 = spherePoint(theta + 0.018, phi + 0.012, radius);
-    const tangent = new THREE.Vector3(p2.x - p.x, p2.y - p.y, p2.z - p.z).normalize();
-    const normal = new THREE.Vector3(p.x, p.y, p.z).normalize();
-    const side = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-    const widthPulse = Math.sin(t * Math.PI * 4 + (opts.phase || 0)) * (opts.widthVariance || 0) * 0.22;
-    const thicknessPulse = Math.sin(t * Math.PI * 3 + (opts.phase || 0) * 0.7) * (opts.thicknessVariance || 0) * (opts.thickness || 0.012) * 0.38;
-    const widthAtT = width * (1 + widthPulse);
-    const edgeLift = (opts.edgeLift || 0.015) + thicknessPulse;
-    const left = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, -widthAtT).addScaledVector(normal, edgeLift);
-    const right = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(side, widthAtT).addScaledVector(normal, edgeLift * 0.45);
-    vertices.push(left.x, left.y, left.z, right.x, right.y, right.z);
-    normals.push(normal.x, normal.y, normal.z, normal.x, normal.y, normal.z);
-    centerline.push([Number(p.x.toFixed(5)), Number(p.y.toFixed(5)), Number(p.z.toFixed(5))]);
+    const sample = ribbonShellSampleAt(t, opts);
+    const { center } = sample;
+    const surface = ribbonShellSurfacePoints(sample, widthSegments);
+    for (const { point, normal } of surface) {
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+    }
+    centerline.push([Number(center.x.toFixed(5)), Number(center.y.toFixed(5)), Number(center.z.toFixed(5))]);
     if (i < samples) {
-      const a = i * 2;
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      const row = i * columns;
+      const nextRow = (i + 1) * columns;
+      for (let column = 0; column < widthSegments; column++) {
+        const a = row + column;
+        const b = row + column + 1;
+        const c = nextRow + column;
+        const d = nextRow + column + 1;
+        indices.push(a, b, c, b, d, c);
+      }
     }
   }
 

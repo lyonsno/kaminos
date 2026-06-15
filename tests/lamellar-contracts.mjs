@@ -189,6 +189,7 @@ assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip insta
 assert.match(core, /SphereCurveDescriptor/, 'Lamellar core names sphere curves as the upstream authored geometry primitive');
 assert.match(core, /generateSphereCurveDescriptors/, 'Lamellar core generates sphere curves before section mesh descriptors');
 assert.match(core, /CurveInteractionReceipt/, 'Lamellar core records curve-space interaction receipts before meshing');
+assert.match(core, /ribbon-shell-angular-offset-v0/, 'Lamellar ribbon mesh emission records shell-angular width offsets instead of flat tangent-plane offsets');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
 assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
@@ -293,6 +294,30 @@ assert.match(witness, /manualEnable/, 'witness can exercise the plain-load Lamel
 assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera and visibility state');
 
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
+const shellParallelRibbon = coreModule.sampleLamellarRibbonShellRadii([0.12, 0.9], {
+  theta0: -0.7,
+  thetaTwist: 5.1,
+  phi0: -0.2,
+  phiSlope: 0.82,
+  phase: 0.4,
+  radius: 1.07,
+  width: 0.18,
+  edgeLift: 0.024,
+  waviness: 0.09,
+}, 18);
+assert.equal(shellParallelRibbon.mode, 'ribbon-shell-angular-offset-v0', 'ribbon shell sampling uses the angular shell-offset mode');
+assert.ok(
+  shellParallelRibbon.maxShellRadiusError < 1e-9,
+  `wide ribbon rails leave the intended shell radius by ${shellParallelRibbon.maxShellRadiusError}`
+);
+assert.ok(
+  shellParallelRibbon.surfaceColumnCount >= 5,
+  `wide ribbon mesh should subdivide across the sphere shell, got ${shellParallelRibbon.surfaceColumnCount} columns`
+);
+assert.ok(
+  shellParallelRibbon.maxSurfaceRadiusError < 1e-9,
+  `wide ribbon surface vertices leave the intended shell radius by ${shellParallelRibbon.maxSurfaceRadiusError}`
+);
 const lowChunk = coreModule.generateLamellarSectionSegments({
   seed: 31,
   layerCount: 4,
