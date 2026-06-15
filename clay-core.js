@@ -28,6 +28,10 @@ function clampFinite(value, min, max, fallback) {
   return Math.max(min, Math.min(max, number));
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
 function normalizeCollider(collider, index) {
   const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
   return {
@@ -110,6 +114,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let sharedPrimitiveProbeDistanceSq = null;
   let sharedPrimitiveProbeFeature = null;
   let sharedPrimitiveProbeTriangleIndex = null;
+  let primitiveContactPassStatus = 'not-run';
+  let primitiveContactJobCount = 0;
+  let primitiveContactActiveCount = 0;
+  let primitiveContactMinDistance = null;
+  let primitiveContactForceSum = 0;
   let lastError = '';
   const vertexCount = GRID_X * GRID_Z;
   const basePositions = new Float32Array(vertexCount * 4);
@@ -162,6 +171,89 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     }
   }
 
+  function latticeVertex(ix, iz) {
+    const i = iz * GRID_X + ix;
+    return [
+      basePositions[i * 4],
+      basePositions[i * 4 + 1],
+      basePositions[i * 4 + 2],
+    ];
+  }
+
+  function claySurfaceTriangleForCollider(collider) {
+    const u = clamp01((collider.center[0] / 1.65) + 0.5);
+    const v = clamp01((collider.center[2] / 1.05) + 0.5);
+    const gx = Math.min(GRID_X - 2, Math.max(0, Math.floor(u * (GRID_X - 1))));
+    const gz = Math.min(GRID_Z - 2, Math.max(0, Math.floor(v * (GRID_Z - 1))));
+    const localX = (u * (GRID_X - 1)) - gx;
+    const localZ = (v * (GRID_Z - 1)) - gz;
+    const p00 = latticeVertex(gx, gz);
+    const p10 = latticeVertex(gx + 1, gz);
+    const p01 = latticeVertex(gx, gz + 1);
+    const p11 = latticeVertex(gx + 1, gz + 1);
+    const cellTriangleIndex = (gz * (GRID_X - 1) + gx) * 2;
+    if (localX + localZ <= 1) {
+      return { triangle: [p00, p10, p01], triangleIndex: cellTriangleIndex };
+    }
+    return { triangle: [p10, p11, p01], triangleIndex: cellTriangleIndex + 1 };
+  }
+
+  async function runPointTriangleDistanceJobs(packedJobs, jobCount, label) {
+    const resultBytes = POINT_TRIANGLE_RESULT_BYTES * jobCount;
+    const jobBuffer = device.createBuffer({
+      label: `${label}-point-triangle-jobs`,
+      size: packedJobs.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const resultBuffer = device.createBuffer({
+      label: `${label}-point-triangle-results`,
+      size: resultBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    const jobReadback = device.createBuffer({
+      label: `${label}-point-triangle-readback`,
+      size: resultBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    device.queue.writeBuffer(jobBuffer, 0, packedJobs);
+    const pointTrianglePipeline = await device.createComputePipelineAsync({
+      label: `${label}-point-triangle-pipeline`,
+      layout: 'auto',
+      compute: {
+        module: device.createShaderModule({ code: pointTriangleDistanceWgsl }),
+        entryPoint: 'point_triangle_distance_main',
+      },
+    });
+    const pointTriangleBindGroup = device.createBindGroup({
+      layout: pointTrianglePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: jobBuffer } },
+        { binding: 1, resource: { buffer: resultBuffer } },
+      ],
+    });
+    const encoder = device.createCommandEncoder({ label: `${label}-point-triangle` });
+    const pass = encoder.beginComputePass({ label: `${label}-point-triangle-pass` });
+    pass.setPipeline(pointTrianglePipeline);
+    pass.setBindGroup(0, pointTriangleBindGroup);
+    pass.dispatchWorkgroups(Math.ceil(jobCount / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(resultBuffer, 0, jobReadback, 0, resultBytes);
+    device.queue.submit([encoder.finish()]);
+    await jobReadback.mapAsync(GPUMapMode.READ);
+    const resultView = new DataView(jobReadback.getMappedRange());
+    const results = [];
+    for (let i = 0; i < jobCount; i += 1) {
+      const offset = i * POINT_TRIANGLE_RESULT_BYTES;
+      results.push({
+        distanceSq: resultView.getFloat32(offset, true),
+        feature: resultView.getUint32(offset + 4, true),
+        triangleIndex: resultView.getUint32(offset + 8, true),
+      });
+    }
+    jobReadback.unmap();
+    return results;
+  }
+
   async function runSharedPrimitiveProbe() {
     if (sharedPrimitiveProbeStatus === 'pass') return;
     sharedPrimitiveProbeStatus = 'running';
@@ -174,51 +266,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       ],
       triangleIndex: SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX,
     }]);
-    const jobBuffer = device.createBuffer({
-      label: 'kaminos-clay-shared-point-triangle-jobs',
-      size: jobs.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    const resultBuffer = device.createBuffer({
-      label: 'kaminos-clay-shared-point-triangle-results',
-      size: POINT_TRIANGLE_RESULT_BYTES,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    });
-    const probeReadback = device.createBuffer({
-      label: 'kaminos-clay-shared-point-triangle-readback',
-      size: POINT_TRIANGLE_RESULT_BYTES,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-    device.queue.writeBuffer(jobBuffer, 0, jobs);
-    const probePipeline = await device.createComputePipelineAsync({
-      label: 'kaminos-clay-shared-point-triangle-probe',
-      layout: 'auto',
-      compute: {
-        module: device.createShaderModule({ code: pointTriangleDistanceWgsl }),
-        entryPoint: 'point_triangle_distance_main',
-      },
-    });
-    const probeBindGroup = device.createBindGroup({
-      layout: probePipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: jobBuffer } },
-        { binding: 1, resource: { buffer: resultBuffer } },
-      ],
-    });
-    const encoder = device.createCommandEncoder({ label: 'kaminos-clay-shared-point-triangle-probe' });
-    const pass = encoder.beginComputePass({ label: 'kaminos-clay-shared-point-triangle-pass' });
-    pass.setPipeline(probePipeline);
-    pass.setBindGroup(0, probeBindGroup);
-    pass.dispatchWorkgroups(1);
-    pass.end();
-    encoder.copyBufferToBuffer(resultBuffer, 0, probeReadback, 0, POINT_TRIANGLE_RESULT_BYTES);
-    device.queue.submit([encoder.finish()]);
-    await probeReadback.mapAsync(GPUMapMode.READ);
-    const resultView = new DataView(probeReadback.getMappedRange());
-    sharedPrimitiveProbeDistanceSq = resultView.getFloat32(0, true);
-    sharedPrimitiveProbeFeature = resultView.getUint32(4, true);
-    sharedPrimitiveProbeTriangleIndex = resultView.getUint32(8, true);
-    probeReadback.unmap();
+    const [result] = await runPointTriangleDistanceJobs(jobs, 1, 'kaminos-clay-shared-probe');
+    sharedPrimitiveProbeDistanceSq = result.distanceSq;
+    sharedPrimitiveProbeFeature = result.feature;
+    sharedPrimitiveProbeTriangleIndex = result.triangleIndex;
     const distanceOk = Math.abs(sharedPrimitiveProbeDistanceSq - SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ) <= 1e-5;
     const featureOk = sharedPrimitiveProbeFeature === SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE;
     const identityOk = sharedPrimitiveProbeTriangleIndex === SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX;
@@ -232,6 +283,46 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       throw new Error(lastError);
     }
     sharedPrimitiveProbeStatus = 'pass';
+  }
+
+  async function runPrimitiveContactPass() {
+    primitiveContactJobCount = colliders.length;
+    primitiveContactActiveCount = 0;
+    primitiveContactMinDistance = null;
+    primitiveContactForceSum = 0;
+    if (!colliders.length) {
+      primitiveContactPassStatus = 'idle';
+      return [];
+    }
+    primitiveContactPassStatus = 'running';
+    const contactJobs = colliders.map((collider) => {
+      const { triangle, triangleIndex } = claySurfaceTriangleForCollider(collider);
+      return { point: collider.center, triangle, triangleIndex };
+    });
+    const packedJobs = packPointTriangleDistanceJobs(contactJobs);
+    const results = await runPointTriangleDistanceJobs(packedJobs, contactJobs.length, 'kaminos-clay-contact');
+    const effectiveColliders = colliders.map((collider, index) => {
+      const result = results[index];
+      if (result.triangleIndex !== contactJobs[index].triangleIndex) {
+        primitiveContactPassStatus = 'fail';
+        lastError = `primitive-contact-triangle-identity-mismatch:${JSON.stringify({
+          expected: contactJobs[index].triangleIndex,
+          actual: result.triangleIndex,
+        })}`;
+        throw new Error(lastError);
+      }
+      const distance = Math.sqrt(Math.max(0, result.distanceSq));
+      const contactScale = clamp01(1 - distance / Math.max(collider.radius, 0.001));
+      const effectiveStrength = collider.strength * contactScale;
+      if (contactScale > 0) primitiveContactActiveCount += 1;
+      primitiveContactMinDistance = primitiveContactMinDistance === null
+        ? distance
+        : Math.min(primitiveContactMinDistance, distance);
+      primitiveContactForceSum += effectiveStrength;
+      return { ...collider, effectiveStrength };
+    });
+    primitiveContactPassStatus = 'pass';
+    return effectiveColliders;
   }
 
   async function ensureGpu() {
@@ -296,12 +387,13 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     if (!active) return;
     await ensureGpu();
     ensureMesh();
+    const primitiveColliders = await runPrimitiveContactPass();
     const colliderData = new Float32Array(MAX_COLLIDERS * 4);
-    colliders.slice(0, MAX_COLLIDERS).forEach((collider, index) => {
+    primitiveColliders.slice(0, MAX_COLLIDERS).forEach((collider, index) => {
       colliderData[index * 4] = collider.center[0];
       colliderData[index * 4 + 1] = collider.center[2];
       colliderData[index * 4 + 2] = collider.radius;
-      colliderData[index * 4 + 3] = collider.strength;
+      colliderData[index * 4 + 3] = collider.effectiveStrength;
     });
     device.queue.writeBuffer(colliderBuffer, 0, colliderData);
     device.queue.writeBuffer(paramsBuffer, 0, new Uint32Array([vertexCount, colliders.length, gpuStepCount + 1, 0]));
@@ -362,6 +454,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       sharedPrimitiveProbeDistanceSq,
       sharedPrimitiveProbeFeature,
       sharedPrimitiveProbeTriangleIndex,
+      primitiveContactPassStatus,
+      primitiveContactJobCount,
+      primitiveContactActiveCount,
+      primitiveContactMinDistance,
+      primitiveContactForceSum,
       clayGrid: `${GRID_X}x${GRID_Z}`,
       clayColliderCount: colliders.length,
       clayDeformationCount,

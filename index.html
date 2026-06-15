@@ -529,6 +529,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Primitive</span><span class="field-val" id="clay-primitive">kaolin-kpm-001-forward-distance-feature-codes</span></div>
       <div class="field"><span class="field-key">Probe</span><span class="field-val" id="clay-primitive-probe">not-run</span></div>
       <div class="field"><span class="field-key">Pkg commit</span><span class="field-val" id="clay-primitive-commit">none</span></div>
+      <div class="field"><span class="field-key">Primitive contacts</span><span class="field-val" id="clay-primitive-contacts">0 / 0</span></div>
+      <div class="field"><span class="field-key">Primitive force</span><span class="field-val" id="clay-primitive-force">0.00</span></div>
     </div>
   </div>
 
@@ -1615,6 +1617,8 @@ function refreshClayReadout() {
   document.getElementById('clay-primitive').textContent = s.packagePrimitiveSourceContract || 'none';
   document.getElementById('clay-primitive-probe').textContent = s.sharedPrimitiveProbeStatus || 'not-run';
   document.getElementById('clay-primitive-commit').textContent = s.packagePrimitiveCommit || 'none';
+  document.getElementById('clay-primitive-contacts').textContent = `${s.primitiveContactActiveCount ?? 0} / ${s.primitiveContactJobCount ?? 0}`;
+  document.getElementById('clay-primitive-force').textContent = Number.isFinite(s.primitiveContactForceSum) ? s.primitiveContactForceSum.toFixed(2) : '0.00';
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
 }

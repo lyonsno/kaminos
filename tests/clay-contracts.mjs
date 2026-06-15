@@ -14,6 +14,8 @@ assert.match(index, /__kaminosClayPrototype/, 'clay route exposes a witness/debu
 assert.match(index, /clay_fixture_hand/, 'clay route exposes a deterministic hand-collider fixture');
 assert.match(index, /clay-primitive-probe/, 'Clay panel exposes package primitive probe status');
 assert.match(index, /clay-primitive-commit/, 'Clay panel exposes package primitive commit identity');
+assert.match(index, /clay-primitive-contacts/, 'Clay panel exposes primitive-driven contact count');
+assert.match(index, /clay-primitive-force/, 'Clay panel exposes primitive-derived force');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -29,6 +31,12 @@ assert.doesNotMatch(core, /export const pointTriangleDistanceWgsl = 'fn point_tr
 assert.match(core, /sharedPrimitiveProbeStatus/, 'clay debug state records package primitive WebGPU probe status');
 assert.match(core, /sharedPrimitiveProbeFeature/, 'clay debug state records package primitive feature readback');
 assert.match(core, /sharedPrimitiveProbeTriangleIndex/, 'clay debug state records package primitive identity readback');
+assert.match(core, /runPrimitiveContactPass/, 'clay step uses package point-triangle primitive for contact pass');
+assert.match(core, /primitiveContactPassStatus/, 'clay debug state records primitive contact pass status');
+assert.match(core, /primitiveContactJobCount/, 'clay debug state records primitive contact job count');
+assert.match(core, /primitiveContactActiveCount/, 'clay debug state records active primitive contacts');
+assert.match(core, /primitiveContactMinDistance/, 'clay debug state records primitive contact distance');
+assert.match(core, /primitiveContactForceSum/, 'clay debug state records primitive-derived force');
 assert.match(core, /clayColliderCount/, 'clay debug state records collider count');
 assert.match(core, /clayDeformationCount/, 'clay debug state records deformation count');
 assert.match(core, /clayContactCount/, 'clay debug state records contact count');
@@ -53,6 +61,9 @@ assert.match(witness, /runtimeCpuFallback/, 'clay witness records CPU fallback a
 assert.match(witness, /sharedPrimitiveProbeStatus/, 'clay witness requires package primitive probe status');
 assert.match(witness, /sharedPrimitiveProbeFeature/, 'clay witness records package primitive feature readback');
 assert.match(witness, /sharedPrimitiveProbeTriangleIndex/, 'clay witness records package primitive identity readback');
+assert.match(witness, /primitiveContactPassStatus/, 'clay witness requires primitive contact pass status');
+assert.match(witness, /primitiveContactActiveCount/, 'clay witness records active primitive contacts');
+assert.match(witness, /primitiveContactForceSum/, 'clay witness records primitive-derived force');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

@@ -193,6 +193,11 @@ async function main() {
       Math.abs((state.sharedPrimitiveProbeDistanceSq ?? Number.NaN) - 0.25) <= 1e-5,
       `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
     );
+    assert.equal(state.primitiveContactPassStatus, 'pass');
+    assert.ok((state.primitiveContactJobCount ?? 0) >= 5, 'primitive contact pass did not process hand colliders');
+    assert.ok((state.primitiveContactActiveCount ?? 0) >= 5, 'primitive contact pass did not report active contacts');
+    assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'primitive contact pass did not record a minimum distance');
+    assert.ok((state.primitiveContactForceSum ?? 0) > 0, 'primitive contact pass did not derive positive force');
     assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
     assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
@@ -225,6 +230,11 @@ async function main() {
       sharedPrimitiveProbeDistanceSq: state.sharedPrimitiveProbeDistanceSq,
       sharedPrimitiveProbeFeature: state.sharedPrimitiveProbeFeature,
       sharedPrimitiveProbeTriangleIndex: state.sharedPrimitiveProbeTriangleIndex,
+      primitiveContactPassStatus: state.primitiveContactPassStatus,
+      primitiveContactJobCount: state.primitiveContactJobCount,
+      primitiveContactActiveCount: state.primitiveContactActiveCount,
+      primitiveContactMinDistance: state.primitiveContactMinDistance,
+      primitiveContactForceSum: state.primitiveContactForceSum,
       clayColliderCount: state.clayColliderCount,
       clayContactCount: state.clayContactCount,
       clayDeformationCount: state.clayDeformationCount,
