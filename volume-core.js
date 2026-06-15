@@ -6,6 +6,12 @@ const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const MAX_VOLUME_PRIMITIVE_SOURCES = 4;
 const VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY = 'volume-primitive-scene-bounds-source-domain-v1';
+const VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY = 'volume-source-type-taxonomy-v0';
+const VOLUME_SOURCE_TYPE_MIXES = Object.freeze({
+  fire: Object.freeze({ fire: 1, smoke: 0.12 }),
+  smoke: Object.freeze({ fire: 0, smoke: 1 }),
+  fire_smoke: Object.freeze({ fire: 1, smoke: 1 }),
+});
 const VOLUME_PRIMITIVE_SOURCE_SCENE_BOUNDS = Object.freeze({
   min: [-5, -2.5, -5],
   max: [5, 3, 5],
@@ -576,6 +582,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let sourceCount = u32(clamp(u.primitive_source_meta.x, 1.0, f32(MAX_VOLUME_PRIMITIVE_SOURCES)));
   var source = 0.0;
+  var smokeSource = 0.0;
+  var heatSource = 0.0;
   var fireBirth = 0.0;
   var emberRing = 0.0;
   var primitiveCenteredInfluence = 0.0;
@@ -585,6 +593,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let sourceParams = u.primitive_source_params[sourceIndex];
       let inputRadius = max(0.04, sourceParams.x);
       let inputFlow = max(0.0, sourceParams.y);
+      let sourceFireMix = clamp(sourceParams.z, 0.0, 1.0);
+      let sourceSmokeMix = clamp(sourceParams.w, 0.0, 1.0);
+      let sourceAnyMix = max(sourceFireMix, sourceSmokeMix);
       let primitiveCenteredBody = clamp(sourceVector.w, 0.0, 1.0);
       let sourceCenter = sceneP - sourceVector.xyz;
       let sourceRadial = length(sourceCenter.xz);
@@ -604,13 +615,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let effectiveFireBirthBand = mix(fireBirthBand, primitiveFireBirthBand, primitiveCenteredBody);
       let plumeFireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
       let primitiveFireBirth = exp(-sourceDistance * sourceDistance * sourceFalloff * 1.18) * effectiveFireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
-      source = source + localSource;
-      fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody);
-      emberRing = emberRing + localEmberRing;
+      source = source + localSource * sourceAnyMix;
+      smokeSource = smokeSource + localSource * sourceSmokeMix;
+      heatSource = heatSource + localSource * sourceFireMix;
+      fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody) * sourceFireMix;
+      emberRing = emberRing + localEmberRing * max(sourceFireMix, sourceSmokeMix * 0.18);
       primitiveCenteredInfluence = max(primitiveCenteredInfluence, primitiveCenteredBody * smoothstep(0.0008, 0.035, localSource));
     }
   }
   source = min(source, 2.5);
+  smokeSource = min(smokeSource, 2.5);
+  heatSource = min(heatSource, 2.5);
   fireBirth = min(fireBirth, 2.5);
   emberRing = min(emberRing, 2.0);
   let primitiveBodyVelocityDamping = mix(1.0, 0.48, clamp(primitiveCenteredInfluence, 0.0, 1.0));
@@ -637,9 +652,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.009 * curl;
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
-  smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
-  heat = max(heat, source * 0.86 + emberRing * 0.22);
-  fuel = max(fuel, source * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
+  smoke = max(smoke + smokeFromHeat, smokeSource * 0.54 + emberRing * 0.16);
+  heat = max(heat, heatSource * 0.86 + emberRing * 0.22);
+  fuel = max(fuel, heatSource * 0.88 * (1.0 - smoothstep(-0.74, -0.18, p.y)));
   fuel = max(fuel - heat * 0.018, 0.0);
   materialDetail = max(materialDetail, (source + emberRing + smokeFromHeat * 3.2) * (0.32 + 0.56 * breakup));
   microSmoke = max(microSmoke, (source * 0.26 + smokeFromHeat * 0.70 + materialDetail * 0.18) * microAmount * (0.48 + 0.52 * breakup));
@@ -902,10 +917,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const transform = source.transform && typeof source.transform === 'object' ? source.transform : {};
     const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : {};
     const scale = Array.isArray(transform.scale) ? transform.scale.map(Number) : [0.12, 0.12, 0.12];
+    const sourceType = normalizePrimitiveSourceType(source.sourceType || source.kind);
+    const sourceMix = primitiveSourceMix(source, sourceType);
     return {
       ...source,
       id: String(source.id || 'volume-primitive-0'),
       kind: String(source.kind || 'fire_smoke'),
+      sourceType,
+      sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
+      sourceMix,
       shape: String(source.shape || 'sphere'),
       volumeBodyMode: String(source.volumeBodyMode || ''),
       transform: {
@@ -918,6 +938,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sourceRadius: Number.isFinite(Number(simulation.sourceRadius)) ? Number(simulation.sourceRadius) : Math.max(0.08, Number(scale[0]) || 0.12),
         flowRate: Number.isFinite(Number(simulation.flowRate)) ? Number(simulation.flowRate) : (controlsSnapshot.flowRate ?? 0.3),
       },
+    };
+  }
+
+  function normalizePrimitiveSourceType(sourceType = 'fire_smoke') {
+    const key = String(sourceType || 'fire_smoke');
+    return VOLUME_SOURCE_TYPE_MIXES[key] ? key : 'fire_smoke';
+  }
+
+  function primitiveSourceMix(primitive, sourceType = 'fire_smoke') {
+    const preset = VOLUME_SOURCE_TYPE_MIXES[normalizePrimitiveSourceType(sourceType)] || VOLUME_SOURCE_TYPE_MIXES.fire_smoke;
+    const sourceMix = primitive?.sourceMix && typeof primitive.sourceMix === 'object' ? primitive.sourceMix : {};
+    const channels = primitive?.channels && typeof primitive.channels === 'object' ? primitive.channels : {};
+    const fire = Number(sourceMix.fire ?? channels.fireSource ?? preset.fire);
+    const smoke = Number(sourceMix.smoke ?? channels.smokeSource ?? preset.smoke);
+    return {
+      fire: Number.isFinite(fire) ? Math.max(0, Math.min(1, fire)) : preset.fire,
+      smoke: Number.isFinite(smoke) ? Math.max(0, Math.min(1, smoke)) : preset.smoke,
     };
   }
 
@@ -938,6 +975,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.volumePrimitives = volumePrimitives.map(primitive => ({
       id: primitive.id,
       kind: primitive.kind,
+      sourceType: primitive.sourceType,
+      sourceTaxonomyIdentity: primitive.sourceTaxonomyIdentity,
+      sourceMix: primitive.sourceMix,
       shape: primitive.shape,
       couplingSource: primitive.couplingSource,
       volumeBodyMode: primitive.volumeBodyMode,
@@ -974,14 +1014,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const primitiveCenteredBody = primitive.volumeBodyMode === 'primitive-centered-sphere-volume-v0' || primitive.couplingSource === 'manual';
     const scenePosition = Array.isArray(primitive.transform?.position) ? primitive.transform.position : [0, -0.58, 0];
     const nativeSourcePosition = normalizePrimitiveNativeSourcePosition(scenePosition);
+    const sourceType = normalizePrimitiveSourceType(primitive.sourceType || primitive.kind);
+    const sourceMix = primitiveSourceMix(primitive, sourceType);
     return {
       id: primitive.id,
+      sourceType,
+      sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
       position: [...scenePosition],
       scenePosition: [...scenePosition],
       nativeSourcePosition,
       sourceMappingIdentity: VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY,
       radius: Math.max(0.32, primitive.simulation.sourceRadius * 2.0),
       flowRate: Math.max(0, primitive.simulation.flowRate),
+      fireSourceMix: sourceMix.fire,
+      smokeSourceMix: sourceMix.smoke,
       primitiveCenteredBody,
       bodyMode: primitiveCenteredBody ? 'primitive-centered-sphere-volume-v0' : 'legacy-plume-source-v0',
     };
@@ -990,12 +1036,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function getLegacyPrimitiveSource() {
     return {
       id: 'legacy-plume-source',
+      sourceType: 'fire_smoke',
+      sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
       position: [0, -0.74, 0],
       scenePosition: [0, -0.74, 0],
       nativeSourcePosition: normalizePrimitiveNativeSourcePosition([0, -0.74, 0]),
       sourceMappingIdentity: 'legacy-plume-source-scene-domain-v0',
       radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
       flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      fireSourceMix: 1,
+      smokeSourceMix: 1,
       primitiveCenteredBody: false,
       bodyMode: 'legacy-plume-source-v0',
     };
@@ -1013,12 +1063,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function serializePrimitiveSource(sourcePrimitive) {
     return {
       id: sourcePrimitive.id,
+      sourceType: sourcePrimitive.sourceType || 'fire_smoke',
+      sourceTaxonomyIdentity: sourcePrimitive.sourceTaxonomyIdentity || VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
       position: [...sourcePrimitive.position],
       scenePosition: [...(sourcePrimitive.scenePosition || sourcePrimitive.position)],
       nativeSourcePosition: [...(sourcePrimitive.nativeSourcePosition || sourcePrimitive.position)],
       sourceMappingIdentity: sourcePrimitive.sourceMappingIdentity || 'legacy-plume-source-scene-domain-v0',
       radius: sourcePrimitive.radius,
       flowRate: sourcePrimitive.flowRate,
+      fireSourceMix: sourcePrimitive.fireSourceMix ?? 1,
+      smokeSourceMix: sourcePrimitive.smokeSourceMix ?? 1,
       primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,
       bodyMode: sourcePrimitive.bodyMode,
     };
@@ -1270,8 +1324,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       uniforms[sourceOffset + 3] = source?.primitiveCenteredBody ? 1 : 0;
       uniforms[paramsOffset] = source?.radius ?? sourcePrimitive.radius;
       uniforms[paramsOffset + 1] = source?.flowRate ?? 0;
-      uniforms[paramsOffset + 2] = source ? 1 : 0;
-      uniforms[paramsOffset + 3] = 0;
+      uniforms[paramsOffset + 2] = source?.fireSourceMix ?? sourcePrimitive.fireSourceMix ?? 1;
+      uniforms[paramsOffset + 3] = source?.smokeSourceMix ?? sourcePrimitive.smokeSourceMix ?? 1;
     }
     uniforms[primitiveSourceMetaBase] = sourcePrimitives.length;
     uniforms[primitiveSourceMetaBase + 1] = MAX_VOLUME_PRIMITIVE_SOURCES;

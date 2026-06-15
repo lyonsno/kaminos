@@ -365,6 +365,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Selected</span><span class="field-val" id="volume-selected-primitive">none</span></div>
       <div class="field"><span class="field-key">Primitive</span><select class="select-input" id="volume-primitive-select"></select></div>
       <div class="volume-actions">
+        <button class="btn" id="volume-add-fire">Add Fire</button>
+        <button class="btn" id="volume-add-smoke">Add Smoke</button>
         <button class="btn" id="volume-add-fire-smoke">Add Fire+Smoke</button>
         <button class="btn" id="volume-primitive-context-button">Actions</button>
       </div>
@@ -374,6 +376,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="menu-item" id="volume-primitive-delete">Delete</button>
       </div>
       <div class="volume-section-title" data-parameter-ownership="primitive-local-applied">Primitive Source</div>
+      <div class="field" data-parameter-ownership="primitive-local-applied">
+        <span class="field-key">Source</span>
+        <select class="select-input" id="volume-source-type-select">
+          <option value="fire">Fire</option>
+          <option value="smoke">Smoke</option>
+          <option value="fire_smoke" selected>Fire+Smoke</option>
+        </select>
+      </div>
       <div class="slider-row" data-parameter-ownership="primitive-local-applied">
         <span class="slider-label">Prim Radius</span>
         <input type="range" id="volume-primitive-radius" min="0.06" max="0.5" step="0.01" value="0.12">
@@ -681,9 +691,58 @@ let volumePrototype = null;
 let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const VOLUME_PRIMITIVE_LOCAL_SETTINGS_IDENTITY = 'volume-primitive-local-settings-v0';
+const VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY = 'volume-source-type-taxonomy-v0';
+const VOLUME_SOURCE_TYPES = Object.freeze({
+  fire: Object.freeze({
+    sourceType: 'fire',
+    label: 'Fire',
+    kind: 'fire',
+    authoringTool: 'volume-add-fire',
+    sourceMix: Object.freeze({ fire: 1, smoke: 0.12 }),
+    channels: Object.freeze({
+      density: 0.72,
+      temperature: 1,
+      fuel: 1,
+      smoke: 0.18,
+      emissive: 1,
+      absorption: 0.42,
+    }),
+  }),
+  smoke: Object.freeze({
+    sourceType: 'smoke',
+    label: 'Smoke',
+    kind: 'smoke',
+    authoringTool: 'volume-add-smoke',
+    sourceMix: Object.freeze({ fire: 0, smoke: 1 }),
+    channels: Object.freeze({
+      density: 1,
+      temperature: 0.08,
+      fuel: 0,
+      smoke: 1,
+      emissive: 0.04,
+      absorption: 0.9,
+    }),
+  }),
+  fire_smoke: Object.freeze({
+    sourceType: 'fire_smoke',
+    label: 'Fire+Smoke',
+    kind: 'fire_smoke',
+    authoringTool: 'volume-add-fire-smoke',
+    sourceMix: Object.freeze({ fire: 1, smoke: 1 }),
+    channels: Object.freeze({
+      density: 1,
+      temperature: 1,
+      fuel: 0.9,
+      smoke: 1,
+      emissive: 1,
+      absorption: 0.85,
+    }),
+  }),
+});
 const VOLUME_PARAMETER_OWNERSHIP = Object.freeze({
   identity: 'volume-parameter-ownership-taxonomy-v0',
   primitiveAppliedControlIds: [
+    'volume-source-type-select',
     'volume-primitive-radius',
     'volume-primitive-flow-rate',
   ],
@@ -743,6 +802,49 @@ function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
 }
 
+function normalizeVolumeSourceType(sourceType = 'fire_smoke') {
+  const key = String(sourceType || 'fire_smoke');
+  return VOLUME_SOURCE_TYPES[key] ? key : 'fire_smoke';
+}
+
+function volumeSourceTypeDefinition(sourceType = 'fire_smoke') {
+  return VOLUME_SOURCE_TYPES[normalizeVolumeSourceType(sourceType)];
+}
+
+function volumeSourceTypeTaxonomyState() {
+  return {
+    identity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
+    sourceTypes: Object.values(VOLUME_SOURCE_TYPES).map(type => ({
+      sourceType: type.sourceType,
+      label: type.label,
+      kind: type.kind,
+      authoringTool: type.authoringTool,
+      sourceMix: { ...type.sourceMix },
+      channels: { ...type.channels },
+    })),
+  };
+}
+
+function applyVolumeSourceTypeToPrimitive(primitive, sourceType = 'fire_smoke', options = {}) {
+  const definition = volumeSourceTypeDefinition(sourceType);
+  primitive.sourceType = definition.sourceType;
+  primitive.sourceTaxonomyIdentity = VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY;
+  primitive.kind = definition.kind;
+  primitive.channels = {
+    ...definition.channels,
+    ...(options.channelOverrides || {}),
+  };
+  primitive.sourceMix = {
+    ...definition.sourceMix,
+    ...(options.sourceMixOverrides || {}),
+  };
+  primitive.coupling = {
+    ...(primitive.coupling || {}),
+    authoringTool: definition.authoringTool,
+  };
+  return primitive;
+}
+
 function createVolumePrimitiveFixture(name = 'fire_sphere') {
   if (['lamellar_hook', 'lamellar_selected_hook'].includes(name)) {
     return createLamellarHookVolumePrimitiveFixture();
@@ -751,6 +853,8 @@ function createVolumePrimitiveFixture(name = 'fire_sphere') {
   return {
     id: 'fixture-fire-smoke-sphere',
     kind: 'fire_smoke',
+    sourceType: 'fire_smoke',
+    sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
     shape: 'sphere',
     transform: {
       position: [0, -0.74, 0],
@@ -758,13 +862,9 @@ function createVolumePrimitiveFixture(name = 'fire_sphere') {
       scale: [0.12, 0.12, 0.12],
     },
     channels: {
-      density: 1,
-      temperature: 1,
-      fuel: 0.9,
-      smoke: 1,
-      emissive: 1,
-      absorption: 0.85,
+      ...VOLUME_SOURCE_TYPES.fire_smoke.channels,
     },
+    sourceMix: { ...VOLUME_SOURCE_TYPES.fire_smoke.sourceMix },
     coupling: {
       source: 'route-fixture',
       targetHook: 'native-fluid-source',
@@ -785,6 +885,8 @@ function createLamellarHookVolumePrimitiveFixture() {
   return {
     id: 'fixture-lamellar-hook-selected',
     kind: 'lamellar_hook_emitter',
+    sourceType: 'fire_smoke',
+    sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
     shape: 'hook-derived',
     couplingSource: 'lamellar',
     targetHookId: 'lamellar-0-0-selected',
@@ -803,6 +905,7 @@ function createLamellarHookVolumePrimitiveFixture() {
       emissive: 0.78,
       absorption: 0.58,
     },
+    sourceMix: { ...VOLUME_SOURCE_TYPES.fire_smoke.sourceMix },
     coupling: {
       source: 'lamellar',
       couplingSource: 'lamellar',
@@ -854,11 +957,15 @@ function normalizeVolumePrimitive(primitive) {
   const transform = source.transform && typeof source.transform === 'object' ? source.transform : fixture.transform;
   const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : fixture.simulation;
   const render = source.render && typeof source.render === 'object' ? source.render : fixture.render;
+  const sourceType = normalizeVolumeSourceType(source.sourceType || (VOLUME_SOURCE_TYPES[source.kind] ? source.kind : fixture.sourceType));
+  const sourceDefinition = volumeSourceTypeDefinition(sourceType);
   return {
     ...fixture,
     ...source,
     id: String(source.id || fixture.id),
-    kind: String(source.kind || fixture.kind),
+    kind: String(source.kind || sourceDefinition.kind || fixture.kind),
+    sourceType,
+    sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
     shape: String(source.shape || fixture.shape),
     transform: {
       position: Array.isArray(transform.position) ? transform.position.map(Number) : [...fixture.transform.position],
@@ -872,6 +979,14 @@ function normalizeVolumePrimitive(primitive) {
     render: {
       ...(fixture.render || {}),
       ...render,
+    },
+    channels: {
+      ...sourceDefinition.channels,
+      ...(source.channels || fixture.channels || {}),
+    },
+    sourceMix: {
+      ...sourceDefinition.sourceMix,
+      ...(source.sourceMix || fixture.sourceMix || {}),
     },
     authoring: normalizeVolumePrimitiveAuthoring(source.authoring),
   };
@@ -929,15 +1044,17 @@ function normalizeVolumePrimitiveScenePosition(position = [0, -0.58, 0]) {
 function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options = {}) {
   const controlsSnapshot = typeof readVolumeControls === 'function' ? readVolumeControls() : {};
   const scenePosition = normalizeVolumePrimitiveScenePosition(position);
+  const sourceType = normalizeVolumeSourceType(options.sourceType || volumeAuthoringMode || 'fire_smoke');
+  const sourceDefinition = volumeSourceTypeDefinition(sourceType);
   const radius = Number(options.radius ?? controlsSnapshot.inputRadius ?? 0.12);
   const flowRate = Number(options.flowRate ?? controlsSnapshot.flowRate ?? 0.15);
   const radiance = Number(options.radiance ?? controlsSnapshot.radiance ?? 1.65);
   const glow = Number(options.glow ?? controlsSnapshot.glow ?? 1.15);
-  const smoke = Number(options.smoke ?? controlsSnapshot.smoke ?? 1);
-  const density = Number(options.density ?? controlsSnapshot.density ?? 1);
-  return {
-    id: String(options.id || makeSceneObjectId('manual-fire-smoke')),
-    kind: 'fire_smoke',
+  const sourcePrimitive = {
+    id: String(options.id || makeSceneObjectId(`manual-${sourceType.replace('_', '-')}`)),
+    kind: sourceDefinition.kind,
+    sourceType,
+    sourceTaxonomyIdentity: VOLUME_SOURCE_TYPE_TAXONOMY_IDENTITY,
     shape: 'sphere',
     volumeBodyMode: 'primitive-centered-sphere-volume-v0',
     couplingSource: 'manual',
@@ -947,17 +1064,20 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
       scale: [radius, radius, radius],
     },
     channels: {
-      density,
-      temperature: 1,
-      fuel: 0.9,
-      smoke,
-      emissive: 1,
-      absorption: Number(options.absorption ?? controlsSnapshot.absorption ?? 0.85),
+      ...sourceDefinition.channels,
+      ...(options.channels || {}),
+      density: Number(options.density ?? sourceDefinition.channels.density),
+      smoke: Number(options.smoke ?? sourceDefinition.channels.smoke),
+      absorption: Number(options.absorption ?? sourceDefinition.channels.absorption),
+    },
+    sourceMix: {
+      ...sourceDefinition.sourceMix,
+      ...(options.sourceMix || {}),
     },
     coupling: {
       source: 'manual',
       targetHook: 'native-fluid-source',
-      authoringTool: 'volume-add-fire-smoke',
+      authoringTool: sourceDefinition.authoringTool,
     },
     simulation: {
       sourceRadius: radius,
@@ -970,6 +1090,7 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
     },
     authoring: normalizeVolumePrimitiveAuthoring(options.authoring),
   };
+  return sourcePrimitive;
 }
 
 function volumePrimitivePosition(primitive) {
@@ -1026,6 +1147,7 @@ function refreshVolumePrimitiveSelector() {
 function refreshVolumePrimitivePanel() {
   const primitive = selectedVolumePrimitive();
   const selectedEl = document.getElementById('volume-selected-primitive');
+  const sourceTypeEl = document.getElementById('volume-source-type-select');
   const radiusEl = document.getElementById('volume-primitive-radius');
   const radiusVal = document.getElementById('volume-primitive-radius-val');
   const flowEl = document.getElementById('volume-primitive-flow-rate');
@@ -1036,10 +1158,10 @@ function refreshVolumePrimitivePanel() {
   const handleOpacityEl = document.getElementById('volume-marker-opacity');
   refreshVolumePrimitiveSelector();
   updateVolumeMarkerControlLabels();
-  if (!selectedEl || !radiusEl || !flowEl || !radianceEl) return;
+  if (!selectedEl || !sourceTypeEl || !radiusEl || !flowEl || !radianceEl) return;
   selectedEl.textContent = primitive ? primitive.id : 'none';
   selectedEl.title = primitive ? primitive.id : '';
-  for (const el of [radiusEl, flowEl, radianceEl, handleVisibleEl, handleOpacityEl]) {
+  for (const el of [sourceTypeEl, radiusEl, flowEl, radianceEl, handleVisibleEl, handleOpacityEl]) {
     if (el) el.disabled = !primitive;
   }
   if (!primitive) {
@@ -1051,6 +1173,7 @@ function refreshVolumePrimitivePanel() {
     return;
   }
   const markerSettings = volumePrimitiveMarkerSettings(primitive);
+  sourceTypeEl.value = normalizeVolumeSourceType(primitive.sourceType);
   radiusEl.value = String(volumePrimitiveRadius(primitive));
   flowEl.value = String(Number(primitive.simulation?.flowRate ?? 0.15));
   radianceEl.value = String(Number(primitive.render?.radiance ?? 1.65));
@@ -1072,7 +1195,13 @@ function applySelectedVolumePrimitiveControls() {
   const radius = Number(document.getElementById('volume-primitive-radius')?.value ?? primitive.simulation?.sourceRadius ?? 0.12);
   const flowRate = Number(document.getElementById('volume-primitive-flow-rate')?.value ?? primitive.simulation?.flowRate ?? 0.15);
   const radiance = Number(document.getElementById('volume-primitive-radiance')?.value ?? primitive.render?.radiance ?? 1.65);
+  const sourceType = normalizeVolumeSourceType(document.getElementById('volume-source-type-select')?.value ?? primitive.sourceType ?? 'fire_smoke');
+  const sourceTypeChanged = sourceType !== normalizeVolumeSourceType(primitive.sourceType);
   const panelMarkerSettings = readVolumeMarkerControls();
+  applyVolumeSourceTypeToPrimitive(primitive, sourceType, {
+    channelOverrides: sourceTypeChanged ? {} : { ...(primitive.channels || {}) },
+    sourceMixOverrides: sourceTypeChanged ? {} : { ...(primitive.sourceMix || {}) },
+  });
   primitive.transform = primitive.transform || { position: [0, -0.58, 0], rotation: [0, 0, 0], scale: [radius, radius, radius] };
   primitive.transform.scale = [radius, radius, radius];
   primitive.simulation = { ...(primitive.simulation || {}), sourceRadius: radius, flowRate };
@@ -1087,6 +1216,21 @@ function applySelectedVolumePrimitiveControls() {
   attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
   refreshVolumePrimitivePanel();
   window._kaminosDirty?.();
+}
+
+function setSelectedVolumePrimitiveSourceType(sourceType = 'fire_smoke') {
+  const primitive = selectedVolumePrimitive();
+  if (!primitive) return null;
+  applyVolumeSourceTypeToPrimitive(primitive, sourceType);
+  const sourceTypeEl = document.getElementById('volume-source-type-select');
+  if (sourceTypeEl) sourceTypeEl.value = primitive.sourceType;
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  syncVolumePrimitiveMarkers();
+  attachVolumePrimitiveTransform(selectedVolumePrimitiveId);
+  refreshVolumePrimitivePanel();
+  window._kaminosDirty?.();
+  return primitive;
 }
 
 function selectVolumePrimitive(id) {
@@ -1321,16 +1465,22 @@ function syncVolumePrimitiveMarkers() {
 }
 
 function armVolumePrimitiveTool(kind = 'fire_smoke') {
-  volumeAuthoringMode = kind;
-  document.getElementById('volume-add-fire-smoke')?.classList.toggle('active', kind === 'fire_smoke');
+  const sourceType = normalizeVolumeSourceType(kind);
+  const sourceDefinition = volumeSourceTypeDefinition(sourceType);
+  volumeAuthoringMode = sourceType;
+  for (const type of Object.values(VOLUME_SOURCE_TYPES)) {
+    document.getElementById(type.authoringTool)?.classList.toggle('active', type.sourceType === sourceType);
+  }
   setActiveTab('volume');
-  setInfo('Click viewport to place Fire+Smoke volume primitive');
+  setInfo(`Click viewport to place ${sourceDefinition.label} volume primitive`);
   return volumeAuthoringMode;
 }
 
 function disarmVolumePrimitiveTool() {
   volumeAuthoringMode = null;
-  document.getElementById('volume-add-fire-smoke')?.classList.remove('active');
+  for (const type of Object.values(VOLUME_SOURCE_TYPES)) {
+    document.getElementById(type.authoringTool)?.classList.remove('active');
+  }
 }
 
 function viewportPointerNdc(event) {
@@ -1342,7 +1492,10 @@ function viewportPointerNdc(event) {
 }
 
 function placeVolumePrimitiveAt(position, options = {}) {
-  const primitive = createManualFireSmokeVolumePrimitive(position, options);
+  const primitive = createManualFireSmokeVolumePrimitive(position, {
+    ...options,
+    sourceType: options.sourceType || volumeAuthoringMode || 'fire_smoke',
+  });
   setVolumePrimitivesState({
     schema: VOLUME_PRIMITIVE_SCHEMA,
     primitives: [...volumePrimitives, primitive],
@@ -1372,7 +1525,7 @@ function volumePlacementPointFromEvent(event) {
 }
 
 function placeVolumePrimitiveFromEvent(event) {
-  const primitive = placeVolumePrimitiveAt(volumePlacementPointFromEvent(event));
+  const primitive = placeVolumePrimitiveAt(volumePlacementPointFromEvent(event), { sourceType: volumeAuthoringMode || 'fire_smoke' });
   disarmVolumePrimitiveTool();
   setInfo(`Placed volume primitive ${primitive.id}`);
   return primitive;
@@ -1405,7 +1558,7 @@ function selectedMarkerProjection() {
 }
 
 function handleVolumeViewportPointerDown(event) {
-  if (volumeAuthoringMode === 'fire_smoke') {
+  if (VOLUME_SOURCE_TYPES[volumeAuthoringMode]) {
     event.preventDefault();
     event.stopImmediatePropagation();
     placeVolumePrimitiveFromEvent(event);
@@ -2991,16 +3144,21 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
-  document.getElementById('volume-add-fire-smoke').addEventListener('click', () => {
-    if (volumeAuthoringMode === 'fire_smoke') {
-      disarmVolumePrimitiveTool();
-      setInfo('Volume primitive placement cancelled');
-    } else {
-      armVolumePrimitiveTool('fire_smoke');
-    }
-  });
+  for (const type of Object.values(VOLUME_SOURCE_TYPES)) {
+    document.getElementById(type.authoringTool)?.addEventListener('click', () => {
+      if (volumeAuthoringMode === type.sourceType) {
+        disarmVolumePrimitiveTool();
+        setInfo('Volume primitive placement cancelled');
+      } else {
+        armVolumePrimitiveTool(type.sourceType);
+      }
+    });
+  }
   document.getElementById('volume-primitive-select').addEventListener('change', event => {
     selectVolumePrimitive(event.target.value || null);
+  });
+  document.getElementById('volume-source-type-select').addEventListener('change', event => {
+    setSelectedVolumePrimitiveSourceType(event.target.value || 'fire_smoke');
   });
   document.getElementById('volume-marker-visible').addEventListener('change', applySelectedVolumePrimitiveControls);
   document.getElementById('volume-marker-opacity').addEventListener('input', applySelectedVolumePrimitiveControls);
@@ -3039,6 +3197,7 @@ async function initKaminosVolumeRoute() {
       if (values.radius !== undefined) document.getElementById('volume-primitive-radius').value = String(values.radius);
       if (values.flowRate !== undefined) document.getElementById('volume-primitive-flow-rate').value = String(values.flowRate);
       if (values.radiance !== undefined) document.getElementById('volume-primitive-radiance').value = String(values.radiance);
+      if (values.sourceType !== undefined) document.getElementById('volume-source-type-select').value = normalizeVolumeSourceType(values.sourceType);
       if (values.handleOpacity !== undefined) document.getElementById('volume-marker-opacity').value = String(values.handleOpacity);
       if (values.handleVisible !== undefined) document.getElementById('volume-marker-visible').checked = !!values.handleVisible;
       applySelectedVolumePrimitiveControls();
@@ -3069,6 +3228,8 @@ async function initKaminosVolumeRoute() {
         markerOpacity: selectedMarkerSettings.handleOpacity,
         markerVisible: selectedMarkerSettings.handleVisible,
         parameterOwnership: volumeParameterOwnershipState(),
+        sourceTypeTaxonomy: volumeSourceTypeTaxonomyState(),
+        selectedSourceType: selectedVolumePrimitive()?.sourceType || null,
         selectedMarkerBelowGround,
         selectedMarkerDepthTest: selectedMarker?.material?.depthTest ?? null,
         selectedMarkerRenderOrder: selectedMarker?.renderOrder ?? null,
