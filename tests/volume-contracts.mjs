@@ -188,7 +188,7 @@ assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup us
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
 assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
 assert.match(core, /bonfireSwirlSymmetryGain/, 'bonfire scene damps one-handed global swirl at zero wind so liveliness does not read as wind drift');
-assert.match(core, /bonfireNoWindSymmetryBlend/, 'bonfire scene softly recenters accumulated material around the source when explicit wind is off');
+assert.match(core, /bonfireScalarSymmetryBlend/, 'bonfire scene softly recenters accumulated material around the source when explicit wind is off');
 assert.match(core, /microTextureSignal/, 'raymarch keeps microdetail texture separate from body density');
 assert.match(core, /microBodyContribution/, 'raymarch limits microdetail contribution to visible volume body');
 assert.match(core, /rayStepOpacity/, 'raymarch alpha integrates with per-step optical thickness');
@@ -287,6 +287,9 @@ assert.match(core, /state\.volumeScene/, 'debug state exposes the effective volu
 assert.match(core, /volumeScene/, 'renderer controls carry named scene identity for witness/debug routing');
 assert.match(core, /scene_controls/, 'fluid uniforms carry scene-shaping controls into the shader');
 assert.match(core, /bonfireScene/, 'fluid source shaping names the bottom-fireball scene branch');
+assert.match(core, /bonfireSourceY/, 'bonfire source names its vertical source origin instead of hiding it in a magic constant');
+assert.match(core, /bonfireThermalRiseDirection/, 'bonfire thermal advection names its rise direction');
+assert.doesNotMatch(core, /bonfireLiftDirection = mix\(1\.0, -1\.0, bonfireScene\)/, 'bonfire thermal rise must not be an implicit scene-mode Y-axis flip');
 assert.match(core, /bonfireSourceBreakup/, 'bonfire source shaping uses centered radial breakup instead of one-sided column breakup');
 assert.match(core, /bonfireDetailBreakup/, 'bonfire detail birth uses centered radial breakup under zero wind');
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
@@ -302,8 +305,8 @@ assert.match(core, /bonfireWindResponseGain/, 'bonfire scene gives explicit wind
 assert.match(core, /bonfireNonWindLateralDamping/, 'bonfire scene damps non-wind lateral drift before explicit wind is applied');
 assert.match(core, /bonfireNonWindCenteringForce/, 'bonfire scene recenters low-wind plume drift around the source before explicit wind is applied');
 assert.match(core, /bonfireNonWindRecenteringGain/, 'bonfire scene names its zero-wind recentering gain so lively detail cannot impersonate wind drift');
-assert.match(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 - explicitWindAuthority\);/, 'zero-wind bonfire scalar material state must be XZ symmetric unless explicit wind has authority');
-assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend \* 0\.[0-9]+/, 'zero-wind bonfire symmetry must not be a weak partial blend that lets one side accumulate');
+assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
+assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 - explicitWindAuthority\);/, 'bonfire no-wind correction must not fully mirror material state and kill vertical advection');
 assert.doesNotMatch(core, /mix\(0\.12, 1\.0, explicitWindAuthority\)/, 'bonfire no-wind thermal advection must not retain hidden lateral slip');
 assert.doesNotMatch(core, /mix\(0\.22, 0\.68, explicitWindAuthority\)/, 'bonfire no-wind detail forces must not retain hidden lateral slip');
 assert.doesNotMatch(core, /mix\(0\.16, 1\.0, explicitWindAuthority\)/, 'bonfire no-wind swirl must not retain hidden lateral motion');
@@ -337,6 +340,9 @@ assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection
 assert.match(core, /smokeCenterX/, 'sim readback reports smoke center of mass in simulation X');
 assert.match(core, /smokeCenterZ/, 'sim readback reports smoke center of mass in simulation Z');
 assert.match(core, /fireCenterX/, 'sim readback reports fire center of mass in simulation X');
+assert.match(core, /smokeVelocityY/, 'sim readback reports smoke-weighted vertical transport');
+assert.match(core, /fireVelocityY/, 'sim readback reports fire-weighted vertical transport');
+assert.match(core, /smokeVisualRiseVelocity/, 'sim readback reports scene-aware visual upward smoke transport');
 assert.match(core, /plumeHeightBins/, 'sim readback reports per-height plume drift bins');
 assert.match(core, /sampleGridStep/, 'sim readback samples the 3D grid with a per-axis lattice step');
 assert.match(core, /sampleGridAxis/, 'sim readback uses endpoint-balanced lattice coordinates on even grids');

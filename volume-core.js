@@ -1016,13 +1016,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
   let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
   let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
-  let bonfireNoWindSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority);
+  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.24;
   let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
   let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
   let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
-  material = mix(material, symmetricMaterial, bonfireNoWindSymmetryBlend);
-  fireLayer = mix(fireLayer, symmetricFireLayer, bonfireNoWindSymmetryBlend);
-  microLayer = mix(microLayer, symmetricMicroLayer, bonfireNoWindSymmetryBlend);
+  material = mix(material, symmetricMaterial, bonfireScalarSymmetryBlend);
+  fireLayer = mix(fireLayer, symmetricFireLayer, bonfireScalarSymmetryBlend * 0.70);
+  microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
@@ -1060,11 +1060,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
-  let bonfireVertical = (p.y - 0.62) / 0.23;
+  let bonfireSourceY = 0.62;
+  let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
   let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
   let bonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
-  let bonfireSmokeBand = smoothstep(0.30, 0.52, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
+  let bonfireSmokeBand = smoothstep(bonfireSourceY - 0.32, bonfireSourceY - 0.10, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
   let bonfireSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.72 + 0.44 * bonfireSourceBreakup) * inputFlow;
   let source = mix(columnSource, max(bonfireSmokeSource, bonfireFireball * inputFlow * 0.84), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
@@ -1104,9 +1105,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + fineBreakup;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
-  let bonfireLiftDirection = mix(1.0, -1.0, bonfireScene);
-  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireLiftDirection;
-  vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireLiftDirection;
+  let bonfireThermalRiseDirection = -1.0;
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection;
+  vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
   let bonfireNonWindLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
@@ -1126,7 +1127,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   smoke = max(smoke, externalInjection.material.x * 0.76);
   heat = max(heat, source * 0.86 + emberRing * 0.22);
   heat = max(heat, externalInjection.material.y * 0.92);
-  let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), smoothstep(0.28, 0.58, p.y), bonfireScene);
+  let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
+  let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
   fuel = max(fuel, source * 0.88 * sourceFuelMask);
   fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
@@ -1148,7 +1150,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   flameDetail = max(flameDetail, (fireBirth * 1.16 + heatExpansion.y * 4.0) * (0.44 + 0.62 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34);
   flameDetail = max(flameDetail, externalInjection.fire.z);
 
-  let bonfireFireCeiling = mix(1.0, smoothstep(0.18, 0.58, p.y), bonfireScene);
+  let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.44, bonfireSourceY - 0.04, p.y), bonfireScene);
   flame = flame * bonfireFireCeiling;
   ember = ember * mix(1.0, max(0.24, bonfireFireCeiling), bonfireScene);
   flameDetail = flameDetail * bonfireFireCeiling;
@@ -2249,10 +2251,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let smokeWeightedX = 0;
     let smokeWeightedY = 0;
     let smokeWeightedZ = 0;
+    let smokeWeightedVelocityY = 0;
     let fireWeightSum = 0;
     let fireWeightedX = 0;
     let fireWeightedY = 0;
     let fireWeightedZ = 0;
+    let fireWeightedVelocityY = 0;
     const plumeHeightBinCount = 8;
     const plumeHeightBins = Array.from({ length: plumeHeightBinCount }, (_, bin) => ({
       bin,
@@ -2261,9 +2265,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeWeight: 0,
       smokeWeightedX: 0,
       smokeWeightedZ: 0,
+      smokeWeightedVelocityY: 0,
       fireWeight: 0,
       fireWeightedX: 0,
       fireWeightedZ: 0,
+      fireWeightedVelocityY: 0,
     }));
     const sampleCells = new Set();
     const addSampleCell = (x, y, z) => {
@@ -2284,10 +2290,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const plumeDriftCells = new Set(sampleCells);
     const center = Math.floor(gridSize * 0.5);
-    const sourceY = Math.floor(gridSize * 0.13);
+    const isBonfireReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume';
+    const sourceY01 = isBonfireReadbackScene ? 0.81 : 0.13;
+    const sourceY = Math.floor(gridSize * sourceY01);
     const sourceRadius = Math.max(2, Math.ceil(gridSize * Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * 0.75));
     const localStep = Math.max(1, Math.floor(sourceRadius / 3));
-    for (let y = sourceY - sourceRadius; y <= sourceY + sourceRadius * 6; y += localStep) {
+    const plumeStartY = isBonfireReadbackScene ? 0 : sourceY - sourceRadius;
+    const plumeTopY = isBonfireReadbackScene ? sourceY + sourceRadius : sourceY + sourceRadius * 6;
+    for (let y = plumeStartY; y <= plumeTopY; y += localStep) {
       for (let z = center - sourceRadius; z <= center + sourceRadius; z += localStep) {
         for (let x = center - sourceRadius; x <= center + sourceRadius; x += localStep) {
           addSampleCell(x, y, z);
@@ -2337,17 +2347,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeWeightedX += smokeWeight * nx;
         smokeWeightedY += smokeWeight * ny;
         smokeWeightedZ += smokeWeight * nz;
+        smokeWeightedVelocityY += smokeWeight * vy;
         fireWeightSum += fireWeight;
         fireWeightedX += fireWeight * nx;
         fireWeightedY += fireWeight * ny;
         fireWeightedZ += fireWeight * nz;
+        fireWeightedVelocityY += fireWeight * vy;
         const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor((ny + 1) * 0.5 * plumeHeightBinCount)))];
         bin.smokeWeight += smokeWeight;
         bin.smokeWeightedX += smokeWeight * nx;
         bin.smokeWeightedZ += smokeWeight * nz;
+        bin.smokeWeightedVelocityY += smokeWeight * vy;
         bin.fireWeight += fireWeight;
         bin.fireWeightedX += fireWeight * nx;
         bin.fireWeightedZ += fireWeight * nz;
+        bin.fireWeightedVelocityY += fireWeight * vy;
       }
       densitySum += d;
       densityMax = Math.max(densityMax, d);
@@ -2380,6 +2394,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     readback.unmap();
     readback.destroy();
+    const smokeVelocityY = smokeWeightSum > 0 ? smokeWeightedVelocityY / smokeWeightSum : 0;
+    const fireVelocityY = fireWeightSum > 0 ? fireWeightedVelocityY / fireWeightSum : 0;
+    const visualRiseDirectionY = isBonfireReadbackScene ? -1 : 1;
     return {
       grid: gridSize,
       gridLabel: state.simGridLabel,
@@ -2403,11 +2420,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeCenterX: smokeWeightSum > 0 ? smokeWeightedX / smokeWeightSum : 0,
       smokeCenterY: smokeWeightSum > 0 ? smokeWeightedY / smokeWeightSum : 0,
       smokeCenterZ: smokeWeightSum > 0 ? smokeWeightedZ / smokeWeightSum : 0,
+      smokeVelocityY,
+      smokeVisualRiseVelocity: smokeVelocityY * visualRiseDirectionY,
       smokeRadialDrift: smokeWeightSum > 0 ? Math.hypot(smokeWeightedX / smokeWeightSum, smokeWeightedZ / smokeWeightSum) : 0,
       fireWeight: fireWeightSum,
       fireCenterX: fireWeightSum > 0 ? fireWeightedX / fireWeightSum : 0,
       fireCenterY: fireWeightSum > 0 ? fireWeightedY / fireWeightSum : 0,
       fireCenterZ: fireWeightSum > 0 ? fireWeightedZ / fireWeightSum : 0,
+      fireVelocityY,
+      fireVisualRiseVelocity: fireVelocityY * visualRiseDirectionY,
       fireRadialDrift: fireWeightSum > 0 ? Math.hypot(fireWeightedX / fireWeightSum, fireWeightedZ / fireWeightSum) : 0,
       plumeHeightBins: plumeHeightBins.map(bin => ({
         bin: bin.bin,
@@ -2416,9 +2437,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeWeight: bin.smokeWeight,
         smokeCenterX: bin.smokeWeight > 0 ? bin.smokeWeightedX / bin.smokeWeight : 0,
         smokeCenterZ: bin.smokeWeight > 0 ? bin.smokeWeightedZ / bin.smokeWeight : 0,
+        smokeVelocityY: bin.smokeWeight > 0 ? bin.smokeWeightedVelocityY / bin.smokeWeight : 0,
         fireWeight: bin.fireWeight,
         fireCenterX: bin.fireWeight > 0 ? bin.fireWeightedX / bin.fireWeight : 0,
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
+        fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,
       })),
       liveVoxels,
     };
