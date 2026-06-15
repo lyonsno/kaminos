@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -29,6 +30,8 @@ BROWSE_ROOTS = {
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj"}
+JOB_OUTPUT_EVENTS = []
+JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -216,6 +219,11 @@ def greenroom_job_output_delay_seconds(job_id, filename):
     return 0.0
 
 
+def record_job_output_event(event):
+    with JOB_OUTPUT_EVENTS_LOCK:
+        JOB_OUTPUT_EVENTS.append(event)
+
+
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -228,6 +236,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
             self.handle_read(parse_qs(parsed.query))
+        elif parsed.path == "/api/job-output-events":
+            self.handle_job_output_events(parse_qs(parsed.query))
         elif parsed.path == "/api/job-outputs":
             self.handle_job_outputs(parse_qs(parsed.query))
         elif parsed.path.startswith("/api/job-output"):
@@ -500,6 +510,15 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             })
         self.send_json({"entries": entries, "output_dir": output_dir, "job_display": job_display})
 
+    def handle_job_output_events(self, params):
+        """Expose job-output route timing for local witness runs."""
+        should_clear = params.get("clear", ["0"])[0] == "1"
+        with JOB_OUTPUT_EVENTS_LOCK:
+            if should_clear:
+                JOB_OUTPUT_EVENTS.clear()
+            events = list(JOB_OUTPUT_EVENTS)
+        self.send_json({"events": events, "cleared": should_clear})
+
     def handle_job_output(self, params):
         """Serve files from a completed job's output_dir. ?job_id=xxx&file=output.glb
 
@@ -543,8 +562,22 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         delay_seconds = greenroom_job_output_delay_seconds(job_id, filename)
+        delay_ms = int(delay_seconds * 1000)
+        started_at_ms = int(time.time() * 1000)
+        body = target.read_bytes()
         if delay_seconds:
             time.sleep(delay_seconds)
+        ended_at_ms = int(time.time() * 1000)
+        record_job_output_event({
+            "job_id": job_id,
+            "file": filename,
+            "path": f"/api/job-output?job_id={job_id}&file={filename}",
+            "delay_ms": delay_ms,
+            "started_at_ms": started_at_ms,
+            "ended_at_ms": ended_at_ms,
+            "duration_ms": ended_at_ms - started_at_ms,
+            "content_length": len(body),
+        })
 
         ext = target.suffix.lower()
         content_types = {
@@ -555,8 +588,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         }
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(target.read_bytes())
+        self.wfile.write(body)
 
     def send_json(self, data, status=200):
         body = json.dumps(data, indent=2).encode()
@@ -581,7 +615,7 @@ if __name__ == "__main__":
     print(f"Kaminos server at http://localhost:{PORT}")
     print(f"  Scratch: {BROWSE_ROOTS['scratch']}")
     print(f"  Greenroom: {BROWSE_ROOTS['greenroom']}")
-    server = http.server.HTTPServer(("", PORT), KaminosHandler)
+    server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

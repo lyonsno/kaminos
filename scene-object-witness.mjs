@@ -1198,6 +1198,18 @@ async function runGreenroomPreviewRaceScenario(ws) {
         return waitForSceneRows(1);
       };
       const greenroomRawName = value => String(value || '').trim().replace(/^raw\\s+/i, '');
+      const getJobOutputEvents = async query => {
+        const suffix = query ? '?' + query : '';
+        const resp = await fetch('/api/job-output-events' + suffix);
+        const data = await resp.json().catch(() => ({}));
+        return {
+          ok: resp.ok,
+          status: resp.status,
+          events: Array.isArray(data.events) ? data.events : [],
+          cleared: !!data.cleared,
+          error: data.error || null,
+        };
+      };
       const outputRouteFor = async rawName => {
         const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(rawName));
         const outputsData = await outputsResp.json().catch(() => ({}));
@@ -1249,11 +1261,20 @@ async function runGreenroomPreviewRaceScenario(ws) {
       if (!viewA || !viewB) {
         throw new Error('greenroom preview race View buttons disappeared: ' + JSON.stringify({ raceRows }));
       }
+      const clearedJobOutputEvents = await getJobOutputEvents('clear=1');
       viewA.click();
       await wait(50);
       viewB.click();
       const afterSecondRoute = await waitForPreviewRoute(raceRouteB.route);
-      await wait(2600);
+      const routeBOwnedAtMs = Date.now();
+      await wait(3200);
+      const jobOutputEventState = await getJobOutputEvents();
+      const routeAEvents = jobOutputEventState.events.filter(event => event.job_id === raceA.rawName && event.file === raceRouteA.mesh);
+      const routeBEvents = jobOutputEventState.events.filter(event => event.job_id === raceB.rawName && event.file === raceRouteB.mesh);
+      const delayedRouteAEvent = routeAEvents.find(event => Number(event.delay_ms || 0) > 0) || null;
+      const effectiveDelayMs = Number(delayedRouteAEvent?.delay_ms || 0);
+      const routeACompletedAfterRouteBOwned = !!delayedRouteAEvent
+        && Number(delayedRouteAEvent.ended_at_ms || 0) > routeBOwnedAtMs;
       const afterBothLoads = { state: previewState(), debug: previewDebug() };
       const sources = afterBothLoads.debug.previewSceneObjectSources || [];
       const raceSettledOnSecondRoute = afterBothLoads.state.active
@@ -1280,7 +1301,15 @@ async function runGreenroomPreviewRaceScenario(ws) {
         raceRows: [raceA, raceB],
         raceRouteA,
         raceRouteB,
+        clearedJobOutputEvents,
         afterSecondRoute,
+        routeBOwnedAtMs,
+        jobOutputEventState,
+        routeAEvents,
+        routeBEvents,
+        delayedRouteAEvent,
+        effectiveDelayMs,
+        routeACompletedAfterRouteBOwned,
         afterBothLoads,
         afterImportRows,
         routeBImports,
@@ -1300,6 +1329,9 @@ async function runGreenroomPreviewRaceScenario(ws) {
   }
   if (!lastEvidence.greenroomPreviewRace.importAppendedSecondRoute) {
     throw new Error(`greenroom preview race import did not append the second route: ${JSON.stringify(lastEvidence.greenroomPreviewRace)}`);
+  }
+  if (!lastEvidence.greenroomPreviewRace.routeACompletedAfterRouteBOwned) {
+    throw new Error(`greenroom preview race did not prove delayed route A completed after route B owned preview: ${JSON.stringify(lastEvidence.greenroomPreviewRace)}`);
   }
 }
 

@@ -90,6 +90,11 @@ assert.match(witness, /greenroom preview race import did not append the second r
 assert.match(witness, /greenroomPreviewRace/, 'Green Room race witness records race-specific evidence');
 assert.match(witness, /raceRouteA/, 'Green Room race witness records the first delayed route identity');
 assert.match(witness, /raceRouteB/, 'Green Room race witness records the second winning route identity');
+assert.match(witness, /job-output-events/, 'Green Room race witness reads server job-output timing events');
+assert.match(witness, /clear=1/, 'Green Room race witness clears stale route timing events before racing');
+assert.match(witness, /effectiveDelayMs/, 'Green Room race witness records effective route delay identity');
+assert.match(witness, /routeACompletedAfterRouteBOwned/, 'Green Room race witness proves route A completed after route B owned preview state');
+assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');
 assert.match(witness, /previewDidNotMutateAuthoredRows/, 'Green Room action witness computes an authored-scene non-mutation predicate');
