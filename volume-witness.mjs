@@ -37,6 +37,7 @@ const expectedLamellarHookFixture = ['lamellar_hook', 'lamellar_selected_hook'].
 const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1';
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
+const expectedThirdSmokeTransformProbe = routeParams.get('volume_third_smoke_transform_probe') === '1';
 const requestedSourceTypeProbe = routeParams.get('volume_source_type_probe');
 const expectedSourceTypeProbe = requestedSourceTypeProbe === '1';
 const expectedSingleSourceTypeProbe = ['fire', 'smoke', 'fire_smoke'].includes(requestedSourceTypeProbe);
@@ -50,6 +51,7 @@ const expectedSceneBoundsOnlyProbe = expectedSceneBoundsProbe && !expectedSceneS
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedSecondPrimitiveId = 'authored-fire-smoke-witness-b';
 const expectedSmokePrimitiveId = 'authored-smoke-source-witness';
+const expectedThirdSmokePrimitiveId = 'authored-smoke-source-witness-b';
 const expectedFireSmokeSourcePrimitiveId = 'authored-fire-smoke-source-witness';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
 const expectedAuthoredMovedNativeSourcePosition = [0.05504, -0.1048, 0.03096];
@@ -65,6 +67,8 @@ const expectedAuthoredNativeSourcePosition = expectedSceneSourceProbe ? [0.0, 0.
 const expectedSourceMappingIdentity = 'volume-primitive-scene-bounds-source-domain-v1';
 const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedSecondPrimitiveNativeSourcePosition = [-0.04128, -0.1048, -0.03096];
+const expectedThirdSmokePrimitivePosition = [0.54, -0.48, 0.22];
+const expectedThirdSmokePrimitiveNativeSourcePosition = [0.09288, -0.0952, 0.03784];
 const expectedRouteSourceProbeId = expectedSingleSourceTypeProbe ? `route-${requestedSourceTypeProbe.replace('_', '-')}-source-probe` : null;
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
@@ -368,7 +372,7 @@ async function main() {
             authoring.select('${expectedSecondPrimitiveId}');
             authoring.updateSelected({ radius: 0.16, flowRate: 0.32, radiance: 1.9, handleOpacity: 0.05, handleVisible: true });
           }
-          const smokeSource = ${expectedSourceTypeProbe
+          const smokeSource = ${expectedSourceTypeProbe || expectedThirdSmokeTransformProbe
             ? `authoring.placeAt([-0.30, -0.52, -0.10], {
                 id: '${expectedSmokePrimitiveId}',
                 sourceType: 'smoke',
@@ -379,7 +383,21 @@ async function main() {
             : "null"};
           if (smokeSource) {
             authoring.select('${expectedSmokePrimitiveId}');
-            authoring.updateSelected({ sourceType: 'smoke', radius: 0.16, flowRate: 0.34, radiance: 0.4, handleOpacity: 0.07, handleVisible: true });
+            authoring.updateSelected({ sourceType: 'smoke', radius: 0.16, flowRate: 0.34, fire: 0, smoke: 1, radiance: 0.4, handleOpacity: 0.07, handleVisible: true });
+          }
+          const thirdSmokeSource = ${expectedThirdSmokeTransformProbe
+            ? `authoring.placeAt([0.12, -0.50, 0.04], {
+                id: '${expectedThirdSmokePrimitiveId}',
+                sourceType: 'smoke',
+                radius: 0.14,
+                flowRate: 0.29,
+                radiance: 0.32,
+              })`
+            : "null"};
+          if (thirdSmokeSource) {
+            authoring.select('${expectedThirdSmokePrimitiveId}');
+            authoring.updateSelected({ sourceType: 'smoke', radius: 0.14, flowRate: 0.29, fire: 0, smoke: 1, radiance: 0.32, handleOpacity: 0.09, handleVisible: true });
+            authoring.moveSelectedTo([${expectedThirdSmokePrimitivePosition.join(', ')}]);
           }
           const fireSmokeSource = ${expectedSourceTypeProbe
             ? `authoring.placeAt([0.04, -0.50, -0.24], {
@@ -437,7 +455,8 @@ async function main() {
         assert.equal(contextResult?.shownMarkerState?.handleVisible, true, `shown context marker state was not local to the duplicate: ${JSON.stringify(contextResult)}`);
         assert.equal(contextResult?.selectedAfterDelete, expectedAuthoredPrimitiveId, 'context delete action did not return selection to the surviving primitive');
       }
-      const expectedProbeSelection = expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
+      const expectedProbeSelection = expectedThirdSmokeTransformProbe ? expectedThirdSmokePrimitiveId
+        : expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
         : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedProbeSelection, 'authored volume primitive was not selected');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedProbeSelection, 'authored volume primitive did not attach to the transform target');
@@ -450,6 +469,11 @@ async function main() {
       if (expectedMultiPrimitiveProbe) {
         assert.equal(volumeAuthoring?.volumePrimitiveCount, 2, 'multi-primitive probe did not create two authored primitives');
         assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedSecondPrimitiveId), 'second authored primitive marker was not created');
+      }
+      if (expectedThirdSmokeTransformProbe) {
+        assert.equal(volumeAuthoring?.volumePrimitiveCount, 3, 'third smoke transform probe did not create three authored primitives');
+        assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedSmokePrimitiveId), 'third smoke transform probe did not create the first smoke primitive marker');
+        assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedThirdSmokePrimitiveId), 'third smoke transform probe did not create the second smoke primitive marker');
       }
       if (expectedSourceTypeProbe) {
         assert.equal(volumeAuthoring?.sourceTypeTaxonomy?.identity, 'volume-source-type-taxonomy-v0', 'source type probe did not expose source taxonomy identity');
@@ -552,7 +576,8 @@ async function main() {
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-density'), 'density was not marked renderer-global');
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-smoke'), 'smoke was not marked renderer-global');
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-steps'), 'ray steps were not marked renderer-global');
-      const expectedSelectedPrimitiveId = expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
+      const expectedSelectedPrimitiveId = expectedThirdSmokeTransformProbe ? expectedThirdSmokePrimitiveId
+        : expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
         : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedSelectedPrimitiveId, 'authored primitive selection was not retained');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedSelectedPrimitiveId, 'authored primitive transform target was not retained');
@@ -591,6 +616,36 @@ async function main() {
         assert.equal(firstSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'first source did not preserve primitive-centered mode');
         assert.equal(secondSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'second source did not preserve primitive-centered mode');
         assert.equal(secondPrimitive?.couplingSource, 'manual', 'second authored primitive did not preserve manual coupling source');
+      }
+      if (expectedThirdSmokeTransformProbe) {
+        assert.equal(state.volumePrimitiveCount, 3, 'renderer did not retain three authored volume primitives');
+        assert.equal(state.primitiveSourceCount, 3, 'renderer did not publish three effective primitive sources for the third-smoke probe');
+        assert.ok(state.volumePrimitiveIds?.includes(expectedSmokePrimitiveId), 'renderer primitive ids did not include the first Smoke primitive');
+        assert.ok(state.volumePrimitiveIds?.includes(expectedThirdSmokePrimitiveId), 'renderer primitive ids did not include the second Smoke primitive');
+        assert.ok(volumeAuthoring?.markerIds?.includes(expectedThirdSmokePrimitiveId), 'authoring marker ids did not include the selected second Smoke primitive');
+        const firstSmokePrimitive = state.volumePrimitives?.find(item => item.id === expectedSmokePrimitiveId);
+        const thirdSmokePrimitive = state.volumePrimitives?.find(item => item.id === expectedThirdSmokePrimitiveId);
+        const firstSmokeSource = state.primitiveSources?.find(source => source.id === expectedSmokePrimitiveId);
+        const thirdSmokeSource = state.primitiveSources?.find(source => source.id === expectedThirdSmokePrimitiveId);
+        const thirdAuthoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedThirdSmokePrimitiveId);
+        const firstSmokeMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedSmokePrimitiveId);
+        const thirdSmokeMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedThirdSmokePrimitiveId);
+        assert.equal(firstSmokePrimitive?.sourceType, 'smoke', 'first duplicate Smoke primitive did not preserve source type');
+        assert.equal(thirdSmokePrimitive?.sourceType, 'smoke', 'selected duplicate Smoke primitive did not preserve source type');
+        assertVectorClose(thirdSmokePrimitive?.transform?.position, expectedThirdSmokePrimitivePosition, 'third Smoke renderer primitive transform position');
+        assertVectorClose(thirdAuthoredPrimitive?.transform?.position, expectedThirdSmokePrimitivePosition, 'third Smoke authoring primitive transform position');
+        assertVectorClose(thirdSmokeSource?.position, expectedThirdSmokePrimitivePosition, 'third Smoke effective source position');
+        assertVectorClose(thirdSmokeSource?.nativeSourcePosition, expectedThirdSmokePrimitiveNativeSourcePosition, 'third Smoke native source position');
+        assert.equal(firstSmokeSource?.fireSourceMix, 0, 'first duplicate Smoke source carried fire mix');
+        assert.equal(thirdSmokeSource?.fireSourceMix, 0, 'selected duplicate Smoke source carried fire mix');
+        assert.ok((firstSmokeSource?.smokeSourceMix ?? 0) > 0.9, 'first duplicate Smoke source did not carry smoke mix');
+        assert.ok((thirdSmokeSource?.smokeSourceMix ?? 0) > 0.9, 'selected duplicate Smoke source did not carry smoke mix');
+        assert.equal(firstSmokeSource?.fireGain, 0, 'first duplicate Smoke source carried primitive-local fire gain');
+        assert.equal(thirdSmokeSource?.fireGain, 0, 'selected duplicate Smoke source carried primitive-local fire gain');
+        assert.ok((thirdSmokeSource?.smokeGain ?? 0) > 0.9, 'selected duplicate Smoke source did not carry primitive-local smoke gain');
+        assert.ok(Math.abs((thirdAuthoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.09) < 0.001, 'third Smoke primitive handle opacity did not persist locally');
+        assert.ok(Math.abs((thirdSmokeMarkerState?.handleOpacity ?? 0) - 0.09) < 0.001, 'third Smoke marker did not use its own local handle opacity');
+        assert.notEqual(firstSmokeMarkerState?.handleOpacity, thirdSmokeMarkerState?.handleOpacity, 'duplicate Smoke marker opacity remained global instead of per primitive');
       }
       if (expectedSourceTypeProbe) {
         assert.equal(state.volumePrimitiveCount, 3, 'source type probe did not retain three authored volume primitives');
