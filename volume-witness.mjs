@@ -498,6 +498,10 @@ async function main() {
       fireBounds: sample.fireBounds,
       smokeBounds: sample.smokeBounds,
       verticalFillRatio: sample.volumeBounds?.verticalFillRatio ?? 0,
+      normalizedCenterX: sample.volumeBounds?.normalizedCenterX ?? 0,
+      screenDriftX: sample.volumeBounds?.screenDriftX ?? 0,
+      smokeScreenDriftX: sample.smokeBounds?.screenDriftX ?? 0,
+      fireScreenDriftX: sample.fireBounds?.screenDriftX ?? 0,
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';

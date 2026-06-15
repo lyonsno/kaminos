@@ -280,6 +280,7 @@ assert.match(core, /state\.volumeScene/, 'debug state exposes the effective volu
 assert.match(core, /volumeScene/, 'renderer controls carry named scene identity for witness/debug routing');
 assert.match(core, /scene_controls/, 'fluid uniforms carry scene-shaping controls into the shader');
 assert.match(core, /bonfireScene/, 'fluid source shaping names the bottom-fireball scene branch');
+assert.match(core, /bonfireSourceBreakup/, 'bonfire source shaping uses centered radial breakup instead of one-sided column breakup');
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
 assert.match(core, /bonfireSmokeSource/, 'fluid source shaping creates smoke from the bottom fireball before plume rise');
 assert.match(core, /let sourceCenter = p\.xz;/, 'fluid source is centered in sim XZ coordinates');
@@ -287,6 +288,9 @@ assert.doesNotMatch(core, /sourceCenter = p\.xz \+ vec2/, 'fluid source must not
 assert.match(core, /windDirection/, 'fluid compute shader derives an explicit wind direction vector');
 assert.match(core, /windHeightRamp/, 'fluid compute shader gates explicit wind through a height/ramp control');
 assert.match(core, /windMaterialCoupling/, 'fluid compute shader applies wind through smoke/fire material coupling');
+assert.match(core, /bonfireWindResponseGain/, 'bonfire scene gives explicit wind enough authority to steer the plume');
+assert.match(core, /bonfireNonWindLateralDamping/, 'bonfire scene damps non-wind lateral drift before explicit wind is applied');
+assert.match(core, /bonfireNonWindCenteringForce/, 'bonfire scene recenters low-wind plume drift around the source before explicit wind is applied');
 assert.match(core, /state\.windStrength/, 'debug state exposes effective explicit wind strength');
 assert.match(core, /state\.windAngle/, 'debug state exposes effective explicit wind direction');
 assert.match(core, /state\.windHeight/, 'debug state exposes effective explicit wind height/ramp');
@@ -308,6 +312,8 @@ assert.match(core, /raf-and-queue-proxy/, 'timing evidence is explicitly labeled
 assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carries a present-latency disclaimer');
 assert.match(core, /curlMean/, 'sim readback reports curl evidence');
 assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection evidence');
+assert.match(core, /normalizedCenterX/, 'visual readback bounds report normalized screen-space center for drift/bias checks');
+assert.match(core, /screenDriftX/, 'visual readback bounds report signed screen-space drift from frame center');
 assert.doesNotMatch(core, /screenGridLine/, 'grid overlay must not fall back to a fake screen-space lattice');
 assert.match(core, /faceUv = p\.yz/, 'grid overlay uses volume coordinates on x-facing cube surfaces');
 assert.match(core, /faceUv = p\.xz/, 'grid overlay uses volume coordinates on y-facing cube surfaces');
@@ -391,6 +397,8 @@ assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visua
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
 assert.match(witness, /fireBounds/, 'witness records visual fire bounds for bottom-fireball scene checks');
 assert.match(witness, /smokeBounds/, 'witness records visual smoke bounds for rising plume scene checks');
+assert.match(witness, /normalizedCenterX/, 'witness records normalized screen-space center for drift/bias checks');
+assert.match(witness, /screenDriftX/, 'witness records signed screen-space drift from frame center');
 assert.match(witness, /verticalFillRatio/, 'witness records vertical fill ratio for tall-plume scale checks');
 assert.match(witness, /microdetailMean/, 'witness requires transported microdetail evidence');
 assert.match(witness, /interfaceShredMean/, 'witness requires interface shredding evidence');

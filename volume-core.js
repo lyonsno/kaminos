@@ -1017,6 +1017,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.16,
     1.22
   );
+  let bonfireSourceBreakup = clamp(
+    0.72
+      + 0.18 * sin(sourceRadial * 34.0 * scaledDetailFrequency + time * 1.45)
+      + 0.14 * cos(sourceRadial * 21.0 * scaledDetailFrequency - time * 1.18)
+      + 0.08 * hash31(vec3<f32>(sourceRadial * 17.0 * scaledDetailFrequency, p.y * 11.0, floor(time * 2.0))),
+    0.32,
+    1.14
+  );
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
@@ -1025,16 +1033,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
   let bonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
   let bonfireSmokeBand = smoothstep(0.30, 0.52, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
-  let bonfireSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.72 + 0.44 * breakup) * inputFlow;
+  let bonfireSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.72 + 0.44 * bonfireSourceBreakup) * inputFlow;
   let source = mix(columnSource, max(bonfireSmokeSource, bonfireFireball * inputFlow * 0.84), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
   let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
-  let bonfireEmberRing = exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * inputFlow * (0.32 + 0.22 * sin(time * 2.4 + p.x * 11.0 + p.z * 7.0));
+  let bonfireEmberRing = exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireSmokeBand * inputFlow * (0.32 + 0.22 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency));
   let emberRing = mix(columnEmberRing, bonfireEmberRing, bonfireScene);
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
   let columnFireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
-  let bonfireFireBirth = (bonfireFireball * (1.08 + 0.58 * breakup) + bonfireEmberRing * 0.42) * inputFlow * sourceScaleCompensation;
+  let bonfireFireBirth = (bonfireFireball * (1.08 + 0.58 * bonfireSourceBreakup) + bonfireEmberRing * 0.42) * inputFlow * sourceScaleCompensation;
   let fireBirth = mix(columnFireBirth, bonfireFireBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
@@ -1058,10 +1066,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLiftDirection = mix(1.0, -1.0, bonfireScene);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireLiftDirection;
   vel.y = vel.y + (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale * bonfireLiftDirection;
-  let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
-  vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * (0.020 + speed * 0.004);
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
+  let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
+  let bonfireNonWindLateralDamping = mix(1.0, mix(0.28, 0.78, explicitWindAuthority), bonfireScene);
+  vel.x = vel.x * bonfireNonWindLateralDamping;
+  vel.z = vel.z * bonfireNonWindLateralDamping;
+  let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
+  let bonfireCenteringCarrier = clamp(source * 0.72 + smoke * 0.46 + heat * 0.28, 0.0, 1.5);
+  let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * (0.026 + speed * 0.006);
+  vel = vel + bonfireNonWindCenteringForce;
+  let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
+  let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
+  vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   smoke = max(smoke + smokeFromHeat, source * 0.54 + emberRing * 0.16);
@@ -2426,6 +2443,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       height: 0,
       horizontalFillRatio: 0,
       verticalFillRatio: 0,
+      sumX: 0,
+      sumY: 0,
+      centerX: 0,
+      centerY: 0,
+      normalizedCenterX: 0,
+      normalizedCenterY: 0,
+      screenDriftX: 0,
+      screenDriftY: 0,
     };
     const fireBounds = { ...volumeBounds };
     const smokeBounds = { ...volumeBounds };
@@ -2435,6 +2460,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bounds.maxX = Math.max(bounds.maxX, x);
       bounds.maxY = Math.max(bounds.maxY, y);
       bounds.pixelCount += 1;
+      bounds.sumX += x;
+      bounds.sumY += y;
     };
     const finalizeBounds = bounds => {
       if (bounds.pixelCount > 0) {
@@ -2442,11 +2469,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bounds.height = bounds.maxY - bounds.minY + 1;
         bounds.horizontalFillRatio = bounds.width / Math.max(1, state.width);
         bounds.verticalFillRatio = bounds.height / Math.max(1, state.height);
+        bounds.centerX = bounds.sumX / bounds.pixelCount;
+        bounds.centerY = bounds.sumY / bounds.pixelCount;
+        bounds.normalizedCenterX = (bounds.centerX / Math.max(1, state.width - 1)) * 2 - 1;
+        bounds.normalizedCenterY = (bounds.centerY / Math.max(1, state.height - 1)) * 2 - 1;
+        bounds.screenDriftX = bounds.normalizedCenterX;
+        bounds.screenDriftY = bounds.normalizedCenterY;
       } else {
         bounds.minX = 0;
         bounds.minY = 0;
         bounds.maxX = 0;
         bounds.maxY = 0;
+        bounds.sumX = 0;
+        bounds.sumY = 0;
+        bounds.centerX = 0;
+        bounds.centerY = 0;
+        bounds.normalizedCenterX = 0;
+        bounds.normalizedCenterY = 0;
+        bounds.screenDriftX = 0;
+        bounds.screenDriftY = 0;
       }
     };
     const previewWidth = 256;
