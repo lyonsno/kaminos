@@ -542,6 +542,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Surface range</span><span class="field-val" id="clay-surface-range">--</span></div>
       <div class="field"><span class="field-key">Mean |height|</span><span class="field-val" id="clay-surface-mean-abs">--</span></div>
       <div class="field"><span class="field-key">Topology</span><span class="field-val" id="clay-topology">--</span></div>
+      <div class="field"><span class="field-key">Pointer mode</span><span class="field-val" id="clay-pointer-mode">idle</span></div>
+      <div class="field"><span class="field-key">Pointer steps</span><span class="field-val" id="clay-pointer-drag-steps">0</span></div>
     </div>
   </div>
 
@@ -1669,6 +1671,8 @@ function refreshClayReadout() {
   document.getElementById('clay-surface-range').textContent = Number.isFinite(s.claySurfaceHeightRange) ? s.claySurfaceHeightRange.toFixed(3) : '--';
   document.getElementById('clay-surface-mean-abs').textContent = Number.isFinite(s.claySurfaceMeanAbsHeight) ? s.claySurfaceMeanAbsHeight.toFixed(3) : '--';
   document.getElementById('clay-topology').textContent = `${s.clayGrid || '--'} / ${s.claySurfaceTriangleCount ?? '--'} tri`;
+  document.getElementById('clay-pointer-mode').textContent = s.clayInteractionMode || 'idle';
+  document.getElementById('clay-pointer-drag-steps').textContent = String(s.clayPointerDragStepCount ?? 0);
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
 }
@@ -1686,6 +1690,85 @@ function frameClayCamera() {
   window._kaminosDirty?.();
 }
 
+function installClayPointerInteraction(params) {
+  if (params.get('clay_interactive') !== '1') return;
+  const canvas = renderer.domElement;
+  const pointerRaycaster = new THREE.Raycaster();
+  const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
+  const pointerPoint = new THREE.Vector3();
+  let dragging = false;
+  let busy = false;
+  let queuedEvent = null;
+
+  const eventToClayHit = event => {
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+      -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1),
+    );
+    pointerRaycaster.setFromCamera(ndc, camera);
+    if (!pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) return null;
+    return {
+      center: [
+        Math.max(-0.82, Math.min(0.82, pointerPoint.x)),
+        0,
+        Math.max(-0.52, Math.min(0.52, pointerPoint.z)),
+      ],
+      radius: 0.17,
+      strength: event.shiftKey ? 0.58 : 1.18,
+      screenX: event.clientX,
+      screenY: event.clientY,
+    };
+  };
+
+  const drivePointerStep = async event => {
+    queuedEvent = event;
+    if (busy) return;
+    busy = true;
+    try {
+      while (queuedEvent) {
+        const nextEvent = queuedEvent;
+        queuedEvent = null;
+        const hit = eventToClayHit(nextEvent);
+        if (!hit) continue;
+        clayPrototype.setPointerClayCollider(hit);
+        await clayPrototype.step();
+        refreshClayReadout();
+      }
+    } finally {
+      busy = false;
+    }
+  };
+
+  canvas.addEventListener('pointerdown', event => {
+    if (!clayPrototype?.debugState?.().active) return;
+    dragging = true;
+    canvas.setPointerCapture?.(event.pointerId);
+    controls.enabled = false;
+    event.preventDefault();
+    drivePointerStep(event);
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (!dragging) return;
+    event.preventDefault();
+    drivePointerStep(event);
+  });
+  const stopDrag = event => {
+    if (!dragging) return;
+    dragging = false;
+    canvas.releasePointerCapture?.(event.pointerId);
+    controls.enabled = true;
+    clayPrototype.clearPointerClayCollider();
+    refreshClayReadout();
+  };
+  canvas.addEventListener('pointerup', stopDrag);
+  canvas.addEventListener('pointercancel', stopDrag);
+  window.__kaminosClayPointerInteraction = {
+    mode: 'clay_interactive:pointer_drag_v0',
+    eventToClayHit,
+  };
+}
+
 async function initKaminosClayRoute() {
   const params = new URLSearchParams(window.location.search);
   clayPrototype = createKaminosClayPrototype({
@@ -1700,6 +1783,7 @@ async function initKaminosClayRoute() {
   if (params.get('clay_debug_colliders') === '0') {
     clayPrototype.setDebugCollidersVisible(false);
   }
+  installClayPointerInteraction(params);
 
   const seedFixture = async () => {
     clayPrototype.setColliders(clayFixtureHandColliders());
@@ -1733,7 +1817,7 @@ async function initKaminosClayRoute() {
     transformControls.detach();
     frameClayCamera();
     await clayPrototype.setActive(true);
-    const colliderMode = params.get('clay_colliders') || 'clay_fixture_hand';
+    const colliderMode = params.get('clay_colliders') || (params.get('clay_interactive') === '1' ? 'none' : 'clay_fixture_hand');
     if (colliderMode === 'hand_pose_fixture') {
       await seedHandPoseFixture();
     } else if (colliderMode === 'clay_fixture_hand') {

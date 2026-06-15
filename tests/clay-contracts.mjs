@@ -31,6 +31,10 @@ assert.match(index, /clay-surface-mean-abs/, 'Clay panel exposes mean absolute s
 assert.match(index, /clay-topology/, 'Clay panel exposes clay grid topology');
 assert.match(index, /clay_steps/, 'clay route accepts witness-controlled step count');
 assert.match(index, /clay_debug_colliders/, 'clay route accepts debug-collider visibility control');
+assert.match(index, /clay_interactive/, 'clay route accepts an interactive pointer smoke mode');
+assert.match(index, /installClayPointerInteraction/, 'clay route installs pointer drag interaction');
+assert.match(index, /clay-pointer-mode/, 'Clay panel exposes pointer interaction mode');
+assert.match(index, /clay-pointer-drag-steps/, 'Clay panel exposes pointer-driven drag step count');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -76,6 +80,12 @@ assert.match(core, /claySurfaceMeanAbsHeight/, 'clay debug state records mean ab
 assert.match(core, /claySurfaceVertexCount/, 'clay debug state records surface vertex count');
 assert.match(core, /claySurfaceTriangleCount/, 'clay debug state records surface triangle count');
 assert.match(core, /clayDebugCollidersVisible/, 'clay debug state records debug collider visibility');
+assert.match(core, /setPointerClayCollider/, 'clay prototype exposes pointer collider ingress');
+assert.match(core, /clearPointerClayCollider/, 'clay prototype can clear pointer collider ingress');
+assert.match(core, /clayInteractionMode/, 'clay debug state records interaction mode');
+assert.match(core, /clayPointerActive/, 'clay debug state records active pointer drag state');
+assert.match(core, /clayPointerDragStepCount/, 'clay debug state records pointer-driven clay steps');
+assert.match(core, /clayPointerLastHit/, 'clay debug state records last pointer hit in clay coordinates');
 assert.match(core, /MeshStandardMaterial/, 'clay surface uses shaded material so deformation can read visually');
 assert.match(core, /clayRelaxationFactor/, 'clay debug state records relaxation factor');
 assert.match(core, /clayPlasticityFactor/, 'clay debug state records plasticity factor');
@@ -125,6 +135,12 @@ assert.match(witness, /clayStepP95Ms/, 'clay witness records route-local step p9
 assert.match(witness, /claySurfaceHeightRange/, 'clay witness records surface height range');
 assert.match(witness, /claySurfaceMeanAbsHeight/, 'clay witness records mean absolute surface height');
 assert.match(witness, /claySurfaceTriangleCount/, 'clay witness records surface triangle count');
+assert.match(witness, /clay_interactive=1/, 'clay witness can drive the interactive pointer route');
+assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
+assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
+assert.match(witness, /missing clay canvas bounds/, 'clay witness fails loud when it cannot measure the interactive canvas');
+assert.match(witness, /clayPointerDragStepCount/, 'clay witness records pointer-driven drag steps');
+assert.match(witness, /clayPointerLastHit/, 'clay witness records pointer hit coordinates');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

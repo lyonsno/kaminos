@@ -239,6 +239,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let claySurfaceHeightRange = 0;
   let claySurfaceMeanAbsHeight = 0;
   let clayDebugCollidersVisible = true;
+  let clayInteractionMode = 'idle';
+  let clayPointerActive = false;
+  let clayPointerColliderCount = 0;
+  let clayPointerDragStepCount = 0;
+  let clayPointerLastHit = null;
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
   const clayTimingDisclaimer = 'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency';
   const clayStepDurationHistory = [];
@@ -618,6 +623,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     mesh.geometry.computeVertexNormals();
     gpuStepCount += 1;
     frameCount += 1;
+    if (clayPointerActive && clayPointerColliderCount > 0) clayPointerDragStepCount += 1;
     clayStepLatestMs = performance.now() - stepStartedAt;
     clayStepDurationHistory.push(clayStepLatestMs);
     clayStepP95Ms = percentile(clayStepDurationHistory, 0.95);
@@ -629,12 +635,18 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     const incoming = Array.isArray(payload.colliders) ? payload.colliders : [];
     colliders = incoming.slice(0, MAX_COLLIDERS).map(normalizeCollider);
     handPoseAdapterState = normalizeClayHandPoseColliders({});
+    clayInteractionMode = payload.mode || (colliders.length ? 'fixture' : 'idle');
+    clayPointerActive = false;
+    clayPointerColliderCount = 0;
     refreshColliderMeshes();
   }
 
   function setHandPoseFrame(payload = {}) {
     handPoseAdapterState = normalizeClayHandPoseColliders(payload);
     colliders = handPoseAdapterState.colliders.slice(0, MAX_COLLIDERS).map(normalizeCollider);
+    clayInteractionMode = handPoseAdapterState.mode;
+    clayPointerActive = false;
+    clayPointerColliderCount = 0;
     refreshColliderMeshes();
     onStatus(debugState());
     return {
@@ -651,6 +663,48 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       handPoseColliderCount: handPoseAdapterState.handPoseColliderCount,
       handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
     };
+  }
+
+  function setPointerClayCollider(payload = {}) {
+    const center = Array.isArray(payload.center)
+      ? payload.center
+      : [payload.x, 0, payload.z];
+    const pointerCollider = normalizeCollider({
+      id: payload.id || 'pointer-drag',
+      center,
+      radius: payload.radius ?? 0.18,
+      strength: payload.strength ?? 1.15,
+    }, 0);
+    colliders = [pointerCollider];
+    handPoseAdapterState = normalizeClayHandPoseColliders({});
+    clayInteractionMode = 'pointer_drag';
+    clayPointerActive = true;
+    clayPointerColliderCount = 1;
+    clayPointerLastHit = {
+      x: pointerCollider.center[0],
+      y: pointerCollider.center[1],
+      z: pointerCollider.center[2],
+      screenX: Number.isFinite(payload.screenX) ? payload.screenX : null,
+      screenY: Number.isFinite(payload.screenY) ? payload.screenY : null,
+    };
+    refreshColliderMeshes();
+    onStatus(debugState());
+    return {
+      mode: clayInteractionMode,
+      active: clayPointerActive,
+      colliderCount: clayPointerColliderCount,
+      lastHit: clayPointerLastHit,
+    };
+  }
+
+  function clearPointerClayCollider() {
+    if (clayInteractionMode !== 'pointer_drag' && !clayPointerActive) return;
+    colliders = [];
+    clayInteractionMode = 'pointer_idle';
+    clayPointerActive = false;
+    clayPointerColliderCount = 0;
+    refreshColliderMeshes();
+    onStatus(debugState());
   }
 
   function debugState() {
@@ -697,6 +751,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       claySurfaceVertexCount: vertexCount,
       claySurfaceTriangleCount: (GRID_X - 1) * (GRID_Z - 1) * 2,
       clayDebugCollidersVisible,
+      clayInteractionMode,
+      clayPointerActive,
+      clayPointerColliderCount,
+      clayPointerDragStepCount,
+      clayPointerLastHit,
       requestedHandPoseBackend: handPoseAdapterState.requestedHandPoseBackend,
       effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
       handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
@@ -736,6 +795,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     },
     setColliders,
     setHandPoseFrame,
+    setPointerClayCollider,
+    clearPointerClayCollider,
     setDebugCollidersVisible,
     step,
     debugState,

@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=hand_pose_fixture&clay_steps=6&clay_debug_colliders=0';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -163,6 +163,57 @@ async function main() {
     phase = 'settle';
     await delay(settleMs);
 
+    if (url.includes('clay_interactive=1')) {
+      phase = 'pointer-drag-geometry';
+      let drag = null;
+      let dragFailure = 'missing clay canvas bounds';
+      for (let i = 0; i < 30; i += 1) {
+        const dragEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const canvas = document.querySelector('canvas');
+            const pointerInteraction = window.__kaminosClayPointerInteraction;
+            if (!canvas) return { ok: false, reason: 'missing clay canvas' };
+            const rect = canvas.getBoundingClientRect();
+            if (!pointerInteraction) return { ok: false, reason: 'missing pointer interaction' };
+            if (!(rect.width > 16 && rect.height > 16)) {
+              return { ok: false, reason: 'missing clay canvas bounds', rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
+            }
+            return {
+              ok: true,
+              startX: rect.left + rect.width * 0.46,
+              startY: rect.top + rect.height * 0.51,
+              midX: rect.left + rect.width * 0.52,
+              midY: rect.top + rect.height * 0.50,
+              endX: rect.left + rect.width * 0.58,
+              endY: rect.top + rect.height * 0.52,
+              rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            };
+          })()`,
+          returnByValue: true,
+        });
+        if (dragEval.exceptionDetails) {
+          throw new Error(`pointer-drag-geometry evaluation failed: ${dragEval.exceptionDetails.text || 'unknown exception'}`);
+        }
+        const candidate = dragEval.result?.value;
+        if (candidate?.ok) {
+          drag = candidate;
+          break;
+        }
+        dragFailure = candidate?.reason || dragFailure;
+        await delay(100);
+      }
+      assert.ok(drag, `missing clay canvas bounds for pointer drag geometry: ${dragFailure}`);
+      phase = 'pointer-drag';
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: drag.startX, y: drag.startY });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: drag.startX, y: drag.startY, button: 'left', buttons: 1, clickCount: 1 });
+      for (const [x, y] of [[drag.midX, drag.midY], [drag.endX, drag.endY], [drag.endX + 35, drag.endY - 8], [drag.endX + 70, drag.endY + 12]]) {
+        await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 });
+        await delay(80);
+      }
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.endX + 70, y: drag.endY + 12, button: 'left', buttons: 0, clickCount: 1 });
+      await delay(600);
+    }
+
     phase = 'state';
     let state = null;
     for (let i = 0; i < 30; i += 1) {
@@ -175,6 +226,7 @@ async function main() {
         (state?.persistentClayStepCount ?? 0) >= 6
         && (state?.persistentClayDeltaHistory?.length ?? 0) >= 3
         && (state?.clayStepSampleCount ?? 0) >= 6
+        && (!url.includes('clay_interactive=1') || (state?.clayPointerDragStepCount ?? 0) >= 3)
         && state?.clayDeformationCount > 0
       ) break;
       await delay(180);
@@ -199,8 +251,9 @@ async function main() {
       `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
     );
     assert.equal(state.primitiveContactPassStatus, 'pass');
-    assert.ok((state.primitiveContactJobCount ?? 0) >= 5, 'primitive contact pass did not process hand colliders');
-    assert.ok((state.primitiveContactActiveCount ?? 0) >= 5, 'primitive contact pass did not report active contacts');
+    const expectedPrimitiveContacts = url.includes('clay_interactive=1') ? 1 : 5;
+    assert.ok((state.primitiveContactJobCount ?? 0) >= expectedPrimitiveContacts, 'primitive contact pass did not process expected colliders');
+    assert.ok((state.primitiveContactActiveCount ?? 0) >= expectedPrimitiveContacts, 'primitive contact pass did not report active contacts');
     assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'primitive contact pass did not record a minimum distance');
     assert.ok((state.primitiveContactForceSum ?? 0) > 0, 'primitive contact pass did not derive positive force');
     assert.equal(state.persistentClayStateStatus, 'persistent');
@@ -213,7 +266,9 @@ async function main() {
     assert.ok((state.persistentClayInitialDelta ?? 0) > 0, 'persistent clay state did not record initial relaxation delta');
     assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
-    assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
+    if (!url.includes('clay_interactive=1')) {
+      assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
+    }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(
       state.clayTimingDisclaimer,
@@ -231,6 +286,13 @@ async function main() {
     if (url.includes('clay_debug_colliders=0')) {
       assert.equal(state.clayDebugCollidersVisible, false, 'quality witness did not hide debug colliders');
     }
+    if (url.includes('clay_interactive=1')) {
+      assert.ok((state.clayPointerDragStepCount ?? 0) >= 3, 'interactive clay route did not run pointer-driven steps');
+      assert.ok(['pointer_drag', 'pointer_idle'].includes(state.clayInteractionMode), `unexpected clay interaction mode: ${state.clayInteractionMode}`);
+      assert.ok(state.clayPointerLastHit, 'interactive clay route did not record a pointer hit');
+      assert.ok(Number.isFinite(state.clayPointerLastHit.x), 'pointer hit x did not reach clay debug state');
+      assert.ok(Number.isFinite(state.clayPointerLastHit.z), 'pointer hit z did not reach clay debug state');
+    }
     if (url.includes('hand_pose_fixture')) {
       assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach clay debug state');
       assert.equal(state.effectiveHandPoseBackend, 'wilor-mlx-fixture', 'effective hand-pose backend did not reach clay debug state');
@@ -243,7 +305,7 @@ async function main() {
     }
     assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
     assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
-    assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
+    assert.ok((state.clayColliderCount ?? 0) >= (url.includes('clay_interactive=1') ? 0 : 5), 'clay fixture did not seed expected colliders');
     assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
 
@@ -300,6 +362,11 @@ async function main() {
       claySurfaceVertexCount: state.claySurfaceVertexCount,
       claySurfaceTriangleCount: state.claySurfaceTriangleCount,
       clayDebugCollidersVisible: state.clayDebugCollidersVisible,
+      clayInteractionMode: state.clayInteractionMode,
+      clayPointerActive: state.clayPointerActive,
+      clayPointerColliderCount: state.clayPointerColliderCount,
+      clayPointerDragStepCount: state.clayPointerDragStepCount,
+      clayPointerLastHit: state.clayPointerLastHit,
       requestedHandPoseBackend: state.requestedHandPoseBackend,
       effectiveHandPoseBackend: state.effectiveHandPoseBackend,
       handPoseEvidenceKind: state.handPoseEvidenceKind,
