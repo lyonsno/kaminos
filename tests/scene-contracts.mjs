@@ -14,6 +14,12 @@ assert.match(index, /function registerSceneObject\(/, 'load paths register autho
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
 assert.match(index, /function setActiveSceneObject\(/, 'selection/gizmo can target one object in a multi-object scene');
+assert.match(index, /new THREE\.Raycaster\(\)/, 'viewport click selection uses a real scene raycaster');
+assert.match(index, /function pickSceneObjectFromViewportPointer\(/, 'viewport click selection resolves pointer hits to authored scene objects');
+assert.match(index, /function handleViewportSelectionClick\(/, 'viewport click selection has an explicit click handler distinct from orbit dirtying');
+assert.match(index, /greenroomPreviewIsActive\(\)/, 'viewport click selection preserves temporary Greenroom preview mode');
+assert.match(index, /function clearActiveSceneObjectSelection\(/, 'empty viewport clicks share a clear-selection helper');
+assert.match(index, /clearActiveSceneObjectSelection\(\);[\s\S]*setInfo\('Selection cleared'\)/, 'empty viewport clicks clear active object selection');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
 assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');
 assert.match(index, /function renderSceneObjectList\(/, 'scene object registry renders to the editor surface');

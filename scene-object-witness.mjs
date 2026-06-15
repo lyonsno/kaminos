@@ -121,6 +121,25 @@ async function evaluate(ws, expression, options = {}) {
   return result.result.value;
 }
 
+async function dispatchMouseClick(ws, point) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+}
+
 function normalizeUrlForWitness(value) {
   try {
     return new URL(value).href;
@@ -876,6 +895,102 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   }
 }
 
+async function runViewportClickSelectDeselectScenario(ws) {
+  phase = 'scenario-viewport-click-select-deselect';
+  lastEvidence.viewportClickSelectionSetup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!demo) throw new Error('SuperMat Ring demo button missing');
+      document.getElementById('append-import-toggle').checked = false;
+      for (let i = 0; i < 120; i++) {
+        const rows = rowState();
+        if (rows.length === 1 && rows[0].active && rows[0].pressed === 'true') break;
+        await wait(125);
+      }
+      if (rowState().length !== 1) {
+        demo.click();
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === 1 && rows[0].active && rows[0].pressed === 'true') break;
+          await wait(125);
+        }
+      }
+      const rows = rowState();
+      const canvas = document.querySelector('#viewport canvas');
+      if (!canvas) throw new Error('viewport canvas missing');
+      const rect = canvas.getBoundingClientRect();
+      return {
+        rows,
+        selectedId: rows.find(row => row.active && row.pressed === 'true')?.id || null,
+        transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+        emptyPoint: {
+          x: Math.round(rect.left + rect.width * 0.88),
+          y: Math.round(rect.top + rect.height * 0.76),
+        },
+        objectPoint: {
+          x: Math.round(rect.left + rect.width * 0.52),
+          y: Math.round(rect.top + rect.height * 0.52),
+        },
+      };
+    })()
+  `);
+  if (lastEvidence.viewportClickSelectionSetup.rows.length !== 1 || !lastEvidence.viewportClickSelectionSetup.selectedId) {
+    throw new Error(`viewport click selection setup did not create one selected object: ${JSON.stringify(lastEvidence.viewportClickSelectionSetup)}`);
+  }
+  if (!lastEvidence.viewportClickSelectionSetup.transformBarVisible) {
+    throw new Error(`viewport click selection setup did not show transform toolbar: ${JSON.stringify(lastEvidence.viewportClickSelectionSetup)}`);
+  }
+
+  await dispatchMouseClick(ws, lastEvidence.viewportClickSelectionSetup.emptyPoint);
+  await delay(600);
+  lastEvidence.viewportClickSelectionAfterEmpty = await evaluate(ws, `
+    (() => ({
+      rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      })),
+      transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      info: document.getElementById('info-bar').textContent.trim(),
+    }))()
+  `);
+  const emptyActiveRows = lastEvidence.viewportClickSelectionAfterEmpty.rows.filter(row => row.active || row.pressed === 'true');
+  if (emptyActiveRows.length !== 0) {
+    throw new Error(`viewport empty click did not deselect scene object: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterEmpty)}`);
+  }
+  if (lastEvidence.viewportClickSelectionAfterEmpty.transformBarVisible) {
+    throw new Error(`viewport empty click did not hide transform toolbar: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterEmpty)}`);
+  }
+
+  await dispatchMouseClick(ws, lastEvidence.viewportClickSelectionSetup.objectPoint);
+  await delay(800);
+  lastEvidence.viewportClickSelectionAfterObject = await evaluate(ws, `
+    (() => ({
+      rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      })),
+      transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      info: document.getElementById('info-bar').textContent.trim(),
+    }))()
+  `);
+  const objectActiveRows = lastEvidence.viewportClickSelectionAfterObject.rows.filter(row => row.active && row.pressed === 'true');
+  if (objectActiveRows.length !== 1 || objectActiveRows[0].id !== lastEvidence.viewportClickSelectionSetup.selectedId) {
+    throw new Error(`viewport object click did not select scene object: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterObject)}`);
+  }
+  if (!lastEvidence.viewportClickSelectionAfterObject.transformBarVisible) {
+    throw new Error(`viewport object click did not restore transform toolbar: ${JSON.stringify(lastEvidence.viewportClickSelectionAfterObject)}`);
+  }
+}
+
 async function runGreenroomPickerDisplayScenario(ws) {
   phase = 'scenario-greenroom-picker-display';
   lastEvidence.greenroomPickerDisplay = await evaluate(ws, `
@@ -1404,6 +1519,8 @@ try {
     await runGreenroomPickerDisplayScenario(ws);
   } else if (scenario === 'greenroom-preview-race') {
     await runGreenroomPreviewRaceScenario(ws);
+  } else if (scenario === 'viewport-click-select-deselect') {
+    await runViewportClickSelectDeselectScenario(ws);
   } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }

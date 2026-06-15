@@ -14,6 +14,7 @@ assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene s
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
+assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
@@ -50,6 +51,10 @@ assert.match(witness, /mouse remove did not preserve transform toolbar/, 'witnes
 assert.match(witness, /keyboard remove did not remove focused row/, 'witness proves focused keyboard removal');
 assert.match(witness, /keyboard remove did not preserve transform toolbar/, 'witness proves keyboard removal keeps transform controls on fallback object');
 assert.match(witness, /append selection did not preserve transform toolbar/, 'witness proves transform controls after append selection');
+assert.match(witness, /viewport empty click did not deselect scene object/, 'witness proves empty viewport clicks clear object selection');
+assert.match(witness, /viewport empty click did not hide transform toolbar/, 'witness proves empty viewport clicks hide the transform toolbar');
+assert.match(witness, /viewport object click did not select scene object/, 'witness proves object viewport clicks select a scene object');
+assert.match(witness, /viewport object click did not restore transform toolbar/, 'witness proves object viewport clicks retarget transform controls');
 assert.match(witness, /scene save did not create exactly one new scene file/, 'save/load witness proves a server scene file was created');
 assert.match(witness, /saved scene document did not persist two objects/, 'save/load witness proves saved JSON contains both authored objects');
 assert.match(witness, /saved scene document did not preserve active object id/, 'save/load witness proves saved JSON preserves active object identity');

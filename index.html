@@ -555,6 +555,7 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPipeline = null;
 let aoComposite = null;
@@ -582,6 +583,8 @@ let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 let sceneMutationToken = 0;
+let viewportPointerDown = null;
+let transformGizmoDragging = false;
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
@@ -938,10 +941,24 @@ function renderSceneObjectList() {
   });
 }
 
+function clearActiveSceneObjectSelection() {
+  activeSceneObjectId = null;
+  currentMesh = null;
+  renderSceneObjectList();
+  if (!transformControls) return;
+  transformControls.detach();
+  transformControls.visible = false;
+  document.getElementById('transform-bar').classList.remove('visible');
+}
+
 function setActiveSceneObject(id) {
   const entry = sceneObjects.find(obj => obj.id === id);
-  activeSceneObjectId = entry ? entry.id : null;
-  currentMesh = entry ? entry.object : null;
+  if (!entry) {
+    clearActiveSceneObjectSelection();
+    return;
+  }
+  activeSceneObjectId = entry.id;
+  currentMesh = entry.object;
   renderSceneObjectList();
   if (!transformControls) return;
   transformControls.detach();
@@ -950,9 +967,86 @@ function setActiveSceneObject(id) {
     transformControls.attach(currentMesh);
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
-  } else {
-    document.getElementById('transform-bar').classList.remove('visible');
   }
+}
+
+function sceneObjectRecordForDescendant(object) {
+  for (const record of sceneObjects) {
+    let cursor = object;
+    while (cursor) {
+      if (cursor === record.object) return record;
+      cursor = cursor.parent;
+    }
+  }
+  return null;
+}
+
+function pickSceneObjectFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    return null;
+  }
+  scenePointerNdc.set(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+  );
+  sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  const hits = sceneRaycaster.intersectObjects(sceneObjects.map(record => record.object), true);
+  for (const hit of hits) {
+    const record = sceneObjectRecordForDescendant(hit.object);
+    if (record) return record;
+  }
+  return null;
+}
+
+function viewportEventHitsInteractiveOverlay(event) {
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar');
+}
+
+function viewportEventIsInsideCanvas(event) {
+  if (!renderer?.domElement) return false;
+  const rect = renderer.domElement.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+}
+
+function handleViewportPointerDown(event) {
+  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  viewportPointerDown = {
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  };
+}
+
+function handleViewportSelectionClick(event) {
+  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) {
+    viewportPointerDown = null;
+    return;
+  }
+  const start = viewportPointerDown || (event.type === 'click' ? {
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  } : null);
+  viewportPointerDown = null;
+  const pointerIdsDiffer = start?.pointerId !== undefined && event.pointerId !== undefined && start.pointerId !== event.pointerId;
+  if (!start || pointerIdsDiffer) {
+    return;
+  }
+  const drift = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+  if (drift > 5) return;
+
+  const record = pickSceneObjectFromViewportPointer(event);
+  if (record) {
+    setActiveSceneObject(record.id);
+    setInfo(`Selected: ${record.label || record.fileName || record.id}`);
+  } else {
+    clearActiveSceneObjectSelection();
+    setInfo('Selection cleared');
+  }
+  window._kaminosDirty?.();
 }
 
 function registerSceneObject(object, metadata = {}) {
@@ -1127,11 +1221,14 @@ async function initScene() {
   // Transform gizmo
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', e => {
+    transformGizmoDragging = e.value;
     controls.enabled = !e.value; // disable orbit while dragging gizmo
   });
   transformControls.setSize(0.75);
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
+  sceneRaycaster = new THREE.Raycaster();
+  scenePointerNdc = new THREE.Vector2();
 
   // --- Manual AO render pipeline ---
   // Scene → RenderTarget (color+depth) → GTAO compute → composite to canvas
@@ -1187,6 +1284,16 @@ async function initScene() {
   const markDirty = () => { needsRender = true; idleFrames = 0; };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', markDirty);
+  const viewportEl = document.getElementById('viewport');
+  renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
+  renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
+  renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
+  renderer.domElement.addEventListener('mousedown', handleViewportPointerDown);
+  renderer.domElement.addEventListener('click', handleViewportSelectionClick);
+  viewportEl.addEventListener('pointerdown', handleViewportPointerDown);
+  viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
+  viewportEl.addEventListener('mousedown', handleViewportPointerDown);
+  viewportEl.addEventListener('click', handleViewportSelectionClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
