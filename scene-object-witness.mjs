@@ -1143,6 +1143,166 @@ async function runGreenroomPickerDisplayScenario(ws) {
   }
 }
 
+async function runGreenroomPreviewRaceScenario(ws) {
+  phase = 'scenario-greenroom-preview-race';
+  lastEvidence.greenroomPreviewRace = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const previewState = () => {
+        const panel = document.getElementById('greenroom-preview-controls');
+        return {
+          active: !!window.greenroomPreviewIsActive?.(),
+          visible: !!panel && !panel.hidden,
+          title: document.getElementById('greenroom-preview-title')?.textContent?.trim() || null,
+          source: document.getElementById('greenroom-preview-source')?.textContent?.trim() || null,
+          actions: [...document.querySelectorAll('[data-greenroom-preview-action]')].map(button => button.textContent.trim()),
+        };
+      };
+      const previewDebug = () => window.greenroomPreviewDebugState?.() || {};
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 160; i++) {
+          const rows = rowState();
+          if (rows.length === count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const waitForPreviewRoute = async route => {
+        for (let i = 0; i < 160; i++) {
+          const state = previewState();
+          const debug = previewDebug();
+          if (state.active
+            && state.visible
+            && state.source?.includes(route)
+            && debug.previewObjectSource?.includes(route)
+            && debug.previewSceneObjectSources?.length === 1
+            && debug.previewSceneObjectSources[0]?.includes(route)) {
+            return { state, debug };
+          }
+          await wait(125);
+        }
+        return { state: previewState(), debug: previewDebug() };
+      };
+      const ensureBaseObject = async () => {
+        if (rowState().length) return rowState();
+        const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+        if (!demo) throw new Error('SuperMat Ring demo button missing');
+        demo.click();
+        return waitForSceneRows(1);
+      };
+      const greenroomRawName = value => String(value || '').trim().replace(/^raw\\s+/i, '');
+      const outputRouteFor = async rawName => {
+        const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(rawName));
+        const outputsData = await outputsResp.json().catch(() => ({}));
+        const mesh = (outputsData.entries || []).find(entry => /\\.(glb|gltf|obj)$/i.test(entry.name));
+        return {
+          jobId: rawName,
+          outputsStatus: outputsResp.status,
+          outputsOk: outputsResp.ok,
+          outputsError: outputsData.error || null,
+          mesh: mesh?.name || null,
+          route: mesh ? '/api/job-output?job_id=' + encodeURIComponent(rawName) + '&file=' + encodeURIComponent(mesh.name) : null,
+        };
+      };
+      const setupRows = rowState();
+      document.querySelector('[data-tab="greenroom"]').click();
+      let entries = [];
+      for (let i = 0; i < 120; i++) {
+        entries = [...document.querySelectorAll('#greenroom-list .gr-entry')];
+        if (entries.filter(entry => [...entry.querySelectorAll('button')].some(button => button.textContent.trim() === 'View')).length >= 2) break;
+        const doneEntry = entries.find(entry => (
+          entry.querySelector('.gr-title')?.textContent?.trim().toLowerCase() === 'done'
+          || entry.querySelector('.gr-raw')?.textContent?.trim().toLowerCase() === 'raw done'
+        ));
+        if (doneEntry) doneEntry.click();
+        await wait(125);
+      }
+      const raceRows = entries.map((entry, index) => ({
+        index,
+        title: entry.querySelector('.gr-title')?.textContent?.trim() || null,
+        raw: entry.querySelector('.gr-raw')?.textContent?.trim() || null,
+        rawName: greenroomRawName(entry.querySelector('.gr-raw')?.textContent?.trim() || ''),
+        buttons: [...entry.querySelectorAll('button')].map(button => button.textContent.trim()),
+      })).filter(row => row.rawName && row.buttons.includes('View'));
+      if (raceRows.length < 2) {
+        throw new Error('greenroom preview race fixture needs at least two View rows: ' + JSON.stringify(raceRows));
+      }
+      const raceA = raceRows[0];
+      const raceB = raceRows[1];
+      const raceRouteA = await outputRouteFor(raceA.rawName);
+      const raceRouteB = await outputRouteFor(raceB.rawName);
+      if (!raceRouteA.route || !raceRouteB.route) {
+        throw new Error('greenroom preview race fixture rows did not expose mesh routes: ' + JSON.stringify({ raceRouteA, raceRouteB }));
+      }
+      const actionEntries = [...document.querySelectorAll('#greenroom-list .gr-entry')];
+      const entryA = actionEntries.find(entry => greenroomRawName(entry.querySelector('.gr-raw')?.textContent?.trim() || '') === raceA.rawName);
+      const entryB = actionEntries.find(entry => greenroomRawName(entry.querySelector('.gr-raw')?.textContent?.trim() || '') === raceB.rawName);
+      const viewA = [...(entryA?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'View');
+      const viewB = [...(entryB?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'View');
+      if (!viewA || !viewB) {
+        throw new Error('greenroom preview race View buttons disappeared: ' + JSON.stringify({ raceRows }));
+      }
+      viewA.click();
+      await wait(50);
+      viewB.click();
+      const afterSecondRoute = await waitForPreviewRoute(raceRouteB.route);
+      await wait(2600);
+      const afterBothLoads = { state: previewState(), debug: previewDebug() };
+      const sources = afterBothLoads.debug.previewSceneObjectSources || [];
+      const raceSettledOnSecondRoute = afterBothLoads.state.active
+        && afterBothLoads.state.visible
+        && afterBothLoads.state.source?.includes(raceRouteB.route)
+        && afterBothLoads.debug.previewObjectSource?.includes(raceRouteB.route)
+        && sources.length === 1
+        && sources[0]?.includes(raceRouteB.route)
+        && afterBothLoads.debug.sceneObjectCount === 0;
+      const firstRouteAbsent = !afterBothLoads.state.source?.includes(raceRouteA.route)
+        && !afterBothLoads.debug.previewObjectSource?.includes(raceRouteA.route)
+        && !sources.some(source => source?.includes(raceRouteA.route));
+      const importButton = document.querySelector('[data-greenroom-preview-action="import"]');
+      if (!importButton) throw new Error('greenroom preview race Import to Scene button missing');
+      importButton.click();
+      const afterImportRows = await waitForSceneRows(setupRows.length + 1);
+      const routeBImports = afterImportRows.filter(row => row.source?.includes(raceRouteB.route));
+      const routeAImports = afterImportRows.filter(row => row.source?.includes(raceRouteA.route));
+      const importAppendedSecondRoute = afterImportRows.length === setupRows.length + 1
+        && routeBImports.length === 1
+        && routeAImports.length === 0;
+      return {
+        setupRows,
+        raceRows: [raceA, raceB],
+        raceRouteA,
+        raceRouteB,
+        afterSecondRoute,
+        afterBothLoads,
+        afterImportRows,
+        routeBImports,
+        routeAImports,
+        raceSettledOnSecondRoute,
+        firstRouteAbsent,
+        importAppendedSecondRoute,
+      };
+    })()
+  `, { timeoutMs: 120000 });
+
+  if (!lastEvidence.greenroomPreviewRace.raceSettledOnSecondRoute) {
+    throw new Error(`greenroom preview race did not settle on the second route: ${JSON.stringify(lastEvidence.greenroomPreviewRace)}`);
+  }
+  if (!lastEvidence.greenroomPreviewRace.firstRouteAbsent) {
+    throw new Error(`greenroom preview race leaked the first route into active preview state: ${JSON.stringify(lastEvidence.greenroomPreviewRace)}`);
+  }
+  if (!lastEvidence.greenroomPreviewRace.importAppendedSecondRoute) {
+    throw new Error(`greenroom preview race import did not append the second route: ${JSON.stringify(lastEvidence.greenroomPreviewRace)}`);
+  }
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -1210,6 +1370,8 @@ try {
     await runSceneBoundaryRoundtripScenario(ws);
   } else if (scenario === 'greenroom-picker-display') {
     await runGreenroomPickerDisplayScenario(ws);
+  } else if (scenario === 'greenroom-preview-race') {
+    await runGreenroomPreviewRaceScenario(ws);
   } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }

@@ -13,6 +13,7 @@ assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'appe
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
+assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
@@ -82,6 +83,13 @@ assert.match(witness, /greenroom preview save was not blocked/, 'Green Room acti
 assert.match(witness, /greenroom preview Back did not restore authored scene rows/, 'Green Room action witness proves Back to Scene restores the authored scene');
 assert.match(witness, /greenroom preview Import to Scene did not restore and append into the authored scene/, 'Green Room action witness proves Import to Scene restores the authored scene before appending');
 assert.match(witness, /greenroom preview import did not preserve Greenroom route source/, 'Green Room action witness proves imported preview rows keep the selected Greenroom route source');
+assert.match(witness, /greenroom preview race fixture needs at least two View rows/, 'Green Room race witness requires two distinct previewable rows');
+assert.match(witness, /greenroom preview race did not settle on the second route/, 'Green Room race witness proves fast View A then View B settles on route B');
+assert.match(witness, /greenroom preview race leaked the first route into active preview state/, 'Green Room race witness proves stale route A cannot own active preview state');
+assert.match(witness, /greenroom preview race import did not append the second route/, 'Green Room race witness proves Import to Scene appends route B after the race');
+assert.match(witness, /greenroomPreviewRace/, 'Green Room race witness records race-specific evidence');
+assert.match(witness, /raceRouteA/, 'Green Room race witness records the first delayed route identity');
+assert.match(witness, /raceRouteB/, 'Green Room race witness records the second winning route identity');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');
 assert.match(witness, /previewDidNotMutateAuthoredRows/, 'Green Room action witness computes an authored-scene non-mutation predicate');

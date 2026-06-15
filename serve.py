@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
@@ -197,6 +198,22 @@ def find_greenroom_receipt(job_id):
         if receipt_path.exists():
             return json.loads(receipt_path.read_text())
     return None
+
+
+def greenroom_job_output_delay_seconds(job_id, filename):
+    config = os.environ.get("KAMINOS_JOB_OUTPUT_DELAY_MS_BY_JOB", "")
+    for item in config.split(","):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        key = key.strip()
+        if key not in {job_id, filename, f"{job_id}/{filename}"}:
+            continue
+        try:
+            return max(0.0, float(value.strip()) / 1000.0)
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
@@ -524,6 +541,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if not target.is_file():
             self.send_json({"error": f"File not found: {filename}"}, 404)
             return
+
+        delay_seconds = greenroom_job_output_delay_seconds(job_id, filename)
+        if delay_seconds:
+            time.sleep(delay_seconds)
 
         ext = target.suffix.lower()
         content_types = {

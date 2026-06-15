@@ -760,6 +760,26 @@ function greenroomPreviewIsActive() {
 
 window.greenroomPreviewIsActive = greenroomPreviewIsActive;
 
+function greenroomPreviewDebugState() {
+  const preview = greenroomPreviewState?.preview || {};
+  const previewObject = greenroomPreviewState?.previewObject || null;
+  const previewSceneObjectSources = scene.children
+    .map(child => child.userData?.kaminosSceneObject?.source)
+    .filter(Boolean);
+  return {
+    active: greenroomPreviewIsActive(),
+    previewGeneration: greenroomPreviewState?.previewGeneration ?? null,
+    source: preview.url || null,
+    title: preview.display?.title || preview.fileName || null,
+    previewObjectSource: previewObject?.userData?.kaminosSceneObject?.source || null,
+    previewObjectInScene: previewObject ? scene.children.includes(previewObject) : false,
+    previewSceneObjectSources,
+    sceneObjectCount: sceneObjects.length,
+  };
+}
+
+window.greenroomPreviewDebugState = greenroomPreviewDebugState;
+
 function nextGreenroomPreviewGeneration() {
   sceneMutationToken++;
   greenroomPreviewGeneration += 1;
