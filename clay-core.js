@@ -1,12 +1,26 @@
+import {
+  POINT_TRIANGLE_FEATURE,
+  POINT_TRIANGLE_IMPORT_PATH,
+  POINT_TRIANGLE_JOB_FLOATS,
+  POINT_TRIANGLE_PACKAGE_COMMIT,
+  POINT_TRIANGLE_RESULT_BYTES,
+  POINT_TRIANGLE_SOURCE_CONTRACT,
+  packPointTriangleDistanceJobs,
+  pointTriangleDistanceWgsl,
+} from './vendor/webgpu-geometry-primitives/point-triangle.js';
+
 const ROUTE_IDENTITY = 'kaminos-clay-sim-route-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-clay-prototype-v0';
 const SOLVER_IDENTITY = 'webgpu-clay-surface-lattice-scaffold-v0';
-const SHARED_PRIMITIVE_SOURCE_CONTRACT = 'kaolin-kpm-001-forward-distance-feature-codes';
+const SHARED_PRIMITIVE_SOURCE_CONTRACT = POINT_TRIANGLE_SOURCE_CONTRACT;
 const GRID_X = 48;
 const GRID_Z = 32;
 const MAX_COLLIDERS = 8;
+const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
+const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
+const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
 
-export const pointTriangleDistanceWgsl = 'fn point_triangle_distance_main() {}';
+export { pointTriangleDistanceWgsl };
 
 function clampFinite(value, min, max, fallback) {
   const number = Number(value);
@@ -92,6 +106,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let clayDeformationCount = 0;
   let clayContactCount = 0;
   let clayDeformationMax = 0;
+  let sharedPrimitiveProbeStatus = 'not-run';
+  let sharedPrimitiveProbeDistanceSq = null;
+  let sharedPrimitiveProbeFeature = null;
+  let sharedPrimitiveProbeTriangleIndex = null;
   let lastError = '';
   const vertexCount = GRID_X * GRID_Z;
   const basePositions = new Float32Array(vertexCount * 4);
@@ -144,6 +162,78 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     }
   }
 
+  async function runSharedPrimitiveProbe() {
+    if (sharedPrimitiveProbeStatus === 'pass') return;
+    sharedPrimitiveProbeStatus = 'running';
+    const jobs = packPointTriangleDistanceJobs([{
+      point: [0.25, 0.25, 0.5],
+      triangle: [
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 1, 0],
+      ],
+      triangleIndex: SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX,
+    }]);
+    const jobBuffer = device.createBuffer({
+      label: 'kaminos-clay-shared-point-triangle-jobs',
+      size: jobs.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const resultBuffer = device.createBuffer({
+      label: 'kaminos-clay-shared-point-triangle-results',
+      size: POINT_TRIANGLE_RESULT_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    const probeReadback = device.createBuffer({
+      label: 'kaminos-clay-shared-point-triangle-readback',
+      size: POINT_TRIANGLE_RESULT_BYTES,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    device.queue.writeBuffer(jobBuffer, 0, jobs);
+    const probePipeline = await device.createComputePipelineAsync({
+      label: 'kaminos-clay-shared-point-triangle-probe',
+      layout: 'auto',
+      compute: {
+        module: device.createShaderModule({ code: pointTriangleDistanceWgsl }),
+        entryPoint: 'point_triangle_distance_main',
+      },
+    });
+    const probeBindGroup = device.createBindGroup({
+      layout: probePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: jobBuffer } },
+        { binding: 1, resource: { buffer: resultBuffer } },
+      ],
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos-clay-shared-point-triangle-probe' });
+    const pass = encoder.beginComputePass({ label: 'kaminos-clay-shared-point-triangle-pass' });
+    pass.setPipeline(probePipeline);
+    pass.setBindGroup(0, probeBindGroup);
+    pass.dispatchWorkgroups(1);
+    pass.end();
+    encoder.copyBufferToBuffer(resultBuffer, 0, probeReadback, 0, POINT_TRIANGLE_RESULT_BYTES);
+    device.queue.submit([encoder.finish()]);
+    await probeReadback.mapAsync(GPUMapMode.READ);
+    const resultView = new DataView(probeReadback.getMappedRange());
+    sharedPrimitiveProbeDistanceSq = resultView.getFloat32(0, true);
+    sharedPrimitiveProbeFeature = resultView.getUint32(4, true);
+    sharedPrimitiveProbeTriangleIndex = resultView.getUint32(8, true);
+    probeReadback.unmap();
+    const distanceOk = Math.abs(sharedPrimitiveProbeDistanceSq - SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ) <= 1e-5;
+    const featureOk = sharedPrimitiveProbeFeature === SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE;
+    const identityOk = sharedPrimitiveProbeTriangleIndex === SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX;
+    if (!distanceOk || !featureOk || !identityOk) {
+      sharedPrimitiveProbeStatus = 'fail';
+      lastError = `shared-primitive-probe-mismatch:${JSON.stringify({
+        distanceSq: sharedPrimitiveProbeDistanceSq,
+        feature: sharedPrimitiveProbeFeature,
+        triangleIndex: sharedPrimitiveProbeTriangleIndex,
+      })}`;
+      throw new Error(lastError);
+    }
+    sharedPrimitiveProbeStatus = 'pass';
+  }
+
   async function ensureGpu() {
     if (device) return;
     if (!navigator.gpu) {
@@ -156,6 +246,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       throw new Error(lastError);
     }
     device = await adapter.requestDevice();
+    await runSharedPrimitiveProbe();
     baseBuffer = device.createBuffer({
       label: 'kaminos-clay-base-positions',
       size: basePositions.byteLength,
@@ -262,7 +353,15 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       substrateEvidenceKind: device ? 'webgpu-compute-readback' : 'none',
       runtimeCpuFallback: false,
       packagePrimitiveSourceContract: SHARED_PRIMITIVE_SOURCE_CONTRACT,
+      packagePrimitiveImportPath: POINT_TRIANGLE_IMPORT_PATH,
+      packagePrimitiveCommit: POINT_TRIANGLE_PACKAGE_COMMIT,
+      pointTriangleJobFloats: POINT_TRIANGLE_JOB_FLOATS,
+      pointTriangleResultBytes: POINT_TRIANGLE_RESULT_BYTES,
       pointTriangleDistanceWgslEntry: 'point_triangle_distance_main',
+      sharedPrimitiveProbeStatus,
+      sharedPrimitiveProbeDistanceSq,
+      sharedPrimitiveProbeFeature,
+      sharedPrimitiveProbeTriangleIndex,
       clayGrid: `${GRID_X}x${GRID_Z}`,
       clayColliderCount: colliders.length,
       clayDeformationCount,

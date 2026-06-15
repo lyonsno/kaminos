@@ -12,6 +12,8 @@ assert.match(index, /clay-core\.js/, 'index imports the clay prototype module');
 assert.match(index, /initKaminosClayRoute/, 'index initializes the clay route explicitly');
 assert.match(index, /__kaminosClayPrototype/, 'clay route exposes a witness/debug prototype handle');
 assert.match(index, /clay_fixture_hand/, 'clay route exposes a deterministic hand-collider fixture');
+assert.match(index, /clay-primitive-probe/, 'Clay panel exposes package primitive probe status');
+assert.match(index, /clay-primitive-commit/, 'Clay panel exposes package primitive commit identity');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -20,12 +22,25 @@ assert.match(core, /export function createKaminosClayPrototype/, 'clay module ex
 assert.match(core, /navigator\.gpu/, 'clay module requires WebGPU instead of CPU runtime fallback');
 assert.match(core, /runtimeCpuFallback:\s*false/, 'clay debug state refuses CPU runtime fallback');
 assert.match(core, /webgpu-clay-surface-lattice-scaffold-v0/, 'clay solver identity is stable');
-assert.match(core, /kaolin-kpm-001-forward-distance-feature-codes/, 'clay scaffold records shared primitive source contract');
+assert.match(core, /vendor\/webgpu-geometry-primitives\/point-triangle\.js/, 'clay route consumes the package primitive bridge');
+assert.match(core, /POINT_TRIANGLE_SOURCE_CONTRACT/, 'clay scaffold consumes imported shared primitive source contract');
 assert.match(core, /pointTriangleDistanceWgsl|point_triangle_distance_main/, 'clay scaffold points at the shared primitive WGSL contract');
+assert.doesNotMatch(core, /export const pointTriangleDistanceWgsl = 'fn point_triangle_distance_main\(\) \{\}'/, 'clay route must not use the placeholder point-triangle WGSL');
+assert.match(core, /sharedPrimitiveProbeStatus/, 'clay debug state records package primitive WebGPU probe status');
+assert.match(core, /sharedPrimitiveProbeFeature/, 'clay debug state records package primitive feature readback');
+assert.match(core, /sharedPrimitiveProbeTriangleIndex/, 'clay debug state records package primitive identity readback');
 assert.match(core, /clayColliderCount/, 'clay debug state records collider count');
 assert.match(core, /clayDeformationCount/, 'clay debug state records deformation count');
 assert.match(core, /clayContactCount/, 'clay debug state records contact count');
 assert.doesNotMatch(core, /fireLike|flame|smoke/i, 'clay core must not reuse fire/smoke visual language');
+
+const vendorPointTrianglePath = join(root, 'vendor/webgpu-geometry-primitives/point-triangle.js');
+assert.ok(existsSync(vendorPointTrianglePath), 'Kaminos vendors a static package primitive bridge for the no-bundler route');
+const vendorPointTriangle = existsSync(vendorPointTrianglePath) ? readFileSync(vendorPointTrianglePath, 'utf8') : '';
+assert.match(vendorPointTriangle, /POINT_TRIANGLE_SOURCE_CONTRACT/, 'vendor bridge exposes point-triangle source contract');
+assert.match(vendorPointTriangle, /packPointTriangleDistanceJobs/, 'vendor bridge exposes point-triangle job packing schema');
+assert.match(vendorPointTriangle, /point_triangle_distance_main/, 'vendor bridge exposes executable point-triangle WGSL');
+assert.match(vendorPointTriangle, /49dd17c/, 'vendor bridge records the local package commit it was copied from');
 
 const witnessPath = join(root, 'clay-witness.mjs');
 assert.ok(existsSync(witnessPath), 'clay-witness.mjs exists');
@@ -35,6 +50,9 @@ assert.match(witness, /__kaminosClayPrototype/, 'clay witness reads clay debug s
 assert.match(witness, /effectiveBackend/, 'clay witness records effective backend');
 assert.match(witness, /WebGPU/, 'clay witness requires WebGPU evidence');
 assert.match(witness, /runtimeCpuFallback/, 'clay witness records CPU fallback absence');
+assert.match(witness, /sharedPrimitiveProbeStatus/, 'clay witness requires package primitive probe status');
+assert.match(witness, /sharedPrimitiveProbeFeature/, 'clay witness records package primitive feature readback');
+assert.match(witness, /sharedPrimitiveProbeTriangleIndex/, 'clay witness records package primitive identity readback');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

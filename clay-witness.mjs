@@ -182,6 +182,17 @@ async function main() {
     assert.equal(state.substrateEvidenceKind, 'webgpu-compute-readback');
     assert.equal(state.runtimeCpuFallback, false);
     assert.equal(state.packagePrimitiveSourceContract, 'kaolin-kpm-001-forward-distance-feature-codes');
+    assert.equal(state.packagePrimitiveImportPath, './vendor/webgpu-geometry-primitives/point-triangle.js');
+    assert.equal(state.packagePrimitiveCommit, '49dd17c');
+    assert.equal(state.pointTriangleJobFloats, 16);
+    assert.equal(state.pointTriangleResultBytes, 16);
+    assert.equal(state.sharedPrimitiveProbeStatus, 'pass');
+    assert.equal(state.sharedPrimitiveProbeFeature, 0);
+    assert.equal(state.sharedPrimitiveProbeTriangleIndex, 77);
+    assert.ok(
+      Math.abs((state.sharedPrimitiveProbeDistanceSq ?? Number.NaN) - 0.25) <= 1e-5,
+      `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
+    );
     assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
     assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
@@ -206,6 +217,14 @@ async function main() {
       substrateEvidenceKind: state.substrateEvidenceKind,
       runtimeCpuFallback: state.runtimeCpuFallback,
       packagePrimitiveSourceContract: state.packagePrimitiveSourceContract,
+      packagePrimitiveImportPath: state.packagePrimitiveImportPath,
+      packagePrimitiveCommit: state.packagePrimitiveCommit,
+      pointTriangleJobFloats: state.pointTriangleJobFloats,
+      pointTriangleResultBytes: state.pointTriangleResultBytes,
+      sharedPrimitiveProbeStatus: state.sharedPrimitiveProbeStatus,
+      sharedPrimitiveProbeDistanceSq: state.sharedPrimitiveProbeDistanceSq,
+      sharedPrimitiveProbeFeature: state.sharedPrimitiveProbeFeature,
+      sharedPrimitiveProbeTriangleIndex: state.sharedPrimitiveProbeTriangleIndex,
       clayColliderCount: state.clayColliderCount,
       clayContactCount: state.clayContactCount,
       clayDeformationCount: state.clayDeformationCount,

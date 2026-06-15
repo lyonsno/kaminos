@@ -527,6 +527,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">GPU steps</span><span class="field-val" id="clay-steps">0</span></div>
       <div class="field"><span class="field-key">CPU fallback</span><span class="field-val" id="clay-cpu-fallback">false</span></div>
       <div class="field"><span class="field-key">Primitive</span><span class="field-val" id="clay-primitive">kaolin-kpm-001-forward-distance-feature-codes</span></div>
+      <div class="field"><span class="field-key">Probe</span><span class="field-val" id="clay-primitive-probe">not-run</span></div>
+      <div class="field"><span class="field-key">Pkg commit</span><span class="field-val" id="clay-primitive-commit">none</span></div>
     </div>
   </div>
 
@@ -1611,6 +1613,8 @@ function refreshClayReadout() {
   document.getElementById('clay-steps').textContent = String(s.gpuStepCount ?? 0);
   document.getElementById('clay-cpu-fallback').textContent = String(!!s.runtimeCpuFallback);
   document.getElementById('clay-primitive').textContent = s.packagePrimitiveSourceContract || 'none';
+  document.getElementById('clay-primitive-probe').textContent = s.sharedPrimitiveProbeStatus || 'not-run';
+  document.getElementById('clay-primitive-commit').textContent = s.packagePrimitiveCommit || 'none';
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
 }
