@@ -130,7 +130,9 @@ assert.match(index, /shouldFrameLamellarOnEnable\(/, 'Lamellar manual Enable can
 assert.match(index, /function syncLamellarContextInspector\(/, 'Lamellar UI syncs selected-object context inspector controls');
 assert.match(index, /function syncLamellarSelectionPopover\(/, 'Lamellar UI syncs the viewport selection popover');
 assert.match(index, /function positionLamellarSelectionPopover\(/, 'Lamellar UI positions the popover from the 3D selection anchor');
-assert.match(index, /scheduleLamellarControlsRebuild/, 'Lamellar slider input rebuilds are coalesced to animation-frame cadence');
+assert.match(index, /scheduleLamellarControlsRebuild/, 'Lamellar slider input rebuilds are coalesced by a central scheduler');
+assert.match(index, /LAMELLAR_REBUILD_MIN_INTERVAL_MS/, 'Lamellar slider input rebuilds have a named low-cadence budget instead of rebuilding at display cadence');
+assert.match(index, /lamellarControlsRebuildTimeout/, 'Lamellar input rebuild scheduler can defer heavy geometry work beyond the next animation frame');
 assert.match(index, /flushLamellarControlsRebuild/, 'Lamellar slider change events can flush pending rebuilds immediately');
 assert.match(index, /function setSelectedLamellarStripById\(/, 'Lamellar UI can switch selected strip from a picked strip instance id');
 assert.match(index, /function syncSelectedLamellarStrip\(/, 'Lamellar UI syncs selected-strip profile controls');

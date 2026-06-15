@@ -684,7 +684,10 @@ const lamellarStripProfileOverrides = {};
 const lamellarStripPopulationOverrides = {};
 let lamellarPinnedPopoverSelectionKey = null;
 let lamellarControlsRebuildRaf = 0;
+let lamellarControlsRebuildTimeout = 0;
+let lamellarLastControlsRebuildAt = 0;
 let lamellarPendingPopulationSelectionId = null;
+const LAMELLAR_REBUILD_MIN_INTERVAL_MS = 80;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1096,9 +1099,14 @@ function flushLamellarControlsRebuild(options = {}) {
     cancelAnimationFrame(lamellarControlsRebuildRaf);
     lamellarControlsRebuildRaf = 0;
   }
+  if (lamellarControlsRebuildTimeout) {
+    clearTimeout(lamellarControlsRebuildTimeout);
+    lamellarControlsRebuildTimeout = 0;
+  }
   const populationId = options.populationId || lamellarPendingPopulationSelectionId;
   lamellarPendingPopulationSelectionId = null;
   lamellarWitness.setControls(readLamellarControls());
+  lamellarLastControlsRebuildAt = performance.now();
   if (populationId) {
     const selection = lamellarWitness.selectPopulationByPopulationId?.(populationId, 'ui-population-override');
     if (selection) selectLamellarObject(selection);
@@ -1110,11 +1118,21 @@ function flushLamellarControlsRebuild(options = {}) {
 
 function scheduleLamellarControlsRebuild(options = {}) {
   if (options.populationId) lamellarPendingPopulationSelectionId = options.populationId;
-  if (lamellarControlsRebuildRaf) return null;
-  lamellarControlsRebuildRaf = requestAnimationFrame(() => {
-    lamellarControlsRebuildRaf = 0;
-    flushLamellarControlsRebuild();
-  });
+  if (lamellarControlsRebuildRaf || lamellarControlsRebuildTimeout) return null;
+  const elapsed = performance.now() - lamellarLastControlsRebuildAt;
+  const delay = Math.max(0, LAMELLAR_REBUILD_MIN_INTERVAL_MS - elapsed);
+  const queueAnimationFrameFlush = () => {
+    lamellarControlsRebuildTimeout = 0;
+    lamellarControlsRebuildRaf = requestAnimationFrame(() => {
+      lamellarControlsRebuildRaf = 0;
+      flushLamellarControlsRebuild();
+    });
+  };
+  if (delay > 0) {
+    lamellarControlsRebuildTimeout = setTimeout(queueAnimationFrameFlush, delay);
+  } else {
+    queueAnimationFrameFlush();
+  }
   return null;
 }
 
