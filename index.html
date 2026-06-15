@@ -845,22 +845,31 @@ function removeGreenroomPreviewObject({ dispose = true } = {}) {
   return previewObject;
 }
 
+function sceneObjectTransformState(object) {
+  return {
+    position: object?.position?.toArray?.() || [0, 0, 0],
+    rotation: object?.rotation ? [object.rotation.x, object.rotation.y, object.rotation.z] : [0, 0, 0],
+    scale: object?.scale?.toArray?.() || [1, 1, 1],
+  };
+}
+
+function applySceneObjectTransformState(object, transform = {}) {
+  if (!object) return;
+  object.position.fromArray(Array.isArray(transform.position) ? transform.position : [0, 0, 0]);
+  object.rotation.set(...(Array.isArray(transform.rotation) ? transform.rotation : [0, 0, 0]));
+  object.scale.fromArray(Array.isArray(transform.scale) ? transform.scale : [1, 1, 1]);
+}
+
 function previewTransformState(object) {
   return {
-    transform: {
-      position: object.position.toArray(),
-      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-      scale: object.scale.toArray(),
-    },
+    transform: sceneObjectTransformState(object),
     materials: getMaterialStateForObject(object),
   };
 }
 
 function applyPreviewTransformState(object, state) {
   if (!object || !state) return;
-  object.position.fromArray(state.transform?.position || [0, 0, 0]);
-  object.rotation.set(...(state.transform?.rotation || [0, 0, 0]));
-  object.scale.fromArray(state.transform?.scale || [1, 1, 1]);
+  applySceneObjectTransformState(object, state.transform);
   applyMaterialStateToObject(object, state.materials);
 }
 
@@ -1101,6 +1110,31 @@ window.selectSceneObject = function(id) {
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
     window._kaminosDirty?.();
   }
+};
+
+window.kaminosSceneObjectDebugState = function() {
+  return sceneObjects.map(record => ({
+    id: record.id,
+    label: record.label || record.fileName || record.id,
+    source: record.source || null,
+    type: record.type || null,
+    active: record.id === activeSceneObjectId,
+    transform: sceneObjectTransformState(record.object),
+  }));
+};
+
+window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+  const entry = sceneObjects.find(obj => obj.id === id);
+  if (!entry) throw new Error(`Scene object "${id}" was not found`);
+  applySceneObjectTransformState(entry.object, transform);
+  if (entry.id === activeSceneObjectId && transformControls) {
+    transformControls.detach();
+    transformControls.attach(entry.object);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
+  window._kaminosDirty?.();
+  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
 window.removeSceneObject = function(id) {
@@ -3614,11 +3648,7 @@ function serializeSceneObject(entry) {
     fileName: metadata.fileName ?? entry.fileName,
     label: metadata.label ?? entry.label,
     createdAt: metadata.createdAt ?? entry.createdAt,
-    transform: {
-      position: object.position.toArray(),
-      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-      scale: object.scale.toArray(),
-    },
+    transform: sceneObjectTransformState(object),
     materials: getMaterialStateForObject(object),
   };
 }
@@ -3657,11 +3687,7 @@ async function loadSceneObjects(records, activeId) {
   try {
     for (const record of records) {
       const object = await addSceneObjectFromSource(record);
-      if (record.transform) {
-        object.position.fromArray(record.transform.position || [0, 0, 0]);
-        object.rotation.set(...(record.transform.rotation || [0, 0, 0]));
-        object.scale.fromArray(record.transform.scale || [1, 1, 1]);
-      }
+      if (record.transform) applySceneObjectTransformState(object, record.transform);
       applyMaterialStateToObject(object, record.materials);
       loaded.push(record.id);
     }

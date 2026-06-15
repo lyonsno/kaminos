@@ -250,6 +250,23 @@ async function runSaveLoadRoundtripScenario(ws) {
         label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
+      const roundTransformValue = value => Number(Number(value || 0).toFixed(4));
+      const normalizeTransform = transform => ({
+        position: (transform?.position || []).map(roundTransformValue),
+        rotation: (transform?.rotation || []).map(roundTransformValue),
+        scale: (transform?.scale || []).map(roundTransformValue),
+      });
+      const transformMatches = (actual, expected, epsilon = 0.001) => {
+        const normalizedActual = normalizeTransform(actual);
+        const normalizedExpected = normalizeTransform(expected);
+        for (const key of ['position', 'rotation', 'scale']) {
+          if (normalizedActual[key].length !== 3 || normalizedExpected[key].length !== 3) return false;
+          for (let i = 0; i < 3; i++) {
+            if (Math.abs(normalizedActual[key][i] - normalizedExpected[key][i]) > epsilon) return false;
+          }
+        }
+        return true;
+      };
       const waitForRows = async count => {
         for (let i = 0; i < 120; i++) {
           const rows = rowState();
@@ -278,6 +295,32 @@ async function runSaveLoadRoundtripScenario(ws) {
 
       const firstId = appendedRows[0].id;
       const secondId = appendedRows[1].id;
+      if (typeof window.kaminosSetSceneObjectTransform !== 'function') {
+        throw new Error('scene transform witness missing kaminosSetSceneObjectTransform');
+      }
+      if (typeof window.kaminosSceneObjectDebugState !== 'function') {
+        throw new Error('scene transform witness missing kaminosSceneObjectDebugState');
+      }
+      const transformPlan = {
+        [firstId]: {
+          position: [-0.75, -0.23, 0.14],
+          rotation: [0.11, 0.22, 0.33],
+          scale: [0.82, 0.91, 1.07],
+        },
+        [secondId]: {
+          position: [0.68, 0.18, -0.22],
+          rotation: [0.04, -0.31, 0.18],
+          scale: [1.18, 0.76, 0.94],
+        },
+      };
+      window.kaminosSetSceneObjectTransform(firstId, transformPlan[firstId]);
+      window.kaminosSetSceneObjectTransform(secondId, transformPlan[secondId]);
+      const transformDebugBeforeSave = window.kaminosSceneObjectDebugState();
+      const firstBeforeSave = transformDebugBeforeSave.find(object => object.id === firstId);
+      const secondBeforeSave = transformDebugBeforeSave.find(object => object.id === secondId);
+      if (!transformMatches(firstBeforeSave?.transform, transformPlan[firstId]) || !transformMatches(secondBeforeSave?.transform, transformPlan[secondId])) {
+        throw new Error('scene transform witness could not set distinct object transforms: ' + JSON.stringify({ transformDebugBeforeSave, transformPlan }));
+      }
       document.querySelector('[data-scene-object-id="' + firstId + '"]').click();
       await wait(250);
       const beforeSaveRows = rowState();
@@ -307,6 +350,14 @@ async function runSaveLoadRoundtripScenario(ws) {
       }
       if (savedScene.activeObjectId !== firstId) {
         throw new Error('saved scene document did not preserve active object id: ' + JSON.stringify({ activeObjectId: savedScene.activeObjectId, firstId }));
+      }
+      const firstSavedObject = savedScene.objects.find(object => object.id === firstId);
+      const secondSavedObject = savedScene.objects.find(object => object.id === secondId);
+      if (!transformMatches(firstSavedObject?.transform, transformPlan[firstId]) || !transformMatches(secondSavedObject?.transform, transformPlan[secondId])) {
+        throw new Error('saved scene document did not preserve distinct object transforms: ' + JSON.stringify({
+          savedTransforms: savedScene.objects.map(object => ({ id: object.id, transform: normalizeTransform(object.transform) })),
+          transformPlan,
+        }));
       }
       const savedSources = savedScene.objects.map(object => object.source);
       if (!savedSources.every(source => source === 'demos/supermat-ring/')) {
@@ -351,6 +402,15 @@ async function runSaveLoadRoundtripScenario(ws) {
       if (!transformBarVisible) {
         throw new Error('scene load did not preserve transform toolbar: ' + JSON.stringify({ restoredRows, activeAfterLoad }));
       }
+      const restoredTransformDebugState = window.kaminosSceneObjectDebugState();
+      const firstAfterLoad = restoredTransformDebugState.find(object => object.id === firstId);
+      const secondAfterLoad = restoredTransformDebugState.find(object => object.id === secondId);
+      if (!transformMatches(firstAfterLoad?.transform, transformPlan[firstId]) || !transformMatches(secondAfterLoad?.transform, transformPlan[secondId])) {
+        throw new Error('scene load did not restore distinct object transforms: ' + JSON.stringify({
+          restoredTransformDebugState,
+          transformPlan,
+        }));
+      }
       if (infoAfterLoad !== 'Scene loaded: 2 objects') {
         throw new Error('scene load did not report two loaded objects: ' + JSON.stringify({ infoAfterLoad }));
       }
@@ -368,8 +428,11 @@ async function runSaveLoadRoundtripScenario(ws) {
           objectSources: savedSources,
           activeObjectId: savedScene.activeObjectId,
           volumePrimitiveSchema: savedScene.volumePrimitives?.schema || null,
+          objectTransforms: savedScene.objects.map(object => ({ id: object.id, transform: normalizeTransform(object.transform) })),
         },
+        transformDebugBeforeSave,
         restoredRows,
+        restoredTransformDebugState,
         activeAfterLoad,
         infoAfterLoad,
         transformBarVisible,

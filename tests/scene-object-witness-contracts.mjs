@@ -62,10 +62,14 @@ assert.match(witness, /viewport object click did not restore transform toolbar/,
 assert.match(witness, /scene save did not create exactly one new scene file/, 'save/load witness proves a server scene file was created');
 assert.match(witness, /saved scene document did not persist two objects/, 'save/load witness proves saved JSON contains both authored objects');
 assert.match(witness, /saved scene document did not preserve active object id/, 'save/load witness proves saved JSON preserves active object identity');
+assert.match(witness, /saved scene document did not preserve distinct object transforms/, 'save/load witness proves saved JSON preserves per-object transforms');
 assert.match(witness, /saved scene document did not preserve reloadable demo sources/, 'save/load witness proves saved JSON preserves reloadable demo sources');
 assert.match(witness, /scene load did not restore two object rows/, 'save/load witness proves browser load restores two object rows');
 assert.match(witness, /scene load did not restore active object id/, 'save/load witness proves browser load restores active selection');
 assert.match(witness, /scene load did not preserve transform toolbar/, 'save/load witness proves transform controls survive scene load');
+assert.match(witness, /scene load did not restore distinct object transforms/, 'save/load witness proves browser load restores per-object transforms');
+assert.match(witness, /kaminosSetSceneObjectTransform/, 'save/load witness uses an explicit transform setter instead of inferring from row state');
+assert.match(witness, /kaminosSceneObjectDebugState/, 'save/load witness captures scene-object transform debug state');
 assert.match(witness, /scene load did not report two loaded objects/, 'save/load witness proves load status reflects multi-object restore');
 assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');

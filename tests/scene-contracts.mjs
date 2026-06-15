@@ -13,6 +13,10 @@ assert.match(index, /let activeSceneObjectId\s*=\s*null/, 'workbench tracks the 
 assert.match(index, /function registerSceneObject\(/, 'load paths register authored objects instead of only replacing currentMesh');
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
+assert.match(index, /function sceneObjectTransformState\(/, 'scene object transforms use a shared state serializer');
+assert.match(index, /function applySceneObjectTransformState\(/, 'scene object transforms use a shared state applier');
+assert.match(index, /window\.kaminosSceneObjectDebugState/, 'browser witnesses can inspect live scene object transform state');
+assert.match(index, /window\.kaminosSetSceneObjectTransform/, 'browser witnesses can set live scene object transforms without DOM inference');
 assert.match(index, /function setActiveSceneObject\(/, 'selection/gizmo can target one object in a multi-object scene');
 assert.match(index, /new THREE\.Raycaster\(\)/, 'viewport click selection uses a real scene raycaster');
 assert.match(index, /function pickSceneObjectFromViewportPointer\(/, 'viewport click selection resolves pointer hits to authored scene objects');
