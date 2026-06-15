@@ -457,6 +457,10 @@ async function main() {
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
     assert.ok((state.stripInstances || []).length > (state.layerSpecs || []).length, 'Lamellar witness did not export layer-owned strip assemblages');
     assert.ok((state.sphereCurveDescriptors || []).length >= (state.stripInstances || []).length, 'Lamellar witness did not export sphere-curve descriptors before mesh descriptors');
+    assert.ok((state.lamellarEnvelopeDescriptors || []).length >= 1, 'Lamellar witness did not export curve-family envelope descriptors');
+    assert.equal(state.lamellarEnvelopeDescriptors?.[0]?.mode, 'curve-family-envelope-loft-v0', 'Lamellar envelope descriptor did not use the curve-family loft mode');
+    assert.ok((state.lamellarEnvelopeDescriptors?.[0]?.sourceCurveIds || []).length >= 3, 'Lamellar envelope descriptor did not preserve source curve ancestry');
+    assert.ok((state.sectionSegments || []).some(segment => segment.kind === 'LamellarEnvelopeDescriptor'), 'Lamellar witness did not emit an envelope body section segment');
     assert.equal(state.curveInteractionReceipt?.mode, 'sphere-curve-proximity-interaction-v0', 'Lamellar witness did not export curve interaction receipt');
     assert.ok(
       (state.generatedSegmentDescriptors || []).every(descriptor => descriptor.sourceCurveId),
@@ -596,6 +600,7 @@ async function main() {
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,
       sphereCurveDescriptors: state.sphereCurveDescriptors,
+      lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
       curveInteractionReceipt: state.curveInteractionReceipt,
       selectedLayerUi: state.selectedLayerUi,
       selectedStripUi: state.selectedStripUi,

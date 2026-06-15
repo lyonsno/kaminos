@@ -191,6 +191,8 @@ assert.match(core, /LamellarStripInstance/, 'Lamellar core names per-strip insta
 assert.match(core, /SphereCurveDescriptor/, 'Lamellar core names sphere curves as the upstream authored geometry primitive');
 assert.match(core, /generateSphereCurveDescriptors/, 'Lamellar core generates sphere curves before section mesh descriptors');
 assert.match(core, /CurveInteractionReceipt/, 'Lamellar core records curve-space interaction receipts before meshing');
+assert.match(core, /LamellarEnvelopeDescriptor/, 'Lamellar core names curve-family envelope bodies explicitly');
+assert.match(core, /curve-family-envelope-loft-v0/, 'Lamellar core records the curve-family envelope loft mode');
 assert.match(core, /ribbon-shell-angular-offset-v0/, 'Lamellar ribbon mesh emission records shell-angular width offsets instead of flat tangent-plane offsets');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
@@ -263,6 +265,7 @@ assert.match(witness, /layerStackDescriptor/, 'witness records layer-stack descr
 assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
 assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
 assert.match(witness, /sphereCurveDescriptors/, 'witness records upstream sphere curve descriptors');
+assert.match(witness, /lamellarEnvelopeDescriptors/, 'witness records curve-family envelope descriptors');
 assert.match(witness, /curveInteractionReceipt/, 'witness records curve-space interaction receipt');
 assert.match(witness, /selectedLayerUi/, 'witness records selected-layer UI state');
 assert.match(witness, /selectedLayerRadiusReceipt/, 'witness records selected-layer radius mutation behavior');
@@ -296,6 +299,22 @@ assert.match(witness, /manualEnable/, 'witness can exercise the plain-load Lamel
 assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera and visibility state');
 
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
+const envelopeGenerated = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 2,
+  populationCount: 6,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  chunkinessBase: 0.48,
+});
+assert.ok((envelopeGenerated.lamellarEnvelopeDescriptors || []).length >= 1, 'curve-family generation emits at least one lamellar envelope descriptor');
+const firstEnvelope = envelopeGenerated.lamellarEnvelopeDescriptors[0];
+assert.equal(firstEnvelope.kind, 'LamellarEnvelopeDescriptor', 'envelope descriptor carries explicit kind');
+assert.equal(firstEnvelope.mode, 'curve-family-envelope-loft-v0', 'envelope descriptor carries curve-family loft mode');
+assert.ok((firstEnvelope.sourceCurveIds || []).length >= 3, 'envelope descriptor is derived from multiple source curves');
+assert.equal(firstEnvelope.sourceCurveIds.length, firstEnvelope.sourceStripInstanceIds.length, 'envelope curve ids stay aligned with source strip ids');
+assert.ok((firstEnvelope.sampleRows || []).length >= 8, 'envelope descriptor records sampled loft rows');
+assert.ok((firstEnvelope.envelopeRails || []).length >= 2, 'envelope descriptor records outer rails for meshing');
 const shellParallelRibbon = coreModule.sampleLamellarRibbonShellRadii([0.12, 0.9], {
   theta0: -0.7,
   thetaTwist: 5.1,

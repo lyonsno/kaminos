@@ -11,6 +11,7 @@ const POPULATION_COVERAGE_LAYOUT_MODE = "even-shell-coverage-layout-v0";
 const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SPHERE_CURVE_MODE = "sphere-curve-source-before-strip-mesh-v0";
 const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
+const LAMELLAR_ENVELOPE_MODE = "curve-family-envelope-loft-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
@@ -655,6 +656,103 @@ function curveInteractionKind(a, b) {
   return "same-layer-cross-population-proximity";
 }
 
+function vectorToArray(v) {
+  return [Number(v.x.toFixed(5)), Number(v.y.toFixed(5)), Number(v.z.toFixed(5))];
+}
+
+function sortedPopulationCurves(curves) {
+  return curves.slice().sort((a, b) => (a.populationIndex ?? a.stripIndex ?? 0) - (b.populationIndex ?? b.stripIndex ?? 0));
+}
+
+function sampleEnvelopeRows(curves, interval, rowCount = 18) {
+  const ordered = sortedPopulationCurves(curves);
+  const rows = [];
+  for (let rowIndex = 0; rowIndex <= rowCount; rowIndex++) {
+    const t = interval[0] + (interval[1] - interval[0]) * (rowIndex / rowCount);
+    const points = ordered.map(curve => curvePointAt(curve, t));
+    const first = points[0];
+    const second = points[1] || points[0];
+    const last = points[points.length - 1];
+    const beforeLast = points[points.length - 2] || last;
+    const firstOut = normalizeVector({ x: first.x - second.x, y: first.y - second.y, z: first.z - second.z });
+    const lastOut = normalizeVector({ x: last.x - beforeLast.x, y: last.y - beforeLast.y, z: last.z - beforeLast.z });
+    const edgePad = Math.max(...ordered.map(curve => curve.width || 0.04)) * 0.55;
+    const outerStart = addScaledVector(first, firstOut, edgePad);
+    const outerEnd = addScaledVector(last, lastOut, edgePad);
+    const surfacePoints = [outerStart, ...points, outerEnd];
+    const center = surfacePoints.reduce((acc, point) => ({
+      x: acc.x + point.x / surfacePoints.length,
+      y: acc.y + point.y / surfacePoints.length,
+      z: acc.z + point.z / surfacePoints.length,
+    }), { x: 0, y: 0, z: 0 });
+    const radii = surfacePoints.map(point => vectorLength(point));
+    rows.push({
+      t: Number(t.toFixed(4)),
+      center: vectorToArray(center),
+      points: surfacePoints.map(vectorToArray),
+      shellRadiusRange: [Number(Math.min(...radii).toFixed(4)), Number(Math.max(...radii).toFixed(4))],
+    });
+  }
+  return rows;
+}
+
+export function generateLamellarEnvelopeDescriptors(sphereCurveDescriptors = []) {
+  const groups = new Map();
+  for (const curve of sphereCurveDescriptors) {
+    if (curve.populationRole !== "lamella") continue;
+    if (!curve.populationId || curve.layerIndex !== 0) continue;
+    const key = `${curve.layerSpecId}:${curve.populationId}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(curve);
+  }
+  const descriptors = [];
+  for (const curves of groups.values()) {
+    const ordered = sortedPopulationCurves(curves);
+    if (ordered.length < 3) continue;
+    const interval = [
+      Number(Math.max(...ordered.map(curve => curve.interval[0])).toFixed(4)),
+      Number(Math.min(...ordered.map(curve => curve.interval[1])).toFixed(4)),
+    ];
+    if (interval[1] - interval[0] < 0.18) continue;
+    const sampleRows = sampleEnvelopeRows(ordered, interval);
+    const envelopeRails = [
+      sampleRows.map(row => row.points[0]),
+      sampleRows.map(row => row.points[row.points.length - 1]),
+    ];
+    const sourceCurveIds = ordered.map(curve => curve.id);
+    const sourceStripInstanceIds = ordered.map(curve => curve.stripInstanceId);
+    const widths = ordered.map(curve => curve.width || 0);
+    const radii = sampleRows.flatMap(row => row.shellRadiusRange);
+    descriptors.push({
+      kind: "LamellarEnvelopeDescriptor",
+      mode: LAMELLAR_ENVELOPE_MODE,
+      id: `${ordered[0].populationId}-envelope-loft`,
+      sourceCurveMode: SPHERE_CURVE_MODE,
+      meshSource: "curve-family-envelope-before-strip-mesh",
+      layerSpecId: ordered[0].layerSpecId,
+      layerIndex: ordered[0].layerIndex,
+      populationId: ordered[0].populationId,
+      populationRole: ordered[0].populationRole,
+      materialRole: "selected-envelope",
+      sliceParticipation: "population-envelope-body",
+      sourceCurveIds,
+      sourceStripInstanceIds,
+      sourcePopulationId: ordered[0].populationId,
+      interval,
+      capTValues: interval,
+      envelopeRails,
+      sampleRows,
+      rowCount: sampleRows.length,
+      columnCount: sampleRows[0]?.points.length || 0,
+      widthRange: [Number(Math.min(...widths).toFixed(4)), Number(Math.max(...widths).toFixed(4))],
+      shellRadiusRange: [Number(Math.min(...radii).toFixed(4)), Number(Math.max(...radii).toFixed(4))],
+      mergePolicy: "skin-guide-curve-family-first",
+      slicePolicy: "slice-envelope-after-curve-family-loft-next",
+    });
+  }
+  return descriptors;
+}
+
 function createCurveInteractionReceipt(sphereCurveDescriptors) {
   const closeApproaches = [];
   for (let i = 0; i < sphereCurveDescriptors.length; i++) {
@@ -809,8 +907,10 @@ export function generateLamellarSectionSegments(input = {}) {
     capLaw: END_CAP_SEALING_MODE,
     sphereCurveKind: "SphereCurveDescriptor",
     curveInteractionKind: "CurveInteractionReceipt",
+    lamellarEnvelopeKind: "LamellarEnvelopeDescriptor",
     sphereCurveMode: SPHERE_CURVE_MODE,
     curveInteractionMode: CURVE_INTERACTION_MODE,
+    lamellarEnvelopeMode: LAMELLAR_ENVELOPE_MODE,
     meshEmission: "sphere-curve-solved-before-ribbon-geometry",
   };
 
@@ -831,6 +931,7 @@ export function generateLamellarSectionSegments(input = {}) {
     selectedPhase,
   });
   const curveInteractionReceipt = createCurveInteractionReceipt(sphereCurveDescriptors);
+  const lamellarEnvelopeDescriptors = generateLamellarEnvelopeDescriptors(sphereCurveDescriptors);
 
   for (const curve of sphereCurveDescriptors) {
     emitCurveSectionDescriptor(descriptors, curve, seed);
@@ -845,6 +946,7 @@ export function generateLamellarSectionSegments(input = {}) {
     stripPopulationDescriptors,
     stripProfileDescriptors: stripInstances.map(strip => strip.stripProfileDescriptor),
     sphereCurveDescriptors,
+    lamellarEnvelopeDescriptors,
     curveInteractionReceipt,
     descriptors,
   };
@@ -1089,6 +1191,43 @@ function makeRibbonGeometry(THREE, span, opts) {
   return { geometry, centerline };
 }
 
+function makeLamellarEnvelopeGeometry(THREE, descriptor) {
+  const rows = descriptor.sampleRows || [];
+  const columns = rows[0]?.points?.length || 0;
+  const vertices = [];
+  const normals = [];
+  const indices = [];
+  const centerline = [];
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    const center = new THREE.Vector3(row.center[0], row.center[1], row.center[2]);
+    centerline.push([Number(center.x.toFixed(5)), Number(center.y.toFixed(5)), Number(center.z.toFixed(5))]);
+    for (const pointArray of row.points) {
+      const point = new THREE.Vector3(pointArray[0], pointArray[1], pointArray[2]);
+      const normal = point.clone().normalize();
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+    }
+    if (rowIndex < rows.length - 1) {
+      const rowOffset = rowIndex * columns;
+      const nextRowOffset = (rowIndex + 1) * columns;
+      for (let columnIndex = 0; columnIndex < columns - 1; columnIndex++) {
+        const a = rowOffset + columnIndex;
+        const b = rowOffset + columnIndex + 1;
+        const c = nextRowOffset + columnIndex;
+        const d = nextRowOffset + columnIndex + 1;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  geometry.computeBoundingSphere();
+  return { geometry, centerline };
+}
+
 function lamellarFrame(THREE, t, opts) {
   const theta = opts.theta0 + opts.thetaTwist * t;
   const phi = opts.phi0 + opts.phiSlope * (t - 0.5) + Math.sin(t * Math.PI * 2 + opts.phase) * (opts.waviness ?? 0.08);
@@ -1241,6 +1380,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     stripPopulationDescriptors: [],
     stripProfileDescriptors: [],
     sphereCurveDescriptors: [],
+    lamellarEnvelopeDescriptors: [],
     curveInteractionReceipt: null,
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
@@ -1265,6 +1405,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
 
   const materials = {
     selected: new THREE.MeshStandardMaterial({ color: 0xd6a33d, metalness: 0.72, roughness: 0.34, side: THREE.DoubleSide }),
+    selectedEnvelope: new THREE.MeshStandardMaterial({ color: 0xf0c46b, metalness: 0.54, roughness: 0.42, transparent: true, opacity: 0.46, depthWrite: false, side: THREE.DoubleSide }),
     continuation: new THREE.MeshStandardMaterial({ color: 0xf2c86b, metalness: 0.64, roughness: 0.38, side: THREE.DoubleSide }),
     neighbor: new THREE.MeshStandardMaterial({ color: 0x10c9c1, emissive: 0x073330, emissiveIntensity: 0.18, metalness: 0.34, roughness: 0.36, side: THREE.DoubleSide }),
     neighborCompanion: new THREE.MeshStandardMaterial({ color: 0x5d807d, metalness: 0.34, roughness: 0.5, side: THREE.DoubleSide }),
@@ -1617,6 +1758,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.stripProfileOverrides = generated.stripProfileOverrides;
     state.stripProfileDescriptors = generated.stripProfileDescriptors;
     state.sphereCurveDescriptors = generated.sphereCurveDescriptors;
+    state.lamellarEnvelopeDescriptors = generated.lamellarEnvelopeDescriptors;
     state.curveInteractionReceipt = generated.curveInteractionReceipt;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
       id: d.id,
@@ -1681,6 +1823,43 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.capTValues = sliced.sliceApplicationReceipt.capTValues;
     state.sectionSegments = [];
     state.lightHooks = [];
+
+    state.lamellarEnvelopeDescriptors.forEach((descriptor, envelopeIndex) => {
+      const { geometry, centerline } = makeLamellarEnvelopeGeometry(THREE, descriptor);
+      const mesh = new THREE.Mesh(geometry, materials.selectedEnvelope);
+      mesh.renderOrder = 12;
+      mesh.userData.lamellarSelectable = true;
+      mesh.userData.lamellarObjectKind = "LamellarEnvelopeDescriptor";
+      mesh.userData.lamellarRole = "curve-family-envelope-loft";
+      mesh.userData.lamellarSectionId = descriptor.id;
+      mesh.userData.layerSpecId = descriptor.layerSpecId;
+      mesh.userData.stripInstanceId = descriptor.sourceStripInstanceIds?.[0] || null;
+      mesh.userData.layerIndex = descriptor.layerIndex;
+      mesh.userData.stripIndex = null;
+      mesh.userData.populationId = descriptor.populationId;
+      mesh.userData.populationRole = descriptor.populationRole;
+      group.add(mesh);
+      state.sectionSegments.push({
+        id: descriptor.id,
+        kind: descriptor.kind,
+        mode: descriptor.mode,
+        meshSource: descriptor.meshSource,
+        role: "curve-family-envelope-loft",
+        layerSpecId: descriptor.layerSpecId,
+        layerIndex: descriptor.layerIndex,
+        populationId: descriptor.populationId,
+        populationRole: descriptor.populationRole,
+        sourceCurveIds: descriptor.sourceCurveIds,
+        sourceStripInstanceIds: descriptor.sourceStripInstanceIds,
+        span: descriptor.interval,
+        capTValues: descriptor.capTValues,
+        rowCount: descriptor.rowCount,
+        columnCount: descriptor.columnCount,
+        shellRadiusRange: descriptor.shellRadiusRange,
+        openEdgeCount: 0,
+      });
+      state.lightHooks.push(makeHook(centerline, descriptor.layerIndex, envelopeIndex, "curve-family-envelope-loft", descriptor));
+    });
 
     sliced.descriptors.forEach((descriptor, index) => {
       const isCutAuthorEnvelope = descriptor.sliceParticipation === "cut-author-envelope";
