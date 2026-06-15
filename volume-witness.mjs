@@ -506,6 +506,7 @@ async function main() {
     }
     const expectsInterfaceShredEvidence = (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
     const expectsFireLickEvidence = (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
+    const expectsBonfireVerticalTransport = expectedVolumeScene === 'bonfire_plume';
     if (expectsInterfaceShredEvidence && (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025)) {
       throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -517,6 +518,23 @@ async function main() {
     }
     if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
       throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (expectsBonfireVerticalTransport) {
+      const risingBins = sample.simReadback.sourceRelativeVisualHeightBins || [];
+      const hasRisingSmokeAboveSource = risingBins.some(bin =>
+        bin.visualCenter > 0.20 &&
+        bin.smokeWeight > 1.0 &&
+        bin.smokeVisualRiseVelocity > 0.002
+      );
+      if (
+        !Number.isFinite(sample.simReadback.smokeVisualRiseVelocity) ||
+        sample.simReadback.smokeVisualRiseVelocity <= 0.025 ||
+        !Number.isFinite(sample.simReadback.smokeVisualRiseDisplacement) ||
+        sample.simReadback.smokeVisualRiseDisplacement <= 0.16 ||
+        !hasRisingSmokeAboveSource
+      ) {
+        throw new Error(`bonfire plume did not show source-relative zero-wind vertical smoke transport: ${JSON.stringify(sample.simReadback)}`);
+      }
     }
     const metrics = {
       width: sample.width,
@@ -537,6 +555,11 @@ async function main() {
       smokeScreenDriftX: sample.smokeBounds?.screenDriftX ?? 0,
       fireScreenDriftX: sample.fireBounds?.screenDriftX ?? 0,
       plumeHeightBins: sample.simReadback?.plumeHeightBins ?? [],
+      smokeVisualRiseVelocity: sample.simReadback?.smokeVisualRiseVelocity ?? 0,
+      fireVisualRiseVelocity: sample.simReadback?.fireVisualRiseVelocity ?? 0,
+      smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
+      fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
+      sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
@@ -625,6 +648,7 @@ async function main() {
       expectsCurlEvidence,
       expectsInterfaceShredEvidence,
       expectsFireLickEvidence,
+      expectsBonfireVerticalTransport,
       screenshot: out,
       metrics,
     };

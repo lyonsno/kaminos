@@ -645,8 +645,8 @@ fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
   ) * 0.5;
 }
 
-fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32) -> vec4<f32> {
-  let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055), 0.0);
+fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
+  let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
   let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
   let slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
   let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
@@ -807,8 +807,8 @@ fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> Externa
   return influence;
 }
 
-fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32) -> vec4<f32> {
-  let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055), 0.0);
+fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
+  let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055) * thermalAdvectionRiseDirection, 0.0);
   let rawThermalSlip = vec3<f32>(
     sin(cell.z * 0.41 + localHeat * 2.7),
     0.0,
@@ -848,8 +848,8 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
   return coolingBand * upperAir * 0.064 + fuelSmoke;
 }
 
-fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32) -> vec4<f32> {
-  let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13), 0.0);
+fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
+  let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
   let rawLick = vec3<f32>(
     sin(cell.y * 0.44 + cell.z * 0.19 + heat * 3.8),
     0.0,
@@ -1071,14 +1071,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireScene = step(1.5, sceneMode);
+  let bonfireThermalRiseDirection = 1.0 - bonfireScene * 2.0;
+  let thermalAdvectionRiseDirection = bonfireThermalRiseDirection;
+  let fireLayerRiseDirection = bonfireThermalRiseDirection;
+  let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireAdvectionLateralDamping = mix(1.0, explicitWindAuthority, bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping);
-  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireAdvectionLateralDamping);
+  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping, thermalAdvectionRiseDirection);
+  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireAdvectionLateralDamping, fireLayerRiseDirection);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireAdvectionLateralDamping, microdetailRiseDirection);
   let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
   let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
   let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
@@ -1194,7 +1198,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + fineBreakup;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
-  let bonfireThermalRiseDirection = -1.0;
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
@@ -2490,6 +2493,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const smokeVelocityY = smokeWeightSum > 0 ? smokeWeightedVelocityY / smokeWeightSum : 0;
     const fireVelocityY = fireWeightSum > 0 ? fireWeightedVelocityY / fireWeightSum : 0;
     const visualRiseDirectionY = isBonfireReadbackScene ? -1 : 1;
+    const sourceYNorm = sourceY / Math.max(1, gridSize - 1) * 2 - 1;
+    const smokeCenterX = smokeWeightSum > 0 ? smokeWeightedX / smokeWeightSum : 0;
+    const smokeCenterY = smokeWeightSum > 0 ? smokeWeightedY / smokeWeightSum : 0;
+    const smokeCenterZ = smokeWeightSum > 0 ? smokeWeightedZ / smokeWeightSum : 0;
+    const fireCenterX = fireWeightSum > 0 ? fireWeightedX / fireWeightSum : 0;
+    const fireCenterY = fireWeightSum > 0 ? fireWeightedY / fireWeightSum : 0;
+    const fireCenterZ = fireWeightSum > 0 ? fireWeightedZ / fireWeightSum : 0;
+    const smokeVisualRiseDisplacement = (smokeCenterY - sourceYNorm) * visualRiseDirectionY;
+    const fireVisualRiseDisplacement = (fireCenterY - sourceYNorm) * visualRiseDirectionY;
     return {
       grid: gridSize,
       gridLabel: state.simGridLabel,
@@ -2509,20 +2521,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       curlMax,
       divergenceMean: divergenceSum / samples,
       divergenceMax,
+      sourceY: sourceYNorm,
+      visualRiseDirectionY,
       smokeWeight: smokeWeightSum,
-      smokeCenterX: smokeWeightSum > 0 ? smokeWeightedX / smokeWeightSum : 0,
-      smokeCenterY: smokeWeightSum > 0 ? smokeWeightedY / smokeWeightSum : 0,
-      smokeCenterZ: smokeWeightSum > 0 ? smokeWeightedZ / smokeWeightSum : 0,
+      smokeCenterX,
+      smokeCenterY,
+      smokeCenterZ,
       smokeVelocityY,
       smokeVisualRiseVelocity: smokeVelocityY * visualRiseDirectionY,
-      smokeRadialDrift: smokeWeightSum > 0 ? Math.hypot(smokeWeightedX / smokeWeightSum, smokeWeightedZ / smokeWeightSum) : 0,
+      smokeVisualRiseDisplacement,
+      smokeRadialDrift: smokeWeightSum > 0 ? Math.hypot(smokeCenterX, smokeCenterZ) : 0,
       fireWeight: fireWeightSum,
-      fireCenterX: fireWeightSum > 0 ? fireWeightedX / fireWeightSum : 0,
-      fireCenterY: fireWeightSum > 0 ? fireWeightedY / fireWeightSum : 0,
-      fireCenterZ: fireWeightSum > 0 ? fireWeightedZ / fireWeightSum : 0,
+      fireCenterX,
+      fireCenterY,
+      fireCenterZ,
       fireVelocityY,
       fireVisualRiseVelocity: fireVelocityY * visualRiseDirectionY,
-      fireRadialDrift: fireWeightSum > 0 ? Math.hypot(fireWeightedX / fireWeightSum, fireWeightedZ / fireWeightSum) : 0,
+      fireVisualRiseDisplacement,
+      fireRadialDrift: fireWeightSum > 0 ? Math.hypot(fireCenterX, fireCenterZ) : 0,
       plumeHeightBins: plumeHeightBins.map(bin => ({
         bin: bin.bin,
         yMin: bin.yMin,
@@ -2536,6 +2552,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
         fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,
       })),
+      sourceRelativeVisualHeightBins: plumeHeightBins.map(bin => {
+        const visualCenter = (((bin.yMin + bin.yMax) * 0.5) - sourceYNorm) * visualRiseDirectionY;
+        const smokeVelocity = bin.smokeWeight > 0 ? bin.smokeWeightedVelocityY / bin.smokeWeight : 0;
+        const fireVelocity = bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0;
+        return {
+          bin: bin.bin,
+          visualCenter,
+          smokeWeight: bin.smokeWeight,
+          fireWeight: bin.fireWeight,
+          smokeVisualRiseVelocity: smokeVelocity * visualRiseDirectionY,
+          fireVisualRiseVelocity: fireVelocity * visualRiseDirectionY,
+        };
+      }),
       liveVoxels,
     };
   }

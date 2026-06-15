@@ -268,6 +268,12 @@ assert.match(core, /thermalAdvection/, 'fluid compute shader treats heat as an e
 assert.match(core, /thermalBuoyancyForce/, 'fluid compute shader derives buoyancy from transported heat');
 assert.match(core, /thermalExpansionForce/, 'fluid compute shader expands hot flow from heat gradients');
 assert.match(core, /heatToSmokeConversion/, 'fluid compute shader converts cooling heat/fuel into smoke');
+assert.match(core, /thermalAdvectionRiseDirection/, 'thermal material advection receives the scene-aware rise direction');
+assert.match(core, /fireLayerRiseDirection/, 'fire layer advection receives the scene-aware rise direction');
+assert.match(core, /microdetailRiseDirection/, 'microdetail advection receives the scene-aware rise direction');
+assert.doesNotMatch(core, /fn thermalAdvection\(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32\)/, 'thermal advection must not hardcode positive-Y lift independent of bonfire rise convention');
+assert.doesNotMatch(core, /fn fireLayerAdvection\(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32\)/, 'fire layer advection must not hardcode positive-Y lift independent of bonfire rise convention');
+assert.doesNotMatch(core, /fn transportedMicrodetailAdvection\(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32\)/, 'microdetail advection must not hardcode positive-Y lift independent of bonfire rise convention');
 assert.doesNotMatch(core, /jetA|jetB|jetC/, 'default motion must not be driven by a three-nozzle whirling sprayer');
 assert.match(core, /fireLayerAdvection/, 'fluid compute shader advects a distinct fire layer');
 assert.match(core, /sampleWorldFireLayer/, 'fragment shader samples fire separately from smoke material');
@@ -348,6 +354,9 @@ assert.match(core, /fireCenterX/, 'sim readback reports fire center of mass in s
 assert.match(core, /smokeVelocityY/, 'sim readback reports smoke-weighted vertical transport');
 assert.match(core, /fireVelocityY/, 'sim readback reports fire-weighted vertical transport');
 assert.match(core, /smokeVisualRiseVelocity/, 'sim readback reports scene-aware visual upward smoke transport');
+assert.match(core, /smokeVisualRiseDisplacement/, 'sim readback reports source-relative scene-aware smoke displacement, not only instantaneous velocity');
+assert.match(core, /fireVisualRiseDisplacement/, 'sim readback reports source-relative scene-aware fire displacement, not only instantaneous velocity');
+assert.match(core, /sourceRelativeVisualHeightBins/, 'sim readback reports source-relative visual height bins for plume verticality');
 assert.match(core, /fireRoughnessMean/, 'visual readback reports fire roughness so smooth glowing bulbs cannot close the bonfire attractor');
 assert.match(core, /fireEdgeEnergy/, 'visual readback reports fire edge energy for the bonfire combustion boundary');
 assert.match(core, /plumeHeightBins/, 'sim readback reports per-height plume drift bins');
@@ -454,6 +463,9 @@ assert.match(witness, /expectsFireLickEvidence/, 'witness only requires fire-lic
 assert.match(witness, /expectsMicrodetailEvidence/, 'witness only requires microdetail evidence when the route requests it');
 assert.match(witness, /expectsCurlEvidence/, 'witness only requires curl evidence when the route requests it');
 assert.match(witness, /plumeHeightBins/, 'witness preserves sim-space per-height plume drift bins');
+assert.match(witness, /expectsBonfireVerticalTransport/, 'witness requires scene-aware vertical transport evidence for the bonfire plume');
+assert.match(witness, /smokeVisualRiseDisplacement/, 'witness records source-relative smoke rise displacement for the bonfire plume');
+assert.match(witness, /sourceRelativeVisualHeightBins/, 'witness records source-relative height bins for scene-aware vertical transport');
 assert.match(witness, /curlMean/, 'witness requires curl diagnostic evidence');
 assert.match(witness, /divergenceMean/, 'witness requires divergence diagnostic evidence');
 assert.match(witness, /gridOverlay/, 'witness records grid overlay/debug state');
