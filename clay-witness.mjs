@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=clay_fixture_hand&clay_steps=6';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_colliders=hand_pose_fixture&clay_steps=6';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -213,6 +213,16 @@ async function main() {
     assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
     assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
+    if (url.includes('hand_pose_fixture')) {
+      assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach clay debug state');
+      assert.equal(state.effectiveHandPoseBackend, 'wilor-mlx-fixture', 'effective hand-pose backend did not reach clay debug state');
+      assert.equal(state.handPoseEvidenceKind, 'synthetic', 'hand-pose evidence kind did not reach clay debug state');
+      assert.equal(state.handPoseStale, false, 'fresh clay hand-pose fixture was marked stale');
+      assert.ok(String(state.handPoseFrameId || '').startsWith('hand-pose-fixture-'), 'hand-pose frame id did not reach clay debug state');
+      assert.equal(state.handPoseHandCount, 1, 'clay hand-pose fixture did not report one hand');
+      assert.equal(state.handPoseColliderCount, 5, 'clay hand-pose fixture did not emit fingertip colliders');
+      assert.deepEqual(state.handPoseAdapterWarnings, [], 'clay hand-pose fixture emitted adapter warnings');
+    }
     assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
     assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
     assert.ok((state.clayColliderCount ?? 0) >= 5, 'clay fixture did not seed hand colliders');
@@ -259,6 +269,14 @@ async function main() {
       persistentClayInitialDelta: state.persistentClayInitialDelta,
       persistentClayLatestDelta: state.persistentClayLatestDelta,
       persistentClaySettlingRatio: state.persistentClaySettlingRatio,
+      requestedHandPoseBackend: state.requestedHandPoseBackend,
+      effectiveHandPoseBackend: state.effectiveHandPoseBackend,
+      handPoseEvidenceKind: state.handPoseEvidenceKind,
+      handPoseStale: state.handPoseStale,
+      handPoseFrameId: state.handPoseFrameId,
+      handPoseHandCount: state.handPoseHandCount,
+      handPoseColliderCount: state.handPoseColliderCount,
+      handPoseAdapterWarnings: state.handPoseAdapterWarnings,
       clayRelaxationFactor: state.clayRelaxationFactor,
       clayPlasticityFactor: state.clayPlasticityFactor,
       clayColliderCount: state.clayColliderCount,

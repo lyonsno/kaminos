@@ -21,6 +21,9 @@ const CLAY_PLASTICITY_FACTOR = 0.10;
 const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
+const HAND_POSE_STALE_MS = 250;
+const CLAY_HAND_TIP_INDICES = [4, 8, 12, 16, 20];
+const HAND_POSE_EVIDENCE_KINDS = ['live', 'captured', 'fallback', 'synthetic', 'unverified'];
 
 export { pointTriangleDistanceWgsl };
 
@@ -32,6 +35,113 @@ function clampFinite(value, min, max, fallback) {
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
+}
+
+function clayHandPoseNowMs() {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+function normalizeClayHandPoint(point, coordinateSpace, warnings) {
+  if (!Array.isArray(point) || point.length < 2) {
+    warnings.push('invalid-hand-point');
+    return [0, 0];
+  }
+  const x = Number(point[0]);
+  const y = Number(point[1]);
+  const z = Number(point[2]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    warnings.push('nonfinite-hand-point');
+    return [0, 0];
+  }
+  if (coordinateSpace === 'clay-local') {
+    return [
+      clampFinite(x, -1.2, 1.2, 0),
+      clampFinite(Number.isFinite(z) ? z : 0, -1.2, 1.2, 0),
+    ];
+  }
+  if (coordinateSpace === 'volume-local') {
+    return [
+      clampFinite(x, -1.2, 1.2, 0),
+      clampFinite(y, -1.2, 1.2, 0),
+    ];
+  }
+  return [
+    clampFinite((x - 0.5) * 1.25, -1.2, 1.2, 0),
+    clampFinite((0.5 - y) * 1.25, -1.2, 1.2, 0),
+  ];
+}
+
+export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPoseNowMs()) {
+  const warnings = [];
+  const requestedHandPoseBackend = String(payload.requestedBackend || payload.requestedHandPoseBackend || 'unspecified');
+  const effectiveHandPoseBackend = String(payload.effectiveBackend || payload.effectiveHandPoseBackend || payload.backend || 'unknown');
+  const handPoseEvidenceKind = String(payload.evidenceKind || payload.handPoseEvidenceKind || 'unverified');
+  const timestampMs = clampFinite(payload.timestampMs, 0, Number.MAX_SAFE_INTEGER, nowMs);
+  const ageMs = Math.max(0, nowMs - timestampMs);
+  const handPoseStale = handPoseEvidenceKind === 'live' && ageMs > HAND_POSE_STALE_MS;
+  const coordinateSpace = payload.coordinateSpace === 'volume-local' || payload.coordinateSpace === 'clay-local'
+    ? payload.coordinateSpace
+    : 'image-normalized';
+  const rawHands = Array.isArray(payload.hands) ? payload.hands : [];
+  const mode = `hand_pose:${effectiveHandPoseBackend}`;
+  const colliders = [];
+  let handPoseHandCount = 0;
+
+  if (rawHands.length && effectiveHandPoseBackend === 'unknown') warnings.push('missing-effective-hand-pose-backend');
+  if (!HAND_POSE_EVIDENCE_KINDS.includes(handPoseEvidenceKind)) {
+    warnings.push(`unknown-hand-pose-evidence-kind:${handPoseEvidenceKind}`);
+  }
+  if (handPoseStale) warnings.push('stale-live-hand-pose-frame');
+
+  for (const hand of rawHands) {
+    if (!hand || hand.active === false) continue;
+    const points = Array.isArray(hand.keypoints_3d) && hand.keypoints_3d.length >= 21
+      ? hand.keypoints_3d
+      : hand.keypoints3d && Array.isArray(hand.keypoints3d) && hand.keypoints3d.length >= 21
+        ? hand.keypoints3d
+        : Array.isArray(hand.keypoints_2d) && hand.keypoints_2d.length >= 21
+          ? hand.keypoints_2d
+          : Array.isArray(hand.keypoints2d) && hand.keypoints2d.length >= 21
+            ? hand.keypoints2d
+            : [];
+    if (!points.length) {
+      warnings.push('hand-missing-21-keypoints');
+      continue;
+    }
+    handPoseHandCount += 1;
+    if (handPoseStale) continue;
+    const side = String(hand.hand_side || hand.handedness || 'unknown').toLowerCase();
+    for (const tipIndex of CLAY_HAND_TIP_INDICES) {
+      if (colliders.length >= MAX_COLLIDERS) break;
+      const [x, z] = normalizeClayHandPoint(points[tipIndex], coordinateSpace, warnings);
+      colliders.push({
+        id: `hand-${side}-tip-${tipIndex}`,
+        center: [x, 0, z],
+        radius: clampFinite(hand.radius, 0.06, 0.28, 0.16),
+        strength: clampFinite(hand.strength, 0.05, 2.5, 1.05),
+        source: mode,
+      });
+    }
+  }
+
+  return {
+    mode,
+    coordinateSpace,
+    timestampMs,
+    frameId: payload.frameId ?? payload.handPoseFrameId ?? null,
+    ageMs,
+    colliders,
+    requestedHandPoseBackend,
+    effectiveHandPoseBackend,
+    handPoseEvidenceKind,
+    handPoseStale,
+    handPoseFrameId: payload.frameId ?? payload.handPoseFrameId ?? null,
+    handPoseHandCount,
+    handPoseColliderCount: colliders.length,
+    handPoseAdapterWarnings: warnings,
+  };
 }
 
 function normalizeCollider(collider, index) {
@@ -133,6 +243,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let persistentClayInitialDelta = null;
   let persistentClayLatestDelta = null;
   let persistentClaySettlingRatio = null;
+  let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
   const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
   let lastError = '';
@@ -475,7 +586,29 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   function setColliders(payload = {}) {
     const incoming = Array.isArray(payload.colliders) ? payload.colliders : [];
     colliders = incoming.slice(0, MAX_COLLIDERS).map(normalizeCollider);
+    handPoseAdapterState = normalizeClayHandPoseColliders({});
     refreshColliderMeshes();
+  }
+
+  function setHandPoseFrame(payload = {}) {
+    handPoseAdapterState = normalizeClayHandPoseColliders(payload);
+    colliders = handPoseAdapterState.colliders.slice(0, MAX_COLLIDERS).map(normalizeCollider);
+    refreshColliderMeshes();
+    onStatus(debugState());
+    return {
+      mode: handPoseAdapterState.mode,
+      coordinateSpace: handPoseAdapterState.coordinateSpace,
+      count: handPoseAdapterState.handPoseColliderCount,
+      ageMs: handPoseAdapterState.ageMs,
+      frameId: handPoseAdapterState.handPoseFrameId,
+      requestedHandPoseBackend: handPoseAdapterState.requestedHandPoseBackend,
+      effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
+      handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
+      handPoseStale: handPoseAdapterState.handPoseStale,
+      handPoseHandCount: handPoseAdapterState.handPoseHandCount,
+      handPoseColliderCount: handPoseAdapterState.handPoseColliderCount,
+      handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
+    };
   }
 
   function debugState() {
@@ -509,6 +642,14 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       persistentClayInitialDelta,
       persistentClayLatestDelta,
       persistentClaySettlingRatio,
+      requestedHandPoseBackend: handPoseAdapterState.requestedHandPoseBackend,
+      effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
+      handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
+      handPoseStale: handPoseAdapterState.handPoseStale,
+      handPoseFrameId: handPoseAdapterState.handPoseFrameId,
+      handPoseHandCount: handPoseAdapterState.handPoseHandCount,
+      handPoseColliderCount: handPoseAdapterState.handPoseColliderCount,
+      handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
       clayRelaxationFactor,
       clayPlasticityFactor,
       clayGrid: `${GRID_X}x${GRID_Z}`,
@@ -539,6 +680,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       await step();
     },
     setColliders,
+    setHandPoseFrame,
     step,
     debugState,
   };

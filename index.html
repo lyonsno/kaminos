@@ -534,6 +534,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">State</span><span class="field-val" id="clay-persistent-state">not-run</span></div>
       <div class="field"><span class="field-key">State delta</span><span class="field-val" id="clay-state-delta">0.000</span></div>
       <div class="field"><span class="field-key">Settling</span><span class="field-val" id="clay-settling-ratio">--</span></div>
+      <div class="field"><span class="field-key">Hand backend</span><span class="field-val" id="clay-hand-pose-backend">--</span></div>
+      <div class="field"><span class="field-key">Hand evidence</span><span class="field-val" id="clay-hand-pose-evidence">--</span></div>
+      <div class="field"><span class="field-key">Hand frame</span><span class="field-val" id="clay-hand-pose-frame">--</span></div>
     </div>
   </div>
 
@@ -1606,6 +1609,34 @@ function clayFixtureHandColliders() {
   };
 }
 
+function handPoseFixtureFrame(timestampMs) {
+  const keypoints = Array.from({ length: 21 }, (_, i) => {
+    const finger = Math.floor((i - 1) / 4);
+    const joint = i === 0 ? 0 : ((i - 1) % 4) + 1;
+    const spread = i === 0 ? 0 : (finger - 2) * 0.075;
+    return [
+      spread + Math.sin(timestampMs * 0.0016 + i * 0.23) * 0.018,
+      -0.66 + joint * 0.072 + Math.cos(timestampMs * 0.0013 + i * 0.19) * 0.014,
+      Math.sin(timestampMs * 0.0011 + finger * 0.41) * 0.045,
+    ];
+  });
+  return {
+    requestedBackend: 'mlx',
+    effectiveBackend: 'wilor-mlx-fixture',
+    evidenceKind: 'synthetic',
+    coordinateSpace: 'volume-local',
+    timestampMs,
+    frameId: `hand-pose-fixture-${Math.round(timestampMs)}`,
+    hands: [{
+      hand_side: 'right',
+      confidence: 1,
+      keypoints_3d: keypoints,
+      radius: 0.18,
+      strength: 1.05,
+    }],
+  };
+}
+
 function refreshClayReadout() {
   if (!clayPrototype) return;
   const s = clayPrototype.debugState();
@@ -1625,6 +1656,9 @@ function refreshClayReadout() {
   document.getElementById('clay-persistent-state').textContent = s.persistentClayStateStatus || 'not-run';
   document.getElementById('clay-state-delta').textContent = Number.isFinite(s.persistentClayMaxDelta) ? s.persistentClayMaxDelta.toFixed(3) : '0.000';
   document.getElementById('clay-settling-ratio').textContent = Number.isFinite(s.persistentClaySettlingRatio) ? s.persistentClaySettlingRatio.toFixed(3) : '--';
+  document.getElementById('clay-hand-pose-backend').textContent = s.effectiveHandPoseBackend || '--';
+  document.getElementById('clay-hand-pose-evidence').textContent = s.handPoseEvidenceKind || '--';
+  document.getElementById('clay-hand-pose-frame').textContent = s.handPoseFrameId || '--';
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
 }
@@ -1659,6 +1693,11 @@ async function initKaminosClayRoute() {
     await clayPrototype.step();
     refreshClayReadout();
   };
+  const seedHandPoseFixture = async () => {
+    clayPrototype.setHandPoseFrame(handPoseFixtureFrame(performance.now()));
+    await clayPrototype.step();
+    refreshClayReadout();
+  };
 
   document.getElementById('clay-toggle').addEventListener('click', async () => {
     if (clayPrototype.debugState().active) {
@@ -1681,7 +1720,10 @@ async function initKaminosClayRoute() {
     transformControls.detach();
     frameClayCamera();
     await clayPrototype.setActive(true);
-    if ((params.get('clay_colliders') || 'clay_fixture_hand') === 'clay_fixture_hand') {
+    const colliderMode = params.get('clay_colliders') || 'clay_fixture_hand';
+    if (colliderMode === 'hand_pose_fixture') {
+      await seedHandPoseFixture();
+    } else if (colliderMode === 'clay_fixture_hand') {
       await seedFixture();
     }
     const routeSteps = clayRouteStepCount(params);
