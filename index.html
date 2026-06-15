@@ -31,6 +31,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 
 #drop-zone { border: 2px dashed #333; border-radius: 10px; padding: 20px; text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; cursor: pointer; transition: all 0.2s; }
 #drop-zone:hover, #drop-zone.dragover { border-color: #1976d2; color: #aaa; background: rgba(25,118,210,0.05); }
+.import-mode { display: flex; align-items: center; gap: 6px; margin: -6px 0 12px; font-size: 10px; color: #777; cursor: pointer; }
+.import-mode input { accent-color: #1976d2; }
 
 .channel-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
 .channel-item { text-align: center; }
@@ -75,6 +77,13 @@ canvas { display: block; }
 .tb-btn.primary { background: #1565c0; border-color: #1976d2; color: #fff; }
 .tb-btn.primary:hover { background: #1976d2; }
 .tb-sep { width: 1px; height: 18px; background: #333; margin: 0 4px; }
+#greenroom-preview-controls { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); min-width: min(520px, calc(100% - 32px)); background: rgba(20,20,20,0.9); border: 1px solid #5d4822; border-radius: 8px; padding: 10px 12px; z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+#greenroom-preview-controls[hidden] { display: none; }
+.greenroom-preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.greenroom-preview-kicker { color: #f0b85a; font: 10px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.8px; }
+.greenroom-preview-title { color: #eee; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.greenroom-preview-source { color: #777; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 8px; }
+.greenroom-preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 #viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
@@ -89,6 +98,8 @@ canvas { display: block; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
+.select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
+.select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
@@ -103,6 +114,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-entry:hover { background: #222; }
 .gr-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
 .gr-name { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gr-title { color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.gr-subtitle { color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.gr-raw { color: #4f4f4f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-family: 'SF Mono', monospace; }
 .gr-meta { font-size: 9px; color: #555; font-family: 'SF Mono', monospace; }
 .gr-status { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
 .gr-status.done { background: #1b3a1b; color: #66bb6a; }
@@ -110,6 +125,40 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-status.pending { background: #2a2a1b; color: #ffa726; }
 .gr-status.running { background: #1b2a3a; color: #42a5f5; }
 .gr-status.cancelled { background: #2a2a2a; color: #777; }
+
+/* Scene objects */
+.scene-object-list { display: flex; flex-direction: column; gap: 6px; }
+.scene-object-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #202020; border: 1px solid #303030; border-radius: 6px; color: #bbb; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
+.scene-object-row:hover { background: #262626; border-color: #3a3a3a; }
+.scene-object-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
+.scene-object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.scene-object-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.scene-object-actions { display: flex; align-items: center; gap: 6px; }
+.scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
+.scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
+.scene-object-empty { font-size: 11px; color: #555; }
+.transform-inspector { display: flex; flex-direction: column; gap: 9px; }
+.transform-inspector-empty { font-size: 11px; color: #555; }
+.transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
+.transform-inspector-head { min-width: 0; }
+.transform-inspector-name { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transform-inspector-id { color: #555; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.transform-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; }
+.transform-label { color: #777; font-size: 10px; }
+.transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
+.transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
+.transform-input { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #bbb; font: 10px 'SF Mono', monospace; padding: 2px 4px; outline: none; }
+.transform-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.transform-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Volume prototype */
+.route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
+.volume-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.volume-readout .field { margin: 0; padding: 0; }
+.volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 </style>
 </head>
 <body>
@@ -120,6 +169,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -130,6 +180,51 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
       Drop a receipt directory here<br>or click to browse
       <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+    </div>
+    <label class="import-mode">
+      <input type="checkbox" id="append-import-toggle">
+      <span>Append</span>
+    </label>
+
+    <h2>Scene Objects</h2>
+    <div class="panel">
+      <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
+      <div id="scene-object-list" class="scene-object-list"></div>
+    </div>
+
+    <h2>Transform</h2>
+    <div class="panel transform-inspector" id="transform-inspector" data-selected-object-id="">
+      <div id="transform-inspector-empty" class="transform-inspector-empty">No object selected</div>
+      <div id="transform-inspector-fields" class="transform-inspector-fields" hidden>
+        <div class="transform-inspector-head">
+          <div class="transform-inspector-name" id="transform-inspector-name"></div>
+          <div class="transform-inspector-id" id="transform-inspector-id"></div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Position</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z"></label>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Rotation</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z"></label>
+          </div>
+        </div>
+        <div class="transform-row">
+          <div class="transform-label">Scale</div>
+          <div class="transform-axis-grid">
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="demo-buttons">
@@ -249,6 +344,127 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Volume Tab -->
+  <div class="tab-content" id="tab-volume">
+    <h2>Volume Renderer</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
+      <div class="field"><span class="field-key">Backend</span><span class="field-val" id="volume-backend">inactive</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="volume-identity">kaminos-volume-prototype-v0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="volume-toggle">Enable</button>
+        <button class="btn" id="volume-fit-camera">Frame</button>
+      </div>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Density</span>
+      <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
+      <span class="slider-val" id="volume-density-val">4.20</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Fire</span>
+      <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="1.4">
+      <span class="slider-val" id="volume-fire-val">1.40</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Radiance</span>
+      <input type="range" id="volume-radiance" min="0" max="3" step="0.05" value="1.65">
+      <span class="slider-val" id="volume-radiance-val">1.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Absorption</span>
+      <input type="range" id="volume-absorption" min="0" max="2" step="0.05" value="0.85">
+      <span class="slider-val" id="volume-absorption-val">0.85</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Glow</span>
+      <input type="range" id="volume-glow" min="0" max="2.5" step="0.05" value="1.15">
+      <span class="slider-val" id="volume-glow-val">1.15</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Smoke</span>
+      <input type="range" id="volume-smoke" min="0.1" max="2.8" step="0.05" value="2.8">
+      <span class="slider-val" id="volume-smoke-val">2.80</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Curl</span>
+      <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="2.65">
+      <span class="slider-val" id="volume-curl-val">2.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Microdetail</span>
+      <input type="range" id="volume-microdetail" min="0" max="2.5" step="0.05" value="2.5">
+      <span class="slider-val" id="volume-microdetail-val">2.50</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Shred</span>
+      <input type="range" id="volume-interface-shred" min="0" max="5" step="0.05" value="2.5">
+      <span class="slider-val" id="volume-interface-shred-val">2.50</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Fire Licks</span>
+      <input type="range" id="volume-fire-licks" min="0" max="5" step="0.05" value="1.65">
+      <span class="slider-val" id="volume-fire-licks-val">1.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Projection</span>
+      <input type="range" id="volume-projection" min="0" max="1.5" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-projection-val">0.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Speed</span>
+      <input type="range" id="volume-speed" min="0.1" max="5" step="0.05" value="5">
+      <span class="slider-val" id="volume-speed-val">5.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Ray Steps</span>
+      <input type="range" id="volume-steps" min="24" max="160" step="4" value="96">
+      <span class="slider-val" id="volume-steps-val">96</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Adaptive Rays</span>
+      <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
+      <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Input Radius</span>
+      <input type="range" id="volume-input-radius" min="0.08" max="0.7" step="0.01" value="0.12">
+      <span class="slider-val" id="volume-input-radius-val">0.12</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Flow Rate</span>
+      <input type="range" id="volume-flow-rate" min="0" max="2.5" step="0.05" value="0.15">
+      <span class="slider-val" id="volume-flow-rate-val">0.15</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Grid</span>
+      <select id="volume-resolution" class="select-input">
+        <option value="32">32^3</option>
+        <option value="48">48^3</option>
+        <option value="64">64^3</option>
+        <option value="96" selected>96^3</option>
+      </select>
+      <span class="slider-val" id="volume-resolution-val">96^3</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Grid Overlay</span>
+      <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Flow Debug</span>
+      <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
+      <span class="slider-val" id="volume-flow-debug-val">0.00</span>
+    </div>
+    <div class="panel volume-readout">
+      <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
+      <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
+      <div class="field"><span class="field-key">Grid</span><span class="field-val" id="volume-grid">96^3</span></div>
+      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-compute-fluid-raymarch-v0</span></div>
+      <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -341,6 +557,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene (Ctrl+O)">Load</button>
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
+  <div id="greenroom-preview-controls" hidden>
+    <div class="greenroom-preview-head">
+      <span class="greenroom-preview-kicker">Temporary Preview</span>
+      <span class="greenroom-preview-title" id="greenroom-preview-title"></span>
+    </div>
+    <div class="greenroom-preview-source" id="greenroom-preview-source"></div>
+    <div class="greenroom-preview-actions">
+      <button class="tb-btn primary" data-greenroom-preview-action="import" onclick="importGreenroomPreviewToScene()">Import to Scene</button>
+      <button class="tb-btn" data-greenroom-preview-action="back" onclick="restoreAuthoredSceneFromPreview()">Back to Scene</button>
+    </div>
+  </div>
   <div id="info-bar">No asset loaded</div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
@@ -349,9 +576,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <script type="importmap">
 {
   "imports": {
-    "three": "./lib/three.webgpu.js",
-    "three/webgpu": "./lib/three.webgpu.js",
-    "three/tsl": "./lib/three.tsl.js",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.tsl.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
   }
 }
@@ -359,9 +586,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
-import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
-import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
+let pass; // loaded lazily after renderer init
+import { GTAOComputePipeline } from './ao-pipeline.js';
+import { AOCompositePass } from './ao-composite.js';
+import { createKaminosVolumePrototype } from './volume-core.js';
+import {
+  SCENE_SCHEMA,
+  buildSceneDocument,
+  isReloadableSceneObjectRecord,
+  planSceneRestore,
+} from './scene-persistence-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -380,8 +614,10 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
-let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
+let aoPipeline = null;
+let aoComposite = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -395,6 +631,684 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+let volumePrototype = null;
+let volumeBridge = null;
+const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
+const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
+let volumePrimitives = [];
+let sceneObjects = [];
+let activeSceneObjectId = null;
+let sceneSaveBlockedByFailedRestore = false;
+let greenroomPreviewState = null;
+let greenroomPreviewGeneration = 0;
+let sceneMutationToken = 0;
+let viewportPointerDown = null;
+let viewportSuppressedClick = null;
+let transformGizmoDragging = false;
+
+function cloneVolumePrimitive(primitive) {
+  return JSON.parse(JSON.stringify(primitive));
+}
+
+function createVolumePrimitiveFixture(name = 'fire_sphere') {
+  if (['lamellar_hook', 'lamellar_selected_hook'].includes(name)) {
+    return createLamellarHookVolumePrimitiveFixture();
+  }
+  if (!['fire_sphere', 'fire_smoke_sphere'].includes(name)) return null;
+  return {
+    id: 'fixture-fire-smoke-sphere',
+    kind: 'fire_smoke',
+    shape: 'sphere',
+    transform: {
+      position: [0, -0.74, 0],
+      rotation: [0, 0, 0],
+      scale: [0.12, 0.12, 0.12],
+    },
+    channels: {
+      density: 1,
+      temperature: 1,
+      fuel: 0.9,
+      smoke: 1,
+      emissive: 1,
+      absorption: 0.85,
+    },
+    coupling: {
+      source: 'route-fixture',
+      targetHook: 'native-fluid-source',
+    },
+    simulation: {
+      sourceRadius: 0.12,
+      flowRate: 0.15,
+      vorticity: 2.65,
+    },
+    render: {
+      radiance: 1.65,
+      glow: 1.15,
+    },
+  };
+}
+
+function createLamellarHookVolumePrimitiveFixture() {
+  return {
+    id: 'fixture-lamellar-hook-selected',
+    kind: 'lamellar_hook_emitter',
+    shape: 'hook-derived',
+    couplingSource: 'lamellar',
+    targetHookId: 'lamellar-0-0-selected',
+    topologyAuthority: 'placeholder',
+    placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    transform: {
+      position: [0.18, -0.58, 0.16],
+      rotation: [0, 0, 0],
+      scale: [0.11, 0.11, 0.11],
+    },
+    channels: {
+      density: 0.72,
+      temperature: 0.86,
+      fuel: 0.42,
+      smoke: 0.58,
+      emissive: 0.78,
+      absorption: 0.58,
+    },
+    coupling: {
+      source: 'lamellar',
+      couplingSource: 'lamellar',
+      targetHookId: 'lamellar-0-0-selected',
+      witnessIdentity: 'kaminos-lamellar-witness-v0',
+      effectiveRoute: 'sphere-domain-section-segment-witness-v0',
+      routeGate: 'kaminos_lamellar_witness=1',
+      controlIds: ['lamellar-view', 'lamellar-cut-radius', 'lamellar-layer-count'],
+      placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    },
+    lamellarHook: {
+      bandId: 'lamellar-0-0-selected',
+      layerIndex: 0,
+      bandIndex: 0,
+      role: 'selected',
+      centerlineSamples: [[0.32, -0.42, 0.18], [0.18, -0.28, 0.37], [0.02, -0.08, 0.48]],
+      rimMask: 0.92,
+      innerExposure: 0.66,
+      shellOcclusion: 0.32,
+      emissiveCatch: 0.78,
+      placeholderContract: LAMELLAR_PLACEHOLDER_CONTRACT,
+    },
+    simulation: {
+      sourceRadius: 0.11,
+      flowRate: 0.18,
+      vorticity: 2.25,
+    },
+    render: {
+      radiance: 1.45,
+      glow: 1.05,
+    },
+  };
+}
+
+function normalizeVolumePrimitive(primitive) {
+  const source = primitive && typeof primitive === 'object' ? primitive : {};
+  const fixture = createVolumePrimitiveFixture();
+  const transform = source.transform && typeof source.transform === 'object' ? source.transform : fixture.transform;
+  const simulation = source.simulation && typeof source.simulation === 'object' ? source.simulation : fixture.simulation;
+  return {
+    ...fixture,
+    ...source,
+    id: String(source.id || fixture.id),
+    kind: String(source.kind || fixture.kind),
+    shape: String(source.shape || fixture.shape),
+    transform: {
+      position: Array.isArray(transform.position) ? transform.position.map(Number) : [...fixture.transform.position],
+      rotation: Array.isArray(transform.rotation) ? transform.rotation.map(Number) : [...fixture.transform.rotation],
+      scale: Array.isArray(transform.scale) ? transform.scale.map(Number) : [...fixture.transform.scale],
+    },
+    simulation: {
+      ...fixture.simulation,
+      ...simulation,
+    },
+  };
+}
+
+function getVolumePrimitiveState() {
+  return {
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    primitives: volumePrimitives.map(cloneVolumePrimitive),
+  };
+}
+
+function setVolumePrimitivesState(state) {
+  const primitiveList = Array.isArray(state) ? state : state?.primitives;
+  volumePrimitives = Array.isArray(primitiveList) ? primitiveList.map(normalizeVolumePrimitive) : [];
+  volumePrototype?.setVolumePrimitives?.(volumePrimitives);
+  window.__kaminosVolumePrimitives = getVolumePrimitiveState();
+  window._kaminosDirty?.();
+}
+
+function seedVolumePrimitiveFixture(name) {
+  const fixture = createVolumePrimitiveFixture(name);
+  if (!fixture) return;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [fixture] });
+}
+
+function makeSceneObjectId(prefix = 'object') {
+  if (crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sceneObjectMetadataFor(object) {
+  return object?.userData?.kaminosSceneObject || null;
+}
+
+function disposeObjectTree(object) {
+  object.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const m of mats) {
+        for (const prop of ['map','roughnessMap','metalnessMap','normalMap','displacementMap','envMap','aoMap','emissiveMap','alphaMap']) {
+          if (m[prop]) { m[prop].dispose(); m[prop] = null; }
+        }
+        m.dispose();
+      }
+    }
+  });
+}
+
+function shouldClearSceneForImport(options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, 'clear')) return options.clear !== false;
+  return !document.getElementById('append-import-toggle')?.checked;
+}
+
+function greenroomPreviewIsActive() {
+  return !!greenroomPreviewState;
+}
+
+window.greenroomPreviewIsActive = greenroomPreviewIsActive;
+
+function greenroomPreviewDebugState() {
+  const preview = greenroomPreviewState?.preview || {};
+  const previewObject = greenroomPreviewState?.previewObject || null;
+  const previewSceneObjectSources = scene.children
+    .map(child => child.userData?.kaminosSceneObject?.source)
+    .filter(Boolean);
+  return {
+    active: greenroomPreviewIsActive(),
+    previewGeneration: greenroomPreviewState?.previewGeneration ?? null,
+    source: preview.url || null,
+    title: preview.display?.title || preview.fileName || null,
+    previewObjectSource: previewObject?.userData?.kaminosSceneObject?.source || null,
+    previewObjectInScene: previewObject ? scene.children.includes(previewObject) : false,
+    previewSceneObjectSources,
+    sceneObjectCount: sceneObjects.length,
+  };
+}
+
+window.greenroomPreviewDebugState = greenroomPreviewDebugState;
+
+function nextGreenroomPreviewGeneration() {
+  sceneMutationToken++;
+  greenroomPreviewGeneration += 1;
+  return greenroomPreviewGeneration;
+}
+
+function captureAuthoredSceneStateForPreview() {
+  return {
+    sceneObjects: [...sceneObjects],
+    activeSceneObjectId,
+    currentMesh,
+    currentSceneFile,
+    sceneSaveBlockedByFailedRestore,
+    volumePrimitives: getVolumePrimitiveState(),
+    modelSourceUrl,
+    modelSourceType,
+    glbFileName,
+  };
+}
+
+function detachAuthoredSceneForPreview(authored) {
+  sceneMutationToken++;
+  for (const entry of authored.sceneObjects) scene.remove(entry.object);
+  sceneObjects = [];
+  activeSceneObjectId = null;
+  currentMesh = null;
+  setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] });
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  renderSceneObjectList();
+  updateTransformInspector();
+}
+
+function updateGreenroomPreviewControls() {
+  const panel = document.getElementById('greenroom-preview-controls');
+  if (!panel) return;
+  if (!greenroomPreviewState) {
+    panel.hidden = true;
+    return;
+  }
+  const preview = greenroomPreviewState.preview || {};
+  document.getElementById('greenroom-preview-title').textContent = preview.display?.title || preview.fileName || 'Greenroom output';
+  document.getElementById('greenroom-preview-source').textContent = preview.url || '';
+  panel.hidden = false;
+}
+
+function removeGreenroomPreviewObject({ dispose = true } = {}) {
+  const previewObject = greenroomPreviewState?.previewObject;
+  if (!previewObject) return null;
+  if (transformControls && currentMesh === previewObject) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  scene.remove(previewObject);
+  if (dispose) disposeObjectTree(previewObject);
+  if (currentMesh === previewObject) currentMesh = null;
+  greenroomPreviewState.previewObject = null;
+  return previewObject;
+}
+
+function sceneObjectTransformState(object) {
+  return {
+    position: object?.position?.toArray?.() || [0, 0, 0],
+    rotation: object?.rotation ? [object.rotation.x, object.rotation.y, object.rotation.z] : [0, 0, 0],
+    scale: object?.scale?.toArray?.() || [1, 1, 1],
+  };
+}
+
+function applySceneObjectTransformState(object, transform = {}) {
+  if (!object) return;
+  object.position.fromArray(Array.isArray(transform.position) ? transform.position : [0, 0, 0]);
+  object.rotation.set(...(Array.isArray(transform.rotation) ? transform.rotation : [0, 0, 0]));
+  object.scale.fromArray(Array.isArray(transform.scale) ? transform.scale : [1, 1, 1]);
+}
+
+function degreesFromRadians(value) {
+  return value * 180 / Math.PI;
+}
+
+function radiansFromDegrees(value) {
+  return value * Math.PI / 180;
+}
+
+function formatInspectorNumber(value, digits = 3) {
+  if (!Number.isFinite(value)) return '';
+  return Number(value.toFixed(digits)).toString();
+}
+
+function previewTransformState(object) {
+  return {
+    transform: sceneObjectTransformState(object),
+    materials: getMaterialStateForObject(object),
+  };
+}
+
+function applyPreviewTransformState(object, state) {
+  if (!object || !state) return;
+  applySceneObjectTransformState(object, state.transform);
+  applyMaterialStateToObject(object, state.materials);
+}
+
+async function restoreAuthoredSceneFromPreview(options = {}) {
+  if (!greenroomPreviewState) return false;
+  const state = greenroomPreviewState;
+  const authored = state.authored;
+  removeGreenroomPreviewObject({ dispose: options.disposePreview !== false });
+  sceneMutationToken++;
+  greenroomPreviewState = null;
+  updateGreenroomPreviewControls();
+  sceneObjects = [...authored.sceneObjects];
+  for (const entry of sceneObjects) scene.add(entry.object);
+  activeSceneObjectId = authored.activeSceneObjectId;
+  currentSceneFile = authored.currentSceneFile;
+  sceneSaveBlockedByFailedRestore = authored.sceneSaveBlockedByFailedRestore;
+  modelSourceUrl = authored.modelSourceUrl;
+  modelSourceType = authored.modelSourceType;
+  glbFileName = authored.glbFileName;
+  setVolumePrimitivesState(authored.volumePrimitives);
+  setActiveSceneObject(activeSceneObjectId);
+  if (!sceneObjects.length) {
+    renderSceneObjectList();
+    document.getElementById('transform-bar').classList.remove('visible');
+  }
+  if (!options.silent) setInfo('Returned to scene');
+  return true;
+}
+
+window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
+
+function sceneObjectReloadabilityLabel(record) {
+  if (isReloadableSceneObjectRecord(record)) return 'reloadable';
+  if (!record.source) return 'unsourced';
+  if (record.type === 'pbr') return 'procedural';
+  return 're-drop required';
+}
+
+function selectedSceneObjectEntry() {
+  return sceneObjects.find(obj => obj.id === activeSceneObjectId) || null;
+}
+
+function setTransformInspectorFieldsDisabled(disabled) {
+  document.querySelectorAll('[data-transform-field]').forEach(input => {
+    input.disabled = disabled;
+  });
+}
+
+function updateTransformInspector() {
+  const inspector = document.getElementById('transform-inspector');
+  const empty = document.getElementById('transform-inspector-empty');
+  const fields = document.getElementById('transform-inspector-fields');
+  if (!inspector || !empty || !fields) return;
+  const entry = selectedSceneObjectEntry();
+  inspector.dataset.selectedObjectId = entry?.id || '';
+  empty.hidden = !!entry;
+  fields.hidden = !entry;
+  setTransformInspectorFieldsDisabled(!entry);
+  if (!entry) return;
+
+  document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
+  document.getElementById('transform-inspector-id').textContent = entry.id;
+  const transform = sceneObjectTransformState(entry.object);
+  const values = {
+    'position.x': transform.position[0],
+    'position.y': transform.position[1],
+    'position.z': transform.position[2],
+    'rotation.x': degreesFromRadians(transform.rotation[0]),
+    'rotation.y': degreesFromRadians(transform.rotation[1]),
+    'rotation.z': degreesFromRadians(transform.rotation[2]),
+    'scale.x': transform.scale[0],
+    'scale.y': transform.scale[1],
+    'scale.z': transform.scale[2],
+  };
+  for (const [field, value] of Object.entries(values)) {
+    const input = document.querySelector(`[data-transform-field="${field}"]`);
+    if (input && document.activeElement !== input) {
+      input.value = formatInspectorNumber(value);
+    }
+  }
+}
+
+function applyTransformInspectorField(input) {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || !input?.dataset?.transformField) {
+    updateTransformInspector();
+    return;
+  }
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) return;
+  const [group, axis] = input.dataset.transformField.split('.');
+  const axisIndex = { x: 0, y: 1, z: 2 }[axis];
+  if (!['position', 'rotation', 'scale'].includes(group) || axisIndex === undefined) return;
+  const transform = sceneObjectTransformState(entry.object);
+  transform[group][axisIndex] = group === 'rotation' ? radiansFromDegrees(value) : value;
+  applySceneObjectTransformState(entry.object, transform);
+  if (transformControls && entry.object === currentMesh) {
+    transformControls.attach(entry.object);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
+  window._kaminosDirty?.();
+  setInfo(`Transform updated: ${entry.label || entry.fileName || entry.id}`);
+}
+
+function initTransformInspector() {
+  document.querySelectorAll('[data-transform-field]').forEach(input => {
+    input.addEventListener('input', () => applyTransformInspectorField(input));
+    input.addEventListener('change', () => updateTransformInspector());
+  });
+  updateTransformInspector();
+}
+
+function renderSceneObjectList() {
+  const list = document.getElementById('scene-object-list');
+  const empty = document.getElementById('scene-object-empty');
+  if (!list || !empty) return;
+  empty.style.display = sceneObjects.length ? 'none' : '';
+  list.innerHTML = sceneObjects.map(record => {
+    const active = record.id === activeSceneObjectId;
+    const rowClass = active ? 'scene-object-row active' : 'scene-object-row';
+    const label = record.label || record.fileName || record.id;
+    const typeLabel = record.type || 'object';
+    const reloadability = sceneObjectReloadabilityLabel(record);
+    const source = record.source || 'no source';
+    return `
+      <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+        <span>
+          <span class="scene-object-name">${escapeHtml(label)}</span>
+          <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
+        </span>
+        <span class="scene-object-actions">
+          <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+          <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
+        </span>
+      </div>
+    `;
+  }).join('');
+  list.querySelectorAll('[data-scene-object-id]').forEach(button => {
+    button.addEventListener('click', () => window.selectSceneObject(button.dataset.sceneObjectId));
+    button.addEventListener('keydown', event => {
+      if (event.target !== button) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.selectSceneObject(button.dataset.sceneObjectId);
+      }
+    });
+  });
+  list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      window.removeSceneObject(button.dataset.sceneObjectRemoveId);
+    });
+  });
+}
+
+function clearActiveSceneObjectSelection() {
+  activeSceneObjectId = null;
+  currentMesh = null;
+  renderSceneObjectList();
+  updateTransformInspector();
+  if (!transformControls) return;
+  transformControls.detach();
+  transformControls.visible = false;
+  document.getElementById('transform-bar').classList.remove('visible');
+}
+
+function setActiveSceneObject(id) {
+  const entry = sceneObjects.find(obj => obj.id === id);
+  if (!entry) {
+    clearActiveSceneObjectSelection();
+    return;
+  }
+  activeSceneObjectId = entry.id;
+  currentMesh = entry.object;
+  renderSceneObjectList();
+  updateTransformInspector();
+  if (!transformControls) return;
+  transformControls.detach();
+  transformControls.visible = false;
+  if (currentMesh) {
+    transformControls.attach(currentMesh);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
+}
+
+function sceneObjectRecordForDescendant(object) {
+  for (const record of sceneObjects) {
+    let cursor = object;
+    while (cursor) {
+      if (cursor === record.object) return record;
+      cursor = cursor.parent;
+    }
+  }
+  return null;
+}
+
+function pickSceneObjectFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    return null;
+  }
+  scenePointerNdc.set(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+  );
+  sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  const hits = sceneRaycaster.intersectObjects(sceneObjects.map(record => record.object), true);
+  for (const hit of hits) {
+    const record = sceneObjectRecordForDescendant(hit.object);
+    if (record) return record;
+  }
+  return null;
+}
+
+function viewportEventHitsInteractiveOverlay(event) {
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar');
+}
+
+function viewportEventIsInsideCanvas(event) {
+  if (!renderer?.domElement) return false;
+  const rect = renderer.domElement.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+}
+
+function handleViewportPointerDown(event) {
+  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  viewportPointerDown = {
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  };
+}
+
+function handleViewportSelectionClick(event) {
+  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (event.type === 'click' && viewportSuppressedClick) {
+    const age = performance.now() - viewportSuppressedClick.at;
+    const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
+    if (age < 750 && distance < 8) {
+      viewportSuppressedClick = null;
+      event.stopPropagation?.();
+      return;
+    }
+    viewportSuppressedClick = null;
+  }
+  if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) {
+    viewportPointerDown = null;
+    return;
+  }
+  const start = viewportPointerDown || (event.type === 'click' ? {
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  } : null);
+  viewportPointerDown = null;
+  const pointerIdsDiffer = start?.pointerId !== undefined && event.pointerId !== undefined && start.pointerId !== event.pointerId;
+  if (!start || pointerIdsDiffer) {
+    return;
+  }
+  const drift = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+  if (drift > 5) {
+    viewportSuppressedClick = {
+      x: event.clientX,
+      y: event.clientY,
+      at: performance.now(),
+    };
+    return;
+  }
+
+  const record = pickSceneObjectFromViewportPointer(event);
+  if (record) {
+    setActiveSceneObject(record.id);
+    setInfo(`Selected: ${record.label || record.fileName || record.id}`);
+  } else {
+    clearActiveSceneObjectSelection();
+    setInfo('Selection cleared');
+  }
+  window._kaminosDirty?.();
+}
+
+function registerSceneObject(object, metadata = {}) {
+  sceneSaveBlockedByFailedRestore = false;
+  const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
+  const record = {
+    id,
+    object,
+    source: metadata.source ?? null,
+    type: metadata.type ?? null,
+    fileName: metadata.fileName ?? 'object',
+    label: metadata.label ?? metadata.fileName ?? id,
+    createdAt: metadata.createdAt ?? new Date().toISOString(),
+  };
+  object.userData.kaminosSceneObject = {
+    id: record.id,
+    source: record.source,
+    type: record.type,
+    fileName: record.fileName,
+    label: record.label,
+    createdAt: record.createdAt,
+  };
+  sceneObjects = sceneObjects.filter(obj => obj.id !== id);
+  sceneObjects.push(record);
+  setActiveSceneObject(id);
+  window._kaminosDirty?.();
+  return record;
+}
+
+window.selectSceneObject = function(id) {
+  setActiveSceneObject(id);
+  if (currentMesh) {
+    const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
+    setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
+    window._kaminosDirty?.();
+  }
+};
+
+window.kaminosSceneObjectDebugState = function() {
+  return sceneObjects.map(record => ({
+    id: record.id,
+    label: record.label || record.fileName || record.id,
+    source: record.source || null,
+    type: record.type || null,
+    active: record.id === activeSceneObjectId,
+    transform: sceneObjectTransformState(record.object),
+  }));
+};
+
+window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+  const entry = sceneObjects.find(obj => obj.id === id);
+  if (!entry) throw new Error(`Scene object "${id}" was not found`);
+  applySceneObjectTransformState(entry.object, transform);
+  updateTransformInspector();
+  if (entry.id === activeSceneObjectId && transformControls) {
+    transformControls.detach();
+    transformControls.attach(entry.object);
+    transformControls.visible = true;
+    document.getElementById('transform-bar').classList.add('visible');
+  }
+  window._kaminosDirty?.();
+  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
+};
+
+window.removeSceneObject = function(id) {
+  const index = sceneObjects.findIndex(obj => obj.id === id);
+  if (index < 0) return;
+  const [entry] = sceneObjects.splice(index, 1);
+  const wasActive = activeSceneObjectId === entry.id;
+  if (transformControls && currentMesh === entry.object) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  scene.remove(entry.object);
+  disposeObjectTree(entry.object);
+  const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
+  if (wasActive || !fallback) {
+    setActiveSceneObject(fallback?.id || null);
+  } else {
+    renderSceneObjectList();
+    updateTransformInspector();
+  }
+  setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
+  window._kaminosDirty?.();
+};
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -439,8 +1353,8 @@ function restoreSettings() {
 }
 
 // Auto-save on any sidebar control change
-document.querySelector('.sidebar').addEventListener('input', saveSettings);
-document.querySelector('.sidebar').addEventListener('change', saveSettings);
+document.getElementById('sidebar')?.addEventListener('input', saveSettings);
+document.getElementById('sidebar')?.addEventListener('change', saveSettings);
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -508,6 +1422,19 @@ async function initScene() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
+  controls.rotateSpeed = -0.72;
+  controls.panSpeed = 0.45;
+  controls.zoomSpeed = 0.85;
+  controls.screenSpacePanning = true;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN,
+  };
+  controls.touches = {
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN,
+  };
   controls.minDistance = 0.5;
   controls.maxDistance = 10;
   controls.target.set(0, 0, 0);
@@ -544,55 +1471,43 @@ async function initScene() {
   // Transform gizmo
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', e => {
+    transformGizmoDragging = e.value;
     controls.enabled = !e.value; // disable orbit while dragging gizmo
   });
   transformControls.setSize(0.75);
   transformControls.visible = false;
   scene.add(transformControls.getHelper());
+  sceneRaycaster = new THREE.Raycaster();
+  scenePointerNdc = new THREE.Vector2();
 
-  // --- GTAO Compute AO via RenderPipeline ---
-  renderPipeline = new THREE.RenderPipeline(renderer);
+  // --- Manual AO render pipeline ---
+  // Scene -> RenderTarget (color+depth) -> GTAO compute -> composite to canvas
+  postProcessing = null;
 
-  // Pre-pass for normals
-  const prePass = pass(scene, camera);
-  prePass.name = 'Pre-Pass';
-  prePass.transparent = false;
-  prePass.setMRT(mrt({ output: packNormalToRGB(normalView) }));
-  const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
-  const prePassDepth = prePass.getTextureNode('depth');
-  const normalTexture = prePass.getTexture('output');
-  normalTexture.type = THREE.UnsignedByteType;
+  // Scene render target with depth
+  let sceneRT = new THREE.RenderTarget(vp.clientWidth, vp.clientHeight, {
+    depthTexture: new THREE.DepthTexture(vp.clientWidth, vp.clientHeight),
+  });
+  sceneRT.depthTexture.format = THREE.DepthFormat;
+  sceneRT.depthTexture.type = THREE.UnsignedIntType;
 
-  // Scene pass
-  scenePass = pass(scene, camera);
-
-  // Depth render target for compute AO
-  const resScale = 0.5;
-  const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  let depthRT = new THREE.RenderTarget(
-    Math.round(drawSize.x * resScale),
-    Math.round(drawSize.y * resScale),
-    { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
-  );
-  const depthMaterial = new THREE.NodeMaterial();
-  depthMaterial.name = 'LinearDepthToColor';
-  depthMaterial.blending = THREE.NoBlending;
-  depthMaterial.colorNode = vec4(positionView.z.negate(), 0, 0, 1);
-
-  // Compute AO
-  const depthTexNode = texture(depthRT.texture);
-  const normalTexNode = texture(normalTexture);
-  aoPass = aoCompute(depthTexNode, normalTexNode, camera);
-  aoPass.setDepthPass(depthRT, depthMaterial, scene);
-
-  // StorageTexture → regular texture bridge + denoise
-  const aoResolved = convertToTexture(aoPass.getTextureNode());
-  const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
-
-  // Composite: scene × AO
-  aoIntensity = uniform(1.0);
-  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  // GTAO compute pipeline + composite pass
+  const device = renderer.backend?.device;
+  const canvasFormat = navigator.gpu?.getPreferredCanvasFormat?.() || 'bgra8unorm';
+  if (device) {
+    try {
+      aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
+      await aoPipeline._initPromise;
+      aoComposite = new AOCompositePass(device, canvasFormat);
+      console.log('GTAO compute + composite:', aoPipeline.isReady ? 'ready' : 'failed');
+    } catch (e) {
+      console.warn('GTAO pipeline init failed:', e);
+      aoPipeline = null;
+      aoComposite = null;
+    }
+  } else {
+    console.warn('No WebGPU device - AO compute disabled');
+  }
 
   window.addEventListener('resize', () => {
     const w = vp.clientWidth;
@@ -600,8 +1515,14 @@ async function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    depthRT.setSize(Math.round(size.x * resScale), Math.round(size.y * resScale));
+    // Recreate render target at new size
+    sceneRT.dispose();
+    sceneRT = new THREE.RenderTarget(w, h, {
+      depthTexture: new THREE.DepthTexture(w, h),
+    });
+    sceneRT.depthTexture.format = THREE.DepthFormat;
+    sceneRT.depthTexture.type = THREE.UnsignedIntType;
+    if (aoPipeline) aoPipeline.setSize(w, h);
     needsRender = true;
   });
 
@@ -612,7 +1533,21 @@ async function initScene() {
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
   controls.addEventListener('change', markDirty);
-  transformControls.addEventListener('change', markDirty);
+  transformControls.addEventListener('change', () => {
+    markDirty();
+    updateTransformInspector();
+  });
+  initTransformInspector();
+  const viewportEl = document.getElementById('viewport');
+  renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
+  renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
+  renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
+  renderer.domElement.addEventListener('mousedown', handleViewportPointerDown);
+  renderer.domElement.addEventListener('click', handleViewportSelectionClick);
+  viewportEl.addEventListener('pointerdown', handleViewportPointerDown);
+  viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
+  viewportEl.addEventListener('mousedown', handleViewportPointerDown);
+  viewportEl.addEventListener('click', handleViewportSelectionClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
@@ -625,11 +1560,20 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
-      renderPipeline.render();
+      // GTAO compute disabled in render loop - raw device access conflicts with Three.js
+      // command buffer management and caused kernel panic on M-series (texture usage flags,
+      // double canvas acquire, competing queue.submit calls).
+      // Compute shaders verified correct (ao-compute.js). Integration needs either:
+      // - Three.js r172+ ComputeNode in PostProcessing graph, OR
+      // - Full renderer takeover (don't use Three.js for rendering at all), OR
+      // - Patch Three.js RenderTarget to add TEXTURE_BINDING|STORAGE_BINDING usage
+      //   and hook into its command encoder instead of creating our own.
+      renderer.render(scene, camera);
 
       const frameMs = performance.now() - t0;
       fpsFrames++;
@@ -641,7 +1585,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender) idleFrames++;
+      if (!needsRender && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -730,41 +1674,35 @@ function applyEnvMap(envMap, intensity) {
   updateBackground();
 
   // Update all materials in scene to use envMap
-  if (currentMesh) {
-    currentMesh.traverse(child => {
+  sceneObjects.forEach(({ object }) => {
+    object.traverse(child => {
       if (child.material) {
         child.material.envMapIntensity = intensity;
         child.material.needsUpdate = true;
       }
     });
-  }
+  });
   window._kaminosDirty?.();
 }
 
 // --- File Loading ---
 function clearScene() {
-  if (currentMesh) {
-    scene.remove(currentMesh);
-    currentMesh.traverse(child => {
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        for (const m of mats) {
-          for (const prop of ['map','roughnessMap','metalnessMap','normalMap','displacementMap','envMap','aoMap','emissiveMap','alphaMap']) {
-            if (m[prop]) { m[prop].dispose(); m[prop] = null; }
-          }
-          m.dispose();
-        }
-      }
-    });
-    currentMesh = null;
+  sceneMutationToken++;
+  for (const entry of sceneObjects) {
+    scene.remove(entry.object);
+    disposeObjectTree(entry.object);
   }
+  sceneObjects = [];
+  activeSceneObjectId = null;
+  currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
     transformControls.detach();
     transformControls.visible = false;
   }
   document.getElementById('transform-bar').classList.remove('visible');
+  renderSceneObjectList();
+  updateTransformInspector();
 }
 
 function loadTexture(file) {
@@ -792,8 +1730,13 @@ function loadTextureLinear(file) {
 }
 
 // --- PBR Material Preview ---
-async function showPBRPreview() {
-  clearScene();
+async function showPBRPreview(options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
+  const loadToken = sceneMutationToken;
+  const metadata = options.metadata || {};
+  modelSourceUrl = metadata.source ?? modelSourceUrl ?? 'material-preview';
+  modelSourceType = 'pbr';
+  glbFileName = metadata.fileName ?? glbFileName ?? 'pbr-material-preview';
   const albedoFile = loadedFiles['albedo.png'];
   const roughnessFile = loadedFiles['roughness.png'];
   const metallicFile = loadedFiles['metallic.png'];
@@ -827,52 +1770,99 @@ async function showPBRPreview() {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.position.y = 0;
-  currentMesh = mesh;
-  scene.add(currentMesh);
+  if (loadToken !== sceneMutationToken || greenroomPreviewIsActive()) {
+    disposeObjectTree(mesh);
+    console.warn('stale async PBR preview load ignored');
+    return null;
+  }
+  scene.add(mesh);
+  registerSceneObject(mesh, {
+    ...metadata,
+    source: metadata.source ?? modelSourceUrl ?? 'material-preview',
+    type: metadata.type ?? 'pbr',
+    fileName: metadata.fileName ?? glbFileName ?? 'pbr-material-preview',
+  });
+  document.getElementById('transform-bar').classList.add('visible');
   setInfo('PBR Material Preview — orbit to inspect');
+  return mesh;
 }
 
 // --- GLB Inspector ---
-async function showGLB(file) {
-  clearScene();
+async function showGLB(file, options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
+  const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
-  loader.load(url, gltf => {
-    if (isBlob) URL.revokeObjectURL(url);
-    glbSourceScene = gltf.scene;
-    const model = gltf.scene;
-    const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3()).length();
-    model.position.sub(center);
-    const scale = 2.0 / size;
-    model.scale.setScalar(scale);
-    model.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        if (child.material) {
-          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
-        }
+	return new Promise((resolve, reject) => {
+	  loader.load(url, gltf => {
+	    if (isBlob) URL.revokeObjectURL(url);
+	    glbSourceScene = gltf.scene;
+	    const model = gltf.scene;
+      const stalePreviewLoad = options.register === false
+        && options.previewGeneration !== undefined
+        && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
+      if (loadToken !== sceneMutationToken || stalePreviewLoad || (greenroomPreviewIsActive() && options.register !== false)) {
+        disposeObjectTree(model);
+        reject(new Error('stale async GLB load ignored'));
+        return;
       }
+      if (options.normalize !== false) {
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        model.position.sub(center);
+        const scale = 2.0 / size;
+        model.scale.setScalar(scale);
+      }
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+          }
+        }
+      });
+      scene.add(model);
+      if (options.register === false) {
+        const metadata = options.metadata || {};
+        model.userData.kaminosSceneObject = {
+          source: metadata.source ?? modelSourceUrl,
+          type: metadata.type ?? 'glb',
+          fileName: metadata.fileName ?? glbFileName,
+          label: metadata.label ?? metadata.fileName ?? glbFileName,
+        };
+        currentMesh = model;
+        if (transformControls) {
+          transformControls.attach(model);
+          transformControls.visible = true;
+        }
+      } else {
+        registerSceneObject(model, {
+          ...(options.metadata || {}),
+          source: options.metadata?.source ?? modelSourceUrl,
+          type: options.metadata?.type ?? 'glb',
+          fileName: options.metadata?.fileName ?? glbFileName,
+        });
+      }
+      document.getElementById('transform-bar').classList.add('visible');
+      setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
+      resolve(model);
+    }, undefined, (err) => {
+      if (isBlob) URL.revokeObjectURL(url);
+      setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
+      reject(err);
     });
-    currentMesh = model;
-    scene.add(currentMesh);
-    document.getElementById('transform-bar').classList.add('visible');
-    setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-  }, undefined, (err) => {
-    if (isBlob) URL.revokeObjectURL(url);
-    setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
   });
 }
 
 // --- OBJ Inspector ---
-async function showOBJ(objFile, mtlFile) {
-  clearScene();
+async function showOBJ(objFile, mtlFile, options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
   modelSourceUrl = objFile.name;
@@ -897,45 +1887,56 @@ async function showOBJ(objFile, mtlFile) {
   const objLoader = new OBJLoader();
   if (materials) objLoader.setMaterials(materials);
 
-  objLoader.load(objUrl, obj => {
-    URL.revokeObjectURL(objUrl);
-    glbSourceScene = obj;
-    const box = new THREE.Box3().setFromObject(obj);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3()).length();
-    obj.position.sub(center);
-    const scale = 2.0 / size;
-    obj.scale.setScalar(scale);
-    obj.traverse(child => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        // If no MTL, give it a decent default material
-        if (!mtlFile && child.material) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            roughness: 0.5,
-            metalness: 0.0,
-            envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
-          });
-        } else if (child.material) {
-          child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
-        }
+  return new Promise((resolve, reject) => {
+    objLoader.load(objUrl, obj => {
+      URL.revokeObjectURL(objUrl);
+      glbSourceScene = obj;
+      if (options.normalize !== false) {
+        const box = new THREE.Box3().setFromObject(obj);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        obj.position.sub(center);
+        const scale = 2.0 / size;
+        obj.scale.setScalar(scale);
       }
+      obj.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          // If no MTL, give it a decent default material
+          if (!mtlFile && child.material) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0xcccccc,
+              roughness: 0.5,
+              metalness: 0.0,
+              envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+            });
+          } else if (child.material) {
+            child.material.envMapIntensity = parseFloat(document.getElementById('env-intensity-slider').value);
+          }
+        }
+      });
+      scene.add(obj);
+      registerSceneObject(obj, {
+        ...(options.metadata || {}),
+        source: options.metadata?.source ?? modelSourceUrl,
+        type: options.metadata?.type ?? 'obj',
+        fileName: options.metadata?.fileName ?? glbFileName,
+      });
+      document.getElementById('transform-bar').classList.add('visible');
+      setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
+      resolve(obj);
+    }, undefined, (err) => {
+      URL.revokeObjectURL(objUrl);
+      setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
+      reject(err);
     });
-    currentMesh = obj;
-    scene.add(currentMesh);
-    document.getElementById('transform-bar').classList.add('visible');
-    setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
-  }, undefined, (err) => {
-    URL.revokeObjectURL(objUrl);
-    setInfo('Failed to load OBJ: ' + (err.message || 'unknown error'));
   });
 }
 
 // --- Depth Surface ---
-async function showDepthSurface() {
-  clearScene();
+async function showDepthSurface(options = {}) {
+  if (shouldClearSceneForImport(options)) clearScene();
   const depthFile = loadedFiles['depth_vis.png'] || loadedFiles['depth.exr'];
   const imageFile = loadedFiles['image.jpg'];
   if (!depthFile) { setInfo('No depth output found'); return; }
@@ -951,9 +1952,14 @@ async function showDepthSurface() {
       })
     : new THREE.MeshStandardMaterial({ map: depthTex });
 
-  currentMesh = new THREE.Mesh(geo, mat);
-  currentMesh.castShadow = true;
-  scene.add(currentMesh);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  registerSceneObject(mesh, {
+    source: modelSourceUrl || 'depth-surface',
+    type: 'depth',
+    fileName: glbFileName || 'depth-surface',
+  });
   setInfo('Depth Surface — orbit to inspect');
 }
 
@@ -1031,8 +2037,257 @@ function setInfo(msg) {
   window._kaminosDirty?.();
 }
 
+function setActiveTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+}
+
+function readVolumeControls() {
+  return {
+    density: parseFloat(document.getElementById('volume-density').value),
+    fire: parseFloat(document.getElementById('volume-fire').value),
+    radiance: parseFloat(document.getElementById('volume-radiance').value),
+    absorption: parseFloat(document.getElementById('volume-absorption').value),
+    glow: parseFloat(document.getElementById('volume-glow').value),
+    smoke: parseFloat(document.getElementById('volume-smoke').value),
+    curl: parseFloat(document.getElementById('volume-curl').value),
+    microdetail: parseFloat(document.getElementById('volume-microdetail').value),
+    interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
+    fireLicks: parseFloat(document.getElementById('volume-fire-licks').value),
+    projection: parseFloat(document.getElementById('volume-projection').value),
+    speed: parseFloat(document.getElementById('volume-speed').value),
+    raySteps: parseFloat(document.getElementById('volume-steps').value),
+    adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
+    inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
+    flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
+    resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+    gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
+    flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+  };
+}
+
+function updateVolumeControlLabels() {
+  const c = readVolumeControls();
+  document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
+  document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
+  document.getElementById('volume-radiance-val').textContent = c.radiance.toFixed(2);
+  document.getElementById('volume-absorption-val').textContent = c.absorption.toFixed(2);
+  document.getElementById('volume-glow-val').textContent = c.glow.toFixed(2);
+  document.getElementById('volume-smoke-val').textContent = c.smoke.toFixed(2);
+  document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
+  document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
+  document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
+  document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
+  document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
+  document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
+  document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
+  document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
+  document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
+  document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
+  document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
+  document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
+  document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+}
+
+function refreshVolumeReadout() {
+  if (!volumePrototype) return;
+  const s = volumePrototype.debugState();
+  document.getElementById('volume-backend').textContent = s.backend || 'unknown';
+  document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
+  document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
+  document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
+  document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
+  document.getElementById('volume-canvas-state').textContent = s.active ? `${s.width}x${s.height}` : 'hidden';
+  document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
+  document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
+}
+
+function frameVolumeCamera() {
+  camera.position.set(1.18, 0.28, 2.05);
+  controls.target.set(0, 0.02, 0);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+function createVolumeMainRendererBridge() {
+  const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
+  sourceTexture.colorSpace = THREE.SRGBColorSpace;
+  sourceTexture.generateMipmaps = false;
+  sourceTexture.minFilter = THREE.LinearFilter;
+  sourceTexture.magFilter = THREE.LinearFilter;
+
+  const material = new THREE.MeshBasicMaterial({
+    map: sourceTexture,
+    transparent: true,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  mesh.name = 'volume-main-renderer-bridge-v0';
+  mesh.renderOrder = 9000;
+  mesh.visible = false;
+  mesh.userData.kaminosVolumeBridge = {
+    identity: 'volume-main-renderer-bridge-v0',
+    source: 'native-webgpu-volume-canvas',
+    composition: 'three-canvas-texture-additive-plane',
+  };
+  scene.add(mesh);
+
+  const direction = new THREE.Vector3();
+  return {
+    identity: 'volume-main-renderer-bridge-v0',
+    mesh,
+    texture: sourceTexture,
+    update() {
+      const state = volumePrototype.debugState();
+      const active = !!state.active;
+      mesh.visible = active;
+      if (!active) return false;
+      sourceTexture.needsUpdate = true;
+      const distance = 1.5;
+      camera.getWorldDirection(direction);
+      mesh.position.copy(camera.position).addScaledVector(direction, distance);
+      mesh.quaternion.copy(camera.quaternion);
+      const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
+      mesh.scale.set(height * camera.aspect, height, 1);
+      return true;
+    },
+    debugState() {
+      return {
+        identity: 'volume-main-renderer-bridge-v0',
+        visible: mesh.visible,
+        textureSource: volumePrototype?.canvasElement?.()?.id || null,
+        meshName: mesh.name,
+        renderOrder: mesh.renderOrder,
+        composition: mesh.userData.kaminosVolumeBridge.composition,
+      };
+    },
+    dispose() {
+      scene.remove(mesh);
+      sourceTexture.dispose();
+      material.dispose();
+      mesh.geometry.dispose();
+    },
+  };
+}
+
+async function initKaminosVolumeRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
+  if ([32, 48, 64, 96].includes(routeResolution)) {
+    document.getElementById('volume-resolution').value = String(routeResolution);
+  }
+  const routeGrid = Number(params.get('volume_grid'));
+  if (Number.isFinite(routeGrid)) {
+    document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));
+  }
+  const routeInputRadius = Number(params.get('volume_input_radius'));
+  if (params.has('volume_input_radius') && Number.isFinite(routeInputRadius)) {
+    document.getElementById('volume-input-radius').value = String(Math.max(0.08, Math.min(0.7, routeInputRadius)));
+  }
+  const routeFlowRate = Number(params.get('volume_flow_rate'));
+  if (params.has('volume_flow_rate') && Number.isFinite(routeFlowRate)) {
+    document.getElementById('volume-flow-rate').value = String(Math.max(0, Math.min(2.5, routeFlowRate)));
+  }
+  const routeProjection = Number(params.get('volume_projection'));
+  if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
+    document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));
+  }
+  const routeMicrodetail = Number(params.get('volume_microdetail'));
+  if (params.has('volume_microdetail') && Number.isFinite(routeMicrodetail)) {
+    document.getElementById('volume-microdetail').value = String(Math.max(0, Math.min(2.5, routeMicrodetail)));
+  }
+  const routeInterfaceShred = Number(params.get('volume_interface_shred'));
+  if (params.has('volume_interface_shred') && Number.isFinite(routeInterfaceShred)) {
+    document.getElementById('volume-interface-shred').value = String(Math.max(0, Math.min(5, routeInterfaceShred)));
+  }
+  const routeFireLicks = Number(params.get('volume_fire_licks'));
+  if (params.has('volume_fire_licks') && Number.isFinite(routeFireLicks)) {
+    document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(5, routeFireLicks)));
+  }
+  const routeRadiance = Number(params.get('volume_radiance'));
+  if (params.has('volume_radiance') && Number.isFinite(routeRadiance)) {
+    document.getElementById('volume-radiance').value = String(Math.max(0, Math.min(3, routeRadiance)));
+  }
+  const routeAbsorption = Number(params.get('volume_absorption'));
+  if (params.has('volume_absorption') && Number.isFinite(routeAbsorption)) {
+    document.getElementById('volume-absorption').value = String(Math.max(0, Math.min(2, routeAbsorption)));
+  }
+  const routeGlow = Number(params.get('volume_glow'));
+  if (params.has('volume_glow') && Number.isFinite(routeGlow)) {
+    document.getElementById('volume-glow').value = String(Math.max(0, Math.min(2.5, routeGlow)));
+  }
+  const routeFlowDebug = Number(params.get('volume_flow_debug'));
+  if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
+    document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
+  }
+  const routeRaySteps = Number(params.get('volume_steps'));
+  if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
+    document.getElementById('volume-steps').value = String(Math.max(24, Math.min(160, routeRaySteps)));
+  }
+  const routeAdaptiveRays = Number(params.get('volume_adaptive_rays'));
+  if (params.has('volume_adaptive_rays') && Number.isFinite(routeAdaptiveRays)) {
+    document.getElementById('volume-adaptive-rays').value = String(Math.max(0, Math.min(1, routeAdaptiveRays)));
+  }
+  updateVolumeControlLabels();
+  volumePrototype = createKaminosVolumePrototype({
+    THREE,
+    viewport: document.getElementById('viewport'),
+    camera,
+    controls,
+    getControls: readVolumeControls,
+    onStatus: status => {
+      document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      if (status.error) setInfo(`Volume renderer: ${status.error}`);
+    },
+  });
+  window.__kaminosVolumePrototype = volumePrototype;
+  volumeBridge?.dispose?.();
+  volumeBridge = createVolumeMainRendererBridge();
+  window.__kaminosVolumeBridge = volumeBridge;
+  window.__kaminosVolumeMainRendererBridge = volumeBridge;
+  volumePrototype.setVolumePrimitives(volumePrimitives);
+  if (params.has('volume_primitive_fixture')) {
+    seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
+  }
+
+  const syncControls = () => {
+    updateVolumeControlLabels();
+    volumePrototype.setControls(readVolumeControls());
+    refreshVolumeReadout();
+  };
+  for (const id of ['volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug']) {
+    document.getElementById(id).addEventListener('input', syncControls);
+    document.getElementById(id).addEventListener('change', syncControls);
+  }
+  document.getElementById('volume-toggle').addEventListener('click', async () => {
+    if (volumePrototype.debugState().active) {
+      volumePrototype.setActive(false);
+      setInfo('Volume renderer disabled');
+    } else {
+      await volumePrototype.setActive(true);
+      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+    }
+    refreshVolumeReadout();
+  });
+  document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
+
+  if (params.get('kaminos_volume_smoke') === '1') {
+    setActiveTab('volume');
+    frameVolumeCamera();
+    await volumePrototype.setActive(true);
+    setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+  }
+  syncControls();
+  setInterval(refreshVolumeReadout, 500);
+}
+
 // --- File Input Handling ---
-async function handleFiles(files) {
+async function handleFiles(files, options = {}) {
   loadedFiles = {};
   receipt = null;
 
@@ -1053,13 +2308,22 @@ async function handleFiles(files) {
   }
 
   if (loadedFiles['albedo.png']) {
-    showPBRPreview();
+    const metadata = options.metadata || {};
+    const previewOptions = { metadata };
+    if (Object.prototype.hasOwnProperty.call(options, 'clear')) previewOptions.clear = options.clear;
+    modelSourceUrl = metadata.source ?? 'material-preview';
+    modelSourceType = 'pbr';
+    glbFileName = metadata.fileName ?? 'pbr-material-preview';
+    return showPBRPreview(previewOptions);
   } else {
     const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
-    if (glb) showGLB(loadedFiles[glb]);
-    else if (loadedFiles['depth_vis.png']) showDepthSurface();
+    const loadOptions = { metadata: options.metadata };
+    if (Object.prototype.hasOwnProperty.call(options, 'clear')) loadOptions.clear = options.clear;
+    if (glb) return showGLB(loadedFiles[glb], loadOptions);
+    else if (loadedFiles['depth_vis.png']) return showDepthSurface(loadOptions);
     else setInfo('No recognized outputs \u2014 drop a sidecar output directory');
   }
+  return null;
 }
 
 // --- Drag & Drop ---
@@ -1116,15 +2380,28 @@ function loadDemoButtons() {
 }
 
 async function loadDemo(demo) {
-  const manifest = await fetch(demo.path + 'manifest.json').then(r => r.json()).catch(() => null);
+  const files = await loadDemoFiles(demo.path);
+  if (!files) return null;
+  return handleFiles(files, {
+    metadata: {
+      source: demo.path,
+      type: 'pbr',
+      fileName: demo.name,
+      label: demo.name,
+    },
+  });
+}
+
+async function loadDemoFiles(path) {
+  const manifest = await fetch(path + 'manifest.json').then(r => r.json()).catch(() => null);
   if (!manifest) { setInfo('Demo manifest not found'); return; }
   const files = [];
   for (const fn of manifest.files) {
-    const resp = await fetch(demo.path + fn);
+    const resp = await fetch(path + fn);
     const blob = await resp.blob();
     files.push(new File([blob], fn));
   }
-  handleFiles(files);
+  return files;
 }
 
 // --- Environment Buttons ---
@@ -1202,50 +2479,39 @@ function updateBackground() {
 // --- AO Controls ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
-  if (renderPipeline && scenePass) {
-    if (e.target.checked) {
-      // Re-enable AO composite
-      if (aoIntensity) aoIntensity.value = parseFloat(document.getElementById('ao-intensity').value);
-    } else {
-      // Bypass AO by setting intensity to 0
-      if (aoIntensity) aoIntensity.value = 0;
-    }
-  }
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-radius-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.radius.value = v;
+  if (aoPipeline) aoPipeline.radius = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoIntensity) aoIntensity.value = v;
+  if (aoPipeline) aoPipeline.intensity = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-scale').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-scale-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.scale.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-thickness').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-thickness-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.thickness.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-falloff').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-falloff-val').textContent = v.toFixed(2);
-  if (aoPass) aoPass.distanceFallOff.value = v;
+  if (aoPipeline) aoPipeline.falloffEnd = v * 6.0; // scale 0-1 slider to 0-6 world units
   window._kaminosDirty?.();
 });
 
@@ -1488,10 +2754,7 @@ viewport.addEventListener('drop', async e => {
 // --- Tab Switching ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    setActiveTab(tab.dataset.tab);
   });
 });
 
@@ -1947,6 +3210,183 @@ async function grFetchApi(endpoint, params = {}) {
 
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
 
+function greenroomHumanizeName(value, fallback = 'Untitled') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  const basename = raw.split(/[\\/]/).pop() || raw;
+  const stem = basename.replace(/\.[^.]+$/, '');
+  const tokens = stem.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (!tokens.length) return fallback;
+  return tokens.map(token => {
+    const lower = token.toLowerCase();
+    if (['mlx', 'glb', 'obj'].includes(lower)) return lower.toUpperCase();
+    if (['qem', 'vs3d'].includes(lower)) return lower[0].toUpperCase() + lower.slice(1);
+    if (/^[A-Z0-9]{2,5}$/.test(token)) return token;
+    return lower[0].toUpperCase() + lower.slice(1);
+  }).join(' ');
+}
+
+function greenroomEntryDisplay(entry = {}) {
+  const raw = entry.name || 'item';
+  const receipt = entry.receipt || {};
+  const outputCount = Array.isArray(entry.output_files) ? entry.output_files.length : 0;
+  const titleSource = receipt.input_name || receipt.input_path || receipt.output_dir || raw;
+  const subtitleParts = [];
+  if (receipt.job_type) subtitleParts.push(greenroomHumanizeName(receipt.job_type, receipt.job_type));
+  if (receipt.status) subtitleParts.push(receipt.status);
+  if (outputCount) subtitleParts.push(outputCount === 1 ? '1 output' : `${outputCount} outputs`);
+  if (entry.type === 'file' && Number.isFinite(entry.size)) subtitleParts.push(formatSize(entry.size));
+  return {
+    title: greenroomHumanizeName(titleSource, greenroomHumanizeName(raw)),
+    subtitle: subtitleParts.join(' / '),
+    meta: `raw ${raw}`,
+    raw_name: raw,
+    load_label: /\.(glb|gltf|obj)$/i.test(raw) || outputCount ? 'Load mesh' : 'Open',
+  };
+}
+
+function greenroomMeshMetadata(display, fileName, source) {
+  return {
+    source,
+    type: 'glb',
+    fileName,
+    label: display?.title || fileName,
+  };
+}
+
+async function greenroomViewMesh(url, fileName, display) {
+  glbFileName = fileName;
+  const metadata = greenroomMeshMetadata(display, fileName, url);
+  const authored = greenroomPreviewState?.authored || captureAuthoredSceneStateForPreview();
+  if (greenroomPreviewState) {
+    removeGreenroomPreviewObject();
+  } else {
+    detachAuthoredSceneForPreview(authored);
+  }
+  const previewGeneration = nextGreenroomPreviewGeneration();
+  greenroomPreviewState = {
+    authored,
+    preview: { url, fileName, display, metadata },
+    previewGeneration: previewGeneration,
+    previewObject: null,
+  };
+  updateGreenroomPreviewControls();
+  setInfo(`Greenroom preview: ${display?.title || fileName}`);
+  try {
+    const previewObject = await showGLB(url, {
+      clear: false,
+      register: false,
+      previewGeneration,
+      metadata,
+    });
+    if (greenroomPreviewState?.previewGeneration === previewGeneration) {
+      greenroomPreviewState.previewObject = previewObject;
+    } else {
+      scene.remove(previewObject);
+      if (transformControls && currentMesh === previewObject) {
+        transformControls.detach();
+        transformControls.visible = false;
+      }
+      if (currentMesh === previewObject) currentMesh = null;
+      disposeObjectTree(previewObject);
+      return;
+    }
+  } catch (error) {
+    if (greenroomPreviewState?.previewGeneration === previewGeneration) {
+      await restoreAuthoredSceneFromPreview({ silent: true });
+    } else {
+      console.warn('stale Greenroom preview load ignored', error);
+      return;
+    }
+    throw error;
+  }
+  updateGreenroomPreviewControls();
+  setInfo(`Greenroom view: ${display?.title || fileName}`);
+}
+
+async function greenroomImportMesh(url, fileName, display) {
+  if (greenroomPreviewIsActive()) {
+    await restoreAuthoredSceneFromPreview({ silent: true });
+  }
+  glbFileName = fileName;
+  await showGLB(url, {
+    clear: false,
+    metadata: greenroomMeshMetadata(display, fileName, url),
+  });
+  setInfo(`Greenroom import: ${display?.title || fileName}`);
+}
+
+async function importGreenroomPreviewToScene() {
+  if (!greenroomPreviewState?.previewObject) return false;
+  const preview = greenroomPreviewState.preview;
+  const transformState = previewTransformState(greenroomPreviewState.previewObject);
+  await restoreAuthoredSceneFromPreview({ silent: true });
+  glbFileName = preview.fileName;
+  const imported = await showGLB(preview.url, {
+    clear: false,
+    metadata: preview.metadata,
+  });
+  applyPreviewTransformState(imported, transformState);
+  setInfo(`Greenroom import: ${preview.display?.title || preview.fileName}`);
+  return true;
+}
+
+window.importGreenroomPreviewToScene = importGreenroomPreviewToScene;
+
+function addGreenroomMeshActions(container, url, fileName, display) {
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'btn';
+  viewBtn.textContent = 'View';
+  viewBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await greenroomViewMesh(url, fileName, display);
+    } catch {}
+  };
+  container.appendChild(viewBtn);
+
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn';
+  importBtn.textContent = 'Import';
+  importBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await greenroomImportMesh(url, fileName, display);
+    } catch {}
+  };
+  container.appendChild(importBtn);
+}
+
+function renderGreenroomEntryIdentity(container, entry, options = {}) {
+  const display = entry.display || greenroomEntryDisplay(entry);
+  const main = document.createElement('span');
+  main.className = 'gr-entry-main';
+
+  const title = document.createElement('span');
+  title.className = 'gr-title';
+  title.textContent = display.title || display.raw_name || entry.name || 'Untitled';
+  title.title = display.raw_name || entry.name || '';
+  main.appendChild(title);
+
+  if (display.subtitle || options.forceSubtitle) {
+    const subtitle = document.createElement('span');
+    subtitle.className = 'gr-subtitle';
+    subtitle.textContent = display.subtitle || '';
+    main.appendChild(subtitle);
+  }
+
+  if (display.raw_name && display.raw_name !== display.title) {
+    const raw = document.createElement('span');
+    raw.className = 'gr-raw';
+    raw.textContent = display.meta || `raw ${display.raw_name}`;
+    raw.title = display.raw_name;
+    main.appendChild(raw);
+  }
+
+  container.appendChild(main);
+  return display;
+}
+
 async function grInit() {
   const rootBtns = document.getElementById('greenroom-root-buttons');
 
@@ -2020,19 +3460,9 @@ async function grBrowse() {
     icon.className = 'gr-icon';
     icon.textContent = entry.type === 'dir' ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
 
-    const name = document.createElement('span');
-    name.className = 'gr-name';
-    // Show semantic name from metadata if available, raw name as fallback
     const md = entry.metadata;
-    if (md && md.name) {
-      name.textContent = md.name;
-      name.title = entry.name; // raw dir name on hover
-    } else {
-      name.textContent = entry.name;
-    }
-
     div.appendChild(icon);
-    div.appendChild(name);
+    const display = renderGreenroomEntryIdentity(div, entry);
 
     // Metadata tags (from greenroom metadata sidecar)
     if (md) {
@@ -2087,12 +3517,6 @@ async function grBrowse() {
       status.textContent = entry.receipt.status || '';
       div.appendChild(status);
 
-      if (entry.receipt.job_type) {
-        const meta = document.createElement('span');
-        meta.className = 'gr-meta';
-        meta.textContent = entry.receipt.job_type;
-        div.appendChild(meta);
-      }
     } else if (entry.job_status) {
       const status = document.createElement('span');
       status.className = 'gr-status ' + entry.job_status;
@@ -2111,36 +3535,30 @@ async function grBrowse() {
     if (entry.output_files) {
       const glbs = entry.output_files.filter(f => f.endsWith('.glb') || f.endsWith('.gltf'));
       for (const glb of glbs) {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = glbs.length > 1 ? glb : 'Load';
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
-          showGLB(url);
-          glbFileName = glb;
-          setInfo(`Greenroom: ${entry.name} / ${glb}`);
-        };
-        div.appendChild(btn);
+        const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(glb)}`;
+        const actionDisplay = glbs.length > 1
+          ? { ...display, title: `${display.title || entry.name} / ${greenroomHumanizeName(glb, glb)}` }
+          : display;
+        addGreenroomMeshActions(div, url, glb, actionDisplay);
       }
     }
 
     // Quick-load button for plain GLB/OBJ files in output roots
-    if (entry.type === 'file' && /\.(glb|gltf|obj)$/i.test(entry.name)) {
+    if (entry.type === 'file' && /\.(glb|gltf)$/i.test(entry.name)) {
+      const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+      addGreenroomMeshActions(div, url, entry.name, entry.display);
+    } else if (entry.type === 'file' && /\.obj$/i.test(entry.name)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
-      btn.textContent = 'Load';
+      btn.textContent = entry.display?.load_label || 'Load';
       btn.onclick = (e) => {
         e.stopPropagation();
         const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
         const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
-        if (/\.obj$/i.test(entry.name)) {
-          showOBJ(url, entry.name);
-        } else {
-          showGLB(url);
-        }
+        showOBJ(url, entry.name);
         glbFileName = entry.name;
-        setInfo(`${grCurrentRoot}: ${entry.name}`);
+        setInfo(`${grCurrentRoot}: ${entry.display?.title || entry.name}`);
       };
       div.appendChild(btn);
     }
@@ -2188,11 +3606,8 @@ async function grOpenJobDir(path) {
     const icon = document.createElement('span');
     icon.className = 'gr-icon';
     icon.textContent = '\uD83D\uDCC4';
-    const name = document.createElement('span');
-    name.className = 'gr-name';
-    name.textContent = entry.name;
     div.appendChild(icon);
-    div.appendChild(name);
+    const display = renderGreenroomEntryIdentity(div, entry);
 
     if (entry.size !== null) {
       const meta = document.createElement('span');
@@ -2204,20 +3619,12 @@ async function grOpenJobDir(path) {
     // Add load button for viewable files
     const ext = entry.name.split('.').pop().toLowerCase();
     if (['glb', 'gltf'].includes(ext)) {
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.textContent = 'Load GLB';
-      btn.onclick = async (e) => {
-        e.stopPropagation();
-        const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
-        showGLB(url);
-        setInfo(`GLB: ${entry.name}`);
-      };
-      div.appendChild(btn);
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
+      addGreenroomMeshActions(div, url, entry.name, display);
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
-      btn.textContent = 'View';
+      btn.textContent = display.load_label || 'View';
       btn.onclick = (e) => {
         e.stopPropagation();
         const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
@@ -2244,11 +3651,8 @@ async function grOpenJobDir(path) {
       const icon = document.createElement('span');
       icon.className = 'gr-icon';
       icon.textContent = '\uD83D\uDCC4';
-      const name = document.createElement('span');
-      name.className = 'gr-name';
-      name.textContent = out.name;
       div.appendChild(icon);
-      div.appendChild(name);
+      const display = renderGreenroomEntryIdentity(div, out);
 
       if (out.size !== null) {
         const meta = document.createElement('span');
@@ -2259,21 +3663,12 @@ async function grOpenJobDir(path) {
 
       const ext = out.name.split('.').pop().toLowerCase();
       if (['glb', 'gltf'].includes(ext)) {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = 'Load GLB';
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
-          showGLB(url);
-          glbFileName = out.name;
-          setInfo(`Greenroom: ${jobId} / ${out.name}`);
-        };
-        div.appendChild(btn);
+        const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
+        addGreenroomMeshActions(div, url, out.name, display);
       } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
         const btn = document.createElement('button');
         btn.className = 'btn';
-        btn.textContent = 'View';
+        btn.textContent = display.load_label || 'View';
         btn.onclick = (e) => {
           e.stopPropagation();
           window.open(`/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`, '_blank');
@@ -2474,42 +3869,114 @@ function formatSize(bytes) {
 }
 
 // --- Scene Save/Load ---
-function buildSceneData() {
-  // Extract provenance from greenroom job if source is a job-output URL
-  let provenance = null;
-  if (modelSourceUrl) {
-    const jobMatch = modelSourceUrl.match(/job_id=([^&]+)/);
-    if (jobMatch) {
-      provenance = { greenroom_job_id: jobMatch[1], source_url: modelSourceUrl };
-    } else {
-      provenance = { source_url: modelSourceUrl };
+function provenanceForSource(source) {
+  if (!source) return null;
+  const provenance = {};
+  const jobMatch = source.match(/job_id=([^&]+)/);
+  if (jobMatch) provenance.greenroom_job_id = jobMatch[1];
+  provenance.source_url = source;
+  if (source.startsWith('demos/')) {
+    provenance.source_group = 'demo';
+  } else if (source.startsWith('/api/job-output')) {
+    provenance.source_group = 'greenroom';
+  } else if (source.startsWith('/api/read?root=scratch')) {
+    provenance.source_group = 'scratch';
+  } else {
+    provenance.source_group = 'local';
+  }
+  return provenance;
+}
+
+function getMaterialStateForObject(object) {
+  if (!object) return null;
+  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
+  object.traverse(child => {
+    if (child.isMesh && child.material) {
+      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+      state.side = mat.side;
+      state.transparent = mat.transparent;
+      state.opacity = mat.opacity;
     }
-    // Add model source as sortable key
-    if (modelSourceUrl.startsWith('demos/')) {
-      provenance.source_group = 'demo';
-    } else if (modelSourceUrl.startsWith('/api/job-output')) {
-      provenance.source_group = 'greenroom';
-    } else if (modelSourceUrl.startsWith('/api/read?root=scratch')) {
-      provenance.source_group = 'scratch';
-    } else {
-      provenance.source_group = 'local';
+  });
+  return state;
+}
+
+function serializeSceneObject(entry) {
+  const object = entry.object;
+  const metadata = sceneObjectMetadataFor(object) || entry;
+  return {
+    id: entry.id,
+    source: metadata.source ?? entry.source,
+    type: metadata.type ?? entry.type,
+    fileName: metadata.fileName ?? entry.fileName,
+    label: metadata.label ?? entry.label,
+    createdAt: metadata.createdAt ?? entry.createdAt,
+    transform: sceneObjectTransformState(object),
+    materials: getMaterialStateForObject(object),
+  };
+}
+
+function readNumberControl(id, fallback = 0) {
+  const value = document.getElementById(id)?.value;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function addSceneObjectFromSource(record) {
+  if (!record?.source) throw new Error('Scene object missing source');
+  if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
+    const files = await loadDemoFiles(record.source);
+    if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
+    return handleFiles(files, {
+      clear: false,
+      metadata: record,
+    });
+  }
+  if (isReloadableSceneObjectRecord(record)) {
+    return showGLB(record.source, {
+      clear: false,
+      normalize: false,
+      metadata: record,
+    });
+  }
+  throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
+}
+
+function assertSceneObjectsReloadable(records) {
+  for (const record of records) {
+    if (!isReloadableSceneObjectRecord(record)) {
+      throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
     }
   }
+}
 
-  return {
-    version: 2,
+async function loadSceneObjects(records, activeId) {
+  clearScene();
+  const loaded = [];
+  try {
+    for (const record of records) {
+      const object = await addSceneObjectFromSource(record);
+      if (record.transform) applySceneObjectTransformState(object, record.transform);
+      applyMaterialStateToObject(object, record.materials);
+      loaded.push(record.id);
+    }
+  } catch (e) {
+    clearScene();
+    throw e;
+  }
+  setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
+}
+
+function buildSceneData() {
+  const objects = sceneObjects.map(serializeSceneObject);
+  const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
+  const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
+
+  return buildSceneDocument({
     timestamp: new Date().toISOString(),
-    model: {
-      source: modelSourceUrl,
-      type: modelSourceType,
-      fileName: glbFileName,
-    },
+    objects,
+    activeObjectId: activeSceneObjectId,
     provenance,
-    transform: currentMesh ? {
-      position: currentMesh.position.toArray(),
-      rotation: [currentMesh.rotation.x, currentMesh.rotation.y, currentMesh.rotation.z],
-      scale: currentMesh.scale.toArray(),
-    } : null,
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -2523,13 +3990,16 @@ function buildSceneData() {
       showBackground: showEnvBg,
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
     },
-    materials: getMaterialState(),
+    volumePrimitives: getVolumePrimitiveState(),
     postprocessing: {
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
-        radius: parseFloat(document.getElementById('ao-radius').value),
-        intensity: parseFloat(document.getElementById('ao-intensity').value),
-        farBlend: parseFloat(document.getElementById('ao-far-blend').value),
+        radius: readNumberControl('ao-radius'),
+        intensity: readNumberControl('ao-intensity', 1),
+        scale: readNumberControl('ao-scale', 1.62),
+        thickness: readNumberControl('ao-thickness', 1.81),
+        falloff: readNumberControl('ao-falloff', 0.74),
+        farBlend: readNumberControl('ao-falloff', 0.74),
       },
       dof: {
         enabled: document.getElementById('dof-toggle').checked,
@@ -2540,7 +4010,7 @@ function buildSceneData() {
     },
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
-  };
+  });
 }
 
 async function saveToServer(sceneData, filename) {
@@ -2567,35 +4037,49 @@ async function saveToServer(sceneData, filename) {
   return false;
 }
 
+function sceneIsEmpty() {
+  return !currentMesh && volumePrimitives.length === 0;
+}
+
+function sceneSaveIsBlocked() {
+  if (greenroomPreviewIsActive()) {
+    setInfo('Greenroom preview is temporary; import or go back before saving');
+    return true;
+  }
+  if (!sceneSaveBlockedByFailedRestore) return false;
+  setInfo('Scene save blocked until a scene loads successfully');
+  return true;
+}
+
 // Save: overwrite current scene file, or create new if none
 window.saveScene = async function() {
+  if (sceneSaveIsBlocked()) return false;
+  if (sceneIsEmpty()) {
+    setInfo('Nothing to save');
+    return false;
+  }
   const data = buildSceneData();
-  await saveToServer(data, currentSceneFile);
+  return saveToServer(data, currentSceneFile);
 };
 
 // Save As: always create a new scene file
 window.saveSceneAs = async function() {
+  if (sceneSaveIsBlocked()) return false;
+  if (sceneIsEmpty()) {
+    setInfo('Nothing to save');
+    return false;
+  }
   const data = buildSceneData();
-  await saveToServer(data, null);
+  return saveToServer(data, null);
 };
 
 function getMaterialState() {
-  if (!currentMesh) return null;
-  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
-  currentMesh.traverse(child => {
-    if (child.isMesh && child.material) {
-      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
-      state.side = mat.side;
-      state.transparent = mat.transparent;
-      state.opacity = mat.opacity;
-    }
-  });
-  return state;
+  return getMaterialStateForObject(currentMesh);
 }
 
-function applyMaterialState(state) {
-  if (!currentMesh || !state) return;
-  currentMesh.traverse(child => {
+function applyMaterialStateToObject(object, state) {
+  if (!object || !state) return;
+  object.traverse(child => {
     if (!child.isMesh) return;
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     for (const mat of mats) {
@@ -2611,7 +4095,19 @@ function applyMaterialState(state) {
   });
 }
 
+function applyMaterialState(state) {
+  applyMaterialStateToObject(currentMesh, state);
+}
+
+function claimLoadedSceneFile(file) {
+  if (file.name && file.name.endsWith('.kaminos.json')) {
+    currentSceneFile = file.name;
+  }
+}
+
 async function loadSceneFile(file) {
+  const previousSceneFile = currentSceneFile;
+  const previousVolumePrimitiveState = getVolumePrimitiveState();
   const text = await file.text();
   let data;
   try {
@@ -2620,12 +4116,22 @@ async function loadSceneFile(file) {
     setInfo('Invalid scene file');
     return;
   }
-  // Track the scene file for overwrite
-  if (file.name && file.name.endsWith('.kaminos.json')) {
-    currentSceneFile = file.name;
-  }
-  if (!data.version || !data.model?.source) {
+  let restorePlan;
+  try {
+    restorePlan = planSceneRestore(data);
+  } catch {
     setInfo('Invalid scene format');
+    return;
+  }
+  const objectRecords = restorePlan.objects;
+  const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
+
+  try {
+    assertSceneObjectsReloadable(objectRecords);
+  } catch (e) {
+    sceneSaveBlockedByFailedRestore = true;
+    currentSceneFile = null;
+    setInfo('Scene load failed: ' + e.message);
     return;
   }
 
@@ -2659,46 +4165,26 @@ async function loadSceneFile(file) {
     updateBackground();
   }
 
-  // Load model
-  const src = data.model.source;
-  modelSourceType = data.model.type;
-  glbFileName = data.model.fileName || 'model.glb';
-
-  if (src.startsWith('/api/') || src.startsWith('http')) {
-    // URL-based source (greenroom job output, demo, etc.)
-    showGLB(src);
-  } else if (src.startsWith('demos/')) {
-    // Demo asset
-    showGLB(src);
+  if (objectRecords.length > 0) {
+    try {
+      await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
+    } catch (e) {
+      setVolumePrimitivesState(previousVolumePrimitiveState);
+      sceneSaveBlockedByFailedRestore = true;
+      currentSceneFile = null;
+      setInfo('Scene load failed: ' + e.message);
+      return;
+    }
   } else {
-    setInfo(`Scene loaded but model "${src}" must be re-dropped (local file references cannot be reloaded automatically)`);
-    return;
+    clearScene();
   }
 
-  // Wait for model to load, then apply transforms
-  const waitForMesh = () => new Promise((resolve, reject) => {
-    let elapsed = 0;
-    const check = () => {
-      if (currentMesh) return resolve();
-      elapsed += 100;
-      if (elapsed > 30000) return reject(new Error('Model load timed out'));
-      setTimeout(check, 100);
-    };
-    check();
-  });
-
-  try {
-    await waitForMesh();
-  } catch (e) {
-    setInfo('Scene load failed: ' + e.message);
-    return;
-  }
-
-  // Apply transforms
-  if (data.transform) {
-    currentMesh.position.fromArray(data.transform.position);
-    currentMesh.rotation.set(...data.transform.rotation);
-    currentMesh.scale.fromArray(data.transform.scale);
+  setVolumePrimitivesState(restorePlan.volumePrimitives);
+  if (hasVolumePrimitiveScene) {
+    setActiveTab('volume');
+    await volumePrototype?.setActive?.(true);
+  } else {
+    await volumePrototype?.setActive?.(false);
   }
 
   // Apply camera
@@ -2711,7 +4197,7 @@ async function loadSceneFile(file) {
   }
 
   // Apply material state
-  applyMaterialState(data.materials);
+  if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
   if (data.postprocessing) {
@@ -2731,9 +4217,18 @@ async function loadSceneFile(file) {
         document.getElementById('ao-intensity').value = ao.scale;
         document.getElementById('ao-intensity-val').textContent = ao.scale.toFixed(1);
       }
-      if (ao.farBlend !== undefined) {
-        document.getElementById('ao-far-blend').value = ao.farBlend;
-        document.getElementById('ao-far-blend-val').textContent = ao.farBlend.toFixed(2);
+      if (ao.scale !== undefined && document.getElementById('ao-scale')) {
+        document.getElementById('ao-scale').value = ao.scale;
+        document.getElementById('ao-scale-val').textContent = ao.scale.toFixed(2);
+      }
+      if (ao.thickness !== undefined && document.getElementById('ao-thickness')) {
+        document.getElementById('ao-thickness').value = ao.thickness;
+        document.getElementById('ao-thickness-val').textContent = ao.thickness.toFixed(2);
+      }
+      const aoFalloff = ao.falloff ?? ao.farBlend;
+      if (aoFalloff !== undefined && document.getElementById('ao-falloff')) {
+        document.getElementById('ao-falloff').value = aoFalloff;
+        document.getElementById('ao-falloff-val').textContent = aoFalloff.toFixed(2);
       }
     }
     const dof = data.postprocessing.dof;
@@ -2771,7 +4266,13 @@ async function loadSceneFile(file) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
-  setInfo(`Scene loaded: ${data.model.fileName}`);
+  claimLoadedSceneFile(file);
+  sceneSaveBlockedByFailedRestore = false;
+  if (objectRecords.length > 0) {
+    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
+  } else {
+    setInfo('Volume scene loaded');
+  }
 }
 
 // File input handler for Load Scene
@@ -2788,7 +4289,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
-    if (!currentMesh) return;
+    if (sceneIsEmpty()) return;
     if (e.shiftKey) saveSceneAs();
     else saveScene();
   }
@@ -2808,6 +4309,7 @@ initScene().then(() => {
   loadEnvironment('studio').then(() => {
     loadDemo(DEMO_ASSETS[0]);
   });
+  initKaminosVolumeRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
