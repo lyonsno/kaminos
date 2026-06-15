@@ -1002,16 +1002,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function primitiveStateSignature(primitives = []) {
+    const stableNumber = value => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? Math.round(numeric * 100000) / 100000 : value;
+    };
+    const stableArray = values => Array.isArray(values) ? values.map(stableNumber) : values;
+    const stableObject = object => Object.fromEntries(
+      Object.entries(object || {}).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? stableArray(value) : stableNumber(value),
+      ]),
+    );
     return JSON.stringify(primitives.map(primitive => ({
       id: primitive.id,
       kind: primitive.kind,
+      sourceType: primitive.sourceType,
       shape: primitive.shape,
       couplingSource: primitive.couplingSource,
       volumeBodyMode: primitive.volumeBodyMode,
-      transform: primitive.transform,
-      simulation: primitive.simulation,
-      render: primitive.render,
-      channels: primitive.channels,
+      transform: {
+        position: stableArray(primitive.transform?.position),
+        rotation: stableArray(primitive.transform?.rotation),
+        scale: stableArray(primitive.transform?.scale),
+      },
+      simulation: stableObject(primitive.simulation),
+      sourceMix: stableObject(primitive.sourceMix),
+      channels: stableObject(primitive.channels),
       targetHookId: primitive.targetHookId,
     })));
   }
