@@ -227,6 +227,8 @@ assert.match(core, /primitive_source_channels:\s*array<vec4<f32>,\s*MAX_VOLUME_P
 assert.match(core, /sourceDensityGain/, 'fluid shader consumes per-primitive density source gain');
 assert.match(core, /sourceFireGain/, 'fluid shader consumes per-primitive fire source gain');
 assert.match(core, /sourceSmokeGain/, 'fluid shader consumes per-primitive smoke source gain');
+assert.match(core, /sourceTypeHardFireGain/, 'primitive source records hard-zero fire gain when the source type cannot emit fire');
+assert.match(core, /sourceTypeHardSmokeGain/, 'primitive source records hard-zero smoke gain when the source type cannot emit smoke');
 assert.match(core, /initialSmokeSeed/, 'initial fluid rebuild preserves smoke-only source channels instead of seeding every source as fire+smoke');
 assert.match(core, /initialFireSeed/, 'initial fluid rebuild preserves fire-only source channels instead of seeding every source as fire+smoke');
 assert.match(core, /shared-volume-simulation-cost-v0/, 'volume debug state exposes the shared-simulation cost model identity');
@@ -291,6 +293,7 @@ assert.match(witness, /volume_authoring_probe/, 'witness can exercise authored v
 assert.match(witness, /volume_save_load_probe/, 'witness can exercise authored moved primitive save/load round-trip');
 assert.match(witness, /volume_multi_primitive_probe/, 'witness can exercise two authored live volume primitive sources');
 assert.match(witness, /volume_third_smoke_transform_probe/, 'witness can prove a third authored primitive with duplicate Smoke type remains transformable');
+assert.match(witness, /volume_smoke_move_channel_probe/, 'witness can sample immediately after moving a Smoke primitive and reject fire-channel flash');
 assert.match(witness, /volume_source_type_probe/, 'witness can exercise Fire, Smoke, and Fire+Smoke source types');
 assert.match(witness, /volume_context_probe/, 'witness can exercise selected primitive context actions');
 assert.match(witness, /volume_scene_source_probe/, 'witness can prove scene-scale primitive placement still produces a visible native source');

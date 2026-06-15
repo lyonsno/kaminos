@@ -38,11 +38,13 @@ const expectedAuthoringProbe = routeParams.get('volume_authoring_probe') === '1'
 const expectedSaveLoadProbe = routeParams.get('volume_save_load_probe') === '1';
 const expectedMultiPrimitiveProbe = routeParams.get('volume_multi_primitive_probe') === '1';
 const expectedThirdSmokeTransformProbe = routeParams.get('volume_third_smoke_transform_probe') === '1';
+const expectedSmokeMoveChannelProbe = routeParams.get('volume_smoke_move_channel_probe') === '1';
 const requestedSourceTypeProbe = routeParams.get('volume_source_type_probe');
 const expectedSourceTypeProbe = requestedSourceTypeProbe === '1';
 const expectedSingleSourceTypeProbe = ['fire', 'smoke', 'fire_smoke'].includes(requestedSourceTypeProbe);
 const expectedSmokeOnlySourceProbe = requestedSourceTypeProbe === 'smoke';
 const expectedFireOnlySourceProbe = requestedSourceTypeProbe === 'fire';
+const expectedSmokeOnlyChannelProbe = expectedSmokeOnlySourceProbe || expectedSmokeMoveChannelProbe;
 const expectedContextProbe = routeParams.get('volume_context_probe') === '1';
 const expectedSceneBoundsProbe = routeParams.get('volume_scene_bounds_probe') === '1';
 const expectedSceneSourceProbe = routeParams.get('volume_scene_source_probe') === '1';
@@ -51,17 +53,22 @@ const expectedSceneBoundsOnlyProbe = expectedSceneBoundsProbe && !expectedSceneS
 const expectedAuthoredPrimitiveId = 'authored-fire-smoke-witness';
 const expectedSecondPrimitiveId = 'authored-fire-smoke-witness-b';
 const expectedSmokePrimitiveId = 'authored-smoke-source-witness';
+const expectedSmokeMovePrimitiveId = 'authored-smoke-move-channel-witness';
 const expectedThirdSmokePrimitiveId = 'authored-smoke-source-witness-b';
 const expectedFireSmokeSourcePrimitiveId = 'authored-fire-smoke-source-witness';
 const expectedAuthoredMovedPosition = [0.32, -0.52, 0.18];
 const expectedAuthoredMovedNativeSourcePosition = [0.05504, -0.1048, 0.03096];
+const expectedSmokeMovePrimitivePosition = [0.42, -0.50, -0.22];
+const expectedSmokeMovePrimitiveNativeSourcePosition = [0.07224, -0.1, -0.03784];
 const expectedAuthoredSceneBoundsPosition = [0.62, -0.9, 0.0];
 const expectedAuthoredSceneBoundsNativeSourcePosition = [0.10664, -0.196, 0.0];
 const expectedAuthoredSourceWallPosition = [0.0, 0.4, 0.9];
-const expectedAuthoredEffectivePosition = expectedSceneSourceProbe ? expectedAuthoredSourceWallPosition
+const expectedAuthoredEffectivePosition = expectedSmokeMoveChannelProbe ? expectedSmokeMovePrimitivePosition
+  : expectedSceneSourceProbe ? expectedAuthoredSourceWallPosition
   : expectedSceneBoundsProbe ? expectedAuthoredSceneBoundsPosition
   : expectedAuthoredMovedPosition;
-const expectedAuthoredNativeSourcePosition = expectedSceneSourceProbe ? [0.0, 0.116, 0.1548]
+const expectedAuthoredNativeSourcePosition = expectedSmokeMoveChannelProbe ? expectedSmokeMovePrimitiveNativeSourcePosition
+  : expectedSceneSourceProbe ? [0.0, 0.116, 0.1548]
   : expectedSceneBoundsProbe ? expectedAuthoredSceneBoundsNativeSourcePosition
   : expectedAuthoredMovedNativeSourcePosition;
 const expectedSourceMappingIdentity = 'volume-primitive-scene-bounds-source-domain-v1';
@@ -73,6 +80,7 @@ const expectedRouteSourceProbeId = expectedSingleSourceTypeProbe ? `route-${requ
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
   : expectedSingleSourceTypeProbe ? expectedRouteSourceProbeId
+  : expectedSmokeMoveChannelProbe ? expectedSmokeMovePrimitiveId
   : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
   : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 
@@ -314,7 +322,8 @@ async function main() {
     let volumeAuthoring = null;
     let saveLoadRoundTrip = null;
     let contextActionProbe = null;
-    if (expectedAuthoringProbe || expectedSingleSourceTypeProbe) {
+    let smokeMoveChannelSamples = null;
+    if (expectedAuthoringProbe || expectedSingleSourceTypeProbe || expectedSmokeMoveChannelProbe) {
       phase = 'authoring-probe';
       let authoringReady = false;
       for (let i = 0; i < 40; i++) {
@@ -332,6 +341,7 @@ async function main() {
           const authoring = window.__kaminosVolumeAuthoring;
           const primaryId = '${expectedPrimitiveId || expectedAuthoredPrimitiveId}';
           let primitive = null;
+          let smokeMoveChannelSamples = null;
           if (${expectedSingleSourceTypeProbe ? 'true' : 'false'}) {
             authoring.select(primaryId);
             primitive = authoring.updateSelected({
@@ -348,18 +358,48 @@ async function main() {
           } else {
             primitive = authoring.placeAt([0.24, -0.58, 0.12], {
               id: primaryId,
-              sourceType: '${expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
+              sourceType: '${expectedSmokeMoveChannelProbe ? 'smoke' : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
               radius: 0.18,
               flowRate: 0.35,
               density: 1,
-              fire: 1,
-              smoke: ${expectedSourceTypeProbe ? '0' : '1'},
-              radiance: 2.1,
+              fire: ${expectedSmokeMoveChannelProbe ? '0' : '1'},
+              smoke: ${expectedSmokeMoveChannelProbe ? '1' : expectedSourceTypeProbe ? '0' : '1'},
+              radiance: ${expectedSmokeMoveChannelProbe ? '0.35' : '2.1'},
             });
             authoring.select(primaryId);
-            authoring.updateSelected({ sourceType: '${expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}', radius: 0.18, flowRate: 0.35, density: 1, fire: 1, smoke: ${expectedSourceTypeProbe ? '0' : '1'}, radiance: 2.1, handleOpacity: 0.12, handleVisible: true });
+            authoring.updateSelected({
+              sourceType: '${expectedSmokeMoveChannelProbe ? 'smoke' : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
+              radius: 0.18,
+              flowRate: 0.35,
+              density: 1,
+              fire: ${expectedSmokeMoveChannelProbe ? '0' : '1'},
+              smoke: ${expectedSmokeMoveChannelProbe ? '1' : expectedSourceTypeProbe ? '0' : '1'},
+              radiance: ${expectedSmokeMoveChannelProbe ? '0.35' : '2.1'},
+              handleOpacity: 0.12,
+              handleVisible: true,
+            });
           }
           const moved = authoring.moveSelectedTo([${expectedAuthoredEffectivePosition.join(', ')}]);
+          if (${expectedSmokeMoveChannelProbe ? 'true' : 'false'}) {
+            smokeMoveChannelSamples = [];
+            const movePositions = [
+              [0.02, -0.52, 0.02],
+              [-0.36, -0.49, 0.18],
+              [${expectedSmokeMovePrimitivePosition.join(', ')}],
+            ];
+            for (const movePosition of movePositions) {
+              const movedStep = authoring.moveSelectedTo(movePosition);
+              await new Promise(resolveFrame => requestAnimationFrame(() => resolveFrame()));
+              const sample = await window.__kaminosVolumePrototype.sampleFrame();
+              const { preview, ...sampleSummary } = sample || {};
+              smokeMoveChannelSamples.push({
+                movedPosition: movedStep?.transform?.position || null,
+                volumeState: window.__kaminosVolumePrototype?.debugState?.() || null,
+                authoringState: authoring.debugState(),
+                sample: sampleSummary,
+              });
+            }
+          }
           const second = ${expectedMultiPrimitiveProbe
             ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
                 id: '${expectedSecondPrimitiveId}',
@@ -436,7 +476,7 @@ async function main() {
           const roundTrip = ${expectedSaveLoadProbe
             ? "await window.__kaminosScenePersistence.saveLoadRoundTrip(null)"
             : "null"};
-          return { ok: true, primitive: moved || primitive, state: authoring.debugState(), roundTrip, contextResult };
+          return { ok: true, primitive: moved || primitive, state: authoring.debugState(), roundTrip, contextResult, smokeMoveChannelSamples };
         })()`,
         returnByValue: true,
         awaitPromise: true,
@@ -447,6 +487,7 @@ async function main() {
       saveLoadRoundTrip = authoringProbe.roundTrip || null;
       const contextResult = authoringProbe.contextResult || null;
       contextActionProbe = contextResult;
+      smokeMoveChannelSamples = authoringProbe.smokeMoveChannelSamples || null;
       if (expectedContextProbe) {
         assert.ok(contextResult?.duplicateId, 'context duplicate action did not create a duplicate primitive');
         assert.equal(contextResult?.hiddenVisible, false, `context hide action did not hide the duplicate handle locally: ${JSON.stringify(contextResult)}`);
@@ -474,6 +515,24 @@ async function main() {
         assert.equal(volumeAuthoring?.volumePrimitiveCount, 3, 'third smoke transform probe did not create three authored primitives');
         assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedSmokePrimitiveId), 'third smoke transform probe did not create the first smoke primitive marker');
         assert.ok(volumeAuthoring?.volumePrimitiveIds?.includes(expectedThirdSmokePrimitiveId), 'third smoke transform probe did not create the second smoke primitive marker');
+      }
+      if (expectedSmokeMoveChannelProbe) {
+        assert.equal(volumeAuthoring?.volumePrimitiveCount, 1, 'smoke move channel probe should create exactly one authored primitive');
+        assert.ok(Array.isArray(smokeMoveChannelSamples), 'smoke move channel probe did not return immediate move samples');
+        assert.equal(smokeMoveChannelSamples.length, 3, 'smoke move channel probe did not sample every movement step');
+        for (const [index, moveSample] of smokeMoveChannelSamples.entries()) {
+          const movedSource = moveSample?.volumeState?.primitiveSources?.find(source => source.id === expectedSmokeMovePrimitiveId);
+          assert.equal(movedSource?.sourceType, 'smoke', `smoke move sample ${index} lost source type`);
+          assert.equal(movedSource?.fireSourceMix, 0, `smoke move sample ${index} carried fire source mix`);
+          assert.equal(movedSource?.fireGain, 0, `smoke move sample ${index} carried primitive-local fire gain`);
+          assert.ok((movedSource?.smokeGain ?? 0) > 0.9, `smoke move sample ${index} lost smoke gain`);
+          assert.ok((moveSample?.sample?.simReadback?.fireLayerMean ?? 1) <= 0.00018, `smoke move sample ${index} leaked fire layer during movement`);
+          assert.ok((moveSample?.sample?.simReadback?.radianceMean ?? 1) <= 0.0008, `smoke move sample ${index} leaked radiance during movement`);
+          assert.ok((moveSample?.sample?.simReadback?.fireLickMean ?? 1) <= 0.00012, `smoke move sample ${index} leaked fire licks during movement`);
+          assert.equal(moveSample?.sample?.fireLikePixels, 0, `smoke move sample ${index} showed fire-like pixels immediately after movement`);
+          assert.equal(moveSample?.sample?.emissiveLikePixels, 0, `smoke move sample ${index} showed emissive pixels immediately after movement`);
+          assert.equal(moveSample?.sample?.warmEmissivePixels, 0, `smoke move sample ${index} showed warm emissive pixels immediately after movement`);
+        }
       }
       if (expectedSourceTypeProbe) {
         assert.equal(volumeAuthoring?.sourceTypeTaxonomy?.identity, 'volume-source-type-taxonomy-v0', 'source type probe did not expose source taxonomy identity');
@@ -689,6 +748,19 @@ async function main() {
           assert.equal(state.primitiveSource?.smokeGain, 0, 'Fire-only source carried primitive-local smoke gain');
         }
       }
+      if (expectedSmokeMoveChannelProbe) {
+        assert.equal(state.volumePrimitiveCount, 1, 'smoke move channel probe did not retain exactly one authored primitive');
+        assert.equal(state.primitiveSourceCount, 1, 'smoke move channel probe did not publish exactly one primitive source');
+        assert.equal(primitive?.sourceType, 'smoke', 'smoke move primitive did not preserve Smoke source type');
+        assert.equal(state.primitiveSource?.sourceType, 'smoke', 'smoke move source record did not publish Smoke source type');
+        assertVectorClose(primitive?.transform?.position, expectedSmokeMovePrimitivePosition, 'smoke move primitive final transform position');
+        assertVectorClose(state.primitiveSource?.position, expectedSmokeMovePrimitivePosition, 'smoke move effective source final position');
+        assertVectorClose(state.primitiveSource?.nativeSourcePosition, expectedSmokeMovePrimitiveNativeSourcePosition, 'smoke move native source final position');
+        assert.equal(state.primitiveSource?.fireSourceMix, 0, 'smoke move source carried fire source mix');
+        assert.equal(state.primitiveSource?.fireGain, 0, 'smoke move source carried primitive-local fire gain');
+        assert.ok((state.primitiveSource?.smokeSourceMix ?? 0) > 0.9, 'smoke move source did not carry smoke source mix');
+        assert.ok((state.primitiveSource?.smokeGain ?? 0) > 0.9, 'smoke move source did not carry primitive-local smoke gain');
+      }
       if (expectedSaveLoadProbe) {
         assert.equal(saveLoadRoundTrip?.volumeAuthoring?.selectedVolumePrimitiveId, expectedAuthoredPrimitiveId, 'save/load round-trip selection evidence missing from report');
         assert.equal(saveLoadRoundTrip?.volumeState?.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'save/load round-trip did not restore primitive-centered body mode');
@@ -696,13 +768,14 @@ async function main() {
       assert.equal(primitive?.volumeBodyMode, 'primitive-centered-sphere-volume-v0', 'authored primitive did not request a primitive-centered volume body');
       assert.equal(state.primitiveSource?.bodyMode, 'primitive-centered-sphere-volume-v0', 'fluid renderer did not use the primitive-centered body mode');
       assert.equal(state.primitiveSource?.primitiveCenteredBody, true, 'fluid renderer did not enable primitive-centered source shaping');
-      const expectedAuthoringTool = expectedSingleSourceTypeProbe ? `volume-add-${requestedSourceTypeProbe.replace('_', '-')}`
+      const expectedAuthoringTool = expectedSmokeMoveChannelProbe ? 'volume-add-smoke'
+        : expectedSingleSourceTypeProbe ? `volume-add-${requestedSourceTypeProbe.replace('_', '-')}`
         : expectedSourceTypeProbe ? 'volume-add-fire' : 'volume-add-fire-smoke';
       assert.equal(primitive?.coupling?.authoringTool, expectedAuthoringTool, 'authored primitive did not preserve authoring tool identity');
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
       assert.ok(Math.abs((primitive?.channels?.density ?? 0) - 1) < 0.001, 'authored primitive density gain setting was not applied');
-      const expectedPrimitiveRadiance = expectedSmokeOnlySourceProbe ? 0.35 : 2.1;
+      const expectedPrimitiveRadiance = expectedSmokeOnlyChannelProbe ? 0.35 : 2.1;
       assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - expectedPrimitiveRadiance) < 0.001, 'authored primitive radiance setting was not applied');
       assert.equal(authoredPrimitive?.authoring?.settingsIdentity, 'volume-primitive-local-settings-v0', 'authored primitive did not preserve local settings identity');
       assert.ok(Math.abs((authoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.12) < 0.001, 'authored primitive handle opacity did not persist locally');
@@ -764,7 +837,7 @@ async function main() {
       if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= materialDetailReadbackThreshold) {
         throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (expectedSmokeOnlySourceProbe) {
+      if (expectedSmokeOnlyChannelProbe) {
         if ((sample.simReadback.fireLayerMean ?? 1) > 0.00018 || (sample.simReadback.radianceMean ?? 1) > 0.0008) {
           throw new Error(`Smoke-only source leaked fire/radiance transport: ${JSON.stringify(sample.simReadback)}`);
         }
@@ -782,10 +855,10 @@ async function main() {
       if (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= microdetailReadbackThreshold) {
         throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= (expectedSmokeOnlySourceProbe ? 0.00008 : interfaceShredReadbackThreshold)) {
+      if (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= (expectedSmokeOnlyChannelProbe ? 0.00008 : interfaceShredReadbackThreshold)) {
         throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (expectedSmokeOnlySourceProbe) {
+      if (expectedSmokeOnlyChannelProbe) {
         if ((sample.simReadback.fireLickMean ?? 1) > 0.00012) {
           throw new Error(`Smoke-only source leaked fire-lick transport: ${JSON.stringify(sample.simReadback)}`);
         }
@@ -809,7 +882,7 @@ async function main() {
       warmEmissivePixels: sample.warmEmissivePixels,
       smokeLikePixels: sample.smokeLikePixels,
     };
-    if (expectedSmokeOnlySourceProbe) {
+    if (expectedSmokeOnlyChannelProbe) {
       if (metrics.litPixels < 1500 || metrics.smokeLikePixels < 800 || metrics.fireLikePixels > 160 || metrics.emissiveLikePixels > 120) {
         throw new Error(`smoke-only source visual leaked fire or lost smoke body: ${JSON.stringify(metrics)}`);
       }
@@ -819,7 +892,7 @@ async function main() {
     const mainRendererScreenshot = out.replace(/\.png$/i, '.main-renderer.png');
     const mainRendererMetrics = await captureMainRendererScreenshot(ws, mainRendererScreenshot);
     const primitiveCenteredBodyVisual = state.primitiveSource?.bodyMode === 'primitive-centered-sphere-volume-v0';
-    const missingMainRendererVolume = expectedSmokeOnlySourceProbe
+    const missingMainRendererVolume = expectedSmokeOnlyChannelProbe
       ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 800 || mainRendererMetrics.fireLikePixels > 500
       : primitiveCenteredBodyVisual
       ? mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.warmEmissivePixels < 500 || mainRendererMetrics.meanLuma < 8
@@ -853,6 +926,7 @@ async function main() {
       parameterOwnership: volumeAuthoring?.parameterOwnership || null,
       sourceTypeTaxonomy: volumeAuthoring?.sourceTypeTaxonomy || null,
       contextActionProbe,
+      smokeMoveChannelSamples,
       saveLoadRoundTrip,
       controls: state.controls,
       screenshot: out,

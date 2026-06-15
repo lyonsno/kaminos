@@ -984,6 +984,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function primitiveSourceChannelGains(primitive, sourceMix) {
+    const channels = primitive?.channels || {};
+    const densityGain = Number.isFinite(Number(channels.density)) ? Number(channels.density) : 1;
+    const rawFireGain = Number.isFinite(Number(channels.temperature ?? channels.fuel)) ? Number(channels.temperature ?? channels.fuel) : 1;
+    const rawSmokeGain = Number.isFinite(Number(channels.smoke)) ? Number(channels.smoke) : 1;
+    const sourceTypeHardFireGain = (sourceMix?.fire ?? 0) > 0 ? Math.max(0, rawFireGain) : 0;
+    const sourceTypeHardSmokeGain = (sourceMix?.smoke ?? 0) > 0 ? Math.max(0, rawSmokeGain) : 0;
+    return {
+      densityGain: Math.max(0, densityGain),
+      fireGain: sourceTypeHardFireGain,
+      smokeGain: sourceTypeHardSmokeGain,
+    };
+  }
+
   function assertNoPlaceholderTopologyClaim(primitive) {
     const placeholderContract = primitive?.placeholderContract || primitive?.coupling?.placeholderContract || primitive?.lamellarHook?.placeholderContract;
     const claimsProduction =
@@ -1059,10 +1073,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const nativeSourcePosition = normalizePrimitiveNativeSourcePosition(scenePosition);
     const sourceType = normalizePrimitiveSourceType(primitive.sourceType || primitive.kind);
     const sourceMix = primitiveSourceMix(primitive, sourceType);
-    const channels = primitive.channels || {};
-    const densityGain = Number.isFinite(Number(channels.density)) ? Number(channels.density) : 1;
-    const fireGain = Number.isFinite(Number(channels.temperature ?? channels.fuel)) ? Number(channels.temperature ?? channels.fuel) : 1;
-    const smokeGain = Number.isFinite(Number(channels.smoke)) ? Number(channels.smoke) : 1;
+    const { densityGain, fireGain, smokeGain } = primitiveSourceChannelGains(primitive, sourceMix);
     return {
       id: primitive.id,
       sourceType,
@@ -1073,9 +1084,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceMappingIdentity: VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY,
       radius: Math.max(0.32, primitive.simulation.sourceRadius * 2.0),
       flowRate: Math.max(0, primitive.simulation.flowRate),
-      densityGain: Math.max(0, densityGain),
-      fireGain: Math.max(0, fireGain),
-      smokeGain: Math.max(0, smokeGain),
+      densityGain,
+      fireGain,
+      smokeGain,
       fireSourceMix: sourceMix.fire,
       smokeSourceMix: sourceMix.smoke,
       primitiveCenteredBody,
