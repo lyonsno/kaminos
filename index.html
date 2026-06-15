@@ -149,6 +149,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
     <div class="tab" data-tab="volume">Volume</div>
+    <div class="tab" data-tab="clay">Clay</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -504,6 +505,31 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Clay Tab -->
+  <div class="tab-content" id="tab-clay">
+    <h2>Clay Sim</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_clay_sim=1</span></div>
+      <div class="field"><span class="field-key">Backend</span><span class="field-val" id="clay-backend">inactive</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="clay-identity">kaminos-clay-prototype-v0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="clay-toggle">Enable</button>
+        <button class="btn" id="clay-fixture">Fixture</button>
+        <button class="btn" id="clay-fit-camera">Frame</button>
+      </div>
+    </div>
+    <div class="panel volume-readout">
+      <div class="field"><span class="field-key">Solver</span><span class="field-val" id="clay-solver">webgpu-clay-surface-lattice-scaffold-v0</span></div>
+      <div class="field"><span class="field-key">Evidence</span><span class="field-val" id="clay-evidence">none</span></div>
+      <div class="field"><span class="field-key">Colliders</span><span class="field-val" id="clay-colliders">0</span></div>
+      <div class="field"><span class="field-key">Contacts</span><span class="field-val" id="clay-contacts">0</span></div>
+      <div class="field"><span class="field-key">Deformed</span><span class="field-val" id="clay-deformed">0</span></div>
+      <div class="field"><span class="field-key">GPU steps</span><span class="field-val" id="clay-steps">0</span></div>
+      <div class="field"><span class="field-key">CPU fallback</span><span class="field-val" id="clay-cpu-fallback">false</span></div>
+      <div class="field"><span class="field-key">Primitive</span><span class="field-val" id="clay-primitive">kaolin-kpm-001-forward-distance-feature-codes</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -618,6 +644,7 @@ let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
+import { createKaminosClayPrototype } from './clay-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -653,6 +680,7 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
+let clayPrototype = null;
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1553,6 +1581,92 @@ function frameVolumeCamera() {
   controls.target.set(...frame.target);
   controls.update();
   window._kaminosDirty?.();
+}
+
+function clayFixtureHandColliders() {
+  return {
+    mode: 'clay_fixture_hand',
+    evidenceKind: 'synthetic',
+    coordinateSpace: 'clay-local',
+    colliders: [
+      { id: 'thumb', center: [-0.34, 0, -0.08], radius: 0.17, strength: 0.72 },
+      { id: 'index', center: [-0.15, 0, 0.08], radius: 0.19, strength: 1.05 },
+      { id: 'middle', center: [0.03, 0, 0.14], radius: 0.20, strength: 1.16 },
+      { id: 'ring', center: [0.21, 0, 0.06], radius: 0.18, strength: 0.92 },
+      { id: 'pinky', center: [0.36, 0, -0.08], radius: 0.15, strength: 0.70 },
+      { id: 'palm', center: [0.02, 0, -0.22], radius: 0.24, strength: 0.58 },
+    ],
+  };
+}
+
+function refreshClayReadout() {
+  if (!clayPrototype) return;
+  const s = clayPrototype.debugState();
+  document.getElementById('clay-backend').textContent = s.effectiveBackend || 'inactive';
+  document.getElementById('clay-solver').textContent = s.solverIdentity || 'unknown';
+  document.getElementById('clay-evidence').textContent = s.substrateEvidenceKind || 'none';
+  document.getElementById('clay-colliders').textContent = String(s.clayColliderCount ?? 0);
+  document.getElementById('clay-contacts').textContent = String(s.clayContactCount ?? 0);
+  document.getElementById('clay-deformed').textContent = String(s.clayDeformationCount ?? 0);
+  document.getElementById('clay-steps').textContent = String(s.gpuStepCount ?? 0);
+  document.getElementById('clay-cpu-fallback').textContent = String(!!s.runtimeCpuFallback);
+  document.getElementById('clay-primitive').textContent = s.packagePrimitiveSourceContract || 'none';
+  document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
+  document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
+}
+
+function frameClayCamera() {
+  camera.position.set(0, 1.08, 1.72);
+  controls.target.set(0, 0.0, 0);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+async function initKaminosClayRoute() {
+  const params = new URLSearchParams(window.location.search);
+  clayPrototype = createKaminosClayPrototype({
+    THREE,
+    scene,
+    viewport: document.getElementById('viewport'),
+    camera,
+    controls,
+    onStatus: refreshClayReadout,
+  });
+  window.__kaminosClayPrototype = clayPrototype;
+
+  const seedFixture = async () => {
+    clayPrototype.setColliders(clayFixtureHandColliders());
+    await clayPrototype.step();
+    refreshClayReadout();
+  };
+
+  document.getElementById('clay-toggle').addEventListener('click', async () => {
+    if (clayPrototype.debugState().active) {
+      await clayPrototype.setActive(false);
+      setInfo('Clay sim disabled');
+    } else {
+      await clayPrototype.setActive(true);
+      await seedFixture();
+      setInfo('Clay sim - WebGPU surface lattice scaffold');
+    }
+    refreshClayReadout();
+  });
+  document.getElementById('clay-fixture').addEventListener('click', seedFixture);
+  document.getElementById('clay-fit-camera').addEventListener('click', frameClayCamera);
+
+  if (params.get('kaminos_clay_sim') === '1') {
+    setActiveTab('clay');
+    if (currentMesh) currentMesh.visible = false;
+    if (groundPlane) groundPlane.visible = false;
+    transformControls.detach();
+    frameClayCamera();
+    await clayPrototype.setActive(true);
+    if ((params.get('clay_colliders') || 'clay_fixture_hand') === 'clay_fixture_hand') {
+      await seedFixture();
+    }
+    setInfo('Clay sim - WebGPU surface lattice scaffold');
+  }
+  refreshClayReadout();
 }
 
 async function initKaminosVolumeRoute() {
@@ -3533,11 +3647,15 @@ grInit();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
-  // Load HDR environment first, then auto-load demo
+  const startupParams = new URLSearchParams(window.location.search);
+  // Load HDR environment first, then auto-load demo unless a route owns the viewport.
   loadEnvironment('studio').then(() => {
-    loadDemo(DEMO_ASSETS[0]);
+    if (startupParams.get('kaminos_clay_sim') !== '1') {
+      loadDemo(DEMO_ASSETS[0]);
+    }
   });
   initKaminosVolumeRoute();
+  initKaminosClayRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
