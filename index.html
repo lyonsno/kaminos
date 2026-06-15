@@ -128,11 +128,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 /* Scene objects */
 .scene-object-list { display: flex; flex-direction: column; gap: 6px; }
+.scene-object-tools { display: flex; gap: 6px; margin-bottom: 8px; }
 .scene-object-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #202020; border: 1px solid #303030; border-radius: 6px; color: #bbb; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
 .scene-object-row:hover { background: #262626; border-color: #3a3a3a; }
 .scene-object-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
+.scene-object-row.grouped { margin-left: 14px; width: calc(100% - 14px); }
+.scene-group-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #1c2426; border: 1px solid #2b3b3f; border-radius: 6px; color: #c8d8dc; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
+.scene-group-row:hover { background: #213034; border-color: #3a545a; }
+.scene-group-row.active { background: #142f34; border-color: #248a9d; color: #fff; }
 .scene-object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
 .scene-object-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.scene-name-input { width: 100%; min-width: 0; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; font-weight: 600; padding: 2px 3px; border-radius: 4px; outline: none; }
+.scene-name-input:focus { background: #181818; border-color: #1976d2; color: #fff; }
 .scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
 .scene-object-actions { display: flex; align-items: center; gap: 6px; }
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
@@ -141,6 +148,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .transform-inspector { display: flex; flex-direction: column; gap: 9px; }
 .transform-inspector-empty { font-size: 11px; color: #555; }
 .transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
+.transform-inspector-empty[hidden], .transform-inspector-fields[hidden] { display: none; }
 .transform-inspector-head { min-width: 0; }
 .transform-inspector-name { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transform-inspector-id { color: #555; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
@@ -188,6 +196,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
     <h2>Scene Objects</h2>
     <div class="panel">
+      <div class="scene-object-tools">
+        <button type="button" class="btn" data-scene-group-create>Create Group</button>
+      </div>
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
     </div>
@@ -637,7 +648,9 @@ const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 let volumePrimitives = [];
 let sceneObjects = [];
+let sceneGroups = [];
 let activeSceneObjectId = null;
+let activeSceneGroupId = null;
 let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
@@ -852,7 +865,9 @@ function nextGreenroomPreviewGeneration() {
 function captureAuthoredSceneStateForPreview() {
   return {
     sceneObjects: [...sceneObjects],
+    sceneGroups: sceneGroups.map(group => ({ ...group, objectIds: [...group.objectIds] })),
     activeSceneObjectId,
+    activeSceneGroupId,
     currentMesh,
     currentSceneFile,
     sceneSaveBlockedByFailedRestore,
@@ -867,7 +882,9 @@ function detachAuthoredSceneForPreview(authored) {
   sceneMutationToken++;
   for (const entry of authored.sceneObjects) scene.remove(entry.object);
   sceneObjects = [];
+  sceneGroups = [];
   activeSceneObjectId = null;
+  activeSceneGroupId = null;
   currentMesh = null;
   setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] });
   if (transformControls) {
@@ -881,13 +898,16 @@ function detachAuthoredSceneForPreview(authored) {
 function updateGreenroomPreviewControls() {
   const panel = document.getElementById('greenroom-preview-controls');
   if (!panel) return;
+  const importButton = panel.querySelector('[data-greenroom-preview-action="import"]');
   if (!greenroomPreviewState) {
     panel.hidden = true;
+    if (importButton) importButton.disabled = true;
     return;
   }
   const preview = greenroomPreviewState.preview || {};
   document.getElementById('greenroom-preview-title').textContent = preview.display?.title || preview.fileName || 'Greenroom output';
   document.getElementById('greenroom-preview-source').textContent = preview.url || '';
+  if (importButton) importButton.disabled = !greenroomPreviewState.previewObject;
   panel.hidden = false;
 }
 
@@ -955,15 +975,18 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   greenroomPreviewState = null;
   updateGreenroomPreviewControls();
   sceneObjects = [...authored.sceneObjects];
+  sceneGroups = authored.sceneGroups.map(group => ({ ...group, objectIds: [...group.objectIds] }));
   for (const entry of sceneObjects) scene.add(entry.object);
   activeSceneObjectId = authored.activeSceneObjectId;
+  activeSceneGroupId = authored.activeSceneGroupId;
   currentSceneFile = authored.currentSceneFile;
   sceneSaveBlockedByFailedRestore = authored.sceneSaveBlockedByFailedRestore;
   modelSourceUrl = authored.modelSourceUrl;
   modelSourceType = authored.modelSourceType;
   glbFileName = authored.glbFileName;
   setVolumePrimitivesState(authored.volumePrimitives);
-  setActiveSceneObject(activeSceneObjectId);
+  if (activeSceneGroupId) setActiveSceneGroup(activeSceneGroupId);
+  else setActiveSceneObject(activeSceneObjectId);
   if (!sceneObjects.length) {
     renderSceneObjectList();
     document.getElementById('transform-bar').classList.remove('visible');
@@ -985,6 +1008,132 @@ function selectedSceneObjectEntry() {
   return sceneObjects.find(obj => obj.id === activeSceneObjectId) || null;
 }
 
+function selectedSceneGroupEntry() {
+  return sceneGroups.find(group => group.id === activeSceneGroupId) || null;
+}
+
+function sceneObjectDisplayLabel(record) {
+  return record?.label || record?.fileName || record?.id || 'Object';
+}
+
+function sceneGroupDisplayLabel(group) {
+  return group?.label || group?.id || 'Group';
+}
+
+function setSceneObjectGroupId(record, groupId) {
+  record.groupId = groupId || null;
+  if (record.object?.userData?.kaminosSceneObject) {
+    record.object.userData.kaminosSceneObject.groupId = record.groupId;
+  }
+}
+
+function pruneSceneGroups() {
+  const objectIds = new Set(sceneObjects.map(record => record.id));
+  sceneGroups = sceneGroups
+    .map(group => ({
+      ...group,
+      objectIds: [...new Set(group.objectIds.filter(id => objectIds.has(id)))],
+    }))
+    .filter(group => group.objectIds.length > 0);
+  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  for (const record of sceneObjects) {
+    if (record.groupId && !groupedIds.has(record.id)) setSceneObjectGroupId(record, null);
+  }
+  if (activeSceneGroupId && !sceneGroups.some(group => group.id === activeSceneGroupId)) activeSceneGroupId = null;
+}
+
+function serializeSceneGroups() {
+  pruneSceneGroups();
+  return sceneGroups.map(group => ({
+    id: group.id,
+    label: sceneGroupDisplayLabel(group),
+    objectIds: [...group.objectIds],
+    source: group.source ?? null,
+    createdAt: group.createdAt ?? null,
+  }));
+}
+
+function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
+  const ids = [...new Set((objectIds || []).map(String))]
+    .filter(id => sceneObjects.some(record => record.id === id));
+  if (!ids.length) return null;
+  const id = String(metadata.id || makeSceneObjectId('group'));
+  for (const group of sceneGroups) {
+    group.objectIds = group.objectIds.filter(objectId => !ids.includes(objectId));
+  }
+  let group = sceneGroups.find(entry => entry.id === id);
+  if (!group) {
+    group = {
+      id,
+      label: label || `Group ${sceneGroups.length + 1}`,
+      objectIds: [],
+      source: metadata.source ?? null,
+      createdAt: metadata.createdAt ?? new Date().toISOString(),
+    };
+    sceneGroups.push(group);
+  }
+  group.label = label || group.label || id;
+  group.source = metadata.source ?? group.source ?? null;
+  group.createdAt = metadata.createdAt ?? group.createdAt ?? new Date().toISOString();
+  group.objectIds = [...new Set([...group.objectIds, ...ids])];
+  for (const record of sceneObjects) {
+    if (ids.includes(record.id)) setSceneObjectGroupId(record, group.id);
+  }
+  pruneSceneGroups();
+  if (metadata.select !== false) setActiveSceneGroup(group.id);
+  else renderSceneObjectList();
+  window._kaminosDirty?.();
+  return group;
+}
+
+function setSceneGroupsFromRecords(groups = [], activeGroupId = null) {
+  sceneGroups = [];
+  for (const record of sceneObjects) setSceneObjectGroupId(record, null);
+  for (const group of groups) {
+    createSceneGroupForObjects(group.objectIds, group.label, {
+      id: group.id,
+      source: group.source,
+      createdAt: group.createdAt,
+      select: false,
+    });
+  }
+  pruneSceneGroups();
+  activeSceneGroupId = activeGroupId && sceneGroups.some(group => group.id === activeGroupId) ? activeGroupId : null;
+  renderSceneObjectList();
+}
+
+function renameSceneObject(id, label) {
+  const entry = sceneObjects.find(record => record.id === id);
+  if (!entry) return false;
+  const clean = String(label || '').trim();
+  if (!clean) {
+    renderSceneObjectList();
+    return false;
+  }
+  entry.label = clean;
+  if (entry.object?.userData?.kaminosSceneObject) {
+    entry.object.userData.kaminosSceneObject.label = clean;
+  }
+  renderSceneObjectList();
+  updateTransformInspector();
+  window._kaminosDirty?.();
+  return true;
+}
+
+function renameSceneGroup(id, label) {
+  const group = sceneGroups.find(entry => entry.id === id);
+  if (!group) return false;
+  const clean = String(label || '').trim();
+  if (!clean) {
+    renderSceneObjectList();
+    return false;
+  }
+  group.label = clean;
+  renderSceneObjectList();
+  window._kaminosDirty?.();
+  return true;
+}
+
 function setTransformInspectorFieldsDisabled(disabled) {
   document.querySelectorAll('[data-transform-field]').forEach(input => {
     input.disabled = disabled;
@@ -998,9 +1147,15 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedSceneObjectEntry();
   inspector.dataset.selectedObjectId = entry?.id || '';
+  inspector.dataset.selectedGroupId = activeSceneGroupId || '';
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
+  if (!entry && activeSceneGroupId) {
+    empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
+  } else if (!entry) {
+    empty.textContent = 'No object selected';
+  }
   if (!entry) return;
 
   document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
@@ -1056,33 +1211,82 @@ function initTransformInspector() {
   updateTransformInspector();
 }
 
+function renderSceneObjectRow(record, options = {}) {
+  const active = record.id === activeSceneObjectId;
+  const grouped = options.grouped ? ' grouped' : '';
+  const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${grouped}`;
+  const label = sceneObjectDisplayLabel(record);
+  const typeLabel = record.type || 'object';
+  const reloadability = sceneObjectReloadabilityLabel(record);
+  const source = record.source || 'no source';
+  return `
+    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+      <span>
+        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name">
+        <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
+      </span>
+      <span class="scene-object-actions">
+        <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+        <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
+      </span>
+    </div>
+  `;
+}
+
+function renderSceneGroupRow(group) {
+  const active = group.id === activeSceneGroupId;
+  const rowClass = active ? 'scene-group-row active' : 'scene-group-row';
+  const label = sceneGroupDisplayLabel(group);
+  return `
+    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+      <span>
+        <input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
+        <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
+      </span>
+      <span class="scene-object-actions">
+        <span class="scene-object-chip">group</span>
+      </span>
+    </div>
+  `;
+}
+
 function renderSceneObjectList() {
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
   if (!list || !empty) return;
+  pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
-  list.innerHTML = sceneObjects.map(record => {
-    const active = record.id === activeSceneObjectId;
-    const rowClass = active ? 'scene-object-row active' : 'scene-object-row';
-    const label = record.label || record.fileName || record.id;
-    const typeLabel = record.type || 'object';
-    const reloadability = sceneObjectReloadabilityLabel(record);
-    const source = record.source || 'no source';
-    return `
-      <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
-        <span>
-          <span class="scene-object-name">${escapeHtml(label)}</span>
-          <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
-        </span>
-        <span class="scene-object-actions">
-          <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
-          <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
-        </span>
-      </div>
-    `;
-  }).join('');
+  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  const rows = [];
+  for (const group of sceneGroups) {
+    rows.push(renderSceneGroupRow(group));
+    for (const objectId of group.objectIds) {
+      const record = sceneObjects.find(entry => entry.id === objectId);
+      if (record) rows.push(renderSceneObjectRow(record, { grouped: true }));
+    }
+  }
+  for (const record of sceneObjects) {
+    if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
+  }
+  list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-scene-group-id]').forEach(button => {
+    button.addEventListener('click', event => {
+      if (event.target.closest('input, button')) return;
+      window.selectSceneGroup(button.dataset.sceneGroupId);
+    });
+    button.addEventListener('keydown', event => {
+      if (event.target !== button) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.selectSceneGroup(button.dataset.sceneGroupId);
+      }
+    });
+  });
   list.querySelectorAll('[data-scene-object-id]').forEach(button => {
-    button.addEventListener('click', () => window.selectSceneObject(button.dataset.sceneObjectId));
+    button.addEventListener('click', event => {
+      if (event.target.closest('input, button')) return;
+      window.selectSceneObject(button.dataset.sceneObjectId);
+    });
     button.addEventListener('keydown', event => {
       if (event.target !== button) return;
       if (event.key === 'Enter' || event.key === ' ') {
@@ -1090,6 +1294,14 @@ function renderSceneObjectList() {
         window.selectSceneObject(button.dataset.sceneObjectId);
       }
     });
+  });
+  list.querySelectorAll('[data-scene-object-name]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('change', () => renameSceneObject(input.dataset.sceneObjectName, input.value));
+  });
+  list.querySelectorAll('[data-scene-group-name]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('change', () => renameSceneGroup(input.dataset.sceneGroupName, input.value));
   });
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -1101,6 +1313,7 @@ function renderSceneObjectList() {
 
 function clearActiveSceneObjectSelection() {
   activeSceneObjectId = null;
+  activeSceneGroupId = null;
   currentMesh = null;
   renderSceneObjectList();
   updateTransformInspector();
@@ -1117,6 +1330,7 @@ function setActiveSceneObject(id) {
     return;
   }
   activeSceneObjectId = entry.id;
+  activeSceneGroupId = null;
   currentMesh = entry.object;
   renderSceneObjectList();
   updateTransformInspector();
@@ -1128,6 +1342,24 @@ function setActiveSceneObject(id) {
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
   }
+}
+
+function setActiveSceneGroup(id) {
+  const group = sceneGroups.find(entry => entry.id === id);
+  if (!group) {
+    clearActiveSceneObjectSelection();
+    return;
+  }
+  activeSceneGroupId = group.id;
+  activeSceneObjectId = null;
+  currentMesh = null;
+  renderSceneObjectList();
+  updateTransformInspector();
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  document.getElementById('transform-bar').classList.remove('visible');
 }
 
 function sceneObjectRecordForDescendant(object) {
@@ -1236,6 +1468,7 @@ function registerSceneObject(object, metadata = {}) {
     type: metadata.type ?? null,
     fileName: metadata.fileName ?? 'object',
     label: metadata.label ?? metadata.fileName ?? id,
+    groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
   };
   object.userData.kaminosSceneObject = {
@@ -1244,10 +1477,17 @@ function registerSceneObject(object, metadata = {}) {
     type: record.type,
     fileName: record.fileName,
     label: record.label,
+    groupId: record.groupId,
     createdAt: record.createdAt,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
+  if (metadata.groupLabel) {
+    createSceneGroupForObjects([id], metadata.groupLabel, {
+      source: metadata.groupSource ?? metadata.source,
+      select: false,
+    });
+  }
   setActiveSceneObject(id);
   window._kaminosDirty?.();
   return record;
@@ -1262,16 +1502,53 @@ window.selectSceneObject = function(id) {
   }
 };
 
+window.selectSceneGroup = function(id) {
+  setActiveSceneGroup(id);
+  const group = selectedSceneGroupEntry();
+  if (group) {
+    setInfo(`Selected group: ${sceneGroupDisplayLabel(group)}`);
+    window._kaminosDirty?.();
+  }
+};
+
+window.createSceneGroupFromAllObjects = function(label = null) {
+  const ids = sceneObjects.map(record => record.id);
+  const group = createSceneGroupForObjects(ids, label || `Group ${sceneGroups.length + 1}`);
+  if (group) setInfo(`Grouped: ${sceneGroupDisplayLabel(group)}`);
+  else setInfo('No objects to group');
+  return group;
+};
+
 window.kaminosSceneObjectDebugState = function() {
   return sceneObjects.map(record => ({
     id: record.id,
     label: record.label || record.fileName || record.id,
     source: record.source || null,
     type: record.type || null,
+    groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
     transform: sceneObjectTransformState(record.object),
   }));
 };
+
+window.kaminosSceneGroupDebugState = function() {
+  pruneSceneGroups();
+  return sceneGroups.map(group => ({
+    id: group.id,
+    label: sceneGroupDisplayLabel(group),
+    objectIds: [...group.objectIds],
+    source: group.source || null,
+    active: group.id === activeSceneGroupId,
+  }));
+};
+
+window.renameSceneObject = renameSceneObject;
+window.renameSceneGroup = renameSceneGroup;
+window.createSceneGroupForObjects = createSceneGroupForObjects;
+
+document.querySelector('[data-scene-group-create]')?.addEventListener('click', () => {
+  window.createSceneGroupFromAllObjects();
+});
 
 window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
@@ -1292,6 +1569,8 @@ window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
+  for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
+  pruneSceneGroups();
   const wasActive = activeSceneObjectId === entry.id;
   if (transformControls && currentMesh === entry.object) {
     transformControls.detach();
@@ -1693,7 +1972,9 @@ function clearScene() {
     disposeObjectTree(entry.object);
   }
   sceneObjects = [];
+  sceneGroups = [];
   activeSceneObjectId = null;
+  activeSceneGroupId = null;
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -3251,6 +3532,8 @@ function greenroomMeshMetadata(display, fileName, source) {
     type: 'glb',
     fileName,
     label: display?.title || fileName,
+    groupLabel: display?.title || fileName,
+    groupSource: source,
   };
 }
 
@@ -3317,7 +3600,11 @@ async function greenroomImportMesh(url, fileName, display) {
 }
 
 async function importGreenroomPreviewToScene() {
-  if (!greenroomPreviewState?.previewObject) return false;
+  if (!greenroomPreviewState?.previewObject) {
+    setInfo('Greenroom preview is still loading');
+    updateGreenroomPreviewControls();
+    return false;
+  }
   const preview = greenroomPreviewState.preview;
   const transformState = previewTransformState(greenroomPreviewState.previewObject);
   await restoreAuthoredSceneFromPreview({ silent: true });
@@ -3910,6 +4197,7 @@ function serializeSceneObject(entry) {
     type: metadata.type ?? entry.type,
     fileName: metadata.fileName ?? entry.fileName,
     label: metadata.label ?? entry.label,
+    groupId: metadata.groupId ?? entry.groupId ?? null,
     createdAt: metadata.createdAt ?? entry.createdAt,
     transform: sceneObjectTransformState(object),
     materials: getMaterialStateForObject(object),
@@ -3950,7 +4238,7 @@ function assertSceneObjectsReloadable(records) {
   }
 }
 
-async function loadSceneObjects(records, activeId) {
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null) {
   clearScene();
   const loaded = [];
   try {
@@ -3958,13 +4246,20 @@ async function loadSceneObjects(records, activeId) {
       const object = await addSceneObjectFromSource(record);
       if (record.transform) applySceneObjectTransformState(object, record.transform);
       applyMaterialStateToObject(object, record.materials);
+      const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
+      if (entry && record.groupId) setSceneObjectGroupId(entry, record.groupId);
       loaded.push(record.id);
     }
   } catch (e) {
     clearScene();
     throw e;
   }
-  setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
+  setSceneGroupsFromRecords(groups, activeGroupId);
+  if (activeGroupId && sceneGroups.some(group => group.id === activeGroupId)) {
+    setActiveSceneGroup(activeGroupId);
+  } else {
+    setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
+  }
 }
 
 function buildSceneData() {
@@ -3975,7 +4270,9 @@ function buildSceneData() {
   return buildSceneDocument({
     timestamp: new Date().toISOString(),
     objects,
+    groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
+    activeGroupId: activeSceneGroupId,
     provenance,
     camera: {
       position: camera.position.toArray(),
@@ -4038,7 +4335,7 @@ async function saveToServer(sceneData, filename) {
 }
 
 function sceneIsEmpty() {
-  return !currentMesh && volumePrimitives.length === 0;
+  return sceneObjects.length === 0 && volumePrimitives.length === 0;
 }
 
 function sceneSaveIsBlocked() {
@@ -4167,7 +4464,7 @@ async function loadSceneFile(file) {
 
   if (objectRecords.length > 0) {
     try {
-      await loadSceneObjects(objectRecords, restorePlan.activeObjectId);
+      await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId);
     } catch (e) {
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
+  getSceneGroupRecords,
   getSceneObjectRecords,
   isReloadableSceneObjectRecord,
   planSceneRestore,
@@ -72,6 +73,15 @@ const objectB = {
 const document = buildSceneDocument({
   timestamp: '2026-06-13T22:02:00.000Z',
   objects: [objectA, objectB],
+  groups: [
+    {
+      id: 'group-demo',
+      label: 'Demo Pair',
+      objectIds: ['object-a', 'object-b'],
+      source: 'demos/supermat-ring/',
+      createdAt: '2026-06-13T22:03:00.000Z',
+    },
+  ],
   activeObjectId: objectB.id,
   volumePrimitives,
   provenance: { source: objectB.source, kind: 'api-job-output' },
@@ -100,15 +110,30 @@ const saved = JSON.parse(JSON.stringify(document));
 const restorePlan = planSceneRestore(saved);
 
 assert.equal(saved.schema, SCENE_SCHEMA, 'round-trip scene document uses the v1 multi-object schema');
-assert.equal(saved.version, 3, 'round-trip scene document keeps the current scene version');
+assert.equal(saved.version, 4, 'round-trip scene document keeps the current scene version');
 assert.equal(saved.objects.length, 2, 'round-trip scene document saves both authored objects');
+assert.deepEqual(saved.groups, [
+  {
+    id: 'group-demo',
+    label: 'Demo Pair',
+    objectIds: ['object-a', 'object-b'],
+    source: 'demos/supermat-ring/',
+    createdAt: '2026-06-13T22:03:00.000Z',
+  },
+], 'round-trip scene document saves authored object groups');
 assert.equal(saved.activeObjectId, 'object-b', 'round-trip scene document preserves active object identity');
 assert.equal(saved.model.source, objectB.source, 'legacy model field mirrors the active object source');
 assert.equal(saved.model.fileName, objectB.fileName, 'legacy model field mirrors the active object filename');
 assert.deepEqual(saved.volumePrimitives, volumePrimitives, 'round-trip scene document preserves volume primitive state');
 assert.deepEqual(getSceneObjectRecords(saved).map(obj => obj.id), ['object-a', 'object-b'], 'scene loader sees both object records in order');
+assert.deepEqual(getSceneGroupRecords(saved).map(group => [group.id, group.label, group.objectIds]), [
+  ['group-demo', 'Demo Pair', ['object-a', 'object-b']],
+], 'scene loader sees group records with stable object membership');
 assert.equal(sceneDocumentIsLoadable(saved), true, 'two-object scene with volume primitives is loadable');
 assert.equal(restorePlan.activeObjectId, 'object-b', 'restore plan keeps active object selection');
+assert.deepEqual(restorePlan.groups.map(group => [group.id, group.label, group.objectIds]), [
+  ['group-demo', 'Demo Pair', ['object-a', 'object-b']],
+], 'restore plan carries scene group membership');
 assert.deepEqual(restorePlan.volumePrimitives, volumePrimitives, 'restore plan carries volume primitive state');
 assert.deepEqual(restorePlan.objects.map(obj => obj.transform.position), [[-1.25, 0.1, 0.5], [1.5, 0.4, -0.25]], 'restore plan keeps independent object transforms');
 assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1], 'restore plan keeps independent material state');
@@ -154,6 +179,18 @@ assert.equal(sceneDocumentIsLoadable({
   objects: [],
   volumePrimitives: { schema: 'kaminos.volume-primitives.v0', primitives: [] },
 }), false, 'empty object and empty volume scenes fail loud instead of looking saved');
+
+const prunedGroupPlan = planSceneRestore({
+  ...saved,
+  objects: [objectA],
+  groups: [
+    { id: 'mixed-group', label: 'Mixed Group', objectIds: ['object-a', 'missing-object'] },
+    { id: 'empty-group', label: 'Empty Group', objectIds: ['missing-object'] },
+  ],
+});
+assert.deepEqual(prunedGroupPlan.groups.map(group => [group.id, group.objectIds]), [
+  ['mixed-group', ['object-a']],
+], 'restore plan prunes missing group members and drops empty groups');
 
 assert.equal(sceneDocumentIsLoadable({}), false, 'versionless scene document is not loadable');
 assert.equal(sceneDocumentIsLoadable(null), false, 'null scene document is not loadable');

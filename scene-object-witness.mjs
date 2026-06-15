@@ -247,9 +247,10 @@ async function runSaveLoadRoundtripScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
+      const groupState = () => window.kaminosSceneGroupDebugState?.() || [];
       const roundTransformValue = value => Number(Number(value || 0).toFixed(4));
       const normalizeTransform = transform => ({
         position: (transform?.position || []).map(roundTransformValue),
@@ -415,7 +416,6 @@ async function runSaveLoadRoundtripScenario(ws) {
         throw new Error('scene load did not report two loaded objects: ' + JSON.stringify({ infoAfterLoad }));
       }
 
-      document.querySelector('[data-tab="assets"]').click();
       const { cleanup, postCleanupFiles } = await assertSceneDeleted(savedFile);
       return {
         savedFile,
@@ -481,7 +481,7 @@ async function runTransformInspectorScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
       }));
       const waitForRows = async count => {
         for (let i = 0; i < 120; i++) {
@@ -657,6 +657,217 @@ async function runTransformInspectorScenario(ws) {
   `, { timeoutMs: 60000 });
 }
 
+async function runObjectGroupsRoundtripScenario(ws) {
+  phase = 'scenario-object-groups-roundtrip';
+  lastEvidence.objectGroupsRoundtrip = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const assertSceneDeleted = async name => {
+        const cleanup = await deleteScene(name);
+        if (cleanup.deleted !== name) throw new Error('cleanup did not delete saved scene file: ' + JSON.stringify({ name, cleanup }));
+        const postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(name)) throw new Error('post-cleanup scene listing still includes saved scene file: ' + JSON.stringify({ name, postCleanupFiles }));
+        return { cleanup, postCleanupFiles };
+      };
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        grouped: row.classList.contains('grouped'),
+      }));
+      const groupRows = () => [...document.querySelectorAll('[data-scene-group-id]')].map(row => ({
+        id: row.dataset.sceneGroupId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-group-name]')?.value?.trim() || row.querySelector('.scene-group-name')?.textContent?.trim() || null,
+      }));
+      const waitForRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const setInputValue = (selector, value) => {
+        const input = document.querySelector(selector);
+        if (!input) throw new Error('outliner input missing: ' + selector);
+        input.focus();
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!demo) throw new Error('SuperMat Ring demo button missing');
+      for (let i = 0; i < 80; i++) {
+        if (document.querySelectorAll('[data-scene-object-id]').length === 1) break;
+        await wait(125);
+      }
+      const initialRows = rowState();
+      if (initialRows.length !== 1) throw new Error('object grouping setup did not start with one object row: ' + JSON.stringify(initialRows));
+      const append = document.getElementById('append-import-toggle');
+      if (!append) throw new Error('append import toggle missing');
+      append.checked = true;
+      demo.click();
+      const appendedRows = await waitForRows(2);
+      if (appendedRows.length !== 2) throw new Error('object grouping setup did not create two object rows: ' + JSON.stringify(appendedRows));
+      const firstId = appendedRows[0].id;
+      const secondId = appendedRows[1].id;
+
+      setInputValue('[data-scene-object-name="' + firstId + '"]', 'Key Ring');
+      setInputValue('[data-scene-object-name="' + secondId + '"]', 'Fill Ring');
+      await wait(200);
+      const renamedRows = rowState();
+      if (!renamedRows.some(row => row.id === firstId && row.label === 'Key Ring') || !renamedRows.some(row => row.id === secondId && row.label === 'Fill Ring')) {
+        throw new Error('object grouping did not preserve renamed object labels: ' + JSON.stringify(renamedRows));
+      }
+      if (typeof window.createSceneGroupForObjects !== 'function' || typeof window.kaminosSceneGroupDebugState !== 'function') {
+        throw new Error('object grouping debug/create API missing');
+      }
+      const group = window.createSceneGroupForObjects([firstId, secondId], 'Lighting Pair');
+      await wait(250);
+      if (!group?.id) throw new Error('object grouping did not create a group record');
+      const createdGroupRows = groupRows();
+      if (createdGroupRows.length !== 1 || createdGroupRows[0].label !== 'Lighting Pair') {
+        throw new Error('object grouping did not create a group row: ' + JSON.stringify(createdGroupRows));
+      }
+      setInputValue('[data-scene-group-name="' + group.id + '"]', 'Hero Pair');
+      await wait(200);
+      const renamedGroups = groupRows();
+      if (renamedGroups.length !== 1 || renamedGroups[0].label !== 'Hero Pair') {
+        throw new Error('object grouping did not preserve renamed group label: ' + JSON.stringify(renamedGroups));
+      }
+      document.querySelector('[data-scene-group-id="' + group.id + '"]').click();
+      await wait(250);
+      const groupSelectionRows = groupRows();
+      const transformBarVisibleAfterGroup = document.getElementById('transform-bar').classList.contains('visible');
+      const inspector = document.getElementById('transform-inspector');
+      const inspectorFields = document.getElementById('transform-inspector-fields');
+      const inspectorFieldsVisible = !!inspectorFields
+        && !inspectorFields.hidden
+        && getComputedStyle(inspectorFields).display !== 'none'
+        && inspectorFields.getBoundingClientRect().height > 0;
+      if (!groupSelectionRows[0]?.active || groupSelectionRows[0]?.pressed !== 'true') {
+        throw new Error('object grouping did not select group row: ' + JSON.stringify(groupSelectionRows));
+      }
+      if (transformBarVisibleAfterGroup || inspectorFieldsVisible || inspector?.dataset?.selectedObjectId) {
+        throw new Error('group selection did not hide object transform controls: ' + JSON.stringify({
+          transformBarVisibleAfterGroup,
+          inspectorFieldsHidden: inspectorFields?.hidden ?? null,
+          inspectorFieldsDisplay: inspectorFields ? getComputedStyle(inspectorFields).display : null,
+          inspectorFieldsHeight: inspectorFields?.getBoundingClientRect?.().height ?? null,
+          selectedObjectId: inspector?.dataset?.selectedObjectId || null,
+          selectedGroupId: inspector?.dataset?.selectedGroupId || null,
+        }));
+      }
+
+      const beforeSceneFiles = new Set(await listScenes());
+      await window.saveSceneAs();
+      let newFiles = [];
+      for (let i = 0; i < 120; i++) {
+        const afterSceneFiles = await listScenes();
+        newFiles = afterSceneFiles.filter(name => !beforeSceneFiles.has(name));
+        if (newFiles.length === 1) break;
+        await wait(125);
+      }
+      if (newFiles.length !== 1) throw new Error('object grouping save did not create exactly one scene file: ' + JSON.stringify({ newFiles, before: [...beforeSceneFiles] }));
+      const savedFile = newFiles[0];
+      const savedScene = await readScene(savedFile);
+      const savedGroup = savedScene.groups?.find(saved => saved.id === group.id);
+      if (!savedGroup || savedGroup.label !== 'Hero Pair' || savedGroup.objectIds.length !== 2 || !savedGroup.objectIds.includes(firstId) || !savedGroup.objectIds.includes(secondId)) {
+        throw new Error('object grouping saved scene did not preserve group membership: ' + JSON.stringify(savedScene.groups));
+      }
+      if (savedScene.activeGroupId !== group.id) {
+        throw new Error('object grouping saved scene did not preserve active group: ' + JSON.stringify({ activeGroupId: savedScene.activeGroupId, groupId: group.id }));
+      }
+      const savedLabels = savedScene.objects.map(object => [object.id, object.label]);
+      if (!savedLabels.some(([id, label]) => id === firstId && label === 'Key Ring') || !savedLabels.some(([id, label]) => id === secondId && label === 'Fill Ring')) {
+        throw new Error('object grouping saved scene did not preserve object labels: ' + JSON.stringify(savedLabels));
+      }
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      let sceneEntry = null;
+      for (let i = 0; i < 120; i++) {
+        sceneEntry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(entry => (
+          entry.querySelector('.gr-name')?.textContent?.trim() === savedFile.replace('.kaminos.json', '')
+        ));
+        if (sceneEntry) break;
+        await wait(125);
+      }
+      if (!sceneEntry) throw new Error('object grouping saved scene did not appear in scene list: ' + savedFile);
+      const loadButton = [...sceneEntry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load');
+      if (!loadButton) throw new Error('object grouping saved scene list entry missing Load button: ' + savedFile);
+      loadButton.click();
+      let restoredGroups = [];
+      let restoredRows = [];
+      for (let i = 0; i < 160; i++) {
+        restoredGroups = window.kaminosSceneGroupDebugState?.() || [];
+        restoredRows = rowState();
+        if (restoredGroups.length === 1 && restoredRows.length === 2 && restoredGroups[0].label === 'Hero Pair') break;
+        await wait(125);
+      }
+      const restoredGroup = restoredGroups[0];
+      if (!restoredGroup || restoredGroup.label !== 'Hero Pair' || restoredGroup.objectIds.length !== 2 || !restoredGroup.objectIds.includes(firstId) || !restoredGroup.objectIds.includes(secondId)) {
+        throw new Error('object grouping load did not restore group membership: ' + JSON.stringify({ restoredGroups, restoredRows }));
+      }
+      if (!restoredGroup.active || document.getElementById('transform-bar').classList.contains('visible')) {
+        throw new Error('object grouping load did not restore active group selection: ' + JSON.stringify({
+          restoredGroups,
+          transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+        }));
+      }
+      if (!restoredRows.every(row => row.grouped) || !restoredRows.some(row => row.label === 'Key Ring') || !restoredRows.some(row => row.label === 'Fill Ring')) {
+        throw new Error('object grouping load did not restore grouped renamed rows: ' + JSON.stringify(restoredRows));
+      }
+
+      document.querySelector('[data-tab="assets"]').click();
+      const { cleanup, postCleanupFiles } = await assertSceneDeleted(savedFile);
+      window.selectSceneGroup(group.id);
+      await wait(250);
+      const finalGroups = groupRows();
+      const finalRows = rowState();
+      if (!finalGroups.some(row => row.id === group.id && row.active && row.label === 'Hero Pair') || !finalRows.every(row => row.grouped)) {
+        throw new Error('object grouping final screenshot state lost group membership: ' + JSON.stringify({ finalGroups, finalRows }));
+      }
+      return {
+        savedFile,
+        firstId,
+        secondId,
+        groupId: group.id,
+        renamedRows,
+        renamedGroups,
+        groupSelectionRows,
+        savedGroup,
+        savedLabels,
+        restoredGroups,
+        restoredRows,
+        finalGroups,
+        finalRows,
+        cleanup,
+        postCleanupFileCount: postCleanupFiles.length,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+}
+
 async function runSceneBoundaryRoundtripScenario(ws) {
   phase = 'scenario-scene-boundary-roundtrip';
   lastEvidence.sceneBoundaryRoundtrip = await evaluate(ws, `
@@ -667,7 +878,7 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
       const listScenes = async () => {
@@ -1207,7 +1418,7 @@ async function runViewportClickSelectDeselectScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
       }));
       const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
       if (!demo) throw new Error('SuperMat Ring demo button missing');
@@ -1350,20 +1561,24 @@ async function runGreenroomPickerDisplayScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
+      const groupState = () => window.kaminosSceneGroupDebugState?.() || [];
       const infoText = () => document.getElementById('info-bar')?.textContent?.trim() || '';
       const previewState = () => {
         const panel = document.getElementById('greenroom-preview-controls');
+        const importButton = document.querySelector('[data-greenroom-preview-action="import"]');
         return {
           active: !!window.greenroomPreviewIsActive?.(),
           visible: !!panel && !panel.hidden,
           title: document.getElementById('greenroom-preview-title')?.textContent?.trim() || null,
           source: document.getElementById('greenroom-preview-source')?.textContent?.trim() || null,
+          importDisabled: importButton ? importButton.disabled : null,
           actions: [...document.querySelectorAll('[data-greenroom-preview-action]')].map(button => button.textContent.trim()),
         };
       };
+      const previewDebug = () => window.greenroomPreviewDebugState?.() || {};
       const waitForSceneRows = async count => {
         for (let i = 0; i < 120; i++) {
           const rows = rowState();
@@ -1379,6 +1594,19 @@ async function runGreenroomPickerDisplayScenario(ws) {
           await wait(125);
         }
         return previewState();
+      };
+      const waitForPreviewObject = async route => {
+        for (let i = 0; i < 160; i++) {
+          const state = previewState();
+          const debug = previewDebug();
+          if (state.active && state.visible && !state.importDisabled
+            && debug.previewObjectInScene
+            && debug.previewObjectSource?.includes(route)) {
+            return { state, debug };
+          }
+          await wait(125);
+        }
+        return { state: previewState(), debug: previewDebug() };
       };
       const sameRows = (a, b) => JSON.stringify(a.map(row => [row.id, row.label, row.source, row.active, row.pressed]))
         === JSON.stringify(b.map(row => [row.id, row.label, row.source, row.active, row.pressed]));
@@ -1466,7 +1694,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
       if (viewButton) {
         viewButton.click();
         await waitForPreviewActive(true);
-        await wait(1000);
+        await waitForPreviewObject(loadProbe?.route);
       }
       const afterViewRows = rowState();
       const afterViewPreview = previewState();
@@ -1497,7 +1725,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
       if (viewButton) {
         viewButton.click();
         await waitForPreviewActive(true);
-        await wait(250);
+        await waitForPreviewObject(loadProbe?.route);
       }
       window.rotateAxis?.('y');
       const previewImportButton = document.querySelector('[data-greenroom-preview-action="import"]');
@@ -1511,11 +1739,18 @@ async function runGreenroomPickerDisplayScenario(ws) {
       const viewProtectedSaveTarget = JSON.stringify(savedBeforeView) === JSON.stringify(savedAfterView);
       const authoredRowsAfterPreviewImport = afterPreviewImportRows.filter(row => setupRows.some(setup => setup.id === row.id));
       const previewImportedRows = afterPreviewImportRows.filter(row => row.label === loadRow?.title && row.source?.includes(loadProbe?.route));
+      const afterPreviewImportGroups = groupState();
+      const previewImportGroup = afterPreviewImportGroups.find(group => (
+        group.label === loadRow?.title
+        && group.source?.includes(loadProbe?.route)
+        && previewImportedRows.some(row => group.objectIds?.includes(row.id))
+      )) || null;
       const previewImportRestoredAndAppended = authoredRowsAfterPreviewImport.length === setupRows.length
         && previewImportedRows.length === 1
         && afterPreviewImportRows.length === setupRows.length + 1;
       const previewImportRowsGreenroomSourced = previewImportedRows.length === 1
         && previewImportedRows.every(row => row.source?.includes(loadProbe?.route));
+      const previewImportCreatedGroup = !!previewImportGroup;
       for (const name of [savedFile, ...viewSaveFiles].filter(Boolean)) {
         await deleteScene(name);
         const postCleanupFiles = await listScenes();
@@ -1537,6 +1772,8 @@ async function runGreenroomPickerDisplayScenario(ws) {
         afterViewInfo,
         afterBackRows,
         afterPreviewImportRows,
+        afterPreviewImportGroups,
+        previewImportGroup,
         savedFile,
         viewSaveFiles,
         viewProtectedSaveTarget,
@@ -1547,6 +1784,7 @@ async function runGreenroomPickerDisplayScenario(ws) {
         backRestoredAuthoredRows,
         previewImportRestoredAndAppended,
         previewImportRowsGreenroomSourced,
+        previewImportCreatedGroup,
       };
     })()
   `, { timeoutMs: 90000 });
@@ -1585,6 +1823,9 @@ async function runGreenroomPickerDisplayScenario(ws) {
   if (!lastEvidence.greenroomPickerDisplay.previewImportRowsGreenroomSourced) {
     throw new Error(`greenroom preview import did not preserve Greenroom route source: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
+  if (!lastEvidence.greenroomPickerDisplay.previewImportCreatedGroup) {
+    throw new Error(`greenroom preview import did not create a grouped imported object: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
+  }
   if (!lastEvidence.greenroomPickerDisplay.viewProtectedSaveTarget) {
     throw new Error(`greenroom View did not protect the previous save target: ${JSON.stringify(lastEvidence.greenroomPickerDisplay)}`);
   }
@@ -1599,7 +1840,7 @@ async function runGreenroomPreviewRaceScenario(ws) {
         id: row.dataset.sceneObjectId,
         active: row.classList.contains('active'),
         pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
         source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
       }));
       const previewState = () => {
@@ -1847,6 +2088,8 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'transform-inspector') {
     await runTransformInspectorScenario(ws);
+  } else if (scenario === 'object-groups-roundtrip') {
+    await runObjectGroupsRoundtripScenario(ws);
   } else if (scenario === 'scene-boundary-roundtrip') {
     await runSceneBoundaryRoundtripScenario(ws);
   } else if (scenario === 'greenroom-picker-display') {

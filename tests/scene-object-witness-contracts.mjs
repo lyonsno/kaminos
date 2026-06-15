@@ -16,6 +16,7 @@ assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser sc
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
+assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
@@ -80,6 +81,11 @@ assert.match(witness, /transform inspector changed a non-selected object/, 'tran
 assert.match(witness, /transform inspector saved scene did not preserve edited transform/, 'transform inspector witness proves UI edits persist into saved JSON');
 assert.match(witness, /transform inspector load did not restore edited transform/, 'transform inspector witness proves UI edits survive browser scene load');
 assert.match(witness, /transform inspector did not display restored rotation degrees/, 'transform inspector witness proves restored state is reflected in the UI');
+assert.match(witness, /object grouping did not create a group row/, 'grouping witness proves the editor creates a visible group row');
+assert.match(witness, /object grouping did not preserve renamed object labels/, 'grouping witness proves object renames persist');
+assert.match(witness, /object grouping saved scene did not preserve group membership/, 'grouping witness proves saved JSON carries group membership');
+assert.match(witness, /object grouping load did not restore group membership/, 'grouping witness proves browser scene load restores group membership');
+assert.match(witness, /group selection did not hide object transform controls/, 'grouping witness proves group selection is distinct from object transform selection');
 assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');
 assert.match(witness, /assertSceneDeleted\(/, 'witness shares exact cleanup proof across scenarios');
@@ -105,6 +111,7 @@ assert.match(witness, /greenroom preview save was not blocked/, 'Green Room acti
 assert.match(witness, /greenroom preview Back did not restore authored scene rows/, 'Green Room action witness proves Back to Scene restores the authored scene');
 assert.match(witness, /greenroom preview Import to Scene did not restore and append into the authored scene/, 'Green Room action witness proves Import to Scene restores the authored scene before appending');
 assert.match(witness, /greenroom preview import did not preserve Greenroom route source/, 'Green Room action witness proves imported preview rows keep the selected Greenroom route source');
+assert.match(witness, /greenroom preview import did not create a grouped imported object/, 'Green Room action witness proves imported preview rows create a named scene group');
 assert.match(witness, /greenroom preview race fixture needs at least two View rows/, 'Green Room race witness requires two distinct previewable rows');
 assert.match(witness, /greenroom preview race did not settle on the second route/, 'Green Room race witness proves fast View A then View B settles on route B');
 assert.match(witness, /greenroom preview race leaked the first route into active preview state/, 'Green Room race witness proves stale route A cannot own active preview state');

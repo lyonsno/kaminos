@@ -1,6 +1,6 @@
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 3;
+export const SCENE_VERSION = 4;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -23,6 +23,21 @@ function normalizeSceneObjectRecord(record) {
       scale: [1, 1, 1],
     }),
     materials: cloneJson(record.materials ?? null),
+  };
+}
+
+function normalizeSceneGroupRecord(record) {
+  if (!record || typeof record !== 'object') throw new Error('Scene group record must be an object');
+  const id = String(record.id || record.label || 'group');
+  const objectIds = Array.isArray(record.objectIds)
+    ? [...new Set(record.objectIds.map(value => String(value)).filter(Boolean))]
+    : [];
+  return {
+    id,
+    label: record.label ?? id,
+    objectIds,
+    source: record.source ?? null,
+    createdAt: record.createdAt ?? null,
   };
 }
 
@@ -58,6 +73,18 @@ export function getSceneObjectRecords(data) {
   return [];
 }
 
+export function getSceneGroupRecords(data, objectRecords = getSceneObjectRecords(data)) {
+  if (!Array.isArray(data?.groups)) return [];
+  const objectIds = new Set(objectRecords.map(record => record.id));
+  return data.groups
+    .map(normalizeSceneGroupRecord)
+    .map(group => ({
+      ...group,
+      objectIds: group.objectIds.filter(id => objectIds.has(id)),
+    }))
+    .filter(group => group.objectIds.length > 0);
+}
+
 export function hasVolumePrimitives(data) {
   return Array.isArray(data?.volumePrimitives?.primitives) && data.volumePrimitives.primitives.length > 0;
 }
@@ -78,14 +105,18 @@ export function isReloadableSceneObjectRecord(record) {
 export function planSceneRestore(data) {
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
   const objects = getSceneObjectRecords(data);
+  const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
+  const requestedActiveGroupId = data.activeGroupId && groups.some(group => group.id === data.activeGroupId) ? data.activeGroupId : null;
   const activeObjectId = requestedActiveId || objects.at(-1)?.id || null;
   return {
     schema: data.schema || null,
     version: data.version,
     objects,
+    groups,
     activeObjectId,
+    activeGroupId: requestedActiveGroupId,
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
   };
@@ -94,7 +125,9 @@ export function planSceneRestore(data) {
 export function buildSceneDocument({
   timestamp = new Date().toISOString(),
   objects = [],
+  groups = [],
   activeObjectId = null,
+  activeGroupId = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   camera = null,
@@ -104,13 +137,17 @@ export function buildSceneDocument({
   backdropBrightness = undefined,
 } = {}) {
   const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
+  const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
   const document = {
     schema: SCENE_SCHEMA,
     version: SCENE_VERSION,
     timestamp,
     objects: sceneObjects,
+    groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
+    activeGroupId: activeGroup?.id || null,
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,
