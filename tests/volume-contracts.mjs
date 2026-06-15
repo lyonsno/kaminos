@@ -299,7 +299,13 @@ assert.doesNotMatch(core, /bonfireLiftDirection = mix\(1\.0, -1\.0, bonfireScene
 assert.match(core, /bonfireSourceBreakup/, 'bonfire source shaping uses centered radial breakup instead of one-sided column breakup');
 assert.match(core, /bonfireDetailBreakup/, 'bonfire detail birth uses centered radial breakup under zero wind');
 assert.match(core, /bonfireCombustionCellField/, 'bonfire source uses a clustered combustion field rather than one smooth fireball');
+assert.match(core, /bonfireSymmetricCombustionPairOffset/, 'bonfire clustered source uses pairwise symmetric lobe offsets so zero wind cannot birth lateral drift');
+assert.match(core, /bonfirePairStrength/, 'bonfire clustered source uses pairwise matched lobe strength instead of independent one-sided flicker');
+assert.doesNotMatch(core, /let cellJitter = vec2<f32>\(\s*sin\(time \* 0\.73 \+ fi \* 2\.17\),\s*cos\(time \* 0\.61 - fi \* 1\.91\)\s*\) \* sourceRadius \* 0\.10;/, 'bonfire source must not use independent per-lobe jitter that shifts the source center of mass');
 assert.match(core, /bonfireFlameTongues/, 'bonfire flame tongues structurally modulate fire and heat birth');
+assert.match(core, /bonfireSymmetricEdgeBreakup/, 'bonfire edge breakup uses radial/even fields instead of linear one-sided X/Z phases');
+assert.doesNotMatch(core, /sin\(p\.x \* 43\.0 \* scaledDetailFrequency \+ p\.y \* 13\.0 - time \* 1\.9\)/, 'bonfire edge breakup must not multiply source birth with a one-sided X phase');
+assert.doesNotMatch(core, /cos\(p\.z \* 47\.0 \* scaledDetailFrequency - p\.y \* 9\.0 \+ time \* 1\.4\)/, 'bonfire edge breakup must not multiply source birth with a one-sided Z phase');
 assert.match(core, /bonfireInterfaceCombustion/, 'bonfire source creates smoke/detail at the fire/smoke combustion interface');
 assert.match(core, /bonfireZeroMeanLateralFlow/, 'bonfire no-wind liveness uses zero-mean local lateral flow instead of global drift');
 assert.match(core, /bonfireEntrainedLift/, 'bonfire plume has named vertical entrainment separate from scalar symmetry');
@@ -307,6 +313,10 @@ assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-lo
 assert.match(core, /bonfireSmokeSource/, 'fluid source shaping creates smoke from the bottom fireball before plume rise');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
 assert.match(core, /let p = \(cell \/ f32\(GRID\)\) \* 2\.0 - vec3<f32>\(1\.0\);/, 'fluid sim maps cell-centered coordinates into symmetric volume space');
+assert.match(core, /fn sampleFluidSlot\(cellCenter: vec3<f32>, slot: u32\)/, 'fluid slot sampler explicitly accepts cell-center coordinates, matching sim advection callers');
+assert.match(core, /cellCenter - vec3<f32>\(0\.5\)/, 'fluid slot sampler converts cell-center coordinates to lattice-index coordinates before trilinear interpolation');
+assert.doesNotMatch(core, /let pc = clamp\(p, vec3<f32>\(0\.0\), vec3<f32>\(f32\(GRID\) - 1\.001\)\);/, 'fluid slot sampler must not treat cell-center coordinates as raw lattice indices');
+assert.doesNotMatch(core, /\* \(f32\(GRID\) - 1\.0\)/, 'world-space volume sampling must use the same GRID cell-center coordinate convention as simulation advection');
 assert.match(core, /let sourceCenter = p\.xz;/, 'fluid source is centered in sim XZ coordinates');
 assert.doesNotMatch(core, /sourceCenter = p\.xz \+ vec2/, 'fluid source must not wobble off-center in XZ');
 assert.match(core, /windDirection/, 'fluid compute shader derives an explicit wind direction vector');
@@ -357,6 +367,8 @@ assert.match(core, /smokeVisualRiseVelocity/, 'sim readback reports scene-aware 
 assert.match(core, /smokeVisualRiseDisplacement/, 'sim readback reports source-relative scene-aware smoke displacement, not only instantaneous velocity');
 assert.match(core, /fireVisualRiseDisplacement/, 'sim readback reports source-relative scene-aware fire displacement, not only instantaneous velocity');
 assert.match(core, /sourceRelativeVisualHeightBins/, 'sim readback reports source-relative visual height bins for plume verticality');
+assert.match(core, /addPlumeDriftCell/, 'sim readback has an explicit plume-corridor sample path for drift evidence');
+assert.doesNotMatch(core, /const plumeDriftCells = new Set\(sampleCells\);/, 'plume drift evidence must not silently exclude the later-added plume corridor cells');
 assert.match(core, /fireRoughnessMean/, 'visual readback reports fire roughness so smooth glowing bulbs cannot close the bonfire attractor');
 assert.match(core, /fireEdgeEnergy/, 'visual readback reports fire edge energy for the bonfire combustion boundary');
 assert.match(core, /plumeHeightBins/, 'sim readback reports per-height plume drift bins');
@@ -466,6 +478,10 @@ assert.match(witness, /plumeHeightBins/, 'witness preserves sim-space per-height
 assert.match(witness, /expectsBonfireVerticalTransport/, 'witness requires scene-aware vertical transport evidence for the bonfire plume');
 assert.match(witness, /smokeVisualRiseDisplacement/, 'witness records source-relative smoke rise displacement for the bonfire plume');
 assert.match(witness, /sourceRelativeVisualHeightBins/, 'witness records source-relative height bins for scene-aware vertical transport');
+assert.match(witness, /expectsBonfireZeroDrift/, 'witness requires zero-wind bonfire drift evidence separately from vertical rise evidence');
+assert.match(witness, /bonfire plume retained non-wind lateral drift/, 'witness fails loudly when zero-wind bonfire drift remains nonzero');
+assert.match(core, /risingSmokeVisualRiseDisplacement/, 'sim readback reports source-relative rising-plume displacement separately from fireball/source smoke center');
+assert.match(witness, /risingSmokeVisualRiseDisplacement/, 'witness gates bonfire plume rise on source-relative rising-plume bins instead of only source-weighted smoke center');
 assert.match(witness, /curlMean/, 'witness requires curl diagnostic evidence');
 assert.match(witness, /divergenceMean/, 'witness requires divergence diagnostic evidence');
 assert.match(witness, /gridOverlay/, 'witness records grid overlay/debug state');

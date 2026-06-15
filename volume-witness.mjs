@@ -530,10 +530,32 @@ async function main() {
         !Number.isFinite(sample.simReadback.smokeVisualRiseVelocity) ||
         sample.simReadback.smokeVisualRiseVelocity <= 0.025 ||
         !Number.isFinite(sample.simReadback.smokeVisualRiseDisplacement) ||
-        sample.simReadback.smokeVisualRiseDisplacement <= 0.16 ||
+        sample.simReadback.smokeVisualRiseDisplacement <= 0.08 ||
+        !Number.isFinite(sample.simReadback.risingSmokeVisualRiseDisplacement) ||
+        sample.simReadback.risingSmokeVisualRiseDisplacement <= 0.20 ||
         !hasRisingSmokeAboveSource
       ) {
         throw new Error(`bonfire plume did not show source-relative zero-wind vertical smoke transport: ${JSON.stringify(sample.simReadback)}`);
+      }
+    }
+    const expectsBonfireZeroDrift = expectsBonfireVerticalTransport && Math.abs(expectedWindStrength) <= 0.001;
+    if (expectsBonfireZeroDrift) {
+      const activeBins = (sample.simReadback.sourceRelativeVisualHeightBins || []).filter(bin =>
+        bin.visualCenter > -0.08 &&
+        bin.smokeWeight > 1.0
+      );
+      const maxSmokeBinRadialDrift = activeBins.reduce((maxDrift, bin) =>
+        Math.max(maxDrift, Math.hypot(bin.smokeCenterX || 0, bin.smokeCenterZ || 0)),
+        0
+      );
+      if (
+        !Number.isFinite(sample.simReadback.smokeRadialDrift) ||
+        sample.simReadback.smokeRadialDrift > 0.015 ||
+        !Number.isFinite(sample.simReadback.fireRadialDrift) ||
+        sample.simReadback.fireRadialDrift > 0.020 ||
+        maxSmokeBinRadialDrift > 0.030
+      ) {
+        throw new Error(`bonfire plume retained non-wind lateral drift: ${JSON.stringify({ simReadback: sample.simReadback, maxSmokeBinRadialDrift })}`);
       }
     }
     const metrics = {
@@ -558,6 +580,7 @@ async function main() {
       smokeVisualRiseVelocity: sample.simReadback?.smokeVisualRiseVelocity ?? 0,
       fireVisualRiseVelocity: sample.simReadback?.fireVisualRiseVelocity ?? 0,
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
+      risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
@@ -649,6 +672,7 @@ async function main() {
       expectsInterfaceShredEvidence,
       expectsFireLickEvidence,
       expectsBonfireVerticalTransport,
+      expectsBonfireZeroDrift,
       screenshot: out,
       metrics,
     };

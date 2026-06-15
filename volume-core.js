@@ -413,8 +413,8 @@ fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
   return fluidSrc[slotIndex(c, slot)];
 }
 
-fn sampleFluidSlot(p: vec3<f32>, slot: u32) -> vec4<f32> {
-  let pc = clamp(p, vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
   let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
@@ -435,22 +435,22 @@ fn sampleFluidSlot(p: vec3<f32>, slot: u32) -> vec4<f32> {
 }
 
 fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
   return sampleFluidSlot(cell, 0u);
 }
 
 fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
   return sampleFluidSlot(cell, 1u);
 }
 
 fn sampleWorldFireLayer(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
   return sampleFluidSlot(cell, 2u);
 }
 
 fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * (f32(GRID) - 1.0);
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
   return sampleFluidSlot(cell, 3u);
 }
 
@@ -696,29 +696,63 @@ fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
+fn bonfireSymmetricCombustionPairOffset(pairIndex: f32, side: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec2<f32> {
+  let ringRadius = sourceRadius * (0.72 + detailFrequency * 0.045);
+  let angle = pairIndex * 2.0943951 + sin(time * (0.31 + pairIndex * 0.049)) * 0.18;
+  let spoke = vec2<f32>(cos(angle), sin(angle));
+  let tangent = vec2<f32>(-spoke.y, spoke.x);
+  let radialPulse = sin(time * 0.73 + pairIndex * 1.71) * sourceRadius * 0.045;
+  let tangentPulse = cos(time * 0.61 - pairIndex * 1.33) * sourceRadius * 0.035;
+  return (spoke * (ringRadius + radialPulse) + tangent * tangentPulse) * side;
+}
+
+fn bonfirePairStrength(pairIndex: f32, time: f32) -> f32 {
+  return 0.46 + 0.22 * sin(time * 1.23 + pairIndex * 1.37);
+}
+
+fn bonfirePairYOffset(pairIndex: f32, time: f32) -> f32 {
+  return sin(time * 0.82 + pairIndex * 1.31) * 0.045 + cos(time * 0.47 - pairIndex * 0.73) * 0.024;
+}
+
+fn bonfirePairRadius(pairIndex: f32, time: f32) -> f32 {
+  return 0.32 + 0.040 * sin(time + pairIndex * 1.17);
+}
+
+fn bonfireSymmetricEdgeBreakup(p: vec3<f32>, scaledDetailFrequency: f32, bonfireTongues: f32, time: f32) -> f32 {
+  let radial = length(p.xz);
+  let radialWave = sin(radial * 43.0 * scaledDetailFrequency + p.y * 13.0 - time * 1.9);
+  let ringWave = cos(radial * 47.0 * scaledDetailFrequency - p.y * 9.0 + time * 1.4);
+  let quadrupoleWave = sin((p.x * p.x - p.z * p.z) * 31.0 * scaledDetailFrequency + time * 1.1);
+  return clamp(
+    0.58
+      + 0.18 * radialWave
+      + 0.16 * ringWave
+      + 0.10 * quadrupoleWave
+      + 0.20 * bonfireTongues,
+    0.18,
+    1.34
+  );
+}
+
 fn bonfireCombustionCellField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
   var field = 0.0;
   var peak = 0.0;
   var combustionInterface = 0.0;
   var lift = 0.0;
-  let ringRadius = sourceRadius * (0.72 + detailFrequency * 0.045);
   let verticalSpan = max(0.058, sourceRadius * 1.05);
   for (var i = 0; i < 7; i = i + 1) {
     let fi = f32(i);
     let isCore = 1.0 - step(0.5, fi);
-    let angle = fi * 1.0471976 + sin(time * (0.31 + fi * 0.037)) * 0.22;
-    let spoke = vec2<f32>(cos(angle), sin(angle));
-    let cellJitter = vec2<f32>(
-      sin(time * 0.73 + fi * 2.17),
-      cos(time * 0.61 - fi * 1.91)
-    ) * sourceRadius * 0.10;
-    let offset = (spoke * ringRadius + cellJitter) * (1.0 - isCore);
-    let yOffset = (sin(time * 0.82 + fi * 1.31) * 0.045 + cos(time * 0.47 - fi * 0.73) * 0.024) * (1.0 - isCore);
-    let cellRadius = sourceRadius * mix(0.72, 0.32 + 0.040 * sin(time + fi), 1.0 - isCore);
+    let pairSlot = max(fi - 1.0, 0.0);
+    let pairIndex = floor(pairSlot * 0.5);
+    let pairSide = 1.0 - (pairSlot - pairIndex * 2.0) * 2.0;
+    let offset = bonfireSymmetricCombustionPairOffset(pairIndex, pairSide, sourceRadius, detailFrequency, time) * (1.0 - isCore);
+    let yOffset = bonfirePairYOffset(pairIndex, time) * (1.0 - isCore);
+    let cellRadius = sourceRadius * mix(0.72, bonfirePairRadius(pairIndex, time), 1.0 - isCore);
     let vertical = (p.y - sourceY - yOffset) / verticalSpan;
     let delta = p.xz - offset;
     let lobe = exp(-dot(delta, delta) / max(0.0024, cellRadius * cellRadius) - vertical * vertical * mix(0.70, 1.28, 1.0 - isCore));
-    let strength = mix(0.42, 0.46 + 0.22 * sin(time * 1.23 + fi * 0.97), 1.0 - isCore);
+    let strength = mix(0.42, bonfirePairStrength(pairIndex, time), 1.0 - isCore);
     let weighted = lobe * strength;
     field = field + weighted;
     peak = max(peak, weighted);
@@ -758,8 +792,8 @@ fn bonfireZeroMeanLateralFlow(p: vec3<f32>, sourceY: f32, combustion: vec4<f32>,
 }
 
 fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combustion: vec4<f32>, plumeRiseScale: f32, speed: f32) -> f32 {
-  let carrier = clamp(source * 0.54 + smoke * 0.18 + heat * 0.24 + flame * 0.12 + combustion.w * 0.40, 0.0, 1.8);
-  return carrier * plumeRiseScale * (0.012 + speed * 0.0035);
+  let carrier = clamp(source * 0.46 + smoke * 0.24 + heat * 0.28 + flame * 0.12 + combustion.w * 0.62, 0.0, 1.8);
+  return carrier * plumeRiseScale * (0.018 + speed * 0.0052);
 }
 
 fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
@@ -1138,16 +1172,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain, scaledDetailFrequency);
   let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
-  let bonfireEdgeBreakup = clamp(
-    0.58
-      + 0.24 * sin(p.x * 43.0 * scaledDetailFrequency + p.y * 13.0 - time * 1.9)
-      + 0.20 * cos(p.z * 47.0 * scaledDetailFrequency - p.y * 9.0 + time * 1.4)
-      + 0.20 * bonfireTongues,
-    0.18,
-    1.34
-  );
+  let bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
   let bonfireFireball = max(smoothBonfireFireball * 0.24 * bonfireEdgeBreakup, bonfireCombustion.x * (0.82 + bonfireTongues * 0.34));
-  let bonfireSmokeBand = smoothstep(bonfireSourceY - 0.32, bonfireSourceY - 0.10, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
+  let bonfireSmokeBand = smoothstep(bonfireSourceY - 0.54, bonfireSourceY - 0.26, p.y) * (1.0 - smoothstep(bonfireSourceY - 0.14, bonfireSourceY + 0.02, p.y));
   let bonfireSmokeSource = (
     exp(-sourceRadial * sourceRadial / max(0.0064, bonfireSmokeRadius * bonfireSmokeRadius)) * bonfireSmokeBand * (0.36 + 0.22 * bonfireSourceBreakup)
       + bonfireInterfaceBirth * 0.56
@@ -1219,7 +1246,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
-  smoke = max(smoke + smokeFromHeat, source * 0.46 + emberRing * 0.13 + bonfireInterfaceBirth * bonfireScene * 0.46);
+  let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
+  let bonfireRisingSmokeBirth = bonfireSmokeSource * 0.76 + bonfireInterfaceBirth * 0.82 + bonfireCombustion.z * 0.22 + smokeFromHeat * 0.40;
+  smoke = max(smoke + smokeFromHeat, mix(columnSmokeBirth, bonfireRisingSmokeBirth, bonfireScene));
   smoke = max(smoke, externalInjection.material.x * 0.76);
   heat = max(heat, source * 0.74 + emberRing * 0.18 + bonfireCombustion.x * bonfireScene * 0.34);
   heat = max(heat, externalInjection.material.y * 0.92);
@@ -2372,7 +2401,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const cx = Math.max(0, Math.min(gridSize - 1, x | 0));
       const cy = Math.max(0, Math.min(gridSize - 1, y | 0));
       const cz = Math.max(0, Math.min(gridSize - 1, z | 0));
-      sampleCells.add(cx + cy * gridSize + cz * gridSize * gridSize);
+      const cellIndex = cx + cy * gridSize + cz * gridSize * gridSize;
+      sampleCells.add(cellIndex);
+      return cellIndex;
     };
     const sampleGridCount = Math.min(17, gridSize);
     const sampleGridStep = (gridSize - 1) / Math.max(1, sampleGridCount - 1);
@@ -2384,7 +2415,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
       }
     }
-    const plumeDriftCells = new Set(sampleCells);
+    const plumeDriftCells = new Set();
+    const addPlumeDriftCell = (x, y, z) => {
+      plumeDriftCells.add(addSampleCell(x, y, z));
+    };
     const center = Math.floor(gridSize * 0.5);
     const isBonfireReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume';
     const sourceY01 = isBonfireReadbackScene ? 0.81 : 0.13;
@@ -2396,7 +2430,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     for (let y = plumeStartY; y <= plumeTopY; y += localStep) {
       for (let z = center - sourceRadius; z <= center + sourceRadius; z += localStep) {
         for (let x = center - sourceRadius; x <= center + sourceRadius; x += localStep) {
-          addSampleCell(x, y, z);
+          addPlumeDriftCell(x, y, z);
         }
       }
     }
@@ -2502,6 +2536,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fireCenterZ = fireWeightSum > 0 ? fireWeightedZ / fireWeightSum : 0;
     const smokeVisualRiseDisplacement = (smokeCenterY - sourceYNorm) * visualRiseDirectionY;
     const fireVisualRiseDisplacement = (fireCenterY - sourceYNorm) * visualRiseDirectionY;
+    const sourceRelativeVisualHeightBins = plumeHeightBins.map(bin => {
+      const visualCenter = (((bin.yMin + bin.yMax) * 0.5) - sourceYNorm) * visualRiseDirectionY;
+      const smokeVelocity = bin.smokeWeight > 0 ? bin.smokeWeightedVelocityY / bin.smokeWeight : 0;
+      const fireVelocity = bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0;
+      return {
+        bin: bin.bin,
+        visualCenter,
+        smokeWeight: bin.smokeWeight,
+        fireWeight: bin.fireWeight,
+        smokeCenterX: bin.smokeWeight > 0 ? bin.smokeWeightedX / bin.smokeWeight : 0,
+        smokeCenterZ: bin.smokeWeight > 0 ? bin.smokeWeightedZ / bin.smokeWeight : 0,
+        fireCenterX: bin.fireWeight > 0 ? bin.fireWeightedX / bin.fireWeight : 0,
+        fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
+        smokeVisualRiseVelocity: smokeVelocity * visualRiseDirectionY,
+        fireVisualRiseVelocity: fireVelocity * visualRiseDirectionY,
+      };
+    });
+    const risingSmokeBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > 0.08 && bin.smokeWeight > 0);
+    const risingSmokeWeight = risingSmokeBins.reduce((sum, bin) => sum + bin.smokeWeight, 0);
+    const risingSmokeVisualRiseDisplacement = risingSmokeWeight > 0
+      ? risingSmokeBins.reduce((sum, bin) => sum + bin.smokeWeight * bin.visualCenter, 0) / risingSmokeWeight
+      : 0;
     return {
       grid: gridSize,
       gridLabel: state.simGridLabel,
@@ -2530,6 +2586,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeVelocityY,
       smokeVisualRiseVelocity: smokeVelocityY * visualRiseDirectionY,
       smokeVisualRiseDisplacement,
+      risingSmokeVisualRiseDisplacement,
+      risingSmokeWeight,
       smokeRadialDrift: smokeWeightSum > 0 ? Math.hypot(smokeCenterX, smokeCenterZ) : 0,
       fireWeight: fireWeightSum,
       fireCenterX,
@@ -2552,19 +2610,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
         fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,
       })),
-      sourceRelativeVisualHeightBins: plumeHeightBins.map(bin => {
-        const visualCenter = (((bin.yMin + bin.yMax) * 0.5) - sourceYNorm) * visualRiseDirectionY;
-        const smokeVelocity = bin.smokeWeight > 0 ? bin.smokeWeightedVelocityY / bin.smokeWeight : 0;
-        const fireVelocity = bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0;
-        return {
-          bin: bin.bin,
-          visualCenter,
-          smokeWeight: bin.smokeWeight,
-          fireWeight: bin.fireWeight,
-          smokeVisualRiseVelocity: smokeVelocity * visualRiseDirectionY,
-          fireVisualRiseVelocity: fireVelocity * visualRiseDirectionY,
-        };
-      }),
+      sourceRelativeVisualHeightBins,
       liveVoxels,
     };
   }
