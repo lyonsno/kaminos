@@ -214,7 +214,12 @@ async function main() {
         const selectedPopulationState = w ? w.debugState() : layerState;
         if (firstPopulationId) window.__kaminosLamellarNudgeSelectedPopulationCount?.(1);
         const afterCountState = w ? w.debugState() : selectedPopulationState;
-        if (firstPopulationId) window.__kaminosLamellarFlipSelectedPopulationChirality?.();
+        const flipButton = document.querySelector('#lamellar-popover-actions [data-action="population-flip-chirality"]');
+        if (firstPopulationId && flipButton) flipButton.click();
+        const afterFlipState = w ? w.debugState() : afterCountState;
+        const afterFlipPopulation = (afterFlipState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+        const afterFlipStrips = (afterFlipState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
+        const afterFlipDescriptors = (afterFlipState.generatedSegmentDescriptors || []).filter(descriptor => descriptor.populationId === firstPopulationId);
         const pinPopover = document.getElementById('lamellar-selection-popover');
         const beforePinnedRect = pinPopover?.getBoundingClientRect();
         const beforePinnedTransform = pinPopover?.style.transform || '';
@@ -289,6 +294,10 @@ async function main() {
           afterCount: afterPopulation?.count ?? null,
           beforeChirality: beforePopulation?.chirality ?? null,
           afterChirality: afterPopulation?.chirality ?? null,
+          flipButtonClicked: Boolean(flipButton),
+          afterFlipChirality: afterFlipPopulation?.chirality ?? null,
+          afterFlipStripChiralities: Array.from(new Set(afterFlipStrips.map(strip => strip.chirality))),
+          afterFlipThetaTwistSigns: Array.from(new Set(afterFlipDescriptors.map(descriptor => Math.sign(descriptor.thetaTwist || 0)))),
           afterBearingVariance: afterPopulation?.bearingVariance ?? null,
           afterBearingOffset: afterPopulation?.bearingOffset ?? null,
           afterRadialSpacing: afterPopulation?.radialSpacing ?? null,
@@ -472,6 +481,22 @@ async function main() {
       state.populationControlReceipt?.afterChirality,
       -(state.populationControlReceipt?.beforeChirality || 1),
       'Lamellar population chirality control did not mutate selected population chirality'
+    );
+    assert.equal(state.populationControlReceipt?.flipButtonClicked, true, 'Lamellar population chirality witness did not click the visible Flip chirality button');
+    assert.equal(
+      state.populationControlReceipt?.afterFlipChirality,
+      -(state.populationControlReceipt?.beforeChirality || 1),
+      'Lamellar visible Flip chirality button did not mutate population chirality'
+    );
+    assert.deepEqual(
+      state.populationControlReceipt?.afterFlipStripChiralities,
+      [state.populationControlReceipt?.afterFlipChirality],
+      'Lamellar visible Flip chirality button did not propagate chirality to strip instances'
+    );
+    assert.deepEqual(
+      state.populationControlReceipt?.afterFlipThetaTwistSigns,
+      [state.populationControlReceipt?.afterFlipChirality],
+      'Lamellar visible Flip chirality button did not change emitted curve twist direction'
     );
     assert.equal(state.populationControlReceipt?.afterBearingVariance, 1, 'Lamellar population spread control did not mutate bearing variance');
     assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.23, 'Lamellar population rotate control did not mutate bearing offset');

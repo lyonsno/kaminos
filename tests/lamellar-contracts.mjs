@@ -588,6 +588,34 @@ for (const count of [4, 5, 6]) {
   assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.phi0)) >= 0.45, `count ${count} descriptors occupy visible shell-lane centerlines`);
   assert.ok(Math.max(...descriptorsForPopulation.map(descriptor => descriptor.radius)) - Math.min(...descriptorsForPopulation.map(descriptor => descriptor.radius)) >= 0.12, `count ${count} descriptors expose radial clearance in emitted shell radius`);
 }
+{
+  const chiralityBase = {
+    seed: 31,
+    layerCount: 2,
+    chiralityPattern: 'same',
+    chunkinessBase: 0.4,
+    chunkinessVariance: 0,
+    stripPopulations: [
+      { id: 'flip-target', layerIndex: 0, role: 'lamella', count: 4, chirality: 1, bearingOffset: 0, bearingVariance: 1, layoutPreset: 'coverage' },
+    ],
+  };
+  const positive = coreModule.generateLamellarSectionSegments(chiralityBase);
+  const negative = coreModule.generateLamellarSectionSegments({
+    ...chiralityBase,
+    stripPopulations: [{ ...chiralityBase.stripPopulations[0], chirality: -1 }],
+  });
+  const positivePopulation = positive.stripPopulationDescriptors.find(population => population.id === 'flip-target');
+  const negativePopulation = negative.stripPopulationDescriptors.find(population => population.id === 'flip-target');
+  const positiveDescriptors = positive.descriptors.filter(descriptor => descriptor.populationId === 'flip-target');
+  const negativeDescriptors = negative.descriptors.filter(descriptor => descriptor.populationId === 'flip-target');
+  assert.equal(positivePopulation?.chirality, 1, 'positive chirality population remains positive');
+  assert.equal(negativePopulation?.chirality, -1, 'negative chirality population flips negative');
+  assert.equal(positiveDescriptors.length, negativeDescriptors.length, 'chirality flip preserves population descriptor count');
+  assert.ok(
+    positiveDescriptors.some((descriptor, index) => Math.sign(descriptor.thetaTwist || 0) !== Math.sign(negativeDescriptors[index]?.thetaTwist || 0)),
+    'population chirality flip changes emitted curve twist direction'
+  );
+}
 assert.ok(
   populated.stripPopulationDescriptors.every(population =>
     populated.stripInstances.some(strip => strip.populationId === population.id)

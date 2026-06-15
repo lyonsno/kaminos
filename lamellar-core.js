@@ -508,10 +508,11 @@ function curveIntervalForStrip(strip, spec) {
 }
 
 function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
+  const stripChirality = strip.chirality < 0 ? -1 : 1;
   if (strip.layerIndex === 0) {
     return {
       theta0: selectedShape.theta0 + strip.bearingPhase * 0.22,
-      thetaTwist: selectedShape.thetaTwist,
+      thetaTwist: Math.abs(selectedShape.thetaTwist) * stripChirality,
       phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
       phiSlope: selectedShape.phiSlope,
       phase: selectedPhase + strip.phaseOffset,
@@ -522,7 +523,7 @@ function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
   const isCutAuthor = strip.sliceParticipation === "cut-author-envelope";
   return {
     theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase * 0.22 + (isCutAuthor ? 0 : 0.04),
-    thetaTwist: spec.chirality * (4.36 + strip.stripIndex * 0.08),
+    thetaTwist: stripChirality * (4.36 + strip.stripIndex * 0.08),
     phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
     phiSlope: 0.86 + strip.stripIndex * 0.04,
     phase: spec.phase + strip.phaseOffset,
@@ -1515,6 +1516,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       interval: d.interval,
       curveLaw: d.curveLaw,
       capLaw: d.capLaw,
+      theta0: d.theta0,
+      thetaTwist: d.thetaTwist,
+      phi0: d.phi0,
+      phiSlope: d.phiSlope,
+      phase: d.phase,
       source: d.source,
       sliceParentId: d.sliceParentId || null,
     }));
@@ -1597,6 +1603,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         stripProfileDescriptor: descriptor.stripProfileDescriptor,
         span: descriptor.interval,
         curveLaw: descriptor.curveLaw,
+        theta0: descriptor.theta0,
+        thetaTwist: descriptor.thetaTwist,
+        phi0: descriptor.phi0,
+        phiSlope: descriptor.phiSlope,
+        phase: descriptor.phase,
         openEdgeCount: 0,
       });
       state.lightHooks.push(makeHook(centerline, descriptor.layerIndex, index, descriptor.materialRole, descriptor));
