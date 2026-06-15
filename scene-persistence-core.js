@@ -30,8 +30,13 @@ function normalizeVolumePrimitiveState(state) {
   const primitives = Array.isArray(state)
     ? state
     : (Array.isArray(state?.primitives) ? state.primitives : []);
+  const selectedVolumePrimitiveId = !Array.isArray(state)
+    && primitives.some(primitive => primitive?.id === state?.selectedVolumePrimitiveId)
+    ? state.selectedVolumePrimitiveId
+    : null;
   return {
     schema: state?.schema || VOLUME_PRIMITIVE_SCHEMA,
+    selectedVolumePrimitiveId,
     primitives: cloneJson(primitives),
   };
 }

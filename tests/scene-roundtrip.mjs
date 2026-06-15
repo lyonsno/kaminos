@@ -12,6 +12,7 @@ import {
 
 const volumePrimitives = {
   schema: 'kaminos.volume-primitives.v0',
+  selectedVolumePrimitiveId: 'fixture-fire-smoke-sphere',
   primitives: [
     {
       id: 'fixture-fire-smoke-sphere',
