@@ -10,6 +10,7 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume_primitive_fixture/, 'URL route can seed a saved volume primitive fixture');
+assert.match(index, /seedVolumeSourceTypeProbe/, 'URL route can seed a visible source-typed primitive probe without witness-side authoring');
 assert.match(index, /function isKaminosVolumeSmokeRoute\(\)/, 'volume route has an explicit route predicate for startup behavior');
 assert.match(index, /if \(!isKaminosVolumeSmokeRoute\(\)\) \{\s*loadDemo\(DEMO_ASSETS\[0\]\);/s, 'volume route must not auto-load the default material preview over the volume');
 assert.match(index, /createVolumeMainRendererBridge/, 'volume route composes into the main Three.js renderer');
@@ -48,6 +49,9 @@ assert.match(index, /id="volume-source-type-select"/, 'Volume tab exposes select
 assert.match(index, /id="volume-primitive-radius"/, 'Volume tab exposes selected primitive radius editing');
 assert.match(index, /id="volume-primitive-flow-rate"/, 'Volume tab exposes selected primitive flow-rate editing');
 assert.match(index, /id="volume-primitive-radiance"/, 'Volume tab exposes selected primitive radiance editing');
+assert.match(index, /id="volume-primitive-density"/, 'Volume tab exposes selected primitive density/source gain editing');
+assert.match(index, /id="volume-primitive-fire"/, 'Volume tab exposes selected primitive fire source gain editing');
+assert.match(index, /id="volume-primitive-smoke"/, 'Volume tab exposes selected primitive smoke source gain editing');
 assert.match(index, /id="volume-marker-visible"/, 'Volume tab exposes a marker visibility toggle');
 assert.match(index, /id="volume-marker-opacity"/, 'Volume tab exposes marker opacity control');
 assert.match(index, /volume-parameter-ownership-taxonomy-v0/, 'Volume tab carries a stable parameter ownership taxonomy identity');
@@ -63,7 +67,7 @@ assert.match(index, /data-parameter-ownership="primitive-local-applied"/, 'Volum
 assert.match(index, /data-parameter-ownership="primitive-local-authored"/, 'Volume tab visibly separates authored primitive-local controls from backend-applied controls');
 assert.match(index, /data-parameter-ownership="renderer-global"/, 'Volume tab visibly groups renderer-wide global controls');
 assert.match(index, /function volumeParameterOwnershipState/, 'authoring debug state exposes parameter ownership taxonomy');
-assert.match(index, /primitiveAppliedControlIds[\s\S]*volume-primitive-radius[\s\S]*volume-primitive-flow-rate/, 'ownership taxonomy names primitive controls currently applied by the backend');
+assert.match(index, /primitiveAppliedControlIds[\s\S]*volume-primitive-radius[\s\S]*volume-primitive-flow-rate[\s\S]*volume-primitive-density[\s\S]*volume-primitive-fire[\s\S]*volume-primitive-smoke/, 'ownership taxonomy names primitive controls currently applied by the backend');
 assert.match(index, /primitiveAuthoredControlIds[\s\S]*volume-primitive-radiance[\s\S]*volume-marker-visible[\s\S]*volume-marker-opacity/, 'ownership taxonomy names primitive controls that are authored/persisted locally');
 assert.match(index, /rendererGlobalControlIds[\s\S]*volume-density[\s\S]*volume-fire[\s\S]*volume-smoke[\s\S]*volume-steps/, 'ownership taxonomy names renderer/global controls');
 assert.match(index, /volumeAuthoringMode/, 'viewport keeps explicit volume primitive authoring mode state');
@@ -219,6 +223,11 @@ assert.match(core, /primitive_source/, 'fluid uniforms carry an explicit primiti
 assert.match(core, /MAX_VOLUME_PRIMITIVE_SOURCES/, 'fluid shader declares a bounded multi-primitive source budget');
 assert.match(core, /primitive_sources:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry multiple primitive source transforms');
 assert.match(core, /primitive_source_params:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry per-primitive radius and flow parameters');
+assert.match(core, /primitive_source_channels:\s*array<vec4<f32>,\s*MAX_VOLUME_PRIMITIVE_SOURCES>/, 'fluid uniforms carry per-primitive backend-applied source channel gains');
+assert.match(core, /sourceDensityGain/, 'fluid shader consumes per-primitive density source gain');
+assert.match(core, /sourceFireGain/, 'fluid shader consumes per-primitive fire source gain');
+assert.match(core, /sourceSmokeGain/, 'fluid shader consumes per-primitive smoke source gain');
+assert.match(core, /shared-volume-simulation-cost-v0/, 'volume debug state exposes the shared-simulation cost model identity');
 assert.match(core, /sourceTaxonomyIdentity/, 'fluid renderer publishes primitive source taxonomy identity');
 assert.match(core, /fireSourceMix/, 'fluid renderer publishes fire source mix routed from source type');
 assert.match(core, /smokeSourceMix/, 'fluid renderer publishes smoke source mix routed from source type');

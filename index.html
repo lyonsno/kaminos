@@ -394,6 +394,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="volume-primitive-flow-rate" min="0" max="2.5" step="0.05" value="0.15">
         <span class="slider-val" id="volume-primitive-flow-rate-val">0.15</span>
       </div>
+      <div class="slider-row" data-parameter-ownership="primitive-local-applied">
+        <span class="slider-label">Prim Density</span>
+        <input type="range" id="volume-primitive-density" min="0" max="3" step="0.05" value="1">
+        <span class="slider-val" id="volume-primitive-density-val">1.00</span>
+      </div>
+      <div class="slider-row" data-parameter-ownership="primitive-local-applied">
+        <span class="slider-label">Prim Fire</span>
+        <input type="range" id="volume-primitive-fire" min="0" max="3" step="0.05" value="1">
+        <span class="slider-val" id="volume-primitive-fire-val">1.00</span>
+      </div>
+      <div class="slider-row" data-parameter-ownership="primitive-local-applied">
+        <span class="slider-label">Prim Smoke</span>
+        <input type="range" id="volume-primitive-smoke" min="0" max="3" step="0.05" value="1">
+        <span class="slider-val" id="volume-primitive-smoke-val">1.00</span>
+      </div>
       <div class="volume-section-title" data-parameter-ownership="primitive-local-authored">Primitive Authored</div>
       <div class="slider-row" data-parameter-ownership="primitive-local-authored">
         <span class="slider-label">Prim Radiance Intent</span>
@@ -745,6 +760,9 @@ const VOLUME_PARAMETER_OWNERSHIP = Object.freeze({
     'volume-source-type-select',
     'volume-primitive-radius',
     'volume-primitive-flow-rate',
+    'volume-primitive-density',
+    'volume-primitive-fire',
+    'volume-primitive-smoke',
   ],
   primitiveAuthoredControlIds: [
     'volume-primitive-radiance',
@@ -1067,6 +1085,8 @@ function createManualFireSmokeVolumePrimitive(position = [0, -0.58, 0], options 
       ...sourceDefinition.channels,
       ...(options.channels || {}),
       density: Number(options.density ?? sourceDefinition.channels.density),
+      temperature: Number(options.fire ?? options.temperature ?? sourceDefinition.channels.temperature),
+      fuel: Number(options.fire ?? options.fuel ?? sourceDefinition.channels.fuel),
       smoke: Number(options.smoke ?? sourceDefinition.channels.smoke),
       absorption: Number(options.absorption ?? sourceDefinition.channels.absorption),
     },
@@ -1152,21 +1172,30 @@ function refreshVolumePrimitivePanel() {
   const radiusVal = document.getElementById('volume-primitive-radius-val');
   const flowEl = document.getElementById('volume-primitive-flow-rate');
   const flowVal = document.getElementById('volume-primitive-flow-rate-val');
+  const densityEl = document.getElementById('volume-primitive-density');
+  const densityVal = document.getElementById('volume-primitive-density-val');
+  const fireEl = document.getElementById('volume-primitive-fire');
+  const fireVal = document.getElementById('volume-primitive-fire-val');
+  const smokeEl = document.getElementById('volume-primitive-smoke');
+  const smokeVal = document.getElementById('volume-primitive-smoke-val');
   const radianceEl = document.getElementById('volume-primitive-radiance');
   const radianceVal = document.getElementById('volume-primitive-radiance-val');
   const handleVisibleEl = document.getElementById('volume-marker-visible');
   const handleOpacityEl = document.getElementById('volume-marker-opacity');
   refreshVolumePrimitiveSelector();
   updateVolumeMarkerControlLabels();
-  if (!selectedEl || !sourceTypeEl || !radiusEl || !flowEl || !radianceEl) return;
+  if (!selectedEl || !sourceTypeEl || !radiusEl || !flowEl || !densityEl || !fireEl || !smokeEl || !radianceEl) return;
   selectedEl.textContent = primitive ? primitive.id : 'none';
   selectedEl.title = primitive ? primitive.id : '';
-  for (const el of [sourceTypeEl, radiusEl, flowEl, radianceEl, handleVisibleEl, handleOpacityEl]) {
+  for (const el of [sourceTypeEl, radiusEl, flowEl, densityEl, fireEl, smokeEl, radianceEl, handleVisibleEl, handleOpacityEl]) {
     if (el) el.disabled = !primitive;
   }
   if (!primitive) {
     radiusVal.textContent = Number(radiusEl.value).toFixed(2);
     flowVal.textContent = Number(flowEl.value).toFixed(2);
+    densityVal.textContent = Number(densityEl.value).toFixed(2);
+    fireVal.textContent = Number(fireEl.value).toFixed(2);
+    smokeVal.textContent = Number(smokeEl.value).toFixed(2);
     radianceVal.textContent = Number(radianceEl.value).toFixed(2);
     updateVolumeMarkerControlLabels();
     refreshVolumePrimitiveContextMenu();
@@ -1176,11 +1205,17 @@ function refreshVolumePrimitivePanel() {
   sourceTypeEl.value = normalizeVolumeSourceType(primitive.sourceType);
   radiusEl.value = String(volumePrimitiveRadius(primitive));
   flowEl.value = String(Number(primitive.simulation?.flowRate ?? 0.15));
+  densityEl.value = String(Number(primitive.channels?.density ?? 1));
+  fireEl.value = String(Number(primitive.channels?.temperature ?? primitive.channels?.fuel ?? 1));
+  smokeEl.value = String(Number(primitive.channels?.smoke ?? 1));
   radianceEl.value = String(Number(primitive.render?.radiance ?? 1.65));
   if (handleVisibleEl) handleVisibleEl.checked = markerSettings.handleVisible;
   if (handleOpacityEl) handleOpacityEl.value = String(markerSettings.handleOpacity);
   radiusVal.textContent = Number(radiusEl.value).toFixed(2);
   flowVal.textContent = Number(flowEl.value).toFixed(2);
+  densityVal.textContent = Number(densityEl.value).toFixed(2);
+  fireVal.textContent = Number(fireEl.value).toFixed(2);
+  smokeVal.textContent = Number(smokeEl.value).toFixed(2);
   radianceVal.textContent = Number(radianceEl.value).toFixed(2);
   updateVolumeMarkerControlLabels();
   refreshVolumePrimitiveContextMenu();
@@ -1194,6 +1229,9 @@ function applySelectedVolumePrimitiveControls() {
   }
   const radius = Number(document.getElementById('volume-primitive-radius')?.value ?? primitive.simulation?.sourceRadius ?? 0.12);
   const flowRate = Number(document.getElementById('volume-primitive-flow-rate')?.value ?? primitive.simulation?.flowRate ?? 0.15);
+  const densityGain = Number(document.getElementById('volume-primitive-density')?.value ?? primitive.channels?.density ?? 1);
+  const fireGain = Number(document.getElementById('volume-primitive-fire')?.value ?? primitive.channels?.temperature ?? primitive.channels?.fuel ?? 1);
+  const smokeGain = Number(document.getElementById('volume-primitive-smoke')?.value ?? primitive.channels?.smoke ?? 1);
   const radiance = Number(document.getElementById('volume-primitive-radiance')?.value ?? primitive.render?.radiance ?? 1.65);
   const sourceType = normalizeVolumeSourceType(document.getElementById('volume-source-type-select')?.value ?? primitive.sourceType ?? 'fire_smoke');
   const sourceTypeChanged = sourceType !== normalizeVolumeSourceType(primitive.sourceType);
@@ -1205,6 +1243,13 @@ function applySelectedVolumePrimitiveControls() {
   primitive.transform = primitive.transform || { position: [0, -0.58, 0], rotation: [0, 0, 0], scale: [radius, radius, radius] };
   primitive.transform.scale = [radius, radius, radius];
   primitive.simulation = { ...(primitive.simulation || {}), sourceRadius: radius, flowRate };
+  primitive.channels = {
+    ...(primitive.channels || {}),
+    density: Math.max(0, densityGain),
+    temperature: Math.max(0, fireGain),
+    fuel: Math.max(0, fireGain),
+    smoke: Math.max(0, smokeGain),
+  };
   primitive.render = { ...(primitive.render || {}), radiance };
   primitive.authoring = normalizeVolumePrimitiveAuthoring({
     ...(primitive.authoring || {}),
@@ -1385,11 +1430,23 @@ function syncVolumePrimitiveFromTransformMarker(marker = currentMesh) {
     0.06,
     0.5,
   );
+  const rotation = [marker.rotation.x, marker.rotation.y, marker.rotation.z]
+    .map(value => Number.isFinite(value) ? value : 0);
+  const closeArray = (a = [], b = [], epsilon = 0.00001) =>
+    a.length === b.length && a.every((value, index) => Math.abs(Number(value) - Number(b[index])) <= epsilon);
+  const nextScale = [radius, radius, radius];
+  if (
+    closeArray(primitive.transform?.position || [], position) &&
+    closeArray(primitive.transform?.rotation || [], rotation) &&
+    closeArray(primitive.transform?.scale || [], nextScale) &&
+    Math.abs(Number(primitive.simulation?.sourceRadius ?? radius) - radius) <= 0.00001
+  ) {
+    return primitive;
+  }
   primitive.transform = primitive.transform || {};
   primitive.transform.position = position;
-  primitive.transform.rotation = [marker.rotation.x, marker.rotation.y, marker.rotation.z]
-    .map(value => Number.isFinite(value) ? value : 0);
-  primitive.transform.scale = [radius, radius, radius];
+  primitive.transform.rotation = rotation;
+  primitive.transform.scale = nextScale;
   primitive.simulation = {
     ...(primitive.simulation || {}),
     sourceRadius: radius,
@@ -1608,6 +1665,30 @@ function seedVolumePrimitiveFixture(name) {
   const fixture = createVolumePrimitiveFixture(name);
   if (!fixture) return;
   setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [fixture] });
+}
+
+function seedVolumeSourceTypeProbe(sourceType) {
+  const normalizedSourceType = normalizeVolumeSourceType(sourceType);
+  if (!VOLUME_SOURCE_TYPES[normalizedSourceType] || normalizedSourceType !== sourceType) return;
+  const primitive = createManualFireSmokeVolumePrimitive([0.24, -0.58, 0.12], {
+    id: `route-${normalizedSourceType.replace('_', '-')}-source-probe`,
+    sourceType: normalizedSourceType,
+    radius: 0.18,
+    flowRate: normalizedSourceType === 'smoke' ? 0.58 : 0.38,
+    radiance: normalizedSourceType === 'smoke' ? 0.35 : 2.1,
+    density: 1,
+    fire: normalizedSourceType === 'smoke' ? 0 : 1,
+    smoke: normalizedSourceType === 'fire' ? 0 : 1,
+    authoring: {
+      handleOpacity: 0.08,
+      handleVisible: true,
+    },
+  });
+  setVolumePrimitivesState({
+    schema: VOLUME_PRIMITIVE_SCHEMA,
+    selectedVolumePrimitiveId: primitive.id,
+    primitives: [primitive],
+  });
 }
 
 function makeSceneObjectId(prefix = 'object') {
@@ -3119,6 +3200,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_primitive_fixture')) {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
   }
+  if (['fire', 'smoke', 'fire_smoke'].includes(params.get('volume_source_type_probe'))) {
+    seedVolumeSourceTypeProbe(params.get('volume_source_type_probe'));
+  }
 
   const syncControls = () => {
     updateVolumeControlLabels();
@@ -3175,7 +3259,7 @@ async function initKaminosVolumeRoute() {
       closeVolumePrimitiveContextMenu();
     }
   });
-  for (const id of ['volume-primitive-radius', 'volume-primitive-flow-rate', 'volume-primitive-radiance']) {
+  for (const id of ['volume-primitive-radius', 'volume-primitive-flow-rate', 'volume-primitive-density', 'volume-primitive-fire', 'volume-primitive-smoke', 'volume-primitive-radiance']) {
     document.getElementById(id).addEventListener('input', applySelectedVolumePrimitiveControls);
     document.getElementById(id).addEventListener('change', applySelectedVolumePrimitiveControls);
   }
@@ -3196,6 +3280,9 @@ async function initKaminosVolumeRoute() {
       if (!primitive) return null;
       if (values.radius !== undefined) document.getElementById('volume-primitive-radius').value = String(values.radius);
       if (values.flowRate !== undefined) document.getElementById('volume-primitive-flow-rate').value = String(values.flowRate);
+      if (values.density !== undefined) document.getElementById('volume-primitive-density').value = String(values.density);
+      if (values.fire !== undefined) document.getElementById('volume-primitive-fire').value = String(values.fire);
+      if (values.smoke !== undefined) document.getElementById('volume-primitive-smoke').value = String(values.smoke);
       if (values.radiance !== undefined) document.getElementById('volume-primitive-radiance').value = String(values.radiance);
       if (values.sourceType !== undefined) document.getElementById('volume-source-type-select').value = normalizeVolumeSourceType(values.sourceType);
       if (values.handleOpacity !== undefined) document.getElementById('volume-marker-opacity').value = String(values.handleOpacity);

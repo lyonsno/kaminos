@@ -65,9 +65,11 @@ const expectedAuthoredNativeSourcePosition = expectedSceneSourceProbe ? [0.0, 0.
 const expectedSourceMappingIdentity = 'volume-primitive-scene-bounds-source-domain-v1';
 const expectedSecondPrimitivePosition = [-0.24, -0.52, -0.18];
 const expectedSecondPrimitiveNativeSourcePosition = [-0.04128, -0.1048, -0.03096];
+const expectedRouteSourceProbeId = expectedSingleSourceTypeProbe ? `route-${requestedSourceTypeProbe.replace('_', '-')}-source-probe` : null;
 const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
-  : (expectedAuthoringProbe || expectedSingleSourceTypeProbe) ? expectedAuthoredPrimitiveId
+  : expectedSingleSourceTypeProbe ? expectedRouteSourceProbeId
+  : expectedAuthoringProbe ? expectedAuthoredPrimitiveId
   : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 
 function assertNoPlaceholderTopologyClaim(primitives = []) {
@@ -324,15 +326,35 @@ async function main() {
       const authoringEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: `(async () => {
           const authoring = window.__kaminosVolumeAuthoring;
-          const primitive = authoring.placeAt([0.24, -0.58, 0.12], {
-            id: '${expectedAuthoredPrimitiveId}',
-            sourceType: '${expectedSingleSourceTypeProbe ? requestedSourceTypeProbe : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
-            radius: 0.18,
-            flowRate: 0.35,
-            radiance: ${expectedSmokeOnlySourceProbe ? '0.35' : '2.1'},
-          });
-          authoring.select('${expectedAuthoredPrimitiveId}');
-          authoring.updateSelected({ sourceType: '${expectedSingleSourceTypeProbe ? requestedSourceTypeProbe : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}', radius: 0.18, flowRate: 0.35, radiance: ${expectedSmokeOnlySourceProbe ? '0.35' : '2.1'}, handleOpacity: 0.12, handleVisible: true });
+          const primaryId = '${expectedPrimitiveId || expectedAuthoredPrimitiveId}';
+          let primitive = null;
+          if (${expectedSingleSourceTypeProbe ? 'true' : 'false'}) {
+            authoring.select(primaryId);
+            primitive = authoring.updateSelected({
+              sourceType: '${expectedSingleSourceTypeProbe ? requestedSourceTypeProbe : expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
+              radius: 0.18,
+              flowRate: 0.35,
+              density: 1,
+              fire: ${expectedSmokeOnlySourceProbe ? '0' : '1'},
+              smoke: ${expectedFireOnlySourceProbe ? '0' : '1'},
+              radiance: ${expectedSmokeOnlySourceProbe ? '0.35' : '2.1'},
+              handleOpacity: 0.12,
+              handleVisible: true,
+            });
+          } else {
+            primitive = authoring.placeAt([0.24, -0.58, 0.12], {
+              id: primaryId,
+              sourceType: '${expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}',
+              radius: 0.18,
+              flowRate: 0.35,
+              density: 1,
+              fire: 1,
+              smoke: ${expectedSourceTypeProbe ? '0' : '1'},
+              radiance: 2.1,
+            });
+            authoring.select(primaryId);
+            authoring.updateSelected({ sourceType: '${expectedSourceTypeProbe ? 'fire' : 'fire_smoke'}', radius: 0.18, flowRate: 0.35, density: 1, fire: 1, smoke: ${expectedSourceTypeProbe ? '0' : '1'}, radiance: 2.1, handleOpacity: 0.12, handleVisible: true });
+          }
           const moved = authoring.moveSelectedTo([${expectedAuthoredEffectivePosition.join(', ')}]);
           const second = ${expectedMultiPrimitiveProbe
             ? `authoring.placeAt([${expectedSecondPrimitivePosition.join(', ')}], {
@@ -416,11 +438,11 @@ async function main() {
         assert.equal(contextResult?.selectedAfterDelete, expectedAuthoredPrimitiveId, 'context delete action did not return selection to the surviving primitive');
       }
       const expectedProbeSelection = expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
-        : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
+        : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedProbeSelection, 'authored volume primitive was not selected');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedProbeSelection, 'authored volume primitive did not attach to the transform target');
       assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored volume primitive target identity regressed');
-      assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored volume primitive marker was not created');
+      assert.ok(volumeAuthoring?.markerIds?.includes(expectedPrimitiveId), 'authored volume primitive marker was not created');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored volume primitive marker regressed to a solid affordance');
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored volume primitive marker must not claim full raymarch bounds');
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored volume primitive marker opacity is too visually dominant');
@@ -512,8 +534,8 @@ async function main() {
         returnByValue: true,
       });
       volumeAuthoring = authoringStateEval.result.value;
-      const primitive = state.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
-      const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedAuthoredPrimitiveId);
+      const primitive = state.volumePrimitives?.find(item => item.id === expectedPrimitiveId);
+      const authoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedPrimitiveId);
       const secondPrimitive = state.volumePrimitives?.find(item => item.id === expectedSecondPrimitiveId);
       assert.equal(volumeAuthoring?.identity, 'volume-authoring-loop-v0', 'wrong volume authoring identity');
       assert.equal(volumeAuthoring?.parameterOwnership?.identity, 'volume-parameter-ownership-taxonomy-v0', 'wrong parameter ownership taxonomy identity');
@@ -523,16 +545,19 @@ async function main() {
       assert.ok(volumeAuthoring?.sourceTypeTaxonomy?.sourceTypes?.some(type => type.sourceType === 'fire_smoke'), 'source taxonomy did not include Fire+Smoke');
       assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-radius'), 'primitive radius ownership was not marked backend-applied local');
       assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-flow-rate'), 'primitive flow ownership was not marked backend-applied local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-density'), 'primitive density ownership was not marked backend-applied local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-fire'), 'primitive fire ownership was not marked backend-applied local');
+      assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAppliedControlIds?.includes('volume-primitive-smoke'), 'primitive smoke ownership was not marked backend-applied local');
       assert.ok(volumeAuthoring?.parameterOwnership?.primitiveAuthoredControlIds?.includes('volume-primitive-radiance'), 'primitive radiance was not marked authored-local');
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-density'), 'density was not marked renderer-global');
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-smoke'), 'smoke was not marked renderer-global');
       assert.ok(volumeAuthoring?.parameterOwnership?.rendererGlobalControlIds?.includes('volume-steps'), 'ray steps were not marked renderer-global');
       const expectedSelectedPrimitiveId = expectedSourceTypeProbe ? expectedFireSmokeSourcePrimitiveId
-        : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedAuthoredPrimitiveId;
+        : expectedMultiPrimitiveProbe ? expectedSecondPrimitiveId : expectedPrimitiveId;
       assert.equal(volumeAuthoring?.selectedVolumePrimitiveId, expectedSelectedPrimitiveId, 'authored primitive selection was not retained');
       assert.equal(volumeAuthoring?.transformTargetPrimitiveId, expectedSelectedPrimitiveId, 'authored primitive transform target was not retained');
       assert.equal(volumeAuthoring?.transformTargetIdentity, 'volume-primitive-transform-target-v0', 'authored primitive transform target identity was not retained');
-      assert.ok(volumeAuthoring?.markerIds?.includes(expectedAuthoredPrimitiveId), 'authored primitive marker id was not retained');
+      assert.ok(volumeAuthoring?.markerIds?.includes(expectedPrimitiveId), 'authored primitive marker id was not retained');
       assert.equal(volumeAuthoring?.markerAffordance, 'volume-primitive-marker-wire-halo-v0', 'authored primitive marker did not preserve wire/halo affordance');
       assert.equal(volumeAuthoring?.markerSemantic, 'volume-primitive-source-handle-not-raymarch-bounds-v0', 'authored primitive marker did not preserve source-handle semantics');
       assert.ok((volumeAuthoring?.markerOpacity ?? 1) <= 0.2, 'authored primitive marker opacity became too visually dominant');
@@ -595,13 +620,18 @@ async function main() {
         assert.equal(primitive?.sourceType, requestedSourceTypeProbe, 'single source primitive did not preserve requested source type');
         assert.equal(state.primitiveSource?.sourceType, requestedSourceTypeProbe, 'single source record did not publish requested source type');
         assert.equal(state.primitiveSource?.sourceTaxonomyIdentity, 'volume-source-type-taxonomy-v0', 'single source did not publish taxonomy identity');
+        assert.ok(Math.abs((state.primitiveSource?.densityGain ?? 0) - 1) < 0.001, 'single source did not publish primitive-local density gain');
         if (expectedSmokeOnlySourceProbe) {
           assert.equal(state.primitiveSource?.fireSourceMix, 0, 'Smoke-only source carried fire source mix');
           assert.ok((state.primitiveSource?.smokeSourceMix ?? 0) > 0.9, 'Smoke-only source did not carry smoke source mix');
+          assert.equal(state.primitiveSource?.fireGain, 0, 'Smoke-only source carried primitive-local fire gain');
+          assert.ok((state.primitiveSource?.smokeGain ?? 0) > 0.9, 'Smoke-only source did not carry primitive-local smoke gain');
         }
         if (expectedFireOnlySourceProbe) {
           assert.ok((state.primitiveSource?.fireSourceMix ?? 0) > 0.9, 'Fire-only source did not carry fire source mix');
           assert.equal(state.primitiveSource?.smokeSourceMix, 0, 'Fire-only source carried direct smoke source mix');
+          assert.ok((state.primitiveSource?.fireGain ?? 0) > 0.9, 'Fire-only source did not carry primitive-local fire gain');
+          assert.equal(state.primitiveSource?.smokeGain, 0, 'Fire-only source carried primitive-local smoke gain');
         }
       }
       if (expectedSaveLoadProbe) {
@@ -616,14 +646,18 @@ async function main() {
       assert.equal(primitive?.coupling?.authoringTool, expectedAuthoringTool, 'authored primitive did not preserve authoring tool identity');
       assert.ok(Math.abs((primitive?.simulation?.sourceRadius ?? 0) - 0.18) < 0.001, 'authored primitive radius setting was not applied');
       assert.ok(Math.abs((primitive?.simulation?.flowRate ?? 0) - 0.35) < 0.001, 'authored primitive flow setting was not applied');
+      assert.ok(Math.abs((primitive?.channels?.density ?? 0) - 1) < 0.001, 'authored primitive density gain setting was not applied');
       const expectedPrimitiveRadiance = expectedSmokeOnlySourceProbe ? 0.35 : 2.1;
       assert.ok(Math.abs((authoredPrimitive?.render?.radiance ?? 0) - expectedPrimitiveRadiance) < 0.001, 'authored primitive radiance setting was not applied');
       assert.equal(authoredPrimitive?.authoring?.settingsIdentity, 'volume-primitive-local-settings-v0', 'authored primitive did not preserve local settings identity');
       assert.ok(Math.abs((authoredPrimitive?.authoring?.handleOpacity ?? 0) - 0.12) < 0.001, 'authored primitive handle opacity did not persist locally');
       assert.equal(authoredPrimitive?.authoring?.handleVisible, true, 'authored primitive handle visibility did not persist locally');
-      const firstMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedAuthoredPrimitiveId);
+      const firstMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedPrimitiveId);
       assert.ok(Math.abs((firstMarkerState?.handleOpacity ?? 0) - 0.12) < 0.001, 'first marker did not use its own local handle opacity');
       assert.equal(firstMarkerState?.handleVisible, true, 'first marker did not use its own local handle visibility');
+      assert.equal(state.simulationCostModel?.identity, 'shared-volume-simulation-cost-v0', 'volume state did not publish shared simulation cost model');
+      assert.equal(state.simulationCostModel?.fullSimulationPasses, 1, 'volume state claimed more than one full simulation pass');
+      assert.equal(state.simulationCostModel?.fullRaymarchPasses, 1, 'volume state claimed more than one full raymarch pass');
       if (expectedMultiPrimitiveProbe) {
         const secondAuthoredPrimitive = volumeAuthoring?.volumePrimitives?.find(item => item.id === expectedSecondPrimitiveId);
         const secondMarkerState = volumeAuthoring?.markerStates?.find(item => item.id === expectedSecondPrimitiveId);

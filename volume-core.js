@@ -91,6 +91,7 @@ struct Uniforms {
   primitive_source: vec4<f32>,
   primitive_sources: array<vec4<f32>, MAX_VOLUME_PRIMITIVE_SOURCES>,
   primitive_source_params: array<vec4<f32>, MAX_VOLUME_PRIMITIVE_SOURCES>,
+  primitive_source_channels: array<vec4<f32>, MAX_VOLUME_PRIMITIVE_SOURCES>,
   primitive_source_meta: vec4<f32>,
 };
 
@@ -591,11 +592,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (sourceIndex < sourceCount) {
       let sourceVector = u.primitive_sources[sourceIndex];
       let sourceParams = u.primitive_source_params[sourceIndex];
+      let sourceChannels = u.primitive_source_channels[sourceIndex];
       let inputRadius = max(0.04, sourceParams.x);
       let inputFlow = max(0.0, sourceParams.y);
       let sourceFireMix = clamp(sourceParams.z, 0.0, 1.0);
       let sourceSmokeMix = clamp(sourceParams.w, 0.0, 1.0);
-      let sourceAnyMix = max(sourceFireMix, sourceSmokeMix);
+      let sourceDensityGain = max(0.0, sourceChannels.x);
+      let sourceFireGain = max(0.0, sourceChannels.y);
+      let sourceSmokeGain = max(0.0, sourceChannels.z);
+      let sourceAnyMix = max(sourceFireMix * sourceFireGain, sourceSmokeMix * sourceSmokeGain) * sourceDensityGain;
       let primitiveCenteredBody = clamp(sourceVector.w, 0.0, 1.0);
       let sourceCenter = sceneP - sourceVector.xyz;
       let sourceRadial = length(sourceCenter.xz);
@@ -616,10 +621,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       let plumeFireBirth = exp(-sourceRadial * sourceRadial * sourceFalloff * 1.70) * fireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
       let primitiveFireBirth = exp(-sourceDistance * sourceDistance * sourceFalloff * 1.18) * effectiveFireBirthBand * inputFlow * (0.72 + 0.66 * breakup);
       source = source + localSource * sourceAnyMix;
-      smokeSource = smokeSource + localSource * sourceSmokeMix;
-      heatSource = heatSource + localSource * sourceFireMix;
-      fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody) * sourceFireMix;
-      emberRing = emberRing + localEmberRing * sourceFireMix;
+      smokeSource = smokeSource + localSource * sourceSmokeMix * sourceSmokeGain * sourceDensityGain;
+      heatSource = heatSource + localSource * sourceFireMix * sourceFireGain * sourceDensityGain;
+      fireBirth = fireBirth + mix(plumeFireBirth, primitiveFireBirth, primitiveCenteredBody) * sourceFireMix * sourceFireGain * sourceDensityGain;
+      emberRing = emberRing + localEmberRing * sourceFireMix * sourceFireGain * sourceDensityGain;
       primitiveCenteredInfluence = max(primitiveCenteredInfluence, primitiveCenteredBody * smoothstep(0.0008, 0.035, localSource));
     }
   }
@@ -804,7 +809,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(44 + MAX_VOLUME_PRIMITIVE_SOURCES * 8 + 4);
+  const uniforms = new Float32Array(44 + MAX_VOLUME_PRIMITIVE_SOURCES * 12 + 4);
   let gridSize = normalizeGridSize(getControls().resolution);
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -986,6 +991,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       placeholderContract: primitive.placeholderContract,
       coupling: primitive.coupling ? { ...primitive.coupling } : undefined,
       lamellarHook: primitive.lamellarHook ? { ...primitive.lamellarHook } : undefined,
+      channels: primitive.channels ? { ...primitive.channels } : undefined,
       transform: {
         position: [...primitive.transform.position],
         rotation: [...primitive.transform.rotation],
@@ -1016,6 +1022,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const nativeSourcePosition = normalizePrimitiveNativeSourcePosition(scenePosition);
     const sourceType = normalizePrimitiveSourceType(primitive.sourceType || primitive.kind);
     const sourceMix = primitiveSourceMix(primitive, sourceType);
+    const channels = primitive.channels || {};
+    const densityGain = Number.isFinite(Number(channels.density)) ? Number(channels.density) : 1;
+    const fireGain = Number.isFinite(Number(channels.temperature ?? channels.fuel)) ? Number(channels.temperature ?? channels.fuel) : 1;
+    const smokeGain = Number.isFinite(Number(channels.smoke)) ? Number(channels.smoke) : 1;
     return {
       id: primitive.id,
       sourceType,
@@ -1026,6 +1036,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceMappingIdentity: VOLUME_PRIMITIVE_SOURCE_MAPPING_IDENTITY,
       radius: Math.max(0.32, primitive.simulation.sourceRadius * 2.0),
       flowRate: Math.max(0, primitive.simulation.flowRate),
+      densityGain: Math.max(0, densityGain),
+      fireGain: Math.max(0, fireGain),
+      smokeGain: Math.max(0, smokeGain),
       fireSourceMix: sourceMix.fire,
       smokeSourceMix: sourceMix.smoke,
       primitiveCenteredBody,
@@ -1044,6 +1057,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceMappingIdentity: 'legacy-plume-source-scene-domain-v0',
       radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
       flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      densityGain: 1,
+      fireGain: 1,
+      smokeGain: 1,
       fireSourceMix: 1,
       smokeSourceMix: 1,
       primitiveCenteredBody: false,
@@ -1071,6 +1087,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceMappingIdentity: sourcePrimitive.sourceMappingIdentity || 'legacy-plume-source-scene-domain-v0',
       radius: sourcePrimitive.radius,
       flowRate: sourcePrimitive.flowRate,
+      densityGain: sourcePrimitive.densityGain ?? 1,
+      fireGain: sourcePrimitive.fireGain ?? 1,
+      smokeGain: sourcePrimitive.smokeGain ?? 1,
       fireSourceMix: sourcePrimitive.fireSourceMix ?? 1,
       smokeSourceMix: sourcePrimitive.smokeSourceMix ?? 1,
       primitiveCenteredBody: !!sourcePrimitive.primitiveCenteredBody,
@@ -1086,6 +1105,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.primitiveSources = effectiveSources.map(serializePrimitiveSource);
     state.primitiveSource = {
       ...serializePrimitiveSource(primarySource),
+    };
+    state.simulationCostModel = {
+      identity: 'shared-volume-simulation-cost-v0',
+      fullSimulationPasses: 1,
+      fullRaymarchPasses: 1,
+      primitiveSourceBudget: MAX_VOLUME_PRIMITIVE_SOURCES,
+      activePrimitiveSources: effectiveSources.length,
+      authoredPrimitiveCount: volumePrimitives.length,
+      gridResolution: gridSize,
+      raySteps: controlsSnapshot.raySteps ?? 72,
+      costDrivers: [
+        'gridResolution^3 shared fluid update',
+        'viewportPixels * raySteps shared raymarch',
+        'activePrimitiveSources bounded source loop inside the shared sim',
+      ],
+      primitiveLocalControls: ['sourceType', 'sourceRadius', 'flowRate', 'densityGain', 'fireGain', 'smokeGain'],
+      rendererGlobalControls: ['density', 'fire', 'smoke', 'radiance', 'absorption', 'glow', 'projection', 'raySteps', 'adaptiveRays', 'resolution'],
     };
   }
 
@@ -1313,11 +1349,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[43] = sourcePrimitive.primitiveCenteredBody ? 1 : 0;
     const primitiveSourceBase = 44;
     const primitiveSourceParamsBase = primitiveSourceBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
-    const primitiveSourceMetaBase = primitiveSourceParamsBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
+    const primitiveSourceChannelsBase = primitiveSourceParamsBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
+    const primitiveSourceMetaBase = primitiveSourceChannelsBase + MAX_VOLUME_PRIMITIVE_SOURCES * 4;
     for (let i = 0; i < MAX_VOLUME_PRIMITIVE_SOURCES; i += 1) {
       const source = sourcePrimitives[i];
       const sourceOffset = primitiveSourceBase + i * 4;
       const paramsOffset = primitiveSourceParamsBase + i * 4;
+      const channelsOffset = primitiveSourceChannelsBase + i * 4;
       uniforms[sourceOffset] = source?.position?.[0] ?? sourcePrimitive.position[0];
       uniforms[sourceOffset + 1] = source?.position?.[1] ?? sourcePrimitive.position[1];
       uniforms[sourceOffset + 2] = source?.position?.[2] ?? sourcePrimitive.position[2];
@@ -1326,6 +1364,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       uniforms[paramsOffset + 1] = source?.flowRate ?? 0;
       uniforms[paramsOffset + 2] = source?.fireSourceMix ?? sourcePrimitive.fireSourceMix ?? 1;
       uniforms[paramsOffset + 3] = source?.smokeSourceMix ?? sourcePrimitive.smokeSourceMix ?? 1;
+      uniforms[channelsOffset] = source?.densityGain ?? sourcePrimitive.densityGain ?? 1;
+      uniforms[channelsOffset + 1] = source?.fireGain ?? sourcePrimitive.fireGain ?? 1;
+      uniforms[channelsOffset + 2] = source?.smokeGain ?? sourcePrimitive.smokeGain ?? 1;
+      uniforms[channelsOffset + 3] = 0;
     }
     uniforms[primitiveSourceMetaBase] = sourcePrimitives.length;
     uniforms[primitiveSourceMetaBase + 1] = MAX_VOLUME_PRIMITIVE_SOURCES;
