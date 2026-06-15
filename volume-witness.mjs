@@ -582,6 +582,40 @@ async function main() {
         throw new Error(`bonfire plume retained non-wind lateral drift: ${JSON.stringify({ simReadback: sample.simReadback, maxSmokeBinRadialDrift })}`);
       }
     }
+    const expectsBonfireConvectionProof = expectsBonfireZeroDrift;
+    if (expectsBonfireConvectionProof) {
+      const convectiveBins = (sample.simReadback.sourceRelativeVisualHeightBins || []).filter(bin =>
+        bin.visualCenter > 0.02 &&
+        bin.smokeWeight > 1.0
+      );
+      const hasLocalRollAboveSource = convectiveBins.some(bin =>
+        bin.smokeLateralVelocityMean > 0.004 &&
+        bin.smokeRadialVelocityAbsMean > 0.0015 &&
+        bin.smokeWeightedCurlMean > 0.0005
+      );
+      if (
+        !Number.isFinite(sample.simReadback.plumeLocalLateralVelocityMean) ||
+        sample.simReadback.plumeLocalLateralVelocityMean <= 0.004 ||
+        !Number.isFinite(sample.simReadback.plumeNetLateralVelocity) ||
+        !Number.isFinite(sample.simReadback.plumeLateralVelocityBalance) ||
+        sample.simReadback.plumeLateralVelocityBalance >= 0.78 ||
+        !Number.isFinite(sample.simReadback.plumeRadialVelocityAbsMean) ||
+        sample.simReadback.plumeRadialVelocityAbsMean <= 0.0015 ||
+        !Number.isFinite(sample.simReadback.plumeSmokeWeightedCurlMean) ||
+        sample.simReadback.plumeSmokeWeightedCurlMean <= 0.0005 ||
+        !hasLocalRollAboveSource
+      ) {
+        throw new Error(`bonfire plume lacked local zero-mean convection: ${JSON.stringify({
+          plumeLocalLateralVelocityMean: sample.simReadback.plumeLocalLateralVelocityMean,
+          plumeNetLateralVelocity: sample.simReadback.plumeNetLateralVelocity,
+          plumeLateralVelocityBalance: sample.simReadback.plumeLateralVelocityBalance,
+          plumeRadialVelocityAbsMean: sample.simReadback.plumeRadialVelocityAbsMean,
+          plumeSmokeWeightedCurlMean: sample.simReadback.plumeSmokeWeightedCurlMean,
+          hasLocalRollAboveSource,
+          convectiveBins,
+        })}`);
+      }
+    }
     if (
       expectsBonfireVerticalTransport &&
       Number.isFinite(expectedMaxSmokeStripeRatio) &&
@@ -624,6 +658,11 @@ async function main() {
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
       risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
+      plumeLocalLateralVelocityMean: sample.simReadback?.plumeLocalLateralVelocityMean ?? 0,
+      plumeNetLateralVelocity: sample.simReadback?.plumeNetLateralVelocity ?? 0,
+      plumeLateralVelocityBalance: sample.simReadback?.plumeLateralVelocityBalance ?? 0,
+      plumeRadialVelocityAbsMean: sample.simReadback?.plumeRadialVelocityAbsMean ?? 0,
+      plumeSmokeWeightedCurlMean: sample.simReadback?.plumeSmokeWeightedCurlMean ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
@@ -715,6 +754,7 @@ async function main() {
       expectsFireLickEvidence,
       expectsBonfireVerticalTransport,
       expectsBonfireZeroDrift,
+      expectsBonfireConvectionProof,
       screenshot: out,
       fullScreenshot: fullScreenshotPath || null,
       metrics,

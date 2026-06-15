@@ -312,7 +312,9 @@ assert.match(core, /bonfireSymmetricLateralForce/, 'bonfire no-wind detail force
 assert.match(core, /bonfireZeroMeanPlumeRoll/, 'bonfire no-wind plume body keeps balanced local roll instead of rising as vertical strips');
 assert.match(core, /bonfireTurbulentDiffusionMix/, 'bonfire no-wind plume mixes transported scalar fields instead of preserving vertical cell columns');
 assert.match(core, /bonfireAzimuthalBreakup/, 'bonfire smoke/detail source uses azimuthal variation rather than radial/Y-only vertical bands');
+assert.match(core, /bonfireMirrorBalancedBreakup/, 'bonfire smoke/detail source averages mirrored azimuthal breakup so local texture cannot shift the plume centerline');
 assert.match(core, /bonfireConvectiveCellRoll/, 'bonfire zero-wind plume injects local convective cells instead of only vertical lift plus recentering');
+assert.doesNotMatch(core, /bonfireConvectiveCellRoll[\s\S]*bonfireAzimuthalBreakup\(p \+ vec3<f32>\(/, 'bonfire convective cell roll must not use shifted one-handed azimuthal samples that bias centerline drift');
 assert.doesNotMatch(core, /hash31\(vec3<f32>\(sourceRadial \* 17\.0 \* scaledDetailFrequency, p\.y \* 11\.0, floor\(time \* 2\.0\)\)\)/, 'bonfire source breakup must not be keyed only by radius and height');
 assert.match(core, /bonfireEntrainedLift/, 'bonfire plume has named vertical entrainment separate from scalar symmetry');
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
@@ -337,6 +339,7 @@ assert.match(core, /bonfireNonWindRecenteringGain/, 'bonfire scene names its zer
 assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
 assert.match(core, /bonfireLocalLateralTransportGain/, 'zero-wind bonfire convection preserves local lateral circulation instead of killing horizontal transport');
 assert.match(core, /bonfireLocalLateralForceGain/, 'zero-wind bonfire detail forces preserve bounded local lateral motion for convection');
+assert.match(core, /bonfireLocalLateralSlipGain/, 'zero-wind bonfire scalar advection separates physical lateral velocity transport from extra stochastic scalar slip');
 assert.match(core, /csDivergencePressure/, 'bonfire plume needs a staged divergence pass instead of only in-line velocity heuristics');
 assert.match(core, /csPressureJacobi/, 'bonfire plume needs pressure iterations before projection, not just a one-sample divergence gradient');
 assert.match(core, /csProjectPressure/, 'bonfire plume needs a projection pass after all forces/source terms are applied');
@@ -348,6 +351,9 @@ assert.doesNotMatch(core, /let bonfireSwirlSymmetryGain = mix\(1\.0, explicitWin
 assert.doesNotMatch(core, /let bonfireNonWindLateralDamping = mix\(1\.0, explicitWindAuthority, bonfireScene\);/, 'zero-wind bonfire final velocity must preserve local lateral circulation while damping net drift');
 assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 - explicitWindAuthority\);/, 'bonfire no-wind correction must not fully mirror material state and kill vertical advection');
 assert.match(core, /bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain/, 'bonfire lateral advection preserves local zero-wind transport while separate damping controls net drift');
+assert.match(core, /thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection\)/, 'bonfire thermal scalar advection must not add hidden lateral slip under zero wind');
+assert.match(core, /fireLayerAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection\)/, 'bonfire fire-layer advection must not add hidden lateral slip under zero wind');
+assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, localMaterial\.x, fireLayer\.x, bonfireLocalLateralSlipGain, microdetailRiseDirection\)/, 'bonfire microdetail advection must not add hidden lateral slip under zero wind');
 assert.match(core, /bonfireDetailLateralDamping = bonfireLocalLateralForceGain/, 'bonfire detail-force lateral authority preserves local zero-wind convection');
 assert.match(core, /isBonfireInitialScene/, 'initial fluid seed detects bonfire scene for centered no-wind reset state');
 assert.match(core, /seedLateralVelocity = isBonfireInitialScene \? 0 : 0\.11/, 'bonfire reset seed must not start with hidden swirl velocity');
@@ -503,6 +509,13 @@ assert.match(witness, /bonfire plume retained vertical curtain striping/, 'witne
 assert.match(core, /bonfireAdvectedSmokeBirth/, 'bonfire smoke birth is routed through transported interface birth instead of a source-aligned upper plume sleeve');
 assert.match(core, /bonfireInterfaceSmokeBand/, 'bonfire source smoke is constrained to the fire/interface band so high plume smoke must be advected there');
 assert.doesNotMatch(core, /let bonfireSmokeBand = smoothstep\(bonfireSourceY - 0\.54, bonfireSourceY - 0\.26, p\.y\)/, 'bonfire smoke source must not stamp a broad vertical sleeve above the fire every frame');
+assert.match(core, /plumeLocalLateralVelocityMean/, 'sim readback reports smoke-weighted local lateral velocity so zero drift cannot mean dead lateral transport');
+assert.match(core, /plumeNetLateralVelocity/, 'sim readback reports smoke-weighted net lateral velocity separately from local lateral energy');
+assert.match(core, /plumeLateralVelocityBalance/, 'sim readback reports local-vs-net lateral balance for zero-mean convection');
+assert.match(core, /plumeRadialVelocityAbsMean/, 'sim readback reports radial entrainment/outflow motion instead of only vertical velocity');
+assert.match(core, /plumeSmokeWeightedCurlMean/, 'sim readback reports smoke-weighted plume curl instead of global sparse-grid curl only');
+assert.match(witness, /expectsBonfireConvectionProof/, 'witness has a simulation-first bonfire convection proof gate');
+assert.match(witness, /bonfire plume lacked local zero-mean convection/, 'witness fails centered-but-dead bonfire columns instead of using visuals as proof');
 assert.match(witness, /captureViewportScreenshot/, 'witness can preserve a large viewport screenshot when thumbnail readback hides striping artifacts');
 assert.match(witness, /fullScreenshot/, 'witness report names the full-size screenshot artifact when captured');
 assert.match(witness, /curlMean/, 'witness requires curl diagnostic evidence');
