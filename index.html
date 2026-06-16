@@ -332,10 +332,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="lamellar-route-id">sphere-domain-section-segment-witness-v0</span></div>
       <button class="btn" id="lamellar-toggle">Enable</button>
       <button class="btn" id="lamellar-frame">Frame</button>
-      <button class="btn" id="lamellar-save-authoring">Save state</button>
-      <button class="btn" id="lamellar-load-authoring">Load state</button>
+      <button class="btn" id="lamellar-save-authoring">Save slot</button>
+      <button class="btn" id="lamellar-load-authoring">Load latest</button>
+      <button class="btn" id="lamellar-export-authoring">Export JSON</button>
+      <button class="btn" id="lamellar-import-authoring">Import JSON</button>
       <input type="file" id="lamellar-authoring-file-input" accept=".json,.kaminos-lamellar,.kaminos-lamellar.json" style="display:none">
       <div class="field"><span class="field-key">Authoring</span><span class="field-val" id="lamellar-authoring-status">unsaved</span></div>
+      <div id="lamellar-saved-state-list" style="margin-top:8px;"></div>
     </div>
     <div class="slider-row">
       <span class="slider-label">View</span>
@@ -693,6 +696,8 @@ let lamellarLastControlsRebuildAt = 0;
 let lamellarPendingPopulationSelectionId = null;
 const LAMELLAR_REBUILD_MIN_INTERVAL_MS = 80;
 const LAMELLAR_AUTHORING_SCHEMA = 'kaminos.lamellar-authoring.v0';
+const LAMELLAR_SAVED_STATES_KEY = 'kaminos.lamellar.saved-states.v0';
+let lamellarActiveSavedStateId = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1027,6 +1032,134 @@ function collectLamellarAuthoringState() {
     },
     active: !!debug.active,
   };
+}
+
+function getLamellarSavedStates() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAMELLAR_SAVED_STATES_KEY) || '{}');
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed.states) ? parsed.states : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistLamellarSavedStates(states) {
+  const payload = {
+    schema: LAMELLAR_SAVED_STATES_KEY,
+    version: 1,
+    updatedAtIso: new Date().toISOString(),
+    states,
+  };
+  localStorage.setItem(LAMELLAR_SAVED_STATES_KEY, JSON.stringify(payload));
+}
+
+function summarizeLamellarAuthoringState(payload) {
+  const controlsState = payload?.controls || {};
+  const seed = Number.isFinite(Number(controlsState.seed)) ? controlsState.seed : 'na';
+  const layers = Number.isFinite(Number(controlsState.layerCount)) ? controlsState.layerCount : 'na';
+  const population = Number.isFinite(Number(controlsState.populationCount)) ? controlsState.populationCount : 'na';
+  const envelopes = lamellarWitness?.debugState?.().lamellarEnvelopeDescriptors?.length ?? 0;
+  return `seed ${seed} / ${layers}L / ${population}P / ${envelopes} envelopes`;
+}
+
+function renderLamellarSavedStateList() {
+  const list = document.getElementById('lamellar-saved-state-list');
+  if (!list) return;
+  const states = getLamellarSavedStates();
+  list.innerHTML = '';
+  if (!states.length) {
+    const empty = document.createElement('div');
+    empty.className = 'gr-meta';
+    empty.style.padding = '4px 0';
+    empty.textContent = 'No Lamellar slots yet';
+    list.appendChild(empty);
+    return;
+  }
+  for (const slot of states) {
+    const row = document.createElement('div');
+    row.className = 'gr-entry';
+    if (slot.id === lamellarActiveSavedStateId) row.style.borderLeft = '2px solid #1976d2';
+
+    const name = document.createElement('span');
+    name.className = 'gr-name';
+    name.textContent = slot.label || summarizeLamellarAuthoringState(slot.payload);
+    name.title = slot.savedAtIso || '';
+
+    const meta = document.createElement('span');
+    meta.className = 'gr-meta';
+    meta.textContent = slot.savedAtIso ? new Date(slot.savedAtIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    const load = document.createElement('button');
+    load.className = 'btn';
+    load.textContent = 'Load';
+    load.onclick = event => {
+      event.stopPropagation();
+      loadLamellarAuthoringSlot(slot.id);
+    };
+
+    const del = document.createElement('button');
+    del.className = 'btn';
+    del.textContent = 'Delete';
+    del.onclick = event => {
+      event.stopPropagation();
+      deleteLamellarAuthoringSlot(slot.id);
+    };
+
+    row.onclick = () => loadLamellarAuthoringSlot(slot.id);
+    row.appendChild(name);
+    row.appendChild(meta);
+    row.appendChild(load);
+    row.appendChild(del);
+    list.appendChild(row);
+  }
+}
+
+function saveLamellarAuthoringSlot(options = {}) {
+  const payload = collectLamellarAuthoringState();
+  const states = getLamellarSavedStates();
+  const savedAtIso = new Date().toISOString();
+  const id = options.id || lamellarActiveSavedStateId || `lamellar-${Date.now().toString(36)}`;
+  const slot = {
+    id,
+    schema: LAMELLAR_AUTHORING_SCHEMA,
+    savedAtIso,
+    label: summarizeLamellarAuthoringState(payload),
+    seed: payload.controls?.seed ?? null,
+    layerCount: payload.controls?.layerCount ?? null,
+    populationCount: payload.controls?.populationCount ?? null,
+    payload: { ...payload, savedAtIso },
+  };
+  const next = [slot, ...states.filter(existing => existing.id !== id)];
+  persistLamellarSavedStates(next);
+  lamellarActiveSavedStateId = id;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`saved ${slot.label}`, 'ok');
+  return slot;
+}
+
+function loadLamellarAuthoringSlot(id = null) {
+  const states = getLamellarSavedStates();
+  const slot = id ? states.find(candidate => candidate.id === id) : states[0];
+  if (!slot) {
+    setLamellarAuthoringStatus('no saved Lamellar slots', 'error');
+    return null;
+  }
+  const receipt = applyLamellarAuthoringState(slot.payload || slot, { status: false });
+  lamellarActiveSavedStateId = slot.id;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`loaded ${slot.label || 'Lamellar slot'}`, 'ok');
+  return { slotId: slot.id, label: slot.label, ...receipt };
+}
+
+function deleteLamellarAuthoringSlot(id) {
+  const states = getLamellarSavedStates();
+  const next = states.filter(slot => slot.id !== id);
+  persistLamellarSavedStates(next);
+  if (lamellarActiveSavedStateId === id) lamellarActiveSavedStateId = null;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus('deleted Lamellar slot', 'ok');
+  return { deleted: id, remaining: next.length };
 }
 
 function setControlValue(id, value, overridden = false) {
@@ -1934,6 +2067,10 @@ async function initLamellarRoute() {
   window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
   window.__kaminosLamellarSaveAuthoringState = () => collectLamellarAuthoringState();
   window.__kaminosLamellarLoadAuthoringState = payload => applyLamellarAuthoringState(payload, { status: false });
+  window.__kaminosLamellarSavedStates = () => getLamellarSavedStates();
+  window.__kaminosLamellarSaveAuthoringSlot = options => saveLamellarAuthoringSlot(options);
+  window.__kaminosLamellarLoadAuthoringSlot = id => loadLamellarAuthoringSlot(id);
+  window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
@@ -2025,8 +2162,10 @@ async function initLamellarRoute() {
     syncLamellarReadout();
     window._kaminosDirty?.();
   });
-  document.getElementById('lamellar-save-authoring').addEventListener('click', () => downloadLamellarAuthoringState());
-  document.getElementById('lamellar-load-authoring').addEventListener('click', () => {
+  document.getElementById('lamellar-save-authoring').addEventListener('click', () => saveLamellarAuthoringSlot());
+  document.getElementById('lamellar-load-authoring').addEventListener('click', () => loadLamellarAuthoringSlot());
+  document.getElementById('lamellar-export-authoring').addEventListener('click', () => downloadLamellarAuthoringState());
+  document.getElementById('lamellar-import-authoring').addEventListener('click', () => {
     document.getElementById('lamellar-authoring-file-input').click();
   });
   document.getElementById('lamellar-authoring-file-input').addEventListener('change', async event => {
@@ -2035,6 +2174,7 @@ async function initLamellarRoute() {
     await loadLamellarAuthoringFile(file);
     event.target.value = '';
   });
+  renderLamellarSavedStateList();
   document.getElementById('lamellar-toggle').addEventListener('click', () => {
     const wasActive = lamellarWitness.debugState().active;
     const active = !wasActive;

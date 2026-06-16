@@ -19,6 +19,7 @@ const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
+const authoringSlotSmoke = requested.get('authoring_slot_smoke') === '1';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -397,6 +398,36 @@ async function main() {
             statusText: document.getElementById('lamellar-authoring-status')?.textContent || '',
           };
         }
+        let authoringSlotRoundTripReceipt = null;
+        if (${authoringSlotSmoke ? 'true' : 'false'}) {
+          localStorage.removeItem('kaminos.lamellar.saved-states.v0');
+          const savedSlot = window.__kaminosLamellarSaveAuthoringSlot?.({ id: 'witness-slot' });
+          const savedState = savedSlot?.payload;
+          const savedSeed = savedState?.controls?.seed;
+          const savedLayerCount = savedState?.controls?.layerCount;
+          const savedPopulationCount = savedState?.controls?.populationCount;
+          document.getElementById('lamellar-seed').value = String((Number(savedSeed) + 73) % 100000);
+          document.getElementById('lamellar-layer-count').value = '1';
+          document.getElementById('lamellar-population-count').value = '1';
+          const loadReceipt = window.__kaminosLamellarLoadAuthoringSlot?.(savedSlot?.id);
+          const restored = window.__kaminosLamellarSaveAuthoringState?.();
+          const savedStates = window.__kaminosLamellarSavedStates?.() || [];
+          authoringSlotRoundTripReceipt = {
+            schema: savedSlot?.schema,
+            mode: 'kaminos-lamellar-local-slot-roundtrip-v0',
+            slotId: savedSlot?.id,
+            listCount: savedStates.length,
+            shelfText: document.getElementById('lamellar-saved-state-list')?.textContent || '',
+            loadReceiptSeed: loadReceipt?.seed,
+            savedSeed,
+            restoredSeed: restored?.controls?.seed,
+            savedLayerCount,
+            restoredLayerCount: restored?.controls?.layerCount,
+            savedPopulationCount,
+            restoredPopulationCount: restored?.controls?.populationCount,
+            statusText: document.getElementById('lamellar-authoring-status')?.textContent || '',
+          };
+        }
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         const state = w ? w.debugState() : preState;
         const activeLayerButton = document.querySelector('#lamellar-layer-selectors .btn.active');
@@ -422,6 +453,7 @@ async function main() {
           populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
           authoringRoundTripReceipt,
+          authoringSlotRoundTripReceipt,
           popoverPinnedDuringSliderReceipt,
           stripDrilldownUi: {
             selectionLevel: state.selectionLevel,
@@ -618,6 +650,15 @@ async function main() {
       assert.equal(state.authoringRoundTripReceipt?.restoredPopulationCount, state.authoringRoundTripReceipt?.savedPopulationCount, 'Lamellar authoring round trip did not restore population count');
       assert.equal(state.authoringRoundTripReceipt?.restoredLayerOverrides, state.authoringRoundTripReceipt?.savedLayerOverrides, 'Lamellar authoring round trip did not restore layer overrides');
     }
+    if (authoringSlotSmoke) {
+      assert.equal(state.authoringSlotRoundTripReceipt?.schema, 'kaminos.lamellar-authoring.v0', 'Lamellar saved-state slot used the wrong schema');
+      assert.equal(state.authoringSlotRoundTripReceipt?.mode, 'kaminos-lamellar-local-slot-roundtrip-v0', 'Lamellar saved-state slot did not report local slot round-trip mode');
+      assert.equal(state.authoringSlotRoundTripReceipt?.restoredSeed, state.authoringSlotRoundTripReceipt?.savedSeed, 'Lamellar saved-state slot did not restore seed');
+      assert.equal(state.authoringSlotRoundTripReceipt?.restoredLayerCount, state.authoringSlotRoundTripReceipt?.savedLayerCount, 'Lamellar saved-state slot did not restore layer count');
+      assert.equal(state.authoringSlotRoundTripReceipt?.restoredPopulationCount, state.authoringSlotRoundTripReceipt?.savedPopulationCount, 'Lamellar saved-state slot did not restore population count');
+      assert.ok((state.authoringSlotRoundTripReceipt?.listCount || 0) >= 1, 'Lamellar saved-state slot did not render into the shelf list');
+      assert.match(state.authoringSlotRoundTripReceipt?.shelfText || '', /seed/, 'Lamellar saved-state shelf did not show a readable saved slot summary');
+    }
 
     if (state.populationControlReceipt?.populationId) {
       await wsRequest(ws, 'Runtime.evaluate', {
@@ -661,6 +702,7 @@ async function main() {
       populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
       authoringRoundTripReceipt: state.authoringRoundTripReceipt,
+      authoringSlotRoundTripReceipt: state.authoringSlotRoundTripReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,
