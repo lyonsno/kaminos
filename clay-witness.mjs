@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1&clay_normal_cadence=every_3';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -313,6 +313,16 @@ async function main() {
     assert.ok(Number.isFinite(state.clayLatticeReadbackWallMs) && state.clayLatticeReadbackWallMs > 0, 'clay lattice dispatch/readback timing missing');
     assert.ok(Number.isFinite(state.clayCpuMeshUpdateMs) && state.clayCpuMeshUpdateMs >= 0, 'clay CPU mesh update timing missing');
     assert.ok(Number.isFinite(state.clayNormalUpdateMs) && state.clayNormalUpdateMs >= 0, 'clay normal recompute timing missing');
+    const requestedNormalCadence = new URL(url).searchParams.get('clay_normal_cadence') || 'every_step';
+    assert.equal(state.clayNormalCadence, requestedNormalCadence, 'clay normal cadence did not match route');
+    assert.ok(Array.isArray(state.clayNormalCadenceWarnings), 'clay normal cadence warnings missing');
+    assert.ok(Number.isFinite(state.clayNormalUpdateCount) && state.clayNormalUpdateCount > 0, 'clay normal update count missing');
+    assert.ok(Number.isFinite(state.clayNormalSkippedCount) && state.clayNormalSkippedCount >= 0, 'clay normal skipped count missing');
+    if (requestedNormalCadence === 'every_3') {
+      assert.ok(state.clayNormalSkippedCount > 0, 'clay every-third normal cadence did not skip recomputes');
+    } else if (requestedNormalCadence === 'every_step') {
+      assert.equal(state.clayNormalSkippedCount, 0, 'clay every-step normal cadence skipped recomputes');
+    }
     assert.ok(Number.isFinite(state.clayStepTotalWallMs) && state.clayStepTotalWallMs > 0, 'clay total wall timing missing');
     assert.equal(state.clayCpuShadowEvidenceKind, 'benchmark-only-js-shadow-not-runtime-fallback', 'clay CPU shadow evidence kind is not explicit');
     assert.equal(state.clayCpuShadowBenchmarkEnabled, url.includes('clay_benchmark_shadow=1'), 'clay CPU shadow benchmark enablement does not match route');
@@ -424,6 +434,11 @@ async function main() {
       clayLatticeReadbackWallMs: state.clayLatticeReadbackWallMs,
       clayCpuMeshUpdateMs: state.clayCpuMeshUpdateMs,
       clayNormalUpdateMs: state.clayNormalUpdateMs,
+      clayNormalCadence: state.clayNormalCadence,
+      clayNormalCadenceWarnings: state.clayNormalCadenceWarnings,
+      clayNormalUpdateCount: state.clayNormalUpdateCount,
+      clayNormalSkippedCount: state.clayNormalSkippedCount,
+      clayNormalsStale: state.clayNormalsStale,
       clayStepTotalWallMs: state.clayStepTotalWallMs,
       clayCpuShadowBenchmarkEnabled: state.clayCpuShadowBenchmarkEnabled,
       clayCpuShadowEvidenceKind: state.clayCpuShadowEvidenceKind,

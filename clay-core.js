@@ -285,6 +285,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let clayLatticeReadbackWallMs = 0;
   let clayCpuMeshUpdateMs = 0;
   let clayNormalUpdateMs = 0;
+  let clayNormalCadence = 'every_step';
+  let clayNormalUpdateCount = 0;
+  let clayNormalSkippedCount = 0;
+  let clayNormalsStale = false;
+  const clayNormalCadenceWarnings = [];
   let clayStepTotalWallMs = 0;
   let clayCpuShadowBenchmarkEnabled = false;
   let clayCpuShadowEstimateMs = 0;
@@ -378,6 +383,25 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       child.visible = clayDebugCollidersVisible;
       if (child.material) child.material.opacity = clayDebugCollidersVisible ? 0.68 : 0.12;
     }
+  }
+
+  function setNormalCadence(nextCadence = 'every_step') {
+    clayNormalCadenceWarnings.length = 0;
+    const requested = String(nextCadence || 'every_step');
+    if (requested === 'every_step' || requested === 'every_3' || requested === 'off') {
+      clayNormalCadence = requested;
+    } else {
+      clayNormalCadence = 'every_step';
+      clayNormalCadenceWarnings.push(`Unsupported clay normal cadence "${requested}"; using every_step`);
+    }
+    onStatus(debugState());
+  }
+
+  function shouldUpdateNormalsForStep() {
+    if (clayNormalCadence === 'every_step') return true;
+    if (clayNormalCadence === 'off') return false;
+    if (clayNormalCadence === 'every_3') return gpuStepCount % 3 === 0;
+    return true;
   }
 
   function latticeVertex(ix, iz) {
@@ -805,8 +829,16 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     position.needsUpdate = true;
     clayCpuMeshUpdateMs = performance.now() - meshUpdateStartedAt;
     const normalUpdateStartedAt = performance.now();
-    mesh.geometry.computeVertexNormals();
-    clayNormalUpdateMs = performance.now() - normalUpdateStartedAt;
+    if (shouldUpdateNormalsForStep()) {
+      mesh.geometry.computeVertexNormals();
+      clayNormalUpdateMs = performance.now() - normalUpdateStartedAt;
+      clayNormalUpdateCount += 1;
+      clayNormalsStale = false;
+    } else {
+      clayNormalUpdateMs = 0;
+      clayNormalSkippedCount += 1;
+      clayNormalsStale = true;
+    }
     gpuStepCount += 1;
     frameCount += 1;
     if (clayPointerActive && clayPointerColliderCount > 0) clayPointerDragStepCount += 1;
@@ -974,6 +1006,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       clayLatticeReadbackWallMs,
       clayCpuMeshUpdateMs,
       clayNormalUpdateMs,
+      clayNormalCadence,
+      clayNormalCadenceWarnings: clayNormalCadenceWarnings.slice(),
+      clayNormalUpdateCount,
+      clayNormalSkippedCount,
+      clayNormalsStale,
       clayStepTotalWallMs,
       clayCpuShadowBenchmarkEnabled,
       clayCpuShadowEvidenceKind: CLAY_CPU_SHADOW_EVIDENCE_KIND,
@@ -1042,6 +1079,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     setPointerClayCollider,
     clearPointerClayCollider,
     setCpuShadowBenchmarkEnabled,
+    setNormalCadence,
     setDebugCollidersVisible,
     step,
     debugState,

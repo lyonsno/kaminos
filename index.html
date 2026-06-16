@@ -546,6 +546,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Lattice readback</span><span class="field-val" id="clay-lattice-readback">-- ms</span></div>
       <div class="field"><span class="field-key">Mesh update</span><span class="field-val" id="clay-mesh-update">-- ms</span></div>
       <div class="field"><span class="field-key">Normal update</span><span class="field-val" id="clay-normal-update">-- ms</span></div>
+      <div class="field"><span class="field-key">Normal cadence</span><span class="field-val" id="clay-normal-cadence">every_step</span></div>
+      <div class="field"><span class="field-key">Normal skips</span><span class="field-val" id="clay-normal-skips">0 / 0</span></div>
       <div class="field"><span class="field-key">CPU shadow</span><span class="field-val" id="clay-cpu-shadow">-- ms</span></div>
       <div class="field"><span class="field-key">Shadow / lattice</span><span class="field-val" id="clay-cpu-shadow-ratio">--</span></div>
       <div class="field"><span class="field-key">CPU contact</span><span class="field-val" id="clay-cpu-contact-shadow">-- ms</span></div>
@@ -1688,6 +1690,8 @@ function refreshClayReadout() {
   document.getElementById('clay-lattice-readback').textContent = Number.isFinite(s.clayLatticeReadbackWallMs) ? `${s.clayLatticeReadbackWallMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-mesh-update').textContent = Number.isFinite(s.clayCpuMeshUpdateMs) ? `${s.clayCpuMeshUpdateMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-normal-update').textContent = Number.isFinite(s.clayNormalUpdateMs) ? `${s.clayNormalUpdateMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-normal-cadence').textContent = s.clayNormalCadence || 'every_step';
+  document.getElementById('clay-normal-skips').textContent = `${s.clayNormalSkippedCount ?? 0} / ${s.clayNormalUpdateCount ?? 0}`;
   document.getElementById('clay-cpu-shadow').textContent = Number.isFinite(s.clayCpuShadowEstimateMs) ? `${s.clayCpuShadowEstimateMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-cpu-shadow-ratio').textContent = Number.isFinite(s.clayCpuShadowRatio) ? `${s.clayCpuShadowRatio.toFixed(2)}x` : '--';
   document.getElementById('clay-cpu-contact-shadow').textContent = Number.isFinite(s.clayCpuContactShadowEstimateMs) ? `${s.clayCpuContactShadowEstimateMs.toFixed(2)} ms` : '-- ms';
@@ -1811,6 +1815,7 @@ async function initKaminosClayRoute() {
     clayPrototype.setDebugCollidersVisible(false);
   }
   clayPrototype.setCpuShadowBenchmarkEnabled(params.get('clay_benchmark_shadow') === '1');
+  clayPrototype.setNormalCadence(params.get('clay_normal_cadence') || 'every_step');
   installClayPointerInteraction(params);
 
   const seedFixture = async () => {

@@ -43,6 +43,7 @@ assert.match(index, /clay_steps/, 'clay route accepts witness-controlled step co
 assert.match(index, /clay_debug_colliders/, 'clay route accepts debug-collider visibility control');
 assert.match(index, /clay_benchmark_shadow/, 'clay route accepts opt-in CPU shadow benchmarking');
 assert.match(index, /clay_grid/, 'clay route accepts an explicit grid preset');
+assert.match(index, /clay_normal_cadence/, 'clay route accepts explicit normal recompute cadence');
 assert.match(index, /96x64/, 'clay route exposes a high-resolution grid preset');
 assert.match(index, /clay_interactive/, 'clay route accepts an interactive pointer smoke mode');
 assert.match(index, /installClayPointerInteraction/, 'clay route installs pointer drag interaction');
@@ -100,6 +101,12 @@ assert.match(core, /clayContactWallMs/, 'clay debug state records primitive cont
 assert.match(core, /clayLatticeReadbackWallMs/, 'clay debug state records lattice dispatch/readback timing');
 assert.match(core, /clayCpuMeshUpdateMs/, 'clay debug state records CPU mesh update timing');
 assert.match(core, /clayNormalUpdateMs/, 'clay debug state records normal recompute timing');
+assert.match(core, /setNormalCadence/, 'clay prototype exposes explicit normal recompute cadence control');
+assert.match(core, /clayNormalCadence/, 'clay debug state records effective normal recompute cadence');
+assert.match(core, /clayNormalCadenceWarnings/, 'clay debug state records normal cadence warnings');
+assert.match(core, /clayNormalUpdateCount/, 'clay debug state records normal recompute count');
+assert.match(core, /clayNormalSkippedCount/, 'clay debug state records skipped normal recompute count');
+assert.match(core, /every_3/, 'clay normal cadence supports every-third-step recompute');
 assert.match(core, /clayCpuShadowEstimateMs/, 'clay debug state records benchmark-only CPU shadow estimate');
 assert.match(core, /clayCpuShadowRatio/, 'clay debug state records CPU shadow versus route ratio');
 assert.match(core, /clayCpuShadowBenchmarkEnabled/, 'clay debug state records CPU shadow benchmark enablement');
@@ -176,6 +183,10 @@ assert.match(witness, /clayContactWallMs/, 'clay witness records primitive conta
 assert.match(witness, /clayLatticeReadbackWallMs/, 'clay witness records lattice dispatch/readback timing');
 assert.match(witness, /clayCpuMeshUpdateMs/, 'clay witness records CPU mesh update timing');
 assert.match(witness, /clayNormalUpdateMs/, 'clay witness records normal recompute timing');
+assert.match(witness, /clay_normal_cadence=every_3/, 'clay witness default route can exercise every-third-step normal cadence');
+assert.match(witness, /clayNormalCadence/, 'clay witness records effective normal recompute cadence');
+assert.match(witness, /clayNormalUpdateCount/, 'clay witness records normal recompute count');
+assert.match(witness, /clayNormalSkippedCount/, 'clay witness records skipped normal recompute count');
 assert.match(witness, /clayCpuShadowEstimateMs/, 'clay witness records benchmark-only CPU shadow estimate');
 assert.match(witness, /clayCpuShadowRatio/, 'clay witness records CPU shadow versus route ratio');
 assert.match(witness, /clayCpuShadowBenchmarkEnabled/, 'clay witness records CPU shadow benchmark enablement');
