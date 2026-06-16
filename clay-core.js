@@ -271,9 +271,15 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
   const clayTimingDisclaimer = 'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency';
   const clayPhaseTimingDisclaimer = 'performance.now wall timings; lattice phase includes dispatch/readback sync and is not GPU timestamp-query kernel time';
+  const CLAY_TIMING_WARMUP_STEP_COUNT = 3;
+  const clayTimingWarmupPolicy = 'first-three-steps-treated-as-warmup';
   const clayStepDurationHistory = [];
+  const claySteadyStepDurationHistory = [];
   let clayStepLatestMs = 0;
   let clayStepP95Ms = 0;
+  let claySteadyStepP50Ms = 0;
+  let claySteadyStepP95Ms = 0;
+  let clayStepMaxOutlierMs = 0;
   let clayContactWallMs = 0;
   let clayColliderPrepWallMs = 0;
   let clayLatticeReadbackWallMs = 0;
@@ -827,6 +833,12 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     }
     clayStepDurationHistory.push(clayStepLatestMs);
     clayStepP95Ms = percentile(clayStepDurationHistory, 0.95);
+    clayStepMaxOutlierMs = Math.max(clayStepMaxOutlierMs, clayStepLatestMs);
+    if (clayStepDurationHistory.length > CLAY_TIMING_WARMUP_STEP_COUNT) {
+      claySteadyStepDurationHistory.push(clayStepLatestMs);
+      claySteadyStepP50Ms = percentile(claySteadyStepDurationHistory, 0.50);
+      claySteadyStepP95Ms = percentile(claySteadyStepDurationHistory, 0.95);
+    }
     onStatus(debugState());
     globalThis._kaminosDirty?.();
   }
@@ -946,10 +958,17 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
       clayPhaseTimingDisclaimer,
+      clayTimingWarmupPolicy,
+      clayWarmupStepCount: CLAY_TIMING_WARMUP_STEP_COUNT,
       clayStepDurationHistory: clayStepDurationHistory.slice(),
+      claySteadyStepDurationHistory: claySteadyStepDurationHistory.slice(),
       clayStepLatestMs,
       clayStepP95Ms,
       clayStepSampleCount: clayStepDurationHistory.length,
+      claySteadyStepP50Ms,
+      claySteadyStepP95Ms,
+      claySteadyStepSampleCount: claySteadyStepDurationHistory.length,
+      clayStepMaxOutlierMs,
       clayContactWallMs,
       clayColliderPrepWallMs,
       clayLatticeReadbackWallMs,

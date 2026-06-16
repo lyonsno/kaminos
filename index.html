@@ -538,7 +538,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Hand evidence</span><span class="field-val" id="clay-hand-pose-evidence">--</span></div>
       <div class="field"><span class="field-key">Hand frame</span><span class="field-val" id="clay-hand-pose-frame">--</span></div>
       <div class="field"><span class="field-key">Step p95</span><span class="field-val" id="clay-step-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">Steady p50</span><span class="field-val" id="clay-steady-p50">-- ms</span></div>
+      <div class="field"><span class="field-key">Steady p95</span><span class="field-val" id="clay-steady-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Step latest</span><span class="field-val" id="clay-step-latest">-- ms</span></div>
+      <div class="field"><span class="field-key">Timing outlier</span><span class="field-val" id="clay-timing-outlier">-- ms</span></div>
       <div class="field"><span class="field-key">Contact wall</span><span class="field-val" id="clay-contact-wall">-- ms</span></div>
       <div class="field"><span class="field-key">Lattice readback</span><span class="field-val" id="clay-lattice-readback">-- ms</span></div>
       <div class="field"><span class="field-key">Mesh update</span><span class="field-val" id="clay-mesh-update">-- ms</span></div>
@@ -1677,7 +1680,10 @@ function refreshClayReadout() {
   document.getElementById('clay-hand-pose-evidence').textContent = s.handPoseEvidenceKind || '--';
   document.getElementById('clay-hand-pose-frame').textContent = s.handPoseFrameId || '--';
   document.getElementById('clay-step-p95').textContent = Number.isFinite(s.clayStepP95Ms) ? `${s.clayStepP95Ms.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-steady-p50').textContent = Number.isFinite(s.claySteadyStepP50Ms) && s.claySteadyStepP50Ms > 0 ? `${s.claySteadyStepP50Ms.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-steady-p95').textContent = Number.isFinite(s.claySteadyStepP95Ms) && s.claySteadyStepP95Ms > 0 ? `${s.claySteadyStepP95Ms.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-step-latest').textContent = Number.isFinite(s.clayStepLatestMs) ? `${s.clayStepLatestMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-timing-outlier').textContent = Number.isFinite(s.clayStepMaxOutlierMs) && s.clayStepMaxOutlierMs > 0 ? `${s.clayStepMaxOutlierMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-contact-wall').textContent = Number.isFinite(s.clayContactWallMs) ? `${s.clayContactWallMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-lattice-readback').textContent = Number.isFinite(s.clayLatticeReadbackWallMs) ? `${s.clayLatticeReadbackWallMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-mesh-update').textContent = Number.isFinite(s.clayCpuMeshUpdateMs) ? `${s.clayCpuMeshUpdateMs.toFixed(2)} ms` : '-- ms';

@@ -26,6 +26,8 @@ assert.match(index, /clay-hand-pose-evidence/, 'Clay panel exposes hand-pose evi
 assert.match(index, /clay-hand-pose-frame/, 'Clay panel exposes hand-pose frame identity');
 assert.match(index, /clay-step-p95/, 'Clay panel exposes route-local step p95 timing');
 assert.match(index, /clay-step-latest/, 'Clay panel exposes latest route-local step timing');
+assert.match(index, /clay-steady-p95/, 'Clay panel exposes steady-state p95 timing separate from warmup');
+assert.match(index, /clay-timing-outlier/, 'Clay panel exposes max timing outlier');
 assert.match(index, /clay-contact-wall/, 'Clay panel exposes primitive contact wall timing');
 assert.match(index, /clay-lattice-readback/, 'Clay panel exposes lattice dispatch/readback timing');
 assert.match(index, /clay-mesh-update/, 'Clay panel exposes CPU mesh update timing');
@@ -87,6 +89,12 @@ assert.match(core, /clayTimingEvidenceSource/, 'clay debug state records timing 
 assert.match(core, /clayTimingDisclaimer/, 'clay debug state records timing disclaimer');
 assert.match(core, /clayStepDurationHistory/, 'clay debug state records step timing history');
 assert.match(core, /clayStepP95Ms/, 'clay debug state records step p95 timing');
+assert.match(core, /claySteadyStepDurationHistory/, 'clay debug state records steady timing history');
+assert.match(core, /claySteadyStepP50Ms/, 'clay debug state records steady timing p50');
+assert.match(core, /claySteadyStepP95Ms/, 'clay debug state records steady timing p95');
+assert.match(core, /clayWarmupStepCount/, 'clay debug state records timing warmup count');
+assert.match(core, /clayStepMaxOutlierMs/, 'clay debug state records max timing outlier');
+assert.match(core, /first-three-steps-treated-as-warmup/, 'clay timing policy names warmup classification');
 assert.match(core, /clayPhaseTimingDisclaimer/, 'clay debug state records phase timing disclaimer');
 assert.match(core, /clayContactWallMs/, 'clay debug state records primitive contact phase timing');
 assert.match(core, /clayLatticeReadbackWallMs/, 'clay debug state records lattice dispatch/readback timing');
@@ -161,6 +169,8 @@ assert.match(witness, /clay_debug_colliders=0/, 'clay witness can capture clay s
 assert.match(witness, /clayTimingEvidenceSource/, 'clay witness records timing evidence source');
 assert.match(witness, /clayTimingDisclaimer/, 'clay witness preserves timing disclaimer');
 assert.match(witness, /clayStepP95Ms/, 'clay witness records route-local step p95 timing');
+assert.match(witness, /claySteadyStepP95Ms/, 'clay witness records steady-state p95 timing');
+assert.match(witness, /clayStepMaxOutlierMs/, 'clay witness records timing outlier evidence');
 assert.match(witness, /clayPhaseTimingDisclaimer/, 'clay witness preserves phase timing disclaimer');
 assert.match(witness, /clayContactWallMs/, 'clay witness records primitive contact wall timing');
 assert.match(witness, /clayLatticeReadbackWallMs/, 'clay witness records lattice dispatch/readback timing');

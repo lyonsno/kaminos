@@ -293,6 +293,16 @@ async function main() {
     assert.ok(Number.isFinite(state.clayStepLatestMs) && state.clayStepLatestMs > 0, 'clay latest step timing missing');
     assert.ok(Number.isFinite(state.clayStepP95Ms) && state.clayStepP95Ms > 0, 'clay p95 step timing missing');
     assert.ok((state.clayStepSampleCount ?? 0) >= 6, 'clay step timing sample count missing');
+    assert.equal(state.clayTimingWarmupPolicy, 'first-three-steps-treated-as-warmup', 'clay timing warmup policy missing');
+    assert.equal(state.clayWarmupStepCount, 3, 'clay timing warmup count missing');
+    assert.ok(Array.isArray(state.claySteadyStepDurationHistory), 'clay steady timing history missing');
+    assert.ok((state.claySteadyStepSampleCount ?? 0) >= 3, 'clay steady timing sample count missing');
+    assert.ok(Number.isFinite(state.claySteadyStepP50Ms) && state.claySteadyStepP50Ms > 0, 'clay steady p50 timing missing');
+    assert.ok(Number.isFinite(state.claySteadyStepP95Ms) && state.claySteadyStepP95Ms > 0, 'clay steady p95 timing missing');
+    assert.ok(
+      Number.isFinite(state.clayStepMaxOutlierMs) && state.clayStepMaxOutlierMs >= state.clayStepP95Ms,
+      'clay max timing outlier missing',
+    );
     assert.match(
       state.clayPhaseTimingDisclaimer || '',
       /not GPU timestamp-query kernel time/,
@@ -398,10 +408,17 @@ async function main() {
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,
+      clayTimingWarmupPolicy: state.clayTimingWarmupPolicy,
+      clayWarmupStepCount: state.clayWarmupStepCount,
       clayStepDurationHistory: state.clayStepDurationHistory,
+      claySteadyStepDurationHistory: state.claySteadyStepDurationHistory,
       clayStepLatestMs: state.clayStepLatestMs,
       clayStepP95Ms: state.clayStepP95Ms,
       clayStepSampleCount: state.clayStepSampleCount,
+      claySteadyStepP50Ms: state.claySteadyStepP50Ms,
+      claySteadyStepP95Ms: state.claySteadyStepP95Ms,
+      claySteadyStepSampleCount: state.claySteadyStepSampleCount,
+      clayStepMaxOutlierMs: state.clayStepMaxOutlierMs,
       clayContactWallMs: state.clayContactWallMs,
       clayColliderPrepWallMs: state.clayColliderPrepWallMs,
       clayLatticeReadbackWallMs: state.clayLatticeReadbackWallMs,
