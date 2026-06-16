@@ -18,6 +18,8 @@ const CLAY_GRID_PRESETS = Object.freeze({
   '48x32': Object.freeze({ gridX: 48, gridZ: 32 }),
   '96x64': Object.freeze({ gridX: 96, gridZ: 64 }),
   '128x96': Object.freeze({ gridX: 128, gridZ: 96 }),
+  '192x128': Object.freeze({ gridX: 192, gridZ: 128 }),
+  '256x192': Object.freeze({ gridX: 256, gridZ: 192 }),
 });
 const MAX_COLLIDERS = 8;
 const CLAY_SURFACE_HALF_X = 1.65 * 0.5;
@@ -260,6 +262,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   const gridZ = gridConfig.gridZ;
   let active = false;
   let device = null;
+  let gpuReadyPromise = null;
+  let sharedPrimitiveProbePromise = null;
   let pipeline = null;
   let bindGroup = null;
   let baseBuffer = null;
@@ -655,33 +659,41 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
 
   async function runSharedPrimitiveProbe() {
     if (sharedPrimitiveProbeStatus === 'pass') return;
-    sharedPrimitiveProbeStatus = 'running';
-    const jobs = packPointTriangleDistanceJobs([{
-      point: [0.25, 0.25, 0.5],
-      triangle: [
-        [0, 0, 0],
-        [1, 0, 0],
-        [0, 1, 0],
-      ],
-      triangleIndex: SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX,
-    }]);
-    const [result] = await runPointTriangleDistanceJobs(jobs, 1, 'kaminos-clay-shared-probe');
-    sharedPrimitiveProbeDistanceSq = result.distanceSq;
-    sharedPrimitiveProbeFeature = result.feature;
-    sharedPrimitiveProbeTriangleIndex = result.triangleIndex;
-    const distanceOk = Math.abs(sharedPrimitiveProbeDistanceSq - SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ) <= 1e-5;
-    const featureOk = sharedPrimitiveProbeFeature === SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE;
-    const identityOk = sharedPrimitiveProbeTriangleIndex === SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX;
-    if (!distanceOk || !featureOk || !identityOk) {
-      sharedPrimitiveProbeStatus = 'fail';
-      lastError = `shared-primitive-probe-mismatch:${JSON.stringify({
-        distanceSq: sharedPrimitiveProbeDistanceSq,
-        feature: sharedPrimitiveProbeFeature,
-        triangleIndex: sharedPrimitiveProbeTriangleIndex,
-      })}`;
-      throw new Error(lastError);
+    if (sharedPrimitiveProbePromise) return sharedPrimitiveProbePromise;
+    sharedPrimitiveProbePromise = (async () => {
+      sharedPrimitiveProbeStatus = 'running';
+      const jobs = packPointTriangleDistanceJobs([{
+        point: [0.25, 0.25, 0.5],
+        triangle: [
+          [0, 0, 0],
+          [1, 0, 0],
+          [0, 1, 0],
+        ],
+        triangleIndex: SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX,
+      }]);
+      const [result] = await runPointTriangleDistanceJobs(jobs, 1, 'kaminos-clay-shared-probe');
+      sharedPrimitiveProbeDistanceSq = result.distanceSq;
+      sharedPrimitiveProbeFeature = result.feature;
+      sharedPrimitiveProbeTriangleIndex = result.triangleIndex;
+      const distanceOk = Math.abs(sharedPrimitiveProbeDistanceSq - SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ) <= 1e-5;
+      const featureOk = sharedPrimitiveProbeFeature === SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE;
+      const identityOk = sharedPrimitiveProbeTriangleIndex === SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX;
+      if (!distanceOk || !featureOk || !identityOk) {
+        sharedPrimitiveProbeStatus = 'fail';
+        lastError = `shared-primitive-probe-mismatch:${JSON.stringify({
+          distanceSq: sharedPrimitiveProbeDistanceSq,
+          feature: sharedPrimitiveProbeFeature,
+          triangleIndex: sharedPrimitiveProbeTriangleIndex,
+        })}`;
+        throw new Error(lastError);
+      }
+      sharedPrimitiveProbeStatus = 'pass';
+    })();
+    try {
+      await sharedPrimitiveProbePromise;
+    } finally {
+      sharedPrimitiveProbePromise = null;
     }
-    sharedPrimitiveProbeStatus = 'pass';
   }
 
   async function runPrimitiveContactPass() {
@@ -725,68 +737,79 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   }
 
   async function ensureGpu() {
-    if (device) return;
-    if (!navigator.gpu) {
-      lastError = 'webgpu-unavailable-no-runtime-fallback';
-      throw new Error(lastError);
+    if (device && pipeline && bindGroup) return;
+    if (gpuReadyPromise) return gpuReadyPromise;
+    gpuReadyPromise = (async () => {
+      if (!navigator.gpu) {
+        lastError = 'webgpu-unavailable-no-runtime-fallback';
+        throw new Error(lastError);
+      }
+      if (!device) {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) {
+          lastError = 'webgpu-adapter-unavailable-no-runtime-fallback';
+          throw new Error(lastError);
+        }
+        device = await adapter.requestDevice();
+      }
+      await runSharedPrimitiveProbe();
+      if (pipeline && bindGroup) return;
+      baseBuffer = device.createBuffer({
+        label: 'kaminos-clay-base-positions',
+        size: basePositions.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      colliderBuffer = device.createBuffer({
+        label: 'kaminos-clay-colliders',
+        size: MAX_COLLIDERS * 4 * Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      paramsBuffer = device.createBuffer({
+        label: 'kaminos-clay-params',
+        size: 4 * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      stateBuffer = device.createBuffer({
+        label: 'kaminos-clay-persistent-state',
+        size: basePositions.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      outputBuffer = device.createBuffer({
+        label: 'kaminos-clay-deformed-positions',
+        size: basePositions.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      readbackBuffer = device.createBuffer({
+        label: 'kaminos-clay-readback',
+        size: basePositions.byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      device.queue.writeBuffer(baseBuffer, 0, basePositions);
+      device.queue.writeBuffer(stateBuffer, 0, basePositions);
+      pipeline = device.createComputePipeline({
+        label: SOLVER_IDENTITY,
+        layout: 'auto',
+        compute: {
+          module: device.createShaderModule({ code: clayComputeShader() }),
+          entryPoint: 'clay_surface_lattice_main',
+        },
+      });
+      bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: baseBuffer } },
+          { binding: 1, resource: { buffer: colliderBuffer } },
+          { binding: 2, resource: { buffer: stateBuffer } },
+          { binding: 3, resource: { buffer: outputBuffer } },
+          { binding: 4, resource: { buffer: paramsBuffer } },
+        ],
+      });
+    })();
+    try {
+      await gpuReadyPromise;
+    } finally {
+      gpuReadyPromise = null;
     }
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) {
-      lastError = 'webgpu-adapter-unavailable-no-runtime-fallback';
-      throw new Error(lastError);
-    }
-    device = await adapter.requestDevice();
-    await runSharedPrimitiveProbe();
-    baseBuffer = device.createBuffer({
-      label: 'kaminos-clay-base-positions',
-      size: basePositions.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    colliderBuffer = device.createBuffer({
-      label: 'kaminos-clay-colliders',
-      size: MAX_COLLIDERS * 4 * Float32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    paramsBuffer = device.createBuffer({
-      label: 'kaminos-clay-params',
-      size: 4 * Uint32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    stateBuffer = device.createBuffer({
-      label: 'kaminos-clay-persistent-state',
-      size: basePositions.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
-    });
-    outputBuffer = device.createBuffer({
-      label: 'kaminos-clay-deformed-positions',
-      size: basePositions.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    });
-    readbackBuffer = device.createBuffer({
-      label: 'kaminos-clay-readback',
-      size: basePositions.byteLength,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-    device.queue.writeBuffer(baseBuffer, 0, basePositions);
-    device.queue.writeBuffer(stateBuffer, 0, basePositions);
-    pipeline = device.createComputePipeline({
-      label: SOLVER_IDENTITY,
-      layout: 'auto',
-      compute: {
-        module: device.createShaderModule({ code: clayComputeShader() }),
-        entryPoint: 'clay_surface_lattice_main',
-      },
-    });
-    bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: baseBuffer } },
-        { binding: 1, resource: { buffer: colliderBuffer } },
-        { binding: 2, resource: { buffer: stateBuffer } },
-        { binding: 3, resource: { buffer: outputBuffer } },
-        { binding: 4, resource: { buffer: paramsBuffer } },
-      ],
-    });
   }
 
   async function step() {

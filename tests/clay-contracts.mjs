@@ -45,6 +45,8 @@ assert.match(index, /clay_benchmark_shadow/, 'clay route accepts opt-in CPU shad
 assert.match(index, /clay_grid/, 'clay route accepts an explicit grid preset');
 assert.match(index, /clay_normal_cadence/, 'clay route accepts explicit normal recompute cadence');
 assert.match(index, /96x64/, 'clay route exposes a high-resolution grid preset');
+assert.match(index, /192x128/, 'clay route exposes a larger inspection grid preset');
+assert.match(index, /256x192/, 'clay route exposes a stress grid preset');
 assert.match(index, /clay_interactive/, 'clay route accepts an interactive pointer smoke mode');
 assert.match(index, /clay_brush_radius/, 'clay route accepts pointer brush radius');
 assert.match(index, /clay_brush_strength/, 'clay route accepts pointer brush strength');
@@ -127,6 +129,8 @@ assert.match(core, /claySurfaceTriangleCount/, 'clay debug state records surface
 assert.match(core, /requestedClayGrid/, 'clay debug state records requested grid preset');
 assert.match(core, /effectiveClayGrid/, 'clay debug state records effective grid preset');
 assert.match(core, /clayGridConfigWarnings/, 'clay debug state records grid config warnings');
+assert.match(core, /'192x128'/, 'clay core supports the larger inspection grid preset');
+assert.match(core, /'256x192'/, 'clay core supports the stress grid preset');
 assert.match(core, /clayDebugCollidersVisible/, 'clay debug state records debug collider visibility');
 assert.match(core, /setPointerClayCollider/, 'clay prototype exposes pointer collider ingress');
 assert.match(core, /clearPointerClayCollider/, 'clay prototype can clear pointer collider ingress');
@@ -221,6 +225,8 @@ assert.match(witness, /clay_brush_strength=/, 'clay witness can exercise routed 
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
 assert.match(witness, /missing clay canvas bounds/, 'clay witness fails loud when it cannot measure the interactive canvas');
+assert.match(witness, /failureState/, 'clay witness failure reports preserve debug state when available');
+assert.match(witness, /screenshotWritten/, 'clay witness failure reports say whether the screenshot was actually captured');
 assert.match(witness, /clayPointerDragStepCount/, 'clay witness records pointer-driven drag steps');
 assert.match(witness, /clayPointerLastHit/, 'clay witness records pointer hit coordinates');
 assert.match(witness, /clayPointerLastHit\.radius/, 'clay witness verifies pointer hit radius');
