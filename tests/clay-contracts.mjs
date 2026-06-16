@@ -130,6 +130,11 @@ assert.match(core, /clayInteractionMode/, 'clay debug state records interaction 
 assert.match(core, /clayPointerActive/, 'clay debug state records active pointer drag state');
 assert.match(core, /clayPointerDragStepCount/, 'clay debug state records pointer-driven clay steps');
 assert.match(core, /clayPointerLastHit/, 'clay debug state records last pointer hit in clay coordinates');
+assert.match(core, /CLAY_BRUSH_BOUNDARY_POLICY/, 'clay core names its brush boundary policy');
+assert.match(core, /clayBrushBoundaryPolicy/, 'clay debug state records brush boundary policy');
+assert.match(core, /clayBrushBoundaryClampCount/, 'clay debug state records brush boundary clamp count');
+assert.match(core, /clayBrushBoundaryWarnings/, 'clay debug state records brush boundary warnings');
+assert.match(core, /radius-aware-center-clamp/, 'clay brush boundary policy is radius-aware');
 assert.match(core, /MeshStandardMaterial/, 'clay surface uses shaded material so deformation can read visually');
 assert.match(core, /clayRelaxationFactor/, 'clay debug state records relaxation factor');
 assert.match(core, /clayPlasticityFactor/, 'clay debug state records plasticity factor');
@@ -196,6 +201,9 @@ assert.match(witness, /clayCpuContactShadowRatio/, 'clay witness records CPU con
 assert.match(witness, /clayCpuContactShadowSampleCount/, 'clay witness records CPU contact shadow sample count');
 assert.match(witness, /claySurfaceHeightRange/, 'clay witness records surface height range');
 assert.match(witness, /claySurfaceMeanAbsHeight/, 'clay witness records mean absolute surface height');
+assert.match(witness, /clayBrushBoundaryPolicy/, 'clay witness records brush boundary policy');
+assert.match(witness, /clayBrushBoundaryClampCount/, 'clay witness records brush boundary clamp count');
+assert.match(witness, /clayBrushBoundaryWarnings/, 'clay witness records brush boundary warnings');
 assert.match(witness, /requestedClayGrid/, 'clay witness records requested grid preset');
 assert.match(witness, /effectiveClayGrid/, 'clay witness records effective grid preset');
 assert.match(witness, /clayGridConfigWarnings/, 'clay witness records grid config warnings');

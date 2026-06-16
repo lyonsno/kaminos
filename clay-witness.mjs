@@ -265,7 +265,11 @@ async function main() {
       `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
     );
     assert.equal(state.primitiveContactPassStatus, 'pass');
-    const expectedPrimitiveContacts = url.includes('clay_interactive=1') ? 1 : 5;
+    const expectedPrimitiveContacts = url.includes('clay_interactive=1')
+      ? 1
+      : url.includes('clay_colliders=clay_edge_fixture')
+        ? 2
+        : 5;
     assert.ok((state.primitiveContactJobCount ?? 0) >= expectedPrimitiveContacts, 'primitive contact pass did not process expected colliders');
     assert.ok((state.primitiveContactActiveCount ?? 0) >= expectedPrimitiveContacts, 'primitive contact pass did not report active contacts');
     assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'primitive contact pass did not record a minimum distance');
@@ -336,6 +340,13 @@ async function main() {
     }
     assert.ok((state.claySurfaceVertexCount ?? 0) >= 1000, 'clay surface vertex count is too small for quality witness');
     assert.ok((state.claySurfaceTriangleCount ?? 0) >= 2500, 'clay surface triangle count is too small for quality witness');
+    assert.equal(state.clayBrushBoundaryPolicy, 'radius-aware-center-clamp', 'clay brush boundary policy missing');
+    assert.equal(state.clayBrushBoundaryEdgeFalloff, 'smoothstep-edge-falloff', 'clay brush boundary edge falloff missing');
+    assert.ok(Number.isFinite(state.clayBrushBoundaryClampCount) && state.clayBrushBoundaryClampCount >= 0, 'clay brush boundary clamp count missing');
+    assert.ok(Array.isArray(state.clayBrushBoundaryWarnings), 'clay brush boundary warnings missing');
+    if (url.includes('clay_colliders=clay_edge_fixture')) {
+      assert.ok(state.clayBrushBoundaryClampCount > 0, 'clay edge fixture did not exercise brush boundary clamp');
+    }
     assert.ok(state.requestedClayGrid, 'clay route did not report requested grid');
     assert.ok(state.effectiveClayGrid, 'clay route did not report effective grid');
     assert.ok(Array.isArray(state.clayGridConfigWarnings), 'clay route did not report grid config warnings');
@@ -371,7 +382,12 @@ async function main() {
     }
     assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
     assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
-    assert.ok((state.clayColliderCount ?? 0) >= (url.includes('clay_interactive=1') ? 0 : 5), 'clay fixture did not seed expected colliders');
+    const expectedClayColliders = url.includes('clay_interactive=1')
+      ? 0
+      : url.includes('clay_colliders=clay_edge_fixture')
+        ? 2
+        : 5;
+    assert.ok((state.clayColliderCount ?? 0) >= expectedClayColliders, 'clay fixture did not seed expected colliders');
     assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
 
@@ -454,6 +470,10 @@ async function main() {
       claySurfaceMaxY: state.claySurfaceMaxY,
       claySurfaceHeightRange: state.claySurfaceHeightRange,
       claySurfaceMeanAbsHeight: state.claySurfaceMeanAbsHeight,
+      clayBrushBoundaryPolicy: state.clayBrushBoundaryPolicy,
+      clayBrushBoundaryEdgeFalloff: state.clayBrushBoundaryEdgeFalloff,
+      clayBrushBoundaryClampCount: state.clayBrushBoundaryClampCount,
+      clayBrushBoundaryWarnings: state.clayBrushBoundaryWarnings,
       claySurfaceVertexCount: state.claySurfaceVertexCount,
       claySurfaceTriangleCount: state.claySurfaceTriangleCount,
       requestedClayGrid: state.requestedClayGrid,

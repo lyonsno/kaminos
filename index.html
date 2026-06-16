@@ -559,6 +559,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Grid effective</span><span class="field-val" id="clay-grid-effective">48x32</span></div>
       <div class="field"><span class="field-key">Pointer mode</span><span class="field-val" id="clay-pointer-mode">idle</span></div>
       <div class="field"><span class="field-key">Pointer steps</span><span class="field-val" id="clay-pointer-drag-steps">0</span></div>
+      <div class="field"><span class="field-key">Boundary clamps</span><span class="field-val" id="clay-boundary-clamps">0</span></div>
     </div>
   </div>
 
@@ -1631,6 +1632,18 @@ function clayFixtureHandColliders() {
   };
 }
 
+function clayEdgeFixtureColliders() {
+  return {
+    mode: 'clay_edge_fixture',
+    evidenceKind: 'synthetic',
+    coordinateSpace: 'clay-local',
+    colliders: [
+      { id: 'edge-index', center: [1.1, 0, 0.62], radius: 0.22, strength: 1.05 },
+      { id: 'edge-palm', center: [-1.05, 0, -0.68], radius: 0.24, strength: 0.78 },
+    ],
+  };
+}
+
 function handPoseFixtureFrame(timestampMs) {
   const keypoints = Array.from({ length: 21 }, (_, i) => {
     const finger = Math.floor((i - 1) / 4);
@@ -1703,6 +1716,7 @@ function refreshClayReadout() {
   document.getElementById('clay-grid-effective').textContent = s.effectiveClayGrid || s.clayGrid || '48x32';
   document.getElementById('clay-pointer-mode').textContent = s.clayInteractionMode || 'idle';
   document.getElementById('clay-pointer-drag-steps').textContent = String(s.clayPointerDragStepCount ?? 0);
+  document.getElementById('clay-boundary-clamps').textContent = `${s.clayBrushBoundaryClampCount ?? 0}`;
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('clay-toggle').classList.toggle('active', !!s.active);
 }
@@ -1853,6 +1867,10 @@ async function initKaminosClayRoute() {
     const colliderMode = params.get('clay_colliders') || (params.get('clay_interactive') === '1' ? 'none' : 'clay_fixture_hand');
     if (colliderMode === 'hand_pose_fixture') {
       await seedHandPoseFixture();
+    } else if (colliderMode === 'clay_edge_fixture') {
+      clayPrototype.setColliders(clayEdgeFixtureColliders());
+      await clayPrototype.step();
+      refreshClayReadout();
     } else if (colliderMode === 'clay_fixture_hand') {
       await seedFixture();
     }

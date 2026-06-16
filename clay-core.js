@@ -20,6 +20,11 @@ const CLAY_GRID_PRESETS = Object.freeze({
   '128x96': Object.freeze({ gridX: 128, gridZ: 96 }),
 });
 const MAX_COLLIDERS = 8;
+const CLAY_SURFACE_HALF_X = 1.65 * 0.5;
+const CLAY_SURFACE_HALF_Z = 1.05 * 0.5;
+const CLAY_BRUSH_BOUNDARY_RADIUS_MARGIN = 1.5;
+const CLAY_BRUSH_BOUNDARY_POLICY = 'radius-aware-center-clamp';
+const CLAY_BRUSH_BOUNDARY_EDGE_FALLOFF = 'smoothstep-edge-falloff';
 const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
 const CLAY_CPU_SHADOW_EVIDENCE_KIND = 'benchmark-only-js-shadow-not-runtime-fallback';
@@ -40,6 +45,11 @@ function clampFinite(value, min, max, fallback) {
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = clamp01((value - edge0) / Math.max(1e-6, edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }
 
 function percentile(values, q) {
@@ -174,15 +184,21 @@ export function normalizeClayGridConfig(requestedGrid = DEFAULT_CLAY_GRID) {
 
 function normalizeCollider(collider, index) {
   const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
+  const radius = clampFinite(collider?.radius, 0.035, 0.35, 0.12);
+  const xMargin = Math.min(CLAY_SURFACE_HALF_X * 0.9, radius * CLAY_BRUSH_BOUNDARY_RADIUS_MARGIN);
+  const zMargin = Math.min(CLAY_SURFACE_HALF_Z * 0.9, radius * CLAY_BRUSH_BOUNDARY_RADIUS_MARGIN);
+  const rawX = clampFinite(center[0], -1.2, 1.2, 0);
+  const rawY = clampFinite(center[1], -1.2, 1.2, 0);
+  const rawZ = clampFinite(center[2], -1.2, 1.2, 0);
+  const clampedX = clampFinite(rawX, -CLAY_SURFACE_HALF_X + xMargin, CLAY_SURFACE_HALF_X - xMargin, 0);
+  const clampedZ = clampFinite(rawZ, -CLAY_SURFACE_HALF_Z + zMargin, CLAY_SURFACE_HALF_Z - zMargin, 0);
   return {
     id: collider?.id || `clay-fixture-${index}`,
-    center: [
-      clampFinite(center[0], -1.2, 1.2, 0),
-      clampFinite(center[1], -1.2, 1.2, 0),
-      clampFinite(center[2], -1.2, 1.2, 0),
-    ],
-    radius: clampFinite(collider?.radius, 0.035, 0.35, 0.12),
+    center: [clampedX, rawY, clampedZ],
+    radius,
     strength: clampFinite(collider?.strength, 0, 2.5, 1),
+    boundaryClamped: Math.abs(clampedX - rawX) > 1e-6 || Math.abs(clampedZ - rawZ) > 1e-6,
+    boundaryMargin: [xMargin, zMargin],
   };
 }
 
@@ -221,9 +237,11 @@ fn clay_surface_lattice_main(@builtin(global_invocation_id) global_id: vec3u) {
     let radius = max(collider.z, 0.001);
     let reach = clamp(1.0 - dist / radius, 0.0, 1.0);
     let rim = clamp(1.0 - abs(dist - radius * 0.72) / (radius * 0.36), 0.0, 1.0);
+    let boundaryDistance = min(0.825 - abs(base.x), 0.525 - abs(base.z));
+    let boundaryGuard = smoothstep(0.0, radius * 0.75, boundaryDistance);
     let force = collider.w;
-    depression = depression - reach * reach * force * 0.18;
-    lift = lift + rim * rim * force * 0.035;
+    depression = depression - reach * reach * force * 0.18 * boundaryGuard;
+    lift = lift + rim * rim * force * 0.035 * boundaryGuard;
     contact = contact + select(0.0, 1.0, reach > 0.001);
   }
   let previous = statePositions[i];
@@ -268,6 +286,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let clayPointerColliderCount = 0;
   let clayPointerDragStepCount = 0;
   let clayPointerLastHit = null;
+  let clayBrushBoundaryClampCount = 0;
+  const clayBrushBoundaryWarnings = [];
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
   const clayTimingDisclaimer = 'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency';
   const clayPhaseTimingDisclaimer = 'performance.now wall timings; lattice phase includes dispatch/readback sync and is not GPU timestamp-query kernel time';
@@ -404,6 +424,21 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     return true;
   }
 
+  function normalizeColliderBatch(incoming) {
+    clayBrushBoundaryWarnings.length = 0;
+    let clampCount = 0;
+    const normalized = incoming.slice(0, MAX_COLLIDERS).map((collider, index) => {
+      const nextCollider = normalizeCollider(collider, index);
+      if (nextCollider.boundaryClamped) {
+        clampCount += 1;
+        clayBrushBoundaryWarnings.push(`${CLAY_BRUSH_BOUNDARY_POLICY}:${nextCollider.id}`);
+      }
+      return nextCollider;
+    });
+    clayBrushBoundaryClampCount = clampCount;
+    return normalized;
+  }
+
   function latticeVertex(ix, iz) {
     const i = iz * gridX + ix;
     return [
@@ -448,9 +483,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
         const radius = Math.max(collider.radius, 0.001);
         const reach = clamp01(1 - dist / radius);
         const rim = clamp01(1 - Math.abs(dist - radius * 0.72) / (radius * 0.36));
+        const boundaryDistance = Math.min(CLAY_SURFACE_HALF_X - Math.abs(baseX), CLAY_SURFACE_HALF_Z - Math.abs(baseZ));
+        const boundaryGuard = smoothstep(0, radius * 0.75, boundaryDistance);
         const force = collider.effectiveStrength;
-        depression -= reach * reach * force * 0.18;
-        lift += rim * rim * force * 0.035;
+        depression -= reach * reach * force * 0.18 * boundaryGuard;
+        lift += rim * rim * force * 0.035 * boundaryGuard;
         contact += reach > 0.001 ? 1 : 0;
       }
       const previousY = previousValues[offset + 1];
@@ -877,7 +914,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
 
   function setColliders(payload = {}) {
     const incoming = Array.isArray(payload.colliders) ? payload.colliders : [];
-    colliders = incoming.slice(0, MAX_COLLIDERS).map(normalizeCollider);
+    colliders = normalizeColliderBatch(incoming);
     handPoseAdapterState = normalizeClayHandPoseColliders({});
     clayInteractionMode = payload.mode || (colliders.length ? 'fixture' : 'idle');
     clayPointerActive = false;
@@ -887,7 +924,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
 
   function setHandPoseFrame(payload = {}) {
     handPoseAdapterState = normalizeClayHandPoseColliders(payload);
-    colliders = handPoseAdapterState.colliders.slice(0, MAX_COLLIDERS).map(normalizeCollider);
+    colliders = normalizeColliderBatch(handPoseAdapterState.colliders);
     clayInteractionMode = handPoseAdapterState.mode;
     clayPointerActive = false;
     clayPointerColliderCount = 0;
@@ -919,6 +956,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
     }, 0);
+    clayBrushBoundaryWarnings.length = 0;
+    clayBrushBoundaryClampCount = pointerCollider.boundaryClamped ? 1 : 0;
+    if (pointerCollider.boundaryClamped) {
+      clayBrushBoundaryWarnings.push(`${CLAY_BRUSH_BOUNDARY_POLICY}:${pointerCollider.id}`);
+    }
     colliders = [pointerCollider];
     handPoseAdapterState = normalizeClayHandPoseColliders({});
     clayInteractionMode = 'pointer_drag';
@@ -944,6 +986,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   function clearPointerClayCollider() {
     if (clayInteractionMode !== 'pointer_drag' && !clayPointerActive) return;
     colliders = [];
+    clayBrushBoundaryClampCount = 0;
+    clayBrushBoundaryWarnings.length = 0;
     clayInteractionMode = 'pointer_idle';
     clayPointerActive = false;
     clayPointerColliderCount = 0;
@@ -1037,6 +1081,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       clayPointerColliderCount,
       clayPointerDragStepCount,
       clayPointerLastHit,
+      clayBrushBoundaryPolicy: CLAY_BRUSH_BOUNDARY_POLICY,
+      clayBrushBoundaryEdgeFalloff: CLAY_BRUSH_BOUNDARY_EDGE_FALLOFF,
+      clayBrushBoundaryClampCount,
+      clayBrushBoundaryWarnings: clayBrushBoundaryWarnings.slice(),
       requestedHandPoseBackend: handPoseAdapterState.requestedHandPoseBackend,
       effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
       handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
