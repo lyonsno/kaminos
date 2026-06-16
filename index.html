@@ -509,7 +509,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-content" id="tab-clay">
     <h2>Clay Sim</h2>
     <div class="panel">
-      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_clay_sim=1</span></div>
+      <div class="field"><span class="field-key">Route</span><span class="route-chip" data-supported-clay-grids="48x32 96x64 128x96">kaminos_clay_sim=1</span></div>
       <div class="field"><span class="field-key">Backend</span><span class="field-val" id="clay-backend">inactive</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="clay-identity">kaminos-clay-prototype-v0</span></div>
       <div class="volume-actions">
@@ -550,6 +550,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Surface range</span><span class="field-val" id="clay-surface-range">--</span></div>
       <div class="field"><span class="field-key">Mean |height|</span><span class="field-val" id="clay-surface-mean-abs">--</span></div>
       <div class="field"><span class="field-key">Topology</span><span class="field-val" id="clay-topology">--</span></div>
+      <div class="field"><span class="field-key">Grid requested</span><span class="field-val" id="clay-grid-requested">48x32</span></div>
+      <div class="field"><span class="field-key">Grid effective</span><span class="field-val" id="clay-grid-effective">48x32</span></div>
       <div class="field"><span class="field-key">Pointer mode</span><span class="field-val" id="clay-pointer-mode">idle</span></div>
       <div class="field"><span class="field-key">Pointer steps</span><span class="field-val" id="clay-pointer-drag-steps">0</span></div>
     </div>
@@ -1687,6 +1689,8 @@ function refreshClayReadout() {
   document.getElementById('clay-surface-range').textContent = Number.isFinite(s.claySurfaceHeightRange) ? s.claySurfaceHeightRange.toFixed(3) : '--';
   document.getElementById('clay-surface-mean-abs').textContent = Number.isFinite(s.claySurfaceMeanAbsHeight) ? s.claySurfaceMeanAbsHeight.toFixed(3) : '--';
   document.getElementById('clay-topology').textContent = `${s.clayGrid || '--'} / ${s.claySurfaceTriangleCount ?? '--'} tri`;
+  document.getElementById('clay-grid-requested').textContent = s.requestedClayGrid || '48x32';
+  document.getElementById('clay-grid-effective').textContent = s.effectiveClayGrid || s.clayGrid || '48x32';
   document.getElementById('clay-pointer-mode').textContent = s.clayInteractionMode || 'idle';
   document.getElementById('clay-pointer-drag-steps').textContent = String(s.clayPointerDragStepCount ?? 0);
   document.getElementById('clay-toggle').textContent = s.active ? 'Disable' : 'Enable';
@@ -1793,6 +1797,7 @@ async function initKaminosClayRoute() {
     viewport: document.getElementById('viewport'),
     camera,
     controls,
+    clayGrid: params.get('clay_grid') || '48x32',
     onStatus: refreshClayReadout,
   });
   window.__kaminosClayPrototype = clayPrototype;

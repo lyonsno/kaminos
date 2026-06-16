@@ -13,8 +13,12 @@ const ROUTE_IDENTITY = 'kaminos-clay-sim-route-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-clay-prototype-v0';
 const SOLVER_IDENTITY = 'webgpu-clay-surface-lattice-scaffold-v0';
 const SHARED_PRIMITIVE_SOURCE_CONTRACT = POINT_TRIANGLE_SOURCE_CONTRACT;
-const GRID_X = 48;
-const GRID_Z = 32;
+const DEFAULT_CLAY_GRID = '48x32';
+const CLAY_GRID_PRESETS = Object.freeze({
+  '48x32': Object.freeze({ gridX: 48, gridZ: 32 }),
+  '96x64': Object.freeze({ gridX: 96, gridZ: 64 }),
+  '128x96': Object.freeze({ gridX: 128, gridZ: 96 }),
+});
 const MAX_COLLIDERS = 8;
 const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
@@ -152,6 +156,22 @@ export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPos
   };
 }
 
+export function normalizeClayGridConfig(requestedGrid = DEFAULT_CLAY_GRID) {
+  const requestedClayGrid = String(requestedGrid || DEFAULT_CLAY_GRID);
+  const preset = CLAY_GRID_PRESETS[requestedClayGrid];
+  const clayGridConfigWarnings = [];
+  const effectiveClayGrid = preset ? requestedClayGrid : DEFAULT_CLAY_GRID;
+  if (!preset) clayGridConfigWarnings.push(`unsupported-clay-grid:${requestedClayGrid}`);
+  const effectivePreset = preset || CLAY_GRID_PRESETS[DEFAULT_CLAY_GRID];
+  return {
+    requestedClayGrid,
+    effectiveClayGrid,
+    gridX: effectivePreset.gridX,
+    gridZ: effectivePreset.gridZ,
+    clayGridConfigWarnings,
+  };
+}
+
 function normalizeCollider(collider, index) {
   const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
   return {
@@ -216,7 +236,10 @@ fn clay_surface_lattice_main(@builtin(global_invocation_id) global_id: vec3u) {
 `;
 }
 
-export function createKaminosClayPrototype({ THREE, scene, viewport, camera, controls, onStatus = () => {} }) {
+export function createKaminosClayPrototype({ THREE, scene, viewport, camera, controls, clayGrid = DEFAULT_CLAY_GRID, onStatus = () => {} }) {
+  const gridConfig = normalizeClayGridConfig(clayGrid);
+  const gridX = gridConfig.gridX;
+  const gridZ = gridConfig.gridZ;
   let active = false;
   let device = null;
   let pipeline = null;
@@ -286,23 +309,23 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
   const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
   let lastError = '';
-  const vertexCount = GRID_X * GRID_Z;
+  const vertexCount = gridX * gridZ;
   const basePositions = new Float32Array(vertexCount * 4);
   let lastStateValues = null;
 
-  for (let z = 0; z < GRID_Z; z += 1) {
-    for (let x = 0; x < GRID_X; x += 1) {
-      const i = z * GRID_X + x;
-      basePositions[i * 4] = (x / (GRID_X - 1) - 0.5) * 1.65;
+  for (let z = 0; z < gridZ; z += 1) {
+    for (let x = 0; x < gridX; x += 1) {
+      const i = z * gridX + x;
+      basePositions[i * 4] = (x / (gridX - 1) - 0.5) * 1.65;
       basePositions[i * 4 + 1] = 0;
-      basePositions[i * 4 + 2] = (z / (GRID_Z - 1) - 0.5) * 1.05;
+      basePositions[i * 4 + 2] = (z / (gridZ - 1) - 0.5) * 1.05;
       basePositions[i * 4 + 3] = 1;
     }
   }
 
   function ensureMesh() {
     if (mesh) return;
-    const geometry = new THREE.PlaneGeometry(1.65, 1.05, GRID_X - 1, GRID_Z - 1);
+    const geometry = new THREE.PlaneGeometry(1.65, 1.05, gridX - 1, gridZ - 1);
     geometry.rotateX(-Math.PI / 2);
     const material = new THREE.MeshStandardMaterial({
       color: 0x8f6f4a,
@@ -352,7 +375,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   }
 
   function latticeVertex(ix, iz) {
-    const i = iz * GRID_X + ix;
+    const i = iz * gridX + ix;
     return [
       basePositions[i * 4],
       basePositions[i * 4 + 1],
@@ -363,15 +386,15 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   function claySurfaceTriangleForCollider(collider) {
     const u = clamp01((collider.center[0] / 1.65) + 0.5);
     const v = clamp01((collider.center[2] / 1.05) + 0.5);
-    const gx = Math.min(GRID_X - 2, Math.max(0, Math.floor(u * (GRID_X - 1))));
-    const gz = Math.min(GRID_Z - 2, Math.max(0, Math.floor(v * (GRID_Z - 1))));
-    const localX = (u * (GRID_X - 1)) - gx;
-    const localZ = (v * (GRID_Z - 1)) - gz;
+    const gx = Math.min(gridX - 2, Math.max(0, Math.floor(u * (gridX - 1))));
+    const gz = Math.min(gridZ - 2, Math.max(0, Math.floor(v * (gridZ - 1))));
+    const localX = (u * (gridX - 1)) - gx;
+    const localZ = (v * (gridZ - 1)) - gz;
     const p00 = latticeVertex(gx, gz);
     const p10 = latticeVertex(gx + 1, gz);
     const p01 = latticeVertex(gx, gz + 1);
     const p11 = latticeVertex(gx + 1, gz + 1);
-    const cellTriangleIndex = (gz * (GRID_X - 1) + gx) * 2;
+    const cellTriangleIndex = (gz * (gridX - 1) + gx) * 2;
     if (localX + localZ <= 1) {
       return { triangle: [p00, p10, p01], triangleIndex: cellTriangleIndex };
     }
@@ -948,7 +971,10 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       claySurfaceHeightRange,
       claySurfaceMeanAbsHeight,
       claySurfaceVertexCount: vertexCount,
-      claySurfaceTriangleCount: (GRID_X - 1) * (GRID_Z - 1) * 2,
+      claySurfaceTriangleCount: (gridX - 1) * (gridZ - 1) * 2,
+      requestedClayGrid: gridConfig.requestedClayGrid,
+      effectiveClayGrid: gridConfig.effectiveClayGrid,
+      clayGridConfigWarnings: gridConfig.clayGridConfigWarnings.slice(),
       clayDebugCollidersVisible,
       clayInteractionMode,
       clayPointerActive,
@@ -965,7 +991,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
       clayRelaxationFactor,
       clayPlasticityFactor,
-      clayGrid: `${GRID_X}x${GRID_Z}`,
+      clayGrid: `${gridX}x${gridZ}`,
       clayColliderCount: colliders.length,
       clayDeformationCount,
       clayContactCount,

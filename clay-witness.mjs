@@ -18,6 +18,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-clay-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1600);
 const windowSize = args.get('--window-size') || '1280,900';
+const expectedGrid = args.get('--expected-grid') || null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -136,6 +137,19 @@ function screenshotMetricsFromPng(buffer) {
   return { width, height, clayColorPixels, brightOrangePixels, litPixels };
 }
 
+function expectedGridTopology(grid) {
+  const match = /^(\d+)x(\d+)$/.exec(String(grid || ''));
+  if (!match) return null;
+  const gridX = Number(match[1]);
+  const gridZ = Number(match[2]);
+  if (!Number.isInteger(gridX) || !Number.isInteger(gridZ) || gridX < 2 || gridZ < 2) return null;
+  return {
+    grid,
+    vertexCount: gridX * gridZ,
+    triangleCount: (gridX - 1) * (gridZ - 1) * 2,
+  };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -180,12 +194,12 @@ async function main() {
             }
             return {
               ok: true,
-              startX: rect.left + rect.width * 0.46,
-              startY: rect.top + rect.height * 0.51,
-              midX: rect.left + rect.width * 0.52,
+              startX: rect.left + rect.width * 0.43,
+              startY: rect.top + rect.height * 0.50,
+              midX: rect.left + rect.width * 0.46,
               midY: rect.top + rect.height * 0.50,
-              endX: rect.left + rect.width * 0.58,
-              endY: rect.top + rect.height * 0.52,
+              endX: rect.left + rect.width * 0.50,
+              endY: rect.top + rect.height * 0.51,
               rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
             };
           })()`,
@@ -206,11 +220,11 @@ async function main() {
       phase = 'pointer-drag';
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: drag.startX, y: drag.startY });
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: drag.startX, y: drag.startY, button: 'left', buttons: 1, clickCount: 1 });
-      for (const [x, y] of [[drag.midX, drag.midY], [drag.endX, drag.endY], [drag.endX + 35, drag.endY - 8], [drag.endX + 70, drag.endY + 12]]) {
+      for (const [x, y] of [[drag.midX, drag.midY], [drag.endX, drag.endY], [drag.endX + 18, drag.endY - 4], [drag.endX + 36, drag.endY + 6]]) {
         await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 });
         await delay(80);
       }
-      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.endX + 70, y: drag.endY + 12, button: 'left', buttons: 0, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.endX + 36, y: drag.endY + 6, button: 'left', buttons: 0, clickCount: 1 });
       await delay(600);
     }
 
@@ -302,6 +316,17 @@ async function main() {
     }
     assert.ok((state.claySurfaceVertexCount ?? 0) >= 1000, 'clay surface vertex count is too small for quality witness');
     assert.ok((state.claySurfaceTriangleCount ?? 0) >= 2500, 'clay surface triangle count is too small for quality witness');
+    assert.ok(state.requestedClayGrid, 'clay route did not report requested grid');
+    assert.ok(state.effectiveClayGrid, 'clay route did not report effective grid');
+    assert.ok(Array.isArray(state.clayGridConfigWarnings), 'clay route did not report grid config warnings');
+    if (expectedGrid) {
+      const expected = expectedGridTopology(expectedGrid);
+      assert.ok(expected, `invalid --expected-grid ${expectedGrid}`);
+      assert.equal(state.effectiveClayGrid, expected.grid, `effective grid did not match expected-grid ${expected.grid}`);
+      assert.equal(state.clayGrid, expected.grid, `clay grid did not match expected-grid ${expected.grid}`);
+      assert.equal(state.claySurfaceVertexCount, expected.vertexCount, `vertex count did not match expected-grid ${expected.grid}`);
+      assert.equal(state.claySurfaceTriangleCount, expected.triangleCount, `triangle count did not match expected-grid ${expected.grid}`);
+    }
     assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
     assert.ok((state.claySurfaceMeanAbsHeight ?? 0) > 0.01, 'clay mean absolute height did not show readable deformation');
     if (url.includes('clay_debug_colliders=0')) {
@@ -399,6 +424,9 @@ async function main() {
       claySurfaceMeanAbsHeight: state.claySurfaceMeanAbsHeight,
       claySurfaceVertexCount: state.claySurfaceVertexCount,
       claySurfaceTriangleCount: state.claySurfaceTriangleCount,
+      requestedClayGrid: state.requestedClayGrid,
+      effectiveClayGrid: state.effectiveClayGrid,
+      clayGridConfigWarnings: state.clayGridConfigWarnings,
       clayDebugCollidersVisible: state.clayDebugCollidersVisible,
       clayInteractionMode: state.clayInteractionMode,
       clayPointerActive: state.clayPointerActive,
