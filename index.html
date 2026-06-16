@@ -539,6 +539,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Hand frame</span><span class="field-val" id="clay-hand-pose-frame">--</span></div>
       <div class="field"><span class="field-key">Step p95</span><span class="field-val" id="clay-step-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Step latest</span><span class="field-val" id="clay-step-latest">-- ms</span></div>
+      <div class="field"><span class="field-key">Contact wall</span><span class="field-val" id="clay-contact-wall">-- ms</span></div>
+      <div class="field"><span class="field-key">Lattice readback</span><span class="field-val" id="clay-lattice-readback">-- ms</span></div>
+      <div class="field"><span class="field-key">Mesh update</span><span class="field-val" id="clay-mesh-update">-- ms</span></div>
+      <div class="field"><span class="field-key">Normal update</span><span class="field-val" id="clay-normal-update">-- ms</span></div>
+      <div class="field"><span class="field-key">CPU shadow</span><span class="field-val" id="clay-cpu-shadow">-- ms</span></div>
+      <div class="field"><span class="field-key">Shadow / lattice</span><span class="field-val" id="clay-cpu-shadow-ratio">--</span></div>
+      <div class="field"><span class="field-key">CPU contact</span><span class="field-val" id="clay-cpu-contact-shadow">-- ms</span></div>
+      <div class="field"><span class="field-key">Contact shadow / wall</span><span class="field-val" id="clay-cpu-contact-shadow-ratio">--</span></div>
       <div class="field"><span class="field-key">Surface range</span><span class="field-val" id="clay-surface-range">--</span></div>
       <div class="field"><span class="field-key">Mean |height|</span><span class="field-val" id="clay-surface-mean-abs">--</span></div>
       <div class="field"><span class="field-key">Topology</span><span class="field-val" id="clay-topology">--</span></div>
@@ -1668,6 +1676,14 @@ function refreshClayReadout() {
   document.getElementById('clay-hand-pose-frame').textContent = s.handPoseFrameId || '--';
   document.getElementById('clay-step-p95').textContent = Number.isFinite(s.clayStepP95Ms) ? `${s.clayStepP95Ms.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-step-latest').textContent = Number.isFinite(s.clayStepLatestMs) ? `${s.clayStepLatestMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-contact-wall').textContent = Number.isFinite(s.clayContactWallMs) ? `${s.clayContactWallMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-lattice-readback').textContent = Number.isFinite(s.clayLatticeReadbackWallMs) ? `${s.clayLatticeReadbackWallMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-mesh-update').textContent = Number.isFinite(s.clayCpuMeshUpdateMs) ? `${s.clayCpuMeshUpdateMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-normal-update').textContent = Number.isFinite(s.clayNormalUpdateMs) ? `${s.clayNormalUpdateMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-cpu-shadow').textContent = Number.isFinite(s.clayCpuShadowEstimateMs) ? `${s.clayCpuShadowEstimateMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-cpu-shadow-ratio').textContent = Number.isFinite(s.clayCpuShadowRatio) ? `${s.clayCpuShadowRatio.toFixed(2)}x` : '--';
+  document.getElementById('clay-cpu-contact-shadow').textContent = Number.isFinite(s.clayCpuContactShadowEstimateMs) ? `${s.clayCpuContactShadowEstimateMs.toFixed(2)} ms` : '-- ms';
+  document.getElementById('clay-cpu-contact-shadow-ratio').textContent = Number.isFinite(s.clayCpuContactShadowRatio) ? `${s.clayCpuContactShadowRatio.toFixed(2)}x` : '--';
   document.getElementById('clay-surface-range').textContent = Number.isFinite(s.claySurfaceHeightRange) ? s.claySurfaceHeightRange.toFixed(3) : '--';
   document.getElementById('clay-surface-mean-abs').textContent = Number.isFinite(s.claySurfaceMeanAbsHeight) ? s.claySurfaceMeanAbsHeight.toFixed(3) : '--';
   document.getElementById('clay-topology').textContent = `${s.clayGrid || '--'} / ${s.claySurfaceTriangleCount ?? '--'} tri`;
@@ -1783,6 +1799,7 @@ async function initKaminosClayRoute() {
   if (params.get('clay_debug_colliders') === '0') {
     clayPrototype.setDebugCollidersVisible(false);
   }
+  clayPrototype.setCpuShadowBenchmarkEnabled(params.get('clay_benchmark_shadow') === '1');
   installClayPointerInteraction(params);
 
   const seedFixture = async () => {

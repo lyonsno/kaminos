@@ -18,6 +18,7 @@ const GRID_Z = 32;
 const MAX_COLLIDERS = 8;
 const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
+const CLAY_CPU_SHADOW_EVIDENCE_KIND = 'benchmark-only-js-shadow-not-runtime-fallback';
 const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
@@ -246,9 +247,25 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let clayPointerLastHit = null;
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
   const clayTimingDisclaimer = 'includes primitive-contact and clay readback; not gpu-exclusive-or-present-latency';
+  const clayPhaseTimingDisclaimer = 'performance.now wall timings; lattice phase includes dispatch/readback sync and is not GPU timestamp-query kernel time';
   const clayStepDurationHistory = [];
   let clayStepLatestMs = 0;
   let clayStepP95Ms = 0;
+  let clayContactWallMs = 0;
+  let clayColliderPrepWallMs = 0;
+  let clayLatticeReadbackWallMs = 0;
+  let clayCpuMeshUpdateMs = 0;
+  let clayNormalUpdateMs = 0;
+  let clayStepTotalWallMs = 0;
+  let clayCpuShadowBenchmarkEnabled = false;
+  let clayCpuShadowEstimateMs = 0;
+  let clayCpuShadowRatio = null;
+  let clayCpuShadowSampleCount = 0;
+  let clayCpuShadowChecksum = 0;
+  let clayCpuContactShadowEstimateMs = 0;
+  let clayCpuContactShadowRatio = null;
+  let clayCpuContactShadowSampleCount = 0;
+  let clayCpuContactShadowChecksum = 0;
   let sharedPrimitiveProbeStatus = 'not-run';
   let sharedPrimitiveProbeDistanceSq = null;
   let sharedPrimitiveProbeFeature = null;
@@ -359,6 +376,135 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       return { triangle: [p00, p10, p01], triangleIndex: cellTriangleIndex };
     }
     return { triangle: [p10, p11, p01], triangleIndex: cellTriangleIndex + 1 };
+  }
+
+  function runCpuShadowIteration(primitiveColliders, previousValues) {
+    let checksum = 0;
+    for (let i = 0; i < vertexCount; i += 1) {
+      const offset = i * 4;
+      const baseX = basePositions[offset];
+      const baseZ = basePositions[offset + 2];
+      let depression = 0;
+      let lift = 0;
+      let contact = 0;
+      for (let c = 0; c < Math.min(MAX_COLLIDERS, primitiveColliders.length); c += 1) {
+        const collider = primitiveColliders[c];
+        const dx = baseX - collider.center[0];
+        const dz = baseZ - collider.center[2];
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const radius = Math.max(collider.radius, 0.001);
+        const reach = clamp01(1 - dist / radius);
+        const rim = clamp01(1 - Math.abs(dist - radius * 0.72) / (radius * 0.36));
+        const force = collider.effectiveStrength;
+        depression -= reach * reach * force * 0.18;
+        lift += rim * rim * force * 0.035;
+        contact += reach > 0.001 ? 1 : 0;
+      }
+      const previousY = previousValues[offset + 1];
+      const mound = 0.035 * Math.exp(-2.2 * (baseX * baseX + baseZ * baseZ));
+      const targetY = mound + depression + lift;
+      const relaxedY = previousY + (targetY - previousY) * CLAY_RELAXATION_FACTOR;
+      const y = Math.max(-0.32, Math.min(0.16, relaxedY + depression * CLAY_PLASTICITY_FACTOR));
+      checksum += y + contact * 0.0001;
+    }
+    return checksum;
+  }
+
+  function estimateCpuShadowClayMs(primitiveColliders, previousValues) {
+    const startedAt = performance.now();
+    let checksum = 0;
+    let iterations = 0;
+    let elapsedMs = 0;
+    do {
+      checksum += runCpuShadowIteration(primitiveColliders, previousValues);
+      iterations += 1;
+      elapsedMs = performance.now() - startedAt;
+    } while (elapsedMs < 0.75);
+    clayCpuShadowChecksum = checksum;
+    clayCpuShadowSampleCount = iterations;
+    return elapsedMs / iterations;
+  }
+
+  function closestSegmentDistanceSq(point, a, b) {
+    const abx = b[0] - a[0];
+    const aby = b[1] - a[1];
+    const abz = b[2] - a[2];
+    const apx = point[0] - a[0];
+    const apy = point[1] - a[1];
+    const apz = point[2] - a[2];
+    const denom = Math.max(abx * abx + aby * aby + abz * abz, 1e-8);
+    const t = clamp01((apx * abx + apy * aby + apz * abz) / denom);
+    const cx = a[0] + abx * t;
+    const cy = a[1] + aby * t;
+    const cz = a[2] + abz * t;
+    const dx = point[0] - cx;
+    const dy = point[1] - cy;
+    const dz = point[2] - cz;
+    return dx * dx + dy * dy + dz * dz;
+  }
+
+  function pointTriangleDistanceSqCpu(point, triangle) {
+    const [a, b, c] = triangle;
+    let best = Math.min(
+      (point[0] - a[0]) ** 2 + (point[1] - a[1]) ** 2 + (point[2] - a[2]) ** 2,
+      (point[0] - b[0]) ** 2 + (point[1] - b[1]) ** 2 + (point[2] - b[2]) ** 2,
+      (point[0] - c[0]) ** 2 + (point[1] - c[1]) ** 2 + (point[2] - c[2]) ** 2,
+      closestSegmentDistanceSq(point, a, b),
+      closestSegmentDistanceSq(point, b, c),
+      closestSegmentDistanceSq(point, c, a),
+    );
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const ap = [point[0] - a[0], point[1] - a[1], point[2] - a[2]];
+    const nx = ab[1] * ac[2] - ab[2] * ac[1];
+    const ny = ab[2] * ac[0] - ab[0] * ac[2];
+    const nz = ab[0] * ac[1] - ab[1] * ac[0];
+    const nn = nx * nx + ny * ny + nz * nz;
+    if (nn > 1e-8) {
+      const signed = (ap[0] * nx + ap[1] * ny + ap[2] * nz) / nn;
+      const projected = [point[0] - nx * signed, point[1] - ny * signed, point[2] - nz * signed];
+      const v2 = [projected[0] - a[0], projected[1] - a[1], projected[2] - a[2]];
+      const d00 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+      const d01 = ab[0] * ac[0] + ab[1] * ac[1] + ab[2] * ac[2];
+      const d11 = ac[0] * ac[0] + ac[1] * ac[1] + ac[2] * ac[2];
+      const d20 = v2[0] * ab[0] + v2[1] * ab[1] + v2[2] * ab[2];
+      const d21 = v2[0] * ac[0] + v2[1] * ac[1] + v2[2] * ac[2];
+      const denom = d00 * d11 - d01 * d01;
+      if (Math.abs(denom) > 1e-8) {
+        const bv = (d11 * d20 - d01 * d21) / denom;
+        const bw = (d00 * d21 - d01 * d20) / denom;
+        const bu = 1 - bv - bw;
+        const faceDist = (point[0] - projected[0]) ** 2 + (point[1] - projected[1]) ** 2 + (point[2] - projected[2]) ** 2;
+        if (bu >= -1e-7 && bv >= -1e-7 && bw >= -1e-7) best = Math.min(best, faceDist);
+      }
+    }
+    return best;
+  }
+
+  function runCpuContactShadowIteration() {
+    let checksum = 0;
+    for (const collider of colliders.slice(0, MAX_COLLIDERS)) {
+      const { triangle, triangleIndex } = claySurfaceTriangleForCollider(collider);
+      const distance = Math.sqrt(Math.max(0, pointTriangleDistanceSqCpu(collider.center, triangle)));
+      const contactScale = clamp01(1 - distance / Math.max(collider.radius, 0.001));
+      checksum += triangleIndex + contactScale * collider.strength;
+    }
+    return checksum;
+  }
+
+  function estimateCpuContactShadowMs() {
+    const startedAt = performance.now();
+    let checksum = 0;
+    let iterations = 0;
+    let elapsedMs = 0;
+    do {
+      checksum += runCpuContactShadowIteration();
+      iterations += 1;
+      elapsedMs = performance.now() - startedAt;
+    } while (elapsedMs < 0.75);
+    clayCpuContactShadowChecksum = checksum;
+    clayCpuContactShadowSampleCount = iterations;
+    return elapsedMs / iterations;
   }
 
   async function runPointTriangleDistanceJobs(packedJobs, jobCount, label) {
@@ -558,7 +704,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     const stepStartedAt = performance.now();
     await ensureGpu();
     ensureMesh();
+    const contactStartedAt = performance.now();
     const primitiveColliders = await runPrimitiveContactPass();
+    clayContactWallMs = performance.now() - contactStartedAt;
+    const cpuShadowPreviousValues = lastStateValues || basePositions;
+    const colliderPrepStartedAt = performance.now();
     const colliderData = new Float32Array(MAX_COLLIDERS * 4);
     primitiveColliders.slice(0, MAX_COLLIDERS).forEach((collider, index) => {
       colliderData[index * 4] = collider.center[0];
@@ -568,6 +718,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     });
     device.queue.writeBuffer(colliderBuffer, 0, colliderData);
     device.queue.writeBuffer(paramsBuffer, 0, new Uint32Array([vertexCount, colliders.length, gpuStepCount + 1, 0]));
+    clayColliderPrepWallMs = performance.now() - colliderPrepStartedAt;
+    const latticeStartedAt = performance.now();
     const encoder = device.createCommandEncoder({ label: 'kaminos-clay-step' });
     const pass = encoder.beginComputePass({ label: 'kaminos-clay-lattice-pass' });
     pass.setPipeline(pipeline);
@@ -580,7 +732,9 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     await readbackBuffer.mapAsync(GPUMapMode.READ);
     const values = new Float32Array(readbackBuffer.getMappedRange()).slice();
     readbackBuffer.unmap();
+    clayLatticeReadbackWallMs = performance.now() - latticeStartedAt;
 
+    const meshUpdateStartedAt = performance.now();
     const position = mesh.geometry.attributes.position;
     clayDeformationCount = 0;
     clayContactCount = 0;
@@ -620,11 +774,34 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
         : null;
     }
     position.needsUpdate = true;
+    clayCpuMeshUpdateMs = performance.now() - meshUpdateStartedAt;
+    const normalUpdateStartedAt = performance.now();
     mesh.geometry.computeVertexNormals();
+    clayNormalUpdateMs = performance.now() - normalUpdateStartedAt;
     gpuStepCount += 1;
     frameCount += 1;
     if (clayPointerActive && clayPointerColliderCount > 0) clayPointerDragStepCount += 1;
-    clayStepLatestMs = performance.now() - stepStartedAt;
+    clayStepTotalWallMs = performance.now() - stepStartedAt;
+    clayStepLatestMs = clayStepTotalWallMs;
+    if (clayCpuShadowBenchmarkEnabled) {
+      clayCpuShadowEstimateMs = estimateCpuShadowClayMs(primitiveColliders, cpuShadowPreviousValues);
+      clayCpuShadowRatio = clayLatticeReadbackWallMs > 0
+        ? clayCpuShadowEstimateMs / clayLatticeReadbackWallMs
+        : null;
+      clayCpuContactShadowEstimateMs = estimateCpuContactShadowMs();
+      clayCpuContactShadowRatio = clayContactWallMs > 0
+        ? clayCpuContactShadowEstimateMs / clayContactWallMs
+        : null;
+    } else {
+      clayCpuShadowEstimateMs = 0;
+      clayCpuShadowRatio = null;
+      clayCpuShadowSampleCount = 0;
+      clayCpuShadowChecksum = 0;
+      clayCpuContactShadowEstimateMs = 0;
+      clayCpuContactShadowRatio = null;
+      clayCpuContactShadowSampleCount = 0;
+      clayCpuContactShadowChecksum = 0;
+    }
     clayStepDurationHistory.push(clayStepLatestMs);
     clayStepP95Ms = percentile(clayStepDurationHistory, 0.95);
     onStatus(debugState());
@@ -707,6 +884,11 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     onStatus(debugState());
   }
 
+  function setCpuShadowBenchmarkEnabled(nextEnabled) {
+    clayCpuShadowBenchmarkEnabled = !!nextEnabled;
+    onStatus(debugState());
+  }
+
   function debugState() {
     return {
       active,
@@ -740,10 +922,27 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       persistentClaySettlingRatio,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
+      clayPhaseTimingDisclaimer,
       clayStepDurationHistory: clayStepDurationHistory.slice(),
       clayStepLatestMs,
       clayStepP95Ms,
       clayStepSampleCount: clayStepDurationHistory.length,
+      clayContactWallMs,
+      clayColliderPrepWallMs,
+      clayLatticeReadbackWallMs,
+      clayCpuMeshUpdateMs,
+      clayNormalUpdateMs,
+      clayStepTotalWallMs,
+      clayCpuShadowBenchmarkEnabled,
+      clayCpuShadowEvidenceKind: CLAY_CPU_SHADOW_EVIDENCE_KIND,
+      clayCpuShadowEstimateMs,
+      clayCpuShadowRatio,
+      clayCpuShadowSampleCount,
+      clayCpuShadowChecksum,
+      clayCpuContactShadowEstimateMs,
+      clayCpuContactShadowRatio,
+      clayCpuContactShadowSampleCount,
+      clayCpuContactShadowChecksum,
       claySurfaceMinY,
       claySurfaceMaxY,
       claySurfaceHeightRange,
@@ -797,6 +996,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     setHandPoseFrame,
     setPointerClayCollider,
     clearPointerClayCollider,
+    setCpuShadowBenchmarkEnabled,
     setDebugCollidersVisible,
     step,
     debugState,

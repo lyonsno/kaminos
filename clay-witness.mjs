@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -279,6 +279,27 @@ async function main() {
     assert.ok(Number.isFinite(state.clayStepLatestMs) && state.clayStepLatestMs > 0, 'clay latest step timing missing');
     assert.ok(Number.isFinite(state.clayStepP95Ms) && state.clayStepP95Ms > 0, 'clay p95 step timing missing');
     assert.ok((state.clayStepSampleCount ?? 0) >= 6, 'clay step timing sample count missing');
+    assert.match(
+      state.clayPhaseTimingDisclaimer || '',
+      /not GPU timestamp-query kernel time/,
+      'clay phase timing disclaimer did not reach debug state',
+    );
+    assert.ok(Number.isFinite(state.clayContactWallMs) && state.clayContactWallMs >= 0, 'clay primitive contact wall timing missing');
+    assert.ok(Number.isFinite(state.clayColliderPrepWallMs) && state.clayColliderPrepWallMs >= 0, 'clay collider prep timing missing');
+    assert.ok(Number.isFinite(state.clayLatticeReadbackWallMs) && state.clayLatticeReadbackWallMs > 0, 'clay lattice dispatch/readback timing missing');
+    assert.ok(Number.isFinite(state.clayCpuMeshUpdateMs) && state.clayCpuMeshUpdateMs >= 0, 'clay CPU mesh update timing missing');
+    assert.ok(Number.isFinite(state.clayNormalUpdateMs) && state.clayNormalUpdateMs >= 0, 'clay normal recompute timing missing');
+    assert.ok(Number.isFinite(state.clayStepTotalWallMs) && state.clayStepTotalWallMs > 0, 'clay total wall timing missing');
+    assert.equal(state.clayCpuShadowEvidenceKind, 'benchmark-only-js-shadow-not-runtime-fallback', 'clay CPU shadow evidence kind is not explicit');
+    assert.equal(state.clayCpuShadowBenchmarkEnabled, url.includes('clay_benchmark_shadow=1'), 'clay CPU shadow benchmark enablement does not match route');
+    if (url.includes('clay_benchmark_shadow=1')) {
+      assert.ok(Number.isFinite(state.clayCpuShadowEstimateMs) && state.clayCpuShadowEstimateMs > 0, 'clay CPU shadow estimate missing');
+      assert.ok(Number.isFinite(state.clayCpuShadowRatio) && state.clayCpuShadowRatio >= 0, 'clay CPU shadow ratio missing');
+      assert.ok((state.clayCpuShadowSampleCount ?? 0) >= 1, 'clay CPU shadow sample count missing');
+      assert.ok(Number.isFinite(state.clayCpuContactShadowEstimateMs) && state.clayCpuContactShadowEstimateMs > 0, 'clay CPU contact shadow estimate missing');
+      assert.ok(Number.isFinite(state.clayCpuContactShadowRatio) && state.clayCpuContactShadowRatio >= 0, 'clay CPU contact shadow ratio missing');
+      assert.ok((state.clayCpuContactShadowSampleCount ?? 0) >= 1, 'clay CPU contact shadow sample count missing');
+    }
     assert.ok((state.claySurfaceVertexCount ?? 0) >= 1000, 'clay surface vertex count is too small for quality witness');
     assert.ok((state.claySurfaceTriangleCount ?? 0) >= 2500, 'clay surface triangle count is too small for quality witness');
     assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
@@ -351,10 +372,27 @@ async function main() {
       persistentClaySettlingRatio: state.persistentClaySettlingRatio,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
+      clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,
       clayStepDurationHistory: state.clayStepDurationHistory,
       clayStepLatestMs: state.clayStepLatestMs,
       clayStepP95Ms: state.clayStepP95Ms,
       clayStepSampleCount: state.clayStepSampleCount,
+      clayContactWallMs: state.clayContactWallMs,
+      clayColliderPrepWallMs: state.clayColliderPrepWallMs,
+      clayLatticeReadbackWallMs: state.clayLatticeReadbackWallMs,
+      clayCpuMeshUpdateMs: state.clayCpuMeshUpdateMs,
+      clayNormalUpdateMs: state.clayNormalUpdateMs,
+      clayStepTotalWallMs: state.clayStepTotalWallMs,
+      clayCpuShadowBenchmarkEnabled: state.clayCpuShadowBenchmarkEnabled,
+      clayCpuShadowEvidenceKind: state.clayCpuShadowEvidenceKind,
+      clayCpuShadowEstimateMs: state.clayCpuShadowEstimateMs,
+      clayCpuShadowRatio: state.clayCpuShadowRatio,
+      clayCpuShadowSampleCount: state.clayCpuShadowSampleCount,
+      clayCpuShadowChecksum: state.clayCpuShadowChecksum,
+      clayCpuContactShadowEstimateMs: state.clayCpuContactShadowEstimateMs,
+      clayCpuContactShadowRatio: state.clayCpuContactShadowRatio,
+      clayCpuContactShadowSampleCount: state.clayCpuContactShadowSampleCount,
+      clayCpuContactShadowChecksum: state.clayCpuContactShadowChecksum,
       claySurfaceMinY: state.claySurfaceMinY,
       claySurfaceMaxY: state.claySurfaceMaxY,
       claySurfaceHeightRange: state.claySurfaceHeightRange,
