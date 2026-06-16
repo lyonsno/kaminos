@@ -259,6 +259,7 @@ assert.match(core, /plumeRiseScale/, 'fluid sim has an explicit plume height/wor
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
 assert.match(core, /microFilamentNoise/, 'raymarch derives visible microdetail from multi-axis turbulent filament noise');
+assert.match(core, /bonfireCurtainBreakup/, 'bonfire raymarch breaks up visible column-aligned smoke curtains after transport evidence is satisfied');
 assert.match(core, /let lickWarp = turbulentDetailForce/, 'fire-lick breakup dephases its comb with turbulent warp before transport');
 assert.doesNotMatch(core, /sin\(p\.x \* 43\.0 \+ p\.y \* 61\.0 - p\.z \* 37\.0/, 'visible microdetail must not use the old single coherent diagonal phase wave');
 assert.match(core, /shredOperatorGain/, 'Shred slider has explicit nonlinear leverage for the exaggerated end of the range');
@@ -320,6 +321,9 @@ assert.match(core, /bonfireEntrainedLift/, 'bonfire plume has named vertical ent
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
 assert.match(core, /bonfireSmokeSource/, 'fluid source shaping creates smoke from the bottom fireball before plume rise');
 assert.match(core, /bonfireSourceCarrier/, 'bonfire smoke/source carrier is separated from the sharper paired combustion lobes');
+assert.match(core, /bonfireBroadSupportSmokeBand/, 'bonfire smoke birth preserves a broad source support body from the pre-wind visual baseline');
+assert.match(core, /bonfireBroadSupportSmokeSource/, 'bonfire smoke transport has a named broad support source instead of only a narrow interface birth collar');
+assert.match(core, /bonfireBreathingRecenteringGain/, 'bonfire zero-wind recentering uses a named breathing gain so drift control does not bottle the plume');
 assert.match(core, /bonfireDetailBirthCarrier/, 'bonfire material detail birth is separated from the smooth source core so smoke does not rise as source-aligned curtains');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
 assert.match(core, /let p = \(cell \/ f32\(GRID\)\) \* 2\.0 - vec3<f32>\(1\.0\);/, 'fluid sim maps cell-centered coordinates into symmetric volume space');
@@ -339,7 +343,8 @@ assert.match(core, /bonfireNonWindRecenteringGain/, 'bonfire scene names its zer
 assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
 assert.match(core, /bonfireLocalLateralTransportGain/, 'zero-wind bonfire convection preserves local lateral circulation instead of killing horizontal transport');
 assert.match(core, /bonfireLocalLateralForceGain/, 'zero-wind bonfire detail forces preserve bounded local lateral motion for convection');
-assert.match(core, /bonfireLocalLateralSlipGain/, 'zero-wind bonfire scalar advection separates physical lateral velocity transport from extra stochastic scalar slip');
+assert.match(core, /bonfireZeroMeanScalarSlipGain/, 'zero-wind bonfire scalar advection has a named bounded local slip floor so smoke/fire material follows convection without becoming global wind');
+assert.match(core, /bonfireLocalLateralSlipGain/, 'zero-wind bonfire scalar advection separates bounded zero-mean local slip from explicit wind authority');
 assert.match(core, /csDivergencePressure/, 'bonfire plume needs a staged divergence pass instead of only in-line velocity heuristics');
 assert.match(core, /csPressureJacobi/, 'bonfire plume needs pressure iterations before projection, not just a one-sample divergence gradient');
 assert.match(core, /csProjectPressure/, 'bonfire plume needs a projection pass after all forces/source terms are applied');
@@ -351,9 +356,9 @@ assert.doesNotMatch(core, /let bonfireSwirlSymmetryGain = mix\(1\.0, explicitWin
 assert.doesNotMatch(core, /let bonfireNonWindLateralDamping = mix\(1\.0, explicitWindAuthority, bonfireScene\);/, 'zero-wind bonfire final velocity must preserve local lateral circulation while damping net drift');
 assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 - explicitWindAuthority\);/, 'bonfire no-wind correction must not fully mirror material state and kill vertical advection');
 assert.match(core, /bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain/, 'bonfire lateral advection preserves local zero-wind transport while separate damping controls net drift');
-assert.match(core, /thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection\)/, 'bonfire thermal scalar advection must not add hidden lateral slip under zero wind');
-assert.match(core, /fireLayerAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection\)/, 'bonfire fire-layer advection must not add hidden lateral slip under zero wind');
-assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, localMaterial\.x, fireLayer\.x, bonfireLocalLateralSlipGain, microdetailRiseDirection\)/, 'bonfire microdetail advection must not add hidden lateral slip under zero wind');
+assert.match(core, /thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection\)/, 'bonfire thermal scalar advection must route through the named local-slip gate');
+assert.match(core, /fireLayerAdvection\(cell, advectVelocity, speed, localMaterial\.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection\)/, 'bonfire fire-layer advection must route through the named local-slip gate');
+assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, localMaterial\.x, fireLayer\.x, bonfireLocalLateralSlipGain, microdetailRiseDirection\)/, 'bonfire microdetail advection must route through the named local-slip gate');
 assert.match(core, /bonfireDetailLateralDamping = bonfireLocalLateralForceGain/, 'bonfire detail-force lateral authority preserves local zero-wind convection');
 assert.match(core, /isBonfireInitialScene/, 'initial fluid seed detects bonfire scene for centered no-wind reset state');
 assert.match(core, /seedLateralVelocity = isBonfireInitialScene \? 0 : 0\.11/, 'bonfire reset seed must not start with hidden swirl velocity');
