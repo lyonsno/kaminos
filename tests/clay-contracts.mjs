@@ -14,6 +14,8 @@ assert.match(index, /__kaminosClayPrototype/, 'clay route exposes a witness/debu
 assert.match(index, /clay_fixture_hand/, 'clay route exposes a deterministic hand-collider fixture');
 assert.match(index, /hand_pose_fixture/, 'clay route exposes a deterministic hand-pose adapter fixture');
 assert.match(index, /setHandPoseFrame/, 'clay route can seed hand-pose frames through the public adapter API');
+assert.match(index, /PerceptasiaClaySubstrate/, 'clay route exposes the same-window Palm Daddy substrate API');
+assert.match(index, /wilor_mlx_hand_pose_frame_for_kaminos_clay/, 'same-window substrate names the Palm Daddy hand-pose frame contract');
 assert.match(index, /clay-primitive-probe/, 'Clay panel exposes package primitive probe status');
 assert.match(index, /clay-primitive-commit/, 'Clay panel exposes package primitive commit identity');
 assert.match(index, /clay-primitive-contacts/, 'Clay panel exposes primitive-driven contact count');
@@ -88,7 +90,12 @@ assert.match(core, /persistentClayLatestDelta/, 'clay debug state records latest
 assert.match(core, /requestedHandPoseBackend/, 'clay debug state records requested hand-pose backend identity');
 assert.match(core, /effectiveHandPoseBackend/, 'clay debug state records effective hand-pose backend identity');
 assert.match(core, /handPoseEvidenceKind/, 'clay debug state distinguishes live, captured, fallback, and synthetic hand-pose evidence');
+assert.match(core, /stale_visual_only/, 'clay adapter accepts Palm Daddy stale visual-only clay evidence');
 assert.match(core, /handPoseStale/, 'clay debug state fails loud when hand-pose input is stale');
+assert.match(core, /handPoseVisualOnly/, 'clay debug state records stale visual-only clay continuity separately from live control');
+assert.match(core, /sampleAuthority/, 'clay debug state records Palm Daddy sample authority');
+assert.match(core, /sourceBackend/, 'clay debug state records Palm Daddy source backend');
+assert.match(core, /clay_local_y_axis_drives_fingertip_pressure/, 'clay adapter preserves Palm Daddy local-Y pressure contract');
 assert.match(core, /handPoseFrameId/, 'clay debug state records hand-pose frame identity');
 assert.match(core, /handPoseColliderCount/, 'clay debug state records hand-pose-derived collider count');
 assert.match(core, /handPoseAdapterWarnings/, 'clay debug state preserves hand-pose adapter warnings');
@@ -182,6 +189,8 @@ assert.match(witness, /persistentClayDeltaHistory/, 'clay witness records persis
 assert.match(witness, /persistentClaySettlingRatio/, 'clay witness records persistent state settling ratio');
 assert.match(witness, /clay_steps=6/, 'clay witness requests a multi-step relaxation route');
 assert.match(witness, /hand_pose_fixture/, 'clay witness can drive the explicit hand-pose adapter fixture route');
+assert.match(witness, /hand-pose-payload/, 'clay witness can inject a captured Palm Daddy hand-pose payload file');
+assert.match(witness, /stale_visual_only/, 'clay witness can verify Palm Daddy stale visual-only payload evidence');
 assert.match(witness, /requestedHandPoseBackend/, 'clay witness records requested hand-pose backend identity');
 assert.match(witness, /effectiveHandPoseBackend/, 'clay witness records effective hand-pose backend identity');
 assert.match(witness, /handPoseEvidenceKind/, 'clay witness records hand-pose evidence kind');

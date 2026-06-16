@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { inflateSync } from 'node:zlib';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -19,6 +19,8 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-clay-witness-pr
 const settleMs = Number(args.get('--settle-ms') || 1600);
 const windowSize = args.get('--window-size') || '1280,900';
 const expectedGrid = args.get('--expected-grid') || null;
+const handPosePayloadPath = args.get('--hand-pose-payload') || null;
+const handPosePayloadReplay = args.get('--hand-pose-payload-replay') || null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -150,6 +152,22 @@ function expectedGridTopology(grid) {
   };
 }
 
+function parseLooseJsonFile(path) {
+  return JSON.parse(readFileSync(path, 'utf8')
+    .replace(/:\s*Infinity\b/g, ': null')
+    .replace(/:\s*-Infinity\b/g, ': null')
+    .replace(/:\s*NaN\b/g, ': null'));
+}
+
+function pickClayHandPosePayload(json) {
+  return json?.witness?.clay_hand_pose_frame
+    || json?.clay_hand_pose_frame
+    || json?.clay?.hand_pose_frame
+    || json?.hand_pose_frame
+    || json?.witness?.hand_pose_frame_update?.payload
+    || null;
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -177,6 +195,38 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     phase = 'settle';
     await delay(settleMs);
+    let injectedHandPosePayload = null;
+    if (handPosePayloadPath) {
+      phase = 'hand-pose-payload';
+      injectedHandPosePayload = pickClayHandPosePayload(parseLooseJsonFile(handPosePayloadPath));
+      assert.ok(injectedHandPosePayload, `missing clay hand-pose payload in ${handPosePayloadPath}`);
+      if (handPosePayloadReplay === 'captured') {
+        injectedHandPosePayload = {
+          ...injectedHandPosePayload,
+          originalEvidenceKind: injectedHandPosePayload.evidenceKind,
+          evidenceKind: 'captured',
+          timestampMs: 0,
+        };
+      }
+      const payloadLiteral = JSON.stringify(injectedHandPosePayload);
+      const injectEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const substrate = window.PerceptasiaClaySubstrate || window.__kaminosClayPrototype;
+          if (!substrate?.setHandPoseFrame) return { ok: false, reason: 'missing setHandPoseFrame substrate' };
+          const payload = ${payloadLiteral};
+          if (${JSON.stringify(handPosePayloadReplay)} === 'captured') payload.timestampMs = performance.now();
+          const accepted = await substrate.setHandPoseFrame(payload);
+          return { ok: true, accepted };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (injectEval.exceptionDetails) {
+        throw new Error(`hand-pose-payload injection failed: ${injectEval.exceptionDetails.text || 'unknown exception'}`);
+      }
+      assert.ok(injectEval.result?.value?.ok, injectEval.result?.value?.reason || 'hand-pose-payload injection did not reach substrate');
+      await delay(350);
+    }
 
     if (url.includes('clay_interactive=1')) {
       phase = 'pointer-drag-geometry';
@@ -301,7 +351,7 @@ async function main() {
     assert.ok((state.persistentClayInitialDelta ?? 0) > 0, 'persistent clay state did not record initial relaxation delta');
     assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
-    if (!url.includes('clay_interactive=1')) {
+    if (!url.includes('clay_interactive=1') && !handPosePayloadPath) {
       assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
@@ -391,12 +441,31 @@ async function main() {
       assert.ok(Math.abs(state.clayPointerLastHit.radius - requestedBrushRadius) <= 1e-6, 'pointer hit radius did not match route');
       assert.ok(Math.abs(state.clayPointerLastHit.strength - requestedBrushStrength) <= 1e-6, 'pointer hit strength did not match route');
     }
-    if (url.includes('hand_pose_fixture')) {
-      assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach clay debug state');
-      assert.equal(state.effectiveHandPoseBackend, 'wilor-mlx-fixture', 'effective hand-pose backend did not reach clay debug state');
-      assert.equal(state.handPoseEvidenceKind, 'synthetic', 'hand-pose evidence kind did not reach clay debug state');
+    if (url.includes('hand_pose_fixture') || handPosePayloadPath) {
+      const expectedHandPose = injectedHandPosePayload || {
+        requestedBackend: 'mlx',
+        effectiveBackend: 'wilor-mlx-fixture',
+        evidenceKind: 'synthetic',
+      };
+      assert.equal(state.requestedHandPoseBackend, expectedHandPose.requestedBackend, 'requested hand-pose backend did not reach clay debug state');
+      assert.equal(state.effectiveHandPoseBackend, expectedHandPose.effectiveBackend, 'effective hand-pose backend did not reach clay debug state');
+      assert.equal(state.handPoseEvidenceKind, expectedHandPose.evidenceKind, 'hand-pose evidence kind did not reach clay debug state');
       assert.equal(state.handPoseStale, false, 'fresh clay hand-pose fixture was marked stale');
-      assert.ok(String(state.handPoseFrameId || '').startsWith('hand-pose-fixture-'), 'hand-pose frame id did not reach clay debug state');
+      if (expectedHandPose.evidenceKind === 'stale_visual_only') {
+        assert.equal(state.handPoseVisualOnly, true, 'stale visual-only payload did not preserve visual-only evidence flag');
+      }
+      if (expectedHandPose.source_backend) {
+        assert.equal(state.sourceBackend, expectedHandPose.source_backend, 'source backend did not reach clay debug state');
+      }
+      if (Number.isFinite(expectedHandPose.sample_authority)) {
+        assert.equal(state.sampleAuthority, expectedHandPose.sample_authority, 'sample authority did not reach clay debug state');
+      }
+      assert.equal(state.handPosePressureContract, 'clay_local_y_axis_drives_fingertip_pressure', 'Palm Daddy pressure contract missing from clay debug state');
+      if (!handPosePayloadPath) {
+        assert.ok(String(state.handPoseFrameId || '').startsWith('hand-pose-fixture-'), 'hand-pose frame id did not reach clay debug state');
+      } else {
+        assert.equal(String(state.handPoseFrameId), String(expectedHandPose.frameId), 'captured hand-pose frame id did not reach clay debug state');
+      }
       assert.equal(state.handPoseHandCount, 1, 'clay hand-pose fixture did not report one hand');
       assert.equal(state.handPoseColliderCount, 5, 'clay hand-pose fixture did not emit fingertip colliders');
       assert.deepEqual(state.handPoseAdapterWarnings, [], 'clay hand-pose fixture emitted adapter warnings');
@@ -514,10 +583,17 @@ async function main() {
       effectiveHandPoseBackend: state.effectiveHandPoseBackend,
       handPoseEvidenceKind: state.handPoseEvidenceKind,
       handPoseStale: state.handPoseStale,
+      handPoseVisualOnly: state.handPoseVisualOnly,
       handPoseFrameId: state.handPoseFrameId,
       handPoseHandCount: state.handPoseHandCount,
       handPoseColliderCount: state.handPoseColliderCount,
       handPoseAdapterWarnings: state.handPoseAdapterWarnings,
+      sourceBackend: state.sourceBackend,
+      sampleAgeMs: state.sampleAgeMs,
+      sampleAuthority: state.sampleAuthority,
+      handPosePressureContract: state.handPosePressureContract,
+      handPosePayloadPath,
+      handPosePayloadReplay,
       clayRelaxationFactor: state.clayRelaxationFactor,
       clayPlasticityFactor: state.clayPlasticityFactor,
       clayColliderCount: state.clayColliderCount,

@@ -1854,6 +1854,30 @@ function installClayPointerInteraction(params) {
   };
 }
 
+function exposePerceptasiaClaySubstrate(clayPrototype) {
+  window.PerceptasiaClaySubstrate = {
+    identity: 'same_window_kaminos_clay_receives_wilor_hand_pose_frames',
+    contract: 'wilor_mlx_hand_pose_frame_for_kaminos_clay',
+    async setHandPoseFrame(payload) {
+      const accepted = clayPrototype.setHandPoseFrame(payload);
+      await clayPrototype.step();
+      refreshClayReadout();
+      return { ...accepted, status: 'accepted', identity: this.identity, contract: this.contract };
+    },
+    updateColliders(payload = {}) {
+      if (payload?.hand_pose_frame || payload?.hands) {
+        return { status: 'skipped_hand_pose_frame_authoritative', identity: this.identity, contract: this.contract };
+      }
+      clayPrototype.setColliders(payload);
+      refreshClayReadout();
+      return { status: 'accepted_legacy_colliders', identity: this.identity, contract: this.contract };
+    },
+    debugState() {
+      return clayPrototype.debugState();
+    },
+  };
+}
+
 async function initKaminosClayRoute() {
   const params = new URLSearchParams(window.location.search);
   initClayBrushControls(params);
@@ -1867,6 +1891,7 @@ async function initKaminosClayRoute() {
     onStatus: refreshClayReadout,
   });
   window.__kaminosClayPrototype = clayPrototype;
+  exposePerceptasiaClaySubstrate(clayPrototype);
   if (params.get('clay_debug_colliders') === '0') {
     clayPrototype.setDebugCollidersVisible(false);
   }

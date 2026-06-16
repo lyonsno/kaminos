@@ -30,12 +30,15 @@ const CLAY_BRUSH_BOUNDARY_EDGE_FALLOFF = 'smoothstep-edge-falloff';
 const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
 const CLAY_CPU_SHADOW_EVIDENCE_KIND = 'benchmark-only-js-shadow-not-runtime-fallback';
+const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
+const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
+const CLAY_PRESSURE_AXIS_GAIN = 2.4;
 const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
 const HAND_POSE_STALE_MS = 250;
 const CLAY_HAND_TIP_INDICES = [4, 8, 12, 16, 20];
-const HAND_POSE_EVIDENCE_KINDS = ['live', 'captured', 'fallback', 'synthetic', 'unverified'];
+const HAND_POSE_EVIDENCE_KINDS = ['live', 'captured', 'fallback', 'synthetic', 'synthetic-witness', 'stale_visual_only', 'unverified'];
 
 export { pointTriangleDistanceWgsl };
 
@@ -70,31 +73,38 @@ function clayHandPoseNowMs() {
 function normalizeClayHandPoint(point, coordinateSpace, warnings) {
   if (!Array.isArray(point) || point.length < 2) {
     warnings.push('invalid-hand-point');
-    return [0, 0];
+    return { x: 0, z: 0, pressureAxis: 0, pressureScale: 1 };
   }
   const x = Number(point[0]);
   const y = Number(point[1]);
   const z = Number(point[2]);
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     warnings.push('nonfinite-hand-point');
-    return [0, 0];
+    return { x: 0, z: 0, pressureAxis: 0, pressureScale: 1 };
   }
   if (coordinateSpace === 'clay-local') {
-    return [
-      clampFinite(x, -1.2, 1.2, 0),
-      clampFinite(Number.isFinite(z) ? z : 0, -1.2, 1.2, 0),
-    ];
+    const pressureAxis = clampFinite(y, -1.2, 1.2, 0);
+    return {
+      x: clampFinite(x, -1.2, 1.2, 0),
+      z: clampFinite(Number.isFinite(z) ? z : 0, -1.2, 1.2, 0),
+      pressureAxis,
+      pressureScale: clampFinite(1 + (pressureAxis - CLAY_PRESSURE_NEUTRAL_AXIS) * CLAY_PRESSURE_AXIS_GAIN, 0.2, 4, 1),
+    };
   }
   if (coordinateSpace === 'volume-local') {
-    return [
-      clampFinite(x, -1.2, 1.2, 0),
-      clampFinite(y, -1.2, 1.2, 0),
-    ];
+    return {
+      x: clampFinite(x, -1.2, 1.2, 0),
+      z: clampFinite(y, -1.2, 1.2, 0),
+      pressureAxis: 0,
+      pressureScale: 1,
+    };
   }
-  return [
-    clampFinite((x - 0.5) * 1.25, -1.2, 1.2, 0),
-    clampFinite((0.5 - y) * 1.25, -1.2, 1.2, 0),
-  ];
+  return {
+    x: clampFinite((x - 0.5) * 1.25, -1.2, 1.2, 0),
+    z: clampFinite((0.5 - y) * 1.25, -1.2, 1.2, 0),
+    pressureAxis: 0,
+    pressureScale: 1,
+  };
 }
 
 export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPoseNowMs()) {
@@ -102,9 +112,17 @@ export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPos
   const requestedHandPoseBackend = String(payload.requestedBackend || payload.requestedHandPoseBackend || 'unspecified');
   const effectiveHandPoseBackend = String(payload.effectiveBackend || payload.effectiveHandPoseBackend || payload.backend || 'unknown');
   const handPoseEvidenceKind = String(payload.evidenceKind || payload.handPoseEvidenceKind || 'unverified');
+  const sourceBackend = String(payload.source_backend || payload.sourceBackend || effectiveHandPoseBackend);
+  const sampleAgeMs = Number.isFinite(Number(payload.sample_age_ms ?? payload.sampleAgeMs))
+    ? Number(payload.sample_age_ms ?? payload.sampleAgeMs)
+    : null;
+  const sampleAuthority = Number.isFinite(Number(payload.sample_authority ?? payload.sampleAuthority))
+    ? Number(payload.sample_authority ?? payload.sampleAuthority)
+    : null;
   const timestampMs = clampFinite(payload.timestampMs, 0, Number.MAX_SAFE_INTEGER, nowMs);
   const ageMs = Math.max(0, nowMs - timestampMs);
   const handPoseStale = handPoseEvidenceKind === 'live' && ageMs > HAND_POSE_STALE_MS;
+  const handPoseVisualOnly = handPoseEvidenceKind === 'stale_visual_only';
   const coordinateSpace = payload.coordinateSpace === 'volume-local' || payload.coordinateSpace === 'clay-local'
     ? payload.coordinateSpace
     : 'image-normalized';
@@ -139,13 +157,18 @@ export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPos
     const side = String(hand.hand_side || hand.handedness || 'unknown').toLowerCase();
     for (const tipIndex of CLAY_HAND_TIP_INDICES) {
       if (colliders.length >= MAX_COLLIDERS) break;
-      const [x, z] = normalizeClayHandPoint(points[tipIndex], coordinateSpace, warnings);
+      const point = normalizeClayHandPoint(points[tipIndex], coordinateSpace, warnings);
+      const baseStrength = clampFinite(hand.strength, 0.05, 2.5, sampleAuthority === null ? 1.05 : 1.05 * sampleAuthority);
       colliders.push({
         id: `hand-${side}-tip-${tipIndex}`,
-        center: [x, 0, z],
+        center: [point.x, 0, point.z],
         radius: clampFinite(hand.radius, 0.06, 0.28, 0.16),
-        strength: clampFinite(hand.strength, 0.05, 2.5, 1.05),
+        strength: clampFinite(baseStrength * point.pressureScale, 0.05, 5, baseStrength),
         source: mode,
+        sourceBackend,
+        sampleAuthority,
+        pressureAxis: point.pressureAxis,
+        pressureScale: point.pressureScale,
       });
     }
   }
@@ -161,10 +184,17 @@ export function normalizeClayHandPoseColliders(payload = {}, nowMs = clayHandPos
     effectiveHandPoseBackend,
     handPoseEvidenceKind,
     handPoseStale,
+    handPoseVisualOnly,
     handPoseFrameId: payload.frameId ?? payload.handPoseFrameId ?? null,
     handPoseHandCount,
     handPoseColliderCount: colliders.length,
     handPoseAdapterWarnings: warnings,
+    sourceBackend,
+    sampleAgeMs,
+    sampleAuthority,
+    handPosePressureContract: CLAY_HAND_POSE_PRESSURE_CONTRACT,
+    clayPressureNeutralAxis: CLAY_PRESSURE_NEUTRAL_AXIS,
+    clayPressureAxisGain: CLAY_PRESSURE_AXIS_GAIN,
   };
 }
 
@@ -198,7 +228,12 @@ function normalizeCollider(collider, index) {
     id: collider?.id || `clay-fixture-${index}`,
     center: [clampedX, rawY, clampedZ],
     radius,
-    strength: clampFinite(collider?.strength, 0, 2.5, 1),
+    strength: clampFinite(collider?.strength, 0, 5, 1),
+    source: collider?.source || null,
+    sourceBackend: collider?.sourceBackend || null,
+    sampleAuthority: Number.isFinite(collider?.sampleAuthority) ? collider.sampleAuthority : null,
+    pressureAxis: Number.isFinite(collider?.pressureAxis) ? collider.pressureAxis : null,
+    pressureScale: Number.isFinite(collider?.pressureScale) ? collider.pressureScale : null,
     boundaryClamped: Math.abs(clampedX - rawX) > 1e-6 || Math.abs(clampedZ - rawZ) > 1e-6,
     boundaryMargin: [xMargin, zMargin],
   };
@@ -963,9 +998,14 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
       handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
       handPoseStale: handPoseAdapterState.handPoseStale,
+      handPoseVisualOnly: handPoseAdapterState.handPoseVisualOnly,
       handPoseHandCount: handPoseAdapterState.handPoseHandCount,
       handPoseColliderCount: handPoseAdapterState.handPoseColliderCount,
       handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
+      sourceBackend: handPoseAdapterState.sourceBackend,
+      sampleAgeMs: handPoseAdapterState.sampleAgeMs,
+      sampleAuthority: handPoseAdapterState.sampleAuthority,
+      handPosePressureContract: handPoseAdapterState.handPosePressureContract,
     };
   }
 
@@ -1114,10 +1154,17 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       effectiveHandPoseBackend: handPoseAdapterState.effectiveHandPoseBackend,
       handPoseEvidenceKind: handPoseAdapterState.handPoseEvidenceKind,
       handPoseStale: handPoseAdapterState.handPoseStale,
+      handPoseVisualOnly: handPoseAdapterState.handPoseVisualOnly,
       handPoseFrameId: handPoseAdapterState.handPoseFrameId,
       handPoseHandCount: handPoseAdapterState.handPoseHandCount,
       handPoseColliderCount: handPoseAdapterState.handPoseColliderCount,
       handPoseAdapterWarnings: handPoseAdapterState.handPoseAdapterWarnings.slice(),
+      sourceBackend: handPoseAdapterState.sourceBackend,
+      sampleAgeMs: handPoseAdapterState.sampleAgeMs,
+      sampleAuthority: handPoseAdapterState.sampleAuthority,
+      handPosePressureContract: handPoseAdapterState.handPosePressureContract,
+      clayPressureNeutralAxis: CLAY_PRESSURE_NEUTRAL_AXIS,
+      clayPressureAxisGain: CLAY_PRESSURE_AXIS_GAIN,
       clayRelaxationFactor,
       clayPlasticityFactor,
       clayGrid: `${gridX}x${gridZ}`,
