@@ -2771,6 +2771,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let smokeWeightedX = 0;
     let smokeWeightedY = 0;
     let smokeWeightedZ = 0;
+    let smokeWeightedX2 = 0;
+    let smokeWeightedZ2 = 0;
     let smokeWeightedVelocityY = 0;
     let smokeWeightedVelocityX = 0;
     let smokeWeightedVelocityZ = 0;
@@ -2779,6 +2781,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let smokeWeightedRadialVelocityAbs = 0;
     let smokeWeightedRadialVelocity = 0;
     let smokeWeightedCurl = 0;
+    let smokeWeightedCurlContact = 0;
     let fireWeightSum = 0;
     let fireWeightedX = 0;
     let fireWeightedY = 0;
@@ -2885,6 +2888,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeWeightedX += smokeWeight * nx;
         smokeWeightedY += smokeWeight * ny;
         smokeWeightedZ += smokeWeight * nz;
+        smokeWeightedX2 += smokeWeight * nx * nx;
+        smokeWeightedZ2 += smokeWeight * nz * nz;
         smokeWeightedVelocityX += smokeWeight * vx;
         smokeWeightedVelocityY += smokeWeight * vy;
         smokeWeightedVelocityZ += smokeWeight * vz;
@@ -2934,6 +2939,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (plumeDriftCells.has(cell)) {
         const smokeWeight = Math.max(0, extinction);
         smokeWeightedCurl += smokeWeight * curlMag;
+        smokeWeightedCurlContact += smokeWeight * Math.max(0, Math.min(1, (curlMag - 0.0005) / 0.035));
         const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor(((y / Math.max(1, gridSize - 1) * 2 - 1) + 1) * 0.5 * plumeHeightBinCount)))];
         bin.smokeWeightedCurl += smokeWeight * curlMag;
       }
@@ -2962,6 +2968,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const plumeRadialVelocityAbsMean = smokeWeightSum > 0 ? smokeWeightedRadialVelocityAbs / smokeWeightSum : 0;
     const plumeRadialVelocityMean = smokeWeightSum > 0 ? smokeWeightedRadialVelocity / smokeWeightSum : 0;
     const plumeSmokeWeightedCurlMean = smokeWeightSum > 0 ? smokeWeightedCurl / smokeWeightSum : 0;
+    const plumeScalarCurlContact = smokeWeightSum > 0 ? smokeWeightedCurlContact / smokeWeightSum : 0;
     const fireCenterX = fireWeightSum > 0 ? fireWeightedX / fireWeightSum : 0;
     const fireCenterY = fireWeightSum > 0 ? fireWeightedY / fireWeightSum : 0;
     const fireCenterZ = fireWeightSum > 0 ? fireWeightedZ / fireWeightSum : 0;
@@ -2987,6 +2994,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireVisualRiseVelocity: fireVelocity * visualRiseDirectionY,
       };
     });
+    const smokeVarianceX = smokeWeightSum > 0 ? Math.max(0, smokeWeightedX2 / smokeWeightSum - smokeCenterX * smokeCenterX) : 0;
+    const smokeVarianceZ = smokeWeightSum > 0 ? Math.max(0, smokeWeightedZ2 / smokeWeightSum - smokeCenterZ * smokeCenterZ) : 0;
+    const plumeSmokeBodyBreadth = Math.sqrt(smokeVarianceX + smokeVarianceZ);
+    const coherentBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > -0.08 && bin.smokeWeight > 1.0);
+    const coherentBinWeight = coherentBins.reduce((sum, bin) => sum + bin.smokeWeight, 0);
+    const coherentBinCenterSpread = coherentBinWeight > 0
+      ? coherentBins.reduce((sum, bin) => sum + bin.smokeWeight * Math.hypot(bin.smokeCenterX - smokeCenterX, bin.smokeCenterZ - smokeCenterZ), 0) / coherentBinWeight
+      : 0;
+    const plumeFieldColumnCoherence = smokeWeightSum > 0
+      ? Math.max(0, Math.min(1.5,
+        (1 - Math.min(1, plumeSmokeBodyBreadth / 0.22)) * 0.62 +
+        (1 - Math.min(1, coherentBinCenterSpread / 0.18)) * 0.38
+      ))
+      : 0;
     const risingSmokeBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > 0.08 && bin.smokeWeight > 0);
     const risingSmokeWeight = risingSmokeBins.reduce((sum, bin) => sum + bin.smokeWeight, 0);
     const risingSmokeVisualRiseDisplacement = risingSmokeWeight > 0
@@ -3026,6 +3047,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeRadialVelocityAbsMean,
       plumeRadialVelocityMean,
       plumeSmokeWeightedCurlMean,
+      plumeScalarCurlContact,
+      plumeSmokeBodyBreadth,
+      plumeFieldColumnCoherence,
+      plumeFieldBinCenterSpread: coherentBinCenterSpread,
       smokeVelocityY,
       smokeVisualRiseVelocity: smokeVelocityY * visualRiseDirectionY,
       smokeVisualRiseDisplacement,

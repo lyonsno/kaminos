@@ -325,6 +325,9 @@ assert.match(core, /bonfireBroadSupportSmokeBand/, 'bonfire smoke birth preserve
 assert.match(core, /bonfireBroadSupportSmokeSource/, 'bonfire smoke transport has a named broad support source instead of only a narrow interface birth collar');
 assert.match(core, /bonfireBreathingRecenteringGain/, 'bonfire zero-wind recentering uses a named breathing gain so drift control does not bottle the plume');
 assert.match(core, /bonfireDetailBirthCarrier/, 'bonfire material detail birth is separated from the smooth source core so smoke does not rise as source-aligned curtains');
+assert.match(core, /plumeFieldColumnCoherence/, 'sim readback reports field-level vertical column coherence separately from screenshot stripe metrics');
+assert.match(core, /plumeScalarCurlContact/, 'sim readback reports whether smoke/extinction occupies locally curling flow');
+assert.match(core, /plumeSmokeBodyBreadth/, 'sim readback reports field-level smoke body breadth so broad render silhouettes cannot hide narrow scalar columns');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
 assert.match(core, /let p = \(cell \/ f32\(GRID\)\) \* 2\.0 - vec3<f32>\(1\.0\);/, 'fluid sim maps cell-centered coordinates into symmetric volume space');
 assert.match(core, /fn sampleFluidSlot\(cellCenter: vec3<f32>, slot: u32\)/, 'fluid slot sampler explicitly accepts cell-center coordinates, matching sim advection callers');
@@ -384,6 +387,9 @@ assert.match(core, /raf-and-queue-proxy/, 'timing evidence is explicitly labeled
 assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carries a present-latency disclaimer');
 assert.match(core, /curlMean/, 'sim readback reports curl evidence');
 assert.match(core, /divergenceMean/, 'sim readback reports divergence/projection evidence');
+assert.match(core, /plumeScalarCurlContact/, 'sim readback reports smoke/extinction contact with local curl, not only global curl existence');
+assert.match(core, /plumeFieldColumnCoherence/, 'sim readback reports whether field smoke columns are still vertically preserved');
+assert.match(core, /plumeSmokeBodyBreadth/, 'sim readback reports scalar plume breadth independently of rendered silhouette');
 assert.match(core, /smokeCenterX/, 'sim readback reports smoke center of mass in simulation X');
 assert.match(core, /smokeCenterZ/, 'sim readback reports smoke center of mass in simulation Z');
 assert.match(core, /fireCenterX/, 'sim readback reports fire center of mass in simulation X');
@@ -441,6 +447,10 @@ assert.match(witness, /temporalFireHistoryProtect/, 'witness records fire-histor
 assert.match(witness, /temporalInterfaceHistoryProtect/, 'witness records interface-history protection evidence');
 assert.match(witness, /temporalEvidenceSource/, 'witness records temporal evidence provenance');
 assert.match(witness, /cpu-estimate-control-proxy/, 'witness preserves CPU/control temporal evidence label');
+assert.match(witness, /plumeScalarCurlContact/, 'witness reports scalar/curl contact so visible smoke must be carried by local flow');
+assert.match(witness, /plumeFieldColumnCoherence/, 'witness reports field-level column coherence so render breakup cannot substitute for scalar mixing');
+assert.match(witness, /plumeSmokeBodyBreadth/, 'witness reports field-level smoke breadth so broad screenshots cannot mask a thin solver column');
+assert.match(witness, /bonfire plume retained solver-column coherence/, 'bonfire witness rejects solver-column preservation even when the rendered frame is nonblank');
 assert.match(witness, /expectedFireScale/, 'witness verifies apparent fire/world scale route/control identity');
 assert.match(witness, /expectedDetailScale/, 'witness verifies fine-detail scale route/control identity');
 assert.match(witness, /expectedPlumeHeight/, 'witness verifies plume height/world-rise route/control identity');

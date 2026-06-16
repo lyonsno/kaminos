@@ -616,6 +616,24 @@ async function main() {
         })}`);
       }
     }
+    if (expectsBonfireConvectionProof) {
+      if (
+        !Number.isFinite(sample.simReadback.plumeScalarCurlContact) ||
+        sample.simReadback.plumeScalarCurlContact <= 0.030 ||
+        !Number.isFinite(sample.simReadback.plumeSmokeBodyBreadth) ||
+        sample.simReadback.plumeSmokeBodyBreadth <= 0.045 ||
+        !Number.isFinite(sample.simReadback.plumeFieldColumnCoherence) ||
+        sample.simReadback.plumeFieldColumnCoherence >= 0.92
+      ) {
+        throw new Error(`bonfire plume retained solver-column coherence: ${JSON.stringify({
+          plumeScalarCurlContact: sample.simReadback.plumeScalarCurlContact,
+          plumeSmokeBodyBreadth: sample.simReadback.plumeSmokeBodyBreadth,
+          plumeFieldColumnCoherence: sample.simReadback.plumeFieldColumnCoherence,
+          plumeFieldBinCenterSpread: sample.simReadback.plumeFieldBinCenterSpread,
+          plumeSmokeWeightedCurlMean: sample.simReadback.plumeSmokeWeightedCurlMean,
+        })}`);
+      }
+    }
     if (
       expectsBonfireVerticalTransport &&
       Number.isFinite(expectedMaxSmokeStripeRatio) &&
@@ -663,6 +681,10 @@ async function main() {
       plumeLateralVelocityBalance: sample.simReadback?.plumeLateralVelocityBalance ?? 0,
       plumeRadialVelocityAbsMean: sample.simReadback?.plumeRadialVelocityAbsMean ?? 0,
       plumeSmokeWeightedCurlMean: sample.simReadback?.plumeSmokeWeightedCurlMean ?? 0,
+      plumeScalarCurlContact: sample.simReadback?.plumeScalarCurlContact ?? 0,
+      plumeSmokeBodyBreadth: sample.simReadback?.plumeSmokeBodyBreadth ?? 0,
+      plumeFieldColumnCoherence: sample.simReadback?.plumeFieldColumnCoherence ?? 0,
+      plumeFieldBinCenterSpread: sample.simReadback?.plumeFieldBinCenterSpread ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
