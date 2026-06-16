@@ -699,6 +699,7 @@ const LAMELLAR_AUTHORING_SCHEMA = 'kaminos.lamellar-authoring.v0';
 const LAMELLAR_SAVED_STATES_KEY = 'kaminos.lamellar.saved-states.v0';
 let lamellarActiveSavedStateId = null;
 let lamellarSavedStateSerial = 0;
+let lamellarLastThumbnailStats = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1064,6 +1065,164 @@ function summarizeLamellarAuthoringState(payload) {
   return `seed ${seed} / ${layers}L / ${population}P / ${envelopes} envelopes`;
 }
 
+function measureLamellarThumbnailCanvas(canvas) {
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  let minLuma = 255;
+  let maxLuma = 0;
+  const buckets = new Set();
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const i = (y * width + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+      minLuma = Math.min(minLuma, luma);
+      maxLuma = Math.max(maxLuma, luma);
+      buckets.add(`${r >> 4}:${g >> 4}:${b >> 4}`);
+    }
+  }
+  return {
+    width,
+    height,
+    lumaRange: maxLuma - minLuma,
+    colorBuckets: buckets.size,
+  };
+}
+
+function drawLamellarDescriptorThumbnail(ctx, width, height) {
+  const debug = lamellarWitness?.debugState?.() || {};
+  const envelopes = Array.isArray(debug.lamellarEnvelopeDescriptors) ? debug.lamellarEnvelopeDescriptors : [];
+  const curves = Array.isArray(debug.sphereCurveDescriptors) ? debug.sphereCurveDescriptors : [];
+  const drawableEnvelopes = envelopes.filter(envelope => Array.isArray(envelope.sampleRows) && envelope.sampleRows.length);
+  const palette = ['#d8b457', '#78d6d1', '#f0e3b8', '#b7896f', '#c7dede'];
+  const pointGroups = [];
+  for (const envelope of drawableEnvelopes) {
+    pointGroups.push(...envelope.sampleRows.map(row => row.points || []));
+  }
+  if (!pointGroups.length) {
+    for (const curve of curves) {
+      const points = [];
+      const start = curve.interval?.[0] ?? 0.16;
+      const end = curve.interval?.[1] ?? 0.84;
+      for (let i = 0; i <= 18; i++) {
+        const t = start + (end - start) * (i / 18);
+        const theta = (curve.theta0 || 0) + (curve.thetaTwist || 0) * t;
+        const phi = (curve.phi0 || 0) + (curve.phiSlope || 0) * (t - 0.5) + Math.sin(t * Math.PI * 2 + (curve.phase || 0)) * (curve.waviness ?? 0.08);
+        const radius = curve.radius || 1;
+        const cosPhi = Math.cos(phi);
+        points.push([radius * cosPhi * Math.cos(theta), radius * Math.sin(phi), radius * cosPhi * Math.sin(theta)]);
+      }
+      pointGroups.push(points);
+    }
+  }
+  const flatPoints = pointGroups.flat().filter(point => Array.isArray(point) && point.length >= 3);
+  if (!flatPoints.length) return false;
+  const projected = flatPoints.map(point => [point[0] + point[2] * 0.28, -point[1] + point[2] * 0.1]);
+  const minX = Math.min(...projected.map(point => point[0]));
+  const maxX = Math.max(...projected.map(point => point[0]));
+  const minY = Math.min(...projected.map(point => point[1]));
+  const maxY = Math.max(...projected.map(point => point[1]));
+  const scale = Math.min((width - 14) / Math.max(0.001, maxX - minX), (height - 12) / Math.max(0.001, maxY - minY));
+  const mapPoint = point => [
+    7 + (point[0] + point[2] * 0.28 - minX) * scale,
+    6 + (-point[1] + point[2] * 0.1 - minY) * scale,
+  ];
+
+  ctx.fillStyle = '#060606';
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'screen';
+  for (const [index, envelope] of drawableEnvelopes.entries()) {
+    const rows = envelope.sampleRows || [];
+    const color = palette[index % palette.length];
+    const leftRail = rows.map(row => row.points?.[0]).filter(Boolean);
+    const rightRail = rows.map(row => row.points?.[row.points.length - 1]).filter(Boolean);
+    if (leftRail.length && rightRail.length) {
+      ctx.beginPath();
+      for (const [railIndex, point] of leftRail.entries()) {
+        const [x, y] = mapPoint(point);
+        if (railIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      for (const point of rightRail.slice().reverse()) {
+        const [x, y] = mapPoint(point);
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color + '55';
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 6) {
+      const row = rows[rowIndex];
+      const points = row.points || [];
+      if (points.length < 2) continue;
+      ctx.beginPath();
+      for (const [pointIndex, point] of points.entries()) {
+        const [x, y] = mapPoint(point);
+        if (pointIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#dffdfb88';
+      ctx.lineWidth = 0.65;
+      ctx.stroke();
+    }
+  }
+  if (!drawableEnvelopes.length) {
+    for (const [index, points] of pointGroups.entries()) {
+      ctx.beginPath();
+      for (const [pointIndex, point] of points.entries()) {
+        const [x, y] = mapPoint(point);
+        if (pointIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = palette[index % palette.length];
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  return true;
+}
+
+function captureLamellarAuthoringThumbnail() {
+  const source = renderer?.domElement;
+  try {
+    const thumb = document.createElement('canvas');
+    thumb.width = 96;
+    thumb.height = 64;
+    const ctx = thumb.getContext('2d');
+    const drewDescriptor = drawLamellarDescriptorThumbnail(ctx, thumb.width, thumb.height);
+    if (!drewDescriptor && source?.width && source?.height) {
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, thumb.width, thumb.height);
+      const sourceAspect = source.width / source.height;
+      const targetAspect = thumb.width / thumb.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = source.width;
+      let sh = source.height;
+      if (sourceAspect > targetAspect) {
+        sw = source.height * targetAspect;
+        sx = (source.width - sw) / 2;
+      } else {
+        sh = source.width / targetAspect;
+        sy = (source.height - sh) / 2;
+      }
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, thumb.width, thumb.height);
+    }
+    lamellarLastThumbnailStats = measureLamellarThumbnailCanvas(thumb);
+    return thumb.toDataURL('image/jpeg', 0.72);
+  } catch {
+    lamellarLastThumbnailStats = null;
+    return '';
+  }
+}
+
 function renderLamellarSavedStateList() {
   const list = document.getElementById('lamellar-saved-state-list');
   if (!list) return;
@@ -1080,16 +1239,45 @@ function renderLamellarSavedStateList() {
   for (const slot of states) {
     const row = document.createElement('div');
     row.className = 'gr-entry';
+    row.style.cssText = 'display:grid; grid-template-columns:62px minmax(0,1fr); align-items:center; column-gap:8px; row-gap:6px;';
     if (slot.id === lamellarActiveSavedStateId) row.style.borderLeft = '2px solid #1976d2';
 
-    const name = document.createElement('span');
-    name.className = 'gr-name';
-    name.textContent = slot.label || summarizeLamellarAuthoringState(slot.payload);
+    const thumbnail = document.createElement('img');
+    thumbnail.className = 'lamellar-slot-thumbnail';
+    thumbnail.alt = 'Saved Lamellar slot thumbnail';
+    thumbnail.src = slot.thumbnailDataUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2296%22 height=%2264%22 viewBox=%220 0 96 64%22%3E%3Crect width=%2296%22 height=%2264%22 fill=%22%23121212%22/%3E%3Cpath d=%22M14 42 C34 18 58 54 82 20%22 fill=%22none%22 stroke=%22%23666%22 stroke-width=%223%22/%3E%3C/svg%3E';
+    thumbnail.style.cssText = 'width:54px; height:36px; object-fit:cover; border-radius:4px; border:1px solid #333; background:#111; grid-row:1 / span 2;';
+
+    const labelWrap = document.createElement('span');
+    labelWrap.style.cssText = 'display:flex; flex-direction:column; gap:3px; min-width:0;';
+
+    const name = document.createElement('input');
+    name.className = 'lamellar-slot-name-input';
+    name.value = slot.label || summarizeLamellarAuthoringState(slot.payload);
     name.title = slot.savedAtIso || '';
+    name.style.cssText = 'width:100%; min-width:0; background:#151515; border:1px solid #2f2f2f; border-radius:4px; color:#ccc; font-size:10px; padding:4px 5px;';
+    name.onclick = event => event.stopPropagation();
+    name.onkeydown = event => {
+      if (event.key === 'Enter') {
+        event.stopPropagation();
+        renameLamellarAuthoringSlot(slot.id, name.value);
+      }
+    };
 
     const meta = document.createElement('span');
     meta.className = 'gr-meta';
     meta.textContent = slot.savedAtIso ? new Date(slot.savedAtIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    labelWrap.appendChild(name);
+    labelWrap.appendChild(meta);
+
+    const rename = document.createElement('button');
+    rename.className = 'btn';
+    rename.textContent = 'Rename';
+    rename.onclick = event => {
+      event.stopPropagation();
+      renameLamellarAuthoringSlot(slot.id, name.value);
+    };
 
     const load = document.createElement('button');
     load.className = 'btn';
@@ -1107,11 +1295,16 @@ function renderLamellarSavedStateList() {
       deleteLamellarAuthoringSlot(slot.id);
     };
 
+    const actions = document.createElement('span');
+    actions.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px;';
+    actions.appendChild(rename);
+    actions.appendChild(load);
+    actions.appendChild(del);
+
     row.onclick = () => loadLamellarAuthoringSlot(slot.id);
-    row.appendChild(name);
-    row.appendChild(meta);
-    row.appendChild(load);
-    row.appendChild(del);
+    row.appendChild(thumbnail);
+    row.appendChild(labelWrap);
+    row.appendChild(actions);
     list.appendChild(row);
   }
 }
@@ -1120,12 +1313,15 @@ function saveLamellarAuthoringSlot(options = {}) {
   const payload = collectLamellarAuthoringState();
   const states = getLamellarSavedStates();
   const savedAtIso = new Date().toISOString();
+  const thumbnailDataUrl = options.thumbnailDataUrl || captureLamellarAuthoringThumbnail();
   const id = options.id || (options.overwrite ? lamellarActiveSavedStateId : null) || `lamellar-${Date.now().toString(36)}-${(lamellarSavedStateSerial += 1).toString(36)}`;
   const slot = {
     id,
     schema: LAMELLAR_AUTHORING_SCHEMA,
     savedAtIso,
     label: summarizeLamellarAuthoringState(payload),
+    thumbnailDataUrl,
+    thumbnailStats: options.thumbnailStats || lamellarLastThumbnailStats,
     seed: payload.controls?.seed ?? null,
     layerCount: payload.controls?.layerCount ?? null,
     populationCount: payload.controls?.populationCount ?? null,
@@ -1161,6 +1357,29 @@ function deleteLamellarAuthoringSlot(id) {
   renderLamellarSavedStateList();
   setLamellarAuthoringStatus('deleted Lamellar slot', 'ok');
   return { deleted: id, remaining: next.length };
+}
+
+function renameLamellarAuthoringSlot(id, label) {
+  const cleanLabel = String(label || '').trim();
+  if (!cleanLabel) {
+    setLamellarAuthoringStatus('slot name cannot be empty', 'error');
+    return null;
+  }
+  const states = getLamellarSavedStates();
+  let renamed = null;
+  const next = states.map(slot => {
+    if (slot.id !== id) return slot;
+    renamed = { ...slot, label: cleanLabel, renamedAtIso: new Date().toISOString() };
+    return renamed;
+  });
+  if (!renamed) {
+    setLamellarAuthoringStatus('slot not found', 'error');
+    return null;
+  }
+  persistLamellarSavedStates(next);
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`renamed ${cleanLabel}`, 'ok');
+  return renamed;
 }
 
 function setControlValue(id, value, overridden = false) {
@@ -2072,6 +2291,7 @@ async function initLamellarRoute() {
   window.__kaminosLamellarSaveAuthoringSlot = options => saveLamellarAuthoringSlot(options);
   window.__kaminosLamellarLoadAuthoringSlot = id => loadLamellarAuthoringSlot(id);
   window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
+  window.__kaminosLamellarRenameAuthoringSlot = (id, label) => renameLamellarAuthoringSlot(id, label);
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());

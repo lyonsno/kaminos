@@ -403,6 +403,7 @@ async function main() {
           localStorage.removeItem('kaminos.lamellar.saved-states.v0');
           const savedSlot = window.__kaminosLamellarSaveAuthoringSlot?.();
           const secondSavedSlot = window.__kaminosLamellarSaveAuthoringSlot?.();
+          const renamedSlot = window.__kaminosLamellarRenameAuthoringSlot?.(secondSavedSlot?.id, 'Operator Index Alpha');
           const savedState = savedSlot?.payload;
           const savedSeed = savedState?.controls?.seed;
           const savedLayerCount = savedState?.controls?.layerCount;
@@ -413,6 +414,13 @@ async function main() {
           const loadReceipt = window.__kaminosLamellarLoadAuthoringSlot?.(secondSavedSlot?.id);
           const restored = window.__kaminosLamellarSaveAuthoringState?.();
           const savedStates = window.__kaminosLamellarSavedStates?.() || [];
+          const loadedSlot = savedStates.find(slot => slot.id === secondSavedSlot?.id) || null;
+          const thumbnailDataUrl = loadedSlot?.thumbnailDataUrl || '';
+          const thumbnailStats = loadedSlot?.thumbnailStats || null;
+          const renamedLabel = loadedSlot?.label || '';
+          const thumbnailElement = document.querySelector('#lamellar-saved-state-list .lamellar-slot-thumbnail');
+          const renameInput = document.querySelector('#lamellar-saved-state-list .lamellar-slot-name-input');
+          const shelfInputText = Array.from(document.querySelectorAll('#lamellar-saved-state-list .lamellar-slot-name-input')).map(input => input.value).join(' ');
           authoringSlotRoundTripReceipt = {
             schema: savedSlot?.schema,
             mode: 'kaminos-lamellar-local-slot-roundtrip-v0',
@@ -420,7 +428,14 @@ async function main() {
             secondSlotId: secondSavedSlot?.id,
             distinctPrimarySaveIds: savedSlot?.id !== secondSavedSlot?.id,
             listCount: savedStates.length,
-            shelfText: document.getElementById('lamellar-saved-state-list')?.textContent || '',
+            shelfText: ((document.getElementById('lamellar-saved-state-list')?.textContent || '') + ' ' + shelfInputText).trim(),
+            thumbnailDataUrl,
+            thumbnailLength: thumbnailDataUrl.length,
+            thumbnailStats,
+            thumbnailElementSrcPrefix: thumbnailElement?.getAttribute('src')?.slice(0, 22) || '',
+            renamedLabel,
+            renameInputValue: renameInput?.value || '',
+            renameReceiptLabel: renamedSlot?.label || '',
             loadReceiptSeed: loadReceipt?.seed,
             savedSeed,
             restoredSeed: restored?.controls?.seed,
@@ -662,6 +677,12 @@ async function main() {
       assert.equal(state.authoringSlotRoundTripReceipt?.distinctPrimarySaveIds, true, 'Lamellar primary Save slot did not create distinct saved slot ids');
       assert.ok((state.authoringSlotRoundTripReceipt?.listCount || 0) >= 2, 'Lamellar primary Save slot did not append a second visible shelf row');
       assert.match(state.authoringSlotRoundTripReceipt?.shelfText || '', /seed/, 'Lamellar saved-state shelf did not show a readable saved slot summary');
+      assert.match(state.authoringSlotRoundTripReceipt?.thumbnailDataUrl || '', /^data:image\//, 'Lamellar saved-state slot did not capture a thumbnail data URL');
+      assert.ok((state.authoringSlotRoundTripReceipt?.thumbnailLength || 0) > 200, 'Lamellar saved-state thumbnail data URL is too small to be useful');
+      assert.ok((state.authoringSlotRoundTripReceipt?.thumbnailStats?.lumaRange || 0) >= 16, 'Lamellar saved-state thumbnail is visually blank');
+      assert.ok((state.authoringSlotRoundTripReceipt?.thumbnailStats?.colorBuckets || 0) >= 4, 'Lamellar saved-state thumbnail lacks color diversity');
+      assert.equal(state.authoringSlotRoundTripReceipt?.renamedLabel, 'Operator Index Alpha', 'Lamellar saved-state rename did not persist to storage');
+      assert.equal(state.authoringSlotRoundTripReceipt?.renameInputValue, 'Operator Index Alpha', 'Lamellar saved-state rename did not render in the shelf input');
     }
 
     if (state.populationControlReceipt?.populationId) {
