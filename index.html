@@ -698,6 +698,7 @@ const LAMELLAR_REBUILD_MIN_INTERVAL_MS = 80;
 const LAMELLAR_AUTHORING_SCHEMA = 'kaminos.lamellar-authoring.v0';
 const LAMELLAR_SAVED_STATES_KEY = 'kaminos.lamellar.saved-states.v0';
 let lamellarActiveSavedStateId = null;
+let lamellarSavedStateSerial = 0;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1119,7 +1120,7 @@ function saveLamellarAuthoringSlot(options = {}) {
   const payload = collectLamellarAuthoringState();
   const states = getLamellarSavedStates();
   const savedAtIso = new Date().toISOString();
-  const id = options.id || lamellarActiveSavedStateId || `lamellar-${Date.now().toString(36)}`;
+  const id = options.id || (options.overwrite ? lamellarActiveSavedStateId : null) || `lamellar-${Date.now().toString(36)}-${(lamellarSavedStateSerial += 1).toString(36)}`;
   const slot = {
     id,
     schema: LAMELLAR_AUTHORING_SCHEMA,
