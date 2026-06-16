@@ -517,6 +517,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="clay-fixture">Fixture</button>
         <button class="btn" id="clay-fit-camera">Frame</button>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Brush size</span>
+        <input type="range" id="clay-brush-radius" min="0.06" max="0.32" step="0.01" value="0.17">
+        <span class="slider-val" id="clay-brush-radius-val">0.17</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Brush force</span>
+        <input type="range" id="clay-brush-strength" min="0.25" max="2.20" step="0.05" value="1.18">
+        <span class="slider-val" id="clay-brush-strength-val">1.18</span>
+      </div>
     </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Solver</span><span class="field-val" id="clay-solver">webgpu-clay-surface-lattice-scaffold-v0</span></div>
@@ -714,6 +724,8 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let clayPrototype = null;
+let clayPointerBrushRadius = 0.17;
+let clayPointerBrushStrength = 1.18;
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1727,6 +1739,35 @@ function clayRouteStepCount(params) {
   return Math.floor(requested);
 }
 
+function clampClayBrushValue(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function setClayBrushRadius(nextRadius) {
+  clayPointerBrushRadius = clampClayBrushValue(nextRadius, 0.06, 0.32, 0.17);
+  const input = document.getElementById('clay-brush-radius');
+  const label = document.getElementById('clay-brush-radius-val');
+  if (input) input.value = clayPointerBrushRadius.toFixed(2);
+  if (label) label.textContent = clayPointerBrushRadius.toFixed(2);
+}
+
+function setClayBrushStrength(nextStrength) {
+  clayPointerBrushStrength = clampClayBrushValue(nextStrength, 0.25, 2.20, 1.18);
+  const input = document.getElementById('clay-brush-strength');
+  const label = document.getElementById('clay-brush-strength-val');
+  if (input) input.value = clayPointerBrushStrength.toFixed(2);
+  if (label) label.textContent = clayPointerBrushStrength.toFixed(2);
+}
+
+function initClayBrushControls(params) {
+  setClayBrushRadius(params.get('clay_brush_radius') || clayPointerBrushRadius);
+  setClayBrushStrength(params.get('clay_brush_strength') || clayPointerBrushStrength);
+  document.getElementById('clay-brush-radius')?.addEventListener('input', event => setClayBrushRadius(event.target.value));
+  document.getElementById('clay-brush-strength')?.addEventListener('input', event => setClayBrushStrength(event.target.value));
+}
+
 function frameClayCamera() {
   camera.position.set(0, 1.08, 1.72);
   controls.target.set(0, 0.0, 0);
@@ -1758,8 +1799,8 @@ function installClayPointerInteraction(params) {
         0,
         Math.max(-0.52, Math.min(0.52, pointerPoint.z)),
       ],
-      radius: 0.17,
-      strength: event.shiftKey ? 0.58 : 1.18,
+      radius: clayPointerBrushRadius,
+      strength: event.shiftKey ? clayPointerBrushStrength * 0.5 : clayPointerBrushStrength,
       screenX: event.clientX,
       screenY: event.clientY,
     };
@@ -1815,6 +1856,7 @@ function installClayPointerInteraction(params) {
 
 async function initKaminosClayRoute() {
   const params = new URLSearchParams(window.location.search);
+  initClayBrushControls(params);
   clayPrototype = createKaminosClayPrototype({
     THREE,
     scene,

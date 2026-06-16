@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1&clay_normal_cadence=every_3';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1&clay_normal_cadence=every_3&clay_brush_radius=0.21&clay_brush_strength=1.45';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -369,6 +369,10 @@ async function main() {
       assert.ok(state.clayPointerLastHit, 'interactive clay route did not record a pointer hit');
       assert.ok(Number.isFinite(state.clayPointerLastHit.x), 'pointer hit x did not reach clay debug state');
       assert.ok(Number.isFinite(state.clayPointerLastHit.z), 'pointer hit z did not reach clay debug state');
+      const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
+      const requestedBrushStrength = Number(new URL(url).searchParams.get('clay_brush_strength') || 1.18);
+      assert.ok(Math.abs(state.clayPointerLastHit.radius - requestedBrushRadius) <= 1e-6, 'pointer hit radius did not match route');
+      assert.ok(Math.abs(state.clayPointerLastHit.strength - requestedBrushStrength) <= 1e-6, 'pointer hit strength did not match route');
     }
     if (url.includes('hand_pose_fixture')) {
       assert.equal(state.requestedHandPoseBackend, 'mlx', 'requested hand-pose backend did not reach clay debug state');

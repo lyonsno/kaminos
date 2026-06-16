@@ -970,6 +970,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       x: pointerCollider.center[0],
       y: pointerCollider.center[1],
       z: pointerCollider.center[2],
+      radius: pointerCollider.radius,
+      strength: pointerCollider.strength,
       screenX: Number.isFinite(payload.screenX) ? payload.screenX : null,
       screenY: Number.isFinite(payload.screenY) ? payload.screenY : null,
     };
