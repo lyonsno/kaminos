@@ -356,9 +356,14 @@ assert.match(core, /bonfireCombustionFrontLiftCarrier/, 'bonfire transported com
 assert.match(core, /bonfireCombustionFrontBirth[\s\S]*bonfireCombustionFrontLiftCarrier/, 'bonfire combustionFront birth must use the lifted/off-axis carrier rather than only source/interface terms');
 assert.match(core, /bonfireFireSourceBinRelief/, 'bonfire visible fire birth relieves the source bin in simulation space before raymarch transfer');
 assert.match(core, /bonfireLiftedFlameBirth/, 'bonfire fire birth has a lifted/off-axis flame carrier derived from the reaction front');
-assert.match(core, /let fireBirth = mix\(columnFireBirth, bonfireLiftedFlameBirth, bonfireScene\);/, 'bonfire fire birth must use lifted flame birth rather than the lower smooth source birth');
+assert.match(core, /bonfireFlameOccupancy/, 'bonfire must name broad flame occupancy separately from visible emission so a lifted front does not render as a smooth shell');
+assert.match(core, /bonfireRadianceBirth/, 'bonfire must name visible radiance/emission birth separately from broad flame occupancy');
+assert.match(core, /bonfireInteriorEmissionBridge/, 'bonfire radiance birth must bridge the lifted ring through interior contact so the flame does not become a goblet shell');
+assert.match(core, /let fireBirth = mix\(columnFireBirth, bonfireRadianceBirth, bonfireScene\);/, 'bonfire fire birth must use radiance birth rather than raw lifted flame occupancy');
+assert.doesNotMatch(core, /let fireBirth = mix\(columnFireBirth, bonfireLiftedFlameBirth, bonfireScene\);/, 'bonfire fire birth must not directly render the broad lifted flame occupancy as visible emission');
 assert.match(core, /bonfireFireBirth[\s\S]*bonfireReactionFront/, 'bonfire fire birth must route through reactionFront rather than directly through the smooth source core');
-assert.match(core, /flame = max\(flame,[\s\S]*bonfireReactionFront/, 'visible bonfire flame must depend on reactionFront before raymarch transfer');
+assert.match(core, /bonfireFlameOccupancy[\s\S]*bonfireReactionFront/, 'broad bonfire flame occupancy must depend on reactionFront before storage');
+assert.match(core, /flame = max\(flame,[\s\S]*bonfireFlameStorageBirth/, 'stored bonfire flame must use broad occupancy rather than visible radiance directly');
 assert.match(core, /bonfireAdvectedSmokeBirth[\s\S]*bonfireSootBirth/, 'bonfire smoke transport must route through sootBirth rather than only source-aligned smoke sleeves');
 assert.match(core, /bonfireDetailBirthCarrier[\s\S]*bonfireSootBirth/, 'bonfire material detail birth must use sootBirth as the front/smoke interface carrier');
 assert.match(core, /bonfireLiftedSootBuoyancy/, 'bonfire smoke lift has a named lifted soot/front buoyancy path instead of relying only on generic thermal rise');
@@ -368,6 +373,8 @@ assert.match(core, /plumeScalarCurlContact/, 'sim readback reports whether smoke
 assert.match(core, /plumeSmokeBodyBreadth/, 'sim readback reports field-level smoke body breadth so broad render silhouettes cannot hide narrow scalar columns');
 assert.match(core, /plumeTopPinchRatio/, 'sim readback reports upper plume breadth relative to the lower smoke body so a pointy centerline chimney cannot hide inside global breadth');
 assert.match(core, /fireSourcePlugRatio/, 'sim readback reports whether bonfire radiance is trapped in one smooth source bin instead of rising through broken flame lobes');
+assert.match(core, /liftedFireShellRatio/, 'sim readback reports whether lifted bonfire radiance is annular/shell-dominant like a goblet');
+assert.match(core, /liftedFireInteriorRatio/, 'sim readback reports whether lifted bonfire radiance has interior contact instead of only a bright ring wall');
 assert.match(core, /combustionFrontSourcePlugRatio/, 'sim readback reports whether transported combustion-front evidence is trapped in one source bin');
 assert.match(core, /combustionFrontRisingBodyRatio/, 'sim readback reports whether transported combustion-front evidence rises out of the source bin');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');

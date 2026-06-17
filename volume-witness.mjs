@@ -607,12 +607,18 @@ async function main() {
         !Number.isFinite(sample.fireEdgeEnergy) ||
         sample.fireEdgeEnergy <= 0.066 ||
         !Number.isFinite(sample.fireRoughnessMean) ||
-        sample.fireRoughnessMean <= 0.105
+        sample.fireRoughnessMean <= 0.105 ||
+        !Number.isFinite(sample.simReadback.liftedFireShellRatio) ||
+        sample.simReadback.liftedFireShellRatio >= 0.62 ||
+        !Number.isFinite(sample.simReadback.liftedFireInteriorRatio) ||
+        sample.simReadback.liftedFireInteriorRatio <= 0.12
       )
     ) {
       throw new Error(`bonfire plume retained smooth fire source plug: ${JSON.stringify({
         fireSourcePlugRatio: sample.simReadback.fireSourcePlugRatio,
         fireRisingBodyRatio: sample.simReadback.fireRisingBodyRatio,
+        liftedFireShellRatio: sample.simReadback.liftedFireShellRatio,
+        liftedFireInteriorRatio: sample.simReadback.liftedFireInteriorRatio,
         combustionFrontMean: sample.simReadback.combustionFrontMean,
         combustionFrontSourcePlugRatio: sample.simReadback.combustionFrontSourcePlugRatio,
         combustionFrontRisingBodyRatio: sample.simReadback.combustionFrontRisingBodyRatio,
@@ -726,6 +732,8 @@ async function main() {
       combustionFrontWeight: sample.simReadback?.combustionFrontWeight ?? 0,
       fireSourcePlugRatio: sample.simReadback?.fireSourcePlugRatio ?? 0,
       fireRisingBodyRatio: sample.simReadback?.fireRisingBodyRatio ?? 0,
+      liftedFireShellRatio: sample.simReadback?.liftedFireShellRatio ?? 0,
+      liftedFireInteriorRatio: sample.simReadback?.liftedFireInteriorRatio ?? 0,
       maxFireBinWeight: sample.simReadback?.maxFireBinWeight ?? 0,
       plumeLocalLateralVelocityMean: sample.simReadback?.plumeLocalLateralVelocityMean ?? 0,
       plumeNetLateralVelocity: sample.simReadback?.plumeNetLateralVelocity ?? 0,
