@@ -54,6 +54,19 @@ function assertPngScreenshot(buffer) {
   assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'screenshot is not a PNG');
 }
 
+function siblingPngPath(suffix) {
+  return out.replace(/\.png$/i, `${suffix}.png`);
+}
+
+async function capturePngScreenshot(ws, screenshotPath) {
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+  const png = Buffer.from(shot.data, 'base64');
+  assertPngScreenshot(png);
+  mkdirSync(dirname(screenshotPath), { recursive: true });
+  writeFileSync(screenshotPath, png);
+  return { path: screenshotPath, bytes: png.length };
+}
+
 async function cdpFetch(path, options) {
   const { timeoutMs = 5000, ...fetchOptions } = options || {};
   if (!fetchOptions.signal) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
@@ -2046,6 +2059,126 @@ async function runGreenroomPreviewRaceScenario(ws) {
   }
 }
 
+async function runAoRouteDeltaScenario(ws) {
+  phase = 'scenario-ao-route-delta-on';
+  lastEvidence.aoRouteDelta = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const waitForAo = async () => {
+        for (let i = 0; i < 120; i++) {
+          if (typeof window.kaminosAODebugState === 'function') {
+            const state = window.kaminosAODebugState();
+            if (state?.hasRenderPipeline && state?.hasAoPass && state?.hasAoIntensity) return state;
+          }
+          await wait(125);
+        }
+        throw new Error('AO debug state did not expose the managed RenderPipeline route');
+      };
+      const waitForObject = async () => {
+        for (let i = 0; i < 120; i++) {
+          const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+          if (rows.length > 0) return rows.length;
+          await wait(125);
+        }
+        const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+        if (!demo) throw new Error('AO witness could not find the SuperMat Ring demo button');
+        demo.click();
+        for (let i = 0; i < 120; i++) {
+          const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+          if (rows.length > 0) return rows.length;
+          await wait(125);
+        }
+        throw new Error('AO witness did not load a scene object');
+      };
+      const setRange = (id, value) => {
+        const el = document.getElementById(id);
+        if (!el) throw new Error('AO control missing: ' + id);
+        el.value = String(value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      const setToggle = value => {
+        const el = document.getElementById('ao-toggle');
+        if (!el) throw new Error('AO toggle missing');
+        el.checked = value;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const objectCount = await waitForObject();
+      const initialState = await waitForAo();
+      if (initialState.route !== 'three-tsl-render-pipeline-gtao-compute') {
+        throw new Error('AO route is not the managed TSL route: ' + JSON.stringify(initialState));
+      }
+      if (initialState.rawPipelineActive) {
+        throw new Error('raw AO pipeline reported active: ' + JSON.stringify(initialState));
+      }
+      setRange('ao-radius', 4.0);
+      setRange('ao-scale', 1.62);
+      setRange('ao-thickness', 1.81);
+      setRange('ao-falloff', 0.74);
+      setRange('ao-intensity', 2.25);
+      setToggle(true);
+      window._kaminosDirty?.();
+      await wait(1400);
+      const stateOn = window.kaminosAODebugState();
+      if (!stateOn.hasRenderPipeline || !stateOn.hasAoPass || stateOn.intensity <= 2.0) {
+        throw new Error('AO on state did not take: ' + JSON.stringify(stateOn));
+      }
+      return {
+        objectCount,
+        initialState,
+        stateOn,
+        info: document.getElementById('info-bar')?.textContent?.trim() || null,
+        rendererCanvasSize: {
+          width: document.querySelector('canvas')?.width || null,
+          height: document.querySelector('canvas')?.height || null,
+        },
+      };
+    })()
+  `, { timeoutMs: 45000 });
+
+  const onShot = await capturePngScreenshot(ws, siblingPngPath('-ao-on'));
+
+  phase = 'scenario-ao-route-delta-off';
+  const offEvidence = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const toggle = document.getElementById('ao-toggle');
+      if (!toggle) throw new Error('AO toggle missing for off capture');
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      window._kaminosDirty?.();
+      await wait(1400);
+      const stateOff = window.kaminosAODebugState?.();
+      if (!stateOff || stateOff.intensity !== 0) {
+        throw new Error('AO off state did not bypass intensity: ' + JSON.stringify(stateOff));
+      }
+      return { stateOff };
+    })()
+  `, { timeoutMs: 20000 });
+
+  const offShot = await capturePngScreenshot(ws, siblingPngPath('-ao-off'));
+
+  phase = 'scenario-ao-route-delta-restore-on';
+  const restoreEvidence = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const toggle = document.getElementById('ao-toggle');
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      window._kaminosDirty?.();
+      await wait(900);
+      return { stateRestored: window.kaminosAODebugState?.() };
+    })()
+  `, { timeoutMs: 20000 });
+
+  lastEvidence.aoRouteDelta = {
+    ...lastEvidence.aoRouteDelta,
+    ...offEvidence,
+    ...restoreEvidence,
+    onShot,
+    offShot,
+  };
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -2119,6 +2252,8 @@ try {
     await runGreenroomPickerDisplayScenario(ws);
   } else if (scenario === 'greenroom-preview-race') {
     await runGreenroomPreviewRaceScenario(ws);
+  } else if (scenario === 'ao-route-delta') {
+    await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else {
@@ -2126,16 +2261,13 @@ try {
   }
 
   phase = 'capturing-screenshot';
-  const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
-  const png = Buffer.from(shot.data, 'base64');
-  assertPngScreenshot(png);
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, png);
+  const finalShot = await capturePngScreenshot(ws, out);
 
   phase = 'writing-report';
   const report = {
     ok: true,
     screenshot: out,
+    screenshotBytes: finalShot.bytes,
     evidence: lastEvidence,
   };
   writeReport(report);

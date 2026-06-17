@@ -17,6 +17,7 @@ assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
+assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');
@@ -29,7 +30,7 @@ assert.match(witness, /phase\s*=/, 'witness tracks failure phase for report-on-f
 assert.match(witness, /writeReport\(/, 'witness writes a durable JSON report');
 assert.match(witness, /catch \(error\)[\s\S]*writeReport\([\s\S]*ok:\s*false/, 'witness writes report even when the primary flow fails');
 assert.match(witness, /mkdirSync\(dirname\(reportPath\)/, 'witness creates report parent directories before writing');
-assert.match(witness, /mkdirSync\(dirname\(out\)/, 'witness creates screenshot parent directories before writing');
+assert.match(witness, /mkdirSync\(dirname\(screenshotPath\)/, 'witness creates screenshot parent directories before writing');
 assert.match(witness, /checking-debug-port/, 'witness checks for stale CDP endpoints before launch');
 assert.match(witness, /CDP debug port already in use before launch/, 'witness fails instead of attaching to stale CDP endpoints');
 assert.match(witness, /chromeProcess\.once\('error'/, 'witness converts Chrome launch errors into caught failures');
@@ -37,6 +38,8 @@ assert.match(witness, /Chrome launch failed/, 'witness names Chrome launch failu
 assert.match(witness, /effective URL mismatch/, 'witness fails when the loaded route differs from the requested route');
 assert.match(witness, /CDP request timed out/, 'witness times out nonresponsive CDP requests');
 assert.match(witness, /Page\.captureScreenshot/, 'witness captures a screenshot artifact');
+assert.match(witness, /siblingPngPath\('-ao-on'\)/, 'AO route witness captures an AO-on screenshot artifact');
+assert.match(witness, /siblingPngPath\('-ao-off'\)/, 'AO route witness captures an AO-off screenshot artifact');
 assert.match(witness, /assertPngScreenshot\(/, 'witness validates screenshot output before claiming visual evidence');
 assert.match(witness, /default replace did not keep one row/, 'witness proves unchecked imports replace rather than append');
 assert.match(witness, /default replace did not start from exactly one row/, 'witness requires a pre-existing row before proving replace behavior');
@@ -132,4 +135,8 @@ assert.match(witness, /previewDidNotMutateAuthoredRows/, 'Green Room action witn
 assert.match(witness, /previewImportRowsGreenroomSourced/, 'Green Room action witness computes a route-backed preview import source predicate');
 assert.match(witness, /loadProbe\.route/, 'Green Room action witness compares object source against the advertised mesh route');
 assert.match(witness, /job-output\?job_id=/, 'Green Room picker witness probes the same job-output route used by the Load mesh button');
+assert.match(witness, /window\.kaminosAODebugState/, 'AO route witness uses the explicit browser AO debug surface');
+assert.match(witness, /three-tsl-render-pipeline-gtao-compute/, 'AO route witness requires the managed TSL RenderPipeline route identity');
+assert.match(witness, /rawPipelineActive/, 'AO route witness rejects raw pipeline activation');
+assert.match(witness, /stateOff\.intensity !== 0/, 'AO route witness proves the off capture actually bypasses AO intensity');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');

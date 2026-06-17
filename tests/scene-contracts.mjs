@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -126,3 +126,27 @@ assert.match(index, /function assertSceneObjectsReloadable\(/, 'scene load prefl
 assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*await loadSceneObjects\(objectRecords,[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load defers volume mutation until object restore succeeds');
 assert.match(index, /catch \(e\) \{[\s\S]*setVolumePrimitivesState\(previousVolumePrimitiveState\);[\s\S]*sceneSaveBlockedByFailedRestore = true;[\s\S]*currentSceneFile = null;[\s\S]*Scene load failed/, 'failed actual object restore rolls volume back and breaks overwrite ownership');
 assert.doesNotMatch(index, /if \(!data\.version \|\| \(!data\.model\?\.source && !hasVolumePrimitiveScene\)\)/, 'scene validation must not reject object-only multi-object scenes');
+
+assert.match(index, /"three": "\.\/lib\/three\.webgpu\.js"/, 'AO recovery must make the local Three WebGPU/TSL dependency explicit instead of relying on CDN r171');
+assert.match(index, /from 'three\/tsl'/, 'AO recovery imports Three TSL nodes for the managed renderer graph');
+assert.match(index, /from '\.\/lib\/addons\/tsl\/display\/GTAOComputeNode\.js'/, 'AO recovery imports the managed GTAOComputeNode');
+assert.match(index, /from '\.\/lib\/addons\/tsl\/display\/DenoiseNode\.js'/, 'AO recovery imports the managed DenoiseNode');
+assert.doesNotMatch(index, /from '\.\/ao-pipeline\.js'/, 'Kaminos main must not import the quarantined raw GTAOComputePipeline route');
+assert.doesNotMatch(index, /from '\.\/ao-composite\.js'/, 'Kaminos main must not import the quarantined raw AOCompositePass route');
+assert.match(index, /new THREE\.RenderPipeline\(renderer\)/, 'AO recovery uses Three RenderPipeline instead of raw command submission');
+assert.match(index, /aoPass\s*=\s*aoCompute\(depthTexNode,\s*normalTexNode,\s*camera\)/, 'AO recovery creates the managed GTAO compute pass');
+assert.match(index, /const aoResolved\s*=\s*convertToTexture\(aoPass\.getTextureNode\(\)\)/, 'AO recovery bridges the storage texture through TSL convertToTexture');
+assert.match(index, /const denoisePass\s*=\s*denoise\(aoResolved,\s*prePassDepth,\s*prePassNormal,\s*camera\)/, 'AO recovery denoises the managed AO output');
+assert.match(index, /renderPipeline\.outputNode\s*=\s*scenePass\.mul\(vec4\(vec3\(aoOutput\),\s*1\)\)/, 'AO recovery composites scene color through the managed AO output node');
+assert.match(index, /renderPipeline\.render\(\)/, 'render loop must render the managed pipeline rather than bypassing AO with renderer.render');
+assert.doesNotMatch(index, /device\.queue\.submit/, 'Kaminos main AO recovery must not submit raw WebGPU command buffers');
+
+for (const file of [
+  'lib/three.webgpu.js',
+  'lib/three.tsl.js',
+  'lib/three.core.js',
+  'lib/addons/tsl/display/GTAOComputeNode.js',
+  'lib/addons/tsl/display/DenoiseNode.js',
+]) {
+  assert.ok(existsSync(join(root, file)), `AO recovery dependency missing: ${file}`);
+}

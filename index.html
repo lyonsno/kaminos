@@ -587,9 +587,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
-    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.webgpu.js",
-    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.tsl.js",
+    "three": "./lib/three.webgpu.js",
+    "three/webgpu": "./lib/three.webgpu.js",
+    "three/tsl": "./lib/three.tsl.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
   }
 }
@@ -597,9 +597,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <script type="module">
 import * as THREE from 'three';
-let pass; // loaded lazily after renderer init
-import { GTAOComputePipeline } from './ao-pipeline.js';
-import { AOCompositePass } from './ao-composite.js';
+import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
+import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
   SCENE_SCHEMA,
@@ -627,8 +627,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
-let aoPipeline = null;
-let aoComposite = null;
+let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -1765,34 +1764,57 @@ async function initScene() {
   sceneRaycaster = new THREE.Raycaster();
   scenePointerNdc = new THREE.Vector2();
 
-  // --- Manual AO render pipeline ---
-  // Scene -> RenderTarget (color+depth) -> GTAO compute -> composite to canvas
+  // --- GTAO Compute AO via Three TSL/RenderPipeline ---
   postProcessing = null;
 
-  // Scene render target with depth
-  let sceneRT = new THREE.RenderTarget(vp.clientWidth, vp.clientHeight, {
-    depthTexture: new THREE.DepthTexture(vp.clientWidth, vp.clientHeight),
-  });
-  sceneRT.depthTexture.format = THREE.DepthFormat;
-  sceneRT.depthTexture.type = THREE.UnsignedIntType;
+  renderPipeline = new THREE.RenderPipeline(renderer);
 
-  // GTAO compute pipeline + composite pass
-  const device = renderer.backend?.device;
-  const canvasFormat = navigator.gpu?.getPreferredCanvasFormat?.() || 'bgra8unorm';
-  if (device) {
-    try {
-      aoPipeline = new GTAOComputePipeline(renderer, camera, vp.clientWidth, vp.clientHeight);
-      await aoPipeline._initPromise;
-      aoComposite = new AOCompositePass(device, canvasFormat);
-      console.log('GTAO compute + composite:', aoPipeline.isReady ? 'ready' : 'failed');
-    } catch (e) {
-      console.warn('GTAO pipeline init failed:', e);
-      aoPipeline = null;
-      aoComposite = null;
-    }
-  } else {
-    console.warn('No WebGPU device - AO compute disabled');
-  }
+  const prePass = pass(scene, camera);
+  prePass.name = 'Pre-Pass';
+  prePass.transparent = false;
+  prePass.setMRT(mrt({ output: packNormalToRGB(normalView) }));
+  const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
+  const prePassDepth = prePass.getTextureNode('depth');
+  const normalTexture = prePass.getTexture('output');
+  normalTexture.type = THREE.UnsignedByteType;
+
+  scenePass = pass(scene, camera);
+
+  const aoResScale = 0.5;
+  const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  let depthRT = new THREE.RenderTarget(
+    Math.round(drawSize.x * aoResScale),
+    Math.round(drawSize.y * aoResScale),
+    { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
+  );
+  const depthMaterial = new THREE.NodeMaterial();
+  depthMaterial.name = 'LinearDepthToColor';
+  depthMaterial.blending = THREE.NoBlending;
+  depthMaterial.colorNode = vec4(positionView.z.negate(), 0, 0, 1);
+
+  const depthTexNode = texture(depthRT.texture);
+  const normalTexNode = texture(normalTexture);
+  aoPass = aoCompute(depthTexNode, normalTexNode, camera);
+  aoPass.setDepthPass(depthRT, depthMaterial, scene);
+
+  const aoResolved = convertToTexture(aoPass.getTextureNode());
+  const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
+
+  aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
+  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
+  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  window.kaminosAODebugState = () => ({
+    route: 'three-tsl-render-pipeline-gtao-compute',
+    hasRenderPipeline: !!renderPipeline,
+    hasAoPass: !!aoPass,
+    hasAoIntensity: !!aoIntensity,
+    rawPipelineActive: false,
+    radius: aoPass?.radius?.value ?? null,
+    intensity: aoIntensity?.value ?? null,
+    scale: aoPass?.scale?.value ?? null,
+    thickness: aoPass?.thickness?.value ?? null,
+    falloff: aoPass?.distanceFallOff?.value ?? null,
+  });
 
   window.addEventListener('resize', () => {
     const w = vp.clientWidth;
@@ -1800,14 +1822,8 @@ async function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    // Recreate render target at new size
-    sceneRT.dispose();
-    sceneRT = new THREE.RenderTarget(w, h, {
-      depthTexture: new THREE.DepthTexture(w, h),
-    });
-    sceneRT.depthTexture.format = THREE.DepthFormat;
-    sceneRT.depthTexture.type = THREE.UnsignedIntType;
-    if (aoPipeline) aoPipeline.setSize(w, h);
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
   });
 
@@ -1850,15 +1866,7 @@ async function initScene() {
     if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
-      // GTAO compute disabled in render loop - raw device access conflicts with Three.js
-      // command buffer management and caused kernel panic on M-series (texture usage flags,
-      // double canvas acquire, competing queue.submit calls).
-      // Compute shaders verified correct (ao-compute.js). Integration needs either:
-      // - Three.js r172+ ComputeNode in PostProcessing graph, OR
-      // - Full renderer takeover (don't use Three.js for rendering at all), OR
-      // - Patch Three.js RenderTarget to add TEXTURE_BINDING|STORAGE_BINDING usage
-      //   and hook into its command encoder instead of creating our own.
-      renderer.render(scene, camera);
+      renderPipeline.render();
 
       const frameMs = performance.now() - t0;
       fpsFrames++;
@@ -2766,39 +2774,44 @@ function updateBackground() {
 // --- AO Controls ---
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
+  if (aoIntensity) {
+    aoIntensity.value = e.target.checked ? parseFloat(document.getElementById('ao-intensity').value) : 0;
+  }
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-radius').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-radius-val').textContent = v.toFixed(2);
-  if (aoPipeline) aoPipeline.radius = v;
+  if (aoPass) aoPass.radius.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoPipeline) aoPipeline.intensity = v;
+  if (aoIntensity) aoIntensity.value = document.getElementById('ao-toggle').checked ? v : 0;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-scale').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-scale-val').textContent = v.toFixed(2);
+  if (aoPass) aoPass.scale.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-thickness').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-thickness-val').textContent = v.toFixed(2);
+  if (aoPass) aoPass.thickness.value = v;
   window._kaminosDirty?.();
 });
 
 document.getElementById('ao-falloff').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-falloff-val').textContent = v.toFixed(2);
-  if (aoPipeline) aoPipeline.falloffEnd = v * 6.0; // scale 0-1 slider to 0-6 world units
+  if (aoPass) aoPass.distanceFallOff.value = v;
   window._kaminosDirty?.();
 });
 
