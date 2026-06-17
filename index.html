@@ -89,6 +89,22 @@ canvas { display: block; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
 #info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#lamellar-selection-popover { position: absolute; left: 0; top: 0; display: none; min-width: 178px; max-width: 250px; padding: 9px 10px; background: rgba(12,12,12,0.72); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; box-shadow: 0 10px 26px rgba(0,0,0,0.38); color: #d8d8d8; z-index: 7; pointer-events: auto; }
+#lamellar-popover-title { font-size: 11px; font-weight: 700; color: #f0f0f0; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lamellar-popover-meta { font-size: 10px; color: #8f8f8f; font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lamellar-popover-populations { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+#lamellar-popover-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#lamellar-popover-actions .btn { margin: 0; padding: 5px 9px; font-size: 10px; }
+#lamellar-selection-popover .population-chip { max-width: 98px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-color: rgba(128,255,230,0.25); }
+#lamellar-selection-popover .population-chip.active { background: rgba(25,118,210,0.48); border-color: rgba(128,255,230,0.5); color: #fff; }
+#lamellar-layer-toolhead,
+#lamellar-population-toolhead { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
+#lamellar-layer-toolhead .slider-row,
+#lamellar-population-toolhead .slider-row { margin: 4px 0; gap: 6px; }
+#lamellar-layer-toolhead .slider-label,
+#lamellar-population-toolhead .slider-label { min-width: 58px; }
+#lamellar-layer-toolhead input[type="range"],
+#lamellar-population-toolhead input[type="range"] { min-width: 96px; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -181,6 +197,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
+    <div class="tab" data-tab="lamellar">Lamellar</div>
   </div>
 
   <!-- Assets Tab -->
@@ -533,6 +550,237 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <img class="gen-preview" id="gen-preview">
     <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
   </div>
+
+  <div class="tab-content" id="tab-lamellar">
+    <h2>Lamellar Witness</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="field-val">kaminos_lamellar_witness=1</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="lamellar-identity">kaminos-lamellar-witness-v0</span></div>
+      <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="lamellar-route-id">sphere-domain-section-segment-witness-v0</span></div>
+      <button class="btn" id="lamellar-toggle">Enable</button>
+      <button class="btn" id="lamellar-frame">Frame</button>
+      <button class="btn" id="lamellar-save-authoring">Save slot</button>
+      <button class="btn" id="lamellar-load-authoring">Load latest</button>
+      <button class="btn" id="lamellar-export-authoring">Export JSON</button>
+      <button class="btn" id="lamellar-import-authoring">Import JSON</button>
+      <input type="file" id="lamellar-authoring-file-input" accept=".json,.kaminos-lamellar,.kaminos-lamellar.json" style="display:none">
+      <div class="field"><span class="field-key">Authoring</span><span class="field-val" id="lamellar-authoring-status">unsaved</span></div>
+      <div id="lamellar-saved-state-list" style="margin-top:8px;"></div>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">View</span>
+      <select id="lamellar-view" class="select-input">
+        <option value="cap_profile" selected>cap profile</option>
+        <option value="cut_radius_coupling">cut radius</option>
+        <option value="malformed_contact_stress">contact stress</option>
+      </select>
+      <span class="slider-val" id="lamellar-view-val">cap_profile</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Cut Radius</span>
+      <input type="range" id="lamellar-cut-radius" min="0.018" max="0.12" step="0.001" value="0.04">
+      <span class="slider-val" id="lamellar-cut-radius-val">0.040</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Layers</span>
+      <input type="range" id="lamellar-layer-count" min="1" max="12" step="1" value="2">
+      <span class="slider-val" id="lamellar-layer-count-val">2</span>
+    </div>
+    <h2>Composer</h2>
+    <div class="panel">
+      <div class="slider-row">
+        <span class="slider-label">Seed</span>
+        <input type="number" class="gen-input" id="lamellar-seed" min="0" max="99999" step="1" value="17" style="margin-bottom:0">
+        <span class="slider-val" id="lamellar-seed-val">17</span>
+      </div>
+      <select id="lamellar-chirality" class="select-input" style="display:none" aria-hidden="true">
+        <option value="same" selected>same</option>
+        <option value="counterpatch">counterpatch</option>
+        <option value="mixed">mixed</option>
+      </select>
+      <div class="slider-row">
+        <span class="slider-label">Pattern</span>
+        <select id="lamellar-chirality-pattern" class="select-input">
+          <option value="same" selected>same</option>
+          <option value="alternating">alternating</option>
+          <option value="counterpatch">counterpatch</option>
+          <option value="mixed">mixed</option>
+        </select>
+        <span class="slider-val" id="lamellar-chirality-pattern-val">same</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Depth</span>
+        <input type="range" id="lamellar-depth-spacing" min="0.015" max="0.09" step="0.001" value="0.035">
+        <span class="slider-val" id="lamellar-depth-spacing-val">0.035</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Chunky</span>
+        <input type="range" id="lamellar-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <span class="slider-val" id="lamellar-chunkiness-val">0.48</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Variance</span>
+        <input type="range" id="lamellar-chunkiness-variance" min="0" max="0.65" step="0.01" value="0.22">
+        <span class="slider-val" id="lamellar-chunkiness-variance-val">0.22</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Overlap</span>
+        <input type="range" id="lamellar-overlap-bias" min="0" max="1" step="0.01" value="0.38">
+        <span class="slider-val" id="lamellar-overlap-bias-val">0.38</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Population</span>
+        <input type="range" id="lamellar-population-count" min="1" max="16" step="1" value="4">
+        <span class="slider-val" id="lamellar-population-count-val">4</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Cutters</span>
+        <input type="range" id="lamellar-cutter-count" min="0" max="8" step="1" value="1">
+        <span class="slider-val" id="lamellar-cutter-count-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Coverage</span>
+        <input type="range" id="lamellar-population-bearing-variance" min="0.15" max="2" step="0.01" value="1">
+        <span class="slider-val" id="lamellar-population-bearing-variance-val">1.00</span>
+      </div>
+      <button class="btn" id="lamellar-generate">Generate</button>
+    </div>
+    <h2>Context</h2>
+    <div class="panel" id="lamellar-context-inspector" data-contextual-inspector="viewport-selection">
+      <div class="field"><span class="field-key">Kind</span><span class="field-val" id="lamellar-selected-object-kind">none</span></div>
+      <div class="field"><span class="field-key">Level</span><span class="field-val" id="lamellar-selected-object-level">none</span></div>
+      <div class="field"><span class="field-key">Object</span><span class="field-val" id="lamellar-selected-object-id">none</span></div>
+      <div class="field"><span class="field-key">Role</span><span class="field-val" id="lamellar-selected-object-role">none</span></div>
+      <div id="lamellar-layer-detail">
+        <div class="slider-row" id="lamellar-layer-selectors">
+          <span class="slider-label">Layer</span>
+          <button class="btn active" id="lamellar-layer-select-0" data-layer="0">L0</button>
+          <button class="btn" id="lamellar-layer-select-1" data-layer="1">L1</button>
+          <button class="btn" id="lamellar-layer-select-2" data-layer="2">L2</button>
+          <button class="btn" id="lamellar-layer-select-3" data-layer="3">L3</button>
+        </div>
+      <div class="field"><span class="field-key">Selected</span><span class="field-val" id="lamellar-selected-layer-index">L0 shell</span></div>
+      <div class="slider-row">
+        <span class="slider-label">Radius</span>
+        <input type="range" id="lamellar-selected-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-selected-layer-radius-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Strips</span>
+        <button class="btn" id="lamellar-remove-strip">-</button>
+        <input type="number" class="gen-input" id="lamellar-selected-layer-strip-count" min="1" max="4" step="1" value="2" style="width:56px; padding:4px 6px; margin-bottom:0">
+        <button class="btn" id="lamellar-add-strip">+</button>
+      </div>
+      <div class="field"><span class="field-key">Strip IDs</span><span class="field-val" id="lamellar-selected-layer-strips">none</span></div>
+      </div>
+      <div id="lamellar-context-profile">
+        <div class="field"><span class="field-key">Strip</span><span class="field-val" id="lamellar-selected-strip-index">none</span></div>
+        <div id="lamellar-strip-profile">
+      <div class="slider-row">
+        <span class="slider-label">Width</span>
+        <input type="range" id="lamellar-selected-strip-width" min="0.006" max="0.18" step="0.001" value="0.06">
+        <span class="slider-val" id="lamellar-selected-strip-width-val">0.060</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thickness</span>
+        <input type="range" id="lamellar-selected-strip-thickness" min="0.002" max="0.07" step="0.001" value="0.018">
+        <span class="slider-val" id="lamellar-selected-strip-thickness-val">0.018</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">W Var</span>
+        <input type="range" id="lamellar-selected-strip-width-variance" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="lamellar-selected-strip-width-variance-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">T Var</span>
+        <input type="range" id="lamellar-selected-strip-thickness-variance" min="0" max="1" step="0.01" value="0">
+        <span class="slider-val" id="lamellar-selected-strip-thickness-variance-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Gaps</span>
+        <select id="lamellar-selected-strip-gap-pattern" class="select-input">
+          <option value="solid" selected>solid</option>
+          <option value="single-window">single-window</option>
+          <option value="dashed">dashed</option>
+          <option value="crosscut">crosscut</option>
+        </select>
+        <span class="slider-val" id="lamellar-selected-strip-gap-pattern-val">solid</span>
+      </div>
+        </div>
+      </div>
+    </div>
+    <h2>Layer Rows</h2>
+    <div class="panel" id="lamellar-layer-rows">
+      <div class="slider-row">
+        <span class="slider-label">Layer 0</span>
+        <select id="lamellar-layer-0-chirality" class="select-input">
+          <option value="1" selected>+</option>
+          <option value="-1">-</option>
+        </select>
+        <input type="range" id="lamellar-layer-0-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <input type="number" class="gen-input" id="lamellar-layer-0-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
+        <input type="hidden" id="lamellar-layer-0-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-layer-0-val">+ 0.48 s2</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Layer 1</span>
+        <select id="lamellar-layer-1-chirality" class="select-input">
+          <option value="1">+</option>
+          <option value="-1" selected>-</option>
+        </select>
+        <input type="range" id="lamellar-layer-1-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <input type="number" class="gen-input" id="lamellar-layer-1-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
+        <input type="hidden" id="lamellar-layer-1-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-layer-1-val">- 0.48 s2</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Layer 2</span>
+        <select id="lamellar-layer-2-chirality" class="select-input">
+          <option value="1" selected>+</option>
+          <option value="-1">-</option>
+        </select>
+        <input type="range" id="lamellar-layer-2-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <input type="number" class="gen-input" id="lamellar-layer-2-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
+        <input type="hidden" id="lamellar-layer-2-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-layer-2-val">+ 0.48 s2</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Layer 3</span>
+        <select id="lamellar-layer-3-chirality" class="select-input">
+          <option value="1">+</option>
+          <option value="-1" selected>-</option>
+        </select>
+        <input type="range" id="lamellar-layer-3-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
+        <input type="number" class="gen-input" id="lamellar-layer-3-strip-count" min="1" max="4" step="1" value="1" style="width:46px; padding:4px 6px; margin-bottom:0">
+        <input type="hidden" id="lamellar-layer-3-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-layer-3-val">- 0.48 s1</span>
+      </div>
+    </div>
+    <h2>Slice Tool</h2>
+    <div class="panel">
+      <div class="slider-row">
+        <span class="slider-label">Slice T</span>
+        <input type="range" id="lamellar-slice-t" min="0.2" max="0.8" step="0.001" value="0.47">
+        <span class="slider-val" id="lamellar-slice-t-val">0.470</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Angle</span>
+        <input type="range" id="lamellar-slice-angle" min="-70" max="70" step="1" value="0">
+        <span class="slider-val" id="lamellar-slice-angle-val">0</span>
+      </div>
+      <button class="btn" id="lamellar-apply-slice">Apply Slice</button>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Segments</span><span class="field-val" id="lamellar-segments">0</span></div>
+      <div class="field"><span class="field-key">Descriptors</span><span class="field-val" id="lamellar-descriptors">0</span></div>
+      <div class="field"><span class="field-key">Layer Stack</span><span class="field-val" id="lamellar-layer-stack">none</span></div>
+      <div class="field"><span class="field-key">Caps</span><span class="field-val" id="lamellar-caps">[]</span></div>
+      <div class="field"><span class="field-key">Open Edges</span><span class="field-val" id="lamellar-open-edges">0</span></div>
+      <div class="field"><span class="field-key">Hooks</span><span class="field-val" id="lamellar-hooks">0</span></div>
+      <div class="field"><span class="field-key">Slice</span><span class="field-val" id="lamellar-slice-receipt">none</span></div>
+      <div class="field"><span class="field-key">Cut Author</span><span class="field-val" id="lamellar-cut-author">none</span></div>
+    </div>
+  </div>
 </div>
 
 <div id="viewport">
@@ -580,6 +828,43 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
   <div id="info-bar">No asset loaded</div>
+  <div id="lamellar-selection-popover" aria-live="polite">
+    <div id="lamellar-popover-title">none</div>
+    <div id="lamellar-popover-meta">none</div>
+    <div id="lamellar-popover-populations"></div>
+    <div id="lamellar-layer-toolhead">
+      <div id="lamellar-layer-summary" class="slider-val">none</div>
+      <div class="slider-row">
+        <span class="slider-label">Layer radius</span>
+        <input type="range" id="lamellar-popover-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-popover-layer-radius-val">0.000</span>
+      </div>
+    </div>
+    <div id="lamellar-population-toolhead">
+      <div id="lamellar-population-summary" class="slider-val">none</div>
+      <div class="slider-row">
+        <span class="slider-label">Spread</span>
+        <input type="range" id="lamellar-population-bearing-spread" min="0.15" max="2" step="0.01" value="1">
+        <span class="slider-val" id="lamellar-population-bearing-spread-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Rotate</span>
+        <input type="range" id="lamellar-population-bearing-offset" min="-6.283" max="6.283" step="0.01" value="0">
+        <span class="slider-val" id="lamellar-population-bearing-offset-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Spacing</span>
+        <input type="range" id="lamellar-population-radial-spacing" min="0" max="0.14" step="0.001" value="0.04">
+        <span class="slider-val" id="lamellar-population-radial-spacing-val">0.040</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Set radius</span>
+        <input type="range" id="lamellar-population-radius-offset" min="-0.24" max="0.24" step="0.001" value="0">
+        <span class="slider-val" id="lamellar-population-radius-offset-val">0.000</span>
+      </div>
+    </div>
+    <div id="lamellar-popover-actions"></div>
+  </div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
 </div>
@@ -616,6 +901,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { createKaminosLamellarWitness } from './lamellar-core.js';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -1593,6 +1879,25 @@ window.removeSceneObject = function(id) {
   setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
   window._kaminosDirty?.();
 };
+let lamellarWitness = null;
+let selectedLamellarLayerIndex = 0;
+let selectedLamellarStripIndex = 0;
+let selectedLamellarPopulationId = null;
+let selectedLamellarObject = null;
+let lamellarCameraInteracted = false;
+const lamellarStripProfileOverrides = {};
+const lamellarStripPopulationOverrides = {};
+let lamellarPinnedPopoverSelectionKey = null;
+let lamellarControlsRebuildRaf = 0;
+let lamellarControlsRebuildTimeout = 0;
+let lamellarLastControlsRebuildAt = 0;
+let lamellarPendingPopulationSelectionId = null;
+const LAMELLAR_REBUILD_MIN_INTERVAL_MS = 80;
+const LAMELLAR_AUTHORING_SCHEMA = 'kaminos.lamellar-authoring.v0';
+const LAMELLAR_SAVED_STATES_KEY = 'kaminos.lamellar.saved-states.v0';
+let lamellarActiveSavedStateId = null;
+let lamellarSavedStateSerial = 0;
+let lamellarLastThumbnailStats = null;
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
@@ -1634,6 +1939,10 @@ function restoreSettings() {
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
+}
+
+function isLamellarRouteActive() {
+  return new URLSearchParams(window.location.search).get('kaminos_lamellar_witness') === '1';
 }
 
 // Auto-save on any sidebar control change
@@ -1833,6 +2142,10 @@ async function initScene() {
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
+  const markLamellarCameraInteracted = () => {
+    lamellarCameraInteracted = true;
+    unpinLamellarSelectionPopover();
+  };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
@@ -1851,6 +2164,10 @@ async function initScene() {
   viewportEl.addEventListener('click', handleViewportSelectionClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
+  renderer.domElement.addEventListener('pointerdown', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('mousedown', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('touchstart', markLamellarCameraInteracted);
+  renderer.domElement.addEventListener('wheel', markLamellarCameraInteracted);
   window._kaminosDirty = markDirty;
 
   // FPS counter
@@ -1862,6 +2179,8 @@ async function initScene() {
     requestAnimationFrame(animate);
     controls.update();
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    lamellarWitness?.update();
+    if (lamellarWitness?.debugState?.().active) positionLamellarSelectionPopover();
 
     if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
@@ -1883,6 +2202,1454 @@ async function initScene() {
     }
   }
   animate();
+}
+
+function readLamellarControls() {
+  const layerOverrides = Array.from({ length: 4 }, (_, layerIndex) => {
+    const chiralityEl = document.getElementById(`lamellar-layer-${layerIndex}-chirality`);
+    const chunkinessEl = document.getElementById(`lamellar-layer-${layerIndex}-chunkiness`);
+    const stripCountEl = document.getElementById(`lamellar-layer-${layerIndex}-strip-count`);
+    const radiusEl = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+    if (
+      chiralityEl.dataset.overridden !== '1'
+      && chunkinessEl.dataset.overridden !== '1'
+      && stripCountEl.dataset.overridden !== '1'
+      && radiusEl.dataset.overridden !== '1'
+    ) return null;
+    const chirality = parseInt(chiralityEl.value, 10);
+    const chunkiness = parseFloat(chunkinessEl.value);
+    const stripCount = parseInt(stripCountEl.value, 10);
+    const radiusOffset = parseFloat(radiusEl.value);
+    return { layerIndex, chirality, chunkiness, stripCount, radiusOffset };
+  }).filter(Boolean);
+  const stripPopulations = Object.values(lamellarStripPopulationOverrides);
+  const controls = {
+    view: document.getElementById('lamellar-view').value,
+    cutRadius: parseFloat(document.getElementById('lamellar-cut-radius').value),
+    layerCount: parseInt(document.getElementById('lamellar-layer-count').value, 10),
+    seed: parseInt(document.getElementById('lamellar-seed').value, 10),
+    chirality: document.getElementById('lamellar-chirality').value,
+    chiralityPattern: document.getElementById('lamellar-chirality-pattern').value,
+    depthSpacing: parseFloat(document.getElementById('lamellar-depth-spacing').value),
+    chunkinessBase: parseFloat(document.getElementById('lamellar-chunkiness').value),
+    chunkinessVariance: parseFloat(document.getElementById('lamellar-chunkiness-variance').value),
+    overlapBias: parseFloat(document.getElementById('lamellar-overlap-bias').value),
+    populationCount: parseInt(document.getElementById('lamellar-population-count').value, 10),
+    cutterCount: parseInt(document.getElementById('lamellar-cutter-count').value, 10),
+    populationBearingVariance: parseFloat(document.getElementById('lamellar-population-bearing-variance').value),
+    sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
+    sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
+    layerOverrides,
+    stripProfileOverrides: Object.values(lamellarStripProfileOverrides),
+  };
+  if (stripPopulations.length) controls.stripPopulations = stripPopulations;
+  return controls;
+}
+
+function setLamellarAuthoringStatus(text, tone = 'neutral') {
+  const el = document.getElementById('lamellar-authoring-status');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('present', tone === 'ok');
+  el.classList.toggle('missing', tone === 'error');
+}
+
+function collectLamellarAuthoringState() {
+  const debug = lamellarWitness?.debugState?.() || {};
+  return {
+    schema: LAMELLAR_AUTHORING_SCHEMA,
+    version: 1,
+    savedAtIso: new Date().toISOString(),
+    witnessIdentity: debug.witnessIdentity || 'kaminos-lamellar-witness-v0',
+    effectiveRoute: debug.effectiveRoute || 'sphere-domain-section-segment-witness-v0',
+    controls: readLamellarControls(),
+    selection: {
+      selectedLayerIndex: selectedLamellarLayerIndex,
+      selectedStripIndex: selectedLamellarStripIndex,
+      selectedPopulationId: selectedLamellarPopulationId,
+      selectedObject: selectedLamellarObject,
+    },
+    active: !!debug.active,
+  };
+}
+
+function getLamellarSavedStates() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAMELLAR_SAVED_STATES_KEY) || '{}');
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed.states) ? parsed.states : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistLamellarSavedStates(states) {
+  const payload = {
+    schema: LAMELLAR_SAVED_STATES_KEY,
+    version: 1,
+    updatedAtIso: new Date().toISOString(),
+    states,
+  };
+  localStorage.setItem(LAMELLAR_SAVED_STATES_KEY, JSON.stringify(payload));
+}
+
+function summarizeLamellarAuthoringState(payload) {
+  const controlsState = payload?.controls || {};
+  const seed = Number.isFinite(Number(controlsState.seed)) ? controlsState.seed : 'na';
+  const layers = Number.isFinite(Number(controlsState.layerCount)) ? controlsState.layerCount : 'na';
+  const population = Number.isFinite(Number(controlsState.populationCount)) ? controlsState.populationCount : 'na';
+  const envelopes = lamellarWitness?.debugState?.().lamellarEnvelopeDescriptors?.length ?? 0;
+  return `seed ${seed} / ${layers}L / ${population}P / ${envelopes} envelopes`;
+}
+
+function measureLamellarThumbnailCanvas(canvas) {
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  let minLuma = 255;
+  let maxLuma = 0;
+  const buckets = new Set();
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const i = (y * width + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+      minLuma = Math.min(minLuma, luma);
+      maxLuma = Math.max(maxLuma, luma);
+      buckets.add(`${r >> 4}:${g >> 4}:${b >> 4}`);
+    }
+  }
+  return {
+    width,
+    height,
+    lumaRange: maxLuma - minLuma,
+    colorBuckets: buckets.size,
+  };
+}
+
+function drawLamellarDescriptorThumbnail(ctx, width, height) {
+  const debug = lamellarWitness?.debugState?.() || {};
+  const envelopes = Array.isArray(debug.lamellarEnvelopeDescriptors) ? debug.lamellarEnvelopeDescriptors : [];
+  const curves = Array.isArray(debug.sphereCurveDescriptors) ? debug.sphereCurveDescriptors : [];
+  const drawableEnvelopes = envelopes.filter(envelope => Array.isArray(envelope.sampleRows) && envelope.sampleRows.length);
+  const palette = ['#d8b457', '#78d6d1', '#f0e3b8', '#b7896f', '#c7dede'];
+  const pointGroups = [];
+  for (const envelope of drawableEnvelopes) {
+    pointGroups.push(...envelope.sampleRows.map(row => row.points || []));
+  }
+  if (!pointGroups.length) {
+    for (const curve of curves) {
+      const points = [];
+      const start = curve.interval?.[0] ?? 0.16;
+      const end = curve.interval?.[1] ?? 0.84;
+      for (let i = 0; i <= 18; i++) {
+        const t = start + (end - start) * (i / 18);
+        const theta = (curve.theta0 || 0) + (curve.thetaTwist || 0) * t;
+        const phi = (curve.phi0 || 0) + (curve.phiSlope || 0) * (t - 0.5) + Math.sin(t * Math.PI * 2 + (curve.phase || 0)) * (curve.waviness ?? 0.08);
+        const radius = curve.radius || 1;
+        const cosPhi = Math.cos(phi);
+        points.push([radius * cosPhi * Math.cos(theta), radius * Math.sin(phi), radius * cosPhi * Math.sin(theta)]);
+      }
+      pointGroups.push(points);
+    }
+  }
+  const flatPoints = pointGroups.flat().filter(point => Array.isArray(point) && point.length >= 3);
+  if (!flatPoints.length) return false;
+  const projected = flatPoints.map(point => [point[0] + point[2] * 0.28, -point[1] + point[2] * 0.1]);
+  const minX = Math.min(...projected.map(point => point[0]));
+  const maxX = Math.max(...projected.map(point => point[0]));
+  const minY = Math.min(...projected.map(point => point[1]));
+  const maxY = Math.max(...projected.map(point => point[1]));
+  const scale = Math.min((width - 14) / Math.max(0.001, maxX - minX), (height - 12) / Math.max(0.001, maxY - minY));
+  const mapPoint = point => [
+    7 + (point[0] + point[2] * 0.28 - minX) * scale,
+    6 + (-point[1] + point[2] * 0.1 - minY) * scale,
+  ];
+
+  ctx.fillStyle = '#060606';
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'screen';
+  for (const [index, envelope] of drawableEnvelopes.entries()) {
+    const rows = envelope.sampleRows || [];
+    const color = palette[index % palette.length];
+    const leftRail = rows.map(row => row.points?.[0]).filter(Boolean);
+    const rightRail = rows.map(row => row.points?.[row.points.length - 1]).filter(Boolean);
+    if (leftRail.length && rightRail.length) {
+      ctx.beginPath();
+      for (const [railIndex, point] of leftRail.entries()) {
+        const [x, y] = mapPoint(point);
+        if (railIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      for (const point of rightRail.slice().reverse()) {
+        const [x, y] = mapPoint(point);
+        ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color + '55';
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 6) {
+      const row = rows[rowIndex];
+      const points = row.points || [];
+      if (points.length < 2) continue;
+      ctx.beginPath();
+      for (const [pointIndex, point] of points.entries()) {
+        const [x, y] = mapPoint(point);
+        if (pointIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#dffdfb88';
+      ctx.lineWidth = 0.65;
+      ctx.stroke();
+    }
+  }
+  if (!drawableEnvelopes.length) {
+    for (const [index, points] of pointGroups.entries()) {
+      ctx.beginPath();
+      for (const [pointIndex, point] of points.entries()) {
+        const [x, y] = mapPoint(point);
+        if (pointIndex === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = palette[index % palette.length];
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  return true;
+}
+
+function captureLamellarAuthoringThumbnail() {
+  const source = renderer?.domElement;
+  try {
+    const thumb = document.createElement('canvas');
+    thumb.width = 96;
+    thumb.height = 64;
+    const ctx = thumb.getContext('2d');
+    const drewDescriptor = drawLamellarDescriptorThumbnail(ctx, thumb.width, thumb.height);
+    if (!drewDescriptor && source?.width && source?.height) {
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, thumb.width, thumb.height);
+      const sourceAspect = source.width / source.height;
+      const targetAspect = thumb.width / thumb.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = source.width;
+      let sh = source.height;
+      if (sourceAspect > targetAspect) {
+        sw = source.height * targetAspect;
+        sx = (source.width - sw) / 2;
+      } else {
+        sh = source.width / targetAspect;
+        sy = (source.height - sh) / 2;
+      }
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, thumb.width, thumb.height);
+    }
+    lamellarLastThumbnailStats = measureLamellarThumbnailCanvas(thumb);
+    return thumb.toDataURL('image/jpeg', 0.72);
+  } catch {
+    lamellarLastThumbnailStats = null;
+    return '';
+  }
+}
+
+function renderLamellarSavedStateList() {
+  const list = document.getElementById('lamellar-saved-state-list');
+  if (!list) return;
+  const states = getLamellarSavedStates();
+  list.innerHTML = '';
+  if (!states.length) {
+    const empty = document.createElement('div');
+    empty.className = 'gr-meta';
+    empty.style.padding = '4px 0';
+    empty.textContent = 'No Lamellar slots yet';
+    list.appendChild(empty);
+    return;
+  }
+  for (const slot of states) {
+    const row = document.createElement('div');
+    row.className = 'gr-entry';
+    row.style.cssText = 'display:grid; grid-template-columns:62px minmax(0,1fr); align-items:center; column-gap:8px; row-gap:6px;';
+    if (slot.id === lamellarActiveSavedStateId) row.style.borderLeft = '2px solid #1976d2';
+
+    const thumbnail = document.createElement('img');
+    thumbnail.className = 'lamellar-slot-thumbnail';
+    thumbnail.alt = 'Saved Lamellar slot thumbnail';
+    thumbnail.src = slot.thumbnailDataUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2296%22 height=%2264%22 viewBox=%220 0 96 64%22%3E%3Crect width=%2296%22 height=%2264%22 fill=%22%23121212%22/%3E%3Cpath d=%22M14 42 C34 18 58 54 82 20%22 fill=%22none%22 stroke=%22%23666%22 stroke-width=%223%22/%3E%3C/svg%3E';
+    thumbnail.style.cssText = 'width:54px; height:36px; object-fit:cover; border-radius:4px; border:1px solid #333; background:#111; grid-row:1 / span 2;';
+
+    const labelWrap = document.createElement('span');
+    labelWrap.style.cssText = 'display:flex; flex-direction:column; gap:3px; min-width:0;';
+
+    const name = document.createElement('input');
+    name.className = 'lamellar-slot-name-input';
+    name.value = slot.label || summarizeLamellarAuthoringState(slot.payload);
+    name.title = slot.savedAtIso || '';
+    name.style.cssText = 'width:100%; min-width:0; background:#151515; border:1px solid #2f2f2f; border-radius:4px; color:#ccc; font-size:10px; padding:4px 5px;';
+    name.onclick = event => event.stopPropagation();
+    name.onkeydown = event => {
+      if (event.key === 'Enter') {
+        event.stopPropagation();
+        renameLamellarAuthoringSlot(slot.id, name.value);
+      }
+    };
+
+    const meta = document.createElement('span');
+    meta.className = 'gr-meta';
+    meta.textContent = slot.savedAtIso ? new Date(slot.savedAtIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    labelWrap.appendChild(name);
+    labelWrap.appendChild(meta);
+
+    const rename = document.createElement('button');
+    rename.className = 'btn';
+    rename.textContent = 'Rename';
+    rename.onclick = event => {
+      event.stopPropagation();
+      renameLamellarAuthoringSlot(slot.id, name.value);
+    };
+
+    const load = document.createElement('button');
+    load.className = 'btn';
+    load.textContent = 'Load';
+    load.onclick = event => {
+      event.stopPropagation();
+      loadLamellarAuthoringSlot(slot.id);
+    };
+
+    const del = document.createElement('button');
+    del.className = 'btn';
+    del.textContent = 'Delete';
+    del.onclick = event => {
+      event.stopPropagation();
+      deleteLamellarAuthoringSlot(slot.id);
+    };
+
+    const actions = document.createElement('span');
+    actions.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px;';
+    actions.appendChild(rename);
+    actions.appendChild(load);
+    actions.appendChild(del);
+
+    row.onclick = () => loadLamellarAuthoringSlot(slot.id);
+    row.appendChild(thumbnail);
+    row.appendChild(labelWrap);
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
+function saveLamellarAuthoringSlot(options = {}) {
+  const payload = collectLamellarAuthoringState();
+  const states = getLamellarSavedStates();
+  const savedAtIso = new Date().toISOString();
+  const thumbnailDataUrl = options.thumbnailDataUrl || captureLamellarAuthoringThumbnail();
+  const id = options.id || (options.overwrite ? lamellarActiveSavedStateId : null) || `lamellar-${Date.now().toString(36)}-${(lamellarSavedStateSerial += 1).toString(36)}`;
+  const slot = {
+    id,
+    schema: LAMELLAR_AUTHORING_SCHEMA,
+    savedAtIso,
+    label: summarizeLamellarAuthoringState(payload),
+    thumbnailDataUrl,
+    thumbnailStats: options.thumbnailStats || lamellarLastThumbnailStats,
+    seed: payload.controls?.seed ?? null,
+    layerCount: payload.controls?.layerCount ?? null,
+    populationCount: payload.controls?.populationCount ?? null,
+    payload: { ...payload, savedAtIso },
+  };
+  const next = [slot, ...states.filter(existing => existing.id !== id)];
+  persistLamellarSavedStates(next);
+  lamellarActiveSavedStateId = id;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`saved ${slot.label}`, 'ok');
+  return slot;
+}
+
+function loadLamellarAuthoringSlot(id = null) {
+  const states = getLamellarSavedStates();
+  const slot = id ? states.find(candidate => candidate.id === id) : states[0];
+  if (!slot) {
+    setLamellarAuthoringStatus('no saved Lamellar slots', 'error');
+    return null;
+  }
+  const receipt = applyLamellarAuthoringState(slot.payload || slot, { status: false });
+  lamellarActiveSavedStateId = slot.id;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`loaded ${slot.label || 'Lamellar slot'}`, 'ok');
+  return { slotId: slot.id, label: slot.label, ...receipt };
+}
+
+function deleteLamellarAuthoringSlot(id) {
+  const states = getLamellarSavedStates();
+  const next = states.filter(slot => slot.id !== id);
+  persistLamellarSavedStates(next);
+  if (lamellarActiveSavedStateId === id) lamellarActiveSavedStateId = null;
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus('deleted Lamellar slot', 'ok');
+  return { deleted: id, remaining: next.length };
+}
+
+function renameLamellarAuthoringSlot(id, label) {
+  const cleanLabel = String(label || '').trim();
+  if (!cleanLabel) {
+    setLamellarAuthoringStatus('slot name cannot be empty', 'error');
+    return null;
+  }
+  const states = getLamellarSavedStates();
+  let renamed = null;
+  const next = states.map(slot => {
+    if (slot.id !== id) return slot;
+    renamed = { ...slot, label: cleanLabel, renamedAtIso: new Date().toISOString() };
+    return renamed;
+  });
+  if (!renamed) {
+    setLamellarAuthoringStatus('slot not found', 'error');
+    return null;
+  }
+  persistLamellarSavedStates(next);
+  renderLamellarSavedStateList();
+  setLamellarAuthoringStatus(`renamed ${cleanLabel}`, 'ok');
+  return renamed;
+}
+
+function setControlValue(id, value, overridden = false) {
+  const el = document.getElementById(id);
+  if (!el || value === undefined || value === null) return;
+  el.value = String(value);
+  if (overridden) el.dataset.overridden = '1';
+  else delete el.dataset.overridden;
+}
+
+function resetLamellarLayerOverrideControls() {
+  for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
+    for (const suffix of ['chirality', 'chunkiness', 'strip-count', 'radius']) {
+      const el = document.getElementById(`lamellar-layer-${layerIndex}-${suffix}`);
+      if (el) delete el.dataset.overridden;
+    }
+  }
+}
+
+function replaceObjectContents(target, entries) {
+  for (const key of Object.keys(target)) delete target[key];
+  for (const entry of entries || []) {
+    if (entry?.id) target[entry.id] = { ...entry };
+    else if (entry?.stripInstanceId) target[entry.stripInstanceId] = { ...entry };
+  }
+}
+
+function applyLamellarAuthoringState(payload, options = {}) {
+  const state = typeof payload === 'string' ? JSON.parse(payload) : payload;
+  if (!state || state.schema !== LAMELLAR_AUTHORING_SCHEMA) {
+    throw new Error(`Unsupported Lamellar authoring schema: ${state?.schema || 'missing'}`);
+  }
+  const controlsState = state.controls || {};
+  setControlValue('lamellar-view', controlsState.view);
+  setControlValue('lamellar-cut-radius', controlsState.cutRadius);
+  setControlValue('lamellar-layer-count', controlsState.layerCount);
+  setControlValue('lamellar-seed', controlsState.seed);
+  setControlValue('lamellar-chirality', controlsState.chirality);
+  setControlValue('lamellar-chirality-pattern', controlsState.chiralityPattern);
+  setControlValue('lamellar-depth-spacing', controlsState.depthSpacing);
+  setControlValue('lamellar-chunkiness', controlsState.chunkinessBase);
+  setControlValue('lamellar-chunkiness-variance', controlsState.chunkinessVariance);
+  setControlValue('lamellar-overlap-bias', controlsState.overlapBias);
+  setControlValue('lamellar-population-count', controlsState.populationCount);
+  setControlValue('lamellar-cutter-count', controlsState.cutterCount);
+  setControlValue('lamellar-population-bearing-variance', controlsState.populationBearingVariance);
+  setControlValue('lamellar-slice-t', controlsState.sliceT);
+  setControlValue('lamellar-slice-angle', controlsState.sliceAngle);
+  resetLamellarLayerOverrideControls();
+  for (const override of controlsState.layerOverrides || []) {
+    const layerIndex = override.layerIndex;
+    setControlValue(`lamellar-layer-${layerIndex}-chirality`, override.chirality, true);
+    setControlValue(`lamellar-layer-${layerIndex}-chunkiness`, override.chunkiness, true);
+    setControlValue(`lamellar-layer-${layerIndex}-strip-count`, override.stripCount, true);
+    setControlValue(`lamellar-layer-${layerIndex}-radius`, override.radiusOffset, true);
+  }
+  replaceObjectContents(lamellarStripPopulationOverrides, controlsState.stripPopulations || []);
+  replaceObjectContents(lamellarStripProfileOverrides, controlsState.stripProfileOverrides || []);
+  selectedLamellarLayerIndex = Math.max(0, Math.min(11, Math.round(Number(state.selection?.selectedLayerIndex) || 0)));
+  selectedLamellarStripIndex = Math.max(0, Math.round(Number(state.selection?.selectedStripIndex) || 0));
+  selectedLamellarPopulationId = state.selection?.selectedPopulationId || null;
+  selectedLamellarObject = state.selection?.selectedObject || null;
+  if (state.active) lamellarWitness?.setActive?.(true);
+  lamellarWitness?.setControls?.(readLamellarControls());
+  syncLamellarReadout();
+  if (selectedLamellarPopulationId && lamellarWitness?.selectPopulationByPopulationId) {
+    const selection = lamellarWitness.selectPopulationByPopulationId(selectedLamellarPopulationId, 'ui-authoring-load');
+    if (selection) selectLamellarObject(selection);
+  }
+  if (options.status !== false) setLamellarAuthoringStatus('loaded authoring state', 'ok');
+  window._kaminosDirty?.();
+  return {
+    schema: state.schema,
+    loaded: true,
+    seed: readLamellarControls().seed,
+    layerCount: readLamellarControls().layerCount,
+    populationCount: readLamellarControls().populationCount,
+    cutterCount: readLamellarControls().cutterCount,
+    stripPopulationOverrideCount: Object.keys(lamellarStripPopulationOverrides).length,
+    stripProfileOverrideCount: Object.keys(lamellarStripProfileOverrides).length,
+  };
+}
+
+function downloadLamellarAuthoringState() {
+  const payload = collectLamellarAuthoringState();
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `kaminos-lamellar-${payload.controls.seed || 0}.kaminos-lamellar.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  setLamellarAuthoringStatus(`saved seed ${payload.controls.seed}`, 'ok');
+  return payload;
+}
+
+async function loadLamellarAuthoringFile(file) {
+  try {
+    const text = await file.text();
+    const receipt = applyLamellarAuthoringState(JSON.parse(text));
+    setLamellarAuthoringStatus(`loaded ${file.name}`, 'ok');
+    return receipt;
+  } catch (error) {
+    setLamellarAuthoringStatus(error.message, 'error');
+    throw error;
+  }
+}
+
+function setSelectedLamellarLayer(layerIndex) {
+  selectedLamellarLayerIndex = Math.max(0, Math.min(11, Math.round(Number(layerIndex) || 0)));
+  selectedLamellarStripIndex = 0;
+  selectedLamellarPopulationId = null;
+  syncSelectedLamellarLayer();
+}
+
+function selectedLamellarStrips(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  return (current.stripInstances || []).filter(strip => strip.layerIndex === selectedLamellarLayerIndex);
+}
+
+function selectedLamellarStrip(state = null) {
+  const strips = selectedLamellarStrips(state);
+  const maxStrip = Math.max(0, strips.length - 1);
+  selectedLamellarStripIndex = Math.max(0, Math.min(maxStrip, Math.round(Number(selectedLamellarStripIndex) || 0)));
+  return strips.find(strip => strip.stripIndex === selectedLamellarStripIndex) || strips[selectedLamellarStripIndex] || null;
+}
+
+function setSelectedLamellarStrip(stripIndex) {
+  selectedLamellarStripIndex = Math.max(0, Math.round(Number(stripIndex) || 0));
+  selectedLamellarPopulationId = null;
+  syncSelectedLamellarStrip();
+}
+
+function setSelectedLamellarStripById(stripInstanceId) {
+  const current = lamellarWitness?.debugState?.() || {};
+  const strip = (current.stripInstances || []).find(candidate => candidate.id === stripInstanceId);
+  if (!strip) return null;
+  selectedLamellarLayerIndex = strip.layerIndex;
+  selectedLamellarStripIndex = strip.stripIndex;
+  syncSelectedLamellarLayer(current);
+  syncSelectedLamellarStrip(current);
+  return strip;
+}
+
+function selectLamellarLayerFromStrip(stripInstanceId, source = 'ui-layer-from-strip') {
+  if (!stripInstanceId || !lamellarWitness?.selectLayerByStripInstanceId) return null;
+  const selection = lamellarWitness.selectLayerByStripInstanceId(stripInstanceId, source);
+  selectLamellarObject(selection);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return selection;
+}
+
+function drillIntoLamellarStrip(stripInstanceId = null) {
+  const current = lamellarWitness?.debugState?.() || {};
+  const fallbackStrip = (current.stripInstances || []).find(strip => strip.layerIndex === selectedLamellarLayerIndex);
+  const targetStripId = stripInstanceId
+    || current.selectedLamellarObject?.hitStripInstanceId
+    || current.viewportPickReceipt?.hitStripInstanceId
+    || fallbackStrip?.id;
+  if (!targetStripId || !lamellarWitness?.selectStripByStripInstanceId) return null;
+  const selection = lamellarWitness.selectStripByStripInstanceId(targetStripId, 'ui-strip-drilldown');
+  selectLamellarObject(selection);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return selection;
+}
+
+function lamellarPopulationsForLayer(state = null, layerIndex = selectedLamellarLayerIndex) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  return (current.stripPopulationDescriptors || []).filter(population => population.layerIndex === layerIndex);
+}
+
+function ensureLamellarPopulationOverrides(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  for (const population of current.stripPopulationDescriptors || []) {
+    if (lamellarStripPopulationOverrides[population.id]) continue;
+    lamellarStripPopulationOverrides[population.id] = {
+      id: population.id,
+      layerIndex: population.layerIndex,
+      role: population.role,
+      count: population.count,
+      chirality: population.chirality,
+      bearingOffset: population.bearingOffset,
+      bearingVariance: population.bearingVariance,
+      radialSpacing: population.radialSpacing,
+      radiusOffset: population.radiusOffset || 0,
+      layoutPreset: population.layoutPreset || 'coverage',
+      gapPattern: population.gapPattern || 'solid',
+    };
+  }
+  return lamellarStripPopulationOverrides;
+}
+
+function selectLamellarPopulation(populationId, source = 'ui-population-selection') {
+  if (!populationId || !lamellarWitness?.selectPopulationByPopulationId) return null;
+  const selection = lamellarWitness.selectPopulationByPopulationId(populationId, source);
+  selectedLamellarPopulationId = selection?.populationId || null;
+  selectLamellarObject(selection);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return selection;
+}
+
+function flushLamellarControlsRebuild(options = {}) {
+  if (!lamellarWitness) return null;
+  if (lamellarControlsRebuildRaf) {
+    cancelAnimationFrame(lamellarControlsRebuildRaf);
+    lamellarControlsRebuildRaf = 0;
+  }
+  if (lamellarControlsRebuildTimeout) {
+    clearTimeout(lamellarControlsRebuildTimeout);
+    lamellarControlsRebuildTimeout = 0;
+  }
+  const populationId = options.populationId || lamellarPendingPopulationSelectionId;
+  lamellarPendingPopulationSelectionId = null;
+  lamellarWitness.setControls(readLamellarControls());
+  lamellarLastControlsRebuildAt = performance.now();
+  if (populationId) {
+    const selection = lamellarWitness.selectPopulationByPopulationId?.(populationId, 'ui-population-override');
+    if (selection) selectLamellarObject(selection);
+  }
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return lamellarWitness.debugState?.() || null;
+}
+
+function scheduleLamellarControlsRebuild(options = {}) {
+  if (options.populationId) lamellarPendingPopulationSelectionId = options.populationId;
+  if (lamellarControlsRebuildRaf || lamellarControlsRebuildTimeout) return null;
+  const elapsed = performance.now() - lamellarLastControlsRebuildAt;
+  const delay = Math.max(0, LAMELLAR_REBUILD_MIN_INTERVAL_MS - elapsed);
+  const queueAnimationFrameFlush = () => {
+    lamellarControlsRebuildTimeout = 0;
+    lamellarControlsRebuildRaf = requestAnimationFrame(() => {
+      lamellarControlsRebuildRaf = 0;
+      flushLamellarControlsRebuild();
+    });
+  };
+  if (delay > 0) {
+    lamellarControlsRebuildTimeout = setTimeout(queueAnimationFrameFlush, delay);
+  } else {
+    queueAnimationFrameFlush();
+  }
+  return null;
+}
+
+function applyLamellarPopulationOverride(populationId = selectedLamellarPopulationId, patch = {}, options = {}) {
+  if (!populationId || !lamellarWitness) return null;
+  const state = lamellarWitness.debugState();
+  ensureLamellarPopulationOverrides(state);
+  const existing = lamellarStripPopulationOverrides[populationId];
+  if (!existing) return null;
+  lamellarStripPopulationOverrides[populationId] = { ...existing, ...patch, id: populationId };
+  selectedLamellarPopulationId = populationId;
+  if (options.immediate) flushLamellarControlsRebuild({ populationId });
+  else scheduleLamellarControlsRebuild({ populationId });
+  return lamellarStripPopulationOverrides[populationId];
+}
+
+function nudgeSelectedPopulationCount(delta) {
+  const populationId = selectedLamellarPopulationId || selectedLamellarObject?.populationId;
+  if (!populationId) return null;
+  const state = lamellarWitness?.debugState?.() || {};
+  const population = (state.stripPopulationDescriptors || []).find(candidate => candidate.id === populationId)
+    || lamellarStripPopulationOverrides[populationId];
+  const nextCount = Math.max(1, Math.min(16, Math.round(Number(population?.count || 1) + delta)));
+  return applyLamellarPopulationOverride(populationId, { count: nextCount }, { immediate: true });
+}
+
+function flipSelectedPopulationChirality() {
+  const populationId = selectedLamellarPopulationId || selectedLamellarObject?.populationId;
+  if (!populationId) return null;
+  const state = lamellarWitness?.debugState?.() || {};
+  const population = (state.stripPopulationDescriptors || []).find(candidate => candidate.id === populationId)
+    || lamellarStripPopulationOverrides[populationId];
+  return applyLamellarPopulationOverride(populationId, { chirality: (population?.chirality || 1) > 0 ? -1 : 1 }, { immediate: true });
+}
+
+function addLamellarPopulation(role = 'lamella') {
+  const state = lamellarWitness?.debugState?.() || {};
+  ensureLamellarPopulationOverrides(state);
+  const layerIndex = selectedLamellarLayerIndex;
+  const existing = Object.values(lamellarStripPopulationOverrides).filter(population => population.layerIndex === layerIndex);
+  const normalizedRole = role === 'cutter' ? 'cutter' : 'lamella';
+  const id = `strip-population-${layerIndex}-${normalizedRole}-authored-${existing.length}`;
+  lamellarStripPopulationOverrides[id] = {
+    id,
+    layerIndex,
+    role: normalizedRole,
+    count: normalizedRole === 'cutter' ? 1 : 3,
+    chirality: normalizedRole === 'cutter' ? -1 : 1,
+    layoutPreset: 'coverage',
+    bearingOffset: normalizedRole === 'cutter' ? 0.42 : 0,
+    bearingVariance: normalizedRole === 'cutter' ? 0.7 : 1,
+    radialSpacing: normalizedRole === 'cutter' ? 0.025 : 0.04,
+    radiusOffset: 0,
+    gapPattern: normalizedRole === 'cutter' ? 'crosscut' : 'solid',
+  };
+  lamellarWitness.setControls(readLamellarControls());
+  return selectLamellarPopulation(id, 'ui-add-population');
+}
+
+function fitLamellarSelection() {
+  lamellarWitness?.frameCamera?.();
+  window._kaminosDirty?.();
+}
+
+function soloSelectedLamellarLayer() {
+  if (!lamellarWitness?.setSoloLayer) return null;
+  const current = lamellarWitness.debugState();
+  const nextSolo = current.soloLayerIndex === selectedLamellarLayerIndex ? null : selectedLamellarLayerIndex;
+  const applied = lamellarWitness.setSoloLayer(nextSolo);
+  syncLamellarReadout();
+  window._kaminosDirty?.();
+  return applied;
+}
+
+function shouldFrameLamellarOnEnable(wasActive) {
+  const atDefaultCamera = Math.hypot(camera.position.x, camera.position.y - 0.6, camera.position.z - 3) < 0.001
+    && Math.hypot(controls.target.x, controls.target.y, controls.target.z) < 0.001;
+  return !wasActive && !lamellarCameraInteracted && !currentMesh && atDefaultCamera;
+}
+
+function selectLamellarObject(selection) {
+  const previousSelectionKey = lamellarPopoverSelectionKey();
+  const nextSelectionKey = lamellarPopoverSelectionKey(selection);
+  if (previousSelectionKey !== nextSelectionKey) unpinLamellarSelectionPopover();
+  selectedLamellarObject = selection || null;
+  selectedLamellarPopulationId = selection?.populationId || null;
+  if (selection?.selectionLevel === 'population') {
+    selectedLamellarLayerIndex = selection.layerIndex;
+    selectedLamellarStripIndex = 0;
+    syncSelectedLamellarLayer(lamellarWitness?.debugState?.() || {});
+  } else if (selection?.stripInstanceId) setSelectedLamellarStripById(selection.stripInstanceId);
+  else if (Number.isFinite(selection?.layerIndex)) {
+    selectedLamellarLayerIndex = selection.layerIndex;
+    selectedLamellarStripIndex = 0;
+    syncSelectedLamellarLayer(lamellarWitness?.debugState?.() || {});
+  } else syncLamellarContextInspector(lamellarWitness?.debugState?.() || {});
+  syncLamellarSelectionPopover(lamellarWitness?.debugState?.() || {});
+  return selectedLamellarObject;
+}
+
+function profileForSelectedStrip(strip, state) {
+  if (!strip) return null;
+  return lamellarStripProfileOverrides[strip.id]
+    || (state.stripProfileOverrides || []).find(profile => profile.stripInstanceId === strip.id)
+    || strip.stripProfileDescriptor
+    || null;
+}
+
+function syncSelectedLamellarLayer(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const maxLayer = Math.max(0, Math.min(11, Number(current.layerCount ?? document.getElementById('lamellar-layer-count').value) - 1));
+  if (selectedLamellarLayerIndex > maxLayer) selectedLamellarLayerIndex = maxLayer;
+  for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
+    const button = document.getElementById(`lamellar-layer-select-${layerIndex}`);
+    if (button) {
+      button.classList.toggle('active', layerIndex === selectedLamellarLayerIndex);
+      button.disabled = layerIndex > maxLayer;
+    }
+  }
+  const layer = (current.layerSpecs || []).find(spec => spec.layerIndex === selectedLamellarLayerIndex);
+  const stripCountEl = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-strip-count`);
+  const radiusEl = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-radius`);
+  const selectedStripCountEl = document.getElementById('lamellar-selected-layer-strip-count');
+  const selectedRadiusEl = document.getElementById('lamellar-selected-layer-radius');
+  const selectedRadiusValEl = document.getElementById('lamellar-selected-layer-radius-val');
+  if (selectedStripCountEl && stripCountEl) selectedStripCountEl.value = stripCountEl.value || String(layer?.stripCount || 1);
+  const radiusOffset = Number(radiusEl?.value ?? layer?.radiusOffset ?? 0);
+  if (selectedRadiusEl) selectedRadiusEl.value = String(radiusOffset);
+  if (selectedRadiusValEl) selectedRadiusValEl.textContent = radiusOffset.toFixed(3);
+  document.getElementById('lamellar-selected-layer-index').textContent = layer
+    ? `L${layer.layerIndex} ${layer.materialRole} s${layer.stripCount} r${Number(layer.radiusOffset || 0).toFixed(3)}`
+    : `L${selectedLamellarLayerIndex} shell`;
+  const strips = (current.stripInstances || []).filter(strip => strip.layerIndex === selectedLamellarLayerIndex);
+  document.getElementById('lamellar-selected-layer-strips').innerHTML = strips.length
+    ? strips.map(strip => `<span data-strip-id="${escapeHtml(strip.id)}">${escapeHtml(`s${strip.stripIndex} ${strip.sliceParticipation}`)}</span>`).join(' ')
+    : 'none';
+  syncSelectedLamellarStrip(current);
+}
+
+function syncSelectedLamellarStrip(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const strips = selectedLamellarStrips(current);
+  const maxStrip = Math.max(0, strips.length - 1);
+  selectedLamellarStripIndex = Math.max(0, Math.min(maxStrip, Math.round(Number(selectedLamellarStripIndex) || 0)));
+  const strip = selectedLamellarStrip(current);
+  const profile = profileForSelectedStrip(strip, current);
+  const width = Number(profile?.width ?? strip?.width ?? 0.06);
+  const thickness = Number(profile?.thickness ?? strip?.thickness ?? 0.018);
+  const widthVariance = Number(profile?.widthVariance ?? strip?.widthVariance ?? 0);
+  const thicknessVariance = Number(profile?.thicknessVariance ?? strip?.thicknessVariance ?? 0);
+  const gapPattern = profile?.gapPattern || strip?.gapPattern || 'solid';
+  document.getElementById('lamellar-selected-strip-index').textContent = strip
+    ? `L${strip.layerIndex} s${strip.stripIndex}`
+    : 'none';
+  document.getElementById('lamellar-selected-strip-width').value = String(width);
+  document.getElementById('lamellar-selected-strip-thickness').value = String(thickness);
+  document.getElementById('lamellar-selected-strip-width-variance').value = String(widthVariance);
+  document.getElementById('lamellar-selected-strip-thickness-variance').value = String(thicknessVariance);
+  document.getElementById('lamellar-selected-strip-gap-pattern').value = gapPattern;
+  document.getElementById('lamellar-selected-strip-width-val').textContent = width.toFixed(3);
+  document.getElementById('lamellar-selected-strip-thickness-val').textContent = thickness.toFixed(3);
+  document.getElementById('lamellar-selected-strip-width-variance-val').textContent = widthVariance.toFixed(2);
+  document.getElementById('lamellar-selected-strip-thickness-variance-val').textContent = thicknessVariance.toFixed(2);
+  document.getElementById('lamellar-selected-strip-gap-pattern-val').textContent = gapPattern;
+}
+
+function syncLamellarContextInspector(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  selectedLamellarObject = current.selectedLamellarObject || selectedLamellarObject;
+  const object = selectedLamellarObject;
+  document.getElementById('lamellar-selected-object-kind').textContent = object?.objectKind || 'none';
+  document.getElementById('lamellar-selected-object-level').textContent = object?.selectionLevel || current.selectionLevel || 'none';
+  document.getElementById('lamellar-selected-object-id').textContent = object?.populationId || object?.sectionId || object?.stripInstanceId || object?.layerSpecId || 'none';
+  document.getElementById('lamellar-selected-object-role').textContent = object?.role || 'none';
+  const profile = document.getElementById('lamellar-context-profile');
+  if (profile) profile.style.display = object?.selectionLevel === 'strip' && object?.stripInstanceId ? '' : 'none';
+}
+
+function positionLamellarSelectionPopover(state = null) {
+  const popover = document.getElementById('lamellar-selection-popover');
+  const anchor = (state || lamellarWitness?.debugState?.() || {}).selectionAnchor;
+  if (!popover || !anchor || anchor.length !== 3 || popover.style.display === 'none') return false;
+  if (popover.dataset.popoverPinned === '1') return false;
+  const point = new THREE.Vector3(anchor[0], anchor[1], anchor[2]);
+  point.project(camera);
+  const viewport = document.getElementById('viewport');
+  const rect = viewport.getBoundingClientRect();
+  const width = popover.offsetWidth || 178;
+  const height = popover.offsetHeight || 72;
+  const x = ((point.x + 1) / 2) * rect.width;
+  const y = ((-point.y + 1) / 2) * rect.height;
+  const left = Math.max(12, Math.min(rect.width - width - 12, x + 18));
+  const top = Math.max(12, Math.min(rect.height - height - 12, y - 18));
+  popover.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
+  return true;
+}
+
+function lamellarPopoverSelectionKey(selection = selectedLamellarObject) {
+  if (!selection) return 'none';
+  return [
+    selection.selectionLevel || 'object',
+    selection.populationId || '',
+    selection.stripInstanceId || '',
+    selection.layerSpecId || '',
+    Number.isFinite(selection.layerIndex) ? `L${selection.layerIndex}` : '',
+  ].join(':');
+}
+
+function pinLamellarSelectionPopover() {
+  const popover = document.getElementById('lamellar-selection-popover');
+  if (!popover || popover.style.display === 'none') return false;
+  if (!popover.style.transform || popover.style.transform === 'none') {
+    positionLamellarSelectionPopover(lamellarWitness?.debugState?.() || {});
+  }
+  popover.dataset.popoverPinned = '1';
+  popover.setAttribute('data-popover-pinned', '1');
+  lamellarPinnedPopoverSelectionKey = lamellarPopoverSelectionKey();
+  return true;
+}
+
+function unpinLamellarSelectionPopover() {
+  const popover = document.getElementById('lamellar-selection-popover');
+  if (popover) {
+    delete popover.dataset.popoverPinned;
+    popover.removeAttribute('data-popover-pinned');
+  }
+  lamellarPinnedPopoverSelectionKey = null;
+}
+
+function syncLamellarSelectionPopover(state = null) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const object = current.selectedLamellarObject || selectedLamellarObject;
+  const popover = document.getElementById('lamellar-selection-popover');
+  const title = document.getElementById('lamellar-popover-title');
+  const meta = document.getElementById('lamellar-popover-meta');
+  const populations = document.getElementById('lamellar-popover-populations');
+  const actions = document.getElementById('lamellar-popover-actions');
+  const layerToolhead = document.getElementById('lamellar-layer-toolhead');
+  const toolhead = document.getElementById('lamellar-population-toolhead');
+  if (!popover || !title || !meta || !populations || !actions || !layerToolhead || !toolhead) return;
+  if (!object || !current.active) {
+    popover.style.display = 'none';
+    populations.replaceChildren();
+    actions.replaceChildren();
+    layerToolhead.style.display = 'none';
+    toolhead.style.display = 'none';
+    return;
+  }
+  popover.style.display = 'block';
+  syncLamellarLayerToolhead(current, object);
+  syncLamellarPopulationToolhead(current, object);
+  if (object.selectionLevel === 'layer') {
+    title.textContent = `Layer L${object.layerIndex}`;
+    meta.textContent = `${object.stripCount || object.stripIds?.length || 0} strips`;
+    actions.innerHTML = [
+      '<button class="btn" data-action="add-population">Add lamella set</button>',
+      '<button class="btn" data-action="add-cutter">Add cutter set</button>',
+      '<button class="btn" data-action="solo-layer">Solo layer</button>',
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="drill">Open strips</button>',
+    ].join('');
+  } else if (object.selectionLevel === 'population') {
+    title.textContent = `L${object.layerIndex} / ${object.populationRole || object.role}`;
+    meta.textContent = `${object.count || object.stripCount || 0} strips · ${object.chirality > 0 ? '+' : '-'}`;
+    actions.innerHTML = [
+      '<button class="btn" data-action="population-count-minus">Remove strip</button>',
+      '<button class="btn" data-action="population-count-plus">Add strip</button>',
+      '<button class="btn" data-action="population-flip-chirality">Flip chirality</button>',
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="layer">Select layer</button>',
+    ].join('');
+  } else {
+    title.textContent = `L${object.layerIndex} / s${object.stripIndex}`;
+    meta.textContent = object.role || object.stripInstanceId || 'strip';
+    actions.innerHTML = [
+      '<button class="btn" data-action="fit-selection">Fit view</button>',
+      '<button class="btn" data-action="layer">Select layer</button>',
+    ].join('');
+  }
+  actions.querySelector('[data-action="add-population"]')?.addEventListener('click', () => addLamellarPopulation('lamella'));
+  actions.querySelector('[data-action="add-cutter"]')?.addEventListener('click', () => addLamellarPopulation('cutter'));
+  actions.querySelector('[data-action="solo-layer"]')?.addEventListener('click', soloSelectedLamellarLayer);
+  actions.querySelector('[data-action="fit-selection"]')?.addEventListener('click', fitLamellarSelection);
+  actions.querySelector('[data-action="population-count-minus"]')?.addEventListener('click', () => nudgeSelectedPopulationCount(-1));
+  actions.querySelector('[data-action="population-count-plus"]')?.addEventListener('click', () => nudgeSelectedPopulationCount(1));
+  actions.querySelector('[data-action="population-flip-chirality"]')?.addEventListener('click', flipSelectedPopulationChirality);
+  actions.querySelector('[data-action="drill"]')?.addEventListener('click', () => {
+    drillIntoLamellarStrip(object.hitStripInstanceId || object.stripIds?.[0]);
+  });
+  actions.querySelector('[data-action="layer"]')?.addEventListener('click', () => {
+    selectLamellarLayerFromStrip(object.stripInstanceId || object.stripIds?.[0] || object.populationStripIds?.[0]);
+  });
+  positionLamellarSelectionPopover(current);
+}
+
+function syncLamellarLayerToolhead(state = null, object = selectedLamellarObject) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const toolhead = document.getElementById('lamellar-layer-toolhead');
+  const summary = document.getElementById('lamellar-layer-summary');
+  const radius = document.getElementById('lamellar-popover-layer-radius');
+  const radiusVal = document.getElementById('lamellar-popover-layer-radius-val');
+  if (!toolhead || !summary || !radius || !radiusVal) return;
+  if (object?.selectionLevel !== 'layer') {
+    toolhead.style.display = 'none';
+    return;
+  }
+  const layerIndex = Number.isFinite(object.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
+  const layer = (current.layerSpecs || []).find(spec => spec.layerIndex === layerIndex);
+  const rowRadius = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+  const radiusOffset = Number(rowRadius?.value ?? layer?.radiusOffset ?? 0);
+  toolhead.style.display = 'block';
+  summary.textContent = `${layer?.materialRole || object.role || 'layer'} · ${object.stripCount || object.stripIds?.length || layer?.stripCount || 0} strips`;
+  radius.value = String(radiusOffset);
+  radiusVal.textContent = radiusOffset.toFixed(3);
+  radius.oninput = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerRadiusOffset(event.target.value);
+  };
+  radius.onchange = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
+  };
+}
+
+function syncLamellarPopulationToolhead(state = null, object = selectedLamellarObject) {
+  const current = state || lamellarWitness?.debugState?.() || {};
+  const populations = document.getElementById('lamellar-popover-populations');
+  const toolhead = document.getElementById('lamellar-population-toolhead');
+  const summary = document.getElementById('lamellar-population-summary');
+  const spread = document.getElementById('lamellar-population-bearing-spread');
+  const offset = document.getElementById('lamellar-population-bearing-offset');
+  const radial = document.getElementById('lamellar-population-radial-spacing');
+  const radius = document.getElementById('lamellar-population-radius-offset');
+  const spreadVal = document.getElementById('lamellar-population-bearing-spread-val');
+  const offsetVal = document.getElementById('lamellar-population-bearing-offset-val');
+  const radialVal = document.getElementById('lamellar-population-radial-spacing-val');
+  const radiusVal = document.getElementById('lamellar-population-radius-offset-val');
+  if (!populations || !toolhead || !summary || !spread || !offset || !radial || !radius || !spreadVal || !offsetVal || !radialVal || !radiusVal) return;
+  const layerIndex = Number.isFinite(object?.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
+  const layerPopulations = lamellarPopulationsForLayer(current, layerIndex);
+  selectedLamellarPopulationId = object?.selectionLevel === 'population' ? object.populationId : selectedLamellarPopulationId;
+  populations.innerHTML = layerPopulations.map(population => {
+    const active = population.id === selectedLamellarPopulationId ? ' active' : '';
+    const label = `${population.role} ${population.count}${population.chirality > 0 ? '+' : '-'}`;
+    return `<button class="btn population-chip${active}" data-population-id="${escapeHtml(population.id)}">${escapeHtml(label)}</button>`;
+  }).join('');
+  for (const chip of populations.querySelectorAll('[data-population-id]')) {
+    chip.addEventListener('click', () => selectLamellarPopulation(chip.dataset.populationId));
+  }
+  const selectedPopulation = layerPopulations.find(population => population.id === selectedLamellarPopulationId);
+  if (!selectedPopulation || object?.selectionLevel !== 'population') {
+    toolhead.style.display = 'none';
+    return;
+  }
+  toolhead.style.display = 'block';
+  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)} · radius ${(selectedPopulation.radiusOffset || 0).toFixed(3)} · spacing ${(selectedPopulation.radialSpacing || 0).toFixed(3)}`;
+  spread.value = String(selectedPopulation.bearingVariance ?? 0);
+  offset.value = String(selectedPopulation.bearingOffset ?? 0);
+  radial.value = String(selectedPopulation.radialSpacing ?? 0);
+  radius.value = String(selectedPopulation.radiusOffset ?? 0);
+  spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);
+  offsetVal.textContent = Number(selectedPopulation.bearingOffset ?? 0).toFixed(2);
+  radialVal.textContent = Number(selectedPopulation.radialSpacing ?? 0).toFixed(3);
+  radiusVal.textContent = Number(selectedPopulation.radiusOffset ?? 0).toFixed(3);
+  spread.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) });
+  };
+  spread.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) }, { immediate: true });
+  };
+  offset.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) });
+  };
+  offset.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { bearingOffset: parseFloat(event.target.value) }, { immediate: true });
+  };
+  radial.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) });
+  };
+  radial.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radialSpacing: parseFloat(event.target.value) }, { immediate: true });
+  };
+  radius.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radiusOffset: parseFloat(event.target.value) });
+  };
+  radius.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { radiusOffset: parseFloat(event.target.value) }, { immediate: true });
+  };
+}
+
+function installLamellarViewportSelection() {
+  const canvas = renderer?.domElement;
+  if (!canvas || canvas.dataset.lamellarSelectionInstalled === '1') return;
+  canvas.dataset.lamellarSelectionInstalled = '1';
+  let down = null;
+  canvas.addEventListener('pointerdown', event => {
+    down = { x: event.clientX, y: event.clientY };
+  });
+  canvas.addEventListener('pointerup', event => {
+    if (!lamellarWitness?.debugState?.().active || !down) return;
+    const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+    down = null;
+    if (moved > 4) return;
+    const receipt = lamellarWitness.pickFromClientPoint(event.clientX, event.clientY, canvas);
+    if (receipt?.hit) selectLamellarObject(lamellarWitness.debugState().selectedLamellarObject);
+    else selectLamellarObject(null);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+  canvas.addEventListener('dblclick', event => {
+    if (!lamellarWitness?.debugState?.().active) return;
+    event.preventDefault();
+    const receipt = lamellarWitness.pickFromClientPoint(event.clientX, event.clientY, canvas, { drillDown: true });
+    if (receipt?.hit) selectLamellarObject(lamellarWitness.debugState().selectedLamellarObject);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+}
+
+function applySelectedStripProfileOverride(options = {}) {
+  const current = lamellarWitness?.debugState?.() || {};
+  const strip = selectedLamellarStrip(current);
+  if (!strip) return;
+  const override = {
+    stripInstanceId: strip.id,
+    layerIndex: strip.layerIndex,
+    stripIndex: strip.stripIndex,
+    width: parseFloat(document.getElementById('lamellar-selected-strip-width').value),
+    thickness: parseFloat(document.getElementById('lamellar-selected-strip-thickness').value),
+    widthVariance: parseFloat(document.getElementById('lamellar-selected-strip-width-variance').value),
+    thicknessVariance: parseFloat(document.getElementById('lamellar-selected-strip-thickness-variance').value),
+    gapPattern: document.getElementById('lamellar-selected-strip-gap-pattern').value,
+  };
+  lamellarStripProfileOverrides[strip.id] = override;
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
+}
+
+function applySelectedLayerStripCount(value, options = {}) {
+  const next = Math.max(1, Math.min(4, Math.round(Number(value) || 1)));
+  const rowInput = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-strip-count`);
+  rowInput.value = String(next);
+  rowInput.dataset.overridden = '1';
+  document.getElementById('lamellar-selected-layer-strip-count').value = String(next);
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
+}
+
+function nudgeSelectedLayerStripCount(delta) {
+  const current = Number(document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-strip-count`).value) || 1;
+  applySelectedLayerStripCount(current + delta);
+}
+
+function applySelectedLayerRadiusOffset(value, options = {}) {
+  const next = Math.max(-0.24, Math.min(0.24, Number(value) || 0));
+  const rowInput = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-radius`);
+  rowInput.value = String(next);
+  rowInput.dataset.overridden = '1';
+  document.getElementById('lamellar-selected-layer-radius').value = String(next);
+  document.getElementById('lamellar-selected-layer-radius-val').textContent = next.toFixed(3);
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
+}
+
+function syncLamellarReadout() {
+  const c = readLamellarControls();
+  document.getElementById('lamellar-view-val').textContent = c.view;
+  document.getElementById('lamellar-cut-radius-val').textContent = c.cutRadius.toFixed(3);
+  document.getElementById('lamellar-layer-count-val').textContent = String(c.layerCount);
+  document.getElementById('lamellar-seed-val').textContent = String(c.seed);
+  document.getElementById('lamellar-chirality-pattern-val').textContent = c.chiralityPattern;
+  document.getElementById('lamellar-depth-spacing-val').textContent = c.depthSpacing.toFixed(3);
+  document.getElementById('lamellar-chunkiness-val').textContent = c.chunkinessBase.toFixed(2);
+  document.getElementById('lamellar-chunkiness-variance-val').textContent = c.chunkinessVariance.toFixed(2);
+  document.getElementById('lamellar-overlap-bias-val').textContent = c.overlapBias.toFixed(2);
+  document.getElementById('lamellar-population-count-val').textContent = String(c.populationCount);
+  document.getElementById('lamellar-cutter-count-val').textContent = String(c.cutterCount);
+  document.getElementById('lamellar-population-bearing-variance-val').textContent = c.populationBearingVariance.toFixed(2);
+  document.getElementById('lamellar-slice-t-val').textContent = c.sliceT.toFixed(3);
+  document.getElementById('lamellar-slice-angle-val').textContent = String(Math.round(c.sliceAngle));
+  if (!lamellarWitness) return;
+  const state = lamellarWitness.debugState();
+  for (const layer of state.layerSpecs || []) {
+    const chiralityEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-chirality`);
+    const chunkinessEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-chunkiness`);
+    const stripCountEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-strip-count`);
+    const radiusEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-radius`);
+    const valEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-val`);
+    if (!valEl) continue;
+    if (
+      chiralityEl && chunkinessEl && stripCountEl && radiusEl
+      && chiralityEl.dataset.overridden !== '1'
+      && chunkinessEl.dataset.overridden !== '1'
+      && stripCountEl.dataset.overridden !== '1'
+      && radiusEl.dataset.overridden !== '1'
+    ) {
+      chiralityEl.value = layer.chirality > 0 ? '1' : '-1';
+      chunkinessEl.value = String(layer.chunkiness);
+      stripCountEl.value = String(layer.stripCount);
+      radiusEl.value = String(layer.radiusOffset || 0);
+    }
+    const sign = (chiralityEl?.value || layer.chirality) > 0 ? '+' : '-';
+    const chunkiness = Number(chunkinessEl?.value ?? layer.chunkiness);
+    const stripCount = Number(stripCountEl?.value ?? layer.stripCount);
+    const radiusOffset = Number(radiusEl?.value ?? layer.radiusOffset ?? 0);
+    valEl.textContent = `${sign} ${chunkiness.toFixed(2)} s${stripCount} r${radiusOffset.toFixed(2)}`;
+  }
+  document.getElementById('lamellar-identity').textContent = state.witnessIdentity || 'kaminos-lamellar-witness-v0';
+  document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
+  document.getElementById('lamellar-segments').textContent = String(state.sectionSegments?.length ?? 0);
+  document.getElementById('lamellar-descriptors').textContent = String(state.segmentDescriptorCount ?? state.generatedSegmentDescriptors?.length ?? 0);
+  document.getElementById('lamellar-layer-stack').textContent = state.layerSpecs?.map(l => `${l.layerIndex}:${l.chirality > 0 ? '+' : '-'}:${l.chunkiness}:s${l.stripCount}:r${Number(l.radiusOffset || 0).toFixed(2)}`).join(' ') || 'none';
+  document.getElementById('lamellar-caps').textContent = JSON.stringify(state.capTValues || []);
+  document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
+  document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
+  document.getElementById('lamellar-slice-receipt').textContent = state.sliceApplicationReceipt?.affectedSegmentIds?.join(',') || 'none';
+  document.getElementById('lamellar-cut-author').textContent = state.channelCutReceipt?.mode || 'none';
+  syncSelectedLamellarLayer(state);
+  syncLamellarContextInspector(state);
+  syncLamellarSelectionPopover(state);
+  document.getElementById('lamellar-toggle').textContent = state.active ? 'Disable' : 'Enable';
+  document.getElementById('lamellar-toggle').classList.toggle('active', !!state.active);
+}
+
+function applyLamellarRouteParams() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('lamellar_view');
+  if (view && document.querySelector(`#lamellar-view option[value="${view}"]`)) {
+    document.getElementById('lamellar-view').value = view;
+  }
+  const cutRadius = Number(params.get('lamellar_cut_radius'));
+  if (params.has('lamellar_cut_radius') && Number.isFinite(cutRadius)) {
+    document.getElementById('lamellar-cut-radius').value = String(Math.max(0.018, Math.min(0.12, cutRadius)));
+  }
+  const layers = Number(params.get('lamellar_layers'));
+  if (params.has('lamellar_layers') && Number.isFinite(layers)) {
+    document.getElementById('lamellar-layer-count').value = String(Math.max(1, Math.min(12, Math.round(layers))));
+  }
+  const seed = Number(params.get('lamellar_seed'));
+  if (params.has('lamellar_seed') && Number.isFinite(seed)) {
+    document.getElementById('lamellar-seed').value = String(Math.max(0, Math.min(99999, Math.round(seed))));
+  }
+  const chirality = params.get('lamellar_chirality');
+  if (chirality && document.querySelector(`#lamellar-chirality option[value="${chirality}"]`)) {
+    document.getElementById('lamellar-chirality').value = chirality;
+  }
+  const chiralityPattern = params.get('lamellar_chirality_pattern') || chirality;
+  if (chiralityPattern && document.querySelector(`#lamellar-chirality-pattern option[value="${chiralityPattern}"]`)) {
+    document.getElementById('lamellar-chirality-pattern').value = chiralityPattern;
+  }
+  const depthSpacing = Number(params.get('lamellar_depth_spacing'));
+  if (params.has('lamellar_depth_spacing') && Number.isFinite(depthSpacing)) {
+    document.getElementById('lamellar-depth-spacing').value = String(Math.max(0.015, Math.min(0.09, depthSpacing)));
+  }
+  const chunkiness = Number(params.get('lamellar_chunkiness'));
+  if (params.has('lamellar_chunkiness') && Number.isFinite(chunkiness)) {
+    document.getElementById('lamellar-chunkiness').value = String(Math.max(0.05, Math.min(1, chunkiness)));
+  }
+  const chunkinessVariance = Number(params.get('lamellar_chunkiness_variance'));
+  if (params.has('lamellar_chunkiness_variance') && Number.isFinite(chunkinessVariance)) {
+    document.getElementById('lamellar-chunkiness-variance').value = String(Math.max(0, Math.min(0.65, chunkinessVariance)));
+  }
+  const layerChiralities = params.get('lamellar_layer_chiralities');
+  if (layerChiralities) {
+    const signs = layerChiralities.replace(/[^+-]/g, '').slice(0, 4);
+    signs.split('').forEach((sign, layerIndex) => {
+      const el = document.getElementById(`lamellar-layer-${layerIndex}-chirality`);
+      el.value = sign === '-' ? '-1' : '1';
+      el.dataset.overridden = '1';
+    });
+  }
+  const layerChunkiness = params.get('lamellar_layer_chunkiness');
+  if (layerChunkiness) {
+    layerChunkiness.split(',').slice(0, 4).forEach((value, layerIndex) => {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        const el = document.getElementById(`lamellar-layer-${layerIndex}-chunkiness`);
+        el.value = String(Math.max(0.05, Math.min(1, numeric)));
+        el.dataset.overridden = '1';
+      }
+    });
+  }
+  const layerStripCounts = params.get('lamellar_layer_strip_counts');
+  if (layerStripCounts) {
+    layerStripCounts.split(',').slice(0, 4).forEach((value, layerIndex) => {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        const el = document.getElementById(`lamellar-layer-${layerIndex}-strip-count`);
+        el.value = String(Math.max(1, Math.min(4, Math.round(numeric))));
+        el.dataset.overridden = '1';
+      }
+    });
+  }
+  const layerRadii = params.get('lamellar_layer_radii');
+  if (layerRadii) {
+    layerRadii.split(',').slice(0, 4).forEach((value, layerIndex) => {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        const el = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+        el.value = String(Math.max(-0.24, Math.min(0.24, numeric)));
+        el.dataset.overridden = '1';
+      }
+    });
+  }
+  const populationCount = Number(params.get('lamellar_population_count'));
+  if (params.has('lamellar_population_count') && Number.isFinite(populationCount)) {
+    document.getElementById('lamellar-population-count').value = String(Math.max(1, Math.min(16, Math.round(populationCount))));
+  }
+  const cutterCount = Number(params.get('lamellar_cutter_count'));
+  if (params.has('lamellar_cutter_count') && Number.isFinite(cutterCount)) {
+    document.getElementById('lamellar-cutter-count').value = String(Math.max(0, Math.min(8, Math.round(cutterCount))));
+  }
+  const populationBearingVariance = Number(params.get('lamellar_population_bearing_variance'));
+  if (params.has('lamellar_population_bearing_variance') && Number.isFinite(populationBearingVariance)) {
+    document.getElementById('lamellar-population-bearing-variance').value = String(Math.max(0.15, Math.min(2, populationBearingVariance)));
+  }
+  const overlapBias = Number(params.get('lamellar_overlap_bias'));
+  if (params.has('lamellar_overlap_bias') && Number.isFinite(overlapBias)) {
+    document.getElementById('lamellar-overlap-bias').value = String(Math.max(0, Math.min(1, overlapBias)));
+  }
+  const sliceT = Number(params.get('lamellar_slice_t'));
+  if (params.has('lamellar_slice_t') && Number.isFinite(sliceT)) {
+    document.getElementById('lamellar-slice-t').value = String(Math.max(0.2, Math.min(0.8, sliceT)));
+  }
+  const sliceAngle = Number(params.get('lamellar_slice_angle'));
+  if (params.has('lamellar_slice_angle') && Number.isFinite(sliceAngle)) {
+    document.getElementById('lamellar-slice-angle').value = String(Math.max(-70, Math.min(70, sliceAngle)));
+  }
+}
+
+async function initLamellarRoute() {
+  const params = new URLSearchParams(window.location.search);
+  lamellarWitness = createKaminosLamellarWitness({ THREE, scene, camera, controls });
+  window.__kaminosLamellarWitness = lamellarWitness;
+  window.__kaminosLamellarSelectByStripInstanceId = stripInstanceId => {
+    const selection = lamellarWitness.selectStripByStripInstanceId(stripInstanceId, 'ui-selection-helper');
+    selectLamellarObject(selection);
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+    return selection;
+  };
+  window.__kaminosLamellarSelectLayerByStripInstanceId = stripInstanceId => selectLamellarLayerFromStrip(stripInstanceId, 'ui-layer-selection-helper');
+  window.__kaminosLamellarSelectPopulationById = populationId => selectLamellarPopulation(populationId, 'ui-population-selection-helper');
+  window.__kaminosLamellarNudgeSelectedPopulationCount = delta => nudgeSelectedPopulationCount(delta);
+  window.__kaminosLamellarFlipSelectedPopulationChirality = () => flipSelectedPopulationChirality();
+  window.__kaminosLamellarApplyPopulationOverride = (populationId, patch) => applyLamellarPopulationOverride(populationId, patch, { immediate: true });
+  window.__kaminosLamellarPinSelectionPopover = () => pinLamellarSelectionPopover();
+  window.__kaminosLamellarDrillIntoStrip = stripInstanceId => drillIntoLamellarStrip(stripInstanceId);
+  window.__kaminosLamellarSaveAuthoringState = () => collectLamellarAuthoringState();
+  window.__kaminosLamellarLoadAuthoringState = payload => applyLamellarAuthoringState(payload, { status: false });
+  window.__kaminosLamellarSavedStates = () => getLamellarSavedStates();
+  window.__kaminosLamellarSaveAuthoringSlot = options => saveLamellarAuthoringSlot(options);
+  window.__kaminosLamellarLoadAuthoringSlot = id => loadLamellarAuthoringSlot(id);
+  window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
+  window.__kaminosLamellarRenameAuthoringSlot = (id, label) => renameLamellarAuthoringSlot(id, label);
+  window.__kaminosLamellarSync = syncLamellarReadout;
+  applyLamellarRouteParams();
+  lamellarWitness.setControls(readLamellarControls());
+  const composerControlIds = [
+    'lamellar-view',
+    'lamellar-cut-radius',
+    'lamellar-layer-count',
+    'lamellar-seed',
+    'lamellar-chirality',
+    'lamellar-chirality-pattern',
+    'lamellar-depth-spacing',
+    'lamellar-chunkiness',
+    'lamellar-chunkiness-variance',
+    'lamellar-population-count',
+    'lamellar-cutter-count',
+    'lamellar-population-bearing-variance',
+    'lamellar-overlap-bias',
+    'lamellar-slice-t',
+    'lamellar-slice-angle',
+    'lamellar-layer-0-chirality',
+    'lamellar-layer-0-chunkiness',
+    'lamellar-layer-0-strip-count',
+    'lamellar-layer-0-radius',
+    'lamellar-layer-1-chirality',
+    'lamellar-layer-1-chunkiness',
+    'lamellar-layer-1-strip-count',
+    'lamellar-layer-1-radius',
+    'lamellar-layer-2-chirality',
+    'lamellar-layer-2-chunkiness',
+    'lamellar-layer-2-strip-count',
+    'lamellar-layer-2-radius',
+    'lamellar-layer-3-chirality',
+    'lamellar-layer-3-chunkiness',
+    'lamellar-layer-3-strip-count',
+    'lamellar-layer-3-radius',
+  ];
+  for (const id of composerControlIds) {
+    document.getElementById(id).addEventListener('input', () => {
+      if (id.startsWith('lamellar-layer-')) document.getElementById(id).dataset.overridden = '1';
+      scheduleLamellarControlsRebuild();
+    });
+    document.getElementById(id).addEventListener('change', () => {
+      if (id.startsWith('lamellar-layer-')) document.getElementById(id).dataset.overridden = '1';
+      flushLamellarControlsRebuild();
+    });
+  }
+  for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
+    document.getElementById(`lamellar-layer-select-${layerIndex}`).addEventListener('click', () => {
+      setSelectedLamellarLayer(layerIndex);
+    });
+  }
+  document.getElementById('lamellar-selected-layer-strip-count').addEventListener('input', event => {
+    applySelectedLayerStripCount(event.target.value);
+  });
+  document.getElementById('lamellar-selected-layer-strip-count').addEventListener('change', event => {
+    applySelectedLayerStripCount(event.target.value, { immediate: true });
+  });
+  document.getElementById('lamellar-selected-layer-radius').addEventListener('input', event => {
+    applySelectedLayerRadiusOffset(event.target.value);
+  });
+  document.getElementById('lamellar-selected-layer-radius').addEventListener('change', event => {
+    applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
+  });
+  document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
+  document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));
+  const selectionPopover = document.getElementById('lamellar-selection-popover');
+  selectionPopover.addEventListener('pointerdown', () => pinLamellarSelectionPopover());
+  selectionPopover.addEventListener('focusin', () => pinLamellarSelectionPopover());
+  const stripProfileControlIds = [
+    'lamellar-selected-strip-width',
+    'lamellar-selected-strip-thickness',
+    'lamellar-selected-strip-width-variance',
+    'lamellar-selected-strip-thickness-variance',
+    'lamellar-selected-strip-gap-pattern',
+  ];
+  for (const id of stripProfileControlIds) {
+    document.getElementById(id).addEventListener('input', () => applySelectedStripProfileOverride());
+    document.getElementById(id).addEventListener('change', () => applySelectedStripProfileOverride({ immediate: true }));
+  }
+  document.getElementById('lamellar-generate').addEventListener('click', () => {
+    const seedInput = document.getElementById('lamellar-seed');
+    seedInput.value = String((parseInt(seedInput.value || '0', 10) + 1) % 100000);
+    lamellarWitness.setControls(readLamellarControls());
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+  document.getElementById('lamellar-apply-slice').addEventListener('click', () => {
+    lamellarWitness.setControls(readLamellarControls());
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  });
+  document.getElementById('lamellar-save-authoring').addEventListener('click', () => saveLamellarAuthoringSlot());
+  document.getElementById('lamellar-load-authoring').addEventListener('click', () => loadLamellarAuthoringSlot());
+  document.getElementById('lamellar-export-authoring').addEventListener('click', () => downloadLamellarAuthoringState());
+  document.getElementById('lamellar-import-authoring').addEventListener('click', () => {
+    document.getElementById('lamellar-authoring-file-input').click();
+  });
+  document.getElementById('lamellar-authoring-file-input').addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await loadLamellarAuthoringFile(file);
+    event.target.value = '';
+  });
+  renderLamellarSavedStateList();
+  document.getElementById('lamellar-toggle').addEventListener('click', () => {
+    const wasActive = lamellarWitness.debugState().active;
+    const active = !wasActive;
+    lamellarWitness.setActive(active);
+    if (active && shouldFrameLamellarOnEnable(wasActive)) lamellarWitness.frameCamera();
+    syncLamellarReadout();
+  });
+  document.getElementById('lamellar-frame').addEventListener('click', () => {
+    lamellarWitness.frameCamera();
+    syncLamellarReadout();
+  });
+  installLamellarViewportSelection();
+  if (params.get('kaminos_lamellar_witness') === '1') {
+    setActiveTab('lamellar');
+    lamellarWitness.setActive(true);
+  }
+  syncLamellarReadout();
 }
 
 // --- Environment Loading ---
@@ -3051,7 +4818,6 @@ viewport.addEventListener('drop', async e => {
   if (collected.length) handleFiles(collected);
 });
 
-// --- Tab Switching ---
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     setActiveTab(tab.dataset.tab);
@@ -4620,18 +6386,17 @@ grInit();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
-  restoreSettings();
-  // Load HDR environment first, then auto-load demo
-  loadEnvironment('studio').then(() => {
-    loadDemo(DEMO_ASSETS[0]);
-  });
+  initLamellarRoute();
+  if (!isLamellarRouteActive()) restoreSettings();
+  loadEnvironment('studio');
   initKaminosVolumeRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
-  restoreSettings();
+  initLamellarRoute();
+  if (!isLamellarRouteActive()) restoreSettings();
 });
 </script>
 </body>
