@@ -533,6 +533,10 @@ async function main() {
     assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar witness did not build section segments');
     assert.ok((state.segmentDescriptorCount || 0) >= 3, 'Lamellar witness did not export generated section descriptors');
     assert.ok(state.composerDescriptor?.mode, 'Lamellar witness did not export composer descriptor');
+    if (requested.has('lamellar_shell_enclosure')) {
+      const requestedShellEnclosure = Number(requested.get('lamellar_shell_enclosure'));
+      assert.equal(state.composerDescriptor?.shellEnclosure, requestedShellEnclosure, 'Lamellar witness effective shellEnclosure did not match requested route');
+    }
     assert.ok(state.layerStackDescriptor?.mode, 'Lamellar witness did not export layer-stack descriptor');
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
     assert.ok((state.stripInstances || []).length > (state.layerSpecs || []).length, 'Lamellar witness did not export layer-owned strip assemblages');
@@ -709,6 +713,8 @@ async function main() {
       openEdgeCount: state.openEdgeCount,
       cuttingEdgeDescriptor: state.cuttingEdgeDescriptor,
       composerDescriptor: state.composerDescriptor,
+      shellEnclosure: state.composerDescriptor?.shellEnclosure ?? null,
+      shellEnclosureMode: state.composerDescriptor?.shellEnclosureMode ?? null,
       layerStackDescriptor: state.layerStackDescriptor,
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,

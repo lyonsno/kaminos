@@ -112,6 +112,7 @@ assert.match(index, /id="lamellar-cutter-count"/, 'Lamellar tab exposes macro sa
 assert.match(index, /id="lamellar-population-bearing-variance"/, 'Lamellar tab exposes macro same-layer direction variance');
 assert.match(index, /id="lamellar-population-bearing-variance"[^>]*max="2"/, 'Lamellar macro population spread has enough range for coverage layouts');
 assert.match(index, /id="lamellar-population-bearing-variance"[^>]*value="1/, 'Lamellar macro population spread defaults to shell coverage, not clustering');
+assert.match(index, /id="lamellar-shell-enclosure"/, 'Lamellar tab exposes macro spherical enclosure control');
 assert.match(index, /id="lamellar-population-bearing-spread"[^>]*max="2"/, 'Lamellar population toolhead spread has enough range for coverage layouts');
 assert.match(index, /id="lamellar-population-bearing-offset"[^>]*min="-6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
 assert.match(index, /id="lamellar-population-bearing-offset"[^>]*max="6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
@@ -134,6 +135,7 @@ assert.match(index, /lamellar_layer_radii/, 'URL route can override per-layer sh
 assert.match(index, /lamellar_population_count/, 'URL route can override macro strip population count');
 assert.match(index, /lamellar_cutter_count/, 'URL route can override macro cutter population count');
 assert.match(index, /lamellar_population_bearing_variance/, 'URL route can override macro direction variance');
+assert.match(index, /lamellar_shell_enclosure/, 'URL route can override macro spherical enclosure');
 assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar overlap bias');
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
@@ -231,6 +233,7 @@ assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip
 assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
 assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar core names same-shell direction population authoring mode');
 assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
+assert.match(core, /sphere-shell-enclosure-composition-v0/, 'Lamellar core names macro sphere-shell enclosure composition mode');
 assert.match(core, /layoutPreset/, 'Lamellar strip population descriptors record their layout preset');
 assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverage spacing for overlap diagnostics');
 assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
@@ -325,6 +328,7 @@ assert.match(witness, /viewportPickReceipt/, 'witness records viewport pick rece
 assert.match(witness, /stripProfileOverrides/, 'witness records selected-strip profile override inputs');
 assert.match(witness, /stripProfileDescriptors/, 'witness records selected-strip profile descriptors');
 assert.match(witness, /stripPopulationDescriptors/, 'witness records macro strip population descriptors');
+assert.match(witness, /shellEnclosure/, 'witness records macro sphere-shell enclosure receipts');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -362,6 +366,58 @@ assert.ok((firstEnvelope.sourceCurveIds || []).length >= 3, 'envelope descriptor
 assert.equal(firstEnvelope.sourceCurveIds.length, firstEnvelope.sourceStripInstanceIds.length, 'envelope curve ids stay aligned with source strip ids');
 assert.ok((firstEnvelope.sampleRows || []).length >= 8, 'envelope descriptor records sampled loft rows');
 assert.ok((firstEnvelope.envelopeRails || []).length >= 2, 'envelope descriptor records outer rails for meshing');
+assert.equal(
+  firstEnvelope.enclosureMode,
+  'sphere-shell-enclosure-composition-v0',
+  'envelope descriptor records the macro enclosure composition mode'
+);
+
+const openEnclosure = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 4,
+  populationCount: 6,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  shellEnclosure: 0,
+  chunkinessBase: 0.48,
+  layerOverrides: [
+    { layerIndex: 0, stripCount: 6 },
+    { layerIndex: 2, stripCount: 5 },
+    { layerIndex: 3, stripCount: 5 },
+  ],
+});
+const closedEnclosure = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 4,
+  populationCount: 6,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  shellEnclosure: 1,
+  chunkinessBase: 0.48,
+  layerOverrides: [
+    { layerIndex: 0, stripCount: 6 },
+    { layerIndex: 2, stripCount: 5 },
+    { layerIndex: 3, stripCount: 5 },
+  ],
+});
+assert.equal(closedEnclosure.composerDescriptor.shellEnclosureMode, 'sphere-shell-enclosure-composition-v0', 'composer descriptor records shell enclosure mode');
+assert.equal(closedEnclosure.composerDescriptor.shellEnclosure, 1, 'composer descriptor records effective shell enclosure amount');
+assert.ok(
+  closedEnclosure.sphereCurveDescriptors.every(curve => curve.shellEnclosureMode === 'sphere-shell-enclosure-composition-v0'),
+  'sphere curves carry the enclosure mode before mesh emission'
+);
+function curveLatitudeSpread(generated) {
+  const phiValues = generated.sphereCurveDescriptors.flatMap(curve => [
+    curve.phi0,
+    curve.phi0 + curve.phiSlope * -0.5,
+    curve.phi0 + curve.phiSlope * 0.5,
+  ]);
+  return Math.max(...phiValues) - Math.min(...phiValues);
+}
+assert.ok(
+  curveLatitudeSpread(closedEnclosure) > curveLatitudeSpread(openEnclosure) * 1.25,
+  'high enclosure broadens sphere-curve latitude coverage before envelope meshing'
+);
 const shellParallelRibbon = coreModule.sampleLamellarRibbonShellRadii([0.12, 0.9], {
   theta0: -0.7,
   thetaTwist: 5.1,

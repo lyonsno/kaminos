@@ -14,6 +14,7 @@ const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
 const LAMELLAR_ENVELOPE_MODE = "curve-family-envelope-loft-v0";
 const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-composition-v0";
 const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
+const SHELL_ENCLOSURE_MODE = "sphere-shell-enclosure-composition-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
@@ -524,10 +525,26 @@ function curveIntervalForStrip(strip, spec) {
   ];
 }
 
-function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
+function applyShellEnclosureToShape(shape, strip, spec, shellEnclosure) {
+  const amount = clamp(Number(shellEnclosure ?? 0), 0, 1);
+  if (amount <= 0) return { ...shape, shellEnclosure: 0 };
+  const layerBand = Math.sin(strip.bearingPhase + spec.layerIndex * 0.72 + strip.populationIndex * 0.38);
+  const chiralityBand = (strip.chirality < 0 ? -1 : 1) * Math.cos(strip.bearingPhase * 0.5 + spec.layerIndex * 0.41);
+  const enclosedPhi0 = shape.phi0 * 0.35 + layerBand * 0.58 + chiralityBand * 0.16;
+  return {
+    ...shape,
+    thetaTwist: Number((shape.thetaTwist * (1 + amount * 0.14)).toFixed(6)),
+    phi0: Number((shape.phi0 * (1 - amount) + enclosedPhi0 * amount).toFixed(6)),
+    phiSlope: Number((shape.phiSlope * (1 + amount * 0.62)).toFixed(6)),
+    waviness: Number(((shape.waviness ?? 0.085) * (1 + amount * 0.18)).toFixed(6)),
+    shellEnclosure: Number(amount.toFixed(4)),
+  };
+}
+
+function curveShapeForStrip(strip, spec, selectedShape, selectedPhase, shellEnclosure = 0) {
   const stripChirality = strip.chirality < 0 ? -1 : 1;
   if (strip.layerIndex === 0) {
-    return {
+    return applyShellEnclosureToShape({
       theta0: selectedShape.theta0 + strip.bearingPhase * 0.22,
       thetaTwist: Math.abs(selectedShape.thetaTwist) * stripChirality,
       phi0: selectedShape.phi0 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.035,
@@ -535,10 +552,10 @@ function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
       phase: selectedPhase + strip.phaseOffset,
       edgeLift: 0.018 + strip.stripIndex * 0.002,
       waviness: 0.085,
-    };
+    }, strip, spec, shellEnclosure);
   }
   const isCutAuthor = strip.sliceParticipation === "cut-author-envelope";
-  return {
+  return applyShellEnclosureToShape({
     theta0: -0.98 + spec.layerIndex * 0.28 + strip.bearingPhase * 0.22 + (isCutAuthor ? 0 : 0.04),
     thetaTwist: stripChirality * (4.36 + strip.stripIndex * 0.08),
     phi0: -0.3 + spec.layerIndex * 0.035 + strip.intervalOffset * 0.12 + strip.shellLaneOffset + Math.sin(strip.bearingPhase) * 0.03,
@@ -546,7 +563,7 @@ function curveShapeForStrip(strip, spec, selectedShape, selectedPhase) {
     phase: spec.phase + strip.phaseOffset,
     edgeLift: strip.materialRole === "neighbor-envelope" ? 0.015 : 0.012,
     waviness: 0.085,
-  };
+  }, strip, spec, shellEnclosure);
 }
 
 export function generateSphereCurveDescriptors(input = {}) {
@@ -558,10 +575,11 @@ export function generateSphereCurveDescriptors(input = {}) {
     selectedShape = {},
     selectedPhase = 0,
   } = input;
+  const shellEnclosure = clamp(Number(composerDescriptor.shellEnclosure ?? input.shellEnclosure ?? 0), 0, 1);
   const selectedSpec = layerSpecs[0] || {};
   return stripInstances.map(strip => {
     const spec = layerSpecs.find(layerSpec => layerSpec.id === strip.layerSpecId) || selectedSpec;
-    const shape = curveShapeForStrip(strip, spec, selectedShape, selectedPhase);
+    const shape = curveShapeForStrip(strip, spec, selectedShape, selectedPhase, shellEnclosure);
     const interval = curveIntervalForStrip(strip, spec);
     return {
       kind: "SphereCurveDescriptor",
@@ -615,6 +633,8 @@ export function generateSphereCurveDescriptors(input = {}) {
       phi0: shape.phi0,
       phiSlope: shape.phiSlope,
       phase: shape.phase,
+      shellEnclosure,
+      shellEnclosureMode: SHELL_ENCLOSURE_MODE,
       radius: Number((1 + strip.effectiveDepth).toFixed(4)),
       width: strip.width,
       thickness: strip.thickness,
@@ -729,6 +749,8 @@ export function generateLamellarEnvelopeDescriptors(sphereCurveDescriptors = [])
       kind: "LamellarEnvelopeDescriptor",
       mode: LAMELLAR_ENVELOPE_MODE,
       compositionMode: LAMELLAR_ENVELOPE_COMPOSITION_MODE,
+      enclosureMode: SHELL_ENCLOSURE_MODE,
+      shellEnclosure: ordered[0].shellEnclosure ?? 0,
       edgeLegibilityMode: LAMELLAR_ENVELOPE_EDGE_MODE,
       id: `${ordered[0].populationId}-envelope-loft`,
       sourceCurveMode: SPHERE_CURVE_MODE,
@@ -882,6 +904,7 @@ function emitCurveSectionDescriptor(output, curve, seed) {
 
 export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const shellEnclosure = Number(clamp(Number(input.shellEnclosure ?? input.enclosure ?? 0), 0, 1).toFixed(4));
   const layerStack = generateLamellarLayerSpecs(input);
   const { layerStackDescriptor, layerSpecs } = layerStack;
   const stripProfileOverrides = normalizeStripProfileOverrides(input.stripProfileOverrides);
@@ -907,6 +930,8 @@ export function generateLamellarSectionSegments(input = {}) {
     chunkinessVariance: layerStackDescriptor.chunkinessVariance,
     depthSpacing: layerStackDescriptor.depthSpacing,
     overlapBias: layerStackDescriptor.overlapBias,
+    shellEnclosure,
+    shellEnclosureMode: SHELL_ENCLOSURE_MODE,
     curveLaw: "poloxodromic-sphere-strip-v0",
     capLaw: END_CAP_SEALING_MODE,
     sphereCurveKind: "SphereCurveDescriptor",
@@ -1391,7 +1416,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     layerOverrides: [],
     populationCount: 4,
     cutterCount: 1,
-    populationBearingVariance: 0.2,
+    populationBearingVariance: 1,
+    shellEnclosure: 0.45,
     stripPopulations: [],
     stripProfileOverrides: [],
     overlapBias: 0.38,
@@ -1776,6 +1802,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       populationCount: state.populationCount,
       cutterCount: state.cutterCount,
       populationBearingVariance: state.populationBearingVariance,
+      shellEnclosure: state.shellEnclosure,
       stripPopulations: state.stripPopulations,
       stripProfileOverrides: state.stripProfileOverrides,
       overlapBias: state.overlapBias,
@@ -2056,7 +2083,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.layerOverrides = normalizeLayerOverrides(next.layerOverrides ?? state.layerOverrides).slice(0, 4);
     state.populationCount = Math.round(clamp(Number(next.populationCount ?? state.populationCount), 1, 16));
     state.cutterCount = Math.round(clamp(Number(next.cutterCount ?? state.cutterCount), 0, 8));
-    state.populationBearingVariance = clamp(Number(next.populationBearingVariance ?? state.populationBearingVariance), 0, 1);
+    state.populationBearingVariance = clamp(Number(next.populationBearingVariance ?? state.populationBearingVariance), 0.15, 2);
+    state.shellEnclosure = clamp(Number(next.shellEnclosure ?? state.shellEnclosure), 0, 1);
     state.stripPopulations = normalizeStripPopulations(next.stripPopulations ?? state.stripPopulations);
     state.stripProfileOverrides = normalizeStripProfileOverrides(next.stripProfileOverrides ?? state.stripProfileOverrides);
     state.overlapBias = clamp(Number(next.overlapBias ?? state.overlapBias), 0, 1);
