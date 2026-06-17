@@ -1569,9 +1569,13 @@ window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
+  const previousActiveGroupId = activeSceneGroupId;
   for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
   pruneSceneGroups();
   const wasActive = activeSceneObjectId === entry.id;
+  const activeGroupSurvives = !wasActive
+    && previousActiveGroupId
+    && sceneGroups.some(group => group.id === previousActiveGroupId);
   if (transformControls && currentMesh === entry.object) {
     transformControls.detach();
     transformControls.visible = false;
@@ -1579,7 +1583,9 @@ window.removeSceneObject = function(id) {
   scene.remove(entry.object);
   disposeObjectTree(entry.object);
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
-  if (wasActive || !fallback) {
+  if (activeGroupSurvives) {
+    setActiveSceneGroup(previousActiveGroupId);
+  } else if (wasActive || !fallback) {
     setActiveSceneObject(fallback?.id || null);
   } else {
     renderSceneObjectList();

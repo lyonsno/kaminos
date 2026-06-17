@@ -847,6 +847,26 @@ async function runObjectGroupsRoundtripScenario(ws) {
       if (!finalGroups.some(row => row.id === group.id && row.active && row.label === 'Hero Pair') || !finalRows.every(row => row.grouped)) {
         throw new Error('object grouping final screenshot state lost group membership: ' + JSON.stringify({ finalGroups, finalRows }));
       }
+      window.removeSceneObject(firstId);
+      await wait(250);
+      const groupsAfterMemberRemoval = groupRows();
+      const rowsAfterMemberRemoval = rowState();
+      const groupDebugAfterMemberRemoval = window.kaminosSceneGroupDebugState?.() || [];
+      const survivingGroup = groupDebugAfterMemberRemoval.find(record => record.id === group.id);
+      if (!groupsAfterMemberRemoval.some(row => row.id === group.id && row.active && row.pressed === 'true')) {
+        throw new Error('object grouping active group selection was cleared by member removal: ' + JSON.stringify({
+          groupsAfterMemberRemoval,
+          groupDebugAfterMemberRemoval,
+          rowsAfterMemberRemoval,
+        }));
+      }
+      if (!survivingGroup || !survivingGroup.active || survivingGroup.objectIds.length !== 1 || !survivingGroup.objectIds.includes(secondId)) {
+        throw new Error('object grouping member removal did not preserve pruned active group membership: ' + JSON.stringify({
+          survivingGroup,
+          groupDebugAfterMemberRemoval,
+          rowsAfterMemberRemoval,
+        }));
+      }
       return {
         savedFile,
         firstId,
@@ -861,6 +881,9 @@ async function runObjectGroupsRoundtripScenario(ws) {
         restoredRows,
         finalGroups,
         finalRows,
+        groupsAfterMemberRemoval,
+        rowsAfterMemberRemoval,
+        groupDebugAfterMemberRemoval,
         cleanup,
         postCleanupFileCount: postCleanupFiles.length,
       };

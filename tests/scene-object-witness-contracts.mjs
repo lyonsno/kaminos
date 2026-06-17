@@ -86,6 +86,8 @@ assert.match(witness, /object grouping did not preserve renamed object labels/, 
 assert.match(witness, /object grouping saved scene did not preserve group membership/, 'grouping witness proves saved JSON carries group membership');
 assert.match(witness, /object grouping load did not restore group membership/, 'grouping witness proves browser scene load restores group membership');
 assert.match(witness, /group selection did not hide object transform controls/, 'grouping witness proves group selection is distinct from object transform selection');
+assert.match(witness, /object grouping active group selection was cleared by member removal/, 'grouping witness proves removing a grouped member does not clear active group selection');
+assert.match(witness, /object grouping member removal did not preserve pruned active group membership/, 'grouping witness proves member removal prunes the active group without dropping it');
 assert.match(witness, /cleanup did not delete saved scene file/, 'save/load witness makes cleanup deletion load-bearing');
 assert.match(witness, /post-cleanup scene listing still includes saved scene file/, 'save/load witness proves cleanup removes the temporary scene file');
 assert.match(witness, /assertSceneDeleted\(/, 'witness shares exact cleanup proof across scenarios');
