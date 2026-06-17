@@ -57,6 +57,9 @@ assert.match(index, /clay_brush_strength/, 'clay route accepts pointer brush str
 assert.match(index, /clay-brush-radius/, 'Clay panel exposes pointer brush radius control');
 assert.match(index, /clay-brush-strength/, 'Clay panel exposes pointer brush strength control');
 assert.match(index, /installClayPointerInteraction/, 'clay route installs pointer drag interaction');
+assert.match(index, /CLAY_BRUSH_HOTKEY\s*=\s*'b'/, 'clay route defines hold-B as the brush/camera arbitration hotkey');
+assert.match(index, /clayBrushModifierActive/, 'clay route tracks brush hotkey state');
+assert.match(index, /shouldBrushClayPointerEvent/, 'clay route gates brush capture separately from orbit camera drag');
 assert.match(index, /clay-pointer-mode/, 'Clay panel exposes pointer interaction mode');
 assert.match(index, /clay-pointer-drag-steps/, 'Clay panel exposes pointer-driven drag step count');
 assert.match(index, /clay-cube-particles/, 'Clay panel exposes cube material-point count');
@@ -253,6 +256,7 @@ assert.match(witness, /clayGridConfigWarnings/, 'clay witness records grid confi
 assert.match(witness, /expected-grid/, 'clay witness can assert an expected effective grid');
 assert.match(witness, /claySurfaceTriangleCount/, 'clay witness records surface triangle count');
 assert.match(witness, /clay_interactive=1/, 'clay witness can drive the interactive pointer route');
+assert.match(witness, /clay_brush_hotkey=1/, 'clay witness can drive the hold-B brush modifier route');
 assert.match(witness, /clay_cube=1/, 'clay witness can drive the volumetric cube route');
 assert.match(witness, /clayCubeParticleCount/, 'clay witness records cube material-point count');
 assert.match(witness, /clayCubeActiveGridCellCount/, 'clay witness records cube active grid-cell count');
@@ -265,6 +269,7 @@ assert.match(witness, /clayCubeDiagnosticHotParticleCount/, 'clay witness record
 assert.match(witness, /clayCubeBoundingBoxVisible/, 'clay witness verifies cube diagnostic bounding-box visibility');
 assert.match(witness, /requestedBrushRadius/, 'clay witness can verify routed pointer brush radius');
 assert.match(witness, /requestedBrushStrength/, 'clay witness can verify routed pointer brush strength');
+assert.match(witness, /Input\.dispatchKeyEvent/, 'clay witness sends real keyboard input for brush modifier mode');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
 assert.match(witness, /missing clay canvas bounds/, 'clay witness fails loud when it cannot measure the interactive canvas');

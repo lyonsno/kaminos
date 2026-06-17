@@ -10,7 +10,9 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_cube=1&clay_cube_grid=10x10x10&clay_steps=7&clay_debug_colliders=0&clay_benchmark_shadow=0&clay_normal_cadence=every_3&clay_colliders=clay_fixture_hand';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_cube=1&clay_cube_grid=10x10x10&clay_steps=7&clay_debug_colliders=0&clay_benchmark_shadow=0&clay_normal_cadence=every_3&clay_colliders=clay_fixture_hand&clay_brush_hotkey=1';
+const routeUsesPointerDrag = url.includes('clay_interactive=1') || url.includes('clay_brush_hotkey=1');
+const routeUsesBrushHotkey = url.includes('clay_brush_hotkey=1');
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -228,7 +230,7 @@ async function main() {
       await delay(350);
     }
 
-    if (url.includes('clay_interactive=1')) {
+    if (routeUsesPointerDrag) {
       phase = 'pointer-drag-geometry';
       let drag = null;
       let dragFailure = 'missing clay canvas bounds';
@@ -269,6 +271,15 @@ async function main() {
       }
       assert.ok(drag, `missing clay canvas bounds for pointer drag geometry: ${dragFailure}`);
       phase = 'pointer-drag';
+      if (routeUsesBrushHotkey) {
+        await wsRequest(ws, 'Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: 'b',
+          code: 'KeyB',
+          windowsVirtualKeyCode: 66,
+          nativeVirtualKeyCode: 66,
+        });
+      }
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: drag.startX, y: drag.startY });
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: drag.startX, y: drag.startY, button: 'left', buttons: 1, clickCount: 1 });
       for (const [x, y] of [
@@ -283,6 +294,15 @@ async function main() {
         await delay(80);
       }
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.endX + 36, y: drag.endY + 6, button: 'left', buttons: 0, clickCount: 1 });
+      if (routeUsesBrushHotkey) {
+        await wsRequest(ws, 'Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: 'b',
+          code: 'KeyB',
+          windowsVirtualKeyCode: 66,
+          nativeVirtualKeyCode: 66,
+        });
+      }
       await delay(600);
     }
 
@@ -298,7 +318,7 @@ async function main() {
         (state?.persistentClayStepCount ?? 0) >= 6
         && (state?.persistentClayDeltaHistory?.length ?? 0) >= 3
         && (state?.clayStepSampleCount ?? 0) >= 6
-        && (!url.includes('clay_interactive=1') || (state?.clayPointerDragStepCount ?? 0) >= 3)
+        && (!routeUsesPointerDrag || (state?.clayPointerDragStepCount ?? 0) >= 3)
         && state?.clayDeformationCount > 0
       ) break;
       await delay(180);
@@ -322,15 +342,15 @@ async function main() {
       Math.abs((state.sharedPrimitiveProbeDistanceSq ?? Number.NaN) - 0.25) <= 1e-5,
       `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
     );
-    const isInteractiveRoute = url.includes('clay_interactive=1');
+    const isPointerDragRoute = routeUsesPointerDrag;
     const isCubeRoute = url.includes('clay_cube=1');
     assert.equal(state.primitiveContactPassStatus, 'pass');
-    const expectedPrimitiveContacts = isInteractiveRoute
+    const expectedPrimitiveContacts = isPointerDragRoute
       ? 1
       : url.includes('clay_colliders=clay_edge_fixture')
         ? 2
         : 5;
-    if (isInteractiveRoute && (state.clayPointerDragStepCount ?? 0) >= 3) {
+    if (isPointerDragRoute && (state.clayPointerDragStepCount ?? 0) >= 3) {
       assert.ok((state.primitiveContactJobCount ?? 0) >= 0, 'interactive primitive contact job count missing');
       if ((state.primitiveContactActiveCount ?? 0) > 0) {
         assert.ok(Number.isFinite(state.primitiveContactMinDistance), 'interactive primitive contact distance missing while contacts are active');
@@ -352,7 +372,7 @@ async function main() {
     assert.ok((state.persistentClayInitialDelta ?? 0) > 0, 'persistent clay state did not record initial relaxation delta');
     assert.ok((state.persistentClayLatestDelta ?? 0) > 0, 'persistent clay state did not record latest relaxation delta');
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
-    if (!url.includes('clay_interactive=1') && !handPosePayloadPath) {
+    if (!routeUsesPointerDrag && !handPosePayloadPath) {
       assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
     }
     assert.equal(state.clayCubeEnabled, isCubeRoute, 'cube witness enablement did not match clay_cube route parameter');
@@ -453,10 +473,10 @@ async function main() {
     if (url.includes('clay_debug_colliders=0')) {
       assert.equal(state.clayDebugCollidersVisible, false, 'quality witness did not hide debug colliders');
     }
-    if (url.includes('clay_interactive=1')) {
-      assert.ok((state.clayPointerDragStepCount ?? 0) >= 3, 'interactive clay route did not run pointer-driven steps');
+    if (routeUsesPointerDrag) {
+      assert.ok((state.clayPointerDragStepCount ?? 0) >= 3, 'pointer clay route did not run pointer-driven steps');
       assert.ok(['pointer_drag', 'pointer_idle'].includes(state.clayInteractionMode), `unexpected clay interaction mode: ${state.clayInteractionMode}`);
-      assert.ok(state.clayPointerLastHit, 'interactive clay route did not record a pointer hit');
+      assert.ok(state.clayPointerLastHit, 'pointer clay route did not record a pointer hit');
       assert.ok(Number.isFinite(state.clayPointerLastHit.x), 'pointer hit x did not reach clay debug state');
       assert.ok(Number.isFinite(state.clayPointerLastHit.z), 'pointer hit z did not reach clay debug state');
       const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
@@ -495,14 +515,14 @@ async function main() {
     }
     assert.ok((state.clayRelaxationFactor ?? 0) > 0, 'clay relaxation factor missing');
     assert.ok((state.clayPlasticityFactor ?? 0) > 0, 'clay plasticity factor missing');
-    const expectedClayColliders = url.includes('clay_interactive=1')
+    const expectedClayColliders = routeUsesPointerDrag
       ? 0
       : url.includes('clay_colliders=clay_edge_fixture')
         ? 2
         : 5;
     assert.ok((state.clayColliderCount ?? 0) >= expectedClayColliders, 'clay fixture did not seed expected colliders');
-    if (isInteractiveRoute) {
-      assert.ok((state.clayPointerDragStepCount ?? 0) >= 3, 'interactive clay route did not preserve pointer contact history');
+    if (isPointerDragRoute) {
+      assert.ok((state.clayPointerDragStepCount ?? 0) >= 3, 'pointer clay route did not preserve pointer contact history');
     } else {
       assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     }

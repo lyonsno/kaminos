@@ -732,6 +732,8 @@ let volumePrototype = null;
 let clayPrototype = null;
 let clayPointerBrushRadius = 0.17;
 let clayPointerBrushStrength = 1.18;
+let clayBrushModifierActive = false;
+const CLAY_BRUSH_HOTKEY = 'b';
 const CLAY_CUBE_CAMERA_FRAME = Object.freeze({
   position: [0, 1.04, 1.82],
   target: [0, 0.34, 0],
@@ -1797,14 +1799,39 @@ function frameClayCamera(cubeMode = false) {
 }
 
 function installClayPointerInteraction(params) {
-  if (params.get('clay_interactive') !== '1') return;
   const canvas = renderer.domElement;
+  const legacyInteractiveRoute = params.get('clay_interactive') === '1';
   const pointerRaycaster = new THREE.Raycaster();
   const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
   const pointerPoint = new THREE.Vector3();
   let dragging = false;
+  let activePointerId = null;
   let busy = false;
   let queuedEvent = null;
+
+  const hotkeyEventTargetsInput = event => {
+    const target = event.target;
+    return !!target?.closest?.('input, textarea, select, [contenteditable="true"]');
+  };
+
+  const shouldBrushClayPointerEvent = event => {
+    if (event?.button != null && event.button !== 0) return false;
+    return legacyInteractiveRoute || clayBrushModifierActive;
+  };
+
+  const updateBrushModifier = event => {
+    if (hotkeyEventTargetsInput(event)) return;
+    if (String(event.key || '').toLowerCase() !== CLAY_BRUSH_HOTKEY) return;
+    clayBrushModifierActive = event.type === 'keydown';
+    if (!clayBrushModifierActive && dragging && !legacyInteractiveRoute) {
+      dragging = false;
+      if (activePointerId != null) canvas.releasePointerCapture?.(activePointerId);
+      activePointerId = null;
+      controls.enabled = true;
+      clayPrototype.clearPointerClayCollider();
+      refreshClayReadout();
+    }
+  };
 
   const eventToClayHit = event => {
     const rect = canvas.getBoundingClientRect();
@@ -1848,8 +1875,10 @@ function installClayPointerInteraction(params) {
 
   canvas.addEventListener('pointerdown', event => {
     if (!clayPrototype?.debugState?.().active) return;
+    if (!shouldBrushClayPointerEvent(event)) return;
     dragging = true;
-    canvas.setPointerCapture?.(event.pointerId);
+    activePointerId = event.pointerId;
+    canvas.setPointerCapture?.(activePointerId);
     controls.enabled = false;
     event.preventDefault();
     drivePointerStep(event);
@@ -1862,16 +1891,24 @@ function installClayPointerInteraction(params) {
   const stopDrag = event => {
     if (!dragging) return;
     dragging = false;
-    canvas.releasePointerCapture?.(event.pointerId);
+    canvas.releasePointerCapture?.(activePointerId ?? event.pointerId);
+    activePointerId = null;
     controls.enabled = true;
     clayPrototype.clearPointerClayCollider();
     refreshClayReadout();
   };
   canvas.addEventListener('pointerup', stopDrag);
   canvas.addEventListener('pointercancel', stopDrag);
+  window.addEventListener('keydown', updateBrushModifier);
+  window.addEventListener('keyup', updateBrushModifier);
   window.__kaminosClayPointerInteraction = {
-    mode: 'clay_interactive:pointer_drag_v0',
+    mode: legacyInteractiveRoute ? 'clay_interactive:pointer_drag_v0' : 'hold-b-brush:pointer_drag_v0',
+    hotkey: CLAY_BRUSH_HOTKEY,
+    shouldBrushClayPointerEvent,
     eventToClayHit,
+    get brushModifierActive() {
+      return clayBrushModifierActive;
+    },
   };
 }
 
