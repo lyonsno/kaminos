@@ -2059,6 +2059,192 @@ async function runGreenroomPreviewRaceScenario(ws) {
   }
 }
 
+async function runGreenroomSplatHandoffScenario(ws) {
+  phase = 'scenario-greenroom-splat-handoff';
+  lastEvidence.greenroomSplatHandoff = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (data.error) throw new Error('scene browse failed: ' + data.error);
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (data.error) throw new Error('saved scene read failed: ' + data.error);
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('scene cleanup failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const loadSceneDocument = async (doc, name) => {
+        const input = document.getElementById('scene-file-input');
+        const file = new File([JSON.stringify(doc)], name, { type: 'application/json' });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const waitForGreenroomRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#greenroom-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#greenroom-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const fetchRoute = async route => {
+        if (!route) return null;
+        const resp = await fetch(route);
+        const body = await resp.arrayBuffer();
+        return {
+          route,
+          ok: resp.ok,
+          status: resp.status,
+          contentType: resp.headers.get('content-type'),
+          bytes: body.byteLength,
+        };
+      };
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      const beforeRows = rowState();
+      const greenroomRows = await waitForGreenroomRows();
+      const actionRow = greenroomRows.find(row => [...row.querySelectorAll('button')]
+        .some(button => button.textContent.trim() === 'Import Splat'));
+      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Import Splat') : null;
+      const title = actionRow?.querySelector('.gr-title')?.textContent?.trim() || null;
+      const raw = actionRow?.querySelector('.gr-raw')?.textContent?.replace(/^raw\\s+/i, '').trim() || null;
+      let outputProbe = null;
+      if (raw) {
+        const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(raw));
+        const outputsData = await outputsResp.json().catch(() => ({}));
+        const splat = (outputsData.entries || []).find(entry => /\\.(ply|spz)$/i.test(entry.name));
+        if (splat) {
+          const route = '/api/job-output?job_id=' + encodeURIComponent(raw) + '&file=' + encodeURIComponent(splat.name);
+          outputProbe = await fetchRoute(route);
+        }
+      }
+      if (actionButton) {
+        actionButton.click();
+      }
+      const afterRows = await waitForSceneRows(beforeRows.length + 1);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splatObject = sceneDebug.find(record => record.type === 'splat') || null;
+      const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const beforeSceneFiles = new Set(await listScenes());
+      const savedOk = await window.saveSceneAs();
+      let savedFile = null;
+      for (let i = 0; i < 120; i++) {
+        const afterSceneFiles = await listScenes();
+        const newFiles = afterSceneFiles.filter(name => !beforeSceneFiles.has(name));
+        if (newFiles.length === 1) {
+          savedFile = newFiles[0];
+          break;
+        }
+        await wait(125);
+      }
+      const savedScene = savedFile ? await readScene(savedFile) : null;
+      const savedSplatObject = (savedScene?.objects || []).find(record => record.type === 'splat') || null;
+      const savedSplatMetadataPreserved = !!savedSplatObject
+        && savedSplatObject.source === splatObject?.source
+        && savedSplatObject.splat?.assetSource === splatObject?.source
+        && savedSplatObject.renderHandoffSchema === 'kaminos.render-handoff.v0'
+        && savedSplatObject.renderCapabilities?.meshDepthOcclusion === false;
+      if (savedScene && savedFile) {
+        await loadSceneDocument(savedScene, savedFile);
+        await waitForSceneRows(savedScene.objects?.length || 1);
+      }
+      const reloadedSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const reloadedSplatObject = reloadedSceneDebug.find(record => record.type === 'splat') || null;
+      const reloadedHandoffDebug = window.kaminosRenderHandoffDebugState?.(reloadedSplatObject?.id) || null;
+      const loadRestoredSplatObject = !!reloadedSplatObject
+        && reloadedSplatObject.source === splatObject?.source
+        && reloadedHandoffDebug?.activeHandoff?.source === splatObject?.source;
+      let cleanup = null;
+      let postCleanupFiles = null;
+      if (savedFile) {
+        cleanup = await deleteScene(savedFile);
+        postCleanupFiles = await listScenes();
+        if (postCleanupFiles.includes(savedFile)) {
+          throw new Error('splat handoff cleanup did not delete saved scene file: ' + savedFile);
+        }
+      }
+      return {
+        beforeRows,
+        afterRows,
+        greenroomRowCount: greenroomRows.length,
+        actionExposed: !!actionButton,
+        title,
+        raw,
+        outputProbe,
+        sceneDebug,
+        splatObject,
+        handoffDebug,
+        savedOk,
+        savedFile,
+        savedSplatObject,
+        savedSplatMetadataPreserved,
+        reloadedSceneDebug,
+        reloadedSplatObject,
+        reloadedHandoffDebug,
+        loadRestoredSplatObject,
+        cleanup,
+        postCleanupFiles,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  if (!lastEvidence.greenroomSplatHandoff.actionExposed) {
+    throw new Error(`Greenroom splat fixture did not expose Import Splat action: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  const splatObject = lastEvidence.greenroomSplatHandoff.splatObject;
+  if (!splatObject || splatObject.type !== 'splat') {
+    throw new Error(`splat handoff did not register a type=splat scene object: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  const source = splatObject.source || '';
+  const handoffSource = lastEvidence.greenroomSplatHandoff.handoffDebug?.activeHandoff?.source || '';
+  if (!source.includes('/api/') || source !== handoffSource) {
+    throw new Error(`splat handoff did not preserve route source: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  const capabilities = lastEvidence.greenroomSplatHandoff.handoffDebug?.activeHandoff?.capabilities || {};
+  if (capabilities.meshDepthOcclusion !== false) {
+    throw new Error(`splat handoff did not record meshDepthOcclusion=false: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (capabilities.sharedCanvasComposite !== false) {
+    throw new Error(`splat handoff did not record sharedCanvasComposite=false: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (capabilities.realSplatRendering !== false) {
+    throw new Error(`splat handoff claimed real splat rendering: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (!lastEvidence.greenroomSplatHandoff.savedSplatMetadataPreserved) {
+    throw new Error(`splat handoff saved scene did not preserve splat metadata: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (!lastEvidence.greenroomSplatHandoff.loadRestoredSplatObject) {
+    throw new Error(`splat handoff scene load did not restore splat object: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+}
+
 async function runAoRouteDeltaScenario(ws) {
   phase = 'scenario-ao-route-delta-on';
   lastEvidence.aoRouteDelta = await evaluate(ws, `
@@ -2252,6 +2438,8 @@ try {
     await runGreenroomPickerDisplayScenario(ws);
   } else if (scenario === 'greenroom-preview-race') {
     await runGreenroomPreviewRaceScenario(ws);
+  } else if (scenario === 'greenroom-splat-handoff') {
+    await runGreenroomSplatHandoffScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

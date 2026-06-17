@@ -15,6 +15,7 @@ assert.match(witness, /transform-inspector/, 'witness supports a selected-object
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
+assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
@@ -128,6 +129,16 @@ assert.match(witness, /job-output-events/, 'Green Room race witness reads server
 assert.match(witness, /clear=1/, 'Green Room race witness clears stale route timing events before racing');
 assert.match(witness, /effectiveDelayMs/, 'Green Room race witness records effective route delay identity');
 assert.match(witness, /routeACompletedAfterRouteBOwned/, 'Green Room race witness proves route A completed after route B owned preview state');
+assert.match(witness, /Greenroom splat fixture did not expose Import Splat action/, 'Green Room splat witness requires an explicit Import Splat action');
+assert.match(witness, /splat handoff did not register a type=splat scene object/, 'Green Room splat witness proves imported splats enter the authored scene registry');
+assert.match(witness, /splat handoff did not preserve route source/, 'Green Room splat witness proves route/source identity is preserved');
+assert.match(witness, /splat handoff did not record meshDepthOcclusion=false/, 'Green Room splat witness proves missing depth occlusion is explicit');
+assert.match(witness, /splat handoff did not record sharedCanvasComposite=false/, 'Green Room splat witness proves missing shared canvas composition is explicit');
+assert.match(witness, /splat handoff claimed real splat rendering/, 'Green Room splat witness rejects false closure on real splat rendering');
+assert.match(witness, /kaminosRenderHandoffDebugState/, 'Green Room splat witness inspects the effective render handoff debug route');
+assert.match(witness, /splat handoff saved scene did not preserve splat metadata/, 'Green Room splat witness proves saved scenes preserve splat route metadata');
+assert.match(witness, /splat handoff scene load did not restore splat object/, 'Green Room splat witness proves scene load restores splat placeholders from saved documents');
+assert.match(witness, /splat handoff cleanup did not delete saved scene file/, 'Green Room splat witness proves cleanup removed its temporary saved scene file');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

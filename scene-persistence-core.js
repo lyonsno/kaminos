@@ -16,6 +16,7 @@ function normalizeSceneObjectRecord(record) {
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
     label: record.label ?? record.fileName ?? id,
+    groupId: record.groupId ?? null,
     createdAt: record.createdAt ?? null,
     transform: cloneJson(record.transform ?? {
       position: [0, 0, 0],
@@ -23,6 +24,10 @@ function normalizeSceneObjectRecord(record) {
       scale: [1, 1, 1],
     }),
     materials: cloneJson(record.materials ?? null),
+    splat: cloneJson(record.splat ?? null),
+    renderRoute: record.renderRoute ?? null,
+    renderCapabilities: cloneJson(record.renderCapabilities ?? null),
+    renderHandoffSchema: record.renderHandoffSchema ?? null,
   };
 }
 
@@ -97,8 +102,9 @@ export function sceneDocumentIsLoadable(data) {
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
-  if (!['glb', 'pbr'].includes(type) || typeof source !== 'string') return false;
+  if (!['glb', 'pbr', 'splat'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
+  if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
 }
 

@@ -29,7 +29,7 @@ BROWSE_ROOTS = {
 }
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
-MESH_EXTENSIONS = {".glb", ".gltf", ".obj"}
+MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 
@@ -447,12 +447,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply"):
+        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
-                ".exr": "application/octet-stream", ".ply": "application/octet-stream",
+                ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
 
@@ -591,7 +591,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         content_types = {
             ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
-            ".exr": "application/octet-stream", ".ply": "application/octet-stream",
+            ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             ".json": "application/json", ".txt": "text/plain", ".log": "text/plain",
         }
         self.send_response(200)

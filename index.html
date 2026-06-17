@@ -645,6 +645,7 @@ let volumePrototype = null;
 let volumeBridge = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
+const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -657,6 +658,42 @@ let sceneMutationToken = 0;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
+
+class HybridMeshSplatRoute {
+  constructor() {
+    this.id = 'hybrid-mesh-splat-route-stub';
+    this.version = 'p0-placeholder';
+    this.lastHandoff = null;
+    this.lastUpdatedAt = null;
+  }
+
+  capabilities() {
+    return {
+      meshDepthOcclusion: false,
+      sharedCanvasComposite: false,
+      activeAO: false,
+      realSplatRendering: false,
+    };
+  }
+
+  updateHandoff(handoff) {
+    this.lastHandoff = handoff;
+    this.lastUpdatedAt = new Date().toISOString();
+    return handoff;
+  }
+
+  debugState() {
+    return {
+      id: this.id,
+      version: this.version,
+      capabilities: this.capabilities(),
+      lastUpdatedAt: this.lastUpdatedAt,
+      lastHandoff: this.lastHandoff,
+    };
+  }
+}
+
+const hybridMeshSplatRoute = new HybridMeshSplatRoute();
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
@@ -827,6 +864,55 @@ function disposeObjectTree(object) {
 function shouldClearSceneForImport(options = {}) {
   if (Object.prototype.hasOwnProperty.call(options, 'clear')) return options.clear !== false;
   return !document.getElementById('append-import-toggle')?.checked;
+}
+
+function renderHandoffCapabilities() {
+  return hybridMeshSplatRoute.capabilities();
+}
+
+function buildRenderHandoffV0(record) {
+  if (!record?.object) throw new Error('Render handoff requires a registered scene object');
+  camera?.updateMatrixWorld?.();
+  record.object.updateMatrixWorld?.(true);
+  const size = new THREE.Vector2();
+  if (renderer?.getDrawingBufferSize) {
+    renderer.getDrawingBufferSize(size);
+  } else {
+    size.set(window.innerWidth || 0, window.innerHeight || 0);
+  }
+  const handoff = {
+    schema: RENDER_HANDOFF_SCHEMA,
+    route: hybridMeshSplatRoute.id,
+    rendererRoute: hybridMeshSplatRoute.id,
+    objectId: record.id,
+    objectType: record.type,
+    source: record.source || null,
+    assetSource: record.splat?.assetSource || record.source || null,
+    fileName: record.fileName || null,
+    viewport: {
+      width: size.x,
+      height: size.y,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    },
+    camera: camera ? {
+      projectionMatrix: Array.from(camera.projectionMatrix.elements),
+      viewMatrix: Array.from(camera.matrixWorldInverse.elements),
+      worldPosition: camera.getWorldPosition(new THREE.Vector3()).toArray(),
+    } : null,
+    object: {
+      worldMatrix: Array.from(record.object.matrixWorld.elements),
+      transform: sceneObjectTransformState(record.object),
+    },
+    capabilities: renderHandoffCapabilities(),
+    evidence: {
+      schema: RENDER_HANDOFF_SCHEMA,
+      routeId: hybridMeshSplatRoute.id,
+      rendererId: 'kaminos-three-tsl-editor',
+      sourcePreserved: !!record.source,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+  return hybridMeshSplatRoute.updateHandoff(handoff);
 }
 
 function greenroomPreviewIsActive() {
@@ -1469,6 +1555,10 @@ function registerSceneObject(object, metadata = {}) {
     label: metadata.label ?? metadata.fileName ?? id,
     groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
+    splat: metadata.splat ?? null,
+    renderRoute: metadata.renderRoute ?? null,
+    renderCapabilities: metadata.renderCapabilities ?? null,
+    renderHandoffSchema: metadata.renderHandoffSchema ?? null,
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -1478,6 +1568,10 @@ function registerSceneObject(object, metadata = {}) {
     label: record.label,
     groupId: record.groupId,
     createdAt: record.createdAt,
+    splat: record.splat,
+    renderRoute: record.renderRoute,
+    renderCapabilities: record.renderCapabilities,
+    renderHandoffSchema: record.renderHandoffSchema,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -1527,7 +1621,36 @@ window.kaminosSceneObjectDebugState = function() {
     groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
     transform: sceneObjectTransformState(record.object),
+    splat: record.splat || null,
+    renderRoute: record.renderRoute || null,
+    renderCapabilities: record.renderCapabilities || null,
+    renderHandoffSchema: record.renderHandoffSchema || null,
   }));
+};
+
+window.kaminosRenderHandoffDebugState = function(id = null) {
+  const requested = id ? sceneObjects.find(record => record.id === id) : null;
+  const active = sceneObjects.find(record => record.id === activeSceneObjectId && record.type === 'splat');
+  const firstSplat = sceneObjects.find(record => record.type === 'splat');
+  const target = requested || active || firstSplat || null;
+  const activeHandoff = target ? buildRenderHandoffV0(target) : null;
+  return {
+    schema: RENDER_HANDOFF_SCHEMA,
+    route: hybridMeshSplatRoute.debugState(),
+    targetObjectId: target?.id || null,
+    splatObjects: sceneObjects
+      .filter(record => record.type === 'splat')
+      .map(record => ({
+        id: record.id,
+        source: record.source || null,
+        fileName: record.fileName || null,
+        splat: record.splat || null,
+        renderRoute: record.renderRoute || null,
+        renderCapabilities: record.renderCapabilities || null,
+        renderHandoffSchema: record.renderHandoffSchema || null,
+      })),
+    activeHandoff,
+  };
 };
 
 window.kaminosSceneGroupDebugState = function() {
@@ -3618,6 +3741,86 @@ async function greenroomImportMesh(url, fileName, display) {
   setInfo(`Greenroom import: ${display?.title || fileName}`);
 }
 
+function createSplatSceneObjectPlaceholder({ url, fileName, display, metadata = {} } = {}) {
+  const group = new THREE.Group();
+  const marker = new THREE.Mesh(
+    new THREE.BoxGeometry(1.35, 1.35, 1.35),
+    new THREE.MeshStandardMaterial({
+      color: 0x5ad7ff,
+      emissive: 0x0b2730,
+      roughness: 0.5,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.32,
+      wireframe: true,
+      envMapIntensity: parseFloat(document.getElementById('env-intensity-slider').value),
+    })
+  );
+  marker.castShadow = false;
+  marker.receiveShadow = false;
+  group.add(marker);
+  group.name = display?.title || metadata.label || fileName || 'Splat placeholder';
+  group.userData.kaminosSplatPlaceholder = {
+    schema: RENDER_HANDOFF_SCHEMA,
+    source: url || null,
+    fileName: fileName || null,
+    route: hybridMeshSplatRoute.id,
+    placeholderOnly: true,
+  };
+  return group;
+}
+
+function greenroomSplatMetadata(display, fileName, url, metadata = {}) {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || 'ply';
+  return {
+    ...metadata,
+    source: metadata.source ?? url,
+    type: 'splat',
+    fileName: metadata.fileName ?? fileName,
+    label: metadata.label ?? display?.title ?? fileName ?? 'Splat',
+    splat: metadata.splat ?? {
+      schema: 'kaminos.splat-asset.v0',
+      assetSource: url,
+      fileName,
+      format: ext,
+      bounds: null,
+      splatCount: null,
+      sidecars: [],
+      provenance: provenanceForSource(url),
+    },
+    renderRoute: metadata.renderRoute ?? hybridMeshSplatRoute.id,
+    renderCapabilities: metadata.renderCapabilities ?? renderHandoffCapabilities(),
+    renderHandoffSchema: metadata.renderHandoffSchema ?? RENDER_HANDOFF_SCHEMA,
+  };
+}
+
+async function greenroomImportSplat(url, fileName, display, options = {}) {
+  if (greenroomPreviewIsActive()) {
+    await restoreAuthoredSceneFromPreview({ silent: true });
+  }
+  if (shouldClearSceneForImport(options)) clearScene();
+  const metadata = greenroomSplatMetadata(display, fileName, url, options.metadata || {});
+  const placeholder = createSplatSceneObjectPlaceholder({ url, fileName, display, metadata });
+  scene.add(placeholder);
+  const record = registerSceneObject(placeholder, {
+    ...metadata,
+    type: 'splat',
+    renderHandoffSchema: RENDER_HANDOFF_SCHEMA,
+  });
+  currentMesh = placeholder;
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.attach(placeholder);
+    transformControls.visible = true;
+  }
+  document.getElementById('transform-bar').classList.add('visible');
+  buildRenderHandoffV0(record);
+  setInfo(`Greenroom splat import: ${display?.title || fileName}`);
+  return placeholder;
+}
+
+window.greenroomImportSplat = greenroomImportSplat;
+
 async function importGreenroomPreviewToScene() {
   if (!greenroomPreviewState?.previewObject) {
     setInfo('Greenroom preview is still loading');
@@ -3658,6 +3861,20 @@ function addGreenroomMeshActions(container, url, fileName, display) {
     e.stopPropagation();
     try {
       await greenroomImportMesh(url, fileName, display);
+    } catch {}
+  };
+  container.appendChild(importBtn);
+}
+
+function addGreenroomSplatActions(container, url, fileName, display) {
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn';
+  importBtn.textContent = 'Import Splat';
+  importBtn.dataset.greenroomSplatAction = 'import';
+  importBtn.onclick = async (e) => {
+    e.stopPropagation();
+    try {
+      await greenroomImportSplat(url, fileName, display, { clear: false });
     } catch {}
   };
   container.appendChild(importBtn);
@@ -3816,6 +4033,15 @@ async function grBrowse() {
           };
           div.appendChild(btn);
         }
+        const splats = md.output_files.filter(f => /\.(ply|spz)$/i.test(f));
+        for (const splat of splats) {
+          const filePath = (grCurrentPath ? grCurrentPath + '/' : '') + entry.name + '/' + splat;
+          const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+          const actionDisplay = splats.length > 1
+            ? { ...display, title: `${display.title || entry.name} / ${greenroomHumanizeName(splat, splat)}` }
+            : display;
+          addGreenroomSplatActions(div, url, splat, actionDisplay);
+        }
       }
     } else if (entry.receipt) {
       const status = document.createElement('span');
@@ -3847,6 +4073,14 @@ async function grBrowse() {
           : display;
         addGreenroomMeshActions(div, url, glb, actionDisplay);
       }
+      const splats = entry.output_files.filter(f => /\.(ply|spz)$/i.test(f));
+      for (const splat of splats) {
+        const url = `/api/job-output?job_id=${entry.name}&file=${encodeURIComponent(splat)}`;
+        const actionDisplay = splats.length > 1
+          ? { ...display, title: `${display.title || entry.name} / ${greenroomHumanizeName(splat, splat)}` }
+          : display;
+        addGreenroomSplatActions(div, url, splat, actionDisplay);
+      }
     }
 
     // Quick-load button for plain GLB/OBJ files in output roots
@@ -3854,6 +4088,10 @@ async function grBrowse() {
       const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
       const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
       addGreenroomMeshActions(div, url, entry.name, entry.display);
+    } else if (entry.type === 'file' && /\.(ply|spz)$/i.test(entry.name)) {
+      const filePath = grCurrentPath ? grCurrentPath + '/' + entry.name : entry.name;
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(filePath)}`;
+      addGreenroomSplatActions(div, url, entry.name, entry.display);
     } else if (entry.type === 'file' && /\.obj$/i.test(entry.name)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
@@ -3927,6 +4165,9 @@ async function grOpenJobDir(path) {
     if (['glb', 'gltf'].includes(ext)) {
       const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
       addGreenroomMeshActions(div, url, entry.name, display);
+    } else if (['ply', 'spz'].includes(ext)) {
+      const url = `/api/read?root=${grCurrentRoot}&path=${encodeURIComponent(path + '/' + entry.name)}`;
+      addGreenroomSplatActions(div, url, entry.name, display);
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
       const btn = document.createElement('button');
       btn.className = 'btn';
@@ -3971,6 +4212,9 @@ async function grOpenJobDir(path) {
       if (['glb', 'gltf'].includes(ext)) {
         const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
         addGreenroomMeshActions(div, url, out.name, display);
+      } else if (['ply', 'spz'].includes(ext)) {
+        const url = `/api/job-output?job_id=${jobId}&file=${encodeURIComponent(out.name)}`;
+        addGreenroomSplatActions(div, url, out.name, display);
       } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
         const btn = document.createElement('button');
         btn.className = 'btn';
@@ -4220,6 +4464,10 @@ function serializeSceneObject(entry) {
     createdAt: metadata.createdAt ?? entry.createdAt,
     transform: sceneObjectTransformState(object),
     materials: getMaterialStateForObject(object),
+    splat: metadata.splat ?? entry.splat ?? null,
+    renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
+    renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
+    renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
   };
 }
 
@@ -4240,6 +4488,15 @@ async function addSceneObjectFromSource(record) {
     });
   }
   if (isReloadableSceneObjectRecord(record)) {
+    if (record.type === 'splat') {
+      return greenroomImportSplat(record.source, record.fileName || 'splat.ply', {
+        title: record.label || record.fileName || 'Splat',
+        raw_name: record.fileName || record.source,
+      }, {
+        clear: false,
+        metadata: record,
+      });
+    }
     return showGLB(record.source, {
       clear: false,
       normalize: false,
