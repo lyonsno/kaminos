@@ -8,7 +8,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 ROOT = Path(__file__).parent.resolve()
@@ -16,10 +16,24 @@ ROOT = Path(__file__).parent.resolve()
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
 SCENES_DIR.mkdir(exist_ok=True)
+KAMINOS_ASSETS_DIR = Path(os.environ.get(
+    "KAMINOS_ASSETS_DIR",
+    os.path.expanduser("~/.local/state/kaminos/assets"),
+)).expanduser()
+KAMINOS_SPLAT_INBOX_DIR = Path(os.environ.get(
+    "KAMINOS_SPLAT_INBOX_DIR",
+    str(KAMINOS_ASSETS_DIR / "splats" / "inbox"),
+)).expanduser()
+KAMINOS_SPLAT_PRODUCTION_DIR = Path(os.environ.get(
+    "KAMINOS_SPLAT_PRODUCTION_DIR",
+    str(KAMINOS_ASSETS_DIR / "splats" / "production"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
+    "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
+    "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -30,6 +44,34 @@ BROWSE_ROOTS = {
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
+SPLAT_EXTENSIONS = {".ply", ".spz"}
+ASSET_ROOTS = [
+    {
+        "id": "splat-inbox",
+        "label": "Experimental Splat Inbox",
+        "kind": "splat",
+        "stage": "experimental",
+        "path": KAMINOS_SPLAT_INBOX_DIR,
+    },
+    {
+        "id": "splat-production",
+        "label": "Production Splats",
+        "kind": "splat",
+        "stage": "production",
+        "path": KAMINOS_SPLAT_PRODUCTION_DIR,
+    },
+]
+for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_ASSET_ROOTS", "").split(os.pathsep)), 1):
+    root_id = f"splat-extra-{index}"
+    root_path = Path(extra_root).expanduser()
+    BROWSE_ROOTS[root_id] = root_path
+    ASSET_ROOTS.append({
+        "id": root_id,
+        "label": f"Experimental Splat Root {index}",
+        "kind": "splat",
+        "stage": "experimental",
+        "path": root_path,
+    })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 
@@ -146,6 +188,23 @@ def build_output_display_metadata(entry_name, *, job_display=None, size=None):
     }
 
 
+def build_asset_display_metadata(path, *, root_label, stage, size=None):
+    ext = path.suffix.lower().lstrip(".").upper() or "FILE"
+    subtitle_parts = [ext, stage, root_label]
+    size_label = _format_size(size)
+    if size_label:
+        subtitle_parts.append(size_label)
+    return {
+        "title": _clean_label(path.name, "Untitled Splat"),
+        "subtitle": " / ".join(subtitle_parts),
+        "meta": f"raw {path.name}",
+        "raw_name": path.name,
+        "load_label": "Import Splat",
+        "stage": stage,
+        "root_label": root_label,
+    }
+
+
 def _format_size(size):
     try:
         size = int(size)
@@ -156,6 +215,45 @@ def _format_size(size):
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size / (1024 * 1024):.1f} MB"
+
+
+def list_asset_entries(kind="splat"):
+    """List declared Kaminos asset roots without scanning outside them."""
+    entries = []
+    for root in ASSET_ROOTS:
+        if kind not in ("all", root.get("kind")):
+            continue
+        root_id = root["id"]
+        root_path = Path(root["path"]).expanduser()
+        if not root_path.is_dir():
+            continue
+        suffixes = SPLAT_EXTENSIONS if root.get("kind") == "splat" else MESH_EXTENSIONS
+        for path in sorted(root_path.rglob("*")):
+            if any(part.startswith(".") for part in path.relative_to(root_path).parts):
+                continue
+            if not path.is_file() or path.suffix.lower() not in suffixes:
+                continue
+            rel_path = path.relative_to(root_path).as_posix()
+            size = path.stat().st_size
+            entries.append({
+                "id": f"{root_id}:{rel_path}",
+                "kind": root.get("kind"),
+                "stage": root.get("stage", "experimental"),
+                "root_id": root_id,
+                "root_label": root.get("label") or root_id,
+                "name": path.name,
+                "path": rel_path,
+                "size": size,
+                "mtime": path.stat().st_mtime,
+                "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+                "display": build_asset_display_metadata(
+                    path,
+                    root_label=root.get("label") or root_id,
+                    stage=root.get("stage", "experimental"),
+                    size=size,
+                ),
+            })
+    return entries
 
 
 def greenroom_output_roots():
@@ -232,6 +330,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/assets":
+            self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -424,6 +524,31 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "root": root_name,
             "path": sub_path,
             "entries": entries,
+        })
+
+    def handle_assets(self, params):
+        """List declared asset roots. v0 supports splat assets."""
+        kind = params.get("kind", ["splat"])[0]
+        if kind not in {"splat", "all"}:
+            self.send_json({"error": f"Unsupported asset kind: {kind}"}, 400)
+            return
+        roots = [
+            {
+                "id": root["id"],
+                "label": root.get("label") or root["id"],
+                "kind": root.get("kind"),
+                "stage": root.get("stage", "experimental"),
+                "path": str(Path(root["path"]).expanduser().resolve()),
+                "exists": Path(root["path"]).expanduser().exists(),
+            }
+            for root in ASSET_ROOTS
+            if kind in {"all", root.get("kind")}
+        ]
+        self.send_json({
+            "schema": "kaminos.asset-index.v0",
+            "kind": kind,
+            "roots": roots,
+            "entries": list_asset_entries(kind=kind),
         })
 
     def handle_read(self, params):
@@ -620,9 +745,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    for path in (BROWSE_ROOTS.get("splat-inbox"), BROWSE_ROOTS.get("splat-production")):
+        if path:
+            path.mkdir(parents=True, exist_ok=True)
     print(f"Kaminos server at http://localhost:{PORT}")
     print(f"  Scratch: {BROWSE_ROOTS['scratch']}")
     print(f"  Greenroom: {BROWSE_ROOTS['greenroom']}")
+    print(f"  Splat inbox: {BROWSE_ROOTS['splat-inbox']}")
+    print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()

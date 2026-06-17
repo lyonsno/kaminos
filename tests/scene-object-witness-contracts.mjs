@@ -16,6 +16,7 @@ assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser sc
 assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room picker display scenario');
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
+assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
@@ -142,6 +143,10 @@ assert.match(witness, /splat preview lost point-cloud state after scene load/, '
 assert.match(witness, /splat handoff saved scene did not preserve splat metadata/, 'Green Room splat witness proves saved scenes preserve splat route metadata');
 assert.match(witness, /splat handoff scene load did not restore splat object/, 'Green Room splat witness proves scene load restores splat placeholders from saved documents');
 assert.match(witness, /splat handoff cleanup did not delete saved scene file/, 'Green Room splat witness proves cleanup removed its temporary saved scene file');
+assert.match(witness, /splat asset inbox did not render any splat assets/, 'Splat Asset Inbox witness requires visible indexed splat rows');
+assert.match(witness, /splat asset inbox did not preserve experimental stage/, 'Splat Asset Inbox witness proves stage identity survives to the UI');
+assert.match(witness, /splat asset inbox import did not register point-cloud splat/, 'Splat Asset Inbox witness proves indexed PLY imports use the point-cloud preview path');
+assert.match(witness, /splat asset inbox did not preserve asset source/, 'Splat Asset Inbox witness proves imported splats keep the indexed asset source route');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

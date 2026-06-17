@@ -119,6 +119,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .gr-subtitle { color: #777; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
 .gr-raw { color: #4f4f4f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-family: 'SF Mono', monospace; }
 .gr-meta { font-size: 9px; color: #555; font-family: 'SF Mono', monospace; }
+.gr-stage { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.gr-stage.experimental { background: #33281b; color: #f0b85a; }
+.gr-stage.production { background: #173420; color: #66bb6a; }
 .gr-status { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
 .gr-status.done { background: #1b3a1b; color: #66bb6a; }
 .gr-status.failed { background: #3a1b1b; color: #ef5350; }
@@ -478,6 +481,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
+    <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
+    <div id="splat-assets-list"></div>
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div class="env-grid" id="greenroom-root-buttons" style="margin-bottom: 10px;"></div>
     <div id="greenroom-breadcrumb" style="font-size: 10px; color: #555; font-family: 'SF Mono', monospace; margin-bottom: 8px;"></div>
@@ -4148,6 +4153,80 @@ function renderGreenroomEntryIdentity(container, entry, options = {}) {
   return display;
 }
 
+async function grBrowseSplatAssets() {
+  const listEl = document.getElementById('splat-assets-list');
+  if (!listEl) return;
+  const data = await grFetchApi('assets', { kind: 'splat' });
+  if (data.error) {
+    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:8px;">${escapeHtml(data.error)}</div>`;
+    return;
+  }
+  const entries = data.entries || [];
+  if (!entries.length) {
+    listEl.innerHTML = '<div style="font-size:11px; color:#444; padding:8px;">No splat assets indexed</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const entry of entries) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+    div.dataset.splatAssetId = entry.id || '';
+    div.dataset.assetStage = entry.stage || '';
+    div.dataset.assetRoot = entry.root_id || '';
+
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = entry.stage === 'production' ? '\u25C6' : '\u25C7';
+    div.appendChild(icon);
+
+    const display = renderGreenroomEntryIdentity(div, entry, { forceSubtitle: true });
+
+    const stage = document.createElement('span');
+    stage.className = `gr-stage ${entry.stage === 'production' ? 'production' : 'experimental'}`;
+    stage.textContent = entry.stage === 'production' ? 'production' : 'experimental';
+    stage.title = entry.root_label || entry.root_id || '';
+    div.appendChild(stage);
+
+    const url = entry.source;
+    const importBtn = document.createElement('button');
+    importBtn.className = 'btn';
+    importBtn.textContent = 'Import Splat';
+    importBtn.dataset.splatAssetAction = 'import';
+    importBtn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        await greenroomImportSplat(url, entry.name || entry.path || 'splat.ply', display, {
+          clear: false,
+          metadata: {
+            source: url,
+            fileName: entry.name || entry.path || 'splat.ply',
+            label: display.title || entry.name || 'Splat',
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: url,
+              fileName: entry.name || entry.path || 'splat.ply',
+              format: (entry.name || entry.path || 'ply').split('.').pop()?.toLowerCase() || 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              provenance: {
+                source_group: entry.stage === 'production' ? 'splat-production' : 'splat-inbox',
+                source_url: url,
+                root_id: entry.root_id || null,
+                root_label: entry.root_label || null,
+                asset_stage: entry.stage || 'experimental',
+                asset_path: entry.path || null,
+              },
+            },
+          },
+        });
+      } catch {}
+    };
+    div.appendChild(importBtn);
+    listEl.appendChild(div);
+  }
+}
+
 async function grInit() {
   const rootBtns = document.getElementById('greenroom-root-buttons');
 
@@ -4188,6 +4267,7 @@ async function grInit() {
   }
   // Default: show done
   grCurrentPath = 'done';
+  grBrowseSplatAssets();
   grBrowse();
   grBrowseScenes();
   grBrowseScratch();
@@ -4356,6 +4436,9 @@ async function grBrowse() {
     listEl.appendChild(div);
   }
 }
+
+window.grBrowseSplatAssets = grBrowseSplatAssets;
+window.grBrowse = grBrowse;
 
 async function grOpenJobDir(path) {
   const listEl = document.getElementById('greenroom-list');

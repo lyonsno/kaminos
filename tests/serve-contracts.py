@@ -4,6 +4,7 @@ import sys
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import serve
 from serve import BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
@@ -143,6 +144,52 @@ def test_greenroom_stray_output_dirs_do_not_get_load_affordance():
             BROWSE_ROOTS["greenroom"] = previous
 
 
+def test_splat_asset_index_separates_experimental_and_production_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        production = root / "splats" / "production"
+        experimental.mkdir(parents=True)
+        production.mkdir(parents=True)
+        (experimental / "hostile-greenroom-output-9f31c.ply").write_text("ply\n")
+        (production / "hero-splat.spz").write_bytes(b"spz")
+        (root / "loose-machine-scan.ply").write_text("must not appear")
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+            {
+                "id": "splat-production",
+                "label": "Production Splats",
+                "kind": "splat",
+                "stage": "production",
+                "path": production,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        BROWSE_ROOTS["splat-production"] = production
+        try:
+            entries = serve.list_asset_entries(kind="splat")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert {entry["stage"] for entry in entries} == {"experimental", "production"}
+        assert [entry["root_id"] for entry in entries] == ["splat-inbox", "splat-production"]
+        assert all(entry["source"].startswith("/api/read?root=splat-") for entry in entries)
+        assert all(entry["display"]["raw_name"] in entry["path"] for entry in entries)
+        assert entries[0]["display"]["title"] == "Hostile Greenroom Output 9f31c"
+        assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_volume_only_scene_save_name_uses_scene_fallback()
@@ -150,3 +197,4 @@ if __name__ == "__main__":
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
+    test_splat_asset_index_separates_experimental_and_production_roots()

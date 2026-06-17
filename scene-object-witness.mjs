@@ -2261,6 +2261,98 @@ async function runGreenroomSplatHandoffScenario(ws) {
   }
 }
 
+async function runSplatAssetInboxScenario(ws) {
+  phase = 'scenario-splat-asset-inbox';
+  lastEvidence.splatAssetInbox = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const waitForAssetRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const beforeRows = rowState();
+      const assetRows = await waitForAssetRows();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const actionRow = assetRows.find(row => row.dataset.assetStage === 'experimental'
+        && [...row.querySelectorAll('button')].some(button => button.textContent.trim() === 'Import Splat'));
+      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Import Splat') : null;
+      const stageText = actionRow?.querySelector('.gr-stage')?.textContent?.trim() || null;
+      const title = actionRow?.querySelector('.gr-title')?.textContent?.trim() || null;
+      const raw = actionRow?.querySelector('.gr-raw')?.textContent?.replace(/^raw\\s+/i, '').trim() || null;
+      const assetEntry = (assetData.entries || []).find(entry => entry.stage === 'experimental') || null;
+      const sourceProbe = assetEntry?.source
+        ? await fetch(assetEntry.source).then(async resp => ({
+            ok: resp.ok,
+            status: resp.status,
+            route: assetEntry.source,
+            bytes: (await resp.arrayBuffer()).byteLength,
+          }))
+        : null;
+      if (actionButton) actionButton.click();
+      const afterRows = await waitForSceneRows(beforeRows.length + 1);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splatObject = sceneDebug.find(record => record.type === 'splat'
+        && record.source === assetEntry?.source) || sceneDebug.find(record => record.type === 'splat') || null;
+      return {
+        beforeRows,
+        afterRows,
+        assetRowCount: assetRows.length,
+        assetData,
+        actionExposed: !!actionButton,
+        stageText,
+        title,
+        raw,
+        assetEntry,
+        sourceProbe,
+        sceneDebug,
+        splatObject,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  if (lastEvidence.splatAssetInbox.assetRowCount < 1) {
+    throw new Error(`splat asset inbox did not render any splat assets: ${JSON.stringify(lastEvidence.splatAssetInbox)}`);
+  }
+  if (lastEvidence.splatAssetInbox.stageText !== 'experimental'
+      || lastEvidence.splatAssetInbox.assetEntry?.stage !== 'experimental') {
+    throw new Error(`splat asset inbox did not preserve experimental stage: ${JSON.stringify(lastEvidence.splatAssetInbox)}`);
+  }
+  const splatObject = lastEvidence.splatAssetInbox.splatObject;
+  if (!splatObject || splatObject.type !== 'splat'
+      || splatObject.splat?.previewKind !== 'point-cloud'
+      || Number(splatObject.splat?.pointCount || 0) < 1) {
+    throw new Error(`splat asset inbox import did not register point-cloud splat: ${JSON.stringify(lastEvidence.splatAssetInbox)}`);
+  }
+  const source = splatObject.source || '';
+  const expectedSource = lastEvidence.splatAssetInbox.assetEntry?.source || '';
+  if (!expectedSource || source !== expectedSource || !source.includes('/api/read?root=splat-inbox')) {
+    throw new Error(`splat asset inbox did not preserve asset source: ${JSON.stringify(lastEvidence.splatAssetInbox)}`);
+  }
+}
+
 async function runAoRouteDeltaScenario(ws) {
   phase = 'scenario-ao-route-delta-on';
   lastEvidence.aoRouteDelta = await evaluate(ws, `
@@ -2456,6 +2548,8 @@ try {
     await runGreenroomPreviewRaceScenario(ws);
   } else if (scenario === 'greenroom-splat-handoff') {
     await runGreenroomSplatHandoffScenario(ws);
+  } else if (scenario === 'splat-asset-inbox') {
+    await runSplatAssetInboxScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

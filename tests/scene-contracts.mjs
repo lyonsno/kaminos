@@ -54,6 +54,11 @@ assert.match(index, /className = 'gr-title'/, 'Greenroom rows promote humane dis
 assert.match(index, /className = 'gr-subtitle'/, 'Greenroom rows expose receipt-derived source/job/seed metadata below the title');
 assert.match(index, /display\.raw_name/, 'Greenroom rows preserve raw filenames and job ids as secondary metadata');
 assert.match(index, /entry\.display \|\| greenroomEntryDisplay\(entry\)/, 'Greenroom browse results consume server-provided display metadata with a client fallback');
+assert.match(index, /id="splat-assets-list"/, 'Greenroom tab exposes a dedicated Splat Assets list distinct from job output browsing');
+assert.match(index, /async function grBrowseSplatAssets\(/, 'Greenroom tab refreshes a declared splat asset index instead of requiring manual directory spelunking');
+assert.match(index, /grFetchApi\('assets',[\s\S]*kind:\s*'splat'/, 'Splat Assets UI queries /api/assets?kind=splat');
+assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
+assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');
