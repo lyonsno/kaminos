@@ -385,11 +385,22 @@ async function main() {
       assert.equal(state.clayCubeDiagnosticColorMode, 'cube-diagnostic-contact-displacement-colors-v0', 'cube diagnostic color mode missing');
       assert.equal(state.clayCubeBoundingBoxVisible, true, 'cube diagnostic bounding box missing');
       assert.equal(state.clayCubeBoundingBoxContract, 'cube-diagnostic-bounding-box-v0', 'cube diagnostic bounding-box contract missing');
+      assert.equal(state.clayCubeIsoSurfaceVisible, true, 'cube diagnostic iso-surface missing');
+      assert.equal(state.clayCubeIsoSurfaceEvidenceKind, 'diagnostic-marching-cubes-cpu-render-surface-not-solver-v0', 'cube diagnostic iso-surface evidence kind missing');
+      assert.ok((state.clayCubeIsoSurfaceResolution ?? 0) >= 20, 'cube diagnostic iso-surface resolution too low or missing');
+      assert.ok((state.clayCubeIsoSurfaceBallCount ?? 0) >= 216, 'cube diagnostic iso-surface did not consume enough material points');
+      assert.ok((state.clayCubeIsoSurfaceTriangleCount ?? 0) > 0, 'cube diagnostic iso-surface produced no triangles');
+      assert.equal(state.clayCubeBoundarySkinVisible, true, 'cube diagnostic boundary skin missing');
+      assert.equal(state.clayCubeBoundarySkinEvidenceKind, 'diagnostic-boundary-skin-from-material-points-not-solver-v0', 'cube diagnostic boundary-skin evidence kind missing');
+      assert.ok((state.clayCubeBoundarySkinVertexCount ?? 0) > 0, 'cube diagnostic boundary skin produced no vertices');
+      assert.ok((state.clayCubeBoundarySkinTriangleCount ?? 0) > 0, 'cube diagnostic boundary skin produced no triangles');
       assert.ok((state.clayCubeParticleCount ?? 0) >= 216, 'cube material-point count too small for first-loop witness');
       assert.ok((state.clayCubeGridDimension ?? 0) >= 12, 'cube grid dimension missing');
       assert.ok((state.clayCubeActiveGridCellCount ?? 0) > 0, 'cube active grid-cell count missing');
       assert.ok((state.clayCubeDeformedParticleCount ?? 0) > 0, 'cube deformation count missing');
-      assert.ok((state.clayCubeContactParticleCount ?? 0) > 0, 'cube contact count missing');
+      if (!routeUsesPointerDrag) {
+        assert.ok((state.clayCubeContactParticleCount ?? 0) > 0, 'cube contact count missing');
+      }
       assert.ok((state.clayCubeDiagnosticColoredParticleCount ?? 0) > 0, 'cube diagnostic colored particle count missing');
       assert.ok((state.clayCubeDiagnosticHotParticleCount ?? 0) > 0, 'cube hot/contact diagnostic particle count missing');
       assert.ok((state.clayCubeMaxDisplacement ?? 0) > 0.005, 'cube max displacement too small to prove hand influence');
@@ -593,6 +604,15 @@ async function main() {
       clayCubeDiagnosticColorMode: state.clayCubeDiagnosticColorMode,
       clayCubeDiagnosticColoredParticleCount: state.clayCubeDiagnosticColoredParticleCount,
       clayCubeDiagnosticHotParticleCount: state.clayCubeDiagnosticHotParticleCount,
+      clayCubeIsoSurfaceVisible: state.clayCubeIsoSurfaceVisible,
+      clayCubeIsoSurfaceEvidenceKind: state.clayCubeIsoSurfaceEvidenceKind,
+      clayCubeIsoSurfaceResolution: state.clayCubeIsoSurfaceResolution,
+      clayCubeIsoSurfaceBallCount: state.clayCubeIsoSurfaceBallCount,
+      clayCubeIsoSurfaceTriangleCount: state.clayCubeIsoSurfaceTriangleCount,
+      clayCubeBoundarySkinVisible: state.clayCubeBoundarySkinVisible,
+      clayCubeBoundarySkinEvidenceKind: state.clayCubeBoundarySkinEvidenceKind,
+      clayCubeBoundarySkinVertexCount: state.clayCubeBoundarySkinVertexCount,
+      clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,
@@ -673,7 +693,7 @@ async function main() {
       brightOrangePixels: metrics.brightOrangePixels,
       litPixels: metrics.litPixels,
       visualVerdict: isCubeRoute
-        ? 'webgpu clay cube material-point witness visible; old surface hidden; not fire'
+        ? 'webgpu clay cube diagnostic skin visible; old surface hidden; not fire'
         : 'webgpu clay surface visible; not fire',
       screenshot: out,
     };

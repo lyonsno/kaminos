@@ -47,6 +47,13 @@ const CLAY_CUBE_EXTENTS = Object.freeze({
 const CLAY_CUBE_SURFACE_VISIBLE = false;
 const CLAY_CUBE_DIAGNOSTIC_COLOR_MODE = 'cube-diagnostic-contact-displacement-colors-v0';
 const CLAY_CUBE_BOUNDING_BOX_CONTRACT = 'cube-diagnostic-bounding-box-v0';
+const CLAY_CUBE_ISO_SURFACE_EVIDENCE_KIND = 'diagnostic-marching-cubes-cpu-render-surface-not-solver-v0';
+const CLAY_CUBE_ISO_SURFACE_RESOLUTION = 22;
+const CLAY_CUBE_ISO_SURFACE_MAX_BALLS = 1000;
+const CLAY_CUBE_ISO_SURFACE_STRENGTH = 0.24;
+const CLAY_CUBE_ISO_SURFACE_SUBTRACT = 10.0;
+const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
+const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
@@ -516,6 +523,7 @@ export function createKaminosClayPrototype({
   viewport,
   camera,
   controls,
+  MarchingCubes = null,
   clayGrid = DEFAULT_CLAY_GRID,
   clayCube = false,
   clayCubeGrid = DEFAULT_CLAY_CUBE,
@@ -550,6 +558,9 @@ export function createKaminosClayPrototype({
   let mesh = null;
   let cubePointCloud = null;
   let cubeBoundingBox = null;
+  let cubeIsoSurface = null;
+  let cubeBoundarySkin = null;
+  let cubeBoundarySkinSourceIndices = [];
   let colliderGroup = null;
   let colliders = [];
   let frameCount = 0;
@@ -633,6 +644,18 @@ export function createKaminosClayPrototype({
   let clayCubeBoundingBoxVisible = clayCubeEnabled;
   let clayCubeDiagnosticColoredParticleCount = 0;
   let clayCubeDiagnosticHotParticleCount = 0;
+  let clayCubeIsoSurfaceVisible = false;
+  let clayCubeIsoSurfaceEvidenceKind = clayCubeEnabled && MarchingCubes
+    ? CLAY_CUBE_ISO_SURFACE_EVIDENCE_KIND
+    : 'disabled';
+  let clayCubeIsoSurfaceResolution = clayCubeEnabled && MarchingCubes ? CLAY_CUBE_ISO_SURFACE_RESOLUTION : 0;
+  let clayCubeIsoSurfaceBallCount = 0;
+  let clayCubeIsoSurfaceTriangleCount = 0;
+  let clayCubeIsoSurfaceNeedsRefresh = false;
+  let clayCubeBoundarySkinVisible = clayCubeEnabled;
+  let clayCubeBoundarySkinEvidenceKind = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND : 'disabled';
+  let clayCubeBoundarySkinVertexCount = 0;
+  let clayCubeBoundarySkinTriangleCount = 0;
   let lastCubeStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
@@ -703,6 +726,49 @@ export function createKaminosClayPrototype({
       cubePointCloud.renderOrder = 5;
       scene.add(cubePointCloud);
 
+      const skinMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc89b65,
+        roughness: 0.86,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.54,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      cubeBoundarySkin = new THREE.Mesh(createCubeBoundarySkinGeometry(), skinMaterial);
+      cubeBoundarySkin.name = 'kaminos-clay-cube-diagnostic-boundary-skin';
+      cubeBoundarySkin.renderOrder = 4;
+      scene.add(cubeBoundarySkin);
+
+      if (MarchingCubes) {
+        const isoMaterial = new THREE.MeshStandardMaterial({
+          color: 0xb88f5d,
+          roughness: 0.9,
+          metalness: 0,
+          transparent: true,
+          opacity: 0.42,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        cubeIsoSurface = new MarchingCubes(
+          CLAY_CUBE_ISO_SURFACE_RESOLUTION,
+          isoMaterial,
+          false,
+          false,
+          42000,
+        );
+        cubeIsoSurface.name = 'kaminos-clay-cube-diagnostic-marching-cubes-surface';
+        cubeIsoSurface.isolation = CLAY_CUBE_ISO_SURFACE_ISOLATION;
+        cubeIsoSurface.scale.set(
+          CLAY_CUBE_EXTENTS.halfX,
+          (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY) * 0.5,
+          CLAY_CUBE_EXTENTS.halfZ,
+        );
+        cubeIsoSurface.position.set(0, (CLAY_CUBE_EXTENTS.minY + CLAY_CUBE_EXTENTS.maxY) * 0.5, 0);
+        cubeIsoSurface.renderOrder = 4;
+        scene.add(cubeIsoSurface);
+      }
+
       const boxGeometry = new THREE.BoxGeometry(
         CLAY_CUBE_EXTENTS.halfX * 2,
         CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY,
@@ -723,6 +789,89 @@ export function createKaminosClayPrototype({
     }
   }
 
+  function cubeParticleIndex(x, y, z) {
+    return y * cubeConfig.cubeZ * cubeConfig.cubeX + z * cubeConfig.cubeX + x;
+  }
+
+  function createCubeBoundarySkinGeometry() {
+    const positions = [];
+    const indices = [];
+    const sourceIndices = [];
+
+    const pushVertex = sourceIndex => {
+      const offset = sourceIndex * 4;
+      sourceIndices.push(sourceIndex);
+      positions.push(cubeBasePositions[offset], cubeBasePositions[offset + 1], cubeBasePositions[offset + 2]);
+      return sourceIndices.length - 1;
+    };
+
+    const pushQuad = (a, b, c, d) => {
+      const base = indices.length;
+      indices.push(a, b, c, c, b, d);
+      return base;
+    };
+
+    for (let y = 0; y < cubeConfig.cubeY - 1; y += 1) {
+      for (let x = 0; x < cubeConfig.cubeX - 1; x += 1) {
+        pushQuad(
+          pushVertex(cubeParticleIndex(x, y, 0)),
+          pushVertex(cubeParticleIndex(x + 1, y, 0)),
+          pushVertex(cubeParticleIndex(x, y + 1, 0)),
+          pushVertex(cubeParticleIndex(x + 1, y + 1, 0)),
+        );
+        pushQuad(
+          pushVertex(cubeParticleIndex(x + 1, y, cubeConfig.cubeZ - 1)),
+          pushVertex(cubeParticleIndex(x, y, cubeConfig.cubeZ - 1)),
+          pushVertex(cubeParticleIndex(x + 1, y + 1, cubeConfig.cubeZ - 1)),
+          pushVertex(cubeParticleIndex(x, y + 1, cubeConfig.cubeZ - 1)),
+        );
+      }
+    }
+
+    for (let y = 0; y < cubeConfig.cubeY - 1; y += 1) {
+      for (let z = 0; z < cubeConfig.cubeZ - 1; z += 1) {
+        pushQuad(
+          pushVertex(cubeParticleIndex(0, y, z + 1)),
+          pushVertex(cubeParticleIndex(0, y, z)),
+          pushVertex(cubeParticleIndex(0, y + 1, z + 1)),
+          pushVertex(cubeParticleIndex(0, y + 1, z)),
+        );
+        pushQuad(
+          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y, z)),
+          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y, z + 1)),
+          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y + 1, z)),
+          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y + 1, z + 1)),
+        );
+      }
+    }
+
+    for (let z = 0; z < cubeConfig.cubeZ - 1; z += 1) {
+      for (let x = 0; x < cubeConfig.cubeX - 1; x += 1) {
+        pushQuad(
+          pushVertex(cubeParticleIndex(x, 0, z + 1)),
+          pushVertex(cubeParticleIndex(x + 1, 0, z + 1)),
+          pushVertex(cubeParticleIndex(x, 0, z)),
+          pushVertex(cubeParticleIndex(x + 1, 0, z)),
+        );
+        pushQuad(
+          pushVertex(cubeParticleIndex(x, cubeConfig.cubeY - 1, z)),
+          pushVertex(cubeParticleIndex(x + 1, cubeConfig.cubeY - 1, z)),
+          pushVertex(cubeParticleIndex(x, cubeConfig.cubeY - 1, z + 1)),
+          pushVertex(cubeParticleIndex(x + 1, cubeConfig.cubeY - 1, z + 1)),
+        );
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    cubeBoundarySkinSourceIndices = sourceIndices;
+    clayCubeBoundarySkinVertexCount = sourceIndices.length;
+    clayCubeBoundarySkinTriangleCount = indices.length / 3;
+    return geometry;
+  }
+
   function refreshColliderMeshes() {
     if (!colliderGroup) return;
     colliderGroup.clear();
@@ -741,6 +890,55 @@ export function createKaminosClayPrototype({
       sphere.name = `kaminos-clay-collider-${collider.id}`;
       colliderGroup.add(sphere);
     }
+  }
+
+  function refreshCubeIsoSurface(cubeValues) {
+    if (!cubeIsoSurface || !cubeValues) {
+      clayCubeIsoSurfaceVisible = false;
+      clayCubeIsoSurfaceBallCount = 0;
+      clayCubeIsoSurfaceTriangleCount = 0;
+      return;
+    }
+    cubeIsoSurface.reset();
+    clayCubeIsoSurfaceBallCount = 0;
+    const invX = 1 / (CLAY_CUBE_EXTENTS.halfX * 2);
+    const invY = 1 / (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY);
+    const invZ = 1 / (CLAY_CUBE_EXTENTS.halfZ * 2);
+    const stride = Math.max(1, Math.ceil(cubeConfig.particleCount / CLAY_CUBE_ISO_SURFACE_MAX_BALLS));
+    for (let i = 0; i < cubeConfig.particleCount; i += stride) {
+      const offset = i * 4;
+      const x = (cubeValues[offset] + CLAY_CUBE_EXTENTS.halfX) * invX;
+      const y = (cubeValues[offset + 1] - CLAY_CUBE_EXTENTS.minY) * invY;
+      const z = (cubeValues[offset + 2] + CLAY_CUBE_EXTENTS.halfZ) * invZ;
+      cubeIsoSurface.addBall(
+        clamp01(x),
+        clamp01(y),
+        clamp01(z),
+        CLAY_CUBE_ISO_SURFACE_STRENGTH,
+        CLAY_CUBE_ISO_SURFACE_SUBTRACT,
+      );
+      clayCubeIsoSurfaceBallCount += 1;
+    }
+    cubeIsoSurface.update();
+    clayCubeIsoSurfaceTriangleCount = Math.floor((cubeIsoSurface.count || 0) / 3);
+    clayCubeIsoSurfaceVisible = clayCubeIsoSurfaceTriangleCount > 0;
+    cubeIsoSurface.visible = clayCubeIsoSurfaceVisible;
+  }
+
+  function refreshCubeBoundarySkin(cubeValues) {
+    const position = cubeBoundarySkin?.geometry?.attributes?.position || null;
+    if (!position || !cubeValues) {
+      clayCubeBoundarySkinVisible = false;
+      return;
+    }
+    for (let i = 0; i < cubeBoundarySkinSourceIndices.length; i += 1) {
+      const sourceOffset = cubeBoundarySkinSourceIndices[i] * 4;
+      position.setXYZ(i, cubeValues[sourceOffset], cubeValues[sourceOffset + 1], cubeValues[sourceOffset + 2]);
+    }
+    position.needsUpdate = true;
+    cubeBoundarySkin.geometry.computeVertexNormals();
+    clayCubeBoundarySkinVisible = true;
+    cubeBoundarySkin.visible = true;
   }
 
   function setDebugCollidersVisible(nextVisible) {
@@ -1295,10 +1493,17 @@ export function createKaminosClayPrototype({
     }
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
+    refreshCubeBoundarySkin(cubeValues);
     clayCubeHeightRange = clayCubeMaxY - clayCubeMinY;
     clayCubeActiveGridCellCount = activeCells.size;
     clayCubeStepStatus = 'pass';
     lastCubeStateValues = cubeValues;
+    if (!clayCubeIsoSurfaceVisible && !clayPointerActive) {
+      refreshCubeIsoSurface(cubeValues);
+      clayCubeIsoSurfaceNeedsRefresh = false;
+    } else {
+      clayCubeIsoSurfaceNeedsRefresh = true;
+    }
   }
 
   async function step() {
@@ -1512,6 +1717,10 @@ export function createKaminosClayPrototype({
     clayPointerActive = false;
     clayPointerColliderCount = 0;
     refreshColliderMeshes();
+    if (clayCubeIsoSurfaceNeedsRefresh && lastCubeStateValues) {
+      refreshCubeIsoSurface(lastCubeStateValues);
+      clayCubeIsoSurfaceNeedsRefresh = false;
+    }
     onStatus(debugState());
   }
 
@@ -1575,6 +1784,15 @@ export function createKaminosClayPrototype({
       clayCubeDiagnosticColorMode: CLAY_CUBE_DIAGNOSTIC_COLOR_MODE,
       clayCubeDiagnosticColoredParticleCount,
       clayCubeDiagnosticHotParticleCount,
+      clayCubeIsoSurfaceVisible,
+      clayCubeIsoSurfaceEvidenceKind,
+      clayCubeIsoSurfaceResolution,
+      clayCubeIsoSurfaceBallCount,
+      clayCubeIsoSurfaceTriangleCount,
+      clayCubeBoundarySkinVisible,
+      clayCubeBoundarySkinEvidenceKind,
+      clayCubeBoundarySkinVertexCount,
+      clayCubeBoundarySkinTriangleCount,
       clayCubeOracleEvidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
@@ -1665,6 +1883,8 @@ export function createKaminosClayPrototype({
         if (mesh) mesh.visible = false;
         if (cubePointCloud) cubePointCloud.visible = false;
         if (cubeBoundingBox) cubeBoundingBox.visible = false;
+        if (cubeIsoSurface) cubeIsoSurface.visible = false;
+        if (cubeBoundarySkin) cubeBoundarySkin.visible = false;
         if (colliderGroup) colliderGroup.visible = false;
         onStatus(debugState());
         return;
@@ -1676,6 +1896,8 @@ export function createKaminosClayPrototype({
       mesh.visible = clayCubeSurfaceVisible;
       if (cubePointCloud) cubePointCloud.visible = clayCubeEnabled;
       if (cubeBoundingBox) cubeBoundingBox.visible = clayCubeBoundingBoxVisible;
+      if (cubeIsoSurface) cubeIsoSurface.visible = clayCubeEnabled && clayCubeIsoSurfaceVisible;
+      if (cubeBoundarySkin) cubeBoundarySkin.visible = clayCubeEnabled && clayCubeBoundarySkinVisible;
       colliderGroup.visible = clayDebugCollidersVisible;
       refreshColliderMeshes();
       await step();
