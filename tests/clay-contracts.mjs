@@ -166,7 +166,7 @@ const vendorPointTriangle = existsSync(vendorPointTrianglePath) ? readFileSync(v
 assert.match(vendorPointTriangle, /POINT_TRIANGLE_SOURCE_CONTRACT/, 'vendor bridge exposes point-triangle source contract');
 assert.match(vendorPointTriangle, /packPointTriangleDistanceJobs/, 'vendor bridge exposes point-triangle job packing schema');
 assert.match(vendorPointTriangle, /point_triangle_distance_main/, 'vendor bridge exposes executable point-triangle WGSL');
-assert.match(vendorPointTriangle, /49dd17c/, 'vendor bridge records the local package commit it was copied from');
+assert.match(vendorPointTriangle, /3a8441b/, 'vendor bridge records the local package commit/submodule boundary it was copied from');
 
 const witnessPath = join(root, 'clay-witness.mjs');
 assert.ok(existsSync(witnessPath), 'clay-witness.mjs exists');

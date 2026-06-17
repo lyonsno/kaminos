@@ -312,7 +312,7 @@ async function main() {
     assert.equal(state.runtimeCpuFallback, false);
     assert.equal(state.packagePrimitiveSourceContract, 'kaolin-kpm-001-forward-distance-feature-codes');
     assert.equal(state.packagePrimitiveImportPath, './vendor/webgpu-geometry-primitives/point-triangle.js');
-    assert.equal(state.packagePrimitiveCommit, '49dd17c');
+    assert.equal(state.packagePrimitiveCommit, '3a8441b');
     assert.equal(state.pointTriangleJobFloats, 16);
     assert.equal(state.pointTriangleResultBytes, 16);
     assert.equal(state.sharedPrimitiveProbeStatus, 'pass');

@@ -1,6 +1,6 @@
-// Static browser bridge copied from /Users/noahlyons/dev/webgpu-geometry-primitives@49dd17c.
+// Static browser bridge copied from the point-triangle submodule shape in /Users/noahlyons/dev/webgpu-geometry-primitives@3a8441b.
 // Kaminos currently runs as a no-bundler static app, so the clay route imports
-// this snapshot until a package install/import-map path exists.
+// this point-triangle subset until a package install/import-map path exists.
 export const POINT_TRIANGLE_FEATURE = Object.freeze({
   FACE: 0,
   VERTEX_0: 1,
@@ -14,7 +14,7 @@ export const POINT_TRIANGLE_FEATURE = Object.freeze({
 export const POINT_TRIANGLE_SOURCE_CONTRACT = 'kaolin-kpm-001-forward-distance-feature-codes';
 export const POINT_TRIANGLE_JOB_FLOATS = 16;
 export const POINT_TRIANGLE_RESULT_BYTES = 16;
-export const POINT_TRIANGLE_PACKAGE_COMMIT = '49dd17c';
+export const POINT_TRIANGLE_PACKAGE_COMMIT = '3a8441b';
 export const POINT_TRIANGLE_IMPORT_PATH = './vendor/webgpu-geometry-primitives/point-triangle.js';
 
 function assertVec3(value, name) {
