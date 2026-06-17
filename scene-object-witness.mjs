@@ -2353,6 +2353,98 @@ async function runSplatAssetInboxScenario(ws) {
   }
 }
 
+async function runSplatDirectDropIngestScenario(ws) {
+  phase = 'scenario-splat-direct-drop-ingest';
+  lastEvidence.splatDirectDropIngest = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const ply = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex 6',
+        'property float x',
+        'property float y',
+        'property float z',
+        'property uchar red',
+        'property uchar green',
+        'property uchar blue',
+        'end_header',
+        '-1 0 0 255 60 60',
+        '1 0 0 60 255 60',
+        '0 -1 0 60 60 255',
+        '0 1 0 255 220 60',
+        '0 0 -1 255 60 220',
+        '0 0 1 60 255 220',
+      ].join('\\n') + '\\n';
+      document.querySelector('[data-tab="greenroom"]').click();
+      const beforeRows = rowState();
+      const file = new File([ply], 'Witness Direct Drop.PLY', { type: 'application/octet-stream' });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: false });
+      const afterRows = await waitForSceneRows(beforeRows.length + 1);
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splatObject = sceneDebug.find(record => record.type === 'splat'
+        && record.source === ingestResult?.entry?.source) || sceneDebug.find(record => record.type === 'splat') || null;
+      const sourceProbe = ingestResult?.entry?.source
+        ? await fetch(ingestResult.entry.source).then(async resp => ({
+            ok: resp.ok,
+            status: resp.status,
+            route: ingestResult.entry.source,
+            bytes: (await resp.arrayBuffer()).byteLength,
+          }))
+        : null;
+      return {
+        beforeRows,
+        afterRows,
+        ingestResult: {
+          entry: ingestResult?.entry || null,
+          objectName: ingestResult?.object?.name || null,
+        },
+        assetData,
+        sourceProbe,
+        sceneDebug,
+        splatObject,
+        info: document.getElementById('info-bar')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  const entry = lastEvidence.splatDirectDropIngest.ingestResult?.entry;
+  if (!entry || entry.stage !== 'experimental' || entry.root_id !== 'splat-inbox') {
+    throw new Error(`direct splat drop did not upload to the experimental inbox: ${JSON.stringify(lastEvidence.splatDirectDropIngest)}`);
+  }
+  const splatObject = lastEvidence.splatDirectDropIngest.splatObject;
+  const source = splatObject?.source || '';
+  if (!splatObject || source !== entry.source || !source.includes('/api/read?root=splat-inbox')) {
+    throw new Error(`direct splat drop did not import from the reloadable inbox route: ${JSON.stringify(lastEvidence.splatDirectDropIngest)}`);
+  }
+  if (splatObject.splat?.previewKind !== 'point-cloud' || Number(splatObject.splat?.pointCount || 0) !== 6) {
+    throw new Error(`direct splat drop did not register point-cloud splat: ${JSON.stringify(lastEvidence.splatDirectDropIngest)}`);
+  }
+  const provenance = splatObject.splat?.provenance || {};
+  if (provenance.ingest !== 'direct-drop'
+      || provenance.asset_stage !== 'experimental'
+      || provenance.root_id !== 'splat-inbox'
+      || provenance.source_url !== entry.source) {
+    throw new Error(`direct splat drop did not preserve ingest provenance: ${JSON.stringify(lastEvidence.splatDirectDropIngest)}`);
+  }
+}
+
 async function runAoRouteDeltaScenario(ws) {
   phase = 'scenario-ao-route-delta-on';
   lastEvidence.aoRouteDelta = await evaluate(ws, `
@@ -2550,6 +2642,8 @@ try {
     await runGreenroomSplatHandoffScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {
     await runSplatAssetInboxScenario(ws);
+  } else if (scenario === 'splat-direct-drop-ingest') {
+    await runSplatDirectDropIngestScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

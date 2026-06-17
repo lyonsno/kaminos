@@ -586,7 +586,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   </div>
   <div id="info-bar">No asset loaded</div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
-  <div id="viewport-drop-overlay">Drop GLB, OBJ, or .kaminos.json</div>
+  <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
 </div>
 
 <script type="importmap">
@@ -2740,9 +2740,11 @@ async function handleFiles(files, options = {}) {
     return showPBRPreview(previewOptions);
   } else {
     const glb = Object.keys(loadedFiles).find(f => f.endsWith('.glb'));
+    const splat = Object.keys(loadedFiles).find(f => /\.(ply|spz)$/i.test(f));
     const loadOptions = { metadata: options.metadata };
     if (Object.prototype.hasOwnProperty.call(options, 'clear')) loadOptions.clear = options.clear;
     if (glb) return showGLB(loadedFiles[glb], loadOptions);
+    else if (splat) return ingestDroppedSplatFile(loadedFiles[splat], loadOptions);
     else if (loadedFiles['depth_vis.png']) return showDepthSurface(loadOptions);
     else setInfo('No recognized outputs \u2014 drop a sidecar output directory');
   }
@@ -3162,6 +3164,10 @@ viewport.addEventListener('drop', async e => {
       const mtlFile = allFiles.find(f => f.name.endsWith('.mtl'));
       showOBJ(file, mtlFile);
       setInfo(`OBJ Inspector — ${file.name}`);
+      return;
+    }
+    if (/\.(ply|spz)$/i.test(file.name)) {
+      await ingestDroppedSplatFile(file);
       return;
     }
   }
@@ -4437,8 +4443,63 @@ async function grBrowse() {
   }
 }
 
+async function ingestDroppedSplatFile(file, options = {}) {
+  const name = file?.name || 'dropped-splat.ply';
+  if (!/\.(ply|spz)$/i.test(name)) {
+    setInfo(`Unsupported splat drop: ${name}`);
+    return null;
+  }
+  const resp = await fetch('/api/ingest-splat' + '?' + new URLSearchParams({ name }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error || !data.entry?.source) {
+    throw new Error(data.error || `Splat ingest failed ${resp.status}`);
+  }
+  const entry = data.entry;
+  const display = entry.display || {
+    title: greenroomHumanizeName(entry.name || name, name),
+    raw_name: entry.name || name,
+    meta: `raw ${entry.name || name}`,
+  };
+  const metadata = {
+    source: entry.source,
+    fileName: entry.name || name,
+    label: display.title || entry.name || name,
+    splat: {
+      schema: 'kaminos.splat-asset.v0',
+      assetSource: entry.source,
+      fileName: entry.name || name,
+      format: (entry.name || name).split('.').pop()?.toLowerCase() || 'ply',
+      bounds: null,
+      splatCount: null,
+      sidecars: [],
+      provenance: {
+        source_group: entry.stage === 'production' ? 'splat-production' : 'splat-inbox',
+        source_url: entry.source,
+        root_id: entry.root_id || 'splat-inbox',
+        root_label: entry.root_label || null,
+        asset_stage: entry.stage || 'experimental',
+        asset_path: entry.path || null,
+        ingest: 'direct-drop',
+        original_file_name: name,
+      },
+    },
+  };
+  const object = await greenroomImportSplat(entry.source, entry.name || name, display, {
+    ...options,
+    metadata,
+  });
+  await grBrowseSplatAssets();
+  setInfo(`Splat drop ingested: ${display.title || entry.name || name}`);
+  return { object, entry };
+}
+
 window.grBrowseSplatAssets = grBrowseSplatAssets;
 window.grBrowse = grBrowse;
+window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {
   const listEl = document.getElementById('greenroom-list');

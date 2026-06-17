@@ -4,6 +4,7 @@
 import http.server
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -233,27 +234,65 @@ def list_asset_entries(kind="splat"):
                 continue
             if not path.is_file() or path.suffix.lower() not in suffixes:
                 continue
-            rel_path = path.relative_to(root_path).as_posix()
-            size = path.stat().st_size
-            entries.append({
-                "id": f"{root_id}:{rel_path}",
-                "kind": root.get("kind"),
-                "stage": root.get("stage", "experimental"),
-                "root_id": root_id,
-                "root_label": root.get("label") or root_id,
-                "name": path.name,
-                "path": rel_path,
-                "size": size,
-                "mtime": path.stat().st_mtime,
-                "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
-                "display": build_asset_display_metadata(
-                    path,
-                    root_label=root.get("label") or root_id,
-                    stage=root.get("stage", "experimental"),
-                    size=size,
-                ),
-            })
+            entries.append(build_asset_entry(root, path))
     return entries
+
+
+def build_asset_entry(root, path):
+    root_id = root["id"]
+    root_path = Path(root["path"]).expanduser().resolve()
+    path = Path(path).resolve()
+    rel_path = path.relative_to(root_path).as_posix()
+    size = path.stat().st_size
+    return {
+        "id": f"{root_id}:{rel_path}",
+        "kind": root.get("kind"),
+        "stage": root.get("stage", "experimental"),
+        "root_id": root_id,
+        "root_label": root.get("label") or root_id,
+        "name": path.name,
+        "path": rel_path,
+        "size": size,
+        "mtime": path.stat().st_mtime,
+        "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+        "display": build_asset_display_metadata(
+            path,
+            root_label=root.get("label") or root_id,
+            stage=root.get("stage", "experimental"),
+            size=size,
+        ),
+    }
+
+
+def splat_inbox_root():
+    for root in ASSET_ROOTS:
+        if root.get("id") == "splat-inbox" and root.get("kind") == "splat":
+            return root
+    return None
+
+
+def sanitize_splat_filename(filename):
+    raw_name = Path(str(filename or "splat.ply")).name
+    ext = Path(raw_name).suffix.lower()
+    if ext not in SPLAT_EXTENSIONS:
+        raise ValueError(f"Unsupported splat asset extension: {ext or 'missing'}")
+    stem = Path(raw_name).stem.strip() or "splat"
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_") or "splat"
+    return f"{stem.lower()}{ext}"
+
+
+def ingest_splat_asset(filename, content):
+    root = splat_inbox_root()
+    if not root:
+        raise FileNotFoundError("splat-inbox root is not configured")
+    root_path = Path(root["path"]).expanduser()
+    root_path.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_splat_filename(filename)
+    target = (root_path / safe_name).resolve()
+    if not target.is_relative_to(root_path.resolve()):
+        raise PermissionError("Path traversal")
+    target.write_bytes(content)
+    return build_asset_entry(root, target)
 
 
 def greenroom_output_roots():
@@ -351,6 +390,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/save-scene":
             self.handle_save_scene()
+        elif parsed.path == "/api/ingest-splat":
+            self.handle_ingest_splat(parse_qs(parsed.query))
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -395,6 +436,34 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         scene_path.write_text(json.dumps(data, indent=2))
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_ingest_splat(self, params):
+        """Write a dropped PLY/SPZ into the experimental splat inbox."""
+        filename = params.get("name", [""])[0]
+        if not filename:
+            self.send_json({"error": "name required"}, 400)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            entry = ingest_splat_asset(filename, self.rfile.read(length))
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json({
+            "schema": "kaminos.asset-ingest.v0",
+            "kind": "splat",
+            "entry": entry,
+        })
 
     def handle_delete_scene(self, params):
         """Delete a scene file."""

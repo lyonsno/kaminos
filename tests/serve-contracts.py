@@ -190,6 +190,54 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
 
 
+def test_splat_asset_ingest_writes_only_to_experimental_inbox():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        production = root / "splats" / "production"
+        outside = root / "outside"
+        experimental.mkdir(parents=True)
+        production.mkdir(parents=True)
+        outside.mkdir()
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+            {
+                "id": "splat-production",
+                "label": "Production Splats",
+                "kind": "splat",
+                "stage": "production",
+                "path": production,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        BROWSE_ROOTS["splat-production"] = production
+        try:
+            entry = serve.ingest_splat_asset("../Hostile Drop Name.PLY", b"ply\n")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert entry["stage"] == "experimental"
+        assert entry["root_id"] == "splat-inbox"
+        assert entry["source"].startswith("/api/read?root=splat-inbox&path=")
+        assert entry["name"].endswith(".ply")
+        assert "/" not in entry["name"]
+        assert ".." not in entry["name"]
+        assert (experimental / entry["name"]).read_bytes() == b"ply\n"
+        assert not any(production.iterdir())
+        assert not any(outside.iterdir())
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_volume_only_scene_save_name_uses_scene_fallback()
@@ -198,3 +246,4 @@ if __name__ == "__main__":
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
+    test_splat_asset_ingest_writes_only_to_experimental_inbox()

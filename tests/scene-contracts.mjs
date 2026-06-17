@@ -59,6 +59,11 @@ assert.match(index, /async function grBrowseSplatAssets\(/, 'Greenroom tab refre
 assert.match(index, /grFetchApi\('assets',[\s\S]*kind:\s*'splat'/, 'Splat Assets UI queries /api/assets?kind=splat');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
+assert.match(index, /async function ingestDroppedSplatFile\(/, 'loose PLY/SPZ drops ingest into the experimental splat inbox before import');
+assert.match(index, /fetch\('\/api\/ingest-splat'/, 'dropped splat ingest uses a server route instead of object URLs');
+assert.match(index, /handleFiles\([\s\S]*\\\.\(ply\|spz\)/, 'sidebar drop handling recognizes loose PLY/SPZ files');
+assert.match(index, /viewport\.addEventListener\('drop'[\s\S]*\\\.\(ply\|spz\)/, 'viewport drop handling recognizes loose PLY/SPZ files');
+assert.match(index, /window\.kaminosIngestDroppedSplatFile/, 'browser witnesses can exercise direct splat-drop ingest without DOM inference');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');

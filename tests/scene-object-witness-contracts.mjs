@@ -17,6 +17,7 @@ assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
+assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
@@ -147,6 +148,10 @@ assert.match(witness, /splat asset inbox did not render any splat assets/, 'Spla
 assert.match(witness, /splat asset inbox did not preserve experimental stage/, 'Splat Asset Inbox witness proves stage identity survives to the UI');
 assert.match(witness, /splat asset inbox import did not register point-cloud splat/, 'Splat Asset Inbox witness proves indexed PLY imports use the point-cloud preview path');
 assert.match(witness, /splat asset inbox did not preserve asset source/, 'Splat Asset Inbox witness proves imported splats keep the indexed asset source route');
+assert.match(witness, /direct splat drop did not upload to the experimental inbox/, 'Direct splat drop witness proves dropped files are ingested into the inbox');
+assert.match(witness, /direct splat drop did not import from the reloadable inbox route/, 'Direct splat drop witness rejects object URL/local-file imports');
+assert.match(witness, /direct splat drop did not register point-cloud splat/, 'Direct splat drop witness proves ingested PLY imports use the point-cloud preview path');
+assert.match(witness, /direct splat drop did not preserve ingest provenance/, 'Direct splat drop witness proves source/root/stage provenance survives import');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');
