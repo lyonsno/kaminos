@@ -12,6 +12,7 @@ import {
 const ROUTE_IDENTITY = 'kaminos-clay-sim-route-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-clay-prototype-v0';
 const SOLVER_IDENTITY = 'webgpu-clay-surface-lattice-scaffold-v0';
+const CUBE_SOLVER_IDENTITY = 'webgpu-clay-material-point-cube-first-loop-v0';
 const SHARED_PRIMITIVE_SOURCE_CONTRACT = POINT_TRIANGLE_SOURCE_CONTRACT;
 const DEFAULT_CLAY_GRID = '48x32';
 const CLAY_GRID_PRESETS = Object.freeze({
@@ -30,6 +31,19 @@ const CLAY_BRUSH_BOUNDARY_EDGE_FALLOFF = 'smoothstep-edge-falloff';
 const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
 const CLAY_CPU_SHADOW_EVIDENCE_KIND = 'benchmark-only-js-shadow-not-runtime-fallback';
+const CLAY_CUBE_ORACLE_EVIDENCE_KIND = 'deterministic-js-oracle-not-runtime-fallback';
+const DEFAULT_CLAY_CUBE = '8x8x8';
+const CLAY_CUBE_PRESETS = Object.freeze({
+  '6x6x6': Object.freeze({ cubeX: 6, cubeY: 6, cubeZ: 6, gridDimension: 12 }),
+  '8x8x8': Object.freeze({ cubeX: 8, cubeY: 8, cubeZ: 8, gridDimension: 16 }),
+  '10x10x10': Object.freeze({ cubeX: 10, cubeY: 10, cubeZ: 10, gridDimension: 20 }),
+});
+const CLAY_CUBE_EXTENTS = Object.freeze({
+  halfX: 0.44,
+  minY: 0.04,
+  maxY: 0.68,
+  halfZ: 0.34,
+});
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
@@ -214,6 +228,151 @@ export function normalizeClayGridConfig(requestedGrid = DEFAULT_CLAY_GRID) {
   };
 }
 
+export function normalizeClayCubeConfig(requestedCube = DEFAULT_CLAY_CUBE) {
+  const requestedClayCube = String(requestedCube || DEFAULT_CLAY_CUBE);
+  const preset = CLAY_CUBE_PRESETS[requestedClayCube];
+  const clayCubeConfigWarnings = [];
+  const effectiveClayCube = preset ? requestedClayCube : DEFAULT_CLAY_CUBE;
+  if (!preset) clayCubeConfigWarnings.push(`unsupported-clay-cube:${requestedClayCube}`);
+  const effectivePreset = preset || CLAY_CUBE_PRESETS[DEFAULT_CLAY_CUBE];
+  const particleCount = effectivePreset.cubeX * effectivePreset.cubeY * effectivePreset.cubeZ;
+  return {
+    requestedClayCube,
+    effectiveClayCube,
+    cubeX: effectivePreset.cubeX,
+    cubeY: effectivePreset.cubeY,
+    cubeZ: effectivePreset.cubeZ,
+    gridDimension: effectivePreset.gridDimension,
+    particleCount,
+    clayCubeConfigWarnings,
+  };
+}
+
+export function seedClayCubeMaterialPoints(config = normalizeClayCubeConfig()) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const positions = new Float32Array(cfg.particleCount * 4);
+  let cursor = 0;
+  for (let y = 0; y < cfg.cubeY; y += 1) {
+    const fy = cfg.cubeY === 1 ? 0.5 : y / (cfg.cubeY - 1);
+    for (let z = 0; z < cfg.cubeZ; z += 1) {
+      const fz = cfg.cubeZ === 1 ? 0.5 : z / (cfg.cubeZ - 1);
+      for (let x = 0; x < cfg.cubeX; x += 1) {
+        const fx = cfg.cubeX === 1 ? 0.5 : x / (cfg.cubeX - 1);
+        positions[cursor] = (fx - 0.5) * CLAY_CUBE_EXTENTS.halfX * 2;
+        positions[cursor + 1] = CLAY_CUBE_EXTENTS.minY + fy * (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY);
+        positions[cursor + 2] = (fz - 0.5) * CLAY_CUBE_EXTENTS.halfZ * 2;
+        positions[cursor + 3] = 1;
+        cursor += 4;
+      }
+    }
+  }
+  return positions;
+}
+
+function normalizedCubeCollider(collider, index) {
+  const normalized = normalizeCollider(collider, index);
+  const sourceY = Number(collider?.center?.[1]);
+  const y = Number.isFinite(sourceY) && Math.abs(sourceY) > 1e-5
+    ? clampFinite(collider.center[1], CLAY_CUBE_EXTENTS.minY, CLAY_CUBE_EXTENTS.maxY, 0.34)
+    : 0.34;
+  return {
+    ...normalized,
+    center: [normalized.center[0], y, normalized.center[2]],
+  };
+}
+
+function cubeGridCellIndex(x, y, z, gridDimension) {
+  const gx = Math.max(0, Math.min(gridDimension - 1, Math.floor(((x / (CLAY_CUBE_EXTENTS.halfX * 2)) + 0.5) * gridDimension)));
+  const gy = Math.max(0, Math.min(gridDimension - 1, Math.floor(((y - CLAY_CUBE_EXTENTS.minY) / (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY)) * gridDimension)));
+  const gz = Math.max(0, Math.min(gridDimension - 1, Math.floor(((z / (CLAY_CUBE_EXTENTS.halfZ * 2)) + 0.5) * gridDimension)));
+  return gx + gy * gridDimension + gz * gridDimension * gridDimension;
+}
+
+export function runClayCubeFirstLoopOracle({
+  basePositions,
+  previousPositions = basePositions,
+  config = normalizeClayCubeConfig(),
+  colliders = [],
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
+  const previous = previousPositions instanceof Float32Array && previousPositions.length === base.length ? previousPositions : base;
+  const next = new Float32Array(base.length);
+  const normalizedColliders = colliders.slice(0, MAX_COLLIDERS).map(normalizedCubeCollider);
+  const activeCells = new Set();
+  let deformedParticleCount = 0;
+  let contactParticleCount = 0;
+  let maxDisplacement = 0;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const baseX = base[offset];
+    const baseY = base[offset + 1];
+    const baseZ = base[offset + 2];
+    let x = previous[offset];
+    let y = previous[offset + 1];
+    let z = previous[offset + 2];
+    let contact = 0;
+    let pushX = 0;
+    let pushY = 0;
+    let pushZ = 0;
+
+    for (const collider of normalizedColliders) {
+      const dx = x - collider.center[0];
+      const dy = y - collider.center[1];
+      const dz = z - collider.center[2];
+      const radius = Math.max(collider.radius, 0.001);
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const reach = clamp01(1 - dist / radius);
+      if (reach <= 0) continue;
+      const force = reach * reach * collider.strength;
+      const invDist = 1 / Math.max(dist, 0.025);
+      pushX += dx * invDist * force * 0.028;
+      pushY -= force * 0.082;
+      pushZ += dz * invDist * force * 0.028;
+      contact += 1;
+    }
+
+    x = x + pushX + (baseX - x) * 0.018;
+    y = y + pushY + (baseY - y) * 0.012;
+    z = z + pushZ + (baseZ - z) * 0.018;
+    x = clampFinite(x, -CLAY_CUBE_EXTENTS.halfX * 1.08, CLAY_CUBE_EXTENTS.halfX * 1.08, baseX);
+    y = clampFinite(y, -0.08, CLAY_CUBE_EXTENTS.maxY * 1.04, baseY);
+    z = clampFinite(z, -CLAY_CUBE_EXTENTS.halfZ * 1.08, CLAY_CUBE_EXTENTS.halfZ * 1.08, baseZ);
+
+    const dx = x - baseX;
+    const dy = y - baseY;
+    const dz = z - baseZ;
+    const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (displacement > 0.002) deformedParticleCount += 1;
+    if (contact > 0) contactParticleCount += 1;
+    maxDisplacement = Math.max(maxDisplacement, displacement);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+    activeCells.add(cubeGridCellIndex(x, y, z, cfg.gridDimension));
+    next[offset] = x;
+    next[offset + 1] = y;
+    next[offset + 2] = z;
+    next[offset + 3] = contact;
+  }
+
+  return {
+    evidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
+    positions: next,
+    particleCount: cfg.particleCount,
+    gridDimension: cfg.gridDimension,
+    activeGridCellCount: activeCells.size,
+    deformedParticleCount,
+    contactParticleCount,
+    maxDisplacement,
+    minY,
+    maxY,
+    heightRange: maxY - minY,
+  };
+}
+
 function normalizeCollider(collider, index) {
   const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
   const radius = clampFinite(collider?.radius, 0.035, 0.35, 0.12);
@@ -291,10 +450,75 @@ fn clay_surface_lattice_main(@builtin(global_invocation_id) global_id: vec3u) {
 `;
 }
 
-export function createKaminosClayPrototype({ THREE, scene, viewport, camera, controls, clayGrid = DEFAULT_CLAY_GRID, onStatus = () => {} }) {
+function clayCubeComputeShader() {
+  return /* wgsl */`
+struct CubeParams {
+  particleCount: u32,
+  colliderCount: u32,
+  stepIndex: u32,
+  gridDimension: u32,
+};
+
+@group(0) @binding(0) var<storage, read> basePositions: array<vec4f>;
+@group(0) @binding(1) var<storage, read> cubeColliders: array<vec4f>;
+@group(0) @binding(2) var<storage, read> cubeColliderForces: array<vec4f>;
+@group(0) @binding(3) var<storage, read> statePositions: array<vec4f>;
+@group(0) @binding(4) var<storage, read_write> outputPositions: array<vec4f>;
+@group(0) @binding(5) var<uniform> params: CubeParams;
+
+@compute @workgroup_size(64)
+fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) global_id: vec3u) {
+  let i = global_id.x;
+  if (i >= params.particleCount) {
+    return;
+  }
+  let base = basePositions[i];
+  var p = statePositions[i];
+  var push = vec3f(0.0);
+  var contact = 0.0;
+  for (var c = 0u; c < 8u; c = c + 1u) {
+    if (c >= params.colliderCount) {
+      break;
+    }
+    let collider = cubeColliders[c];
+    let forceLane = cubeColliderForces[c];
+    let radius = max(collider.w, 0.001);
+    let delta = p.xyz - collider.xyz;
+    let dist = length(delta);
+    let reach = clamp(1.0 - dist / radius, 0.0, 1.0);
+    if (reach > 0.0) {
+      let force = reach * reach * forceLane.x;
+      let direction = delta / max(dist, 0.025);
+      push = push + vec3f(direction.x * 0.028, -0.082, direction.z * 0.028) * force;
+      contact = contact + 1.0;
+    }
+  }
+  var next = p.xyz + push;
+  next = next + (base.xyz - next) * vec3f(0.018, 0.012, 0.018);
+  next.x = clamp(next.x, ${(-CLAY_CUBE_EXTENTS.halfX * 1.08).toFixed(8)}, ${(CLAY_CUBE_EXTENTS.halfX * 1.08).toFixed(8)});
+  next.y = clamp(next.y, -0.08000000, ${(CLAY_CUBE_EXTENTS.maxY * 1.04).toFixed(8)});
+  next.z = clamp(next.z, ${(-CLAY_CUBE_EXTENTS.halfZ * 1.08).toFixed(8)}, ${(CLAY_CUBE_EXTENTS.halfZ * 1.08).toFixed(8)});
+  outputPositions[i] = vec4f(next, contact);
+}
+`;
+}
+
+export function createKaminosClayPrototype({
+  THREE,
+  scene,
+  viewport,
+  camera,
+  controls,
+  clayGrid = DEFAULT_CLAY_GRID,
+  clayCube = false,
+  clayCubeGrid = DEFAULT_CLAY_CUBE,
+  onStatus = () => {},
+}) {
   const gridConfig = normalizeClayGridConfig(clayGrid);
+  const cubeConfig = normalizeClayCubeConfig(clayCubeGrid);
   const gridX = gridConfig.gridX;
   const gridZ = gridConfig.gridZ;
+  const clayCubeEnabled = !!clayCube;
   let active = false;
   let device = null;
   let gpuReadyPromise = null;
@@ -307,7 +531,17 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let stateBuffer = null;
   let outputBuffer = null;
   let readbackBuffer = null;
+  let cubePipeline = null;
+  let cubeBindGroup = null;
+  let cubeBaseBuffer = null;
+  let cubeColliderBuffer = null;
+  let cubeColliderForceBuffer = null;
+  let cubeParamsBuffer = null;
+  let cubeStateBuffer = null;
+  let cubeOutputBuffer = null;
+  let cubeReadbackBuffer = null;
   let mesh = null;
+  let cubePointCloud = null;
   let colliderGroup = null;
   let colliders = [];
   let frameCount = 0;
@@ -375,12 +609,26 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   let persistentClayInitialDelta = null;
   let persistentClayLatestDelta = null;
   let persistentClaySettlingRatio = null;
+  let clayCubeStepStatus = clayCubeEnabled ? 'not-run' : 'disabled';
+  let clayCubeEvidenceKind = clayCubeEnabled ? 'webgpu-material-point-readback' : 'disabled';
+  let clayCubeParticleCount = cubeConfig.particleCount;
+  let clayCubeActiveGridCellCount = 0;
+  let clayCubeDeformedParticleCount = 0;
+  let clayCubeContactParticleCount = 0;
+  let clayCubeMaxDisplacement = 0;
+  let clayCubeMinY = 0;
+  let clayCubeMaxY = 0;
+  let clayCubeHeightRange = 0;
+  let clayCubeReadbackWallMs = 0;
+  let clayCubeDispatchWorkgroups = 0;
+  let lastCubeStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
   const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
   let lastError = '';
   const vertexCount = gridX * gridZ;
   const basePositions = new Float32Array(vertexCount * 4);
+  const cubeBasePositions = seedClayCubeMaterialPoints(cubeConfig);
   let lastStateValues = null;
 
   for (let z = 0; z < gridZ; z += 1) {
@@ -402,6 +650,8 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       roughness: 0.82,
       metalness: 0,
       side: THREE.DoubleSide,
+      transparent: clayCubeEnabled,
+      opacity: clayCubeEnabled ? 0.58 : 1,
     });
     mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'kaminos-clay-surface-lattice';
@@ -412,6 +662,30 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     colliderGroup = new THREE.Group();
     colliderGroup.name = 'kaminos-clay-collider-debug';
     scene.add(colliderGroup);
+
+    if (clayCubeEnabled) {
+      const cubeGeometry = new THREE.BufferGeometry();
+      const cubePositions = new Float32Array(cubeConfig.particleCount * 3);
+      for (let i = 0; i < cubeConfig.particleCount; i += 1) {
+        cubePositions[i * 3] = cubeBasePositions[i * 4];
+        cubePositions[i * 3 + 1] = cubeBasePositions[i * 4 + 1];
+        cubePositions[i * 3 + 2] = cubeBasePositions[i * 4 + 2];
+      }
+      cubeGeometry.setAttribute('position', new THREE.BufferAttribute(cubePositions, 3));
+      const cubeMaterial = new THREE.PointsMaterial({
+        color: 0xb99262,
+        size: 0.052,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.92,
+        depthTest: false,
+        depthWrite: false,
+      });
+      cubePointCloud = new THREE.Points(cubeGeometry, cubeMaterial);
+      cubePointCloud.name = 'kaminos-clay-material-point-cube-first-loop';
+      cubePointCloud.renderOrder = 5;
+      scene.add(cubePointCloud);
+    }
   }
 
   function refreshColliderMeshes() {
@@ -772,7 +1046,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
   }
 
   async function ensureGpu() {
-    if (device && pipeline && bindGroup) return;
+    if (device && pipeline && bindGroup && (!clayCubeEnabled || (cubePipeline && cubeBindGroup))) return;
     if (gpuReadyPromise) return gpuReadyPromise;
     gpuReadyPromise = (async () => {
       if (!navigator.gpu) {
@@ -839,12 +1113,141 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
           { binding: 4, resource: { buffer: paramsBuffer } },
         ],
       });
+      if (clayCubeEnabled && !cubePipeline) {
+        cubeBaseBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-base-positions',
+          size: cubeBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        cubeColliderBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-colliders',
+          size: MAX_COLLIDERS * 4 * Float32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        cubeColliderForceBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-collider-forces',
+          size: MAX_COLLIDERS * 4 * Float32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        cubeParamsBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-params',
+          size: 4 * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        cubeStateBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-persistent-state',
+          size: cubeBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+        cubeOutputBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-output-positions',
+          size: cubeBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        cubeReadbackBuffer = device.createBuffer({
+          label: 'kaminos-clay-cube-readback',
+          size: cubeBasePositions.byteLength,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        device.queue.writeBuffer(cubeBaseBuffer, 0, cubeBasePositions);
+        device.queue.writeBuffer(cubeStateBuffer, 0, cubeBasePositions);
+        cubePipeline = device.createComputePipeline({
+          label: CUBE_SOLVER_IDENTITY,
+          layout: 'auto',
+          compute: {
+            module: device.createShaderModule({ code: clayCubeComputeShader() }),
+            entryPoint: 'clay_material_point_cube_first_loop_main',
+          },
+        });
+        cubeBindGroup = device.createBindGroup({
+          layout: cubePipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: cubeBaseBuffer } },
+            { binding: 1, resource: { buffer: cubeColliderBuffer } },
+            { binding: 2, resource: { buffer: cubeColliderForceBuffer } },
+            { binding: 3, resource: { buffer: cubeStateBuffer } },
+            { binding: 4, resource: { buffer: cubeOutputBuffer } },
+            { binding: 5, resource: { buffer: cubeParamsBuffer } },
+          ],
+        });
+      }
     })();
     try {
       await gpuReadyPromise;
     } finally {
       gpuReadyPromise = null;
     }
+  }
+
+  async function runCubeFirstLoop(primitiveColliders) {
+    if (!clayCubeEnabled) return;
+    clayCubeStepStatus = 'running';
+    clayCubeEvidenceKind = 'webgpu-material-point-readback';
+    const cubeStartedAt = performance.now();
+    const cubeColliderData = new Float32Array(MAX_COLLIDERS * 4);
+    const cubeColliderForceData = new Float32Array(MAX_COLLIDERS * 4);
+    primitiveColliders.slice(0, MAX_COLLIDERS).forEach((collider, index) => {
+      const cubeCollider = normalizedCubeCollider(collider, index);
+      cubeColliderData[index * 4] = cubeCollider.center[0];
+      cubeColliderData[index * 4 + 1] = cubeCollider.center[1];
+      cubeColliderData[index * 4 + 2] = cubeCollider.center[2];
+      cubeColliderData[index * 4 + 3] = cubeCollider.radius;
+      cubeColliderForceData[index * 4] = Number.isFinite(collider.effectiveStrength) ? collider.effectiveStrength : cubeCollider.strength;
+      cubeColliderForceData[index * 4 + 1] = Number.isFinite(collider.sampleAuthority) ? collider.sampleAuthority : -1;
+    });
+    device.queue.writeBuffer(cubeColliderBuffer, 0, cubeColliderData);
+    device.queue.writeBuffer(cubeColliderForceBuffer, 0, cubeColliderForceData);
+    device.queue.writeBuffer(cubeParamsBuffer, 0, new Uint32Array([
+      cubeConfig.particleCount,
+      Math.min(MAX_COLLIDERS, primitiveColliders.length),
+      gpuStepCount + 1,
+      cubeConfig.gridDimension,
+    ]));
+    const encoder = device.createCommandEncoder({ label: 'kaminos-clay-cube-first-loop-step' });
+    const pass = encoder.beginComputePass({ label: 'kaminos-clay-cube-first-loop-pass' });
+    pass.setPipeline(cubePipeline);
+    pass.setBindGroup(0, cubeBindGroup);
+    clayCubeDispatchWorkgroups = Math.ceil(cubeConfig.particleCount / 64);
+    pass.dispatchWorkgroups(clayCubeDispatchWorkgroups);
+    pass.end();
+    encoder.copyBufferToBuffer(cubeOutputBuffer, 0, cubeReadbackBuffer, 0, cubeBasePositions.byteLength);
+    encoder.copyBufferToBuffer(cubeOutputBuffer, 0, cubeStateBuffer, 0, cubeBasePositions.byteLength);
+    device.queue.submit([encoder.finish()]);
+    await cubeReadbackBuffer.mapAsync(GPUMapMode.READ);
+    const cubeValues = new Float32Array(cubeReadbackBuffer.getMappedRange()).slice();
+    cubeReadbackBuffer.unmap();
+    clayCubeReadbackWallMs = performance.now() - cubeStartedAt;
+
+    const activeCells = new Set();
+    clayCubeDeformedParticleCount = 0;
+    clayCubeContactParticleCount = 0;
+    clayCubeMaxDisplacement = 0;
+    clayCubeMinY = Number.POSITIVE_INFINITY;
+    clayCubeMaxY = Number.NEGATIVE_INFINITY;
+    const pointPosition = cubePointCloud?.geometry?.attributes?.position || null;
+    for (let i = 0; i < cubeConfig.particleCount; i += 1) {
+      const offset = i * 4;
+      const x = cubeValues[offset];
+      const y = cubeValues[offset + 1];
+      const z = cubeValues[offset + 2];
+      const contact = cubeValues[offset + 3];
+      const dx = x - cubeBasePositions[offset];
+      const dy = y - cubeBasePositions[offset + 1];
+      const dz = z - cubeBasePositions[offset + 2];
+      const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (displacement > 0.002) clayCubeDeformedParticleCount += 1;
+      if (contact > 0.5) clayCubeContactParticleCount += 1;
+      clayCubeMaxDisplacement = Math.max(clayCubeMaxDisplacement, displacement);
+      clayCubeMinY = Math.min(clayCubeMinY, y);
+      clayCubeMaxY = Math.max(clayCubeMaxY, y);
+      activeCells.add(cubeGridCellIndex(x, y, z, cubeConfig.gridDimension));
+      if (pointPosition) pointPosition.setXYZ(i, x, y, z);
+    }
+    if (pointPosition) pointPosition.needsUpdate = true;
+    clayCubeHeightRange = clayCubeMaxY - clayCubeMinY;
+    clayCubeActiveGridCellCount = activeCells.size;
+    clayCubeStepStatus = 'pass';
+    lastCubeStateValues = cubeValues;
   }
 
   async function step() {
@@ -881,6 +1284,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
     const values = new Float32Array(readbackBuffer.getMappedRange()).slice();
     readbackBuffer.unmap();
     clayLatticeReadbackWallMs = performance.now() - latticeStartedAt;
+    await runCubeFirstLoop(primitiveColliders);
 
     const meshUpdateStartedAt = performance.now();
     const position = mesh.geometry.attributes.position;
@@ -1096,6 +1500,25 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       persistentClayInitialDelta,
       persistentClayLatestDelta,
       persistentClaySettlingRatio,
+      clayCubeEnabled,
+      clayCubeSolverIdentity: CUBE_SOLVER_IDENTITY,
+      clayCubeStepStatus,
+      clayCubeEvidenceKind,
+      requestedClayCube: cubeConfig.requestedClayCube,
+      effectiveClayCube: cubeConfig.effectiveClayCube,
+      clayCubeConfigWarnings: cubeConfig.clayCubeConfigWarnings.slice(),
+      clayCubeGridDimension: cubeConfig.gridDimension,
+      clayCubeParticleCount,
+      clayCubeActiveGridCellCount,
+      clayCubeDeformedParticleCount,
+      clayCubeContactParticleCount,
+      clayCubeMaxDisplacement,
+      clayCubeMinY,
+      clayCubeMaxY,
+      clayCubeHeightRange,
+      clayCubeReadbackWallMs,
+      clayCubeDispatchWorkgroups,
+      clayCubeOracleEvidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
       clayPhaseTimingDisclaimer,
@@ -1183,6 +1606,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       active = !!nextActive;
       if (!active) {
         if (mesh) mesh.visible = false;
+        if (cubePointCloud) cubePointCloud.visible = false;
         if (colliderGroup) colliderGroup.visible = false;
         onStatus(debugState());
         return;
@@ -1190,6 +1614,7 @@ export function createKaminosClayPrototype({ THREE, scene, viewport, camera, con
       await ensureGpu();
       ensureMesh();
       mesh.visible = true;
+      if (cubePointCloud) cubePointCloud.visible = clayCubeEnabled;
       colliderGroup.visible = clayDebugCollidersVisible;
       refreshColliderMeshes();
       await step();

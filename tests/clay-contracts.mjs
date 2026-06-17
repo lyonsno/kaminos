@@ -50,6 +50,8 @@ assert.match(index, /96x64/, 'clay route exposes a high-resolution grid preset')
 assert.match(index, /192x128/, 'clay route exposes a larger inspection grid preset');
 assert.match(index, /256x192/, 'clay route exposes a stress grid preset');
 assert.match(index, /clay_interactive/, 'clay route accepts an interactive pointer smoke mode');
+assert.match(index, /clay_cube/, 'clay route accepts the first volumetric cube witness route');
+assert.match(index, /clay_cube_grid/, 'clay route accepts an explicit cube material-point preset');
 assert.match(index, /clay_brush_radius/, 'clay route accepts pointer brush radius');
 assert.match(index, /clay_brush_strength/, 'clay route accepts pointer brush strength');
 assert.match(index, /clay-brush-radius/, 'Clay panel exposes pointer brush radius control');
@@ -57,6 +59,9 @@ assert.match(index, /clay-brush-strength/, 'Clay panel exposes pointer brush str
 assert.match(index, /installClayPointerInteraction/, 'clay route installs pointer drag interaction');
 assert.match(index, /clay-pointer-mode/, 'Clay panel exposes pointer interaction mode');
 assert.match(index, /clay-pointer-drag-steps/, 'Clay panel exposes pointer-driven drag step count');
+assert.match(index, /clay-cube-particles/, 'Clay panel exposes cube material-point count');
+assert.match(index, /clay-cube-active-cells/, 'Clay panel exposes cube active grid-cell count');
+assert.match(index, /clay-cube-displacement/, 'Clay panel exposes cube max 3D displacement');
 
 const corePath = join(root, 'clay-core.js');
 assert.ok(existsSync(corePath), 'clay-core.js exists');
@@ -67,6 +72,17 @@ assert.match(core, /export function normalizeClayHandPoseColliders/, 'clay modul
 assert.match(core, /navigator\.gpu/, 'clay module requires WebGPU instead of CPU runtime fallback');
 assert.match(core, /runtimeCpuFallback:\s*false/, 'clay debug state refuses CPU runtime fallback');
 assert.match(core, /webgpu-clay-surface-lattice-scaffold-v0/, 'clay solver identity is stable');
+assert.match(core, /webgpu-clay-material-point-cube-first-loop-v0/, 'clay cube witness solver identity is stable');
+assert.match(core, /export function normalizeClayCubeConfig/, 'clay module exports cube config normalization');
+assert.match(core, /export function seedClayCubeMaterialPoints/, 'clay module exports deterministic cube material-point seeding');
+assert.match(core, /export function runClayCubeFirstLoopOracle/, 'clay module exports deterministic cube first-loop oracle');
+assert.match(core, /clayCubeEnabled/, 'clay debug state records whether the cube witness is enabled');
+assert.match(core, /clayCubeParticleCount/, 'clay debug state records cube material-point count');
+assert.match(core, /clayCubeActiveGridCellCount/, 'clay debug state records cube active grid-cell count');
+assert.match(core, /clayCubeMaxDisplacement/, 'clay debug state records cube 3D displacement');
+assert.match(core, /clayCubeHeightRange/, 'clay debug state records cube height range');
+assert.match(core, /clayCubeEvidenceKind/, 'clay debug state records cube evidence kind');
+assert.match(core, /deterministic-js-oracle-not-runtime-fallback/, 'clay cube CPU oracle is explicitly not runtime fallback');
 assert.match(core, /vendor\/webgpu-geometry-primitives\/point-triangle\.js/, 'clay route consumes the package primitive bridge');
 assert.match(core, /POINT_TRIANGLE_SOURCE_CONTRACT/, 'clay scaffold consumes imported shared primitive source contract');
 assert.match(core, /pointTriangleDistanceWgsl|point_triangle_distance_main/, 'clay scaffold points at the shared primitive WGSL contract');
@@ -229,6 +245,11 @@ assert.match(witness, /clayGridConfigWarnings/, 'clay witness records grid confi
 assert.match(witness, /expected-grid/, 'clay witness can assert an expected effective grid');
 assert.match(witness, /claySurfaceTriangleCount/, 'clay witness records surface triangle count');
 assert.match(witness, /clay_interactive=1/, 'clay witness can drive the interactive pointer route');
+assert.match(witness, /clay_cube=1/, 'clay witness can drive the volumetric cube route');
+assert.match(witness, /clayCubeParticleCount/, 'clay witness records cube material-point count');
+assert.match(witness, /clayCubeActiveGridCellCount/, 'clay witness records cube active grid-cell count');
+assert.match(witness, /clayCubeMaxDisplacement/, 'clay witness records cube max 3D displacement');
+assert.match(witness, /clayCubeEvidenceKind/, 'clay witness records cube evidence kind');
 assert.match(witness, /clay_brush_radius=/, 'clay witness can exercise routed pointer brush radius');
 assert.match(witness, /clay_brush_strength=/, 'clay witness can exercise routed pointer brush strength');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');

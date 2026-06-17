@@ -509,7 +509,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-content" id="tab-clay">
     <h2>Clay Sim</h2>
     <div class="panel">
-      <div class="field"><span class="field-key">Route</span><span class="route-chip" data-supported-clay-grids="48x32 96x64 128x96 192x128 256x192">kaminos_clay_sim=1</span></div>
+      <div class="field"><span class="field-key">Route</span><span class="route-chip" data-supported-clay-grids="48x32 96x64 128x96 192x128 256x192" data-supported-clay-cubes="6x6x6 8x8x8 10x10x10" data-clay-cube-route="clay_cube=1">kaminos_clay_sim=1</span></div>
       <div class="field"><span class="field-key">Backend</span><span class="field-val" id="clay-backend">inactive</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="clay-identity">kaminos-clay-prototype-v0</span></div>
       <div class="volume-actions">
@@ -544,6 +544,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">State</span><span class="field-val" id="clay-persistent-state">not-run</span></div>
       <div class="field"><span class="field-key">State delta</span><span class="field-val" id="clay-state-delta">0.000</span></div>
       <div class="field"><span class="field-key">Settling</span><span class="field-val" id="clay-settling-ratio">--</span></div>
+      <div class="field"><span class="field-key">Cube solver</span><span class="field-val" id="clay-cube-solver">disabled</span></div>
+      <div class="field"><span class="field-key">Cube particles</span><span class="field-val" id="clay-cube-particles">0</span></div>
+      <div class="field"><span class="field-key">Cube active cells</span><span class="field-val" id="clay-cube-active-cells">0</span></div>
+      <div class="field"><span class="field-key">Cube displacement</span><span class="field-val" id="clay-cube-displacement">0.000</span></div>
+      <div class="field"><span class="field-key">Cube range</span><span class="field-val" id="clay-cube-range">--</span></div>
+      <div class="field"><span class="field-key">Cube readback</span><span class="field-val" id="clay-cube-readback">-- ms</span></div>
       <div class="field"><span class="field-key">Hand backend</span><span class="field-val" id="clay-hand-pose-backend">--</span></div>
       <div class="field"><span class="field-key">Hand evidence</span><span class="field-val" id="clay-hand-pose-evidence">--</span></div>
       <div class="field"><span class="field-key">Hand frame</span><span class="field-val" id="clay-hand-pose-frame">--</span></div>
@@ -1703,6 +1709,12 @@ function refreshClayReadout() {
   document.getElementById('clay-persistent-state').textContent = s.persistentClayStateStatus || 'not-run';
   document.getElementById('clay-state-delta').textContent = Number.isFinite(s.persistentClayMaxDelta) ? s.persistentClayMaxDelta.toFixed(3) : '0.000';
   document.getElementById('clay-settling-ratio').textContent = Number.isFinite(s.persistentClaySettlingRatio) ? s.persistentClaySettlingRatio.toFixed(3) : '--';
+  document.getElementById('clay-cube-solver').textContent = s.clayCubeEnabled ? (s.clayCubeSolverIdentity || 'enabled') : 'disabled';
+  document.getElementById('clay-cube-particles').textContent = s.clayCubeEnabled ? `${s.clayCubeParticleCount ?? 0} @ ${s.effectiveClayCube || '--'}` : '0';
+  document.getElementById('clay-cube-active-cells').textContent = s.clayCubeEnabled ? String(s.clayCubeActiveGridCellCount ?? 0) : '0';
+  document.getElementById('clay-cube-displacement').textContent = s.clayCubeEnabled && Number.isFinite(s.clayCubeMaxDisplacement) ? s.clayCubeMaxDisplacement.toFixed(3) : '0.000';
+  document.getElementById('clay-cube-range').textContent = s.clayCubeEnabled && Number.isFinite(s.clayCubeHeightRange) ? s.clayCubeHeightRange.toFixed(3) : '--';
+  document.getElementById('clay-cube-readback').textContent = s.clayCubeEnabled && Number.isFinite(s.clayCubeReadbackWallMs) ? `${s.clayCubeReadbackWallMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-hand-pose-backend').textContent = s.effectiveHandPoseBackend || '--';
   document.getElementById('clay-hand-pose-evidence').textContent = s.handPoseEvidenceKind || '--';
   document.getElementById('clay-hand-pose-frame').textContent = s.handPoseFrameId || '--';
@@ -1888,6 +1900,8 @@ async function initKaminosClayRoute() {
     camera,
     controls,
     clayGrid: params.get('clay_grid') || '48x32',
+    clayCube: params.get('clay_cube') === '1',
+    clayCubeGrid: params.get('clay_cube_grid') || '8x8x8',
     onStatus: refreshClayReadout,
   });
   window.__kaminosClayPrototype = clayPrototype;

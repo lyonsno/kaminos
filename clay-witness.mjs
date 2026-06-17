@@ -323,6 +323,7 @@ async function main() {
       `shared primitive probe distance mismatch: ${state.sharedPrimitiveProbeDistanceSq}`,
     );
     const isInteractiveRoute = url.includes('clay_interactive=1');
+    const isCubeRoute = url.includes('clay_cube=1');
     assert.equal(state.primitiveContactPassStatus, 'pass');
     const expectedPrimitiveContacts = isInteractiveRoute
       ? 1
@@ -353,6 +354,22 @@ async function main() {
     assert.ok(Number.isFinite(state.persistentClaySettlingRatio), 'persistent clay state did not record settling ratio');
     if (!url.includes('clay_interactive=1') && !handPosePayloadPath) {
       assert.ok(state.persistentClaySettlingRatio < 1, `persistent clay did not settle: ${state.persistentClaySettlingRatio}`);
+    }
+    assert.equal(state.clayCubeEnabled, isCubeRoute, 'cube witness enablement did not match clay_cube route parameter');
+    if (isCubeRoute) {
+      assert.equal(state.clayCubeSolverIdentity, 'webgpu-clay-material-point-cube-first-loop-v0', 'cube solver identity missing');
+      assert.equal(state.clayCubeStepStatus, 'pass', 'cube first-loop step did not pass');
+      assert.equal(state.clayCubeEvidenceKind, 'webgpu-material-point-readback', 'cube evidence did not come from WebGPU readback');
+      assert.equal(state.clayCubeOracleEvidenceKind, 'deterministic-js-oracle-not-runtime-fallback', 'cube oracle evidence kind missing');
+      assert.ok((state.clayCubeParticleCount ?? 0) >= 216, 'cube material-point count too small for first-loop witness');
+      assert.ok((state.clayCubeGridDimension ?? 0) >= 12, 'cube grid dimension missing');
+      assert.ok((state.clayCubeActiveGridCellCount ?? 0) > 0, 'cube active grid-cell count missing');
+      assert.ok((state.clayCubeDeformedParticleCount ?? 0) > 0, 'cube deformation count missing');
+      assert.ok((state.clayCubeContactParticleCount ?? 0) > 0, 'cube contact count missing');
+      assert.ok((state.clayCubeMaxDisplacement ?? 0) > 0.005, 'cube max displacement too small to prove hand influence');
+      assert.ok((state.clayCubeHeightRange ?? 0) > 0.25, 'cube height range too small for volumetric witness');
+      assert.ok(Number.isFinite(state.clayCubeReadbackWallMs) && state.clayCubeReadbackWallMs > 0, 'cube readback timing missing');
+      assert.ok((state.clayCubeDispatchWorkgroups ?? 0) > 0, 'cube dispatch workgroup count missing');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(
@@ -525,6 +542,25 @@ async function main() {
       persistentClayInitialDelta: state.persistentClayInitialDelta,
       persistentClayLatestDelta: state.persistentClayLatestDelta,
       persistentClaySettlingRatio: state.persistentClaySettlingRatio,
+      clayCubeEnabled: state.clayCubeEnabled,
+      clayCubeSolverIdentity: state.clayCubeSolverIdentity,
+      clayCubeStepStatus: state.clayCubeStepStatus,
+      clayCubeEvidenceKind: state.clayCubeEvidenceKind,
+      clayCubeOracleEvidenceKind: state.clayCubeOracleEvidenceKind,
+      requestedClayCube: state.requestedClayCube,
+      effectiveClayCube: state.effectiveClayCube,
+      clayCubeConfigWarnings: state.clayCubeConfigWarnings,
+      clayCubeGridDimension: state.clayCubeGridDimension,
+      clayCubeParticleCount: state.clayCubeParticleCount,
+      clayCubeActiveGridCellCount: state.clayCubeActiveGridCellCount,
+      clayCubeDeformedParticleCount: state.clayCubeDeformedParticleCount,
+      clayCubeContactParticleCount: state.clayCubeContactParticleCount,
+      clayCubeMaxDisplacement: state.clayCubeMaxDisplacement,
+      clayCubeMinY: state.clayCubeMinY,
+      clayCubeMaxY: state.clayCubeMaxY,
+      clayCubeHeightRange: state.clayCubeHeightRange,
+      clayCubeReadbackWallMs: state.clayCubeReadbackWallMs,
+      clayCubeDispatchWorkgroups: state.clayCubeDispatchWorkgroups,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,
