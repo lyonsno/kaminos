@@ -113,6 +113,7 @@ assert.match(index, /id="lamellar-population-bearing-variance"/, 'Lamellar tab e
 assert.match(index, /id="lamellar-population-bearing-variance"[^>]*max="2"/, 'Lamellar macro population spread has enough range for coverage layouts');
 assert.match(index, /id="lamellar-population-bearing-variance"[^>]*value="1/, 'Lamellar macro population spread defaults to shell coverage, not clustering');
 assert.match(index, /id="lamellar-shell-enclosure"/, 'Lamellar tab exposes macro spherical enclosure control');
+assert.match(index, /id="lamellar-strip-topology-count"/, 'Lamellar tab exposes strip topology member count control');
 assert.match(index, /id="lamellar-population-bearing-spread"[^>]*max="2"/, 'Lamellar population toolhead spread has enough range for coverage layouts');
 assert.match(index, /id="lamellar-population-bearing-offset"[^>]*min="-6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
 assert.match(index, /id="lamellar-population-bearing-offset"[^>]*max="6\.283"/, 'Lamellar population toolhead rotate can make full-turn shell offsets');
@@ -136,6 +137,7 @@ assert.match(index, /lamellar_population_count/, 'URL route can override macro s
 assert.match(index, /lamellar_cutter_count/, 'URL route can override macro cutter population count');
 assert.match(index, /lamellar_population_bearing_variance/, 'URL route can override macro direction variance');
 assert.match(index, /lamellar_shell_enclosure/, 'URL route can override macro spherical enclosure');
+assert.match(index, /lamellar_strip_topology_count/, 'URL route can override subordinate strip topology member count');
 assert.match(index, /lamellar_overlap_bias/, 'URL route can override Lamellar overlap bias');
 assert.match(index, /lamellar_slice_t/, 'URL route can override Lamellar slice position');
 assert.match(index, /lamellar_slice_angle/, 'URL route can override Lamellar slice angle');
@@ -234,6 +236,8 @@ assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports m
 assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar core names same-shell direction population authoring mode');
 assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
 assert.match(core, /sphere-shell-enclosure-composition-v0/, 'Lamellar core names macro sphere-shell enclosure composition mode');
+assert.match(core, /intra-strip-topology-members-v0/, 'Lamellar core names subordinate same-shell strip topology members');
+assert.match(core, /stripTopologyDescriptors/, 'Lamellar debug state reports subordinate strip topology descriptors');
 assert.match(core, /layoutPreset/, 'Lamellar strip population descriptors record their layout preset');
 assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverage spacing for overlap diagnostics');
 assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
@@ -329,6 +333,7 @@ assert.match(witness, /stripProfileOverrides/, 'witness records selected-strip p
 assert.match(witness, /stripProfileDescriptors/, 'witness records selected-strip profile descriptors');
 assert.match(witness, /stripPopulationDescriptors/, 'witness records macro strip population descriptors');
 assert.match(witness, /shellEnclosure/, 'witness records macro sphere-shell enclosure receipts');
+assert.match(witness, /stripTopologyDescriptors/, 'witness records subordinate strip topology descriptors');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -567,6 +572,51 @@ assert.ok(
   Number.isInteger(assembled.curveInteractionReceipt?.curveCount)
     && assembled.curveInteractionReceipt.curveCount === assembled.sphereCurveDescriptors.length,
   'curve interaction receipt counts the generated sphere curves'
+);
+
+const noStripTopologyMembers = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 3,
+  populationCount: 4,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  stripTopologyCount: 0,
+});
+const withStripTopologyMembers = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 3,
+  populationCount: 4,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  stripTopologyCount: 2,
+});
+assert.equal(
+  noStripTopologyMembers.stripTopologyDescriptors.length,
+  0,
+  'zero strip topology count emits no subordinate topology member descriptors'
+);
+assert.ok(
+  withStripTopologyMembers.stripTopologyDescriptors.length > 0,
+  'positive strip topology count emits subordinate topology member descriptors before mesh emission'
+);
+assert.ok(
+  withStripTopologyMembers.stripTopologyDescriptors.every(member =>
+    member.kind === 'SphereCurveDescriptor'
+    && member.topologyMode === 'intra-strip-topology-members-v0'
+    && member.topologyRole === 'intra-strip-member'
+    && member.sourceParentStripInstanceId
+    && member.sourceParentCurveId
+    && Number.isInteger(member.topologyMemberIndex)
+  ),
+  'subordinate topology members carry parent strip/curve ancestry and topology member identity'
+);
+assert.ok(
+  withStripTopologyMembers.descriptors.filter(descriptor => descriptor.topologyRole === 'intra-strip-member').length >= withStripTopologyMembers.stripTopologyDescriptors.length,
+  'subordinate topology members are emitted as Lamellar section geometry, not debug-only receipts'
+);
+assert.ok(
+  withStripTopologyMembers.sphereCurveDescriptors.length > noStripTopologyMembers.sphereCurveDescriptors.length,
+  'subordinate topology members expand the sphere-curve substrate before envelope meshing'
 );
 
 const crossLayerProximity = coreModule.generateLamellarSectionSegments({

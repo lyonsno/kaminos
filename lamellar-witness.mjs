@@ -537,6 +537,17 @@ async function main() {
       const requestedShellEnclosure = Number(requested.get('lamellar_shell_enclosure'));
       assert.equal(state.composerDescriptor?.shellEnclosure, requestedShellEnclosure, 'Lamellar witness effective shellEnclosure did not match requested route');
     }
+    if (requested.has('lamellar_strip_topology_count')) {
+      const requestedStripTopologyCount = Number(requested.get('lamellar_strip_topology_count'));
+      assert.equal(state.composerDescriptor?.stripTopologyCount, requestedStripTopologyCount, 'Lamellar witness effective stripTopologyCount did not match requested route');
+      if (requestedStripTopologyCount > 0) {
+        assert.ok((state.stripTopologyDescriptors || []).length > 0, 'Lamellar witness did not export requested subordinate strip topology descriptors');
+        assert.ok(
+          (state.generatedSegmentDescriptors || []).some(descriptor => descriptor.topologyRole === 'intra-strip-member'),
+          'Lamellar witness did not emit requested subordinate strip topology members as section geometry'
+        );
+      }
+    }
     assert.ok(state.layerStackDescriptor?.mode, 'Lamellar witness did not export layer-stack descriptor');
     assert.ok((state.layerSpecs || []).length >= 1, 'Lamellar witness did not export per-layer specs');
     assert.ok((state.stripInstances || []).length > (state.layerSpecs || []).length, 'Lamellar witness did not export layer-owned strip assemblages');
@@ -719,6 +730,7 @@ async function main() {
       layerSpecs: state.layerSpecs,
       stripInstances: state.stripInstances,
       sphereCurveDescriptors: state.sphereCurveDescriptors,
+      stripTopologyDescriptors: state.stripTopologyDescriptors,
       lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
       curveInteractionReceipt: state.curveInteractionReceipt,
       selectedLayerUi: state.selectedLayerUi,

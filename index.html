@@ -648,6 +648,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-shell-enclosure" min="0" max="1" step="0.01" value="0.45">
         <span class="slider-val" id="lamellar-shell-enclosure-val">0.45</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Topology</span>
+        <input type="range" id="lamellar-strip-topology-count" min="0" max="4" step="1" value="0">
+        <span class="slider-val" id="lamellar-strip-topology-count-val">0</span>
+      </div>
       <button class="btn" id="lamellar-generate">Generate</button>
     </div>
     <h2>Context</h2>
@@ -2243,6 +2248,7 @@ function readLamellarControls() {
     cutterCount: parseInt(document.getElementById('lamellar-cutter-count').value, 10),
     populationBearingVariance: parseFloat(document.getElementById('lamellar-population-bearing-variance').value),
     shellEnclosure: parseFloat(document.getElementById('lamellar-shell-enclosure').value),
+    stripTopologyCount: parseInt(document.getElementById('lamellar-strip-topology-count').value, 10),
     sliceT: parseFloat(document.getElementById('lamellar-slice-t').value),
     sliceAngle: parseFloat(document.getElementById('lamellar-slice-angle').value),
     layerOverrides,
@@ -2670,6 +2676,7 @@ function applyLamellarAuthoringState(payload, options = {}) {
   setControlValue('lamellar-cutter-count', controlsState.cutterCount);
   setControlValue('lamellar-population-bearing-variance', controlsState.populationBearingVariance);
   setControlValue('lamellar-shell-enclosure', controlsState.shellEnclosure);
+  setControlValue('lamellar-strip-topology-count', controlsState.stripTopologyCount);
   setControlValue('lamellar-slice-t', controlsState.sliceT);
   setControlValue('lamellar-slice-angle', controlsState.sliceAngle);
   resetLamellarLayerOverrideControls();
@@ -3360,6 +3367,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-cutter-count-val').textContent = String(c.cutterCount);
   document.getElementById('lamellar-population-bearing-variance-val').textContent = c.populationBearingVariance.toFixed(2);
   document.getElementById('lamellar-shell-enclosure-val').textContent = c.shellEnclosure.toFixed(2);
+  document.getElementById('lamellar-strip-topology-count-val').textContent = String(c.stripTopologyCount);
   document.getElementById('lamellar-slice-t-val').textContent = c.sliceT.toFixed(3);
   document.getElementById('lamellar-slice-angle-val').textContent = String(Math.round(c.sliceAngle));
   if (!lamellarWitness) return;
@@ -3502,6 +3510,10 @@ function applyLamellarRouteParams() {
   if (params.has('lamellar_shell_enclosure') && Number.isFinite(shellEnclosure)) {
     document.getElementById('lamellar-shell-enclosure').value = String(Math.max(0, Math.min(1, shellEnclosure)));
   }
+  const stripTopologyCount = Number(params.get('lamellar_strip_topology_count'));
+  if (params.has('lamellar_strip_topology_count') && Number.isFinite(stripTopologyCount)) {
+    document.getElementById('lamellar-strip-topology-count').value = String(Math.max(0, Math.min(4, Math.round(stripTopologyCount))));
+  }
   const overlapBias = Number(params.get('lamellar_overlap_bias'));
   if (params.has('lamellar_overlap_bias') && Number.isFinite(overlapBias)) {
     document.getElementById('lamellar-overlap-bias').value = String(Math.max(0, Math.min(1, overlapBias)));
@@ -3558,6 +3570,7 @@ async function initLamellarRoute() {
     'lamellar-cutter-count',
     'lamellar-population-bearing-variance',
     'lamellar-shell-enclosure',
+    'lamellar-strip-topology-count',
     'lamellar-overlap-bias',
     'lamellar-slice-t',
     'lamellar-slice-angle',
