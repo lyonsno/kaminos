@@ -1383,11 +1383,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
   let bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
   let bonfireVisualAboveSource = bonfireSourceY - p.y;
-  let bonfireSourcePlugSuppressor = mix(0.18, 1.0, smoothstep(0.016, bonfireCoreRadius * 0.78, sourceRadial));
+  let bonfireSourcePlugSuppressor = mix(0.14, 1.0, smoothstep(0.018, bonfireCoreRadius * 0.82, sourceRadial));
   let bonfireCentralFireRelief = bonfireSourcePlugSuppressor;
   let bonfireLiftedFireBand = smoothstep(0.04, 0.18, bonfireVisualAboveSource) * (1.0 - smoothstep(0.54, 0.88, bonfireVisualAboveSource));
   let bonfireLiftedFireRadius = mix(bonfireCoreRadius * 0.82, bonfireSmokeRadius * 1.12, smoothstep(0.10, 0.58, bonfireVisualAboveSource));
-  let bonfirePacketRisingFireGate = mix(0.42, 1.0, smoothstep(0.035, 0.31, bonfireVisualAboveSource));
+  let bonfirePacketRisingFireGate = mix(0.24, 1.0, smoothstep(0.055, 0.35, bonfireVisualAboveSource));
   let bonfireFireball = max(smoothBonfireFireball * 0.018 * bonfireEdgeBreakup * bonfireSourcePlugSuppressor, bonfirePacketCombustion.x * bonfirePacketRisingFireGate * (0.92 + bonfireTongues * 0.48));
   let bonfireLiftedFireLobes = exp(-sourceRadial * sourceRadial / max(0.0068, bonfireLiftedFireRadius * bonfireLiftedFireRadius))
     * bonfireLiftedFireBand
@@ -1408,6 +1408,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLayeredSmokeBand = smoothstep(0.08, 0.26, bonfireVisualAboveSource) * (1.0 - smoothstep(1.10, 1.58, bonfireVisualAboveSource));
   let bonfireLayeredSmokeBreakup = mix(1.0, bonfireLayeredBreakup, bonfireLayeredSmokeBand);
   let bonfireSourceCarrier = smoothBonfireFireball * bonfireSourcePlugSuppressor * (0.065 + 0.040 * bonfireEdgeBreakup) + bonfirePacketCombustion.x * 0.48 + bonfireLiftedFireLobes * 0.32;
+  let bonfireFrontLiftGate = smoothstep(0.075, 0.24, bonfireVisualAboveSource) * (1.0 - smoothstep(0.74, 1.14, bonfireVisualAboveSource));
+  let bonfireOffAxisReactionRadius = mix(bonfireCoreRadius * 0.56, bonfireSmokeRadius * 1.16, smoothstep(0.08, 0.62, bonfireVisualAboveSource));
+  let bonfireOffAxisReactionWidth = max(0.020, bonfireCoreRadius * mix(0.18, 0.34, smoothstep(0.06, 0.56, bonfireVisualAboveSource)));
+  let bonfireOffAxisReactionRing = exp(-pow(abs(sourceRadial - bonfireOffAxisReactionRadius), 2.0) / max(0.0007, bonfireOffAxisReactionWidth * bonfireOffAxisReactionWidth))
+    * bonfireFrontLiftGate
+    * (0.46 + bonfireLayeredBreakup * 0.28 + bonfireTongues * 0.18 + bonfireEdgeBreakup * 0.16);
   let bonfireInterfaceSmokeBand = smoothstep(-0.04, 0.06, bonfireVisualAboveSource) * (1.0 - smoothstep(0.28, 0.52, bonfireVisualAboveSource));
   let bonfireInterfaceSmokeRadius = bonfireSmokeRadius * mix(1.18, 0.86, smoothstep(0.02, 0.42, bonfireVisualAboveSource));
   let bonfireNarrowInterfaceSmokeSource = (
@@ -1437,14 +1443,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.2
   ) * inputFlow * sourceScaleCompensation;
-  let bonfireReactionCoreRelief = mix(0.24, 1.0, smoothstep(bonfireCoreRadius * 0.30, bonfireCoreRadius * 0.98, sourceRadial));
+  let bonfireReactionCoreRelief = mix(0.14, 1.0, smoothstep(bonfireCoreRadius * 0.40, bonfireCoreRadius * 1.08, sourceRadial));
   let bonfireReactionRiseBias = mix(0.45, 1.32, smoothstep(0.06, 0.52, bonfireVisualAboveSource));
+  let bonfireLiftedReactionFront = (
+    bonfireOffAxisReactionRing * (0.54 + bonfirePacketCombustion.y * 0.34 + bonfirePacketCombustion.z * 0.26 + bonfireInterfaceBirth * 0.20)
+      + bonfireLiftedFireLobes * bonfireFrontLiftGate * (0.74 + bonfireTongues * 0.18)
+      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.28
+  ) * (0.76 + bonfireEdgeBreakup * 0.22);
   let bonfireReactionFront = clamp(
-    bonfireInterfaceBirth * 0.60
-      + bonfireCombustion.z * 0.46
-      + bonfirePacketCombustion.y * 0.34
-      + bonfirePacketCombustion.z * 0.28
-      + bonfireLiftedFireLobes * 0.82
+    bonfireInterfaceBirth * 0.38
+      + bonfireCombustion.z * 0.24
+      + bonfirePacketCombustion.y * 0.22
+      + bonfirePacketCombustion.z * 0.18
+      + bonfireLiftedFireLobes * 0.38
+      + bonfireLiftedReactionFront * 1.18
       + bonfireEmberRing * 0.12,
     0.0,
     2.0
@@ -1461,12 +1473,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     + bonfirePacketCombustion.w * (0.48 + 0.24 * bonfireTongues)
     + bonfireLiftedFireLobes * (2.28 + 0.92 * bonfireTongues + bonfireLayeredBreakup * 0.56);
   let bonfireFireBirth = (
-    bonfireFireball * (0.030 + 0.030 * bonfireSourceBreakup + 0.050 * bonfireTongues)
-      + bonfireReactionFront * (1.55 + 0.52 * bonfireTongues)
+    bonfireFireball * (0.018 + 0.020 * bonfireSourceBreakup + 0.042 * bonfireTongues)
+      + bonfireReactionFront * (1.32 + 0.44 * bonfireTongues)
+      + bonfireLiftedReactionFront * (0.58 + 0.24 * bonfireTongues)
       + bonfirePacketFireBirth * 0.92
       + bonfireEmberRing * 0.26
   ) * inputFlow * sourceScaleCompensation * bonfireEdgeBreakup * (0.82 + bonfireLayeredBreakup * 0.26);
-  let fireBirth = mix(columnFireBirth, bonfireFireBirth, bonfireScene);
+  let bonfireFireSourceBinRelief = mix(
+    0.20,
+    1.0,
+    max(
+      smoothstep(0.08, 0.34, bonfireVisualAboveSource),
+      smoothstep(bonfireCoreRadius * 0.48, bonfireCoreRadius * 1.16, sourceRadial)
+    )
+  );
+  let bonfireLiftedFlameBirth = clamp(
+    bonfireFireBirth * bonfireFireSourceBinRelief * 0.52
+      + bonfireReactionFront * bonfireFrontLiftGate * (0.92 + bonfireTongues * 0.24)
+      + bonfireLiftedReactionFront * (1.16 + bonfireTongues * 0.30)
+      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.34,
+    0.0,
+    3.0
+  ) * (0.86 + bonfireLayeredBreakup * 0.18);
+  let fireBirth = mix(columnFireBirth, bonfireLiftedFlameBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
@@ -1478,13 +1507,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     1.35
   );
+  let bonfireCombustionFrontLiftCarrier = (
+    bonfireLiftedReactionFront * 0.72
+      + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
+      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
+  ) * (0.82 + bonfireLayeredBreakup * 0.18);
   let bonfireCombustionFrontBirth = bonfireScene * clamp(
-    bonfireInterfaceBirth * 0.58
-      + bonfireCombustion.z * 0.44
-      + bonfireReactionFront * 0.34
-      + bonfirePacketCombustion.y * 0.28
-      + bonfirePacketCombustion.z * 0.22
-      + bonfireLiftedFireLobes * 0.54
+    bonfireInterfaceBirth * 0.28
+      + bonfireCombustion.z * 0.18
+      + bonfireReactionFront * 0.28
+      + bonfirePacketCombustion.y * 0.16
+      + bonfirePacketCombustion.z * 0.14
+      + bonfireLiftedFireLobes * 0.24
+      + bonfireCombustionFrontLiftCarrier * 1.16
       + interfaceEnergy * (bonfireSmokeSource + bonfireFireBirth) * 0.20,
     0.0,
     1.85
@@ -1528,8 +1563,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
   let bonfirePacketLiftImpulse = bonfirePacketCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
+  let bonfireLiftedSootBuoyancy = (
+    bonfireSootBirth * 0.38
+      + bonfireCombustionFrontLiftCarrier * 0.42
+      + bonfireLiftedReactionFront * 0.22
+  ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
-  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse, bonfireScene) * bonfireThermalRiseDirection;
+  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
   let bonfireNonWindLateralDamping = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
