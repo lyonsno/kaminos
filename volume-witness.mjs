@@ -98,7 +98,7 @@ const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_st
 const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
   ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
   : expectedVolumeScene === 'bonfire_plume'
-    ? 1.85
+    ? 1.45
     : Infinity;
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
 const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
@@ -520,6 +520,13 @@ async function main() {
     if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
+    if (
+      expectedVolumeScene === 'bonfire_plume' &&
+      sample.simReadback.radianceMean > 0.0005 &&
+      (!Number.isFinite(sample.simReadback.combustionFrontMean) || sample.simReadback.combustionFrontMean <= 0.00025)
+    ) {
+      throw new Error(`GPU sim readback shows bonfire fire without transported combustion-front evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
     if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= 0.0005) {
       throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -563,6 +570,76 @@ async function main() {
       }
     }
     const expectsBonfireZeroDrift = expectsBonfireVerticalTransport && Math.abs(expectedWindStrength) <= 0.001;
+    const expectsBonfireConvectionProof = expectsBonfireZeroDrift;
+    if (expectsBonfireConvectionProof) {
+      if (
+        !Number.isFinite(sample.simReadback.plumeScalarCurlContact) ||
+        sample.simReadback.plumeScalarCurlContact <= 0.030 ||
+        !Number.isFinite(sample.simReadback.plumeSmokeBodyBreadth) ||
+        sample.simReadback.plumeSmokeBodyBreadth <= 0.045 ||
+        !Number.isFinite(sample.simReadback.plumeTopPinchRatio) ||
+        sample.simReadback.plumeTopPinchRatio <= 0.88 ||
+        !Number.isFinite(sample.simReadback.plumeFieldColumnCoherence) ||
+        sample.simReadback.plumeFieldColumnCoherence >= 0.92
+      ) {
+        const failureName = Number.isFinite(sample.simReadback.plumeTopPinchRatio) && sample.simReadback.plumeTopPinchRatio <= 0.88
+          ? 'bonfire plume retained centerline chimney pinching'
+          : 'bonfire plume retained solver-column coherence';
+        throw new Error(`${failureName}: ${JSON.stringify({
+          plumeScalarCurlContact: sample.simReadback.plumeScalarCurlContact,
+          plumeSmokeBodyBreadth: sample.simReadback.plumeSmokeBodyBreadth,
+          plumeTopPinchRatio: sample.simReadback.plumeTopPinchRatio,
+          plumeLowerRollingBodyBreadth: sample.simReadback.plumeLowerRollingBodyBreadth,
+          plumeUpperRollingBodyBreadth: sample.simReadback.plumeUpperRollingBodyBreadth,
+          plumeFieldColumnCoherence: sample.simReadback.plumeFieldColumnCoherence,
+          plumeFieldBinCenterSpread: sample.simReadback.plumeFieldBinCenterSpread,
+          plumeSmokeWeightedCurlMean: sample.simReadback.plumeSmokeWeightedCurlMean,
+        })}`);
+      }
+    }
+    if (
+      expectsBonfireConvectionProof &&
+      (
+        !Number.isFinite(sample.simReadback.fireSourcePlugRatio) ||
+        sample.simReadback.fireSourcePlugRatio >= 0.68 ||
+        !Number.isFinite(sample.simReadback.fireRisingBodyRatio) ||
+        sample.simReadback.fireRisingBodyRatio <= 0.24 ||
+        !Number.isFinite(sample.fireEdgeEnergy) ||
+        sample.fireEdgeEnergy <= 0.066 ||
+        !Number.isFinite(sample.fireRoughnessMean) ||
+        sample.fireRoughnessMean <= 0.105
+      )
+    ) {
+      throw new Error(`bonfire plume retained smooth fire source plug: ${JSON.stringify({
+        fireSourcePlugRatio: sample.simReadback.fireSourcePlugRatio,
+        fireRisingBodyRatio: sample.simReadback.fireRisingBodyRatio,
+        combustionFrontMean: sample.simReadback.combustionFrontMean,
+        combustionFrontSourcePlugRatio: sample.simReadback.combustionFrontSourcePlugRatio,
+        combustionFrontRisingBodyRatio: sample.simReadback.combustionFrontRisingBodyRatio,
+        maxCombustionFrontBinWeight: sample.simReadback.maxCombustionFrontBinWeight,
+        combustionFrontWeight: sample.simReadback.combustionFrontWeight,
+        maxFireBinWeight: sample.simReadback.maxFireBinWeight,
+        fireWeight: sample.simReadback.fireWeight,
+        fireVisualRiseDisplacement: sample.simReadback.fireVisualRiseDisplacement,
+        fireEdgeEnergy: sample.fireEdgeEnergy,
+        fireRoughnessMean: sample.fireRoughnessMean,
+      })}`);
+    }
+    if (
+      expectsBonfireVerticalTransport &&
+      Number.isFinite(expectedMaxSmokeStripeRatio) &&
+      (
+        !Number.isFinite(sample.smokeVerticalStripeRatio) ||
+        sample.smokeVerticalStripeRatio > expectedMaxSmokeStripeRatio
+      )
+    ) {
+      throw new Error(`bonfire plume retained vertical curtain striping: ${JSON.stringify({
+        smokeVerticalStripeRatio: sample.smokeVerticalStripeRatio,
+        maxSmokeStripeRatio: expectedMaxSmokeStripeRatio,
+        smokeHorizontalEnergy: sample.smokeHorizontalEnergy,
+        smokeVerticalEnergy: sample.smokeVerticalEnergy,
+      })}`);
+    }
     if (expectsBonfireZeroDrift) {
       const activeBins = (sample.simReadback.sourceRelativeVisualHeightBins || []).filter(bin =>
         bin.visualCenter > -0.08 &&
@@ -582,7 +659,6 @@ async function main() {
         throw new Error(`bonfire plume retained non-wind lateral drift: ${JSON.stringify({ simReadback: sample.simReadback, maxSmokeBinRadialDrift })}`);
       }
     }
-    const expectsBonfireConvectionProof = expectsBonfireZeroDrift;
     if (expectsBonfireConvectionProof) {
       const convectiveBins = (sample.simReadback.sourceRelativeVisualHeightBins || []).filter(bin =>
         bin.visualCenter > 0.02 &&
@@ -616,39 +692,6 @@ async function main() {
         })}`);
       }
     }
-    if (expectsBonfireConvectionProof) {
-      if (
-        !Number.isFinite(sample.simReadback.plumeScalarCurlContact) ||
-        sample.simReadback.plumeScalarCurlContact <= 0.030 ||
-        !Number.isFinite(sample.simReadback.plumeSmokeBodyBreadth) ||
-        sample.simReadback.plumeSmokeBodyBreadth <= 0.045 ||
-        !Number.isFinite(sample.simReadback.plumeFieldColumnCoherence) ||
-        sample.simReadback.plumeFieldColumnCoherence >= 0.92
-      ) {
-        throw new Error(`bonfire plume retained solver-column coherence: ${JSON.stringify({
-          plumeScalarCurlContact: sample.simReadback.plumeScalarCurlContact,
-          plumeSmokeBodyBreadth: sample.simReadback.plumeSmokeBodyBreadth,
-          plumeFieldColumnCoherence: sample.simReadback.plumeFieldColumnCoherence,
-          plumeFieldBinCenterSpread: sample.simReadback.plumeFieldBinCenterSpread,
-          plumeSmokeWeightedCurlMean: sample.simReadback.plumeSmokeWeightedCurlMean,
-        })}`);
-      }
-    }
-    if (
-      expectsBonfireVerticalTransport &&
-      Number.isFinite(expectedMaxSmokeStripeRatio) &&
-      (
-        !Number.isFinite(sample.smokeVerticalStripeRatio) ||
-        sample.smokeVerticalStripeRatio > expectedMaxSmokeStripeRatio
-      )
-    ) {
-      throw new Error(`bonfire plume retained vertical curtain striping: ${JSON.stringify({
-        smokeVerticalStripeRatio: sample.smokeVerticalStripeRatio,
-        maxSmokeStripeRatio: expectedMaxSmokeStripeRatio,
-        smokeHorizontalEnergy: sample.smokeHorizontalEnergy,
-        smokeVerticalEnergy: sample.smokeVerticalEnergy,
-      })}`);
-    }
     const metrics = {
       width: sample.width,
       height: sample.height,
@@ -676,6 +719,14 @@ async function main() {
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
       risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
+      combustionFrontMean: sample.simReadback?.combustionFrontMean ?? 0,
+      combustionFrontSourcePlugRatio: sample.simReadback?.combustionFrontSourcePlugRatio ?? 0,
+      combustionFrontRisingBodyRatio: sample.simReadback?.combustionFrontRisingBodyRatio ?? 0,
+      maxCombustionFrontBinWeight: sample.simReadback?.maxCombustionFrontBinWeight ?? 0,
+      combustionFrontWeight: sample.simReadback?.combustionFrontWeight ?? 0,
+      fireSourcePlugRatio: sample.simReadback?.fireSourcePlugRatio ?? 0,
+      fireRisingBodyRatio: sample.simReadback?.fireRisingBodyRatio ?? 0,
+      maxFireBinWeight: sample.simReadback?.maxFireBinWeight ?? 0,
       plumeLocalLateralVelocityMean: sample.simReadback?.plumeLocalLateralVelocityMean ?? 0,
       plumeNetLateralVelocity: sample.simReadback?.plumeNetLateralVelocity ?? 0,
       plumeLateralVelocityBalance: sample.simReadback?.plumeLateralVelocityBalance ?? 0,
@@ -683,13 +734,17 @@ async function main() {
       plumeSmokeWeightedCurlMean: sample.simReadback?.plumeSmokeWeightedCurlMean ?? 0,
       plumeScalarCurlContact: sample.simReadback?.plumeScalarCurlContact ?? 0,
       plumeSmokeBodyBreadth: sample.simReadback?.plumeSmokeBodyBreadth ?? 0,
+      plumeTopPinchRatio: sample.simReadback?.plumeTopPinchRatio ?? 0,
+      plumeLowerRollingBodyBreadth: sample.simReadback?.plumeLowerRollingBodyBreadth ?? 0,
+      plumeUpperRollingBodyBreadth: sample.simReadback?.plumeUpperRollingBodyBreadth ?? 0,
       plumeFieldColumnCoherence: sample.simReadback?.plumeFieldColumnCoherence ?? 0,
       plumeFieldBinCenterSpread: sample.simReadback?.plumeFieldBinCenterSpread ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
-    if (metrics.litPixels < 1500 || metrics.fireLikePixels < 300 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+    const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
+    if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const reportControls = {
