@@ -10,7 +10,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_interactive=1&clay_steps=6&clay_debug_colliders=0&clay_benchmark_shadow=1&clay_normal_cadence=every_3&clay_brush_radius=0.21&clay_brush_strength=1.45';
+const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_cube=1&clay_cube_grid=10x10x10&clay_steps=7&clay_debug_colliders=0&clay_benchmark_shadow=0&clay_normal_cadence=every_3&clay_colliders=clay_fixture_hand';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -361,11 +361,17 @@ async function main() {
       assert.equal(state.clayCubeStepStatus, 'pass', 'cube first-loop step did not pass');
       assert.equal(state.clayCubeEvidenceKind, 'webgpu-material-point-readback', 'cube evidence did not come from WebGPU readback');
       assert.equal(state.clayCubeOracleEvidenceKind, 'deterministic-js-oracle-not-runtime-fallback', 'cube oracle evidence kind missing');
+      assert.equal(state.clayCubeSurfaceVisible, false, 'cube route should hide the old heightfield surface in the current witness');
+      assert.equal(state.clayCubeDiagnosticColorMode, 'cube-diagnostic-contact-displacement-colors-v0', 'cube diagnostic color mode missing');
+      assert.equal(state.clayCubeBoundingBoxVisible, true, 'cube diagnostic bounding box missing');
+      assert.equal(state.clayCubeBoundingBoxContract, 'cube-diagnostic-bounding-box-v0', 'cube diagnostic bounding-box contract missing');
       assert.ok((state.clayCubeParticleCount ?? 0) >= 216, 'cube material-point count too small for first-loop witness');
       assert.ok((state.clayCubeGridDimension ?? 0) >= 12, 'cube grid dimension missing');
       assert.ok((state.clayCubeActiveGridCellCount ?? 0) > 0, 'cube active grid-cell count missing');
       assert.ok((state.clayCubeDeformedParticleCount ?? 0) > 0, 'cube deformation count missing');
       assert.ok((state.clayCubeContactParticleCount ?? 0) > 0, 'cube contact count missing');
+      assert.ok((state.clayCubeDiagnosticColoredParticleCount ?? 0) > 0, 'cube diagnostic colored particle count missing');
+      assert.ok((state.clayCubeDiagnosticHotParticleCount ?? 0) > 0, 'cube hot/contact diagnostic particle count missing');
       assert.ok((state.clayCubeMaxDisplacement ?? 0) > 0.005, 'cube max displacement too small to prove hand influence');
       assert.ok((state.clayCubeHeightRange ?? 0) > 0.25, 'cube height range too small for volumetric witness');
       assert.ok(Number.isFinite(state.clayCubeReadbackWallMs) && state.clayCubeReadbackWallMs > 0, 'cube readback timing missing');
@@ -561,6 +567,12 @@ async function main() {
       clayCubeHeightRange: state.clayCubeHeightRange,
       clayCubeReadbackWallMs: state.clayCubeReadbackWallMs,
       clayCubeDispatchWorkgroups: state.clayCubeDispatchWorkgroups,
+      clayCubeSurfaceVisible: state.clayCubeSurfaceVisible,
+      clayCubeBoundingBoxVisible: state.clayCubeBoundingBoxVisible,
+      clayCubeBoundingBoxContract: state.clayCubeBoundingBoxContract,
+      clayCubeDiagnosticColorMode: state.clayCubeDiagnosticColorMode,
+      clayCubeDiagnosticColoredParticleCount: state.clayCubeDiagnosticColoredParticleCount,
+      clayCubeDiagnosticHotParticleCount: state.clayCubeDiagnosticHotParticleCount,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,
@@ -640,7 +652,9 @@ async function main() {
       clayColorPixels: metrics.clayColorPixels,
       brightOrangePixels: metrics.brightOrangePixels,
       litPixels: metrics.litPixels,
-      visualVerdict: 'webgpu clay surface visible; not fire',
+      visualVerdict: isCubeRoute
+        ? 'webgpu clay cube material-point witness visible; old surface hidden; not fire'
+        : 'webgpu clay surface visible; not fire',
       screenshot: out,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));

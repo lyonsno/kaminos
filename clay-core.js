@@ -44,6 +44,9 @@ const CLAY_CUBE_EXTENTS = Object.freeze({
   maxY: 0.68,
   halfZ: 0.34,
 });
+const CLAY_CUBE_SURFACE_VISIBLE = false;
+const CLAY_CUBE_DIAGNOSTIC_COLOR_MODE = 'cube-diagnostic-contact-displacement-colors-v0';
+const CLAY_CUBE_BOUNDING_BOX_CONTRACT = 'cube-diagnostic-bounding-box-v0';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
@@ -360,6 +363,10 @@ export function runClayCubeFirstLoopOracle({
 
   return {
     evidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
+    surfaceVisible: CLAY_CUBE_SURFACE_VISIBLE,
+    diagnosticColorMode: CLAY_CUBE_DIAGNOSTIC_COLOR_MODE,
+    diagnosticColoredParticleCount: deformedParticleCount,
+    diagnosticHotParticleCount: contactParticleCount,
     positions: next,
     particleCount: cfg.particleCount,
     gridDimension: cfg.gridDimension,
@@ -542,6 +549,7 @@ export function createKaminosClayPrototype({
   let cubeReadbackBuffer = null;
   let mesh = null;
   let cubePointCloud = null;
+  let cubeBoundingBox = null;
   let colliderGroup = null;
   let colliders = [];
   let frameCount = 0;
@@ -621,6 +629,10 @@ export function createKaminosClayPrototype({
   let clayCubeHeightRange = 0;
   let clayCubeReadbackWallMs = 0;
   let clayCubeDispatchWorkgroups = 0;
+  let clayCubeSurfaceVisible = clayCubeEnabled ? CLAY_CUBE_SURFACE_VISIBLE : true;
+  let clayCubeBoundingBoxVisible = clayCubeEnabled;
+  let clayCubeDiagnosticColoredParticleCount = 0;
+  let clayCubeDiagnosticHotParticleCount = 0;
   let lastCubeStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
@@ -666,16 +678,21 @@ export function createKaminosClayPrototype({
     if (clayCubeEnabled) {
       const cubeGeometry = new THREE.BufferGeometry();
       const cubePositions = new Float32Array(cubeConfig.particleCount * 3);
+      const cubeColors = new Float32Array(cubeConfig.particleCount * 3);
       for (let i = 0; i < cubeConfig.particleCount; i += 1) {
         cubePositions[i * 3] = cubeBasePositions[i * 4];
         cubePositions[i * 3 + 1] = cubeBasePositions[i * 4 + 1];
         cubePositions[i * 3 + 2] = cubeBasePositions[i * 4 + 2];
+        cubeColors[i * 3] = 0.76;
+        cubeColors[i * 3 + 1] = 0.59;
+        cubeColors[i * 3 + 2] = 0.36;
       }
       cubeGeometry.setAttribute('position', new THREE.BufferAttribute(cubePositions, 3));
+      cubeGeometry.setAttribute('color', new THREE.BufferAttribute(cubeColors, 3));
       const cubeMaterial = new THREE.PointsMaterial({
-        color: 0xb99262,
-        size: 0.052,
+        size: 0.066,
         sizeAttenuation: true,
+        vertexColors: true,
         transparent: true,
         opacity: 0.92,
         depthTest: false,
@@ -685,6 +702,24 @@ export function createKaminosClayPrototype({
       cubePointCloud.name = 'kaminos-clay-material-point-cube-first-loop';
       cubePointCloud.renderOrder = 5;
       scene.add(cubePointCloud);
+
+      const boxGeometry = new THREE.BoxGeometry(
+        CLAY_CUBE_EXTENTS.halfX * 2,
+        CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY,
+        CLAY_CUBE_EXTENTS.halfZ * 2,
+      );
+      const boxEdges = new THREE.EdgesGeometry(boxGeometry);
+      const boxMaterial = new THREE.LineBasicMaterial({
+        color: 0xd6b57a,
+        transparent: true,
+        opacity: 0.48,
+        depthTest: false,
+      });
+      cubeBoundingBox = new THREE.LineSegments(boxEdges, boxMaterial);
+      cubeBoundingBox.name = 'kaminos-clay-cube-diagnostic-bounding-box';
+      cubeBoundingBox.position.set(0, (CLAY_CUBE_EXTENTS.minY + CLAY_CUBE_EXTENTS.maxY) * 0.5, 0);
+      cubeBoundingBox.renderOrder = 6;
+      scene.add(cubeBoundingBox);
     }
   }
 
@@ -1225,6 +1260,9 @@ export function createKaminosClayPrototype({
     clayCubeMinY = Number.POSITIVE_INFINITY;
     clayCubeMaxY = Number.NEGATIVE_INFINITY;
     const pointPosition = cubePointCloud?.geometry?.attributes?.position || null;
+    const pointColor = cubePointCloud?.geometry?.attributes?.color || null;
+    clayCubeDiagnosticColoredParticleCount = 0;
+    clayCubeDiagnosticHotParticleCount = 0;
     for (let i = 0; i < cubeConfig.particleCount; i += 1) {
       const offset = i * 4;
       const x = cubeValues[offset];
@@ -1237,13 +1275,26 @@ export function createKaminosClayPrototype({
       const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (displacement > 0.002) clayCubeDeformedParticleCount += 1;
       if (contact > 0.5) clayCubeContactParticleCount += 1;
+      if (displacement > 0.002 || contact > 0.5) clayCubeDiagnosticColoredParticleCount += 1;
+      if (contact > 0.5 || displacement > 0.08) clayCubeDiagnosticHotParticleCount += 1;
       clayCubeMaxDisplacement = Math.max(clayCubeMaxDisplacement, displacement);
       clayCubeMinY = Math.min(clayCubeMinY, y);
       clayCubeMaxY = Math.max(clayCubeMaxY, y);
       activeCells.add(cubeGridCellIndex(x, y, z, cubeConfig.gridDimension));
       if (pointPosition) pointPosition.setXYZ(i, x, y, z);
+      if (pointColor) {
+        const heat = clamp01(displacement / 0.20);
+        const contactHeat = contact > 0.5 ? 1 : 0;
+        pointColor.setXYZ(
+          i,
+          0.68 + contactHeat * 0.28,
+          0.46 + heat * 0.34,
+          0.26 + (1 - contactHeat) * heat * 0.28,
+        );
+      }
     }
     if (pointPosition) pointPosition.needsUpdate = true;
+    if (pointColor) pointColor.needsUpdate = true;
     clayCubeHeightRange = clayCubeMaxY - clayCubeMinY;
     clayCubeActiveGridCellCount = activeCells.size;
     clayCubeStepStatus = 'pass';
@@ -1518,6 +1569,12 @@ export function createKaminosClayPrototype({
       clayCubeHeightRange,
       clayCubeReadbackWallMs,
       clayCubeDispatchWorkgroups,
+      clayCubeSurfaceVisible,
+      clayCubeBoundingBoxVisible,
+      clayCubeBoundingBoxContract: CLAY_CUBE_BOUNDING_BOX_CONTRACT,
+      clayCubeDiagnosticColorMode: CLAY_CUBE_DIAGNOSTIC_COLOR_MODE,
+      clayCubeDiagnosticColoredParticleCount,
+      clayCubeDiagnosticHotParticleCount,
       clayCubeOracleEvidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
@@ -1607,14 +1664,18 @@ export function createKaminosClayPrototype({
       if (!active) {
         if (mesh) mesh.visible = false;
         if (cubePointCloud) cubePointCloud.visible = false;
+        if (cubeBoundingBox) cubeBoundingBox.visible = false;
         if (colliderGroup) colliderGroup.visible = false;
         onStatus(debugState());
         return;
       }
       await ensureGpu();
       ensureMesh();
-      mesh.visible = true;
+      clayCubeSurfaceVisible = clayCubeEnabled ? CLAY_CUBE_SURFACE_VISIBLE : true;
+      clayCubeBoundingBoxVisible = clayCubeEnabled;
+      mesh.visible = clayCubeSurfaceVisible;
       if (cubePointCloud) cubePointCloud.visible = clayCubeEnabled;
+      if (cubeBoundingBox) cubeBoundingBox.visible = clayCubeBoundingBoxVisible;
       colliderGroup.visible = clayDebugCollidersVisible;
       refreshColliderMeshes();
       await step();

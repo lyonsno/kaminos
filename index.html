@@ -732,6 +732,10 @@ let volumePrototype = null;
 let clayPrototype = null;
 let clayPointerBrushRadius = 0.17;
 let clayPointerBrushStrength = 1.18;
+const CLAY_CUBE_CAMERA_FRAME = Object.freeze({
+  position: [0, 1.04, 1.82],
+  target: [0, 0.34, 0],
+});
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1780,9 +1784,14 @@ function initClayBrushControls(params) {
   document.getElementById('clay-brush-strength')?.addEventListener('input', event => setClayBrushStrength(event.target.value));
 }
 
-function frameClayCamera() {
-  camera.position.set(0, 1.08, 1.72);
-  controls.target.set(0, 0.0, 0);
+function frameClayCamera(cubeMode = false) {
+  if (cubeMode) {
+    camera.position.set(...CLAY_CUBE_CAMERA_FRAME.position);
+    controls.target.set(...CLAY_CUBE_CAMERA_FRAME.target);
+  } else {
+    camera.position.set(0, 1.08, 1.72);
+    controls.target.set(0, 0.0, 0);
+  }
   controls.update();
   window._kaminosDirty?.();
 }
@@ -1892,6 +1901,7 @@ function exposePerceptasiaClaySubstrate(clayPrototype) {
 
 async function initKaminosClayRoute() {
   const params = new URLSearchParams(window.location.search);
+  const clayCubeRoute = params.get('clay_cube') === '1';
   initClayBrushControls(params);
   clayPrototype = createKaminosClayPrototype({
     THREE,
@@ -1900,7 +1910,7 @@ async function initKaminosClayRoute() {
     camera,
     controls,
     clayGrid: params.get('clay_grid') || '48x32',
-    clayCube: params.get('clay_cube') === '1',
+    clayCube: clayCubeRoute,
     clayCubeGrid: params.get('clay_cube_grid') || '8x8x8',
     onStatus: refreshClayReadout,
   });
@@ -1936,14 +1946,14 @@ async function initKaminosClayRoute() {
     refreshClayReadout();
   });
   document.getElementById('clay-fixture').addEventListener('click', seedFixture);
-  document.getElementById('clay-fit-camera').addEventListener('click', frameClayCamera);
+  document.getElementById('clay-fit-camera').addEventListener('click', () => frameClayCamera(clayCubeRoute));
 
   if (params.get('kaminos_clay_sim') === '1') {
     setActiveTab('clay');
     if (currentMesh) currentMesh.visible = false;
     if (groundPlane) groundPlane.visible = false;
     transformControls.detach();
-    frameClayCamera();
+    frameClayCamera(clayCubeRoute);
     await clayPrototype.setActive(true);
     const colliderMode = params.get('clay_colliders') || (params.get('clay_interactive') === '1' ? 'none' : 'clay_fixture_hand');
     if (colliderMode === 'hand_pose_fixture') {
