@@ -2152,6 +2152,8 @@ async function runGreenroomSplatHandoffScenario(ws) {
       const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const splatObject = sceneDebug.find(record => record.type === 'splat') || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const pointCloudPreviewRendered = splatObject?.splat?.previewKind === 'point-cloud';
+      const pointCloudPreviewPointCount = Number(splatObject?.splat?.pointCount || 0);
       const beforeSceneFiles = new Set(await listScenes());
       const savedOk = await window.saveSceneAs();
       let savedFile = null;
@@ -2181,6 +2183,8 @@ async function runGreenroomSplatHandoffScenario(ws) {
       const loadRestoredSplatObject = !!reloadedSplatObject
         && reloadedSplatObject.source === splatObject?.source
         && reloadedHandoffDebug?.activeHandoff?.source === splatObject?.source;
+      const loadRestoredPointCloudState = reloadedSplatObject?.splat?.previewKind === 'point-cloud'
+        && Number(reloadedSplatObject?.splat?.pointCount || 0) === pointCloudPreviewPointCount;
       let cleanup = null;
       let postCleanupFiles = null;
       if (savedFile) {
@@ -2201,6 +2205,8 @@ async function runGreenroomSplatHandoffScenario(ws) {
         sceneDebug,
         splatObject,
         handoffDebug,
+        pointCloudPreviewRendered,
+        pointCloudPreviewPointCount,
         savedOk,
         savedFile,
         savedSplatObject,
@@ -2209,6 +2215,7 @@ async function runGreenroomSplatHandoffScenario(ws) {
         reloadedSplatObject,
         reloadedHandoffDebug,
         loadRestoredSplatObject,
+        loadRestoredPointCloudState,
         cleanup,
         postCleanupFiles,
       };
@@ -2237,11 +2244,20 @@ async function runGreenroomSplatHandoffScenario(ws) {
   if (capabilities.realSplatRendering !== false) {
     throw new Error(`splat handoff claimed real splat rendering: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
   }
+  if (!lastEvidence.greenroomSplatHandoff.pointCloudPreviewRendered) {
+    throw new Error(`splat preview did not render a point cloud: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (lastEvidence.greenroomSplatHandoff.pointCloudPreviewPointCount < 1) {
+    throw new Error(`splat preview did not report point count: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
   if (!lastEvidence.greenroomSplatHandoff.savedSplatMetadataPreserved) {
     throw new Error(`splat handoff saved scene did not preserve splat metadata: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
   }
   if (!lastEvidence.greenroomSplatHandoff.loadRestoredSplatObject) {
     throw new Error(`splat handoff scene load did not restore splat object: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
+  }
+  if (!lastEvidence.greenroomSplatHandoff.loadRestoredPointCloudState) {
+    throw new Error(`splat preview lost point-cloud state after scene load: ${JSON.stringify(lastEvidence.greenroomSplatHandoff)}`);
   }
 }
 

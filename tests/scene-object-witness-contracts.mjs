@@ -136,6 +136,9 @@ assert.match(witness, /splat handoff did not record meshDepthOcclusion=false/, '
 assert.match(witness, /splat handoff did not record sharedCanvasComposite=false/, 'Green Room splat witness proves missing shared canvas composition is explicit');
 assert.match(witness, /splat handoff claimed real splat rendering/, 'Green Room splat witness rejects false closure on real splat rendering');
 assert.match(witness, /kaminosRenderHandoffDebugState/, 'Green Room splat witness inspects the effective render handoff debug route');
+assert.match(witness, /splat preview did not render a point cloud/, 'Green Room splat witness proves parseable PLY imports render a point-cloud preview');
+assert.match(witness, /splat preview did not report point count/, 'Green Room splat witness proves point-cloud preview metadata records point count');
+assert.match(witness, /splat preview lost point-cloud state after scene load/, 'Green Room splat witness proves scene load restores the point-cloud preview state');
 assert.match(witness, /splat handoff saved scene did not preserve splat metadata/, 'Green Room splat witness proves saved scenes preserve splat route metadata');
 assert.match(witness, /splat handoff scene load did not restore splat object/, 'Green Room splat witness proves scene load restores splat placeholders from saved documents');
 assert.match(witness, /splat handoff cleanup did not delete saved scene file/, 'Green Room splat witness proves cleanup removed its temporary saved scene file');

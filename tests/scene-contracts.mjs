@@ -64,6 +64,12 @@ assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');
 assert.match(index, /function createSplatSceneObjectPlaceholder\(/, 'Greenroom splats register through an explicit placeholder scene-object factory');
+assert.match(index, /function parsePlyPointCloud\(/, 'Kaminos has a local PLY point-cloud parser for cheap splat previews');
+assert.match(index, /function createSplatPointCloudObject\(/, 'parseable splats can render as a point-cloud preview instead of only a cube placeholder');
+assert.match(index, /new THREE\.Points\(/, 'PLY splat previews render through Three Points, not the placeholder mesh only');
+assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'PLY point-cloud previews use per-point colors when available');
+assert.match(index, /previewKind:\s*'point-cloud'/, 'splat scene metadata records when the visible preview is a point cloud');
+assert.match(index, /previewKind:\s*'placeholder'/, 'splat scene metadata records placeholder fallback instead of hiding parse failures');
 assert.match(index, /async function greenroomImportSplat\(/, 'Greenroom PLY/SPZ rows expose an explicit Import Splat action');
 assert.match(index, /function addGreenroomSplatActions\(/, 'Greenroom splat rows render through a dedicated action helper');
 assert.match(index, /type:\s*'splat'[\s\S]*renderHandoffSchema:\s*RENDER_HANDOFF_SCHEMA/, 'splat imports register as type=splat scene objects with handoff metadata');
