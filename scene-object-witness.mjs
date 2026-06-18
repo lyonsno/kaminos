@@ -2617,6 +2617,12 @@ async function runSplatCorrectionModeScenario(ws) {
       await wait(50);
       const cropToggleDraft = window.kaminosSplatCorrectionModeDebugState?.() || null;
       const sceneAfterCropToggle = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const cropMode = await window.setSplatCorrectionEditMode('crop');
+      const cropEdit = window.kaminosSetSplatCorrectionCropTransform({
+        position: [0.15, -0.05, 0.25],
+        scale: [0.8, 0.6, 0.4],
+      });
+      const sceneAfterCropEdit = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const saveButton = [...document.querySelectorAll('#splat-correction-panel button')]
         .find(button => button.textContent.trim() === 'Save Correction');
       if (!saveButton) throw new Error('Splat Correction Mode witness could not find visible Save Correction button');
@@ -2647,6 +2653,9 @@ async function runSplatCorrectionModeScenario(ws) {
         sceneAfterFlip,
         cropToggleDraft,
         sceneAfterCropToggle,
+        cropMode,
+        cropEdit,
+        sceneAfterCropEdit,
         saveResult,
         modeAfterSave,
         assetDataAfterSave,
@@ -2698,6 +2707,28 @@ async function runSplatCorrectionModeScenario(ws) {
   const cropToggleVisual = evidence.sceneAfterCropToggle?.transform;
   if (!cropToggleVisual || Math.abs(cropToggleVisual.scale?.[0] + 1.1) > 1e-6) {
     throw new Error(`splat correction crop edit dropped flipped preview scale: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.cropMode?.targetAttached
+      || evidence.cropMode?.editMode !== 'crop'
+      || evidence.cropMode?.transformTargetName !== 'splat-correction-crop-target'
+      || !evidence.cropMode?.cropBoxVisible) {
+    throw new Error(`splat correction crop mode did not attach crop target: ${JSON.stringify(evidence)}`);
+  }
+  const cropEditCorrection = evidence.cropEdit?.draftCorrection || evidence.sceneAfterCropEdit?.splat?.correction || null;
+  if (!cropEditCorrection?.crop?.enabled
+      || Math.abs(cropEditCorrection.crop.min?.[0] + 0.25) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[0] - 0.55) > 1e-6
+      || Math.abs(cropEditCorrection.crop.min?.[1] + 0.35) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[2] - 0.45) > 1e-6) {
+    throw new Error(`splat correction crop mode did not update crop bounds: ${JSON.stringify(evidence)}`);
+  }
+  const afterCropEdit = evidence.sceneAfterCropEdit?.sceneTransform;
+  const cropEditPreservedSceneTransform = Array.isArray(afterCropEdit?.position)
+    && before.position.every((value, index) => Math.abs(value - afterCropEdit.position[index]) < 1e-6)
+    && before.rotation.every((value, index) => Math.abs(value - afterCropEdit.rotation[index]) < 1e-6)
+    && before.scale.every((value, index) => Math.abs(value - afterCropEdit.scale[index]) < 1e-6);
+  if (!cropEditPreservedSceneTransform) {
+    throw new Error(`splat correction crop mode dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
   const savedCorrection = evidence.savedAssetEntry?.correction || null;
   if (!savedCorrection

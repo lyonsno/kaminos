@@ -165,6 +165,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .splat-correction-panel { border-top: 1px solid #2a2a2a; padding-top: 9px; display: flex; flex-direction: column; gap: 8px; }
 .splat-correction-panel[hidden] { display: none; }
 .splat-correction-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.splat-correction-tool-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.splat-correction-tool-row .btn { flex: 1 1 84px; margin: 0; }
 .splat-correction-note { color: #666; font-size: 10px; line-height: 1.35; }
 .transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
@@ -251,6 +253,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="transform-inspector-head">
             <div class="transform-inspector-name">Splat Correction</div>
             <div class="splat-correction-note">Asset-local orientation, axis flip, centroid, and crop hints for preview and render handoff.</div>
+          </div>
+          <div class="splat-correction-tool-row">
+            <button type="button" class="btn" id="splat-correction-pivot-mode-button" onclick="setSplatCorrectionEditMode('pivot')">Pivot</button>
+            <button type="button" class="btn" id="splat-correction-crop-mode-button" onclick="setSplatCorrectionEditMode('crop')">Crop</button>
           </div>
           <div class="transform-row">
             <div class="transform-label">Centroid</div>
@@ -726,6 +732,7 @@ let viewportPointerDown = null;
 let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
 let splatCorrectionMode = null;
+const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 
 class HybridMeshSplatRoute {
   constructor() {
@@ -1235,7 +1242,81 @@ function selectedSplatRecord(id = activeSceneObjectId) {
 }
 
 function splatCorrectionTransformTarget() {
-  return splatCorrectionMode?.target || null;
+  if (!splatCorrectionMode) return null;
+  return splatCorrectionMode.editMode === 'crop'
+    ? splatCorrectionMode.cropTarget
+    : splatCorrectionMode.target;
+}
+
+function cropCenterAndSize(crop = {}) {
+  const normalized = normalizeSplatCorrection({ crop: { enabled: crop.enabled, min: crop.min, max: crop.max } }).crop;
+  const min = normalized.min;
+  const max = normalized.max;
+  return {
+    center: min.map((value, index) => (value + max[index]) / 2),
+    size: min.map((value, index) => Math.max(Math.abs(max[index] - value), SPLAT_CROP_TARGET_MIN_SIZE)),
+  };
+}
+
+function cropFromCenterAndSize(center = [0, 0, 0], size = [1, 1, 1]) {
+  const safeCenter = numberTriplet(center, [0, 0, 0]);
+  const safeSize = numberTriplet(size, [1, 1, 1]).map(value => Math.max(Math.abs(value), SPLAT_CROP_TARGET_MIN_SIZE));
+  return {
+    enabled: true,
+    min: safeCenter.map((value, index) => value - safeSize[index] / 2),
+    max: safeCenter.map((value, index) => value + safeSize[index] / 2),
+  };
+}
+
+function createSplatCorrectionCropTarget() {
+  const target = new THREE.Object3D();
+  target.name = 'splat-correction-crop-target';
+  const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const fill = new THREE.Mesh(boxGeometry, new THREE.MeshBasicMaterial({
+    color: 0x2f9bd8,
+    transparent: true,
+    opacity: 0.08,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  fill.name = 'splat-correction-crop-fill';
+  fill.renderOrder = 998;
+  const edgeGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+  const edges = new THREE.LineSegments(edgeGeometry, new THREE.LineBasicMaterial({
+    color: 0x92dcff,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false,
+  }));
+  edges.name = 'splat-correction-crop-edges';
+  edges.renderOrder = 999;
+  target.add(fill);
+  target.add(edges);
+  target.visible = false;
+  return target;
+}
+
+function setSplatCropTargetFromCorrection(target, correction) {
+  if (!target) return;
+  const normalized = normalizeSplatCorrection(correction);
+  const bounds = cropCenterAndSize(normalized.crop);
+  target.position.fromArray(bounds.center);
+  target.rotation.set(...normalized.orientation.rotation);
+  target.scale.fromArray(bounds.size);
+  target.visible = !!normalized.crop.enabled;
+}
+
+function updateSplatCropTargetVisibility() {
+  if (!splatCorrectionMode?.cropTarget) return;
+  const correction = normalizeSplatCorrection(splatCorrectionMode.record?.splat?.correction);
+  splatCorrectionMode.cropTarget.visible = !!correction.crop.enabled || splatCorrectionMode.editMode === 'crop';
+}
+
+function setSplatCorrectionTargetsFromCorrection(correction) {
+  if (!splatCorrectionMode) return;
+  setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, correction);
+  setSplatCropTargetFromCorrection(splatCorrectionMode.cropTarget, correction);
+  updateSplatCropTargetVisibility();
 }
 
 function splatCorrectionFromTarget(target, fallback = {}) {
@@ -1285,19 +1366,25 @@ function updateSplatCorrectionModeUi() {
   const editButton = document.getElementById('splat-correction-mode-button');
   const revertButton = document.getElementById('splat-correction-revert-button');
   const doneButton = document.getElementById('splat-correction-done-button');
+  const pivotButton = document.getElementById('splat-correction-pivot-mode-button');
+  const cropButton = document.getElementById('splat-correction-crop-mode-button');
   const active = !!splatCorrectionMode;
   if (badge) badge.hidden = !active;
   if (status && active) {
     const record = splatCorrectionMode.record;
     const dirty = splatCorrectionMode.dirty ? 'unsaved draft' : 'saved draft';
-    status.innerHTML = `${escapeHtml(record.label || record.fileName || record.id)} · <span class="${splatCorrectionMode.dirty ? 'splat-correction-mode-dirty' : ''}">${dirty}</span>`;
+    const tool = splatCorrectionMode.editMode === 'crop' ? 'crop' : 'pivot';
+    status.innerHTML = `${escapeHtml(record.label || record.fileName || record.id)} · ${tool} · <span class="${splatCorrectionMode.dirty ? 'splat-correction-mode-dirty' : ''}">${dirty}</span>`;
   }
   if (editButton) {
     editButton.textContent = active ? 'Editing Correction' : 'Edit Correction';
     editButton.classList.toggle('active', active);
   }
+  if (pivotButton) pivotButton.classList.toggle('active', active && splatCorrectionMode.editMode !== 'crop');
+  if (cropButton) cropButton.classList.toggle('active', active && splatCorrectionMode.editMode === 'crop');
   if (revertButton) revertButton.hidden = !active;
   if (doneButton) doneButton.hidden = !active;
+  updateSplatCropTargetVisibility();
 }
 
 function attachTransformControlsToCurrentTarget() {
@@ -1331,6 +1418,7 @@ function syncSplatCorrectionDraftFromTarget() {
   buildRenderHandoffV0(record);
   setSplatCorrectionDraftDirty(true);
   updateSplatCorrectionPanel(record);
+  setSplatCropTargetFromCorrection(splatCorrectionMode.cropTarget, correction);
   return correction;
 }
 
@@ -1339,6 +1427,66 @@ function setSplatCorrectionTargetFromCorrection(target, correction) {
   target.position.fromArray(normalized.centroidOffset);
   target.rotation.set(...normalized.orientation.rotation);
   target.scale.set(1, 1, 1);
+}
+
+function syncSplatCorrectionDraftFromCropTarget() {
+  if (!splatCorrectionMode) return null;
+  const { record, cropTarget } = splatCorrectionMode;
+  const current = normalizeSplatCorrection(record.splat?.correction);
+  const targetTransform = sceneObjectTransformState(cropTarget);
+  const correction = normalizeSplatCorrection({
+    ...current,
+    axisFlips: readSplatCorrectionFields().axisFlips,
+    crop: cropFromCenterAndSize(targetTransform.position, targetTransform.scale),
+  });
+  setSceneObjectSplatMetadata(record, {
+    ...record.splat,
+    correction,
+  });
+  applySplatCorrectionToRecord(record, correction);
+  buildRenderHandoffV0(record);
+  splatCorrectionMode.draftCorrection = correction;
+  setSplatCorrectionDraftDirty(true);
+  updateSplatCorrectionPanel(record);
+  setSplatCropTargetFromCorrection(cropTarget, correction);
+  return correction;
+}
+
+function syncSplatCorrectionDraftFromActiveTarget() {
+  if (splatCorrectionMode?.editMode === 'crop') return syncSplatCorrectionDraftFromCropTarget();
+  return syncSplatCorrectionDraftFromTarget();
+}
+
+async function setSplatCorrectionEditMode(mode = 'pivot') {
+  const editMode = String(mode).toLowerCase() === 'crop' ? 'crop' : 'pivot';
+  if (!splatCorrectionMode) {
+    const entered = await enterSplatCorrectionMode();
+    if (!entered?.active) return entered;
+  }
+  if (!splatCorrectionMode) return null;
+  splatCorrectionMode.editMode = editMode;
+  if (editMode === 'crop') {
+    const record = splatCorrectionMode.record;
+    const correction = normalizeSplatCorrection(record.splat?.correction);
+    if (!correction.crop.enabled) {
+      correction.crop.enabled = true;
+      setSceneObjectSplatMetadata(record, {
+        ...record.splat,
+        correction,
+      });
+      applySplatCorrectionToRecord(record, correction);
+      buildRenderHandoffV0(record);
+      splatCorrectionMode.draftCorrection = correction;
+      setSplatCorrectionDraftDirty(true);
+      updateSplatCorrectionPanel(record);
+    }
+    setSplatCropTargetFromCorrection(splatCorrectionMode.cropTarget, correction);
+  }
+  attachTransformControlsToCurrentTarget();
+  updateSplatCorrectionModeUi();
+  setInfo(`Splat Correction Mode: ${editMode === 'crop' ? 'Crop' : 'Pivot'}`);
+  window._kaminosDirty?.();
+  return window.kaminosSplatCorrectionModeDebugState();
 }
 
 async function enterSplatCorrectionMode(id = activeSceneObjectId) {
@@ -1362,10 +1510,15 @@ async function enterSplatCorrectionMode(id = activeSceneObjectId) {
   axes.name = 'splat-correction-target-axes';
   target.add(axes);
   scene.add(target);
+  const cropTarget = createSplatCorrectionCropTarget();
+  setSplatCropTargetFromCorrection(cropTarget, savedCorrection);
+  scene.add(cropTarget);
   splatCorrectionMode = {
     objectId: record.id,
     record,
     target,
+    cropTarget,
+    editMode: 'pivot',
     savedCorrection,
     draftCorrection: normalizeSplatCorrection(savedCorrection),
     dirty: false,
@@ -1392,7 +1545,9 @@ function exitSplatCorrectionMode(options = {}) {
   }
   transformControls?.detach?.();
   scene.remove(mode.target);
+  scene.remove(mode.cropTarget);
   disposeObjectTree(mode.target);
+  disposeObjectTree(mode.cropTarget);
   splatCorrectionMode = null;
   updateSplatCorrectionModeUi();
   updateTransformInspector();
@@ -1417,6 +1572,7 @@ async function toggleSplatCorrectionMode() {
 window.enterSplatCorrectionMode = enterSplatCorrectionMode;
 window.exitSplatCorrectionMode = exitSplatCorrectionMode;
 window.toggleSplatCorrectionMode = toggleSplatCorrectionMode;
+window.setSplatCorrectionEditMode = setSplatCorrectionEditMode;
 window.revertSplatCorrectionDraft = revertSplatCorrectionDraft;
 
 function degreesFromRadians(value) {
@@ -1713,7 +1869,7 @@ async function persistSelectedSplatCorrection(correction) {
     splatCorrectionMode.savedCorrection = normalizeSplatCorrection(splat.correction);
     splatCorrectionMode.draftCorrection = normalizeSplatCorrection(splat.correction);
     splatCorrectionMode.dirty = false;
-    setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, splat.correction);
+    setSplatCorrectionTargetsFromCorrection(splat.correction);
   }
   buildRenderHandoffV0(entry);
   updateSplatCorrectionModeUi();
@@ -1729,7 +1885,7 @@ async function saveSelectedSplatCorrection() {
     return null;
   }
   if (splatCorrectionMode?.objectId === entry.id) {
-    syncSplatCorrectionDraftFromTarget();
+    syncSplatCorrectionDraftFromActiveTarget();
   }
   const fields = readSplatCorrectionFields();
   const currentCorrection = normalizeSplatCorrection(entry.splat?.correction);
@@ -1756,11 +1912,18 @@ async function resetSelectedSplatCorrection() {
     return null;
   }
   try {
+    const defaultCorrection = defaultSplatCorrection();
     if (splatCorrectionMode?.objectId === entry.id) {
-      setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, defaultSplatCorrection());
-      syncSplatCorrectionDraftFromTarget();
+      setSceneObjectSplatMetadata(entry, {
+        ...entry.splat,
+        correction: defaultCorrection,
+      });
+      applySplatCorrectionToRecord(entry, defaultCorrection);
+      splatCorrectionMode.draftCorrection = normalizeSplatCorrection(defaultCorrection);
+      setSplatCorrectionTargetsFromCorrection(defaultCorrection);
+      setSplatCorrectionDraftDirty(true);
     }
-    const data = await persistSelectedSplatCorrection(defaultSplatCorrection());
+    const data = await persistSelectedSplatCorrection(defaultCorrection);
     setInfo(`Splat correction reset: ${entry.label || entry.fileName || entry.id}`);
     return data;
   } catch (error) {
@@ -1857,7 +2020,7 @@ function applySplatCorrectionInspectorField(input) {
     correction: next,
   });
   if (splatCorrectionMode?.objectId === entry.id) {
-    setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, next);
+    setSplatCorrectionTargetsFromCorrection(next);
     splatCorrectionMode.draftCorrection = next;
     setSplatCorrectionDraftDirty(true);
   }
@@ -2243,12 +2406,18 @@ window.kaminosSceneObjectDebugState = function() {
 window.kaminosSplatCorrectionModeDebugState = function() {
   const mode = splatCorrectionMode;
   const record = mode?.record || null;
+  const activeTarget = splatCorrectionTransformTarget();
   return {
     active: !!mode,
     objectId: mode?.objectId || null,
+    editMode: mode?.editMode || null,
     dirty: !!mode?.dirty,
-    targetAttached: !!mode?.target && transformControls?.object === mode.target,
+    targetAttached: !!activeTarget && transformControls?.object === activeTarget,
+    pivotTargetAttached: !!mode?.target && transformControls?.object === mode.target,
+    cropTargetAttached: !!mode?.cropTarget && transformControls?.object === mode.cropTarget,
     transformTargetName: transformControls?.object?.name || null,
+    cropBoxVisible: !!mode?.cropTarget?.visible,
+    cropTargetTransform: mode?.cropTarget ? sceneObjectTransformState(mode.cropTarget) : null,
     draftCorrection: mode?.draftCorrection ? normalizeSplatCorrection(mode.draftCorrection) : null,
     savedCorrection: mode?.savedCorrection ? normalizeSplatCorrection(mode.savedCorrection) : null,
     sceneTransform: record ? splatSceneTransformState(record) : null,
@@ -2268,6 +2437,24 @@ window.kaminosSetSplatCorrectionDraftTransform = function(transform = {}) {
   applySceneObjectTransformState(splatCorrectionMode.target, next);
   syncSplatCorrectionDraftFromTarget();
   updateTransformInspector();
+  window._kaminosDirty?.();
+  return window.kaminosSplatCorrectionModeDebugState();
+};
+
+window.kaminosSetSplatCorrectionCropTransform = function(transform = {}) {
+  if (!splatCorrectionMode) throw new Error('Splat correction mode is not active');
+  splatCorrectionMode.editMode = 'crop';
+  attachTransformControlsToCurrentTarget();
+  const current = sceneObjectTransformState(splatCorrectionMode.cropTarget);
+  const next = cloneTransformState({
+    position: transform.position || current.position,
+    rotation: current.rotation,
+    scale: transform.scale || current.scale,
+  });
+  applySceneObjectTransformState(splatCorrectionMode.cropTarget, next);
+  syncSplatCorrectionDraftFromCropTarget();
+  updateTransformInspector();
+  updateSplatCorrectionModeUi();
   window._kaminosDirty?.();
   return window.kaminosSplatCorrectionModeDebugState();
 };
@@ -2614,7 +2801,7 @@ async function initScene() {
   transformControls.addEventListener('change', () => {
     markDirty();
     if (splatCorrectionTransformTarget()) {
-      syncSplatCorrectionDraftFromTarget();
+      syncSplatCorrectionDraftFromActiveTarget();
     } else {
       const entry = selectedSceneObjectEntry();
       if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);

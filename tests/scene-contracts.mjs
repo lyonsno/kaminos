@@ -83,6 +83,9 @@ assert.match(index, /window\.kaminosSetSplatCorrectionDraftTransform/, 'browser 
 assert.match(index, /axisFlips/, 'splat correction metadata includes asset-local axis flip state');
 assert.match(index, /function toggleSplatCorrectionAxisFlip\(/, 'splat correction mode can flip axes without mutating scene placement');
 assert.match(index, /window\.kaminosToggleSplatCorrectionAxisFlip/, 'browser witnesses can toggle correction-local axis flips without DOM inference');
+assert.match(index, /function setSplatCorrectionEditMode\(/, 'splat correction mode exposes explicit Pivot/Crop edit targets');
+assert.match(index, /splat-correction-crop-target/, 'splat correction crop mode has a named viewport crop-box target');
+assert.match(index, /window\.kaminosSetSplatCorrectionCropTransform/, 'browser witnesses can edit crop bounds through the viewport crop target');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');
