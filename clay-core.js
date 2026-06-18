@@ -54,6 +54,8 @@ const CLAY_CUBE_ISO_SURFACE_STRENGTH = 0.24;
 const CLAY_CUBE_ISO_SURFACE_SUBTRACT = 10.0;
 const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
 const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
+const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
+const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
@@ -298,6 +300,125 @@ function cubeGridCellIndex(x, y, z, gridDimension) {
   return gx + gy * gridDimension + gz * gridDimension * gridDimension;
 }
 
+function cubeNearestFace(baseX, baseY, baseZ, band) {
+  const distances = [
+    ['front', Math.abs(CLAY_CUBE_EXTENTS.halfZ - baseZ)],
+    ['back', Math.abs(baseZ + CLAY_CUBE_EXTENTS.halfZ)],
+    ['left', Math.abs(baseX + CLAY_CUBE_EXTENTS.halfX)],
+    ['right', Math.abs(CLAY_CUBE_EXTENTS.halfX - baseX)],
+    ['top', Math.abs(CLAY_CUBE_EXTENTS.maxY - baseY)],
+    ['bottom', Math.abs(baseY - CLAY_CUBE_EXTENTS.minY)],
+  ].sort((a, b) => a[1] - b[1]);
+  return distances[0][1] <= band ? distances[0][0] : 'interior';
+}
+
+function computeCubeFaceMetrics({ basePositions, cubeValues, config, colliders = [] }) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const xBand = (CLAY_CUBE_EXTENTS.halfX * 2 / Math.max(1, cfg.cubeX - 1)) * 0.6;
+  const yBand = ((CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY) / Math.max(1, cfg.cubeY - 1)) * 0.6;
+  const zBand = (CLAY_CUBE_EXTENTS.halfZ * 2 / Math.max(1, cfg.cubeZ - 1)) * 0.6;
+  const faceBand = Math.max(xBand, yBand, zBand);
+  let frontFaceDeformedParticleCount = 0;
+  let backFaceDeformedParticleCount = 0;
+  let edgeBandDeformedParticleCount = 0;
+  let cornerBandDeformedParticleCount = 0;
+  let maxDisplacement = -1;
+  let maxDisplacementFace = 'interior';
+  let deformationWeight = 0;
+  let deformationX = 0;
+  let deformationY = 0;
+  let deformationZ = 0;
+  let contactWeight = 0;
+  let contactX = 0;
+  let contactY = 0;
+  let contactZ = 0;
+  let brushWeight = 0;
+  let brushX = 0;
+  let brushY = 0;
+  let brushZ = 0;
+
+  for (const collider of colliders.slice(0, MAX_COLLIDERS)) {
+    const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
+    const strength = Math.max(0.0001, Math.abs(Number(collider?.effectiveStrength ?? collider?.strength ?? 1)) || 1);
+    brushWeight += strength;
+    brushX += center[0] * strength;
+    brushY += center[1] * strength;
+    brushZ += center[2] * strength;
+  }
+
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const baseX = basePositions[offset];
+    const baseY = basePositions[offset + 1];
+    const baseZ = basePositions[offset + 2];
+    const x = cubeValues[offset];
+    const y = cubeValues[offset + 1];
+    const z = cubeValues[offset + 2];
+    const contact = cubeValues[offset + 3];
+    const dx = x - baseX;
+    const dy = y - baseY;
+    const dz = z - baseZ;
+    const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const deformed = displacement > 0.002;
+    const onFront = Math.abs(CLAY_CUBE_EXTENTS.halfZ - baseZ) <= zBand;
+    const onBack = Math.abs(baseZ + CLAY_CUBE_EXTENTS.halfZ) <= zBand;
+    const boundaryAxes = [
+      Math.min(Math.abs(baseX + CLAY_CUBE_EXTENTS.halfX), Math.abs(CLAY_CUBE_EXTENTS.halfX - baseX)) <= xBand,
+      Math.min(Math.abs(baseY - CLAY_CUBE_EXTENTS.minY), Math.abs(CLAY_CUBE_EXTENTS.maxY - baseY)) <= yBand,
+      Math.min(Math.abs(baseZ + CLAY_CUBE_EXTENTS.halfZ), Math.abs(CLAY_CUBE_EXTENTS.halfZ - baseZ)) <= zBand,
+    ].filter(Boolean).length;
+
+    if (deformed) {
+      if (onFront) frontFaceDeformedParticleCount += 1;
+      if (onBack) backFaceDeformedParticleCount += 1;
+      if (boundaryAxes >= 2) edgeBandDeformedParticleCount += 1;
+      if (boundaryAxes >= 3) cornerBandDeformedParticleCount += 1;
+      deformationWeight += displacement;
+      deformationX += x * displacement;
+      deformationY += y * displacement;
+      deformationZ += z * displacement;
+    }
+    if (contact > 0.5) {
+      contactWeight += contact;
+      contactX += x * contact;
+      contactY += y * contact;
+      contactZ += z * contact;
+    }
+    if (displacement > maxDisplacement) {
+      maxDisplacement = displacement;
+      maxDisplacementFace = cubeNearestFace(baseX, baseY, baseZ, faceBand);
+    }
+  }
+
+  const deformationCentroid = deformationWeight > 0
+    ? [deformationX / deformationWeight, deformationY / deformationWeight, deformationZ / deformationWeight]
+    : null;
+  const contactCentroid = contactWeight > 0
+    ? [contactX / contactWeight, contactY / contactWeight, contactZ / contactWeight]
+    : null;
+  const brushCentroid = brushWeight > 0
+    ? [brushX / brushWeight, brushY / brushWeight, brushZ / brushWeight]
+    : null;
+  const distance = (a, b) => a && b
+    ? Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+    : null;
+
+  return {
+    faceMetricEvidenceKind: CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND,
+    frontFaceDeformedParticleCount,
+    backFaceDeformedParticleCount,
+    frontBackDeformationRatio: frontFaceDeformedParticleCount / Math.max(1, backFaceDeformedParticleCount),
+    edgeBandDeformedParticleCount,
+    cornerBandDeformedParticleCount,
+    maxDisplacementFace,
+    deformationCentroid,
+    contactCentroid,
+    brushCentroid,
+    brushToDeformationCentroidDistance: distance(brushCentroid, deformationCentroid),
+    brushToContactCentroidDistance: distance(brushCentroid, contactCentroid),
+  };
+}
+
 export function runClayCubeFirstLoopOracle({
   basePositions,
   previousPositions = basePositions,
@@ -368,6 +489,13 @@ export function runClayCubeFirstLoopOracle({
     next[offset + 3] = contact;
   }
 
+  const faceMetrics = computeCubeFaceMetrics({
+    basePositions: base,
+    cubeValues: next,
+    config: cfg,
+    colliders: normalizedColliders,
+  });
+
   return {
     evidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
     surfaceVisible: CLAY_CUBE_SURFACE_VISIBLE,
@@ -384,6 +512,7 @@ export function runClayCubeFirstLoopOracle({
     minY,
     maxY,
     heightRange: maxY - minY,
+    ...faceMetrics,
   };
 }
 
@@ -655,8 +784,22 @@ export function createKaminosClayPrototype({
   let clayCubeIsoSurfaceNeedsRefresh = false;
   let clayCubeBoundarySkinVisible = clayCubeEnabled;
   let clayCubeBoundarySkinEvidenceKind = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND : 'disabled';
+  let clayCubeBoundarySkinVisualMode = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE : 'disabled';
   let clayCubeBoundarySkinVertexCount = 0;
   let clayCubeBoundarySkinTriangleCount = 0;
+  let clayCubeBoundarySkinSharedVertexCount = 0;
+  let clayCubeFaceMetricEvidenceKind = clayCubeEnabled ? CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND : 'disabled';
+  let clayCubeFrontFaceDeformedParticleCount = 0;
+  let clayCubeBackFaceDeformedParticleCount = 0;
+  let clayCubeFrontBackDeformationRatio = 0;
+  let clayCubeEdgeBandDeformedParticleCount = 0;
+  let clayCubeCornerBandDeformedParticleCount = 0;
+  let clayCubeMaxDisplacementFace = 'interior';
+  let clayCubeDeformationCentroid = null;
+  let clayCubeContactCentroid = null;
+  let clayCubeBrushCentroid = null;
+  let clayCubeBrushToDeformationCentroidDistance = null;
+  let clayCubeBrushToContactCentroidDistance = null;
   let lastCubeStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
@@ -728,9 +871,10 @@ export function createKaminosClayPrototype({
       scene.add(cubePointCloud);
 
       const skinMaterial = new THREE.MeshStandardMaterial({
-        color: 0xc89b65,
+        color: 0xffffff,
         roughness: 0.86,
         metalness: 0,
+        vertexColors: true,
         transparent: true,
         opacity: 0.54,
         side: THREE.DoubleSide,
@@ -796,14 +940,21 @@ export function createKaminosClayPrototype({
 
   function createCubeBoundarySkinGeometry() {
     const positions = [];
+    const colors = [];
     const indices = [];
     const sourceIndices = [];
+    const sourceToVertex = new Map();
 
     const pushVertex = sourceIndex => {
+      const existing = sourceToVertex.get(sourceIndex);
+      if (existing !== undefined) return existing;
       const offset = sourceIndex * 4;
       sourceIndices.push(sourceIndex);
       positions.push(cubeBasePositions[offset], cubeBasePositions[offset + 1], cubeBasePositions[offset + 2]);
-      return sourceIndices.length - 1;
+      colors.push(0.74, 0.56, 0.34);
+      const vertexIndex = sourceIndices.length - 1;
+      sourceToVertex.set(sourceIndex, vertexIndex);
+      return vertexIndex;
     };
 
     const pushQuad = (a, b, c, d) => {
@@ -865,10 +1016,12 @@ export function createKaminosClayPrototype({
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
     cubeBoundarySkinSourceIndices = sourceIndices;
     clayCubeBoundarySkinVertexCount = sourceIndices.length;
+    clayCubeBoundarySkinSharedVertexCount = sourceToVertex.size;
     clayCubeBoundarySkinTriangleCount = indices.length / 3;
     return geometry;
   }
@@ -928,6 +1081,7 @@ export function createKaminosClayPrototype({
 
   function refreshCubeBoundarySkin(cubeValues) {
     const position = cubeBoundarySkin?.geometry?.attributes?.position || null;
+    const color = cubeBoundarySkin?.geometry?.attributes?.color || null;
     if (!position || !cubeValues) {
       clayCubeBoundarySkinVisible = false;
       return;
@@ -935,8 +1089,23 @@ export function createKaminosClayPrototype({
     for (let i = 0; i < cubeBoundarySkinSourceIndices.length; i += 1) {
       const sourceOffset = cubeBoundarySkinSourceIndices[i] * 4;
       position.setXYZ(i, cubeValues[sourceOffset], cubeValues[sourceOffset + 1], cubeValues[sourceOffset + 2]);
+      if (color) {
+        const dx = cubeValues[sourceOffset] - cubeBasePositions[sourceOffset];
+        const dy = cubeValues[sourceOffset + 1] - cubeBasePositions[sourceOffset + 1];
+        const dz = cubeValues[sourceOffset + 2] - cubeBasePositions[sourceOffset + 2];
+        const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const heat = clamp01(displacement / 0.20);
+        const contactHeat = cubeValues[sourceOffset + 3] > 0.5 ? 1 : 0;
+        color.setXYZ(
+          i,
+          0.63 + contactHeat * 0.25 + heat * 0.08,
+          0.49 + heat * 0.25,
+          0.32 - contactHeat * 0.06 + heat * 0.08,
+        );
+      }
     }
     position.needsUpdate = true;
+    if (color) color.needsUpdate = true;
     cubeBoundarySkin.geometry.computeVertexNormals();
     clayCubeBoundarySkinVisible = true;
     cubeBoundarySkin.visible = true;
@@ -1426,7 +1595,9 @@ export function createKaminosClayPrototype({
       cubeColliderData[index * 4 + 1] = cubeCollider.center[1];
       cubeColliderData[index * 4 + 2] = cubeCollider.center[2];
       cubeColliderData[index * 4 + 3] = cubeCollider.radius;
-      cubeColliderForceData[index * 4] = Number.isFinite(collider.effectiveStrength) ? collider.effectiveStrength : cubeCollider.strength;
+      cubeColliderForceData[index * 4] = Number.isFinite(collider.effectiveStrength) && collider.effectiveStrength > 0
+        ? collider.effectiveStrength
+        : cubeCollider.strength;
       cubeColliderForceData[index * 4 + 1] = Number.isFinite(collider.sampleAuthority) ? collider.sampleAuthority : -1;
     });
     device.queue.writeBuffer(cubeColliderBuffer, 0, cubeColliderData);
@@ -1495,6 +1666,24 @@ export function createKaminosClayPrototype({
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
     refreshCubeBoundarySkin(cubeValues);
+    const faceMetrics = computeCubeFaceMetrics({
+      basePositions: cubeBasePositions,
+      cubeValues,
+      config: cubeConfig,
+      colliders: primitiveColliders,
+    });
+    clayCubeFaceMetricEvidenceKind = faceMetrics.faceMetricEvidenceKind;
+    clayCubeFrontFaceDeformedParticleCount = faceMetrics.frontFaceDeformedParticleCount;
+    clayCubeBackFaceDeformedParticleCount = faceMetrics.backFaceDeformedParticleCount;
+    clayCubeFrontBackDeformationRatio = faceMetrics.frontBackDeformationRatio;
+    clayCubeEdgeBandDeformedParticleCount = faceMetrics.edgeBandDeformedParticleCount;
+    clayCubeCornerBandDeformedParticleCount = faceMetrics.cornerBandDeformedParticleCount;
+    clayCubeMaxDisplacementFace = faceMetrics.maxDisplacementFace;
+    clayCubeDeformationCentroid = faceMetrics.deformationCentroid;
+    clayCubeContactCentroid = faceMetrics.contactCentroid;
+    clayCubeBrushCentroid = faceMetrics.brushCentroid;
+    clayCubeBrushToDeformationCentroidDistance = faceMetrics.brushToDeformationCentroidDistance;
+    clayCubeBrushToContactCentroidDistance = faceMetrics.brushToContactCentroidDistance;
     clayCubeHeightRange = clayCubeMaxY - clayCubeMinY;
     clayCubeActiveGridCellCount = activeCells.size;
     clayCubeStepStatus = 'pass';
@@ -1796,8 +1985,22 @@ export function createKaminosClayPrototype({
       clayCubeIsoSurfaceTriangleCount,
       clayCubeBoundarySkinVisible,
       clayCubeBoundarySkinEvidenceKind,
+      clayCubeBoundarySkinVisualMode,
       clayCubeBoundarySkinVertexCount,
+      clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount,
+      clayCubeFaceMetricEvidenceKind,
+      clayCubeFrontFaceDeformedParticleCount,
+      clayCubeBackFaceDeformedParticleCount,
+      clayCubeFrontBackDeformationRatio,
+      clayCubeEdgeBandDeformedParticleCount,
+      clayCubeCornerBandDeformedParticleCount,
+      clayCubeMaxDisplacementFace,
+      clayCubeDeformationCentroid,
+      clayCubeContactCentroid,
+      clayCubeBrushCentroid,
+      clayCubeBrushToDeformationCentroidDistance,
+      clayCubeBrushToContactCentroidDistance,
       clayCubeOracleEvidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,

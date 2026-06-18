@@ -551,6 +551,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Cube range</span><span class="field-val" id="clay-cube-range">--</span></div>
       <div class="field"><span class="field-key">Cube readback</span><span class="field-val" id="clay-cube-readback">-- ms</span></div>
       <div class="field"><span class="field-key">Cube surface</span><span class="field-val" id="clay-cube-surface">hidden</span></div>
+      <div class="field"><span class="field-key">Cube front/back</span><span class="field-val" id="clay-cube-front-back">--</span></div>
+      <div class="field"><span class="field-key">Cube brush contact</span><span class="field-val" id="clay-cube-brush-contact">--</span></div>
+      <div class="field"><span class="field-key">Cube edge/corner</span><span class="field-val" id="clay-cube-edge-corner">--</span></div>
       <div class="field"><span class="field-key">Hand backend</span><span class="field-val" id="clay-hand-pose-backend">--</span></div>
       <div class="field"><span class="field-key">Hand evidence</span><span class="field-val" id="clay-hand-pose-evidence">--</span></div>
       <div class="field"><span class="field-key">Hand frame</span><span class="field-val" id="clay-hand-pose-frame">--</span></div>
@@ -1731,6 +1734,15 @@ function refreshClayReadout() {
   document.getElementById('clay-cube-surface').textContent = s.clayCubeEnabled
     ? `${s.clayCubeBoundarySkinVisible ? 'skin' : 'hidden'} / ${s.clayCubeBoundarySkinTriangleCount ?? 0} tri / mc ${s.clayCubeIsoSurfaceTriangleCount ?? 0}`
     : 'hidden';
+  document.getElementById('clay-cube-front-back').textContent = s.clayCubeEnabled && Number.isFinite(s.clayCubeFrontBackDeformationRatio)
+    ? `${s.clayCubeFrontFaceDeformedParticleCount ?? 0}:${s.clayCubeBackFaceDeformedParticleCount ?? 0} / ${s.clayCubeFrontBackDeformationRatio.toFixed(2)}x`
+    : '--';
+  document.getElementById('clay-cube-brush-contact').textContent = s.clayCubeEnabled && Number.isFinite(s.clayCubeBrushToContactCentroidDistance)
+    ? `${s.clayCubeBrushToContactCentroidDistance.toFixed(3)} / ${s.clayCubeMaxDisplacementFace || 'unknown'}`
+    : '--';
+  document.getElementById('clay-cube-edge-corner').textContent = s.clayCubeEnabled
+    ? `${s.clayCubeEdgeBandDeformedParticleCount ?? 0} / ${s.clayCubeCornerBandDeformedParticleCount ?? 0}`
+    : '--';
   document.getElementById('clay-hand-pose-backend').textContent = s.effectiveHandPoseBackend || '--';
   document.getElementById('clay-hand-pose-evidence').textContent = s.handPoseEvidenceKind || '--';
   document.getElementById('clay-hand-pose-frame').textContent = s.handPoseFrameId || '--';

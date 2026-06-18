@@ -562,8 +562,18 @@ async function main() {
       assert.ok((state.clayCubeIsoSurfaceTriangleCount ?? 0) > 0, 'cube diagnostic iso-surface produced no triangles');
       assert.equal(state.clayCubeBoundarySkinVisible, true, 'cube diagnostic boundary skin missing');
       assert.equal(state.clayCubeBoundarySkinEvidenceKind, 'diagnostic-boundary-skin-from-material-points-not-solver-v0', 'cube diagnostic boundary-skin evidence kind missing');
+      assert.equal(state.clayCubeBoundarySkinVisualMode, 'shared-vertex-displacement-heat-boundary-skin-v0', 'cube diagnostic boundary-skin visual mode missing');
       assert.ok((state.clayCubeBoundarySkinVertexCount ?? 0) > 0, 'cube diagnostic boundary skin produced no vertices');
+      assert.ok((state.clayCubeBoundarySkinSharedVertexCount ?? 0) > 0, 'cube diagnostic boundary skin did not report shared vertices');
+      assert.equal(state.clayCubeBoundarySkinSharedVertexCount, state.clayCubeBoundarySkinVertexCount, 'cube boundary skin still duplicates exterior material vertices');
       assert.ok((state.clayCubeBoundarySkinTriangleCount ?? 0) > 0, 'cube diagnostic boundary skin produced no triangles');
+      assert.equal(state.clayCubeFaceMetricEvidenceKind, 'solver-space-material-point-face-locality-v0', 'cube face-locality metric evidence kind missing');
+      assert.ok(Number.isFinite(state.clayCubeFrontFaceDeformedParticleCount), 'cube front-face deformation count missing');
+      assert.ok(Number.isFinite(state.clayCubeBackFaceDeformedParticleCount), 'cube back-face deformation count missing');
+      assert.ok(Number.isFinite(state.clayCubeFrontBackDeformationRatio), 'cube front/back deformation ratio missing');
+      assert.ok(Number.isFinite(state.clayCubeEdgeBandDeformedParticleCount), 'cube edge-band deformation count missing');
+      assert.ok(Number.isFinite(state.clayCubeCornerBandDeformedParticleCount), 'cube corner-band deformation count missing');
+      assert.ok(['front', 'back', 'left', 'right', 'top', 'bottom', 'interior'].includes(state.clayCubeMaxDisplacementFace), 'cube max displacement face missing');
       assert.ok((state.clayCubeParticleCount ?? 0) >= 216, 'cube material-point count too small for first-loop witness');
       assert.ok((state.clayCubeGridDimension ?? 0) >= 12, 'cube grid dimension missing');
       assert.ok((state.clayCubeActiveGridCellCount ?? 0) > 0, 'cube active grid-cell count missing');
@@ -671,6 +681,9 @@ async function main() {
         assert.ok(Array.isArray(state.clayPointerLastHit.rawCenter), 'cube pointer hit did not preserve raw ray hit');
         assert.ok((state.clayPointerLastHit.rawCenter[2] ?? 0) > 0.25, 'cube pointer raw hit landed behind the visible front face');
         assert.ok((state.clayPointerLastHit.z ?? 0) > 0.15, 'cube pointer effective hit landed behind the visible front face');
+        assert.ok((state.clayCubeFrontBackDeformationRatio ?? 0) > 1, `cube pointer brush deformation was not front-local: ${state.clayCubeFrontBackDeformationRatio}`);
+        assert.ok(Number.isFinite(state.clayCubeBrushToContactCentroidDistance), 'cube pointer brush/contact centroid distance missing');
+        assert.ok(state.clayCubeBrushToContactCentroidDistance < 0.5, `cube pointer brush/contact centroid drifted too far: ${state.clayCubeBrushToContactCentroidDistance}`);
       }
       const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
       const requestedBrushStrength = Number(new URL(url).searchParams.get('clay_brush_strength') || 1.18);
@@ -799,8 +812,22 @@ async function main() {
       clayCubeIsoSurfaceTriangleCount: state.clayCubeIsoSurfaceTriangleCount,
       clayCubeBoundarySkinVisible: state.clayCubeBoundarySkinVisible,
       clayCubeBoundarySkinEvidenceKind: state.clayCubeBoundarySkinEvidenceKind,
+      clayCubeBoundarySkinVisualMode: state.clayCubeBoundarySkinVisualMode,
       clayCubeBoundarySkinVertexCount: state.clayCubeBoundarySkinVertexCount,
+      clayCubeBoundarySkinSharedVertexCount: state.clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
+      clayCubeFaceMetricEvidenceKind: state.clayCubeFaceMetricEvidenceKind,
+      clayCubeFrontFaceDeformedParticleCount: state.clayCubeFrontFaceDeformedParticleCount,
+      clayCubeBackFaceDeformedParticleCount: state.clayCubeBackFaceDeformedParticleCount,
+      clayCubeFrontBackDeformationRatio: state.clayCubeFrontBackDeformationRatio,
+      clayCubeEdgeBandDeformedParticleCount: state.clayCubeEdgeBandDeformedParticleCount,
+      clayCubeCornerBandDeformedParticleCount: state.clayCubeCornerBandDeformedParticleCount,
+      clayCubeMaxDisplacementFace: state.clayCubeMaxDisplacementFace,
+      clayCubeDeformationCentroid: state.clayCubeDeformationCentroid,
+      clayCubeContactCentroid: state.clayCubeContactCentroid,
+      clayCubeBrushCentroid: state.clayCubeBrushCentroid,
+      clayCubeBrushToDeformationCentroidDistance: state.clayCubeBrushToDeformationCentroidDistance,
+      clayCubeBrushToContactCentroidDistance: state.clayCubeBrushToContactCentroidDistance,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,

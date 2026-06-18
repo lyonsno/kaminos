@@ -48,6 +48,11 @@ assert.equal(oracle.surfaceVisible, false, 'cube oracle defaults to cube-only wi
 assert.equal(oracle.diagnosticColorMode, 'cube-diagnostic-contact-displacement-colors-v0');
 assert.ok(oracle.diagnosticColoredParticleCount > 0, 'cube oracle records particles receiving diagnostic color');
 assert.ok(oracle.diagnosticHotParticleCount > 0, 'cube oracle records hot/contact diagnostic particles');
+assert.equal(oracle.faceMetricEvidenceKind, 'solver-space-material-point-face-locality-v0');
+assert.ok(Number.isFinite(oracle.frontBackDeformationRatio), 'cube oracle reports front/back deformation ratio');
+assert.ok(oracle.edgeBandDeformedParticleCount >= 0, 'cube oracle reports edge-band deformation count');
+assert.ok(oracle.cornerBandDeformedParticleCount >= 0, 'cube oracle reports corner-band deformation count');
+assert.ok(['front', 'back', 'left', 'right', 'top', 'bottom', 'interior'].includes(oracle.maxDisplacementFace), 'cube oracle names max displacement face');
 assert.ok(oracle.maxDisplacement > 0.01, 'cube oracle produces readable 3D displacement');
 assert.ok(oracle.minY < 0.08, 'cube oracle lets lower/interior material move, not only the top skin');
 assert.ok(oracle.heightRange > 0.25, 'cube oracle keeps a coherent 3D height span');
