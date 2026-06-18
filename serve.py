@@ -46,6 +46,7 @@ BROWSE_ROOTS = {
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
+SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -244,6 +245,7 @@ def build_asset_entry(root, path):
     path = Path(path).resolve()
     rel_path = path.relative_to(root_path).as_posix()
     size = path.stat().st_size
+    correction_document = load_splat_asset_correction(root_id, rel_path)
     return {
         "id": f"{root_id}:{rel_path}",
         "kind": root.get("kind"),
@@ -255,6 +257,7 @@ def build_asset_entry(root, path):
         "size": size,
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+        "correction": correction_document.get("correction") if correction_document else None,
         "display": build_asset_display_metadata(
             path,
             root_label=root.get("label") or root_id,
@@ -262,6 +265,99 @@ def build_asset_entry(root, path):
             size=size,
         ),
     }
+
+
+def splat_asset_root(root_id):
+    for root in ASSET_ROOTS:
+        if root.get("id") == root_id and root.get("kind") == "splat":
+            return root
+    return None
+
+
+def resolve_splat_asset_path(root_id, rel_path):
+    root = splat_asset_root(root_id)
+    if not root:
+        raise FileNotFoundError(f"splat asset root not configured: {root_id}")
+    root_path = Path(root["path"]).expanduser().resolve()
+    target = (root_path / str(rel_path or "")).resolve()
+    if not target.is_relative_to(root_path):
+        raise PermissionError("Path traversal")
+    if target.suffix.lower() not in SPLAT_EXTENSIONS:
+        raise ValueError(f"Unsupported splat asset extension: {target.suffix or 'missing'}")
+    if not target.is_file():
+        raise FileNotFoundError("splat asset not found")
+    return root, root_path, target
+
+
+def splat_correction_sidecar_path(asset_path):
+    return asset_path.with_name(asset_path.name + ".kaminos-splat.json")
+
+
+def _number_list(value, *, length, fallback):
+    if not isinstance(value, list) or len(value) != length:
+        return list(fallback)
+    try:
+        parsed = [float(item) for item in value]
+    except (TypeError, ValueError):
+        return list(fallback)
+    return parsed if all(item == item and item not in (float("inf"), float("-inf")) for item in parsed) else list(fallback)
+
+
+def normalize_splat_asset_correction(payload):
+    source = payload if isinstance(payload, dict) else {}
+    orientation = source.get("orientation") if isinstance(source.get("orientation"), dict) else {}
+    crop = source.get("crop") if isinstance(source.get("crop"), dict) else {}
+    return {
+        "orientation": {
+            "rotation": _number_list(orientation.get("rotation"), length=3, fallback=[0, 0, 0]),
+        },
+        "centroidOffset": _number_list(source.get("centroidOffset"), length=3, fallback=[0, 0, 0]),
+        "crop": {
+            "enabled": bool(crop.get("enabled", False)),
+            "min": _number_list(crop.get("min"), length=3, fallback=[-0.5, -0.5, -0.5]),
+            "max": _number_list(crop.get("max"), length=3, fallback=[0.5, 0.5, 0.5]),
+        },
+    }
+
+
+def load_splat_asset_correction(root_id, rel_path):
+    try:
+        root, root_path, asset_path = resolve_splat_asset_path(root_id, rel_path)
+    except (FileNotFoundError, PermissionError, ValueError):
+        return None
+    sidecar = splat_correction_sidecar_path(asset_path)
+    if not sidecar.is_file():
+        return None
+    try:
+        document = json.loads(sidecar.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if document.get("schema") != SPLAT_CORRECTION_SCHEMA:
+        return None
+    correction = normalize_splat_asset_correction(document.get("correction"))
+    return {
+        "schema": SPLAT_CORRECTION_SCHEMA,
+        "root_id": root.get("id") or root_id,
+        "path": asset_path.relative_to(root_path).as_posix(),
+        "source": "/api/read?" + urlencode({"root": root.get("id") or root_id, "path": asset_path.relative_to(root_path).as_posix()}),
+        "correction": correction,
+        "updatedAt": document.get("updatedAt"),
+    }
+
+
+def save_splat_asset_correction(root_id, rel_path, payload):
+    root, root_path, asset_path = resolve_splat_asset_path(root_id, rel_path)
+    rel = asset_path.relative_to(root_path).as_posix()
+    document = {
+        "schema": SPLAT_CORRECTION_SCHEMA,
+        "root_id": root.get("id") or root_id,
+        "path": rel,
+        "source": "/api/read?" + urlencode({"root": root.get("id") or root_id, "path": rel}),
+        "correction": normalize_splat_asset_correction(payload),
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    splat_correction_sidecar_path(asset_path).write_text(json.dumps(document, indent=2))
+    return document
 
 
 def splat_inbox_root():
@@ -292,6 +388,9 @@ def ingest_splat_asset(filename, content):
     if not target.is_relative_to(root_path.resolve()):
         raise PermissionError("Path traversal")
     target.write_bytes(content)
+    sidecar = splat_correction_sidecar_path(target)
+    if sidecar.exists():
+        sidecar.unlink()
     return build_asset_entry(root, target)
 
 
@@ -371,6 +470,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
+        elif parsed.path == "/api/splat-correction":
+            self.handle_splat_correction_get(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -392,6 +493,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_save_scene()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
+        elif parsed.path == "/api/splat-correction":
+            self.handle_splat_correction_post(parse_qs(parsed.query))
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -464,6 +567,57 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_splat_correction_get(self, params):
+        root_id = params.get("root", [""])[0]
+        rel_path = params.get("path", [""])[0]
+        try:
+            document = load_splat_asset_correction(root_id, rel_path)
+            if document is None:
+                resolve_splat_asset_path(root_id, rel_path)
+                document = {
+                    "schema": SPLAT_CORRECTION_SCHEMA,
+                    "root_id": root_id,
+                    "path": rel_path,
+                    "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+                    "correction": None,
+                }
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
+
+    def handle_splat_correction_post(self, params):
+        root_id = params.get("root", [""])[0]
+        rel_path = params.get("path", [""])[0]
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            document = save_splat_asset_correction(root_id, rel_path, payload.get("correction", payload))
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
 
     def handle_delete_scene(self, params):
         """Delete a scene file."""

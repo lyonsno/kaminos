@@ -157,6 +157,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .transform-inspector-id { color: #555; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .transform-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; align-items: center; }
 .transform-label { color: #777; font-size: 10px; }
+.splat-correction-panel { border-top: 1px solid #2a2a2a; padding-top: 9px; display: flex; flex-direction: column; gap: 8px; }
+.splat-correction-panel[hidden] { display: none; }
+.splat-correction-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.splat-correction-note { color: #666; font-size: 10px; line-height: 1.35; }
 .transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
 .transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
@@ -236,6 +240,44 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
             <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x"></label>
             <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
             <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
+          </div>
+        </div>
+        <div class="splat-correction-panel" id="splat-correction-panel" hidden>
+          <div class="transform-inspector-head">
+            <div class="transform-inspector-name">Splat Correction</div>
+            <div class="splat-correction-note">Asset-local orientation, centroid, and crop hints for preview and render handoff.</div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-label">Centroid</div>
+            <div class="transform-axis-grid">
+              <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.x"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.y"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.z"></label>
+            </div>
+          </div>
+          <label class="import-mode" style="margin:0;">
+            <input type="checkbox" data-splat-correction-field="crop.enabled">
+            <span>Crop enabled</span>
+          </label>
+          <div class="transform-row">
+            <div class="transform-label">Crop Min</div>
+            <div class="transform-axis-grid">
+              <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.min.x"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.min.y"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.min.z"></label>
+            </div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-label">Crop Max</div>
+            <div class="transform-axis-grid">
+              <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.max.x"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.max.y"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="crop.max.z"></label>
+            </div>
+          </div>
+          <div class="splat-correction-actions">
+            <button type="button" class="btn" onclick="saveSelectedSplatCorrection()">Save Correction</button>
+            <button type="button" class="btn" onclick="resetSelectedSplatCorrection()">Reset Correction</button>
           </div>
         </div>
       </div>
@@ -1030,6 +1072,69 @@ function applySceneObjectTransformState(object, transform = {}) {
   object.scale.fromArray(Array.isArray(transform.scale) ? transform.scale : [1, 1, 1]);
 }
 
+function defaultSplatCorrection() {
+  return {
+    orientation: { rotation: [0, 0, 0] },
+    centroidOffset: [0, 0, 0],
+    crop: { enabled: false, min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5] },
+  };
+}
+
+function numberTriplet(value, fallback) {
+  if (!Array.isArray(value) || value.length !== 3) return [...fallback];
+  const parsed = value.map(Number);
+  return parsed.every(Number.isFinite) ? parsed : [...fallback];
+}
+
+function normalizeSplatCorrection(correction = {}) {
+  const defaults = defaultSplatCorrection();
+  return {
+    orientation: {
+      rotation: numberTriplet(correction?.orientation?.rotation, defaults.orientation.rotation),
+    },
+    centroidOffset: numberTriplet(correction?.centroidOffset, defaults.centroidOffset),
+    crop: {
+      enabled: !!correction?.crop?.enabled,
+      min: numberTriplet(correction?.crop?.min, defaults.crop.min),
+      max: numberTriplet(correction?.crop?.max, defaults.crop.max),
+    },
+  };
+}
+
+function applySplatCorrectionToObject(object, correction = {}) {
+  if (!object) return;
+  const normalized = normalizeSplatCorrection(correction);
+  const transform = sceneObjectTransformState(object);
+  transform.rotation = normalized.orientation.rotation;
+  transform.position = normalized.centroidOffset;
+  applySceneObjectTransformState(object, transform);
+}
+
+function splatAssetRouteIdentity(splat = {}) {
+  const provenance = splat?.provenance || {};
+  const root = provenance.root_id || splat.root_id || null;
+  const path = provenance.asset_path || splat.assetPath || splat.path || null;
+  if (!root || !path) return null;
+  return { root, path };
+}
+
+async function fetchSplatAssetCorrection(splat = {}) {
+  const route = splatAssetRouteIdentity(splat);
+  if (!route) return null;
+  const resp = await fetch('/api/splat-correction' + '?' + new URLSearchParams(route));
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) return null;
+  return data.correction ? normalizeSplatCorrection(data.correction) : null;
+}
+
+function setSceneObjectSplatMetadata(record, splat) {
+  if (!record) return;
+  record.splat = splat || null;
+  if (record.object?.userData?.kaminosSceneObject) {
+    record.object.userData.kaminosSceneObject.splat = record.splat;
+  }
+}
+
 function degreesFromRadians(value) {
   return value * 180 / Math.PI;
 }
@@ -1228,6 +1333,132 @@ function setTransformInspectorFieldsDisabled(disabled) {
   document.querySelectorAll('[data-transform-field]').forEach(input => {
     input.disabled = disabled;
   });
+  document.querySelectorAll('[data-splat-correction-field]').forEach(input => {
+    input.disabled = disabled;
+  });
+}
+
+function setSplatCorrectionField(name, value) {
+  const input = document.querySelector(`[data-splat-correction-field="${name}"]`);
+  if (!input) return;
+  if (input.type === 'checkbox') input.checked = !!value;
+  else if (document.activeElement !== input) input.value = formatInspectorNumber(Number(value || 0));
+}
+
+function readSplatCorrectionFields() {
+  const numberValue = (name, fallback = 0) => {
+    const input = document.querySelector(`[data-splat-correction-field="${name}"]`);
+    const value = Number(input?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return normalizeSplatCorrection({
+    centroidOffset: [
+      numberValue('centroidOffset.x'),
+      numberValue('centroidOffset.y'),
+      numberValue('centroidOffset.z'),
+    ],
+    crop: {
+      enabled: !!document.querySelector('[data-splat-correction-field="crop.enabled"]')?.checked,
+      min: [
+        numberValue('crop.min.x', -0.5),
+        numberValue('crop.min.y', -0.5),
+        numberValue('crop.min.z', -0.5),
+      ],
+      max: [
+        numberValue('crop.max.x', 0.5),
+        numberValue('crop.max.y', 0.5),
+        numberValue('crop.max.z', 0.5),
+      ],
+    },
+  });
+}
+
+function updateSplatCorrectionPanel(entry) {
+  const panel = document.getElementById('splat-correction-panel');
+  if (!panel) return;
+  const isSplat = entry?.type === 'splat';
+  panel.hidden = !isSplat;
+  if (!isSplat) return;
+  const correction = normalizeSplatCorrection(entry.splat?.correction);
+  setSplatCorrectionField('centroidOffset.x', correction.centroidOffset[0]);
+  setSplatCorrectionField('centroidOffset.y', correction.centroidOffset[1]);
+  setSplatCorrectionField('centroidOffset.z', correction.centroidOffset[2]);
+  setSplatCorrectionField('crop.enabled', correction.crop.enabled);
+  setSplatCorrectionField('crop.min.x', correction.crop.min[0]);
+  setSplatCorrectionField('crop.min.y', correction.crop.min[1]);
+  setSplatCorrectionField('crop.min.z', correction.crop.min[2]);
+  setSplatCorrectionField('crop.max.x', correction.crop.max[0]);
+  setSplatCorrectionField('crop.max.y', correction.crop.max[1]);
+  setSplatCorrectionField('crop.max.z', correction.crop.max[2]);
+}
+
+async function persistSelectedSplatCorrection(correction) {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || entry.type !== 'splat') throw new Error('No selected splat');
+  const route = splatAssetRouteIdentity(entry.splat);
+  if (!route) throw new Error('Selected splat is not backed by a declared splat asset root');
+  const resp = await fetch('/api/splat-correction' + '?' + new URLSearchParams(route), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ correction }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) throw new Error(data.error || `Splat correction save failed ${resp.status}`);
+  const splat = {
+    ...entry.splat,
+    correction: normalizeSplatCorrection(data.correction),
+    correctionDocument: {
+      schema: data.schema,
+      root_id: data.root_id,
+      path: data.path,
+      updatedAt: data.updatedAt || null,
+    },
+  };
+  setSceneObjectSplatMetadata(entry, splat);
+  applySplatCorrectionToObject(entry.object, splat.correction);
+  buildRenderHandoffV0(entry);
+  updateTransformInspector();
+  window._kaminosDirty?.();
+  return data;
+}
+
+async function saveSelectedSplatCorrection() {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || entry.type !== 'splat') {
+    setInfo('Select a splat first');
+    return null;
+  }
+  const transform = sceneObjectTransformState(entry.object);
+  const fields = readSplatCorrectionFields();
+  const correction = normalizeSplatCorrection({
+    orientation: { rotation: transform.rotation },
+    centroidOffset: transform.position,
+    crop: fields.crop,
+  });
+  try {
+    const data = await persistSelectedSplatCorrection(correction);
+    setInfo(`Splat correction saved: ${entry.label || entry.fileName || entry.id}`);
+    return data;
+  } catch (error) {
+    setInfo(`Splat correction failed: ${error.message}`);
+    throw error;
+  }
+}
+
+async function resetSelectedSplatCorrection() {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || entry.type !== 'splat') {
+    setInfo('Select a splat first');
+    return null;
+  }
+  try {
+    const data = await persistSelectedSplatCorrection(defaultSplatCorrection());
+    setInfo(`Splat correction reset: ${entry.label || entry.fileName || entry.id}`);
+    return data;
+  } catch (error) {
+    setInfo(`Splat correction reset failed: ${error.message}`);
+    throw error;
+  }
 }
 
 function updateTransformInspector() {
@@ -1241,6 +1472,7 @@ function updateTransformInspector() {
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
+  updateSplatCorrectionPanel(entry);
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
@@ -1300,6 +1532,9 @@ function initTransformInspector() {
   });
   updateTransformInspector();
 }
+
+window.kaminosSaveSelectedSplatCorrection = saveSelectedSplatCorrection;
+window.kaminosResetSelectedSplatCorrection = resetSelectedSplatCorrection;
 
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
@@ -4042,13 +4277,26 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     await restoreAuthoredSceneFromPreview({ silent: true });
   }
   if (shouldClearSceneForImport(options)) clearScene();
-  const metadata = greenroomSplatMetadata(display, fileName, url, options.metadata || {});
+  let metadata = greenroomSplatMetadata(display, fileName, url, options.metadata || {});
+  const correction = metadata.splat?.correction
+    ? normalizeSplatCorrection(metadata.splat.correction)
+    : await fetchSplatAssetCorrection(metadata.splat);
+  if (correction) {
+    metadata = {
+      ...metadata,
+      splat: {
+        ...metadata.splat,
+        correction,
+      },
+    };
+  }
   const preview = await createSplatSceneObjectPreview({ url, fileName, display, metadata });
   const object = preview.object;
   const splat = {
     ...metadata.splat,
     ...preview.preview,
   };
+  if (splat.correction) applySplatCorrectionToObject(object, splat.correction);
   scene.add(object);
   const record = registerSceneObject(object, {
     ...metadata,
@@ -4215,6 +4463,7 @@ async function grBrowseSplatAssets() {
               bounds: null,
               splatCount: null,
               sidecars: [],
+              correction: entry.correction || null,
               provenance: {
                 source_group: entry.stage === 'production' ? 'splat-production' : 'splat-inbox',
                 source_url: url,
@@ -4476,6 +4725,7 @@ async function ingestDroppedSplatFile(file, options = {}) {
       bounds: null,
       splatCount: null,
       sidecars: [],
+      correction: entry.correction || null,
       provenance: {
         source_group: entry.stage === 'production' ? 'splat-production' : 'splat-inbox',
         source_url: entry.source,

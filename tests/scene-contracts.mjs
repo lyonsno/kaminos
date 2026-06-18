@@ -64,6 +64,12 @@ assert.match(index, /fetch\('\/api\/ingest-splat'/, 'dropped splat ingest uses a
 assert.match(index, /handleFiles\([\s\S]*\\\.\(ply\|spz\)/, 'sidebar drop handling recognizes loose PLY/SPZ files');
 assert.match(index, /viewport\.addEventListener\('drop'[\s\S]*\\\.\(ply\|spz\)/, 'viewport drop handling recognizes loose PLY/SPZ files');
 assert.match(index, /window\.kaminosIngestDroppedSplatFile/, 'browser witnesses can exercise direct splat-drop ingest without DOM inference');
+assert.match(index, /Splat Correction/, 'selected splat objects expose correction controls in the transform inspector');
+assert.match(index, /data-splat-correction-field/, 'splat correction controls use stable field ids for browser witnesses');
+assert.match(index, /async function saveSelectedSplatCorrection\(/, 'splat correction controls persist orientation and crop metadata to the asset sidecar');
+assert.match(index, /fetch\('\/api\/splat-correction'/, 'splat correction save/load uses the server sidecar route, not scene-only state');
+assert.match(index, /window\.kaminosSaveSelectedSplatCorrection/, 'browser witnesses can persist selected splat corrections without DOM inference');
+assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');

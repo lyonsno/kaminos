@@ -2445,6 +2445,123 @@ async function runSplatDirectDropIngestScenario(ws) {
   }
 }
 
+async function runSplatCorrectionSidecarScenario(ws) {
+  phase = 'scenario-splat-correction-sidecar';
+  lastEvidence.splatCorrectionSidecar = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const ply = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex 6',
+        'property float x',
+        'property float y',
+        'property float z',
+        'property uchar red',
+        'property uchar green',
+        'property uchar blue',
+        'end_header',
+        '-1 0 0 255 60 60',
+        '1 0 0 60 255 60',
+        '0 -1 0 60 60 255',
+        '0 1 0 255 220 60',
+        '0 0 -1 255 60 220',
+        '0 0 1 60 255 220',
+      ].join('\\n') + '\\n';
+      document.querySelector('[data-tab="greenroom"]').click();
+      const file = new File([ply], 'Witness Correction Sidecar.PLY', { type: 'application/octet-stream' });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: false });
+      await wait(250);
+      const firstSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const firstSplat = firstSceneDebug.find(record => record.type === 'splat'
+        && record.source === ingestResult?.entry?.source) || firstSceneDebug.find(record => record.type === 'splat');
+      if (!firstSplat) throw new Error('correction scenario could not import initial splat');
+      window.selectSceneObject(firstSplat.id);
+      window.kaminosSetSceneObjectTransform(firstSplat.id, {
+        position: [0.25, -0.1, 0.4],
+        rotation: [0.1, 0.2, 0.3],
+        scale: [1, 1, 1],
+      });
+      const setField = (name, value) => {
+        const input = document.querySelector('[data-splat-correction-field="' + name + '"]');
+        if (!input) throw new Error('missing splat correction field ' + name);
+        if (input.type === 'checkbox') input.checked = !!value;
+        else input.value = String(value);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      setField('crop.enabled', true);
+      setField('crop.min.x', -0.2);
+      setField('crop.min.y', -0.3);
+      setField('crop.min.z', -0.4);
+      setField('crop.max.x', 0.7);
+      setField('crop.max.y', 0.8);
+      setField('crop.max.z', 0.9);
+      const saveResult = await window.kaminosSaveSelectedSplatCorrection();
+      const assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const savedAssetEntry = (assetDataAfterSave.entries || []).find(entry => entry.path === ingestResult?.entry?.path) || null;
+      const sourceBeforeReload = ingestResult?.entry?.source;
+      await window.greenroomImportSplat(sourceBeforeReload, ingestResult?.entry?.name || 'splat.ply', ingestResult?.entry?.display || { title: 'Splat' }, {
+        clear: true,
+        metadata: {
+          source: sourceBeforeReload,
+          fileName: ingestResult?.entry?.name || 'splat.ply',
+          label: 'Reloaded correction sidecar',
+          splat: {
+            schema: 'kaminos.splat-asset.v0',
+            assetSource: sourceBeforeReload,
+            fileName: ingestResult?.entry?.name || 'splat.ply',
+            format: 'ply',
+            bounds: null,
+            splatCount: null,
+            sidecars: [],
+            provenance: {
+              source_group: 'splat-inbox',
+              source_url: sourceBeforeReload,
+              root_id: ingestResult?.entry?.root_id,
+              root_label: ingestResult?.entry?.root_label,
+              asset_stage: ingestResult?.entry?.stage,
+              asset_path: ingestResult?.entry?.path,
+            },
+          },
+        },
+      });
+      await wait(250);
+      const reloadedSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const reloadedSplat = reloadedSceneDebug.find(record => record.type === 'splat') || null;
+      const handoffDebug = window.kaminosRenderHandoffDebugState?.(reloadedSplat?.id) || null;
+      return {
+        ingestResult: { entry: ingestResult?.entry || null },
+        saveResult,
+        assetDataAfterSave,
+        savedAssetEntry,
+        firstSplat,
+        reloadedSplat,
+        handoffDebug,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  const saved = lastEvidence.splatCorrectionSidecar.savedAssetEntry;
+  const savedCorrection = saved?.correction || null;
+  if (!savedCorrection
+      || savedCorrection.crop?.enabled !== true
+      || savedCorrection.centroidOffset?.[0] !== 0.25
+      || savedCorrection.orientation?.rotation?.[2] !== 0.3) {
+    throw new Error(`splat correction did not persist to sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const reloaded = lastEvidence.splatCorrectionSidecar.reloadedSplat;
+  if (!reloaded?.splat?.correction
+      || reloaded.splat.correction.crop?.enabled !== true
+      || reloaded.transform?.position?.[0] !== 0.25
+      || reloaded.transform?.rotation?.[1] !== 0.2) {
+    throw new Error(`splat correction did not reload from sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const caps = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.capabilities || {};
+  if (caps.realSplatRendering !== false || caps.meshDepthOcclusion !== false) {
+    throw new Error(`splat correction leaked into render truth claim: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+}
+
 async function runAoRouteDeltaScenario(ws) {
   phase = 'scenario-ao-route-delta-on';
   lastEvidence.aoRouteDelta = await evaluate(ws, `
@@ -2644,6 +2761,8 @@ try {
     await runSplatAssetInboxScenario(ws);
   } else if (scenario === 'splat-direct-drop-ingest') {
     await runSplatDirectDropIngestScenario(ws);
+  } else if (scenario === 'splat-correction-sidecar') {
+    await runSplatCorrectionSidecarScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

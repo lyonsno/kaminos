@@ -238,6 +238,63 @@ def test_splat_asset_ingest_writes_only_to_experimental_inbox():
         assert not any(outside.iterdir())
 
 
+def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        production = root / "splats" / "production"
+        experimental.mkdir(parents=True)
+        production.mkdir(parents=True)
+        asset = experimental / "plant-shelf.ply"
+        asset.write_bytes(b"ply\n")
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+            {
+                "id": "splat-production",
+                "label": "Production Splats",
+                "kind": "splat",
+                "stage": "production",
+                "path": production,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        BROWSE_ROOTS["splat-production"] = production
+        try:
+            correction = serve.save_splat_asset_correction("splat-inbox", "plant-shelf.ply", {
+                "orientation": {"rotation": [0.1, 0.2, 0.3]},
+                "centroidOffset": [1, 2, 3],
+                "crop": {"enabled": True, "min": [-0.5, -0.25, -0.1], "max": [0.5, 0.25, 0.9]},
+            })
+            loaded = serve.load_splat_asset_correction("splat-inbox", "plant-shelf.ply")
+            entries = serve.list_asset_entries(kind="splat")
+            sidecar = experimental / "plant-shelf.ply.kaminos-splat.json"
+            assert sidecar.is_file()
+            assert correction["schema"] == "kaminos.splat-correction.v0"
+            assert correction["root_id"] == "splat-inbox"
+            assert correction["path"] == "plant-shelf.ply"
+            assert loaded["correction"]["orientation"]["rotation"] == [0.1, 0.2, 0.3]
+            assert loaded["correction"]["centroidOffset"] == [1, 2, 3]
+            assert entries[0]["correction"]["crop"]["enabled"] is True
+
+            replacement = serve.ingest_splat_asset("plant-shelf.ply", b"replacement\n")
+            assert replacement["path"] == "plant-shelf.ply"
+            assert replacement["correction"] is None
+            assert not sidecar.exists()
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_volume_only_scene_save_name_uses_scene_fallback()
@@ -247,3 +304,4 @@ if __name__ == "__main__":
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
+    test_splat_asset_correction_roundtrips_as_sidecar_metadata()
