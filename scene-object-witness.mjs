@@ -2610,10 +2610,26 @@ async function runSplatCorrectionModeScenario(ws) {
       const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const flipDraft = window.kaminosToggleSplatCorrectionAxisFlip('x');
       const sceneAfterFlip = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
-      const saveResult = await window.kaminosSaveSelectedSplatCorrection();
+      const saveButton = [...document.querySelectorAll('#splat-correction-panel button')]
+        .find(button => button.textContent.trim() === 'Save Correction');
+      if (!saveButton) throw new Error('Splat Correction Mode witness could not find visible Save Correction button');
+      saveButton.click();
+      let saveResult = null;
+      let assetDataAfterSave = null;
+      let savedAssetEntry = null;
+      for (let i = 0; i < 80; i++) {
+        await wait(125);
+        assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+        savedAssetEntry = (assetDataAfterSave.entries || []).find(entry => entry.path === ingestResult?.entry?.path) || null;
+        if (savedAssetEntry?.correction?.axisFlips?.[0] === -1) {
+          saveResult = await fetch('/api/splat-correction?' + new URLSearchParams({
+            root: ingestResult?.entry?.root_id,
+            path: ingestResult?.entry?.path,
+          })).then(resp => resp.json());
+          break;
+        }
+      }
       const modeAfterSave = window.kaminosSplatCorrectionModeDebugState?.() || null;
-      const assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
-      const savedAssetEntry = (assetDataAfterSave.entries || []).find(entry => entry.path === ingestResult?.entry?.path) || null;
       return {
         ingestResult: { entry: ingestResult?.entry || null },
         sceneBeforeMode,

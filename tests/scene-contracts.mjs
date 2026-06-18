@@ -69,6 +69,8 @@ assert.match(index, /data-splat-correction-field/, 'splat correction controls us
 assert.match(index, /async function saveSelectedSplatCorrection\(/, 'splat correction controls persist orientation and crop metadata to the asset sidecar');
 assert.match(index, /fetch\('\/api\/splat-correction'/, 'splat correction save/load uses the server sidecar route, not scene-only state');
 assert.match(index, /window\.kaminosSaveSelectedSplatCorrection/, 'browser witnesses can persist selected splat corrections without DOM inference');
+assert.match(index, /window\.saveSelectedSplatCorrection\s*=\s*saveSelectedSplatCorrection/, 'visible Save Correction button has the exact global handler named by its inline onclick');
+assert.match(index, /window\.resetSelectedSplatCorrection\s*=\s*resetSelectedSplatCorrection/, 'visible Reset Correction button has the exact global handler named by its inline onclick');
 assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
 assert.match(index, /Splat Correction Mode/, 'viewport exposes an explicit splat correction edit-mode badge');
 assert.match(index, /async function enterSplatCorrectionMode\(/, 'selected splats can enter correction mode without numeric-only editing');
