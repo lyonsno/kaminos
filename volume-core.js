@@ -1525,27 +1525,38 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.4
   ) * (0.72 + bonfireRadianceBreakup * 0.34);
+  let interfaceEnergy = length(materialInterfaceGradient(cellI));
+  let bonfireEmissionDetailCurlFold = clamp(
+    0.52
+      + interfaceEnergy * 1.90
+      + bonfireLayeredBreakup * 0.26
+      + bonfireDetailBreakup * 0.22
+      + bonfireTongues * 0.18
+      + bonfirePacketCombustion.z * 0.22
+      + fireLick * 0.08,
+    0.36,
+    1.55
+  );
   let bonfireEmissionDetailBirth = clamp(
-    bonfireRadianceBirth * (0.44 + bonfireRadianceBreakup * 0.32)
-      + bonfireLiftedReactionFront * bonfireFrontLiftGate * bonfireRadianceBreakup * 0.24
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * (0.18 + bonfireTongues * 0.08)
-      + bonfireInteriorEmissionBridge * 0.20
+    bonfireRadianceBirth * (0.34 + bonfireRadianceBreakup * 0.24)
+      + bonfireLiftedReactionFront * bonfireFrontLiftGate * bonfireRadianceBreakup * (0.14 + bonfireEmissionDetailCurlFold * 0.16)
+      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * (0.12 + bonfireTongues * 0.06 + bonfireEmissionDetailCurlFold * 0.08)
+      + bonfireInteriorEmissionBridge * (0.14 + bonfireEmissionDetailCurlFold * 0.10)
       + fireLick * 0.12,
     0.0,
     2.4
   );
   let bonfireTransportedEmissionDetail = clamp(
-    flameDetail * 0.82
-      + bonfireEmissionDetailBirth * 0.76
-      + fireLick * 0.18
-      + emberFleck * 0.08,
+    flameDetail * (0.66 + bonfireEmissionDetailCurlFold * 0.08)
+      + bonfireEmissionDetailBirth * (0.56 + bonfireEmissionDetailCurlFold * 0.22)
+      + fireLick * (0.12 + bonfireEmissionDetailCurlFold * 0.08)
+      + emberFleck * 0.06,
     0.0,
     2.4
   );
   let fireBirth = mix(columnFireBirth, bonfireRadianceBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
-  let interfaceEnergy = length(materialInterfaceGradient(cellI));
   let columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   let bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
@@ -1686,12 +1697,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fuel = max(fuel, externalInjection.material.z * 0.72);
   fuel = max(fuel - heat * 0.018, 0.0);
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
+  let bonfireSmokeDetailCurlFold = clamp(
+    0.50
+      + interfaceEnergy * 1.55
+      + length(bonfireLayeredPlumeShear.xz) * 8.0
+      + abs(bonfireLayeredPlumeShear.y) * 14.0
+      + bonfireLayeredSmokeBreakup * 0.22
+      + bonfireDetailBreakup * 0.18
+      + bonfireTongues * 0.12,
+    0.34,
+    1.55
+  );
   let columnMaterialDetailBirth = (source + emberRing + smokeFromHeat * 3.2) * (0.30 + 0.36 * bonfireDetailBreakup);
-  let bonfireMaterialDetailBirth = (bonfireDetailBirthCarrier + emberRing * 0.04) * (0.12 + 0.12 * bonfireDetailBreakup + 0.08 * bonfireTongues);
+  let bonfireMaterialDetailBirth = (bonfireDetailBirthCarrier + emberRing * 0.04) * (0.10 + 0.10 * bonfireDetailBreakup + 0.06 * bonfireTongues + bonfireSmokeDetailCurlFold * 0.08);
   materialDetail = mix(max(materialDetail, columnMaterialDetailBirth), min(2.6, materialDetail + bonfireMaterialDetailBirth), bonfireScene);
   materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
   let columnMicroSmokeBirth = (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup);
-  let bonfireMicroSmokeBirth = (bonfireAdvectedSmokeBirth * 0.24 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.09 + materialDetail * 0.060 + bonfireInterfaceBirth * 0.18 + smoke * 0.042) * microAmount * (0.13 + 0.10 * bonfireDetailBreakup + 0.08 * bonfireTongues + 0.07 * bonfireLayeredBreakup);
+  let bonfireMicroSmokeBirth = (bonfireAdvectedSmokeBirth * 0.22 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.08 + materialDetail * 0.054 + bonfireInterfaceBirth * 0.15 + smoke * 0.038) * microAmount * (0.10 + 0.08 * bonfireDetailBreakup + 0.06 * bonfireTongues + 0.05 * bonfireLayeredBreakup + bonfireSmokeDetailCurlFold * 0.09);
   microSmoke = mix(max(microSmoke, columnMicroSmokeBirth), min(2.4, microSmoke + bonfireMicroSmokeBirth), bonfireScene);
   microSmoke = max(microSmoke, externalInjection.micro.x);
   let interfaceSourceTerm = mix(source * 0.30, source * 0.08 + bonfireInterfaceBirth * 0.54 + smokeFromHeat * 0.32, bonfireScene);
@@ -3079,11 +3101,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let smokeWeightedRadialVelocity = 0;
     let smokeWeightedCurl = 0;
     let smokeWeightedCurlContact = 0;
+    let smokeDetailWeightSum = 0;
+    let smokeDetailWeightedX = 0;
+    let smokeDetailWeightedZ = 0;
+    let smokeDetailWeightedX2 = 0;
+    let smokeDetailWeightedZ2 = 0;
     let fireWeightSum = 0;
     let fireWeightedX = 0;
     let fireWeightedY = 0;
     let fireWeightedZ = 0;
     let fireWeightedVelocityY = 0;
+    let emissionDetailWeightSum = 0;
+    let emissionDetailWeightedX = 0;
+    let emissionDetailWeightedZ = 0;
+    let emissionDetailWeightedX2 = 0;
+    let emissionDetailWeightedZ2 = 0;
+    let emissionDetailWeightedCurlContact = 0;
     let combustionFrontWeightSum = 0;
     const plumeHeightBinCount = 8;
     const plumeHeightBins = Array.from({ length: plumeHeightBinCount }, (_, bin) => ({
@@ -3106,6 +3139,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireInteriorWeight: 0,
       fireRingWeight: 0,
       emissionDetailWeight: 0,
+      emissionDetailWeightedX: 0,
+      emissionDetailWeightedZ: 0,
+      emissionDetailWeightedX2: 0,
+      emissionDetailWeightedZ2: 0,
+      smokeDetailWeight: 0,
+      smokeDetailWeightedX: 0,
+      smokeDetailWeightedZ: 0,
+      smokeDetailWeightedX2: 0,
+      smokeDetailWeightedZ2: 0,
       combustionFrontWeight: 0,
     }));
     const sampleCells = new Set();
@@ -3195,6 +3237,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const fireInteriorWeight = radialDistance < sourceRadiusNorm * 0.70 ? fireWeight : 0;
         const fireRingWeight = radialDistance > sourceRadiusNorm * 0.86 ? fireWeight : 0;
         const emissionDetailWeight = Math.max(0, flameDetail);
+        const smokeDetailWeight = Math.max(0, microdetail * 0.70 + interfaceShred * 0.55 + detail * 0.32);
         const radialVelocity = radialDistance > 0.0001 ? (nx * vx + nz * vz) / radialDistance : 0;
         smokeWeightSum += smokeWeight;
         smokeWeightedX += smokeWeight * nx;
@@ -3209,11 +3252,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeWeightedLateralEnergy += smokeWeight * (vx * vx + vz * vz);
         smokeWeightedRadialVelocityAbs += smokeWeight * Math.abs(radialVelocity);
         smokeWeightedRadialVelocity += smokeWeight * radialVelocity;
+        smokeDetailWeightSum += smokeDetailWeight;
+        smokeDetailWeightedX += smokeDetailWeight * nx;
+        smokeDetailWeightedZ += smokeDetailWeight * nz;
+        smokeDetailWeightedX2 += smokeDetailWeight * nx * nx;
+        smokeDetailWeightedZ2 += smokeDetailWeight * nz * nz;
         fireWeightSum += fireWeight;
         fireWeightedX += fireWeight * nx;
         fireWeightedY += fireWeight * ny;
         fireWeightedZ += fireWeight * nz;
         fireWeightedVelocityY += fireWeight * vy;
+        emissionDetailWeightSum += emissionDetailWeight;
+        emissionDetailWeightedX += emissionDetailWeight * nx;
+        emissionDetailWeightedZ += emissionDetailWeight * nz;
+        emissionDetailWeightedX2 += emissionDetailWeight * nx * nx;
+        emissionDetailWeightedZ2 += emissionDetailWeight * nz * nz;
         combustionFrontWeightSum += combustionFrontWeight;
         const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor((ny + 1) * 0.5 * plumeHeightBinCount)))];
         bin.smokeWeight += smokeWeight;
@@ -3231,6 +3284,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bin.fireInteriorWeight += fireInteriorWeight;
         bin.fireRingWeight += fireRingWeight;
         bin.emissionDetailWeight += emissionDetailWeight;
+        bin.emissionDetailWeightedX += emissionDetailWeight * nx;
+        bin.emissionDetailWeightedZ += emissionDetailWeight * nz;
+        bin.emissionDetailWeightedX2 += emissionDetailWeight * nx * nx;
+        bin.emissionDetailWeightedZ2 += emissionDetailWeight * nz * nz;
+        bin.smokeDetailWeight += smokeDetailWeight;
+        bin.smokeDetailWeightedX += smokeDetailWeight * nx;
+        bin.smokeDetailWeightedZ += smokeDetailWeight * nz;
+        bin.smokeDetailWeightedX2 += smokeDetailWeight * nx * nx;
+        bin.smokeDetailWeightedZ2 += smokeDetailWeight * nz * nz;
         bin.combustionFrontWeight += combustionFrontWeight;
       }
       densitySum += d;
@@ -3259,8 +3321,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const div = Math.abs(((vx1[0] - vx0[0]) + (vy1[1] - vy0[1]) + (vz1[2] - vz0[2])) * 0.5);
       if (plumeDriftCells.has(cell)) {
         const smokeWeight = Math.max(0, extinction);
+        const emissionDetailWeight = Math.max(0, flameDetail);
+        const emissionCurlContact = Math.max(0, Math.min(1, (curlMag - 0.0005) / 0.035));
         smokeWeightedCurl += smokeWeight * curlMag;
         smokeWeightedCurlContact += smokeWeight * Math.max(0, Math.min(1, (curlMag - 0.0005) / 0.035));
+        emissionDetailWeightedCurlContact += emissionDetailWeight * emissionCurlContact;
         const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor(((y / Math.max(1, gridSize - 1) * 2 - 1) + 1) * 0.5 * plumeHeightBinCount)))];
         bin.smokeWeightedCurl += smokeWeight * curlMag;
       }
@@ -3303,6 +3368,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const smokeCenterZBin = bin.smokeWeight > 0 ? bin.smokeWeightedZ / bin.smokeWeight : 0;
       const smokeVarianceXBin = bin.smokeWeight > 0 ? Math.max(0, bin.smokeWeightedX2 / bin.smokeWeight - smokeCenterXBin * smokeCenterXBin) : 0;
       const smokeVarianceZBin = bin.smokeWeight > 0 ? Math.max(0, bin.smokeWeightedZ2 / bin.smokeWeight - smokeCenterZBin * smokeCenterZBin) : 0;
+      const emissionDetailCenterXBin = bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedX / bin.emissionDetailWeight : 0;
+      const emissionDetailCenterZBin = bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedZ / bin.emissionDetailWeight : 0;
+      const emissionDetailVarianceXBin = bin.emissionDetailWeight > 0 ? Math.max(0, bin.emissionDetailWeightedX2 / bin.emissionDetailWeight - emissionDetailCenterXBin * emissionDetailCenterXBin) : 0;
+      const emissionDetailVarianceZBin = bin.emissionDetailWeight > 0 ? Math.max(0, bin.emissionDetailWeightedZ2 / bin.emissionDetailWeight - emissionDetailCenterZBin * emissionDetailCenterZBin) : 0;
+      const smokeDetailCenterXBin = bin.smokeDetailWeight > 0 ? bin.smokeDetailWeightedX / bin.smokeDetailWeight : 0;
+      const smokeDetailCenterZBin = bin.smokeDetailWeight > 0 ? bin.smokeDetailWeightedZ / bin.smokeDetailWeight : 0;
+      const smokeDetailVarianceXBin = bin.smokeDetailWeight > 0 ? Math.max(0, bin.smokeDetailWeightedX2 / bin.smokeDetailWeight - smokeDetailCenterXBin * smokeDetailCenterXBin) : 0;
+      const smokeDetailVarianceZBin = bin.smokeDetailWeight > 0 ? Math.max(0, bin.smokeDetailWeightedZ2 / bin.smokeDetailWeight - smokeDetailCenterZBin * smokeDetailCenterZBin) : 0;
       return {
         bin: bin.bin,
         visualCenter,
@@ -3311,6 +3384,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireInteriorWeight: bin.fireInteriorWeight,
         fireRingWeight: bin.fireRingWeight,
         emissionDetailWeight: bin.emissionDetailWeight,
+        emissionDetailCenterX: emissionDetailCenterXBin,
+        emissionDetailCenterZ: emissionDetailCenterZBin,
+        emissionDetailRadialBreadth: Math.sqrt(emissionDetailVarianceXBin + emissionDetailVarianceZBin),
+        smokeDetailWeight: bin.smokeDetailWeight,
+        smokeDetailCenterX: smokeDetailCenterXBin,
+        smokeDetailCenterZ: smokeDetailCenterZBin,
+        smokeDetailRadialBreadth: Math.sqrt(smokeDetailVarianceXBin + smokeDetailVarianceZBin),
         combustionFrontWeight: bin.combustionFrontWeight,
         smokeCenterX: smokeCenterXBin,
         smokeCenterZ: smokeCenterZBin,
@@ -3361,6 +3441,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         (1 - Math.min(1, coherentBinCenterSpread / 0.18)) * 0.38
       ))
       : 0;
+    const emissionDetailCenterX = emissionDetailWeightSum > 0 ? emissionDetailWeightedX / emissionDetailWeightSum : 0;
+    const emissionDetailCenterZ = emissionDetailWeightSum > 0 ? emissionDetailWeightedZ / emissionDetailWeightSum : 0;
+    const emissionDetailVarianceX = emissionDetailWeightSum > 0 ? Math.max(0, emissionDetailWeightedX2 / emissionDetailWeightSum - emissionDetailCenterX * emissionDetailCenterX) : 0;
+    const emissionDetailVarianceZ = emissionDetailWeightSum > 0 ? Math.max(0, emissionDetailWeightedZ2 / emissionDetailWeightSum - emissionDetailCenterZ * emissionDetailCenterZ) : 0;
+    const emissionDetailBodyBreadth = Math.sqrt(emissionDetailVarianceX + emissionDetailVarianceZ);
+    const emissionDetailBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > -0.08 && bin.emissionDetailWeight > 0.01);
+    const emissionDetailBinWeight = emissionDetailBins.reduce((sum, bin) => sum + bin.emissionDetailWeight, 0);
+    const emissionDetailBinCenterSpread = emissionDetailBinWeight > 0
+      ? emissionDetailBins.reduce((sum, bin) => sum + bin.emissionDetailWeight * Math.hypot(bin.emissionDetailCenterX - emissionDetailCenterX, bin.emissionDetailCenterZ - emissionDetailCenterZ), 0) / emissionDetailBinWeight
+      : 0;
+    const emissionDetailVerticalCoherence = emissionDetailWeightSum > 0
+      ? Math.max(0, Math.min(1.5,
+        (1 - Math.min(1, emissionDetailBodyBreadth / 0.18)) * 0.55 +
+        (1 - Math.min(1, emissionDetailBinCenterSpread / 0.16)) * 0.45
+      ))
+      : 0;
+    const smokeDetailCenterX = smokeDetailWeightSum > 0 ? smokeDetailWeightedX / smokeDetailWeightSum : 0;
+    const smokeDetailCenterZ = smokeDetailWeightSum > 0 ? smokeDetailWeightedZ / smokeDetailWeightSum : 0;
+    const smokeDetailVarianceX = smokeDetailWeightSum > 0 ? Math.max(0, smokeDetailWeightedX2 / smokeDetailWeightSum - smokeDetailCenterX * smokeDetailCenterX) : 0;
+    const smokeDetailVarianceZ = smokeDetailWeightSum > 0 ? Math.max(0, smokeDetailWeightedZ2 / smokeDetailWeightSum - smokeDetailCenterZ * smokeDetailCenterZ) : 0;
+    const smokeDetailBodyBreadth = Math.sqrt(smokeDetailVarianceX + smokeDetailVarianceZ);
+    const smokeDetailBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > -0.08 && bin.smokeDetailWeight > 0.01);
+    const smokeDetailBinWeight = smokeDetailBins.reduce((sum, bin) => sum + bin.smokeDetailWeight, 0);
+    const smokeDetailBinCenterSpread = smokeDetailBinWeight > 0
+      ? smokeDetailBins.reduce((sum, bin) => sum + bin.smokeDetailWeight * Math.hypot(bin.smokeDetailCenterX - smokeDetailCenterX, bin.smokeDetailCenterZ - smokeDetailCenterZ), 0) / smokeDetailBinWeight
+      : 0;
+    const smokeDetailVerticalCoherence = smokeDetailWeightSum > 0
+      ? Math.max(0, Math.min(1.5,
+        (1 - Math.min(1, smokeDetailBodyBreadth / 0.22)) * 0.52 +
+        (1 - Math.min(1, smokeDetailBinCenterSpread / 0.18)) * 0.48
+      ))
+      : 0;
+    const emissionDetailCurlContact = emissionDetailWeightSum > 0 ? emissionDetailWeightedCurlContact / emissionDetailWeightSum : 0;
     const risingSmokeBins = sourceRelativeVisualHeightBins.filter(bin => bin.visualCenter > 0.08 && bin.smokeWeight > 0);
     const risingSmokeWeight = risingSmokeBins.reduce((sum, bin) => sum + bin.smokeWeight, 0);
     const risingSmokeVisualRiseDisplacement = risingSmokeWeight > 0
@@ -3441,6 +3554,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeUpperRollingBodyBreadth: upperRollingBodyBreadth,
       plumeFieldColumnCoherence,
       plumeFieldBinCenterSpread: coherentBinCenterSpread,
+      emissionDetailCurlContact,
+      emissionDetailVerticalCoherence,
+      emissionDetailBodyBreadth,
+      emissionDetailBinCenterSpread,
+      smokeDetailVerticalCoherence,
+      smokeDetailBodyBreadth,
+      smokeDetailBinCenterSpread,
       smokeVelocityY,
       smokeVisualRiseVelocity: smokeVelocityY * visualRiseDirectionY,
       smokeVisualRiseDisplacement,
@@ -3490,6 +3610,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireInteriorWeight: bin.fireInteriorWeight,
         fireRingWeight: bin.fireRingWeight,
         emissionDetailWeight: bin.emissionDetailWeight,
+        emissionDetailCenterX: bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedX / bin.emissionDetailWeight : 0,
+        emissionDetailCenterZ: bin.emissionDetailWeight > 0 ? bin.emissionDetailWeightedZ / bin.emissionDetailWeight : 0,
+        emissionDetailRadialBreadth: bin.emissionDetailWeight > 0
+          ? Math.sqrt(
+            Math.max(0, bin.emissionDetailWeightedX2 / bin.emissionDetailWeight - Math.pow(bin.emissionDetailWeightedX / bin.emissionDetailWeight, 2)) +
+            Math.max(0, bin.emissionDetailWeightedZ2 / bin.emissionDetailWeight - Math.pow(bin.emissionDetailWeightedZ / bin.emissionDetailWeight, 2))
+          )
+          : 0,
+        smokeDetailWeight: bin.smokeDetailWeight,
+        smokeDetailCenterX: bin.smokeDetailWeight > 0 ? bin.smokeDetailWeightedX / bin.smokeDetailWeight : 0,
+        smokeDetailCenterZ: bin.smokeDetailWeight > 0 ? bin.smokeDetailWeightedZ / bin.smokeDetailWeight : 0,
+        smokeDetailRadialBreadth: bin.smokeDetailWeight > 0
+          ? Math.sqrt(
+            Math.max(0, bin.smokeDetailWeightedX2 / bin.smokeDetailWeight - Math.pow(bin.smokeDetailWeightedX / bin.smokeDetailWeight, 2)) +
+            Math.max(0, bin.smokeDetailWeightedZ2 / bin.smokeDetailWeight - Math.pow(bin.smokeDetailWeightedZ / bin.smokeDetailWeight, 2))
+          )
+          : 0,
         fireCenterX: bin.fireWeight > 0 ? bin.fireWeightedX / bin.fireWeight : 0,
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
         fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,

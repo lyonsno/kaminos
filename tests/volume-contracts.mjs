@@ -363,6 +363,10 @@ assert.match(core, /bonfireRadianceBirth/, 'bonfire must name visible radiance/e
 assert.match(core, /bonfireInteriorEmissionBridge/, 'bonfire radiance birth must bridge the lifted ring through interior contact so the flame does not become a goblet shell');
 assert.match(core, /bonfireEmissionDetailBirth/, 'bonfire visible emission detail must have its own named birth before storage');
 assert.match(core, /bonfireTransportedEmissionDetail/, 'bonfire visible emission detail must be transported in the existing fireLayer.z lane before raymarch transfer');
+assert.match(core, /bonfireEmissionDetailCurlFold/, 'bonfire emission detail must have a named curl/contact fold so it cannot remain a smooth vertical slab');
+assert.match(core, /bonfireTransportedEmissionDetail[\s\S]*bonfireEmissionDetailCurlFold/, 'transported bonfire emission detail must use curl/contact folding before storage');
+assert.match(core, /bonfireSmokeDetailCurlFold/, 'bonfire smoke detail must have a named curl/contact fold so smoke cannot remain vertical curtains');
+assert.match(core, /bonfireMicroSmokeBirth[\s\S]*bonfireSmokeDetailCurlFold/, 'bonfire smoke-detail birth must use the curl/contact fold instead of only source-layer breakup');
 assert.match(core, /bonfireFlameDetailBirth[\s\S]*bonfireTransportedEmissionDetail/, 'fireLayer.z/flameDetail birth must receive transported emission detail instead of only derived brightness');
 assert.match(core, /flameDetail = max\(flameDetail,[\s\S]*bonfireFlameDetailBirth/, 'fireLayer.z/flameDetail storage must write the transported emission detail birth into the existing lane');
 assert.match(core, /let fireBirth = mix\(columnFireBirth, bonfireRadianceBirth, bonfireScene\);/, 'bonfire fire birth must use radiance birth rather than raw lifted flame occupancy');
@@ -383,6 +387,9 @@ assert.match(core, /liftedFireShellRatio/, 'sim readback reports whether lifted 
 assert.match(core, /liftedFireInteriorRatio/, 'sim readback reports whether lifted bonfire radiance has interior contact instead of only a bright ring wall');
 assert.match(core, /emissionDetailMean/, 'sim readback reports transported emission detail separately from broad fire occupancy');
 assert.match(core, /liftedEmissionDetailRatio/, 'sim readback reports whether transported emission detail reaches the lifted fire body');
+assert.match(core, /emissionDetailCurlContact/, 'sim readback reports whether transported emission detail occupies curling/contacting flow');
+assert.match(core, /emissionDetailVerticalCoherence/, 'sim readback reports when transported emission detail remains vertically coherent across height bins');
+assert.match(core, /smokeDetailVerticalCoherence/, 'sim readback reports when smoke detail remains vertically coherent across height bins');
 assert.match(core, /combustionFrontSourcePlugRatio/, 'sim readback reports whether transported combustion-front evidence is trapped in one source bin');
 assert.match(core, /combustionFrontRisingBodyRatio/, 'sim readback reports whether transported combustion-front evidence rises out of the source bin');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
@@ -583,6 +590,9 @@ assert.match(witness, /bonfire plume retained centerline chimney pinching/, 'wit
 assert.match(witness, /bonfire plume retained smooth fire source plug/, 'witness fails loudly when the bonfire base remains a smooth oval emitter feeding the smoke column');
 assert.match(witness, /combustionFrontSourcePlugRatio/, 'witness preserves combustion-front source concentration evidence in fire-plug failures');
 assert.match(witness, /combustionFrontRisingBodyRatio/, 'witness preserves combustion-front rising-body evidence in fire-plug failures');
+assert.match(witness, /emissionDetailVerticalCoherence/, 'witness preserves transported emission-detail coherence evidence in fire-plug failures');
+assert.match(witness, /smokeDetailVerticalCoherence/, 'witness preserves smoke-detail coherence evidence in fire-plug failures');
+assert.match(witness, /emissionDetailCurlContact/, 'witness preserves emission-detail curl/contact evidence in fire-plug failures');
 assert.match(core, /bonfireAdvectedSmokeBirth/, 'bonfire smoke birth is routed through transported interface birth instead of a source-aligned upper plume sleeve');
 assert.match(core, /bonfireInterfaceSmokeBand/, 'bonfire source smoke is constrained to the fire/interface band so high plume smoke must be advected there');
 assert.doesNotMatch(core, /let bonfireSmokeBand = smoothstep\(bonfireSourceY - 0\.54, bonfireSourceY - 0\.26, p\.y\)/, 'bonfire smoke source must not stamp a broad vertical sleeve above the fire every frame');

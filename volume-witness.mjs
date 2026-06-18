@@ -528,6 +528,16 @@ async function main() {
     }
     if (
       expectedVolumeScene === 'bonfire_plume' &&
+      (
+        !Number.isFinite(sample.simReadback.emissionDetailCurlContact) ||
+        !Number.isFinite(sample.simReadback.emissionDetailVerticalCoherence) ||
+        !Number.isFinite(sample.simReadback.smokeDetailVerticalCoherence)
+      )
+    ) {
+      throw new Error(`GPU sim readback does not show bonfire detail-coherence evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (
+      expectedVolumeScene === 'bonfire_plume' &&
       sample.simReadback.radianceMean > 0.0005 &&
       (!Number.isFinite(sample.simReadback.combustionFrontMean) || sample.simReadback.combustionFrontMean <= 0.00025)
     ) {
@@ -627,6 +637,13 @@ async function main() {
         liftedFireInteriorRatio: sample.simReadback.liftedFireInteriorRatio,
         emissionDetailMean: sample.simReadback.emissionDetailMean,
         liftedEmissionDetailRatio: sample.simReadback.liftedEmissionDetailRatio,
+        emissionDetailCurlContact: sample.simReadback.emissionDetailCurlContact,
+        emissionDetailVerticalCoherence: sample.simReadback.emissionDetailVerticalCoherence,
+        emissionDetailBodyBreadth: sample.simReadback.emissionDetailBodyBreadth,
+        emissionDetailBinCenterSpread: sample.simReadback.emissionDetailBinCenterSpread,
+        smokeDetailVerticalCoherence: sample.simReadback.smokeDetailVerticalCoherence,
+        smokeDetailBodyBreadth: sample.simReadback.smokeDetailBodyBreadth,
+        smokeDetailBinCenterSpread: sample.simReadback.smokeDetailBinCenterSpread,
         combustionFrontMean: sample.simReadback.combustionFrontMean,
         combustionFrontSourcePlugRatio: sample.simReadback.combustionFrontSourcePlugRatio,
         combustionFrontRisingBodyRatio: sample.simReadback.combustionFrontRisingBodyRatio,
@@ -744,6 +761,13 @@ async function main() {
       liftedFireInteriorRatio: sample.simReadback?.liftedFireInteriorRatio ?? 0,
       emissionDetailMean: sample.simReadback?.emissionDetailMean ?? 0,
       liftedEmissionDetailRatio: sample.simReadback?.liftedEmissionDetailRatio ?? 0,
+      emissionDetailCurlContact: sample.simReadback?.emissionDetailCurlContact ?? 0,
+      emissionDetailVerticalCoherence: sample.simReadback?.emissionDetailVerticalCoherence ?? 0,
+      emissionDetailBodyBreadth: sample.simReadback?.emissionDetailBodyBreadth ?? 0,
+      emissionDetailBinCenterSpread: sample.simReadback?.emissionDetailBinCenterSpread ?? 0,
+      smokeDetailVerticalCoherence: sample.simReadback?.smokeDetailVerticalCoherence ?? 0,
+      smokeDetailBodyBreadth: sample.simReadback?.smokeDetailBodyBreadth ?? 0,
+      smokeDetailBinCenterSpread: sample.simReadback?.smokeDetailBinCenterSpread ?? 0,
       maxFireBinWeight: sample.simReadback?.maxFireBinWeight ?? 0,
       plumeLocalLateralVelocityMean: sample.simReadback?.plumeLocalLateralVelocityMean ?? 0,
       plumeNetLateralVelocity: sample.simReadback?.plumeNetLateralVelocity ?? 0,
