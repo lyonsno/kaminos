@@ -162,6 +162,8 @@ assert.match(witness, /splat correction mode dirtied scene transform/, 'Splat co
 assert.match(witness, /splat correction mode did not save draft/, 'Splat correction mode witness proves draft edits persist through the sidecar');
 assert.match(witness, /splat correction mode did not save axis flip/, 'Splat correction mode witness proves axis flips persist through the sidecar');
 assert.match(witness, /splat correction axis flip dirtied scene transform/, 'Splat correction mode witness proves axis flips do not mutate scene placement');
+assert.match(witness, /splat correction crop edit reset axis flip/, 'Splat correction mode witness proves crop edits preserve axis flip metadata');
+assert.match(witness, /splat correction crop edit dropped flipped preview scale/, 'Splat correction mode witness proves crop edits preserve flipped preview composition');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

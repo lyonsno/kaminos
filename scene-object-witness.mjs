@@ -2610,6 +2610,13 @@ async function runSplatCorrectionModeScenario(ws) {
       const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const flipDraft = window.kaminosToggleSplatCorrectionAxisFlip('x');
       const sceneAfterFlip = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const cropEnabled = document.querySelector('[data-splat-correction-field="crop.enabled"]');
+      if (!cropEnabled) throw new Error('Splat Correction Mode witness could not find crop enabled control');
+      cropEnabled.checked = true;
+      cropEnabled.dispatchEvent(new Event('change', { bubbles: true }));
+      await wait(50);
+      const cropToggleDraft = window.kaminosSplatCorrectionModeDebugState?.() || null;
+      const sceneAfterCropToggle = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const saveButton = [...document.querySelectorAll('#splat-correction-panel button')]
         .find(button => button.textContent.trim() === 'Save Correction');
       if (!saveButton) throw new Error('Splat Correction Mode witness could not find visible Save Correction button');
@@ -2638,6 +2645,8 @@ async function runSplatCorrectionModeScenario(ws) {
         sceneAfterDraft,
         flipDraft,
         sceneAfterFlip,
+        cropToggleDraft,
+        sceneAfterCropToggle,
         saveResult,
         modeAfterSave,
         assetDataAfterSave,
@@ -2678,6 +2687,17 @@ async function runSplatCorrectionModeScenario(ws) {
   const flippedVisual = evidence.sceneAfterFlip?.transform;
   if (!flippedVisual || Math.abs(flippedVisual.scale?.[0] + 1.1) > 1e-6) {
     throw new Error(`splat correction mode did not compose axis flip into preview scale: ${JSON.stringify(evidence)}`);
+  }
+  const cropToggleCorrection = evidence.cropToggleDraft?.draftCorrection
+    || evidence.sceneAfterCropToggle?.splat?.correction
+    || null;
+  if (cropToggleCorrection?.axisFlips?.[0] !== -1
+      || evidence.sceneAfterCropToggle?.splat?.correction?.axisFlips?.[0] !== -1) {
+    throw new Error(`splat correction crop edit reset axis flip: ${JSON.stringify(evidence)}`);
+  }
+  const cropToggleVisual = evidence.sceneAfterCropToggle?.transform;
+  if (!cropToggleVisual || Math.abs(cropToggleVisual.scale?.[0] + 1.1) > 1e-6) {
+    throw new Error(`splat correction crop edit dropped flipped preview scale: ${JSON.stringify(evidence)}`);
   }
   const savedCorrection = evidence.savedAssetEntry?.correction || null;
   if (!savedCorrection

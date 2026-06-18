@@ -1848,6 +1848,7 @@ function applySplatCorrectionInspectorField(input) {
   const current = normalizeSplatCorrection(entry.splat?.correction);
   const next = normalizeSplatCorrection({
     orientation: current.orientation,
+    axisFlips: correction.axisFlips,
     centroidOffset: correction.centroidOffset,
     crop: correction.crop,
   });
