@@ -237,7 +237,9 @@ assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar cor
 assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
 assert.match(core, /sphere-shell-enclosure-composition-v0/, 'Lamellar core names macro sphere-shell enclosure composition mode');
 assert.match(core, /intra-strip-topology-members-v0/, 'Lamellar core names subordinate same-shell strip topology members');
+assert.match(core, /shell-distributed-topology-families-v0/, 'Lamellar core names shell-distributed topology families');
 assert.match(core, /stripTopologyDescriptors/, 'Lamellar debug state reports subordinate strip topology descriptors');
+assert.match(core, /shellTopologyFamilyDescriptors/, 'Lamellar debug state reports shell-distributed topology family descriptors');
 assert.match(core, /layoutPreset/, 'Lamellar strip population descriptors record their layout preset');
 assert.match(core, /coverageSpacing/, 'Lamellar strip populations report coverage spacing for overlap diagnostics');
 assert.match(core, /coverageSpan/, 'Lamellar strip populations report visible shell coverage span');
@@ -334,6 +336,7 @@ assert.match(witness, /stripProfileDescriptors/, 'witness records selected-strip
 assert.match(witness, /stripPopulationDescriptors/, 'witness records macro strip population descriptors');
 assert.match(witness, /shellEnclosure/, 'witness records macro sphere-shell enclosure receipts');
 assert.match(witness, /stripTopologyDescriptors/, 'witness records subordinate strip topology descriptors');
+assert.match(witness, /shellTopologyFamilyDescriptors/, 'witness records shell-distributed topology family descriptors');
 assert.match(witness, /layerOverrides/, 'witness records per-layer override inputs');
 assert.match(witness, /sliceToolDescriptor/, 'witness records slicing tool descriptor');
 assert.match(witness, /sliceApplicationReceipt/, 'witness records slice application receipt');
@@ -574,7 +577,7 @@ assert.ok(
   'curve interaction receipt counts the generated sphere curves'
 );
 
-const noStripTopologyMembers = coreModule.generateLamellarSectionSegments({
+const noStripTopologyFamilies = coreModule.generateLamellarSectionSegments({
   seed: 17,
   layerCount: 3,
   populationCount: 4,
@@ -582,41 +585,90 @@ const noStripTopologyMembers = coreModule.generateLamellarSectionSegments({
   populationBearingVariance: 1,
   stripTopologyCount: 0,
 });
-const withStripTopologyMembers = coreModule.generateLamellarSectionSegments({
+const withShellTopologyFamilies = coreModule.generateLamellarSectionSegments({
   seed: 17,
   layerCount: 3,
   populationCount: 4,
   cutterCount: 1,
   populationBearingVariance: 1,
   stripTopologyCount: 2,
+  shellEnclosure: 0.55,
 });
 assert.equal(
-  noStripTopologyMembers.stripTopologyDescriptors.length,
+  noStripTopologyFamilies.stripTopologyDescriptors.length,
   0,
-  'zero strip topology count emits no subordinate topology member descriptors'
+  'zero strip topology count emits no topology descriptors'
 );
 assert.ok(
-  withStripTopologyMembers.stripTopologyDescriptors.length > 0,
-  'positive strip topology count emits subordinate topology member descriptors before mesh emission'
+  withShellTopologyFamilies.stripTopologyDescriptors.length > 0,
+  'positive strip topology count emits topology descriptors before mesh emission'
 );
 assert.ok(
-  withStripTopologyMembers.stripTopologyDescriptors.every(member =>
+  withShellTopologyFamilies.stripTopologyDescriptors.every(member =>
     member.kind === 'SphereCurveDescriptor'
-    && member.topologyMode === 'intra-strip-topology-members-v0'
+    && member.topologyMode === 'shell-distributed-topology-families-v0'
+    && member.topologyRole === 'shell-family-member'
+    && member.sourceParentPopulationId
+    && member.sourceParentCurveId
+    && Number.isInteger(member.shellTopologyFamilyIndex)
+    && Number.isFinite(member.topologyOrientationBearing)
+  ),
+  'shell topology families carry parent population/curve ancestry and sphere-family orientation identity'
+);
+const shellFamilyPopulationIds = new Set(
+  withShellTopologyFamilies.stripTopologyDescriptors.map(member => member.populationId)
+);
+assert.ok(
+  shellFamilyPopulationIds.size >= 2
+    && Array.from(shellFamilyPopulationIds).every(id => /shell-family/.test(id)),
+  'strip topology count creates additional shell-family populations, not just child strips inside one rib'
+);
+const shellFamilyBearings = new Set(
+  withShellTopologyFamilies.stripTopologyDescriptors.map(member => member.topologyOrientationBearing.toFixed(3))
+);
+assert.ok(shellFamilyBearings.size >= 2, 'shell topology families are distributed across multiple sphere bearings');
+const basePhiRange = (() => {
+  const values = noStripTopologyFamilies.sphereCurveDescriptors.map(curve => curve.phi0);
+  return Math.max(...values) - Math.min(...values);
+})();
+const shellPhiRange = (() => {
+  const values = withShellTopologyFamilies.sphereCurveDescriptors.map(curve => curve.phi0);
+  return Math.max(...values) - Math.min(...values);
+})();
+assert.ok(
+  shellPhiRange > basePhiRange + 0.25,
+  'shell topology families expand the latitude coverage instead of only subdividing each strip'
+);
+assert.ok(
+  withShellTopologyFamilies.descriptors.filter(descriptor => descriptor.topologyRole === 'shell-family-member').length >= withShellTopologyFamilies.stripTopologyDescriptors.length,
+  'shell topology families are emitted as Lamellar section geometry, not debug-only receipts'
+);
+assert.ok(
+  withShellTopologyFamilies.lamellarEnvelopeDescriptors.some(envelope => shellFamilyPopulationIds.has(envelope.populationId)),
+  'shell topology family populations are available to envelope meshing as independent curve families'
+);
+assert.ok(
+  withShellTopologyFamilies.sphereCurveDescriptors.length > noStripTopologyFamilies.sphereCurveDescriptors.length,
+  'shell topology families expand the sphere-curve substrate before envelope meshing'
+);
+
+const withIntraStripTopologyMembers = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 3,
+  populationCount: 4,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  stripTopologyCount: 0,
+  intraStripTopologyCount: 2,
+});
+assert.ok(
+  withIntraStripTopologyMembers.stripTopologyDescriptors.some(member =>
+    member.topologyMode === 'intra-strip-topology-members-v0'
     && member.topologyRole === 'intra-strip-member'
     && member.sourceParentStripInstanceId
-    && member.sourceParentCurveId
     && Number.isInteger(member.topologyMemberIndex)
   ),
-  'subordinate topology members carry parent strip/curve ancestry and topology member identity'
-);
-assert.ok(
-  withStripTopologyMembers.descriptors.filter(descriptor => descriptor.topologyRole === 'intra-strip-member').length >= withStripTopologyMembers.stripTopologyDescriptors.length,
-  'subordinate topology members are emitted as Lamellar section geometry, not debug-only receipts'
-);
-assert.ok(
-  withStripTopologyMembers.sphereCurveDescriptors.length > noStripTopologyMembers.sphereCurveDescriptors.length,
-  'subordinate topology members expand the sphere-curve substrate before envelope meshing'
+  'intra-strip topology remains available only through an explicit detail/member control'
 );
 
 const crossLayerProximity = coreModule.generateLamellarSectionSegments({

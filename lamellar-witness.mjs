@@ -541,10 +541,11 @@ async function main() {
       const requestedStripTopologyCount = Number(requested.get('lamellar_strip_topology_count'));
       assert.equal(state.composerDescriptor?.stripTopologyCount, requestedStripTopologyCount, 'Lamellar witness effective stripTopologyCount did not match requested route');
       if (requestedStripTopologyCount > 0) {
-        assert.ok((state.stripTopologyDescriptors || []).length > 0, 'Lamellar witness did not export requested subordinate strip topology descriptors');
+        assert.ok((state.stripTopologyDescriptors || []).length > 0, 'Lamellar witness did not export requested topology descriptors');
+        assert.ok((state.shellTopologyFamilyDescriptors || []).length > 0, 'Lamellar witness did not export requested shell topology family descriptors');
         assert.ok(
-          (state.generatedSegmentDescriptors || []).some(descriptor => descriptor.topologyRole === 'intra-strip-member'),
-          'Lamellar witness did not emit requested subordinate strip topology members as section geometry'
+          (state.generatedSegmentDescriptors || []).some(descriptor => descriptor.topologyRole === 'shell-family-member'),
+          'Lamellar witness did not emit requested shell topology family members as section geometry'
         );
       }
     }
@@ -731,6 +732,7 @@ async function main() {
       stripInstances: state.stripInstances,
       sphereCurveDescriptors: state.sphereCurveDescriptors,
       stripTopologyDescriptors: state.stripTopologyDescriptors,
+      shellTopologyFamilyDescriptors: state.shellTopologyFamilyDescriptors,
       lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
       curveInteractionReceipt: state.curveInteractionReceipt,
       selectedLayerUi: state.selectedLayerUi,

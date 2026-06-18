@@ -16,6 +16,7 @@ const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-c
 const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
 const SHELL_ENCLOSURE_MODE = "sphere-shell-enclosure-composition-v0";
 const STRIP_TOPOLOGY_MODE = "intra-strip-topology-members-v0";
+const SHELL_TOPOLOGY_FAMILY_MODE = "shell-distributed-topology-families-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
 const SLICE_TOOL_MODE = "sphere-domain-lamellar-section-slicer-v0";
 const CHANNEL_CUT_MODE = "neighbor-offset-envelope-terminal-channel-cut";
@@ -844,7 +845,7 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     sourceCurveId: curve.id,
     curveSourceMode: curve.mode,
     meshSource: "sphere-curve-descriptor",
-    id: curve.topologyRole === "intra-strip-member"
+    id: curve.topologyRole
       ? `${curve.id}-section`
       : curve.layerIndex === 0 && curve.sliceParticipation === "primary-cut-target"
       ? `seed-${seed}-layer-0-selected-source`
@@ -855,8 +856,13 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     topologyRole: curve.topologyRole || null,
     topologyMemberIndex: curve.topologyMemberIndex ?? null,
     topologyMemberCount: curve.topologyMemberCount ?? null,
+    shellTopologyFamilyIndex: curve.shellTopologyFamilyIndex ?? null,
+    shellTopologyFamilyCount: curve.shellTopologyFamilyCount ?? null,
+    topologyOrientationBearing: curve.topologyOrientationBearing ?? null,
+    orientationBand: curve.orientationBand ?? null,
     sourceParentCurveId: curve.sourceParentCurveId || null,
     sourceParentStripInstanceId: curve.sourceParentStripInstanceId || null,
+    sourceParentPopulationId: curve.sourceParentPopulationId || null,
     layerSpecId: curve.layerSpecId,
     stripInstanceId: curve.stripInstanceId,
     stripIndex: curve.stripIndex,
@@ -918,15 +924,78 @@ function normalizeStripTopologyCount(input = {}) {
   return Number.isFinite(count) ? Math.round(clamp(count, 0, 4)) : 0;
 }
 
-function generateStripTopologyDescriptors(primaryCurves = [], input = {}) {
+function normalizeIntraStripTopologyCount(input = {}) {
+  const count = typeof input === "number"
+    ? input
+    : Number(input.intraStripTopologyCount ?? input.intraTopologyMemberCount ?? 0);
+  return Number.isFinite(count) ? Math.round(clamp(count, 0, 4)) : 0;
+}
+
+function generateShellTopologyFamilyDescriptors(primaryCurves = [], input = {}) {
   const stripTopologyCount = normalizeStripTopologyCount(input);
   if (stripTopologyCount <= 0) return [];
+  const topologyDescriptors = [];
+  const lamellaCurves = primaryCurves.filter(curve => curve.populationRole === "lamella" && !curve.topologyRole);
+  for (let shellTopologyFamilyIndex = 0; shellTopologyFamilyIndex < stripTopologyCount; shellTopologyFamilyIndex++) {
+    const centered = shellTopologyFamilyIndex - (stripTopologyCount - 1) / 2;
+    const orientationBearing = Number(((shellTopologyFamilyIndex + 1) * TAU / (stripTopologyCount + 1)).toFixed(6));
+    const familyChirality = shellTopologyFamilyIndex % 2 === 0 ? 1 : -1;
+    const latitudeBand = Number((centered * 1.04).toFixed(6));
+    for (const curve of lamellaCurves) {
+      const intervalInset = Math.min(0.032, Math.max(0.012, (curve.interval[1] - curve.interval[0]) * 0.045));
+      const interval = [
+        Number(clamp(curve.interval[0] + intervalInset * 0.5, 0.05, 0.86).toFixed(4)),
+        Number(clamp(curve.interval[1] - intervalInset, 0.16, 0.97).toFixed(4)),
+      ];
+      if (interval[1] - interval[0] < 0.14) continue;
+      const familyPopulationId = `${curve.populationId}-shell-family-${shellTopologyFamilyIndex}`;
+      const localWave = Math.sin((curve.populationIndex ?? 0) * 0.76 + shellTopologyFamilyIndex * 1.13);
+      topologyDescriptors.push({
+        ...curve,
+        id: `${curve.id}-shell-family-${shellTopologyFamilyIndex}`,
+        source: "shell-distributed-topology-expansion",
+        sourceStripKind: "LamellarShellTopologyFamily",
+        sourceParentCurveId: curve.id,
+        sourceParentStripInstanceId: curve.stripInstanceId,
+        sourceParentPopulationId: curve.populationId,
+        topologyMode: SHELL_TOPOLOGY_FAMILY_MODE,
+        topologyRole: "shell-family-member",
+        shellTopologyFamilyIndex,
+        shellTopologyFamilyCount: stripTopologyCount,
+        topologyOrientationBearing: orientationBearing,
+        orientationBand: latitudeBand,
+        populationId: familyPopulationId,
+        sourcePopulationId: familyPopulationId,
+        sourcePopulationRole: "lamella",
+        populationIndex: (curve.populationIndex ?? 0) + (shellTopologyFamilyIndex + 1) * 100,
+        materialRole: "shell-topology-family",
+        sliceParticipation: "shell-distributed-topology-family",
+        interval,
+        theta0: Number((curve.theta0 + orientationBearing + centered * 0.18 + localWave * 0.04).toFixed(6)),
+        thetaTwist: Number((Math.abs(curve.thetaTwist) * familyChirality * (0.72 + shellTopologyFamilyIndex * 0.08)).toFixed(6)),
+        phi0: Number((curve.phi0 * 0.42 + latitudeBand + Math.cos(orientationBearing + curve.bearingPhase) * 0.22).toFixed(6)),
+        phiSlope: Number(((curve.phiSlope * (0.68 + shellTopologyFamilyIndex * 0.12)) * (shellTopologyFamilyIndex % 2 === 0 ? 1 : -1)).toFixed(6)),
+        phase: Number((curve.phase + orientationBearing * 0.5 + centered * 0.27).toFixed(6)),
+        bearingPhase: Number(((curve.bearingPhase ?? 0) + orientationBearing).toFixed(6)),
+        width: Number(clamp(curve.width * 0.78, 0.018, 0.07).toFixed(4)),
+        thickness: Number(clamp(curve.thickness * 0.86, 0.004, 0.06).toFixed(4)),
+        edgeLift: Number(((curve.edgeLift ?? 0.012) + 0.01 + Math.abs(centered) * 0.005).toFixed(4)),
+        gapPattern: curve.gapPattern || "solid",
+      });
+    }
+  }
+  return topologyDescriptors;
+}
+
+function generateIntraStripTopologyDescriptors(primaryCurves = [], input = {}) {
+  const intraStripTopologyCount = normalizeIntraStripTopologyCount(input);
+  if (intraStripTopologyCount <= 0) return [];
   const topologyDescriptors = [];
   for (const curve of primaryCurves) {
     if (curve.populationRole !== "lamella") continue;
     if (curve.topologyRole) continue;
-    for (let topologyMemberIndex = 0; topologyMemberIndex < stripTopologyCount; topologyMemberIndex++) {
-      const centered = topologyMemberIndex - (stripTopologyCount - 1) / 2;
+    for (let topologyMemberIndex = 0; topologyMemberIndex < intraStripTopologyCount; topologyMemberIndex++) {
+      const centered = topologyMemberIndex - (intraStripTopologyCount - 1) / 2;
       const phiOffset = centered * Math.max(curve.width * 1.35, 0.045);
       const thetaOffset = centered * 0.038;
       const intervalInset = Math.min(0.024, Math.max(0.01, (curve.interval[1] - curve.interval[0]) * 0.04));
@@ -945,7 +1014,7 @@ function generateStripTopologyDescriptors(primaryCurves = [], input = {}) {
         topologyMode: STRIP_TOPOLOGY_MODE,
         topologyRole: "intra-strip-member",
         topologyMemberIndex,
-        topologyMemberCount: stripTopologyCount,
+        topologyMemberCount: intraStripTopologyCount,
         materialRole: "strip-topology-member",
         sliceParticipation: "same-shell-topology-member",
         interval,
@@ -966,6 +1035,7 @@ export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const shellEnclosure = Number(clamp(Number(input.shellEnclosure ?? input.enclosure ?? 0), 0, 1).toFixed(4));
   const stripTopologyCount = normalizeStripTopologyCount(input);
+  const intraStripTopologyCount = normalizeIntraStripTopologyCount(input);
   const layerStack = generateLamellarLayerSpecs(input);
   const { layerStackDescriptor, layerSpecs } = layerStack;
   const stripProfileOverrides = normalizeStripProfileOverrides(input.stripProfileOverrides);
@@ -993,8 +1063,12 @@ export function generateLamellarSectionSegments(input = {}) {
     overlapBias: layerStackDescriptor.overlapBias,
     shellEnclosure,
     shellEnclosureMode: SHELL_ENCLOSURE_MODE,
-    stripTopologyMode: STRIP_TOPOLOGY_MODE,
+    stripTopologyMode: SHELL_TOPOLOGY_FAMILY_MODE,
     stripTopologyCount,
+    shellTopologyFamilyMode: SHELL_TOPOLOGY_FAMILY_MODE,
+    shellTopologyFamilyCount: stripTopologyCount,
+    intraStripTopologyMode: STRIP_TOPOLOGY_MODE,
+    intraStripTopologyCount,
     curveLaw: "poloxodromic-sphere-strip-v0",
     capLaw: END_CAP_SEALING_MODE,
     sphereCurveKind: "SphereCurveDescriptor",
@@ -1022,7 +1096,9 @@ export function generateLamellarSectionSegments(input = {}) {
     selectedShape,
     selectedPhase,
   });
-  const stripTopologyDescriptors = generateStripTopologyDescriptors(primarySphereCurveDescriptors, { stripTopologyCount });
+  const shellTopologyFamilyDescriptors = generateShellTopologyFamilyDescriptors(primarySphereCurveDescriptors, { stripTopologyCount });
+  const intraStripTopologyDescriptors = generateIntraStripTopologyDescriptors(primarySphereCurveDescriptors, { intraStripTopologyCount });
+  const stripTopologyDescriptors = [...shellTopologyFamilyDescriptors, ...intraStripTopologyDescriptors];
   const sphereCurveDescriptors = [...primarySphereCurveDescriptors, ...stripTopologyDescriptors];
   const curveInteractionReceipt = createCurveInteractionReceipt(sphereCurveDescriptors);
   const lamellarEnvelopeDescriptors = generateLamellarEnvelopeDescriptors(sphereCurveDescriptors);
@@ -1041,6 +1117,8 @@ export function generateLamellarSectionSegments(input = {}) {
     stripProfileDescriptors: stripInstances.map(strip => strip.stripProfileDescriptor),
     sphereCurveDescriptors,
     stripTopologyDescriptors,
+    shellTopologyFamilyDescriptors,
+    intraStripTopologyDescriptors,
     lamellarEnvelopeDescriptors,
     curveInteractionReceipt,
     descriptors,
@@ -1502,6 +1580,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     stripProfileDescriptors: [],
     sphereCurveDescriptors: [],
     stripTopologyDescriptors: [],
+    shellTopologyFamilyDescriptors: [],
+    intraStripTopologyDescriptors: [],
     lamellarEnvelopeDescriptors: [],
     curveInteractionReceipt: null,
     generatedSegmentDescriptors: [],
@@ -1539,6 +1619,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     neighbor: new THREE.MeshStandardMaterial({ color: 0x10c9c1, emissive: 0x073330, emissiveIntensity: 0.18, metalness: 0.34, roughness: 0.36, side: THREE.DoubleSide }),
     neighborCompanion: new THREE.MeshStandardMaterial({ color: 0x5d807d, metalness: 0.34, roughness: 0.5, side: THREE.DoubleSide }),
     topologyMember: new THREE.MeshStandardMaterial({ color: 0xdff8f4, emissive: 0x073330, emissiveIntensity: 0.08, metalness: 0.22, roughness: 0.5, transparent: true, opacity: 0.82, side: THREE.DoubleSide }),
+    shellTopologyFamily: new THREE.MeshStandardMaterial({ color: 0xb7f0e8, emissive: 0x063634, emissiveIntensity: 0.12, metalness: 0.26, roughness: 0.48, transparent: true, opacity: 0.7, side: THREE.DoubleSide }),
     cuttingEdge: new THREE.MeshStandardMaterial({ color: 0xff5d46, emissive: 0x3a0b04, emissiveIntensity: 0.35, metalness: 0.18, roughness: 0.32, side: THREE.DoubleSide }),
     cap: new THREE.MeshStandardMaterial({ color: 0xffcf76, metalness: 0.52, roughness: 0.3, side: THREE.DoubleSide }),
     gauge: new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0.72, side: THREE.DoubleSide }),
@@ -1873,6 +1954,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       populationBearingVariance: state.populationBearingVariance,
       shellEnclosure: state.shellEnclosure,
       stripTopologyCount: state.stripTopologyCount,
+      intraStripTopologyCount: state.intraStripTopologyCount || 0,
       stripPopulations: state.stripPopulations,
       stripProfileOverrides: state.stripProfileOverrides,
       overlapBias: state.overlapBias,
@@ -1891,6 +1973,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.stripProfileDescriptors = generated.stripProfileDescriptors;
     state.sphereCurveDescriptors = generated.sphereCurveDescriptors;
     state.stripTopologyDescriptors = generated.stripTopologyDescriptors;
+    state.shellTopologyFamilyDescriptors = generated.shellTopologyFamilyDescriptors;
+    state.intraStripTopologyDescriptors = generated.intraStripTopologyDescriptors;
     state.lamellarEnvelopeDescriptors = generated.lamellarEnvelopeDescriptors;
     state.curveInteractionReceipt = generated.curveInteractionReceipt;
     state.generatedSegmentDescriptors = sliced.descriptors.map(d => ({
@@ -1904,8 +1988,13 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       topologyRole: d.topologyRole || null,
       topologyMemberIndex: d.topologyMemberIndex ?? null,
       topologyMemberCount: d.topologyMemberCount ?? null,
+      shellTopologyFamilyIndex: d.shellTopologyFamilyIndex ?? null,
+      shellTopologyFamilyCount: d.shellTopologyFamilyCount ?? null,
+      topologyOrientationBearing: d.topologyOrientationBearing ?? null,
+      orientationBand: d.orientationBand ?? null,
       sourceParentCurveId: d.sourceParentCurveId || null,
       sourceParentStripInstanceId: d.sourceParentStripInstanceId || null,
+      sourceParentPopulationId: d.sourceParentPopulationId || null,
       layerSpecId: d.layerSpecId,
       stripInstanceId: d.stripInstanceId,
       stripIndex: d.stripIndex,
@@ -2027,6 +2116,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       if (descriptor.materialRole === "selected-continuation") material = materials.continuation;
       if (descriptor.materialRole === "neighbor-companion") material = materials.neighborCompanion;
       if (descriptor.topologyRole === "intra-strip-member") material = materials.topologyMember;
+      if (descriptor.topologyRole === "shell-family-member") material = materials.shellTopologyFamily;
       if (descriptor.materialRole === "nested-placeholder-shell") {
         material = descriptor.layerIndex % 2 ? materials.placeholderA : materials.placeholderB;
       }
@@ -2035,6 +2125,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       const mesh = new THREE.Mesh(geometry, material);
       if (isEnvelopeGuideStrip) mesh.renderOrder = 6;
       if (descriptor.topologyRole === "intra-strip-member") mesh.renderOrder = 10;
+      if (descriptor.topologyRole === "shell-family-member") mesh.renderOrder = 9;
       mesh.userData.lamellarSelectable = true;
       mesh.userData.lamellarObjectKind = "LamellarSectionSegment";
       mesh.userData.lamellarRole = descriptor.topologyRole || (isCutAuthorEnvelope ? "cut-author-envelope" : descriptor.materialRole);
@@ -2043,8 +2134,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       mesh.userData.topologyMode = descriptor.topologyMode || null;
       mesh.userData.topologyRole = descriptor.topologyRole || null;
       mesh.userData.topologyMemberIndex = descriptor.topologyMemberIndex ?? null;
+      mesh.userData.shellTopologyFamilyIndex = descriptor.shellTopologyFamilyIndex ?? null;
+      mesh.userData.topologyOrientationBearing = descriptor.topologyOrientationBearing ?? null;
       mesh.userData.sourceParentCurveId = descriptor.sourceParentCurveId || null;
       mesh.userData.sourceParentStripInstanceId = descriptor.sourceParentStripInstanceId || null;
+      mesh.userData.sourceParentPopulationId = descriptor.sourceParentPopulationId || null;
       mesh.userData.layerSpecId = descriptor.layerSpecId;
       mesh.userData.stripInstanceId = descriptor.stripInstanceId;
       mesh.userData.layerIndex = descriptor.layerIndex;
@@ -2063,8 +2157,13 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         topologyRole: descriptor.topologyRole || null,
         topologyMemberIndex: descriptor.topologyMemberIndex ?? null,
         topologyMemberCount: descriptor.topologyMemberCount ?? null,
+        shellTopologyFamilyIndex: descriptor.shellTopologyFamilyIndex ?? null,
+        shellTopologyFamilyCount: descriptor.shellTopologyFamilyCount ?? null,
+        topologyOrientationBearing: descriptor.topologyOrientationBearing ?? null,
+        orientationBand: descriptor.orientationBand ?? null,
         sourceParentCurveId: descriptor.sourceParentCurveId || null,
         sourceParentStripInstanceId: descriptor.sourceParentStripInstanceId || null,
+        sourceParentPopulationId: descriptor.sourceParentPopulationId || null,
         layerSpecId: descriptor.layerSpecId,
         stripInstanceId: descriptor.stripInstanceId,
         stripIndex: descriptor.stripIndex,
