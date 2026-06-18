@@ -578,6 +578,7 @@ export function createKaminosClayPrototype({
   let clayPointerColliderCount = 0;
   let clayPointerDragStepCount = 0;
   let clayPointerLastHit = null;
+  let clayPointerDepthPolicy = null;
   let clayBrushBoundaryClampCount = 0;
   const clayBrushBoundaryWarnings = [];
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
@@ -1673,12 +1674,14 @@ export function createKaminosClayPrototype({
     const center = Array.isArray(payload.center)
       ? payload.center
       : [payload.x, 0, payload.z];
+    const rawCenter = Array.isArray(payload.rawCenter) ? payload.rawCenter : center;
     const pointerCollider = normalizeCollider({
       id: payload.id || 'pointer-drag',
       center,
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
     }, 0);
+    clayPointerDepthPolicy = payload.depthPolicy || null;
     clayBrushBoundaryWarnings.length = 0;
     clayBrushBoundaryClampCount = pointerCollider.boundaryClamped ? 1 : 0;
     if (pointerCollider.boundaryClamped) {
@@ -1693,6 +1696,8 @@ export function createKaminosClayPrototype({
       x: pointerCollider.center[0],
       y: pointerCollider.center[1],
       z: pointerCollider.center[2],
+      rawCenter: rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+      depthPolicy: clayPointerDepthPolicy,
       radius: pointerCollider.radius,
       strength: pointerCollider.strength,
       screenX: Number.isFinite(payload.screenX) ? payload.screenX : null,
@@ -1844,6 +1849,7 @@ export function createKaminosClayPrototype({
       clayPointerColliderCount,
       clayPointerDragStepCount,
       clayPointerLastHit,
+      clayPointerDepthPolicy,
       clayBrushBoundaryPolicy: CLAY_BRUSH_BOUNDARY_POLICY,
       clayBrushBoundaryEdgeFalloff: CLAY_BRUSH_BOUNDARY_EDGE_FALLOFF,
       clayBrushBoundaryClampCount,

@@ -649,8 +649,13 @@ async function main() {
       assert.equal(state.claySurfaceVertexCount, expected.vertexCount, `vertex count did not match expected-grid ${expected.grid}`);
       assert.equal(state.claySurfaceTriangleCount, expected.triangleCount, `triangle count did not match expected-grid ${expected.grid}`);
     }
-    assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
-    assert.ok((state.claySurfaceMeanAbsHeight ?? 0) > 0.01, 'clay mean absolute height did not show readable deformation');
+    if (isCubeRoute) {
+      assert.ok((state.clayCubeMaxDisplacement ?? 0) > 0.05, 'cube route did not show readable material-point displacement');
+      assert.ok((state.clayCubeDeformedParticleCount ?? 0) > 0, 'cube route did not report deformed material points');
+    } else {
+      assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
+      assert.ok((state.claySurfaceMeanAbsHeight ?? 0) > 0.01, 'clay mean absolute height did not show readable deformation');
+    }
     if (url.includes('clay_debug_colliders=0')) {
       assert.equal(state.clayDebugCollidersVisible, false, 'quality witness did not hide debug colliders');
     }
@@ -660,6 +665,13 @@ async function main() {
       assert.ok(state.clayPointerLastHit, 'pointer clay route did not record a pointer hit');
       assert.ok(Number.isFinite(state.clayPointerLastHit.x), 'pointer hit x did not reach clay debug state');
       assert.ok(Number.isFinite(state.clayPointerLastHit.z), 'pointer hit z did not reach clay debug state');
+      if (isCubeRoute) {
+        assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit used the wrong depth policy');
+        assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit did not preserve depth policy');
+        assert.ok(Array.isArray(state.clayPointerLastHit.rawCenter), 'cube pointer hit did not preserve raw ray hit');
+        assert.ok((state.clayPointerLastHit.rawCenter[2] ?? 0) > 0.25, 'cube pointer raw hit landed behind the visible front face');
+        assert.ok((state.clayPointerLastHit.z ?? 0) > 0.15, 'cube pointer effective hit landed behind the visible front face');
+      }
       const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
       const requestedBrushStrength = Number(new URL(url).searchParams.get('clay_brush_strength') || 1.18);
       assert.ok(Math.abs(state.clayPointerLastHit.radius - requestedBrushRadius) <= 1e-6, 'pointer hit radius did not match route');
@@ -842,6 +854,7 @@ async function main() {
       clayPointerActive: state.clayPointerActive,
       clayPointerColliderCount: state.clayPointerColliderCount,
       clayPointerDragStepCount: state.clayPointerDragStepCount,
+      clayPointerDepthPolicy: state.clayPointerDepthPolicy,
       clayPointerLastHit: state.clayPointerLastHit,
       requestedHandPoseBackend: state.requestedHandPoseBackend,
       effectiveHandPoseBackend: state.effectiveHandPoseBackend,

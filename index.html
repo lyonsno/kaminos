@@ -740,6 +740,11 @@ const CLAY_CUBE_CAMERA_FRAME = Object.freeze({
   position: [0, 1.04, 1.82],
   target: [0, 0.34, 0],
 });
+const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
+const CLAY_CUBE_POINTER_BOUNDS = Object.freeze({
+  min: [-0.44, 0.04, -0.34],
+  max: [0.44, 0.68, 0.34],
+});
 
 // --- HDR Environments ---
 const HDR_ENVS = {
@@ -1806,6 +1811,7 @@ function frameClayCamera(cubeMode = false) {
 function installClayPointerInteraction(params) {
   const canvas = renderer.domElement;
   const legacyInteractiveRoute = params.get('clay_interactive') === '1';
+  const cubePointerRoute = params.get('clay_cube') === '1';
   const pointerRaycaster = new THREE.Raycaster();
   const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
   const pointerPoint = new THREE.Vector3();
@@ -1822,6 +1828,33 @@ function installClayPointerInteraction(params) {
   const shouldBrushClayPointerEvent = event => {
     if (event?.button != null && event.button !== 0) return false;
     return legacyInteractiveRoute || clayBrushModifierActive;
+  };
+
+  const intersectClayCubeBounds = ray => {
+    let tMin = Number.NEGATIVE_INFINITY;
+    let tMax = Number.POSITIVE_INFINITY;
+    for (const [axis, min, max] of [
+      ['x', CLAY_CUBE_POINTER_BOUNDS.min[0], CLAY_CUBE_POINTER_BOUNDS.max[0]],
+      ['y', CLAY_CUBE_POINTER_BOUNDS.min[1], CLAY_CUBE_POINTER_BOUNDS.max[1]],
+      ['z', CLAY_CUBE_POINTER_BOUNDS.min[2], CLAY_CUBE_POINTER_BOUNDS.max[2]],
+    ]) {
+      const origin = ray.origin[axis];
+      const direction = ray.direction[axis];
+      if (Math.abs(direction) < 1e-6) {
+        if (origin < min || origin > max) return null;
+        continue;
+      }
+      const invDirection = 1 / direction;
+      let near = (min - origin) * invDirection;
+      let far = (max - origin) * invDirection;
+      if (near > far) [near, far] = [far, near];
+      tMin = Math.max(tMin, near);
+      tMax = Math.min(tMax, far);
+      if (tMin > tMax) return null;
+    }
+    const t = tMin >= 0 ? tMin : tMax;
+    if (t < 0) return null;
+    return ray.at(t, new THREE.Vector3());
   };
 
   const updateBrushModifier = event => {
@@ -1845,13 +1878,30 @@ function installClayPointerInteraction(params) {
       -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1),
     );
     pointerRaycaster.setFromCamera(ndc, camera);
-    if (!pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) return null;
-    return {
-      center: [
-        Math.max(-0.82, Math.min(0.82, pointerPoint.x)),
+    let hitPoint = null;
+    let depthPolicy = 'horizontal-plane-y0';
+    if (cubePointerRoute) {
+      hitPoint = intersectClayCubeBounds(pointerRaycaster.ray);
+      depthPolicy = CLAY_CUBE_POINTER_DEPTH_POLICY;
+    } else if (pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) {
+      hitPoint = pointerPoint;
+    }
+    if (!hitPoint) return null;
+    const center = cubePointerRoute
+      ? [
+        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[0], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[0], hitPoint.x)),
+        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[1], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[1], hitPoint.y)),
+        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[2], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[2], hitPoint.z)),
+      ]
+      : [
+        Math.max(-0.82, Math.min(0.82, hitPoint.x)),
         0,
-        Math.max(-0.52, Math.min(0.52, pointerPoint.z)),
-      ],
+        Math.max(-0.52, Math.min(0.52, hitPoint.z)),
+      ];
+    return {
+      center,
+      rawCenter: [hitPoint.x, hitPoint.y, hitPoint.z],
+      depthPolicy,
       radius: clayPointerBrushRadius,
       strength: event.shiftKey ? clayPointerBrushStrength * 0.5 : clayPointerBrushStrength,
       screenX: event.clientX,

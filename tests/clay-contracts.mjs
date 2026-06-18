@@ -182,6 +182,8 @@ assert.match(core, /clayInteractionMode/, 'clay debug state records interaction 
 assert.match(core, /clayPointerActive/, 'clay debug state records active pointer drag state');
 assert.match(core, /clayPointerDragStepCount/, 'clay debug state records pointer-driven clay steps');
 assert.match(core, /clayPointerLastHit/, 'clay debug state records last pointer hit in clay coordinates');
+assert.match(core, /clayPointerDepthPolicy/, 'clay debug state records how pointer depth was selected');
+assert.match(core, /rawCenter/, 'clay pointer hit preserves the raw ray hit before normalization');
 assert.match(core, /radius:\s*pointerCollider\.radius/, 'clay pointer hit records effective pointer radius');
 assert.match(core, /strength:\s*pointerCollider\.strength/, 'clay pointer hit records effective pointer strength');
 assert.match(core, /CLAY_BRUSH_BOUNDARY_POLICY/, 'clay core names its brush boundary policy');
@@ -289,6 +291,8 @@ assert.match(witness, /requestedBrushStrength/, 'clay witness can verify routed 
 assert.match(witness, /Input\.dispatchKeyEvent/, 'clay witness sends real keyboard input for brush modifier mode');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
+assert.match(index, /CLAY_CUBE_POINTER_DEPTH_POLICY\s*=\s*'camera-ray-nearest-cube-surface'/, 'cube brush depth is anchored on the nearest cube surface, not a back-plane hit');
+assert.match(index, /intersectClayCubeBounds/, 'cube pointer brush computes a camera-ray/cube-bounds intersection');
 assert.match(witness, /visualRecording/, 'clay witness reports automatic visual recording metadata');
 assert.match(witness, /recordFrame/, 'clay witness records frame PNGs during dynamic brush smoke');
 assert.match(witness, /writeFilmstripPng/, 'clay witness writes an inspectable filmstrip PNG');
