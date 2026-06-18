@@ -56,6 +56,7 @@ const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
 const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
 const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
+const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
@@ -290,6 +291,33 @@ function normalizedCubeCollider(collider, index) {
   return {
     ...normalized,
     center: [normalized.center[0], y, normalized.center[2]],
+  };
+}
+
+export function normalizeClayCubePointerCollider(payload = {}) {
+  const center = Array.isArray(payload.center) ? payload.center : [payload.x, payload.y, payload.z];
+  const rawCenter = Array.isArray(payload.rawCenter) ? payload.rawCenter : center;
+  const rawX = clampFinite(center[0], -1.2, 1.2, 0);
+  const rawY = clampFinite(center[1], -1.2, 1.2, CLAY_CUBE_EXTENTS.maxY * 0.5);
+  const rawZ = clampFinite(center[2], -1.2, 1.2, 0);
+  const clampedX = clampFinite(rawX, -CLAY_CUBE_EXTENTS.halfX, CLAY_CUBE_EXTENTS.halfX, 0);
+  const clampedY = clampFinite(rawY, CLAY_CUBE_EXTENTS.minY, CLAY_CUBE_EXTENTS.maxY, CLAY_CUBE_EXTENTS.maxY * 0.5);
+  const clampedZ = clampFinite(rawZ, -CLAY_CUBE_EXTENTS.halfZ, CLAY_CUBE_EXTENTS.halfZ, 0);
+  return {
+    id: payload.id || 'cube-pointer-drag',
+    center: [clampedX, clampedY, clampedZ],
+    rawCenter: rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+    radius: clampFinite(payload.radius, 0.035, 0.35, 0.18),
+    strength: clampFinite(payload.strength, 0, 5, 1.15),
+    source: payload.source || 'cube-pointer',
+    sourceBackend: payload.sourceBackend || null,
+    sampleAuthority: Number.isFinite(payload.sampleAuthority) ? payload.sampleAuthority : null,
+    pressureAxis: Number.isFinite(payload.pressureAxis) ? payload.pressureAxis : null,
+    pressureScale: Number.isFinite(payload.pressureScale) ? payload.pressureScale : null,
+    boundaryClamped: Math.abs(clampedX - rawX) > 1e-6
+      || Math.abs(clampedY - rawY) > 1e-6
+      || Math.abs(clampedZ - rawZ) > 1e-6,
+    boundaryMargin: [0, 0, 0],
   };
 }
 
@@ -1864,12 +1892,16 @@ export function createKaminosClayPrototype({
       ? payload.center
       : [payload.x, 0, payload.z];
     const rawCenter = Array.isArray(payload.rawCenter) ? payload.rawCenter : center;
-    const pointerCollider = normalizeCollider({
+    const pointerPayload = {
       id: payload.id || 'pointer-drag',
       center,
+      rawCenter,
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
-    }, 0);
+    };
+    const pointerCollider = payload.depthPolicy === CLAY_CUBE_POINTER_DEPTH_POLICY
+      ? normalizeClayCubePointerCollider(pointerPayload)
+      : normalizeCollider(pointerPayload, 0);
     clayPointerDepthPolicy = payload.depthPolicy || null;
     clayBrushBoundaryWarnings.length = 0;
     clayBrushBoundaryClampCount = pointerCollider.boundaryClamped ? 1 : 0;
@@ -1885,7 +1917,9 @@ export function createKaminosClayPrototype({
       x: pointerCollider.center[0],
       y: pointerCollider.center[1],
       z: pointerCollider.center[2],
-      rawCenter: rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+      rawCenter: Array.isArray(pointerCollider.rawCenter)
+        ? pointerCollider.rawCenter
+        : rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
       depthPolicy: clayPointerDepthPolicy,
       radius: pointerCollider.radius,
       strength: pointerCollider.strength,

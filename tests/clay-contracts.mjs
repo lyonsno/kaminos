@@ -79,6 +79,7 @@ assert.match(core, /webgpu-clay-material-point-cube-first-loop-v0/, 'clay cube w
 assert.match(core, /export function normalizeClayCubeConfig/, 'clay module exports cube config normalization');
 assert.match(core, /export function seedClayCubeMaterialPoints/, 'clay module exports deterministic cube material-point seeding');
 assert.match(core, /export function runClayCubeFirstLoopOracle/, 'clay module exports deterministic cube first-loop oracle');
+assert.match(core, /export function normalizeClayCubePointerCollider/, 'clay module exports cube-specific pointer collider normalization');
 assert.match(core, /clayCubeEnabled/, 'clay debug state records whether the cube witness is enabled');
 assert.match(core, /clayCubeParticleCount/, 'clay debug state records cube material-point count');
 assert.match(core, /clayCubeActiveGridCellCount/, 'clay debug state records cube active grid-cell count');
@@ -320,8 +321,10 @@ assert.match(witness, /failureState/, 'clay witness failure reports preserve deb
 assert.match(witness, /screenshotWritten/, 'clay witness failure reports say whether the screenshot was actually captured');
 assert.match(witness, /clayPointerDragStepCount/, 'clay witness records pointer-driven drag steps');
 assert.match(witness, /clayPointerLastHit/, 'clay witness records pointer hit coordinates');
+assert.match(witness, /clayPointerLastHit\.y/, 'clay witness verifies pointer hit height');
 assert.match(witness, /clayPointerLastHit\.radius/, 'clay witness verifies pointer hit radius');
 assert.match(witness, /clayPointerLastHit\.strength/, 'clay witness verifies pointer hit strength');
+assert.match(witness, /cube pointer effective hit was inset from the raw cube face hit/, 'cube witness rejects old heightfield clamp insetting cube hits');
 assert.match(witness, /clayDeformationCount/, 'clay witness requires deformation count');
 assert.match(witness, /clayContactCount/, 'clay witness requires contact count');
 assert.match(witness, /clayColorPixels/, 'clay witness performs a clay-color pixel sanity check');

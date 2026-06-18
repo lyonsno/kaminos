@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  normalizeClayCubePointerCollider,
   normalizeClayCubeConfig,
   runClayCubeFirstLoopOracle,
   seedClayCubeMaterialPoints,
@@ -56,3 +57,19 @@ assert.ok(['front', 'back', 'left', 'right', 'top', 'bottom', 'interior'].includ
 assert.ok(oracle.maxDisplacement > 0.01, 'cube oracle produces readable 3D displacement');
 assert.ok(oracle.minY < 0.08, 'cube oracle lets lower/interior material move, not only the top skin');
 assert.ok(oracle.heightRange > 0.25, 'cube oracle keeps a coherent 3D height span');
+
+const cubePointer = normalizeClayCubePointerCollider({
+  id: 'front-face-pointer',
+  center: [0.0968, 0.4468, 0.34],
+  rawCenter: [0.0968, 0.4468, 0.34],
+  radius: 0.17,
+  strength: 1.18,
+});
+
+assert.equal(cubePointer.id, 'front-face-pointer');
+assert.equal(cubePointer.center[0], 0.0968);
+assert.equal(cubePointer.center[1], 0.4468);
+assert.equal(cubePointer.center[2], 0.34, 'cube pointer normalization must not inset a front-face hit with the old heightfield edge clamp');
+assert.deepEqual(cubePointer.rawCenter, [0.0968, 0.4468, 0.34]);
+assert.equal(cubePointer.radius, 0.17);
+assert.equal(cubePointer.strength, 1.18);
