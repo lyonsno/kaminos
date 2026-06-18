@@ -1525,6 +1525,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.4
   ) * (0.72 + bonfireRadianceBreakup * 0.34);
+  let bonfireEmissionDetailBirth = clamp(
+    bonfireRadianceBirth * (0.44 + bonfireRadianceBreakup * 0.32)
+      + bonfireLiftedReactionFront * bonfireFrontLiftGate * bonfireRadianceBreakup * 0.24
+      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * (0.18 + bonfireTongues * 0.08)
+      + bonfireInteriorEmissionBridge * 0.20
+      + fireLick * 0.12,
+    0.0,
+    2.4
+  );
+  let bonfireTransportedEmissionDetail = clamp(
+    flameDetail * 0.82
+      + bonfireEmissionDetailBirth * 0.76
+      + fireLick * 0.18
+      + emberFleck * 0.08,
+    0.0,
+    2.4
+  );
   let fireBirth = mix(columnFireBirth, bonfireRadianceBirth, bonfireScene);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
@@ -1704,7 +1721,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfirePacketCombustion.y * 0.34
       + bonfirePacketCombustion.w * 0.18
   ) * (0.52 + bonfireTongues * 0.34 + fireLickOperatorGain * 0.12);
-  flameDetail = max(flameDetail, (fireBirth * 1.02 + bonfireRadianceBirth * bonfireScene * 0.82 + bonfireInteriorEmissionBridge * bonfireScene * 0.62 + heatExpansion.y * 4.0 + bonfireCombustion.z * bonfireScene * 0.18 + bonfirePacketFlameDetailBirth) * (0.42 + 0.42 * bonfireDetailBreakup + 0.40 * bonfireTongues * bonfireScene) + lickBirth.z + fireLick * 0.34);
+  let columnFlameDetailBirth = (fireBirth * 1.02 + heatExpansion.y * 4.0) * (0.42 + 0.42 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34;
+  let bonfireFlameDetailBirth = bonfireTransportedEmissionDetail * (0.94 + bonfireRadianceBreakup * 0.20)
+    + bonfireRadianceBirth * 0.26
+    + bonfireInteriorEmissionBridge * 0.22
+    + heatExpansion.y * 3.2
+    + bonfireCombustion.z * 0.10
+    + bonfirePacketFlameDetailBirth * 0.64
+    + lickBirth.z
+    + fireLick * 0.30;
+  flameDetail = max(flameDetail, mix(columnFlameDetailBirth, bonfireFlameDetailBirth, bonfireScene));
   flameDetail = max(flameDetail, externalInjection.fire.z);
   combustionFront = max(combustionFront, combustionFrontBirth);
 
@@ -3025,6 +3051,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let heatSum = 0;
     let detailSum = 0;
     let fireLayerSum = 0;
+    let emissionDetailSum = 0;
     let combustionFrontSum = 0;
     let radianceSum = 0;
     let extinctionSum = 0;
@@ -3078,6 +3105,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireWeightedVelocityY: 0,
       fireInteriorWeight: 0,
       fireRingWeight: 0,
+      emissionDetailWeight: 0,
       combustionFrontWeight: 0,
     }));
     const sampleCells = new Set();
@@ -3166,6 +3194,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const sourceRadiusNorm = sourceRadius / Math.max(1, gridSize - 1) * 2;
         const fireInteriorWeight = radialDistance < sourceRadiusNorm * 0.70 ? fireWeight : 0;
         const fireRingWeight = radialDistance > sourceRadiusNorm * 0.86 ? fireWeight : 0;
+        const emissionDetailWeight = Math.max(0, flameDetail);
         const radialVelocity = radialDistance > 0.0001 ? (nx * vx + nz * vz) / radialDistance : 0;
         smokeWeightSum += smokeWeight;
         smokeWeightedX += smokeWeight * nx;
@@ -3201,6 +3230,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bin.fireWeightedVelocityY += fireWeight * vy;
         bin.fireInteriorWeight += fireInteriorWeight;
         bin.fireRingWeight += fireRingWeight;
+        bin.emissionDetailWeight += emissionDetailWeight;
         bin.combustionFrontWeight += combustionFrontWeight;
       }
       densitySum += d;
@@ -3208,6 +3238,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       heatSum += heat;
       detailSum += detail;
       fireLayerSum += fireLayer;
+      emissionDetailSum += flameDetail;
       combustionFrontSum += combustionFront;
       radianceSum += radiance;
       extinctionSum += extinction;
@@ -3279,6 +3310,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireWeight: bin.fireWeight,
         fireInteriorWeight: bin.fireInteriorWeight,
         fireRingWeight: bin.fireRingWeight,
+        emissionDetailWeight: bin.emissionDetailWeight,
         combustionFrontWeight: bin.combustionFrontWeight,
         smokeCenterX: smokeCenterXBin,
         smokeCenterZ: smokeCenterZBin,
@@ -3351,6 +3383,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const liftedFireRingWeight = liftedFireShellBins.reduce((sum, bin) => sum + bin.fireRingWeight, 0);
     const liftedFireShellRatio = liftedFireWeight > 0 ? liftedFireRingWeight / liftedFireWeight : 0;
     const liftedFireInteriorRatio = liftedFireWeight > 0 ? liftedFireInteriorWeight / liftedFireWeight : 0;
+    const emissionDetailWeight = sourceRelativeVisualHeightBins.reduce((sum, bin) => sum + bin.emissionDetailWeight, 0);
+    const liftedEmissionDetailWeight = sourceRelativeVisualHeightBins
+      .filter(bin => bin.visualCenter > 0.05 && bin.visualCenter < 0.86)
+      .reduce((sum, bin) => sum + bin.emissionDetailWeight, 0);
+    const liftedEmissionDetailRatio = emissionDetailWeight > 0 ? liftedEmissionDetailWeight / emissionDetailWeight : 0;
     const activeCombustionFrontBins = sourceRelativeVisualHeightBins.filter(bin => bin.combustionFrontWeight > 0);
     const maxCombustionFrontBinWeight = activeCombustionFrontBins.reduce((maxWeight, bin) =>
       Math.max(maxWeight, bin.combustionFrontWeight),
@@ -3370,6 +3407,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       heatMean: heatSum / samples,
       detailMean: detailSum / samples,
       fireLayerMean: fireLayerSum / samples,
+      emissionDetailMean: emissionDetailSum / samples,
       combustionFrontMean: combustionFrontSum / samples,
       radianceMean: radianceSum / samples,
       extinctionMean: extinctionSum / samples,
@@ -3423,6 +3461,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       liftedFireInteriorRatio,
       liftedFireInteriorWeight,
       liftedFireRingWeight,
+      liftedEmissionDetailRatio,
+      liftedEmissionDetailWeight,
+      emissionDetailWeight,
       maxFireBinWeight,
       combustionFrontWeight: combustionFrontWeightSum,
       combustionFrontSourcePlugRatio,
@@ -3448,6 +3489,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireWeight: bin.fireWeight,
         fireInteriorWeight: bin.fireInteriorWeight,
         fireRingWeight: bin.fireRingWeight,
+        emissionDetailWeight: bin.emissionDetailWeight,
         fireCenterX: bin.fireWeight > 0 ? bin.fireWeightedX / bin.fireWeight : 0,
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
         fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,

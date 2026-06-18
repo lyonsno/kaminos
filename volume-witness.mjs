@@ -522,6 +522,12 @@ async function main() {
     }
     if (
       expectedVolumeScene === 'bonfire_plume' &&
+      (!Number.isFinite(sample.simReadback.emissionDetailMean) || sample.simReadback.emissionDetailMean <= 0.0005)
+    ) {
+      throw new Error(`GPU sim readback does not show transported bonfire emission-detail evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (
+      expectedVolumeScene === 'bonfire_plume' &&
       sample.simReadback.radianceMean > 0.0005 &&
       (!Number.isFinite(sample.simReadback.combustionFrontMean) || sample.simReadback.combustionFrontMean <= 0.00025)
     ) {
@@ -619,6 +625,8 @@ async function main() {
         fireRisingBodyRatio: sample.simReadback.fireRisingBodyRatio,
         liftedFireShellRatio: sample.simReadback.liftedFireShellRatio,
         liftedFireInteriorRatio: sample.simReadback.liftedFireInteriorRatio,
+        emissionDetailMean: sample.simReadback.emissionDetailMean,
+        liftedEmissionDetailRatio: sample.simReadback.liftedEmissionDetailRatio,
         combustionFrontMean: sample.simReadback.combustionFrontMean,
         combustionFrontSourcePlugRatio: sample.simReadback.combustionFrontSourcePlugRatio,
         combustionFrontRisingBodyRatio: sample.simReadback.combustionFrontRisingBodyRatio,
@@ -734,6 +742,8 @@ async function main() {
       fireRisingBodyRatio: sample.simReadback?.fireRisingBodyRatio ?? 0,
       liftedFireShellRatio: sample.simReadback?.liftedFireShellRatio ?? 0,
       liftedFireInteriorRatio: sample.simReadback?.liftedFireInteriorRatio ?? 0,
+      emissionDetailMean: sample.simReadback?.emissionDetailMean ?? 0,
+      liftedEmissionDetailRatio: sample.simReadback?.liftedEmissionDetailRatio ?? 0,
       maxFireBinWeight: sample.simReadback?.maxFireBinWeight ?? 0,
       plumeLocalLateralVelocityMean: sample.simReadback?.plumeLocalLateralVelocityMean ?? 0,
       plumeNetLateralVelocity: sample.simReadback?.plumeNetLateralVelocity ?? 0,

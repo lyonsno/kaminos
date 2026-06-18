@@ -143,6 +143,8 @@ assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolut
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');
+assert.doesNotMatch(core, /FLUID_SLOTS_PER_CELL\s*=\s*[5-9]/, 'transported emission detail must reuse existing fire storage instead of adding a fifth fluid slot');
+assert.match(core, /FLUID_COMPONENTS\s*=\s*FLUID_SLOTS_PER_CELL\s*\*\s*4/, 'fluid component count derives from the four slot layout');
 assert.match(core, /DEFAULT_MAJORANT_GRID_SIZE\s*=\s*48/, 'volume route defaults to the sweep-selected 48^3 coarse majorant grid');
 assert.match(core, /MAX_EXTERNAL_EMITTERS/, 'fluid sim declares a bounded external emitter capacity');
 assert.match(core, /externalEmitterBuffer/, 'fluid sim owns an external emitter storage buffer');
@@ -359,6 +361,10 @@ assert.match(core, /bonfireLiftedFlameBirth/, 'bonfire fire birth has a lifted/o
 assert.match(core, /bonfireFlameOccupancy/, 'bonfire must name broad flame occupancy separately from visible emission so a lifted front does not render as a smooth shell');
 assert.match(core, /bonfireRadianceBirth/, 'bonfire must name visible radiance/emission birth separately from broad flame occupancy');
 assert.match(core, /bonfireInteriorEmissionBridge/, 'bonfire radiance birth must bridge the lifted ring through interior contact so the flame does not become a goblet shell');
+assert.match(core, /bonfireEmissionDetailBirth/, 'bonfire visible emission detail must have its own named birth before storage');
+assert.match(core, /bonfireTransportedEmissionDetail/, 'bonfire visible emission detail must be transported in the existing fireLayer.z lane before raymarch transfer');
+assert.match(core, /bonfireFlameDetailBirth[\s\S]*bonfireTransportedEmissionDetail/, 'fireLayer.z/flameDetail birth must receive transported emission detail instead of only derived brightness');
+assert.match(core, /flameDetail = max\(flameDetail,[\s\S]*bonfireFlameDetailBirth/, 'fireLayer.z/flameDetail storage must write the transported emission detail birth into the existing lane');
 assert.match(core, /let fireBirth = mix\(columnFireBirth, bonfireRadianceBirth, bonfireScene\);/, 'bonfire fire birth must use radiance birth rather than raw lifted flame occupancy');
 assert.doesNotMatch(core, /let fireBirth = mix\(columnFireBirth, bonfireLiftedFlameBirth, bonfireScene\);/, 'bonfire fire birth must not directly render the broad lifted flame occupancy as visible emission');
 assert.match(core, /bonfireFireBirth[\s\S]*bonfireReactionFront/, 'bonfire fire birth must route through reactionFront rather than directly through the smooth source core');
@@ -375,6 +381,8 @@ assert.match(core, /plumeTopPinchRatio/, 'sim readback reports upper plume bread
 assert.match(core, /fireSourcePlugRatio/, 'sim readback reports whether bonfire radiance is trapped in one smooth source bin instead of rising through broken flame lobes');
 assert.match(core, /liftedFireShellRatio/, 'sim readback reports whether lifted bonfire radiance is annular/shell-dominant like a goblet');
 assert.match(core, /liftedFireInteriorRatio/, 'sim readback reports whether lifted bonfire radiance has interior contact instead of only a bright ring wall');
+assert.match(core, /emissionDetailMean/, 'sim readback reports transported emission detail separately from broad fire occupancy');
+assert.match(core, /liftedEmissionDetailRatio/, 'sim readback reports whether transported emission detail reaches the lifted fire body');
 assert.match(core, /combustionFrontSourcePlugRatio/, 'sim readback reports whether transported combustion-front evidence is trapped in one source bin');
 assert.match(core, /combustionFrontRisingBodyRatio/, 'sim readback reports whether transported combustion-front evidence rises out of the source bin');
 assert.match(core, /let cell = vec3<f32>\(gid\) \+ vec3<f32>\(0\.5\);/, 'fluid sim constructs cell-centered coordinates before source shaping');
