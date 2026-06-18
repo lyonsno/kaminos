@@ -2608,6 +2608,8 @@ async function runSplatCorrectionModeScenario(ws) {
         scale: [1, 1, 1],
       });
       const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const flipDraft = window.kaminosToggleSplatCorrectionAxisFlip('x');
+      const sceneAfterFlip = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const saveResult = await window.kaminosSaveSelectedSplatCorrection();
       const modeAfterSave = window.kaminosSplatCorrectionModeDebugState?.() || null;
       const assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
@@ -2618,6 +2620,8 @@ async function runSplatCorrectionModeScenario(ws) {
         entered,
         draft,
         sceneAfterDraft,
+        flipDraft,
+        sceneAfterFlip,
         saveResult,
         modeAfterSave,
         assetDataAfterSave,
@@ -2640,12 +2644,24 @@ async function runSplatCorrectionModeScenario(ws) {
   if (!sameSceneTransform) {
     throw new Error(`splat correction mode dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
+  const afterFlip = evidence.sceneAfterFlip?.sceneTransform;
+  const flipPreservedSceneTransform = Array.isArray(afterFlip?.position)
+    && before.position.every((value, index) => Math.abs(value - afterFlip.position[index]) < 1e-6)
+    && before.rotation.every((value, index) => Math.abs(value - afterFlip.rotation[index]) < 1e-6)
+    && before.scale.every((value, index) => Math.abs(value - afterFlip.scale[index]) < 1e-6);
+  if (!flipPreservedSceneTransform) {
+    throw new Error(`splat correction axis flip dirtied scene transform: ${JSON.stringify(evidence)}`);
+  }
   const visual = evidence.sceneAfterDraft?.transform;
   if (!visual
       || Math.abs(visual.position?.[0] - 1.2) > 1e-6
       || Math.abs(visual.position?.[1] - 0.55) > 1e-6
       || Math.abs(visual.rotation?.[2] - 0.25) > 1e-6) {
     throw new Error(`splat correction mode did not compose draft correction into preview transform: ${JSON.stringify(evidence)}`);
+  }
+  const flippedVisual = evidence.sceneAfterFlip?.transform;
+  if (!flippedVisual || Math.abs(flippedVisual.scale?.[0] + 1.1) > 1e-6) {
+    throw new Error(`splat correction mode did not compose axis flip into preview scale: ${JSON.stringify(evidence)}`);
   }
   const savedCorrection = evidence.savedAssetEntry?.correction || null;
   if (!savedCorrection
@@ -2654,6 +2670,9 @@ async function runSplatCorrectionModeScenario(ws) {
       || Math.abs(savedCorrection.orientation?.rotation?.[1] - 0.1) > 1e-6
       || evidence.modeAfterSave?.dirty !== false) {
     throw new Error(`splat correction mode did not save draft: ${JSON.stringify(evidence)}`);
+  }
+  if (savedCorrection.axisFlips?.[0] !== -1 || evidence.saveResult?.correction?.axisFlips?.[0] !== -1) {
+    throw new Error(`splat correction mode did not save axis flip: ${JSON.stringify(evidence)}`);
   }
 }
 

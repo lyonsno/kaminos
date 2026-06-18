@@ -78,6 +78,9 @@ assert.match(index, /splatCorrectionTransformTarget\(/, 'gizmo attachment can re
 assert.match(index, /sceneTransform/, 'splat scene placement is tracked separately from asset correction metadata');
 assert.match(index, /window\.kaminosSplatCorrectionModeDebugState/, 'browser witnesses can inspect correction-mode target and dirty state');
 assert.match(index, /window\.kaminosSetSplatCorrectionDraftTransform/, 'browser witnesses can move the correction draft without DOM inference');
+assert.match(index, /axisFlips/, 'splat correction metadata includes asset-local axis flip state');
+assert.match(index, /function toggleSplatCorrectionAxisFlip\(/, 'splat correction mode can flip axes without mutating scene placement');
+assert.match(index, /window\.kaminosToggleSplatCorrectionAxisFlip/, 'browser witnesses can toggle correction-local axis flips without DOM inference');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');

@@ -250,7 +250,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="splat-correction-panel" id="splat-correction-panel" hidden>
           <div class="transform-inspector-head">
             <div class="transform-inspector-name">Splat Correction</div>
-            <div class="splat-correction-note">Asset-local orientation, centroid, and crop hints for preview and render handoff.</div>
+            <div class="splat-correction-note">Asset-local orientation, axis flip, centroid, and crop hints for preview and render handoff.</div>
           </div>
           <div class="transform-row">
             <div class="transform-label">Centroid</div>
@@ -258,6 +258,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
               <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.x"></label>
               <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.y"></label>
               <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-splat-correction-field="centroidOffset.z"></label>
+            </div>
+          </div>
+          <div class="transform-row">
+            <div class="transform-label">Axis Flip</div>
+            <div class="transform-axis-grid">
+              <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="checkbox" data-splat-correction-field="axisFlips.x"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="checkbox" data-splat-correction-field="axisFlips.y"></label>
+              <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="checkbox" data-splat-correction-field="axisFlips.z"></label>
             </div>
           </div>
           <label class="import-mode" style="margin:0;">
@@ -1107,6 +1115,7 @@ function applySceneObjectTransformState(object, transform = {}) {
 function defaultSplatCorrection() {
   return {
     orientation: { rotation: [0, 0, 0] },
+    axisFlips: [1, 1, 1],
     centroidOffset: [0, 0, 0],
     crop: { enabled: false, min: [-0.5, -0.5, -0.5], max: [0.5, 0.5, 0.5] },
   };
@@ -1118,12 +1127,18 @@ function numberTriplet(value, fallback) {
   return parsed.every(Number.isFinite) ? parsed : [...fallback];
 }
 
+function axisFlipTriplet(value, fallback = [1, 1, 1]) {
+  if (!Array.isArray(value) || value.length !== 3) return [...fallback];
+  return value.map(item => Number(item) < 0 ? -1 : 1);
+}
+
 function normalizeSplatCorrection(correction = {}) {
   const defaults = defaultSplatCorrection();
   return {
     orientation: {
       rotation: numberTriplet(correction?.orientation?.rotation, defaults.orientation.rotation),
     },
+    axisFlips: axisFlipTriplet(correction?.axisFlips, defaults.axisFlips),
     centroidOffset: numberTriplet(correction?.centroidOffset, defaults.centroidOffset),
     crop: {
       enabled: !!correction?.crop?.enabled,
@@ -1139,6 +1154,7 @@ function applySplatCorrectionToObject(object, correction = {}) {
   const transform = sceneObjectTransformState(object);
   transform.rotation = normalized.orientation.rotation;
   transform.position = normalized.centroidOffset;
+  transform.scale = transform.scale.map((value, index) => Math.abs(value) * normalized.axisFlips[index]);
   applySceneObjectTransformState(object, transform);
 }
 
@@ -1148,7 +1164,7 @@ function composeSplatVisualTransform(sceneTransform = {}, correction = {}) {
   return {
     position: scenePlacement.position.map((value, index) => value + normalized.centroidOffset[index]),
     rotation: scenePlacement.rotation.map((value, index) => value + normalized.orientation.rotation[index]),
-    scale: scenePlacement.scale,
+    scale: scenePlacement.scale.map((value, index) => value * normalized.axisFlips[index]),
   };
 }
 
@@ -1184,7 +1200,7 @@ function syncSplatSceneTransformFromVisual(record) {
   setSceneObjectSceneTransform(record, {
     position: visual.position.map((value, index) => value - correction.centroidOffset[index]),
     rotation: visual.rotation.map((value, index) => value - correction.orientation.rotation[index]),
-    scale: visual.scale,
+    scale: visual.scale.map((value, index) => value * correction.axisFlips[index]),
   });
 }
 
@@ -1227,9 +1243,40 @@ function splatCorrectionFromTarget(target, fallback = {}) {
   return normalizeSplatCorrection({
     ...fallback,
     orientation: { rotation: target?.rotation ? [target.rotation.x, target.rotation.y, target.rotation.z] : fallback?.orientation?.rotation },
+    axisFlips: fields.axisFlips || fallback?.axisFlips,
     centroidOffset: target?.position?.toArray?.() || fallback?.centroidOffset,
     crop: fields.crop || fallback?.crop,
   });
+}
+
+function toggleSplatCorrectionAxisFlip(axis) {
+  const axisIndex = { x: 0, y: 1, z: 2 }[String(axis || '').toLowerCase()];
+  if (axisIndex === undefined) {
+    setInfo('Unknown splat correction axis');
+    return null;
+  }
+  const entry = selectedSplatRecord(splatCorrectionMode?.objectId || activeSceneObjectId);
+  if (!entry) {
+    setInfo('Select a splat first');
+    return null;
+  }
+  const correction = normalizeSplatCorrection(entry.splat?.correction);
+  correction.axisFlips[axisIndex] *= -1;
+  setSceneObjectSplatMetadata(entry, {
+    ...entry.splat,
+    correction,
+  });
+  applySplatCorrectionToRecord(entry, correction);
+  if (splatCorrectionMode?.objectId === entry.id) {
+    splatCorrectionMode.draftCorrection = normalizeSplatCorrection(correction);
+    setSplatCorrectionDraftDirty(true);
+  }
+  buildRenderHandoffV0(entry);
+  updateSplatCorrectionPanel(entry);
+  updateTransformInspector();
+  window._kaminosDirty?.();
+  setInfo(`Splat correction Flip ${String(axis).toUpperCase()} ${correction.axisFlips[axisIndex] < 0 ? 'enabled' : 'disabled'}`);
+  return window.kaminosSplatCorrectionModeDebugState?.() || null;
 }
 
 function updateSplatCorrectionModeUi() {
@@ -1588,7 +1635,13 @@ function readSplatCorrectionFields() {
     const value = Number(input?.value);
     return Number.isFinite(value) ? value : fallback;
   };
+  const axisFlip = name => document.querySelector(`[data-splat-correction-field="${name}"]`)?.checked ? -1 : 1;
   return normalizeSplatCorrection({
+    axisFlips: [
+      axisFlip('axisFlips.x'),
+      axisFlip('axisFlips.y'),
+      axisFlip('axisFlips.z'),
+    ],
     centroidOffset: [
       numberValue('centroidOffset.x'),
       numberValue('centroidOffset.y'),
@@ -1620,6 +1673,9 @@ function updateSplatCorrectionPanel(entry) {
   setSplatCorrectionField('centroidOffset.x', correction.centroidOffset[0]);
   setSplatCorrectionField('centroidOffset.y', correction.centroidOffset[1]);
   setSplatCorrectionField('centroidOffset.z', correction.centroidOffset[2]);
+  setSplatCorrectionField('axisFlips.x', correction.axisFlips[0] < 0);
+  setSplatCorrectionField('axisFlips.y', correction.axisFlips[1] < 0);
+  setSplatCorrectionField('axisFlips.z', correction.axisFlips[2] < 0);
   setSplatCorrectionField('crop.enabled', correction.crop.enabled);
   setSplatCorrectionField('crop.min.x', correction.crop.min[0]);
   setSplatCorrectionField('crop.min.y', correction.crop.min[1]);
@@ -1679,6 +1735,7 @@ async function saveSelectedSplatCorrection() {
   const currentCorrection = normalizeSplatCorrection(entry.splat?.correction);
   const correction = normalizeSplatCorrection({
     orientation: currentCorrection.orientation,
+    axisFlips: fields.axisFlips,
     centroidOffset: currentCorrection.centroidOffset,
     crop: fields.crop,
   });
@@ -2211,6 +2268,8 @@ window.kaminosSetSplatCorrectionDraftTransform = function(transform = {}) {
   window._kaminosDirty?.();
   return window.kaminosSplatCorrectionModeDebugState();
 };
+
+window.kaminosToggleSplatCorrectionAxisFlip = toggleSplatCorrectionAxisFlip;
 
 window.kaminosRenderHandoffDebugState = function(id = null) {
   const requested = id ? sceneObjects.find(record => record.id === id) : null;
@@ -3928,6 +3987,10 @@ document.getElementById('gen-provider').addEventListener('change', e => {
 const HALF_PI = Math.PI / 2;
 
 window.flipAxis = function(axis) {
+  if (splatCorrectionMode) {
+    toggleSplatCorrectionAxisFlip(axis);
+    return;
+  }
   if (!currentMesh) return;
   const s = currentMesh.scale;
   if (axis === 'x') s.x *= -1;

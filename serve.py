@@ -303,6 +303,10 @@ def _number_list(value, *, length, fallback):
     return parsed if all(item == item and item not in (float("inf"), float("-inf")) for item in parsed) else list(fallback)
 
 
+def _axis_flips(value):
+    return [-1 if item < 0 else 1 for item in _number_list(value, length=3, fallback=[1, 1, 1])]
+
+
 def normalize_splat_asset_correction(payload):
     source = payload if isinstance(payload, dict) else {}
     orientation = source.get("orientation") if isinstance(source.get("orientation"), dict) else {}
@@ -311,6 +315,7 @@ def normalize_splat_asset_correction(payload):
         "orientation": {
             "rotation": _number_list(orientation.get("rotation"), length=3, fallback=[0, 0, 0]),
         },
+        "axisFlips": _axis_flips(source.get("axisFlips")),
         "centroidOffset": _number_list(source.get("centroidOffset"), length=3, fallback=[0, 0, 0]),
         "crop": {
             "enabled": bool(crop.get("enabled", False)),

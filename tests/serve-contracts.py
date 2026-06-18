@@ -271,6 +271,7 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
         try:
             correction = serve.save_splat_asset_correction("splat-inbox", "plant-shelf.ply", {
                 "orientation": {"rotation": [0.1, 0.2, 0.3]},
+                "axisFlips": [-1, 1, -1],
                 "centroidOffset": [1, 2, 3],
                 "crop": {"enabled": True, "min": [-0.5, -0.25, -0.1], "max": [0.5, 0.25, 0.9]},
             })
@@ -282,7 +283,9 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             assert correction["root_id"] == "splat-inbox"
             assert correction["path"] == "plant-shelf.ply"
             assert loaded["correction"]["orientation"]["rotation"] == [0.1, 0.2, 0.3]
+            assert loaded["correction"]["axisFlips"] == [-1, 1, -1]
             assert loaded["correction"]["centroidOffset"] == [1, 2, 3]
+            assert entries[0]["correction"]["axisFlips"] == [-1, 1, -1]
             assert entries[0]["correction"]["crop"]["enabled"] is True
 
             replacement = serve.ingest_splat_asset("plant-shelf.ply", b"replacement\n")
