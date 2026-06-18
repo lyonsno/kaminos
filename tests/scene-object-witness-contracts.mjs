@@ -19,6 +19,7 @@ assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room 
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
 assert.match(witness, /splat-correction-sidecar/, 'witness supports selected splat correction sidecar persistence');
+assert.match(witness, /splat-correction-mode/, 'witness supports viewport-driven splat correction mode');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
@@ -156,6 +157,9 @@ assert.match(witness, /direct splat drop did not preserve ingest provenance/, 'D
 assert.match(witness, /splat correction did not persist to sidecar/, 'Splat correction witness proves corrections are server-persisted');
 assert.match(witness, /splat correction did not reload from sidecar/, 'Splat correction witness proves correction metadata reloads from the asset sidecar');
 assert.match(witness, /splat correction leaked into render truth claim/, 'Splat correction witness rejects claiming correction sidecars as real hybrid rendering');
+assert.match(witness, /splat correction mode did not retarget gizmo/, 'Splat correction mode witness proves gizmo retargets to correction draft');
+assert.match(witness, /splat correction mode dirtied scene transform/, 'Splat correction mode witness proves scene placement stays distinct from asset correction');
+assert.match(witness, /splat correction mode did not save draft/, 'Splat correction mode witness proves draft edits persist through the sidecar');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

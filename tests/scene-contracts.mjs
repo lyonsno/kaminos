@@ -70,6 +70,14 @@ assert.match(index, /async function saveSelectedSplatCorrection\(/, 'splat corre
 assert.match(index, /fetch\('\/api\/splat-correction'/, 'splat correction save/load uses the server sidecar route, not scene-only state');
 assert.match(index, /window\.kaminosSaveSelectedSplatCorrection/, 'browser witnesses can persist selected splat corrections without DOM inference');
 assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
+assert.match(index, /Splat Correction Mode/, 'viewport exposes an explicit splat correction edit-mode badge');
+assert.match(index, /async function enterSplatCorrectionMode\(/, 'selected splats can enter correction mode without numeric-only editing');
+assert.match(index, /function exitSplatCorrectionMode\(/, 'splat correction mode has an explicit exit path');
+assert.match(index, /handleViewportDoubleClick/, 'double-clicking the viewport can enter selected splat correction mode');
+assert.match(index, /splatCorrectionTransformTarget\(/, 'gizmo attachment can retarget from scene placement to splat correction draft');
+assert.match(index, /sceneTransform/, 'splat scene placement is tracked separately from asset correction metadata');
+assert.match(index, /window\.kaminosSplatCorrectionModeDebugState/, 'browser witnesses can inspect correction-mode target and dirty state');
+assert.match(index, /window\.kaminosSetSplatCorrectionDraftTransform/, 'browser witnesses can move the correction draft without DOM inference');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');

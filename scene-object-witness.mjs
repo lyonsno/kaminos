@@ -2470,14 +2470,15 @@ async function runSplatCorrectionSidecarScenario(ws) {
       ].join('\\n') + '\\n';
       document.querySelector('[data-tab="greenroom"]').click();
       const file = new File([ply], 'Witness Correction Sidecar.PLY', { type: 'application/octet-stream' });
-      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: false });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: true });
       await wait(250);
       const firstSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const firstSplat = firstSceneDebug.find(record => record.type === 'splat'
         && record.source === ingestResult?.entry?.source) || firstSceneDebug.find(record => record.type === 'splat');
       if (!firstSplat) throw new Error('correction scenario could not import initial splat');
       window.selectSceneObject(firstSplat.id);
-      window.kaminosSetSceneObjectTransform(firstSplat.id, {
+      await window.enterSplatCorrectionMode(firstSplat.id);
+      window.kaminosSetSplatCorrectionDraftTransform({
         position: [0.25, -0.1, 0.4],
         rotation: [0.1, 0.2, 0.3],
         scale: [1, 1, 1],
@@ -2559,6 +2560,100 @@ async function runSplatCorrectionSidecarScenario(ws) {
   const caps = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.capabilities || {};
   if (caps.realSplatRendering !== false || caps.meshDepthOcclusion !== false) {
     throw new Error(`splat correction leaked into render truth claim: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+}
+
+async function runSplatCorrectionModeScenario(ws) {
+  phase = 'scenario-splat-correction-mode';
+  lastEvidence.splatCorrectionMode = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const ply = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex 6',
+        'property float x',
+        'property float y',
+        'property float z',
+        'property uchar red',
+        'property uchar green',
+        'property uchar blue',
+        'end_header',
+        '-1 0 0 255 80 80',
+        '1 0 0 80 255 80',
+        '0 -1 0 80 80 255',
+        '0 1 0 255 220 80',
+        '0 0 -1 255 80 220',
+        '0 0 1 80 255 220',
+      ].join('\\n') + '\\n';
+      document.querySelector('[data-tab="greenroom"]').click();
+      const file = new File([ply], 'Witness Correction Mode.PLY', { type: 'application/octet-stream' });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: true });
+      await wait(250);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splat = sceneDebug.find(record => record.type === 'splat' && record.source === ingestResult?.entry?.source)
+        || sceneDebug.find(record => record.type === 'splat');
+      if (!splat) throw new Error('correction mode scenario could not import splat');
+      window.selectSceneObject(splat.id);
+      const plannedSceneTransform = {
+        position: [1.0, 0.25, -0.5],
+        rotation: [0.4, -0.2, 0.1],
+        scale: [1.1, 1.2, 1.3],
+      };
+      const sceneBeforeMode = window.kaminosSetSceneObjectTransform(splat.id, plannedSceneTransform);
+      const entered = await window.enterSplatCorrectionMode(splat.id);
+      const draft = window.kaminosSetSplatCorrectionDraftTransform({
+        position: [0.2, 0.3, 0.4],
+        rotation: [0.05, 0.1, 0.15],
+        scale: [1, 1, 1],
+      });
+      const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const saveResult = await window.kaminosSaveSelectedSplatCorrection();
+      const modeAfterSave = window.kaminosSplatCorrectionModeDebugState?.() || null;
+      const assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const savedAssetEntry = (assetDataAfterSave.entries || []).find(entry => entry.path === ingestResult?.entry?.path) || null;
+      return {
+        ingestResult: { entry: ingestResult?.entry || null },
+        sceneBeforeMode,
+        entered,
+        draft,
+        sceneAfterDraft,
+        saveResult,
+        modeAfterSave,
+        assetDataAfterSave,
+        savedAssetEntry,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  const evidence = lastEvidence.splatCorrectionMode;
+  if (!evidence.entered?.active || !evidence.entered?.targetAttached || evidence.entered?.transformTargetName !== 'splat-correction-target') {
+    throw new Error(`splat correction mode did not retarget gizmo: ${JSON.stringify(evidence)}`);
+  }
+  const before = evidence.sceneBeforeMode?.sceneTransform;
+  const after = evidence.sceneAfterDraft?.sceneTransform;
+  const sameSceneTransform = Array.isArray(before?.position)
+    && Array.isArray(after?.position)
+    && before.position.every((value, index) => Math.abs(value - after.position[index]) < 1e-6)
+    && before.rotation.every((value, index) => Math.abs(value - after.rotation[index]) < 1e-6)
+    && before.scale.every((value, index) => Math.abs(value - after.scale[index]) < 1e-6);
+  if (!sameSceneTransform) {
+    throw new Error(`splat correction mode dirtied scene transform: ${JSON.stringify(evidence)}`);
+  }
+  const visual = evidence.sceneAfterDraft?.transform;
+  if (!visual
+      || Math.abs(visual.position?.[0] - 1.2) > 1e-6
+      || Math.abs(visual.position?.[1] - 0.55) > 1e-6
+      || Math.abs(visual.rotation?.[2] - 0.25) > 1e-6) {
+    throw new Error(`splat correction mode did not compose draft correction into preview transform: ${JSON.stringify(evidence)}`);
+  }
+  const savedCorrection = evidence.savedAssetEntry?.correction || null;
+  if (!savedCorrection
+      || Math.abs(savedCorrection.centroidOffset?.[0] - 0.2) > 1e-6
+      || Math.abs(savedCorrection.centroidOffset?.[2] - 0.4) > 1e-6
+      || Math.abs(savedCorrection.orientation?.rotation?.[1] - 0.1) > 1e-6
+      || evidence.modeAfterSave?.dirty !== false) {
+    throw new Error(`splat correction mode did not save draft: ${JSON.stringify(evidence)}`);
   }
 }
 
@@ -2763,6 +2858,8 @@ try {
     await runSplatDirectDropIngestScenario(ws);
   } else if (scenario === 'splat-correction-sidecar') {
     await runSplatCorrectionSidecarScenario(ws);
+  } else if (scenario === 'splat-correction-mode') {
+    await runSplatCorrectionModeScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

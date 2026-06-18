@@ -77,6 +77,11 @@ canvas { display: block; }
 .tb-btn.primary { background: #1565c0; border-color: #1976d2; color: #fff; }
 .tb-btn.primary:hover { background: #1976d2; }
 .tb-sep { width: 1px; height: 18px; background: #333; margin: 0 4px; }
+#splat-correction-mode-badge { position: absolute; top: 58px; right: 16px; max-width: min(360px, calc(100% - 32px)); background: rgba(15,22,28,0.88); border: 1px solid #33728a; color: #d9f5ff; border-radius: 8px; padding: 9px 11px; z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.32); }
+#splat-correction-mode-badge[hidden] { display: none; }
+.splat-correction-mode-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #8fc7d6; }
+.splat-correction-mode-body { margin-top: 3px; font: 10px 'SF Mono', monospace; color: #b7d4dc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.splat-correction-mode-dirty { color: #f0b85a; }
 #greenroom-preview-controls { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); min-width: min(520px, calc(100% - 32px)); background: rgba(20,20,20,0.9); border: 1px solid #5d4822; border-radius: 8px; padding: 10px 12px; z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 #greenroom-preview-controls[hidden] { display: none; }
 .greenroom-preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -276,8 +281,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
             </div>
           </div>
           <div class="splat-correction-actions">
+            <button type="button" class="btn" id="splat-correction-mode-button" onclick="toggleSplatCorrectionMode()">Edit Correction</button>
             <button type="button" class="btn" onclick="saveSelectedSplatCorrection()">Save Correction</button>
             <button type="button" class="btn" onclick="resetSelectedSplatCorrection()">Reset Correction</button>
+            <button type="button" class="btn" id="splat-correction-revert-button" onclick="revertSplatCorrectionDraft()" hidden>Revert Draft</button>
+            <button type="button" class="btn" id="splat-correction-done-button" onclick="exitSplatCorrectionMode()" hidden>Done</button>
           </div>
         </div>
       </div>
@@ -584,6 +592,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <div id="splat-correction-mode-badge" hidden>
+    <div class="splat-correction-mode-title">Splat Correction Mode</div>
+    <div class="splat-correction-mode-body" id="splat-correction-mode-status"></div>
+  </div>
   <div id="transform-bar">
     <button class="tb-btn" onclick="flipAxis('x')" title="Flip X">Flip X</button>
     <button class="tb-btn" onclick="flipAxis('y')" title="Flip Y">Flip Y</button>
@@ -705,6 +717,7 @@ let sceneMutationToken = 0;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
+let splatCorrectionMode = null;
 
 class HybridMeshSplatRoute {
   constructor() {
@@ -949,6 +962,8 @@ function buildRenderHandoffV0(record) {
     object: {
       worldMatrix: Array.from(record.object.matrixWorld.elements),
       transform: sceneObjectTransformState(record.object),
+      sceneTransform: record.type === 'splat' ? splatSceneTransformState(record) : null,
+      splatCorrection: record.type === 'splat' ? normalizeSplatCorrection(record.splat?.correction) : null,
     },
     capabilities: renderHandoffCapabilities(),
     evidence: {
@@ -1065,6 +1080,23 @@ function sceneObjectTransformState(object) {
   };
 }
 
+function identitySceneTransform() {
+  return {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  };
+}
+
+function cloneTransformState(transform = {}) {
+  const identity = identitySceneTransform();
+  return {
+    position: numberTriplet(transform?.position, identity.position),
+    rotation: numberTriplet(transform?.rotation, identity.rotation),
+    scale: numberTriplet(transform?.scale, identity.scale),
+  };
+}
+
 function applySceneObjectTransformState(object, transform = {}) {
   if (!object) return;
   object.position.fromArray(Array.isArray(transform.position) ? transform.position : [0, 0, 0]);
@@ -1110,6 +1142,52 @@ function applySplatCorrectionToObject(object, correction = {}) {
   applySceneObjectTransformState(object, transform);
 }
 
+function composeSplatVisualTransform(sceneTransform = {}, correction = {}) {
+  const scenePlacement = cloneTransformState(sceneTransform);
+  const normalized = normalizeSplatCorrection(correction);
+  return {
+    position: scenePlacement.position.map((value, index) => value + normalized.centroidOffset[index]),
+    rotation: scenePlacement.rotation.map((value, index) => value + normalized.orientation.rotation[index]),
+    scale: scenePlacement.scale,
+  };
+}
+
+function splatSceneTransformState(record) {
+  if (!record) return identitySceneTransform();
+  return cloneTransformState(record.sceneTransform || sceneObjectTransformState(record.object));
+}
+
+function setSceneObjectSceneTransform(record, transform = {}) {
+  if (!record) return;
+  record.sceneTransform = cloneTransformState(transform);
+  if (record.object?.userData?.kaminosSceneObject) {
+    record.object.userData.kaminosSceneObject.sceneTransform = cloneTransformState(record.sceneTransform);
+  }
+}
+
+function applySplatCorrectionToRecord(record, correction = record?.splat?.correction) {
+  if (!record?.object || record.type !== 'splat') return;
+  const nextCorrection = normalizeSplatCorrection(correction);
+  if (record.splat) record.splat.correction = nextCorrection;
+  if (!record.sceneTransform) setSceneObjectSceneTransform(record, sceneObjectTransformState(record.object));
+  applySceneObjectTransformState(record.object, composeSplatVisualTransform(record.sceneTransform, nextCorrection));
+  if (record.object?.userData?.kaminosSceneObject) {
+    record.object.userData.kaminosSceneObject.splat = record.splat;
+    record.object.userData.kaminosSceneObject.sceneTransform = cloneTransformState(record.sceneTransform);
+  }
+}
+
+function syncSplatSceneTransformFromVisual(record) {
+  if (!record?.object || record.type !== 'splat') return;
+  const visual = sceneObjectTransformState(record.object);
+  const correction = normalizeSplatCorrection(record.splat?.correction);
+  setSceneObjectSceneTransform(record, {
+    position: visual.position.map((value, index) => value - correction.centroidOffset[index]),
+    rotation: visual.rotation.map((value, index) => value - correction.orientation.rotation[index]),
+    scale: visual.scale,
+  });
+}
+
 function splatAssetRouteIdentity(splat = {}) {
   const provenance = splat?.provenance || {};
   const root = provenance.root_id || splat.root_id || null;
@@ -1134,6 +1212,165 @@ function setSceneObjectSplatMetadata(record, splat) {
     record.object.userData.kaminosSceneObject.splat = record.splat;
   }
 }
+
+function selectedSplatRecord(id = activeSceneObjectId) {
+  const entry = sceneObjects.find(record => record.id === id) || null;
+  return entry?.type === 'splat' ? entry : null;
+}
+
+function splatCorrectionTransformTarget() {
+  return splatCorrectionMode?.target || null;
+}
+
+function splatCorrectionFromTarget(target, fallback = {}) {
+  const fields = readSplatCorrectionFields();
+  return normalizeSplatCorrection({
+    ...fallback,
+    orientation: { rotation: target?.rotation ? [target.rotation.x, target.rotation.y, target.rotation.z] : fallback?.orientation?.rotation },
+    centroidOffset: target?.position?.toArray?.() || fallback?.centroidOffset,
+    crop: fields.crop || fallback?.crop,
+  });
+}
+
+function updateSplatCorrectionModeUi() {
+  const badge = document.getElementById('splat-correction-mode-badge');
+  const status = document.getElementById('splat-correction-mode-status');
+  const editButton = document.getElementById('splat-correction-mode-button');
+  const revertButton = document.getElementById('splat-correction-revert-button');
+  const doneButton = document.getElementById('splat-correction-done-button');
+  const active = !!splatCorrectionMode;
+  if (badge) badge.hidden = !active;
+  if (status && active) {
+    const record = splatCorrectionMode.record;
+    const dirty = splatCorrectionMode.dirty ? 'unsaved draft' : 'saved draft';
+    status.innerHTML = `${escapeHtml(record.label || record.fileName || record.id)} · <span class="${splatCorrectionMode.dirty ? 'splat-correction-mode-dirty' : ''}">${dirty}</span>`;
+  }
+  if (editButton) {
+    editButton.textContent = active ? 'Editing Correction' : 'Edit Correction';
+    editButton.classList.toggle('active', active);
+  }
+  if (revertButton) revertButton.hidden = !active;
+  if (doneButton) doneButton.hidden = !active;
+}
+
+function attachTransformControlsToCurrentTarget() {
+  if (!transformControls) return;
+  const target = splatCorrectionTransformTarget() || currentMesh;
+  transformControls.detach();
+  transformControls.visible = false;
+  if (target) {
+    transformControls.attach(target);
+    transformControls.visible = true;
+    document.getElementById('transform-bar')?.classList.add('visible');
+  }
+}
+
+function setSplatCorrectionDraftDirty(dirty = true) {
+  if (!splatCorrectionMode) return;
+  splatCorrectionMode.dirty = !!dirty;
+  updateSplatCorrectionModeUi();
+}
+
+function syncSplatCorrectionDraftFromTarget() {
+  if (!splatCorrectionMode) return null;
+  const { record, target } = splatCorrectionMode;
+  const correction = splatCorrectionFromTarget(target, record.splat?.correction);
+  splatCorrectionMode.draftCorrection = correction;
+  setSceneObjectSplatMetadata(record, {
+    ...record.splat,
+    correction,
+  });
+  applySplatCorrectionToRecord(record, correction);
+  buildRenderHandoffV0(record);
+  setSplatCorrectionDraftDirty(true);
+  updateSplatCorrectionPanel(record);
+  return correction;
+}
+
+function setSplatCorrectionTargetFromCorrection(target, correction) {
+  const normalized = normalizeSplatCorrection(correction);
+  target.position.fromArray(normalized.centroidOffset);
+  target.rotation.set(...normalized.orientation.rotation);
+  target.scale.set(1, 1, 1);
+}
+
+async function enterSplatCorrectionMode(id = activeSceneObjectId) {
+  const record = selectedSplatRecord(id);
+  if (!record) {
+    setInfo('Select a splat first');
+    return null;
+  }
+  if (splatCorrectionMode?.objectId === record.id) {
+    attachTransformControlsToCurrentTarget();
+    updateSplatCorrectionModeUi();
+    return window.kaminosSplatCorrectionModeDebugState();
+  }
+  if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
+  setActiveSceneObject(record.id);
+  const savedCorrection = normalizeSplatCorrection(record.splat?.correction);
+  const target = new THREE.Object3D();
+  target.name = 'splat-correction-target';
+  setSplatCorrectionTargetFromCorrection(target, savedCorrection);
+  const axes = new THREE.AxesHelper(0.35);
+  axes.name = 'splat-correction-target-axes';
+  target.add(axes);
+  scene.add(target);
+  splatCorrectionMode = {
+    objectId: record.id,
+    record,
+    target,
+    savedCorrection,
+    draftCorrection: normalizeSplatCorrection(savedCorrection),
+    dirty: false,
+  };
+  attachTransformControlsToCurrentTarget();
+  splatCorrectionMode.draftCorrection = normalizeSplatCorrection(savedCorrection);
+  splatCorrectionMode.dirty = false;
+  updateSplatCorrectionPanel(record);
+  updateSplatCorrectionModeUi();
+  setInfo(`Splat Correction Mode: ${record.label || record.fileName || record.id}`);
+  window._kaminosDirty?.();
+  return window.kaminosSplatCorrectionModeDebugState();
+}
+
+function exitSplatCorrectionMode(options = {}) {
+  if (!splatCorrectionMode) return false;
+  const mode = splatCorrectionMode;
+  if (options.revert) {
+    setSceneObjectSplatMetadata(mode.record, {
+      ...mode.record.splat,
+      correction: normalizeSplatCorrection(mode.savedCorrection),
+    });
+    applySplatCorrectionToRecord(mode.record, mode.savedCorrection);
+  }
+  transformControls?.detach?.();
+  scene.remove(mode.target);
+  disposeObjectTree(mode.target);
+  splatCorrectionMode = null;
+  updateSplatCorrectionModeUi();
+  updateTransformInspector();
+  attachTransformControlsToCurrentTarget();
+  if (!options.silent) {
+    setInfo(options.revert ? 'Splat correction draft reverted' : 'Splat correction mode closed');
+  }
+  window._kaminosDirty?.();
+  return true;
+}
+
+function revertSplatCorrectionDraft() {
+  if (!splatCorrectionMode) return resetSelectedSplatCorrection();
+  return exitSplatCorrectionMode({ revert: true });
+}
+
+async function toggleSplatCorrectionMode() {
+  if (splatCorrectionMode) return exitSplatCorrectionMode();
+  return enterSplatCorrectionMode();
+}
+
+window.enterSplatCorrectionMode = enterSplatCorrectionMode;
+window.exitSplatCorrectionMode = exitSplatCorrectionMode;
+window.toggleSplatCorrectionMode = toggleSplatCorrectionMode;
+window.revertSplatCorrectionDraft = revertSplatCorrectionDraft;
 
 function degreesFromRadians(value) {
   return value * 180 / Math.PI;
@@ -1415,8 +1652,15 @@ async function persistSelectedSplatCorrection(correction) {
     },
   };
   setSceneObjectSplatMetadata(entry, splat);
-  applySplatCorrectionToObject(entry.object, splat.correction);
+  applySplatCorrectionToRecord(entry, splat.correction);
+  if (splatCorrectionMode?.objectId === entry.id) {
+    splatCorrectionMode.savedCorrection = normalizeSplatCorrection(splat.correction);
+    splatCorrectionMode.draftCorrection = normalizeSplatCorrection(splat.correction);
+    splatCorrectionMode.dirty = false;
+    setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, splat.correction);
+  }
   buildRenderHandoffV0(entry);
+  updateSplatCorrectionModeUi();
   updateTransformInspector();
   window._kaminosDirty?.();
   return data;
@@ -1428,11 +1672,14 @@ async function saveSelectedSplatCorrection() {
     setInfo('Select a splat first');
     return null;
   }
-  const transform = sceneObjectTransformState(entry.object);
+  if (splatCorrectionMode?.objectId === entry.id) {
+    syncSplatCorrectionDraftFromTarget();
+  }
   const fields = readSplatCorrectionFields();
+  const currentCorrection = normalizeSplatCorrection(entry.splat?.correction);
   const correction = normalizeSplatCorrection({
-    orientation: { rotation: transform.rotation },
-    centroidOffset: transform.position,
+    orientation: currentCorrection.orientation,
+    centroidOffset: currentCorrection.centroidOffset,
     crop: fields.crop,
   });
   try {
@@ -1452,6 +1699,10 @@ async function resetSelectedSplatCorrection() {
     return null;
   }
   try {
+    if (splatCorrectionMode?.objectId === entry.id) {
+      setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, defaultSplatCorrection());
+      syncSplatCorrectionDraftFromTarget();
+    }
     const data = await persistSelectedSplatCorrection(defaultSplatCorrection());
     setInfo(`Splat correction reset: ${entry.label || entry.fileName || entry.id}`);
     return data;
@@ -1482,7 +1733,7 @@ function updateTransformInspector() {
 
   document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
   document.getElementById('transform-inspector-id').textContent = entry.id;
-  const transform = sceneObjectTransformState(entry.object);
+  const transform = entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
   const values = {
     'position.x': transform.position[0],
     'position.y': transform.position[1],
@@ -1513,10 +1764,15 @@ function applyTransformInspectorField(input) {
   const [group, axis] = input.dataset.transformField.split('.');
   const axisIndex = { x: 0, y: 1, z: 2 }[axis];
   if (!['position', 'rotation', 'scale'].includes(group) || axisIndex === undefined) return;
-  const transform = sceneObjectTransformState(entry.object);
+  const transform = entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
   transform[group][axisIndex] = group === 'rotation' ? radiansFromDegrees(value) : value;
-  applySceneObjectTransformState(entry.object, transform);
-  if (transformControls && entry.object === currentMesh) {
+  if (entry.type === 'splat') {
+    setSceneObjectSceneTransform(entry, transform);
+    applySplatCorrectionToRecord(entry);
+  } else {
+    applySceneObjectTransformState(entry.object, transform);
+  }
+  if (transformControls && entry.object === currentMesh && !splatCorrectionTransformTarget()) {
     transformControls.attach(entry.object);
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
@@ -1525,10 +1781,44 @@ function applyTransformInspectorField(input) {
   setInfo(`Transform updated: ${entry.label || entry.fileName || entry.id}`);
 }
 
+function applySplatCorrectionInspectorField(input) {
+  const entry = selectedSplatRecord();
+  if (!entry || !input?.dataset?.splatCorrectionField) {
+    updateTransformInspector();
+    return;
+  }
+  const correction = readSplatCorrectionFields();
+  const current = normalizeSplatCorrection(entry.splat?.correction);
+  const next = normalizeSplatCorrection({
+    orientation: current.orientation,
+    centroidOffset: correction.centroidOffset,
+    crop: correction.crop,
+  });
+  setSceneObjectSplatMetadata(entry, {
+    ...entry.splat,
+    correction: next,
+  });
+  if (splatCorrectionMode?.objectId === entry.id) {
+    setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, next);
+    splatCorrectionMode.draftCorrection = next;
+    setSplatCorrectionDraftDirty(true);
+  }
+  applySplatCorrectionToRecord(entry, next);
+  buildRenderHandoffV0(entry);
+  window._kaminosDirty?.();
+}
+
 function initTransformInspector() {
   document.querySelectorAll('[data-transform-field]').forEach(input => {
     input.addEventListener('input', () => applyTransformInspectorField(input));
     input.addEventListener('change', () => updateTransformInspector());
+  });
+  document.querySelectorAll('[data-splat-correction-field]').forEach(input => {
+    input.addEventListener('input', () => applySplatCorrectionInspectorField(input));
+    input.addEventListener('change', () => {
+      applySplatCorrectionInspectorField(input);
+      updateTransformInspector();
+    });
   });
   updateTransformInspector();
 }
@@ -1637,6 +1927,7 @@ function renderSceneObjectList() {
 }
 
 function clearActiveSceneObjectSelection() {
+  if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   activeSceneObjectId = null;
   activeSceneGroupId = null;
   currentMesh = null;
@@ -1654,6 +1945,9 @@ function setActiveSceneObject(id) {
     clearActiveSceneObjectSelection();
     return;
   }
+  if (splatCorrectionMode && splatCorrectionMode.objectId !== entry.id) {
+    exitSplatCorrectionMode({ revert: false, silent: true });
+  }
   activeSceneObjectId = entry.id;
   activeSceneGroupId = null;
   currentMesh = entry.object;
@@ -1670,6 +1964,7 @@ function setActiveSceneObject(id) {
 }
 
 function setActiveSceneGroup(id) {
+  if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   const group = sceneGroups.find(entry => entry.id === id);
   if (!group) {
     clearActiveSceneObjectSelection();
@@ -1783,9 +2078,23 @@ function handleViewportSelectionClick(event) {
   window._kaminosDirty?.();
 }
 
+function handleViewportDoubleClick(event) {
+  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
+  const picked = pickSceneObjectFromViewportPointer(event);
+  const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
+  if (!record) return;
+  event.preventDefault?.();
+  event.stopPropagation?.();
+  enterSplatCorrectionMode(record.id);
+}
+
 function registerSceneObject(object, metadata = {}) {
   sceneSaveBlockedByFailedRestore = false;
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
+  const sceneTransform = metadata.type === 'splat'
+    ? cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object))
+    : null;
   const record = {
     id,
     object,
@@ -1799,6 +2108,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: metadata.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
+    sceneTransform,
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -1812,6 +2122,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
+    sceneTransform: record.sceneTransform,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -1861,11 +2172,44 @@ window.kaminosSceneObjectDebugState = function() {
     groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
     transform: sceneObjectTransformState(record.object),
+    sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
   }));
+};
+
+window.kaminosSplatCorrectionModeDebugState = function() {
+  const mode = splatCorrectionMode;
+  const record = mode?.record || null;
+  return {
+    active: !!mode,
+    objectId: mode?.objectId || null,
+    dirty: !!mode?.dirty,
+    targetAttached: !!mode?.target && transformControls?.object === mode.target,
+    transformTargetName: transformControls?.object?.name || null,
+    draftCorrection: mode?.draftCorrection ? normalizeSplatCorrection(mode.draftCorrection) : null,
+    savedCorrection: mode?.savedCorrection ? normalizeSplatCorrection(mode.savedCorrection) : null,
+    sceneTransform: record ? splatSceneTransformState(record) : null,
+    objectTransform: record?.object ? sceneObjectTransformState(record.object) : null,
+    selectedObjectId: activeSceneObjectId || null,
+  };
+};
+
+window.kaminosSetSplatCorrectionDraftTransform = function(transform = {}) {
+  if (!splatCorrectionMode) throw new Error('Splat correction mode is not active');
+  const current = sceneObjectTransformState(splatCorrectionMode.target);
+  const next = cloneTransformState({
+    position: transform.position || current.position,
+    rotation: transform.rotation || current.rotation,
+    scale: [1, 1, 1],
+  });
+  applySceneObjectTransformState(splatCorrectionMode.target, next);
+  syncSplatCorrectionDraftFromTarget();
+  updateTransformInspector();
+  window._kaminosDirty?.();
+  return window.kaminosSplatCorrectionModeDebugState();
 };
 
 window.kaminosRenderHandoffDebugState = function(id = null) {
@@ -1915,9 +2259,14 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  applySceneObjectTransformState(entry.object, transform);
+  if (entry.type === 'splat') {
+    setSceneObjectSceneTransform(entry, transform);
+    applySplatCorrectionToRecord(entry);
+  } else {
+    applySceneObjectTransformState(entry.object, transform);
+  }
   updateTransformInspector();
-  if (entry.id === activeSceneObjectId && transformControls) {
+  if (entry.id === activeSceneObjectId && transformControls && !splatCorrectionTransformTarget()) {
     transformControls.detach();
     transformControls.attach(entry.object);
     transformControls.visible = true;
@@ -1931,6 +2280,9 @@ window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
+  if (splatCorrectionMode?.objectId === entry.id) {
+    exitSplatCorrectionMode({ revert: false, silent: true });
+  }
   const previousActiveGroupId = activeSceneGroupId;
   for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
   pruneSceneGroups();
@@ -2199,6 +2551,12 @@ async function initScene() {
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
+    if (splatCorrectionTransformTarget()) {
+      syncSplatCorrectionDraftFromTarget();
+    } else {
+      const entry = selectedSceneObjectEntry();
+      if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
+    }
     updateTransformInspector();
   });
   initTransformInspector();
@@ -2208,10 +2566,12 @@ async function initScene() {
   renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
   renderer.domElement.addEventListener('mousedown', handleViewportPointerDown);
   renderer.domElement.addEventListener('click', handleViewportSelectionClick);
+  renderer.domElement.addEventListener('dblclick', handleViewportDoubleClick);
   viewportEl.addEventListener('pointerdown', handleViewportPointerDown);
   viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
   viewportEl.addEventListener('mousedown', handleViewportPointerDown);
   viewportEl.addEventListener('click', handleViewportSelectionClick);
+  viewportEl.addEventListener('dblclick', handleViewportDoubleClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
@@ -2344,9 +2704,19 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function clearScene() {
   sceneMutationToken++;
+  const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
+  }
+  if (greenroomPreviewState?.previewObject) {
+    removeGreenroomPreviewObject({ dispose: true });
+    greenroomPreviewState = null;
+    updateGreenroomPreviewControls();
+  }
+  if (currentMesh && !registeredObjects.has(currentMesh)) {
+    scene.remove(currentMesh);
+    disposeObjectTree(currentMesh);
   }
   sceneObjects = [];
   sceneGroups = [];
@@ -3788,7 +4158,8 @@ window.cullSmallFaces = function() {
 };
 
 window.setGizmoMode = function(mode) {
-  if (!currentMesh) return;
+  const target = splatCorrectionTransformTarget() || currentMesh;
+  if (!target) return;
   const btns = ['translate', 'rotate', 'scale'];
   btns.forEach(m => document.getElementById('tb-gizmo-' + m)?.classList.remove('active'));
   document.getElementById('tb-gizmo-off')?.classList.remove('active');
@@ -3800,17 +4171,23 @@ window.setGizmoMode = function(mode) {
     setInfo('Gizmo off');
     return;
   }
-  transformControls.attach(currentMesh);
+  transformControls.attach(target);
   transformControls.setMode(mode);
   transformControls.visible = true;
   document.getElementById('tb-gizmo-' + mode)?.classList.add('active');
-  setInfo(`${mode.charAt(0).toUpperCase() + mode.slice(1)} gizmo — drag to transform`);
+  const noun = splatCorrectionTransformTarget() ? 'splat correction draft' : 'scene object';
+  setInfo(`${mode.charAt(0).toUpperCase() + mode.slice(1)} gizmo: ${noun}`);
 };
 
 // Keyboard shortcuts for gizmo modes
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-  if (!currentMesh) return;
+  if (e.key === 'Escape' && splatCorrectionMode) {
+    e.preventDefault();
+    exitSplatCorrectionMode({ revert: true });
+    return;
+  }
+  if (!currentMesh && !splatCorrectionTransformTarget()) return;
   switch (e.key.toLowerCase()) {
     case 'w': setGizmoMode('translate'); break;
     case 'e': setGizmoMode('rotate'); break;
@@ -4296,14 +4673,19 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     ...metadata.splat,
     ...preview.preview,
   };
-  if (splat.correction) applySplatCorrectionToObject(object, splat.correction);
+  const sceneTransform = cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object));
+  if (splat.correction) {
+    applySceneObjectTransformState(object, composeSplatVisualTransform(sceneTransform, splat.correction));
+  }
   scene.add(object);
   const record = registerSceneObject(object, {
     ...metadata,
     splat,
     type: 'splat',
+    sceneTransform,
     renderHandoffSchema: RENDER_HANDOFF_SCHEMA,
   });
+  applySplatCorrectionToRecord(record, splat.correction);
   currentMesh = object;
   if (transformControls) {
     transformControls.detach();
@@ -5094,7 +5476,8 @@ function serializeSceneObject(entry) {
     label: metadata.label ?? entry.label,
     groupId: metadata.groupId ?? entry.groupId ?? null,
     createdAt: metadata.createdAt ?? entry.createdAt,
-    transform: sceneObjectTransformState(object),
+    transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
+    sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
     materials: getMaterialStateForObject(object),
     splat: metadata.splat ?? entry.splat ?? null,
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
@@ -5152,7 +5535,15 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   try {
     for (const record of records) {
       const object = await addSceneObjectFromSource(record);
-      if (record.transform) applySceneObjectTransformState(object, record.transform);
+      if (record.transform) {
+        const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
+        if (entry?.type === 'splat') {
+          setSceneObjectSceneTransform(entry, record.sceneTransform || record.transform);
+          applySplatCorrectionToRecord(entry);
+        } else {
+          applySceneObjectTransformState(object, record.transform);
+        }
+      }
       applyMaterialStateToObject(object, record.materials);
       const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
       if (entry && record.groupId) setSceneObjectGroupId(entry, record.groupId);
@@ -5512,7 +5903,9 @@ initScene().then(() => {
   restoreSettings();
   // Load HDR environment first, then auto-load demo
   loadEnvironment('studio').then(() => {
-    loadDemo(DEMO_ASSETS[0]);
+    if (new URLSearchParams(window.location.search).get('witness') !== '1') {
+      loadDemo(DEMO_ASSETS[0]);
+    }
   });
   initKaminosVolumeRoute();
 }).catch(err => {
