@@ -676,6 +676,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-val" id="lamellar-selected-layer-radius-val">0.000</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Layer mass</span>
+        <input type="range" id="lamellar-selected-layer-thickness-scale" data-scope="layer-descendants" min="0.35" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="lamellar-selected-layer-thickness-scale-val">1.00x</span>
+      </div>
+      <div class="field"><span class="field-key">Mass scope</span><span class="field-val" id="lamellar-selected-layer-thickness-scope">layer descendants; strip overrides local</span></div>
+      <div class="slider-row">
         <span class="slider-label">Strips</span>
         <button class="btn" id="lamellar-remove-strip">-</button>
         <input type="number" class="gen-input" id="lamellar-selected-layer-strip-count" min="1" max="4" step="1" value="2" style="width:56px; padding:4px 6px; margin-bottom:0">
@@ -693,7 +699,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div class="slider-row">
         <span class="slider-label">Thickness</span>
-        <input type="range" id="lamellar-selected-strip-thickness" min="0.002" max="0.07" step="0.001" value="0.018">
+        <input type="range" id="lamellar-selected-strip-thickness" data-scope="strip-local" min="0.002" max="0.07" step="0.001" value="0.018">
         <span class="slider-val" id="lamellar-selected-strip-thickness-val">0.018</span>
       </div>
       <div class="slider-row">
@@ -730,6 +736,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-layer-0-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
         <input type="number" class="gen-input" id="lamellar-layer-0-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
         <input type="hidden" id="lamellar-layer-0-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <input type="hidden" id="lamellar-layer-0-thickness-scale" min="0.35" max="2.5" step="0.01" value="1">
         <span class="slider-val" id="lamellar-layer-0-val">+ 0.48 s2</span>
       </div>
       <div class="slider-row">
@@ -741,6 +748,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-layer-1-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
         <input type="number" class="gen-input" id="lamellar-layer-1-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
         <input type="hidden" id="lamellar-layer-1-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <input type="hidden" id="lamellar-layer-1-thickness-scale" min="0.35" max="2.5" step="0.01" value="1">
         <span class="slider-val" id="lamellar-layer-1-val">- 0.48 s2</span>
       </div>
       <div class="slider-row">
@@ -752,6 +760,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-layer-2-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
         <input type="number" class="gen-input" id="lamellar-layer-2-strip-count" min="1" max="4" step="1" value="2" style="width:46px; padding:4px 6px; margin-bottom:0">
         <input type="hidden" id="lamellar-layer-2-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <input type="hidden" id="lamellar-layer-2-thickness-scale" min="0.35" max="2.5" step="0.01" value="1">
         <span class="slider-val" id="lamellar-layer-2-val">+ 0.48 s2</span>
       </div>
       <div class="slider-row">
@@ -763,6 +772,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="lamellar-layer-3-chunkiness" min="0.05" max="1" step="0.01" value="0.48">
         <input type="number" class="gen-input" id="lamellar-layer-3-strip-count" min="1" max="4" step="1" value="1" style="width:46px; padding:4px 6px; margin-bottom:0">
         <input type="hidden" id="lamellar-layer-3-radius" min="-0.24" max="0.24" step="0.001" value="0">
+        <input type="hidden" id="lamellar-layer-3-thickness-scale" min="0.35" max="2.5" step="0.01" value="1">
         <span class="slider-val" id="lamellar-layer-3-val">- 0.48 s1</span>
       </div>
     </div>
@@ -848,6 +858,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-label">Layer radius</span>
         <input type="range" id="lamellar-popover-layer-radius" min="-0.24" max="0.24" step="0.001" value="0">
         <span class="slider-val" id="lamellar-popover-layer-radius-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Layer mass</span>
+        <input type="range" id="lamellar-popover-layer-thickness-scale" data-scope="layer-descendants" min="0.35" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="lamellar-popover-layer-thickness-scale-val">1.00x</span>
       </div>
     </div>
     <div id="lamellar-population-toolhead">
@@ -2220,17 +2235,20 @@ function readLamellarControls() {
     const chunkinessEl = document.getElementById(`lamellar-layer-${layerIndex}-chunkiness`);
     const stripCountEl = document.getElementById(`lamellar-layer-${layerIndex}-strip-count`);
     const radiusEl = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+    const thicknessScaleEl = document.getElementById(`lamellar-layer-${layerIndex}-thickness-scale`);
     if (
       chiralityEl.dataset.overridden !== '1'
       && chunkinessEl.dataset.overridden !== '1'
       && stripCountEl.dataset.overridden !== '1'
       && radiusEl.dataset.overridden !== '1'
+      && thicknessScaleEl.dataset.overridden !== '1'
     ) return null;
     const chirality = parseInt(chiralityEl.value, 10);
     const chunkiness = parseFloat(chunkinessEl.value);
     const stripCount = parseInt(stripCountEl.value, 10);
     const radiusOffset = parseFloat(radiusEl.value);
-    return { layerIndex, chirality, chunkiness, stripCount, radiusOffset };
+    const thicknessScale = parseFloat(thicknessScaleEl.value);
+    return { layerIndex, chirality, chunkiness, stripCount, radiusOffset, thicknessScale };
   }).filter(Boolean);
   const stripPopulations = Object.values(lamellarStripPopulationOverrides);
   const controls = {
@@ -2641,7 +2659,7 @@ function setControlValue(id, value, overridden = false) {
 
 function resetLamellarLayerOverrideControls() {
   for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
-    for (const suffix of ['chirality', 'chunkiness', 'strip-count', 'radius']) {
+    for (const suffix of ['chirality', 'chunkiness', 'strip-count', 'radius', 'thickness-scale']) {
       const el = document.getElementById(`lamellar-layer-${layerIndex}-${suffix}`);
       if (el) delete el.dataset.overridden;
     }
@@ -2686,6 +2704,7 @@ function applyLamellarAuthoringState(payload, options = {}) {
     setControlValue(`lamellar-layer-${layerIndex}-chunkiness`, override.chunkiness, true);
     setControlValue(`lamellar-layer-${layerIndex}-strip-count`, override.stripCount, true);
     setControlValue(`lamellar-layer-${layerIndex}-radius`, override.radiusOffset, true);
+    setControlValue(`lamellar-layer-${layerIndex}-thickness-scale`, override.thicknessScale, true);
   }
   replaceObjectContents(lamellarStripPopulationOverrides, controlsState.stripPopulations || []);
   replaceObjectContents(lamellarStripProfileOverrides, controlsState.stripProfileOverrides || []);
@@ -3003,12 +3022,18 @@ function syncSelectedLamellarLayer(state = null) {
   const selectedStripCountEl = document.getElementById('lamellar-selected-layer-strip-count');
   const selectedRadiusEl = document.getElementById('lamellar-selected-layer-radius');
   const selectedRadiusValEl = document.getElementById('lamellar-selected-layer-radius-val');
+  const thicknessScaleEl = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-thickness-scale`);
+  const selectedThicknessScaleEl = document.getElementById('lamellar-selected-layer-thickness-scale');
+  const selectedThicknessScaleValEl = document.getElementById('lamellar-selected-layer-thickness-scale-val');
   if (selectedStripCountEl && stripCountEl) selectedStripCountEl.value = stripCountEl.value || String(layer?.stripCount || 1);
   const radiusOffset = Number(radiusEl?.value ?? layer?.radiusOffset ?? 0);
   if (selectedRadiusEl) selectedRadiusEl.value = String(radiusOffset);
   if (selectedRadiusValEl) selectedRadiusValEl.textContent = radiusOffset.toFixed(3);
+  const thicknessScale = Number(thicknessScaleEl?.value ?? layer?.thicknessScale ?? 1);
+  if (selectedThicknessScaleEl) selectedThicknessScaleEl.value = String(thicknessScale);
+  if (selectedThicknessScaleValEl) selectedThicknessScaleValEl.textContent = `${thicknessScale.toFixed(2)}x`;
   document.getElementById('lamellar-selected-layer-index').textContent = layer
-    ? `L${layer.layerIndex} ${layer.materialRole} s${layer.stripCount} r${Number(layer.radiusOffset || 0).toFixed(3)}`
+    ? `L${layer.layerIndex} ${layer.materialRole} s${layer.stripCount} r${Number(layer.radiusOffset || 0).toFixed(3)} m${Number(layer.thicknessScale || 1).toFixed(2)}`
     : `L${selectedLamellarLayerIndex} shell`;
   const strips = (current.stripInstances || []).filter(strip => strip.layerIndex === selectedLamellarLayerIndex);
   document.getElementById('lamellar-selected-layer-strips').innerHTML = strips.length
@@ -3179,7 +3204,9 @@ function syncLamellarLayerToolhead(state = null, object = selectedLamellarObject
   const summary = document.getElementById('lamellar-layer-summary');
   const radius = document.getElementById('lamellar-popover-layer-radius');
   const radiusVal = document.getElementById('lamellar-popover-layer-radius-val');
-  if (!toolhead || !summary || !radius || !radiusVal) return;
+  const thicknessScale = document.getElementById('lamellar-popover-layer-thickness-scale');
+  const thicknessScaleVal = document.getElementById('lamellar-popover-layer-thickness-scale-val');
+  if (!toolhead || !summary || !radius || !radiusVal || !thicknessScale || !thicknessScaleVal) return;
   if (object?.selectionLevel !== 'layer') {
     toolhead.style.display = 'none';
     return;
@@ -3187,11 +3214,15 @@ function syncLamellarLayerToolhead(state = null, object = selectedLamellarObject
   const layerIndex = Number.isFinite(object.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
   const layer = (current.layerSpecs || []).find(spec => spec.layerIndex === layerIndex);
   const rowRadius = document.getElementById(`lamellar-layer-${layerIndex}-radius`);
+  const rowThicknessScale = document.getElementById(`lamellar-layer-${layerIndex}-thickness-scale`);
   const radiusOffset = Number(rowRadius?.value ?? layer?.radiusOffset ?? 0);
+  const layerThicknessScale = Number(rowThicknessScale?.value ?? layer?.thicknessScale ?? 1);
   toolhead.style.display = 'block';
-  summary.textContent = `${layer?.materialRole || object.role || 'layer'} · ${object.stripCount || object.stripIds?.length || layer?.stripCount || 0} strips`;
+  summary.textContent = `${layer?.materialRole || object.role || 'layer'} · ${object.stripCount || object.stripIds?.length || layer?.stripCount || 0} strips · mass ${layerThicknessScale.toFixed(2)}x`;
   radius.value = String(radiusOffset);
   radiusVal.textContent = radiusOffset.toFixed(3);
+  thicknessScale.value = String(layerThicknessScale);
+  thicknessScaleVal.textContent = `${layerThicknessScale.toFixed(2)}x`;
   radius.oninput = event => {
     pinLamellarSelectionPopover();
     selectedLamellarLayerIndex = layerIndex;
@@ -3201,6 +3232,16 @@ function syncLamellarLayerToolhead(state = null, object = selectedLamellarObject
     pinLamellarSelectionPopover();
     selectedLamellarLayerIndex = layerIndex;
     applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
+  };
+  thicknessScale.oninput = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerThicknessScale(event.target.value);
+  };
+  thicknessScale.onchange = event => {
+    pinLamellarSelectionPopover();
+    selectedLamellarLayerIndex = layerIndex;
+    applySelectedLayerThicknessScale(event.target.value, { immediate: true });
   };
 }
 
@@ -3352,6 +3393,21 @@ function applySelectedLayerRadiusOffset(value, options = {}) {
   else scheduleLamellarControlsRebuild();
 }
 
+function applySelectedLayerThicknessScale(value, options = {}) {
+  const next = Math.max(0.35, Math.min(2.5, Number(value) || 1));
+  const rowInput = document.getElementById(`lamellar-layer-${selectedLamellarLayerIndex}-thickness-scale`);
+  rowInput.value = String(next);
+  rowInput.dataset.overridden = '1';
+  document.getElementById('lamellar-selected-layer-thickness-scale').value = String(next);
+  document.getElementById('lamellar-selected-layer-thickness-scale-val').textContent = `${next.toFixed(2)}x`;
+  const popoverInput = document.getElementById('lamellar-popover-layer-thickness-scale');
+  const popoverVal = document.getElementById('lamellar-popover-layer-thickness-scale-val');
+  if (popoverInput) popoverInput.value = String(next);
+  if (popoverVal) popoverVal.textContent = `${next.toFixed(2)}x`;
+  if (options.immediate) flushLamellarControlsRebuild();
+  else scheduleLamellarControlsRebuild();
+}
+
 function syncLamellarReadout() {
   const c = readLamellarControls();
   document.getElementById('lamellar-view-val').textContent = c.view;
@@ -3377,31 +3433,35 @@ function syncLamellarReadout() {
     const chunkinessEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-chunkiness`);
     const stripCountEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-strip-count`);
     const radiusEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-radius`);
+    const thicknessScaleEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-thickness-scale`);
     const valEl = document.getElementById(`lamellar-layer-${layer.layerIndex}-val`);
     if (!valEl) continue;
     if (
-      chiralityEl && chunkinessEl && stripCountEl && radiusEl
+      chiralityEl && chunkinessEl && stripCountEl && radiusEl && thicknessScaleEl
       && chiralityEl.dataset.overridden !== '1'
       && chunkinessEl.dataset.overridden !== '1'
       && stripCountEl.dataset.overridden !== '1'
       && radiusEl.dataset.overridden !== '1'
+      && thicknessScaleEl.dataset.overridden !== '1'
     ) {
       chiralityEl.value = layer.chirality > 0 ? '1' : '-1';
       chunkinessEl.value = String(layer.chunkiness);
       stripCountEl.value = String(layer.stripCount);
       radiusEl.value = String(layer.radiusOffset || 0);
+      thicknessScaleEl.value = String(layer.thicknessScale || 1);
     }
     const sign = (chiralityEl?.value || layer.chirality) > 0 ? '+' : '-';
     const chunkiness = Number(chunkinessEl?.value ?? layer.chunkiness);
     const stripCount = Number(stripCountEl?.value ?? layer.stripCount);
     const radiusOffset = Number(radiusEl?.value ?? layer.radiusOffset ?? 0);
-    valEl.textContent = `${sign} ${chunkiness.toFixed(2)} s${stripCount} r${radiusOffset.toFixed(2)}`;
+    const thicknessScale = Number(thicknessScaleEl?.value ?? layer.thicknessScale ?? 1);
+    valEl.textContent = `${sign} ${chunkiness.toFixed(2)} s${stripCount} r${radiusOffset.toFixed(2)} m${thicknessScale.toFixed(2)}`;
   }
   document.getElementById('lamellar-identity').textContent = state.witnessIdentity || 'kaminos-lamellar-witness-v0';
   document.getElementById('lamellar-route-id').textContent = state.effectiveRoute || 'sphere-domain-section-segment-witness-v0';
   document.getElementById('lamellar-segments').textContent = String(state.sectionSegments?.length ?? 0);
   document.getElementById('lamellar-descriptors').textContent = String(state.segmentDescriptorCount ?? state.generatedSegmentDescriptors?.length ?? 0);
-  document.getElementById('lamellar-layer-stack').textContent = state.layerSpecs?.map(l => `${l.layerIndex}:${l.chirality > 0 ? '+' : '-'}:${l.chunkiness}:s${l.stripCount}:r${Number(l.radiusOffset || 0).toFixed(2)}`).join(' ') || 'none';
+  document.getElementById('lamellar-layer-stack').textContent = state.layerSpecs?.map(l => `${l.layerIndex}:${l.chirality > 0 ? '+' : '-'}:${l.chunkiness}:s${l.stripCount}:r${Number(l.radiusOffset || 0).toFixed(2)}:m${Number(l.thicknessScale || 1).toFixed(2)}`).join(' ') || 'none';
   document.getElementById('lamellar-caps').textContent = JSON.stringify(state.capTValues || []);
   document.getElementById('lamellar-open-edges').textContent = String(state.openEdgeCount ?? 0);
   document.getElementById('lamellar-hooks').textContent = String(state.lightHookCount ?? 0);
@@ -3578,18 +3638,22 @@ async function initLamellarRoute() {
     'lamellar-layer-0-chunkiness',
     'lamellar-layer-0-strip-count',
     'lamellar-layer-0-radius',
+    'lamellar-layer-0-thickness-scale',
     'lamellar-layer-1-chirality',
     'lamellar-layer-1-chunkiness',
     'lamellar-layer-1-strip-count',
     'lamellar-layer-1-radius',
+    'lamellar-layer-1-thickness-scale',
     'lamellar-layer-2-chirality',
     'lamellar-layer-2-chunkiness',
     'lamellar-layer-2-strip-count',
     'lamellar-layer-2-radius',
+    'lamellar-layer-2-thickness-scale',
     'lamellar-layer-3-chirality',
     'lamellar-layer-3-chunkiness',
     'lamellar-layer-3-strip-count',
     'lamellar-layer-3-radius',
+    'lamellar-layer-3-thickness-scale',
   ];
   for (const id of composerControlIds) {
     document.getElementById(id).addEventListener('input', () => {
@@ -3617,6 +3681,12 @@ async function initLamellarRoute() {
   });
   document.getElementById('lamellar-selected-layer-radius').addEventListener('change', event => {
     applySelectedLayerRadiusOffset(event.target.value, { immediate: true });
+  });
+  document.getElementById('lamellar-selected-layer-thickness-scale').addEventListener('input', event => {
+    applySelectedLayerThicknessScale(event.target.value);
+  });
+  document.getElementById('lamellar-selected-layer-thickness-scale').addEventListener('change', event => {
+    applySelectedLayerThicknessScale(event.target.value, { immediate: true });
   });
   document.getElementById('lamellar-add-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(1));
   document.getElementById('lamellar-remove-strip').addEventListener('click', () => nudgeSelectedLayerStripCount(-1));

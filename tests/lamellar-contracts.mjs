@@ -65,6 +65,10 @@ assert.match(index, /id="lamellar-layer-select-3"/, 'Lamellar tab exposes layer 
 assert.match(index, /id="lamellar-selected-layer-index"/, 'Lamellar tab reports the selected layer identity');
 assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab exposes selected-layer strip-count editor');
 assert.match(index, /id="lamellar-selected-layer-radius"/, 'Lamellar tab exposes selected-layer shell radius editor');
+assert.match(index, /id="lamellar-selected-layer-thickness-scale"/, 'Lamellar tab exposes a selected-layer descendant thickness control');
+assert.match(index, /id="lamellar-selected-layer-thickness-scale"[^>]*data-scope="layer-descendants"/, 'selected-layer thickness control declares that it scopes to descendant strips');
+assert.match(index, /id="lamellar-selected-strip-thickness"[^>]*data-scope="strip-local"/, 'selected-strip thickness control declares that it is a local override');
+assert.match(index, /function applySelectedLayerThicknessScale\(/, 'Lamellar UI can write selected-layer descendant thickness overrides');
 assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
 assert.match(index, /id="lamellar-remove-strip"/, 'Lamellar tab exposes remove-strip control for the selected layer');
 assert.match(index, /id="lamellar-selected-layer-strips"/, 'Lamellar tab reports selected-layer strip instances');
@@ -99,6 +103,7 @@ assert.match(index, /data-popover-pinned/, 'Lamellar population toolhead exposes
 assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar population toolhead exposes bearing spread control');
 assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
 assert.match(index, /id="lamellar-population-radial-spacing"/, 'Lamellar population toolhead exposes radial shell spacing control');
+assert.match(index, /id="lamellar-popover-layer-thickness-scale"/, 'Lamellar layer popover exposes descendant thickness control at the selection site');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
 assert.doesNotMatch(index, /id="lamellar-strip-select"/, 'Lamellar strip selection is viewport-driven rather than dropdown-driven');
 assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
@@ -248,6 +253,9 @@ assert.match(core, /shellLaneOffset/, 'Lamellar strip instances carry shell-lane
 assert.match(core, /radialSpacing/, 'Lamellar strip populations report radial spacing for same-population clearance');
 assert.match(core, /radialOffset/, 'Lamellar strip instances carry radial offsets so same-population strips can separate by shell radius');
 assert.match(core, /radiusOffset/, 'Lamellar layer specs carry shell radius offsets for whole-layer radius authoring');
+assert.match(core, /thicknessScale/, 'Lamellar layer specs carry descendant thickness scaling for hierarchy-scoped mass authoring');
+assert.match(core, /layer-descendant-thickness-scale/, 'Lamellar strip profile receipts distinguish layer descendant thickness from strip-local overrides');
+assert.match(core, /strip-local-profile-override/, 'Lamellar strip profile receipts distinguish explicit strip-local overrides from aggregate layer controls');
 assert.match(core, /diagnosticLayerSeparationScale/, 'Lamellar core reports diagnostic layer separation exaggeration while authoring shells');
 assert.match(core, /stripProfileOverrides/, 'Lamellar debug state reports selected-strip profile override inputs');
 assert.match(core, /widthVariance/, 'Lamellar core supports strip-local width variance independent of layer chunkiness');
@@ -732,6 +740,58 @@ assert.ok(
     && liftedLayerOneCurves.some(curve => curve.id === descriptor.sourceCurveId && curve.radius === descriptor.radius)
   ),
   'layer-radius-adjusted mesh descriptors are re-derived from shifted source curves'
+);
+
+const baseLayerThickness = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 2,
+  chiralityPattern: 'same',
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  stripPopulations: [
+    { layerIndex: 0, role: 'lamella', count: 3, chirality: 1, bearingOffset: 0, bearingVariance: 1 },
+  ],
+});
+const scaledLayerThickness = coreModule.generateLamellarSectionSegments({
+  seed: 31,
+  layerCount: 2,
+  chiralityPattern: 'same',
+  chunkinessBase: 0.4,
+  chunkinessVariance: 0,
+  layerOverrides: [
+    { layerIndex: 0, chirality: 1, chunkiness: 0.55, stripCount: 3, thicknessScale: 1.8 },
+  ],
+  stripPopulations: [
+    { layerIndex: 0, role: 'lamella', count: 3, chirality: 1, bearingOffset: 0, bearingVariance: 1 },
+  ],
+  stripProfileOverrides: [
+    { stripInstanceId: 'seed-31-layer-0-strip-1', thickness: 0.011 },
+  ],
+});
+const baseLayerThicknessStrip = baseLayerThickness.stripInstances.find(strip => strip.id === 'seed-31-layer-0-strip-0');
+const scaledLayerThicknessStrip = scaledLayerThickness.stripInstances.find(strip => strip.id === 'seed-31-layer-0-strip-0');
+const localThicknessStrip = scaledLayerThickness.stripInstances.find(strip => strip.id === 'seed-31-layer-0-strip-1');
+assert.equal(scaledLayerThickness.layerSpecs[0].thicknessScale, 1.8, 'layer spec records descendant thickness scale');
+assert.ok(
+  scaledLayerThicknessStrip.thickness > baseLayerThicknessStrip.thickness * 1.5,
+  'layer thickness scale nudges descendant strips without visiting each strip'
+);
+assert.equal(
+  scaledLayerThicknessStrip.stripProfileDescriptor.overrideSource,
+  'layer-descendant-thickness-scale',
+  'aggregate layer thickness receipts name their descendant scope'
+);
+assert.equal(localThicknessStrip.thickness, 0.011, 'strip-local thickness override is not stomped by aggregate layer scale');
+assert.equal(
+  localThicknessStrip.stripProfileDescriptor.overrideSource,
+  'strip-local-profile-override',
+  'strip-local thickness receipt remains explicit when an aggregate layer scale is present'
+);
+assert.ok(
+  scaledLayerThickness.descriptors
+    .filter(descriptor => descriptor.layerIndex === 0)
+    .every(descriptor => descriptor.layerThicknessScale === 1.8),
+  'mesh descriptors carry layer thickness scale receipts for downstream diagnostics'
 );
 
 const profiled = coreModule.generateLamellarSectionSegments({

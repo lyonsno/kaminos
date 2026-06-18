@@ -142,12 +142,14 @@ function normalizeLayerOverrides(overrides) {
     const chunkiness = Number(override?.chunkiness);
     const stripCount = Number(override?.stripCount);
     const radiusOffset = Number(override?.radiusOffset ?? override?.radius);
+    const thicknessScale = Number(override?.thicknessScale ?? override?.layerThicknessScale ?? override?.massScale);
     return {
       layerIndex: Number.isFinite(Number(override?.layerIndex)) ? Math.round(Number(override.layerIndex)) : layerIndex,
       chirality: chirality < 0 ? -1 : 1,
       chunkiness: Number.isFinite(chunkiness) ? clamp(chunkiness, 0.05, 1) : null,
       stripCount: Number.isFinite(stripCount) ? Math.round(clamp(stripCount, 1, 4)) : null,
       radiusOffset: Number.isFinite(radiusOffset) ? Number(clamp(radiusOffset, -0.24, 0.24).toFixed(4)) : null,
+      thicknessScale: Number.isFinite(thicknessScale) ? Number(clamp(thicknessScale, 0.35, 2.5).toFixed(4)) : null,
     };
   });
 }
@@ -236,12 +238,12 @@ function normalizeGapPattern(pattern) {
 function normalizeStripProfileOverrides(overrides) {
   const list = Array.isArray(overrides) ? overrides : Object.values(overrides || {});
   return list.map(override => {
-    const width = Number(override?.width);
-    const thickness = Number(override?.thickness);
-    const widthVariance = Number(override?.widthVariance);
-    const thicknessVariance = Number(override?.thicknessVariance);
-    const layerIndex = Number(override?.layerIndex);
-    const stripIndex = Number(override?.stripIndex);
+    const width = override?.width === null || override?.width === undefined ? NaN : Number(override.width);
+    const thickness = override?.thickness === null || override?.thickness === undefined ? NaN : Number(override.thickness);
+    const widthVariance = override?.widthVariance === null || override?.widthVariance === undefined ? NaN : Number(override.widthVariance);
+    const thicknessVariance = override?.thicknessVariance === null || override?.thicknessVariance === undefined ? NaN : Number(override.thicknessVariance);
+    const layerIndex = override?.layerIndex === null || override?.layerIndex === undefined ? NaN : Number(override.layerIndex);
+    const stripIndex = override?.stripIndex === null || override?.stripIndex === undefined ? NaN : Number(override.stripIndex);
     return {
       kind: "StripProfileDescriptor",
       mode: STRIP_PROFILE_MODE,
@@ -321,6 +323,8 @@ export function generateLamellarLayerSpecs(input = {}) {
     const variance = (rand() * 2 - 1) * chunkinessVariance;
     const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
     const stripCount = layerOverride?.stripCount ?? defaultStripCountForLayer(layerIndex, role);
+    const thicknessScale = Number((layerOverride?.thicknessScale ?? 1).toFixed(4));
+    const baseThickness = Number((0.006 + chunkiness * 0.022).toFixed(4));
     const stripIds = Array.from({ length: stripCount }, (_, stripIndex) => `seed-${seed}-layer-${layerIndex}-strip-${stripIndex}`);
     layerSpecs.push({
       kind: "LamellarLayerSpec",
@@ -337,7 +341,10 @@ export function generateLamellarLayerSpecs(input = {}) {
       diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
       chunkiness,
       width: Number((0.018 + chunkiness * (role === "selected-source" ? 0.095 : role === "neighbor-envelope" ? 0.08 : 0.045)).toFixed(4)),
-      thickness: Number((0.006 + chunkiness * 0.022).toFixed(4)),
+      thickness: Number((baseThickness * thicknessScale).toFixed(4)),
+      baseThickness,
+      thicknessScale,
+      thicknessOverrideMode: "hierarchical-thickness-override-v0",
       stripCount,
       stripIds,
       segmentCount: stripCount,
@@ -447,6 +454,11 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const baseWidth = Number((spec.width * (1 - Math.abs(localOffset) * 0.08)).toFixed(4));
         const baseThickness = spec.thickness;
         const gapPattern = override?.gapPattern ?? population.gapPattern ?? "solid";
+        const profileOverrideSource = override
+          ? "strip-local-profile-override"
+          : spec.thicknessScale !== 1
+            ? "layer-descendant-thickness-scale"
+            : "layer-shell-derived-profile";
         const stripProfileDescriptor = {
           kind: "StripProfileDescriptor",
           mode: STRIP_PROFILE_MODE,
@@ -459,7 +471,11 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           widthVariance: override?.widthVariance ?? 0,
           thicknessVariance: override?.thicknessVariance ?? 0,
           gapPattern,
-          overrideSource: override ? override.overrideSource : "layer-shell-derived-profile",
+          layerThicknessScale: spec.thicknessScale ?? 1,
+          layerBaseThickness: spec.baseThickness ?? spec.thickness,
+          overrideSource: profileOverrideSource,
+          localOverrideSource: override?.overrideSource || null,
+          hierarchyScope: override ? "strip-local" : "layer-descendants",
         };
         stripInstances.push({
           kind: "LamellarStripInstance",
@@ -488,6 +504,9 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           sliceParticipation: isPrimarySelected ? "primary-cut-target" : isCutAuthor ? "cut-author-envelope" : "same-shell-companion",
           chirality: population.chirality,
           chunkiness: spec.chunkiness,
+          layerThicknessScale: spec.thicknessScale ?? 1,
+          baseThickness: spec.baseThickness ?? spec.thickness,
+          profileOverrideSource,
           depth: spec.depth,
           radiusOffset: totalRadiusOffset,
           effectiveDepth: Number((spec.depth + totalRadiusOffset + radialOffset).toFixed(4)),
@@ -625,6 +644,9 @@ export function generateSphereCurveDescriptors(input = {}) {
       effectiveDepth: strip.effectiveDepth,
       chirality: strip.chirality,
       chunkiness: strip.chunkiness,
+      layerThicknessScale: strip.layerThicknessScale ?? 1,
+      baseThickness: strip.baseThickness ?? strip.thickness,
+      profileOverrideSource: strip.profileOverrideSource || strip.stripProfileDescriptor?.overrideSource || "layer-shell-derived-profile",
       segmentCount: spec.segmentCount,
       stripCount: spec.stripCount,
       interval,
@@ -895,6 +917,9 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     effectiveDepth: curve.effectiveDepth,
     chirality: curve.chirality,
     chunkiness: curve.chunkiness,
+    layerThicknessScale: curve.layerThicknessScale ?? 1,
+    baseThickness: curve.baseThickness ?? curve.thickness,
+    profileOverrideSource: curve.profileOverrideSource || curve.stripProfileDescriptor?.overrideSource || "layer-shell-derived-profile",
     segmentCount: curve.segmentCount,
     stripCount: curve.stripCount,
     interval: curve.interval,
@@ -2025,6 +2050,9 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       radius: d.radius,
       chirality: d.chirality,
       chunkiness: d.chunkiness,
+      layerThicknessScale: d.layerThicknessScale ?? 1,
+      baseThickness: d.baseThickness ?? d.thickness,
+      profileOverrideSource: d.profileOverrideSource || d.stripProfileDescriptor?.overrideSource || null,
       width: d.width,
       thickness: d.thickness,
       widthVariance: d.widthVariance,

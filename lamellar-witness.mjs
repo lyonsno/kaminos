@@ -371,6 +371,28 @@ async function main() {
           afterLayerSpecRadiusOffset: (layerRadiusAfterState.layerSpecs || []).find(layer => layer.layerIndex === selectedLayerIndexForRadius)?.radiusOffset ?? null,
           missingSourceCurveIds: afterLayerDescriptors.filter(descriptor => !descriptor.sourceCurveId).length,
         };
+        const layerMassBeforeDescriptors = afterLayerDescriptors;
+        const selectedLayerMassEl = document.getElementById('lamellar-popover-layer-thickness-scale');
+        if (selectedLayerMassEl) {
+          selectedLayerMassEl.value = '1.64';
+          selectedLayerMassEl.dispatchEvent(new Event('input', { bubbles: true }));
+          selectedLayerMassEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const layerMassAfterState = w ? w.debugState() : layerRadiusAfterState;
+        const layerMassAfterDescriptors = (layerMassAfterState.generatedSegmentDescriptors || []).filter(descriptor => descriptor.layerIndex === selectedLayerIndexForRadius);
+        const average = values => values.length
+          ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(4))
+          : null;
+        const selectedLayerMassReceipt = {
+          mode: 'selected-layer-descendant-thickness-scale-before-curve-mesh-derivation-v0',
+          layerIndex: selectedLayerIndexForRadius,
+          beforeDescriptorThicknessAverage: average(layerMassBeforeDescriptors.map(descriptor => descriptor.thickness ?? 0)),
+          afterDescriptorThicknessAverage: average(layerMassAfterDescriptors.map(descriptor => descriptor.thickness ?? 0)),
+          afterLayerSpecThicknessScale: (layerMassAfterState.layerSpecs || []).find(layer => layer.layerIndex === selectedLayerIndexForRadius)?.thicknessScale ?? null,
+          afterDescriptorLayerThicknessScales: Array.from(new Set(layerMassAfterDescriptors.map(descriptor => descriptor.layerThicknessScale ?? null))),
+          afterDescriptorProfileSources: Array.from(new Set(layerMassAfterDescriptors.map(descriptor => descriptor.profileOverrideSource || descriptor.stripProfileDescriptor?.overrideSource || null))),
+          missingSourceCurveIds: layerMassAfterDescriptors.filter(descriptor => !descriptor.sourceCurveId).length,
+        };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         let authoringRoundTripReceipt = null;
         if (${authoringRoundTripSmoke ? 'true' : 'false'}) {
@@ -470,6 +492,7 @@ async function main() {
           populationRadialSpacingReceipt,
           populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
+          selectedLayerMassReceipt,
           authoringRoundTripReceipt,
           authoringSlotRoundTripReceipt,
           popoverPinnedDuringSliderReceipt,
@@ -495,9 +518,11 @@ async function main() {
             layerDetailDisplay: getComputedStyle(document.getElementById('lamellar-layer-detail')).display,
             layerSelectorsDisplay: getComputedStyle(document.getElementById('lamellar-layer-selectors')).display,
             selectedRadiusDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-radius')).display,
+            selectedLayerMassDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-thickness-scale')).display,
             selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
             selectedStripCount: Number(document.getElementById('lamellar-selected-layer-strip-count')?.value || 0),
             selectedRadius: Number(document.getElementById('lamellar-selected-layer-radius')?.value || 0),
+            selectedLayerMass: Number(document.getElementById('lamellar-selected-layer-thickness-scale')?.value || 0),
             selectedStripReadout: document.getElementById('lamellar-selected-layer-strips')?.textContent || '',
             selectedStripIds: Array.from(document.querySelectorAll('#lamellar-selected-layer-strips [data-strip-id]')).map(el => el.dataset.stripId),
           },
@@ -580,6 +605,7 @@ async function main() {
     assert.notEqual(state.selectedLayerUi?.layerDetailDisplay, 'none', 'Lamellar selected-layer authoring panel is hidden in the sidebar');
     assert.notEqual(state.selectedLayerUi?.layerSelectorsDisplay, 'none', 'Lamellar layer selectors are hidden in the sidebar');
     assert.notEqual(state.selectedLayerUi?.selectedRadiusDisplay, 'none', 'Lamellar selected-layer radius slider is hidden in the sidebar');
+    assert.notEqual(state.selectedLayerUi?.selectedLayerMassDisplay, 'none', 'Lamellar selected-layer mass slider is hidden in the sidebar');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
     assert.equal(state.selectedLayerRadiusReceipt?.mode, 'selected-layer-shell-radius-before-curve-mesh-derivation-v0', 'Lamellar witness did not record selected-layer radius mutation');
     assert.equal(state.selectedLayerRadiusReceipt?.afterLayerSpecRadiusOffset, 0.11, 'Lamellar selected-layer radius control did not mutate layer shell radius');
@@ -593,6 +619,18 @@ async function main() {
       state.selectedLayerRadiusReceipt?.afterCurveRadiusRange,
       'Lamellar selected-layer radius descriptors were not re-derived from shifted source curves'
     );
+    assert.equal(state.selectedLayerMassReceipt?.mode, 'selected-layer-descendant-thickness-scale-before-curve-mesh-derivation-v0', 'Lamellar witness did not record selected-layer descendant thickness mutation');
+    assert.equal(state.selectedLayerMassReceipt?.afterLayerSpecThicknessScale, 1.64, 'Lamellar selected-layer mass control did not mutate layer thickness scale');
+    assert.ok(
+      (state.selectedLayerMassReceipt?.afterDescriptorThicknessAverage || 0) > (state.selectedLayerMassReceipt?.beforeDescriptorThicknessAverage || 0) * 1.2,
+      'Lamellar selected-layer mass did not thicken descendant descriptors'
+    );
+    assert.deepEqual(
+      state.selectedLayerMassReceipt?.afterDescriptorLayerThicknessScales,
+      [1.64],
+      'Lamellar selected-layer mass scale did not reach emitted descriptors'
+    );
+    assert.equal(state.selectedLayerMassReceipt?.missingSourceCurveIds, 0, 'Lamellar selected-layer mass descriptors lost source curve ancestry');
     assert.equal(state.layerSelectionUi?.selectionLevel, 'layer', 'Lamellar single-click selection did not select the layer first');
     assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
     assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
@@ -746,6 +784,7 @@ async function main() {
       populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
       populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
+      selectedLayerMassReceipt: state.selectedLayerMassReceipt,
       authoringRoundTripReceipt: state.authoringRoundTripReceipt,
       authoringSlotRoundTripReceipt: state.authoringSlotRoundTripReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,
