@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { inflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -23,6 +23,11 @@ const windowSize = args.get('--window-size') || '1280,900';
 const expectedGrid = args.get('--expected-grid') || null;
 const handPosePayloadPath = args.get('--hand-pose-payload') || null;
 const handPosePayloadReplay = args.get('--hand-pose-payload-replay') || null;
+const recordingEnabled = args.get('--recording') !== '0';
+const recordingFrameLimit = Number(args.get('--recording-frame-limit') || (routeUsesPointerDrag ? 12 : 5));
+const recordingFrameDir = resolve(args.get('--frame-dir') || out.replace(/\.png$/i, '-frames'));
+const recordingFilmstripPath = resolve(args.get('--filmstrip') || out.replace(/\.png$/i, '-filmstrip.png'));
+const recordingEvidenceKind = 'cdp-png-frame-sequence-and-filmstrip-v0';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -77,7 +82,7 @@ function paeth(a, b, c) {
   return c;
 }
 
-function screenshotMetricsFromPng(buffer) {
+function parsePngPixels(buffer) {
   assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'not a PNG screenshot');
   let offset = 8;
   let width = 0;
@@ -124,6 +129,11 @@ function screenshotMetricsFromPng(buffer) {
     row.copy(pixels, y * stride);
     prev = row;
   }
+  return { width, height, channels, pixels };
+}
+
+function screenshotMetricsFromPng(buffer) {
+  const { width, height, channels, pixels } = parsePngPixels(buffer);
   let clayColorPixels = 0;
   let brightOrangePixels = 0;
   let litPixels = 0;
@@ -139,6 +149,108 @@ function screenshotMetricsFromPng(buffer) {
     if (r > 190 && g > 90 && b < 60) brightOrangePixels += 1;
   }
   return { width, height, clayColorPixels, brightOrangePixels, litPixels };
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buffer.length; i += 1) {
+    crc ^= buffer[i];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data = Buffer.alloc(0)) {
+  const typeBuffer = Buffer.from(type, 'ascii');
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0);
+  return Buffer.concat([len, typeBuffer, data, crc]);
+}
+
+function encodePngRgba(width, height, rgba) {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const rowBytes = width * 4;
+  const raw = Buffer.alloc((rowBytes + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (rowBytes + 1);
+    raw[rowStart] = 0;
+    rgba.copy(raw, rowStart + 1, y * rowBytes, (y + 1) * rowBytes);
+  }
+  return Buffer.concat([
+    signature,
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND'),
+  ]);
+}
+
+function samplePngPixel(parsed, x, y) {
+  const clampedX = Math.max(0, Math.min(parsed.width - 1, x));
+  const clampedY = Math.max(0, Math.min(parsed.height - 1, y));
+  const offset = (clampedY * parsed.width + clampedX) * parsed.channels;
+  return [
+    parsed.pixels[offset],
+    parsed.pixels[offset + 1],
+    parsed.pixels[offset + 2],
+    parsed.channels === 4 ? parsed.pixels[offset + 3] : 255,
+  ];
+}
+
+function writeFilmstripPng(frames, filmstripPath, options = {}) {
+  assert.ok(frames.length > 0, 'cannot write filmstrip without frames');
+  const thumbWidth = options.thumbWidth || 360;
+  const gap = options.gap || 8;
+  const columns = Math.min(options.columns || 4, frames.length);
+  const parsedFrames = frames.map(frame => ({
+    frame,
+    png: parsePngPixels(readFileSync(frame.path)),
+  }));
+  const thumbHeight = Math.max(1, Math.round(parsedFrames[0].png.height * (thumbWidth / parsedFrames[0].png.width)));
+  const rows = Math.ceil(parsedFrames.length / columns);
+  const filmstripWidth = columns * thumbWidth + (columns + 1) * gap;
+  const filmstripHeight = rows * thumbHeight + (rows + 1) * gap;
+  const rgba = Buffer.alloc(filmstripWidth * filmstripHeight * 4, 18);
+  for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+
+  parsedFrames.forEach(({ png }, frameIndex) => {
+    const col = frameIndex % columns;
+    const row = Math.floor(frameIndex / columns);
+    const dstX0 = gap + col * (thumbWidth + gap);
+    const dstY0 = gap + row * (thumbHeight + gap);
+    for (let y = 0; y < thumbHeight; y += 1) {
+      const sy = Math.floor((y / Math.max(1, thumbHeight - 1)) * (png.height - 1));
+      for (let x = 0; x < thumbWidth; x += 1) {
+        const sx = Math.floor((x / Math.max(1, thumbWidth - 1)) * (png.width - 1));
+        const [r, g, b, a] = samplePngPixel(png, sx, sy);
+        const dst = ((dstY0 + y) * filmstripWidth + dstX0 + x) * 4;
+        rgba[dst] = r;
+        rgba[dst + 1] = g;
+        rgba[dst + 2] = b;
+        rgba[dst + 3] = a;
+      }
+    }
+  });
+
+  mkdirSync(dirname(filmstripPath), { recursive: true });
+  writeFileSync(filmstripPath, encodePngRgba(filmstripWidth, filmstripHeight, rgba));
+  return {
+    path: filmstripPath,
+    width: filmstripWidth,
+    height: filmstripHeight,
+    columns,
+    rows,
+    thumbWidth,
+    thumbHeight,
+  };
 }
 
 function expectedGridTopology(grid) {
@@ -175,6 +287,9 @@ async function main() {
   mkdirSync(dirname(reportPath), { recursive: true });
   let phase = 'launch';
   const [width, height] = windowSize.split(',').map(v => Number(v.trim()) || 0);
+  const recordingFrames = [];
+  let filmstripWritten = false;
+  let filmstripMetadata = null;
   const proc = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -184,6 +299,53 @@ async function main() {
     url,
   ], { stdio: 'ignore' });
   let ws = null;
+
+  const visualRecording = () => ({
+    enabled: recordingEnabled,
+    evidenceKind: recordingEvidenceKind,
+    requestedFrameCount: recordingFrameLimit,
+    recordingFrameCount: recordingFrames.length,
+    recordingFrames: recordingFrames.slice(),
+    frameDir: recordingFrameDir,
+    filmstrip: recordingFilmstripPath,
+    filmstripWritten,
+    filmstripMetadata,
+  });
+
+  const recordFrame = async label => {
+    if (!recordingEnabled || !ws || ws.readyState !== WebSocket.OPEN) return null;
+    if (recordingFrames.length >= recordingFrameLimit) return null;
+    mkdirSync(recordingFrameDir, { recursive: true });
+    const index = recordingFrames.length;
+    const safeLabel = String(label || 'frame').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'frame';
+    const path = resolve(recordingFrameDir, `${String(index).padStart(2, '0')}-${safeLabel}.png`);
+    const capturedAtMs = Date.now();
+    const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+    const buffer = Buffer.from(shot.data, 'base64');
+    writeFileSync(path, buffer);
+    const metrics = screenshotMetricsFromPng(buffer);
+    const frame = {
+      index,
+      phase,
+      label: safeLabel,
+      path,
+      capturedAtMs,
+      width: metrics.width,
+      height: metrics.height,
+      clayColorPixels: metrics.clayColorPixels,
+      brightOrangePixels: metrics.brightOrangePixels,
+      litPixels: metrics.litPixels,
+    };
+    recordingFrames.push(frame);
+    return frame;
+  };
+
+  const finalizeVisualRecording = () => {
+    if (!recordingEnabled || !recordingFrames.length) return visualRecording();
+    filmstripMetadata = writeFilmstripPng(recordingFrames, recordingFilmstripPath);
+    filmstripWritten = true;
+    return visualRecording();
+  };
 
   try {
     phase = 'cdp';
@@ -197,6 +359,7 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     phase = 'settle';
     await delay(settleMs);
+    await recordFrame('settled');
     let injectedHandPosePayload = null;
     if (handPosePayloadPath) {
       phase = 'hand-pose-payload';
@@ -228,6 +391,7 @@ async function main() {
       }
       assert.ok(injectEval.result?.value?.ok, injectEval.result?.value?.reason || 'hand-pose-payload injection did not reach substrate');
       await delay(350);
+      await recordFrame('hand-pose-payload');
     }
 
     if (routeUsesPointerDrag) {
@@ -270,6 +434,7 @@ async function main() {
         await delay(100);
       }
       assert.ok(drag, `missing clay canvas bounds for pointer drag geometry: ${dragFailure}`);
+      await recordFrame('before-drag');
       phase = 'pointer-drag';
       if (routeUsesBrushHotkey) {
         await wsRequest(ws, 'Input.dispatchKeyEvent', {
@@ -282,6 +447,8 @@ async function main() {
       }
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: drag.startX, y: drag.startY });
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: drag.startX, y: drag.startY, button: 'left', buttons: 1, clickCount: 1 });
+      await recordFrame('drag-pressed');
+      let dragFrameIndex = 0;
       for (const [x, y] of [
         [drag.midX, drag.midY],
         [drag.endX, drag.endY],
@@ -292,6 +459,8 @@ async function main() {
       ]) {
         await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 });
         await delay(80);
+        await recordFrame(`drag-${String(dragFrameIndex).padStart(2, '0')}`);
+        dragFrameIndex += 1;
       }
       await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.endX + 36, y: drag.endY + 6, button: 'left', buttons: 0, clickCount: 1 });
       if (routeUsesBrushHotkey) {
@@ -304,6 +473,7 @@ async function main() {
         });
       }
       await delay(600);
+      await recordFrame('released-settle');
     }
 
     phase = 'state';
@@ -538,6 +708,7 @@ async function main() {
       assert.ok((state.clayContactCount ?? 0) > 0, 'clay route did not report contact');
     }
     assert.ok((state.clayDeformationCount ?? 0) > 0, 'clay route did not report deformation');
+    await recordFrame('asserted-state');
 
     const earlyScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
     const screenshotBuffer = Buffer.from(earlyScreenshot.data, 'base64');
@@ -547,6 +718,11 @@ async function main() {
     const metrics = screenshotMetricsFromPng(screenshotBuffer);
     assert.ok(metrics.clayColorPixels > 400, `missing clay-colored visual evidence: ${JSON.stringify(metrics)}`);
     assert.ok(metrics.brightOrangePixels < metrics.clayColorPixels * 0.35, `not fire: output is too orange/fire-like ${JSON.stringify(metrics)}`);
+    const visualRecordingReport = finalizeVisualRecording();
+    if (recordingEnabled) {
+      assert.ok(visualRecordingReport.recordingFrameCount >= (routeUsesPointerDrag ? 6 : 2), `visual recording captured too few frames: ${visualRecordingReport.recordingFrameCount}`);
+      assert.equal(visualRecordingReport.filmstripWritten, true, 'visual recording filmstrip was not written');
+    }
 
     phase = 'screenshot';
     const report = {
@@ -692,6 +868,11 @@ async function main() {
       clayColorPixels: metrics.clayColorPixels,
       brightOrangePixels: metrics.brightOrangePixels,
       litPixels: metrics.litPixels,
+      visualRecording: visualRecordingReport,
+      recordingFrameCount: visualRecordingReport.recordingFrameCount,
+      recordingFrames: visualRecordingReport.recordingFrames,
+      filmstrip: visualRecordingReport.filmstrip,
+      filmstripWritten: visualRecordingReport.filmstripWritten,
       visualVerdict: isCubeRoute
         ? 'webgpu clay cube diagnostic skin visible; old surface hidden; not fire'
         : 'webgpu clay surface visible; not fire',
@@ -718,8 +899,14 @@ async function main() {
         const failureScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
         writeFileSync(out, Buffer.from(failureScreenshot.data, 'base64'));
         failureScreenshotWritten = true;
+        await recordFrame('failure');
       } catch {
         failureScreenshotWritten = false;
+      }
+      try {
+        finalizeVisualRecording();
+      } catch {
+        filmstripWritten = false;
       }
       ws.close();
     }
@@ -730,6 +917,11 @@ async function main() {
       error: err?.message || String(err),
       screenshot: out,
       screenshotWritten: failureScreenshotWritten,
+      visualRecording: visualRecording(),
+      recordingFrameCount: recordingFrames.length,
+      recordingFrames: recordingFrames.slice(),
+      filmstrip: recordingFilmstripPath,
+      filmstripWritten,
       failureState,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));

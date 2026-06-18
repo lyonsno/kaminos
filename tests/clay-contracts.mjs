@@ -289,6 +289,12 @@ assert.match(witness, /requestedBrushStrength/, 'clay witness can verify routed 
 assert.match(witness, /Input\.dispatchKeyEvent/, 'clay witness sends real keyboard input for brush modifier mode');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
+assert.match(witness, /visualRecording/, 'clay witness reports automatic visual recording metadata');
+assert.match(witness, /recordFrame/, 'clay witness records frame PNGs during dynamic brush smoke');
+assert.match(witness, /writeFilmstripPng/, 'clay witness writes an inspectable filmstrip PNG');
+assert.match(witness, /filmstripWritten/, 'clay witness says whether the filmstrip was actually written');
+assert.match(witness, /recordingFrameCount/, 'clay witness reports written frame count');
+assert.match(witness, /recordingFrames/, 'clay witness reports frame phase/path metadata');
 assert.match(witness, /missing clay canvas bounds/, 'clay witness fails loud when it cannot measure the interactive canvas');
 assert.match(witness, /failureState/, 'clay witness failure reports preserve debug state when available');
 assert.match(witness, /screenshotWritten/, 'clay witness failure reports say whether the screenshot was actually captured');
