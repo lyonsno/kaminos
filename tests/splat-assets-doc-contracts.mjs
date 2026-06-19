@@ -11,6 +11,8 @@ assert.match(docs, /Greenroom\s*->\s*Splat Assets/, 'Splat asset docs tell opera
 assert.match(docs, /Splat Correction panel/, 'Splat asset docs mention the selected-object correction panel');
 assert.match(docs, /Pivot\/Crop/, 'Splat asset docs mention correction-mode Pivot/Crop controls');
 assert.match(docs, /crop bounds box/, 'Splat asset docs mention the visible crop bounds box');
+assert.match(docs, /hides points outside the enabled crop/i, 'Splat asset docs explain normal crop preview visibility');
+assert.match(docs, /faint crop context/i, 'Splat asset docs explain edit-mode crop preview context');
 assert.match(docs, /axisFlips/, 'Splat asset docs include correction axis flips');
 assert.match(docs, /orientation\.rotation/, 'Splat asset docs include orientation correction');
 assert.match(docs, /centroidOffset/, 'Splat asset docs include centroid correction');

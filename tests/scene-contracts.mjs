@@ -98,6 +98,7 @@ assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses
 assert.match(index, /function createSplatSceneObjectPlaceholder\(/, 'Greenroom splats register through an explicit placeholder scene-object factory');
 assert.match(index, /function parsePlyPointCloud\(/, 'Kaminos has a local PLY point-cloud parser for cheap splat previews');
 assert.match(index, /function createSplatPointCloudObject\(/, 'parseable splats can render as a point-cloud preview instead of only a cube placeholder');
+assert.match(index, /function applySplatPointCloudCropPreview\(/, 'PLY point-cloud splat previews can hide cropped-away points');
 assert.match(index, /new THREE\.Points\(/, 'PLY splat previews render through Three Points, not the placeholder mesh only');
 assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'PLY point-cloud previews use per-point colors when available');
 assert.match(index, /previewKind:\s*'point-cloud'/, 'splat scene metadata records when the visible preview is a point cloud');
