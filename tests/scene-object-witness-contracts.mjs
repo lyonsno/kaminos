@@ -170,6 +170,7 @@ assert.match(witness, /splat correction crop mode did not update crop bounds/, '
 assert.match(witness, /splat correction crop mode dirtied scene transform/, 'Splat correction mode witness proves viewport crop-box edits keep scene placement separate');
 assert.match(witness, /splat correction crop preview did not hide outside points/, 'Splat correction mode witness proves normal preview hides cropped-away points');
 assert.match(witness, /splat correction crop preview did not show edit context/, 'Splat correction mode witness proves edit mode shows cropped-away points faintly');
+assert.match(witness, /saved splat crop centroid preview did not show included points before edit mode/, 'Splat correction sidecar witness proves saved crop plus centroid offset remains visible outside edit mode');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

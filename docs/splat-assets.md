@@ -63,7 +63,7 @@ Kaminos reloads an asset correction sidecar when the splat is imported from `Spl
 
 The `Splat Correction panel` exposes Pivot/Crop controls while correction mode is active. Pivot editing moves the asset-local centroid and orientation correction. Crop editing shows a visible crop bounds box in the viewport and retargets the transform gizmo to that box; translating or scaling it updates `crop.min` and `crop.max`, while the numeric crop fields remain available for exact values.
 
-In normal scene viewing, the point-cloud splat preview hides points outside the enabled crop. While Splat Correction Mode is active for that splat, the same preview shows those excluded points as faint crop context so the operator can still see what the crop is removing.
+In normal scene viewing, the point-cloud splat preview hides points outside the enabled crop. While Splat Correction Mode is active for that splat, the same preview shows those excluded points as faint crop context so the operator can still see what the crop is removing. Crop membership is evaluated in corrected asset coordinates: source point positions are tested after `axisFlips` and `centroidOffset`, so saved crops continue to line up after a pivot/centroid correction.
 
 The current UI does not yet show a dedicated `CORRECTED` chip, reveal-sidecar action, or reveal-asset action. Those should be added as a follow-up because the sidecar convention is otherwise too easy to miss.
 

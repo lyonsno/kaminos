@@ -2453,7 +2453,7 @@ async function runSplatCorrectionSidecarScenario(ws) {
       const ply = [
         'ply',
         'format ascii 1.0',
-        'element vertex 6',
+        'element vertex 7',
         'property float x',
         'property float y',
         'property float z',
@@ -2461,6 +2461,7 @@ async function runSplatCorrectionSidecarScenario(ws) {
         'property uchar green',
         'property uchar blue',
         'end_header',
+        '0 0 0 255 255 255',
         '-1 0 0 255 60 60',
         '1 0 0 60 255 60',
         '0 -1 0 60 60 255',
@@ -2479,7 +2480,7 @@ async function runSplatCorrectionSidecarScenario(ws) {
       window.selectSceneObject(firstSplat.id);
       await window.enterSplatCorrectionMode(firstSplat.id);
       window.kaminosSetSplatCorrectionDraftTransform({
-        position: [0.25, -0.1, 0.4],
+        position: [0.5, 0, 0],
         rotation: [0.1, 0.2, 0.3],
         scale: [1, 1, 1],
       });
@@ -2491,12 +2492,12 @@ async function runSplatCorrectionSidecarScenario(ws) {
         input.dispatchEvent(new Event('change', { bubbles: true }));
       };
       setField('crop.enabled', true);
-      setField('crop.min.x', -0.2);
-      setField('crop.min.y', -0.3);
-      setField('crop.min.z', -0.4);
-      setField('crop.max.x', 0.7);
-      setField('crop.max.y', 0.8);
-      setField('crop.max.z', 0.9);
+      setField('crop.min.x', 0.45);
+      setField('crop.min.y', -0.05);
+      setField('crop.min.z', -0.05);
+      setField('crop.max.x', 0.55);
+      setField('crop.max.y', 0.05);
+      setField('crop.max.z', 0.05);
       const saveResult = await window.kaminosSaveSelectedSplatCorrection();
       const assetDataAfterSave = await fetch('/api/assets?kind=splat').then(resp => resp.json());
       const savedAssetEntry = (assetDataAfterSave.entries || []).find(entry => entry.path === ingestResult?.entry?.path) || null;
@@ -2529,6 +2530,11 @@ async function runSplatCorrectionSidecarScenario(ws) {
       await wait(250);
       const reloadedSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const reloadedSplat = reloadedSceneDebug.find(record => record.type === 'splat') || null;
+      const reloadedPreviewBeforeMode = window.kaminosSplatPreviewDebugState?.(reloadedSplat?.id) || null;
+      const enteredReloadedMode = await window.enterSplatCorrectionMode(reloadedSplat?.id);
+      await wait(50);
+      const reloadedPreviewInMode = window.kaminosSplatPreviewDebugState?.(reloadedSplat?.id) || null;
+      const exitedReloadedMode = window.exitSplatCorrectionMode({ revert: false, silent: true });
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(reloadedSplat?.id) || null;
       return {
         ingestResult: { entry: ingestResult?.entry || null },
@@ -2537,6 +2543,10 @@ async function runSplatCorrectionSidecarScenario(ws) {
         savedAssetEntry,
         firstSplat,
         reloadedSplat,
+        reloadedPreviewBeforeMode,
+        enteredReloadedMode,
+        reloadedPreviewInMode,
+        exitedReloadedMode,
         handoffDebug,
       };
     })()
@@ -2546,15 +2556,15 @@ async function runSplatCorrectionSidecarScenario(ws) {
   const savedCorrection = saved?.correction || null;
   if (!savedCorrection
       || savedCorrection.crop?.enabled !== true
-      || savedCorrection.centroidOffset?.[0] !== 0.25
+      || savedCorrection.centroidOffset?.[0] !== 0.5
       || savedCorrection.orientation?.rotation?.[2] !== 0.3) {
     throw new Error(`splat correction did not persist to sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
   const reloaded = lastEvidence.splatCorrectionSidecar.reloadedSplat;
   if (!reloaded?.splat?.correction
       || reloaded.splat.correction.crop?.enabled !== true
-      || reloaded.splat.correction.centroidOffset?.[0] !== 0.25
-      || reloaded.splat.correction.centroidOffset?.[2] !== 0.4
+      || reloaded.splat.correction.centroidOffset?.[0] !== 0.5
+      || reloaded.splat.correction.centroidOffset?.[2] !== 0
       || reloaded.transform?.position?.[0] !== 0
       || reloaded.transform?.position?.[1] !== 0
       || reloaded.transform?.position?.[2] !== 0
@@ -2564,6 +2574,22 @@ async function runSplatCorrectionSidecarScenario(ws) {
   const caps = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.capabilities || {};
   if (caps.realSplatRendering !== false || caps.meshDepthOcclusion !== false) {
     throw new Error(`splat correction leaked into render truth claim: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const reloadedPreviewBeforeMode = lastEvidence.splatCorrectionSidecar.reloadedPreviewBeforeMode;
+  if (!reloadedPreviewBeforeMode
+      || reloadedPreviewBeforeMode.includedPointCount !== 1
+      || reloadedPreviewBeforeMode.excludedPointCount !== 6
+      || reloadedPreviewBeforeMode.includedVisible !== true
+      || reloadedPreviewBeforeMode.excludedVisible !== false) {
+    throw new Error(`saved splat crop centroid preview did not show included points before edit mode: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const reloadedPreviewInMode = lastEvidence.splatCorrectionSidecar.reloadedPreviewInMode;
+  if (!reloadedPreviewInMode
+      || reloadedPreviewInMode.includedPointCount !== 1
+      || reloadedPreviewInMode.excludedPointCount !== 6
+      || reloadedPreviewInMode.excludedVisible !== true
+      || !(reloadedPreviewInMode.excludedOpacity < reloadedPreviewInMode.includedOpacity)) {
+    throw new Error(`saved splat crop centroid preview did not show edit context: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
 }
 
@@ -2623,7 +2649,7 @@ async function runSplatCorrectionModeScenario(ws) {
       const sceneAfterCropToggle = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const cropMode = await window.setSplatCorrectionEditMode('crop');
       const cropEdit = window.kaminosSetSplatCorrectionCropTransform({
-        position: [0, 0, 1],
+        position: [0.2, 0.3, 1.4],
         scale: [0.4, 0.4, 0.4],
       });
       const sceneAfterCropEdit = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
@@ -2730,10 +2756,10 @@ async function runSplatCorrectionModeScenario(ws) {
   }
   const cropEditCorrection = evidence.cropEdit?.draftCorrection || evidence.sceneAfterCropEdit?.splat?.correction || null;
   if (!cropEditCorrection?.crop?.enabled
-      || Math.abs(cropEditCorrection.crop.min?.[0] + 0.2) > 1e-6
-      || Math.abs(cropEditCorrection.crop.max?.[0] - 0.2) > 1e-6
-      || Math.abs(cropEditCorrection.crop.min?.[2] - 0.8) > 1e-6
-      || Math.abs(cropEditCorrection.crop.max?.[2] - 1.2) > 1e-6) {
+      || Math.abs(cropEditCorrection.crop.min?.[0] - 0) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[0] - 0.4) > 1e-6
+      || Math.abs(cropEditCorrection.crop.min?.[2] - 1.2) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[2] - 1.6) > 1e-6) {
     throw new Error(`splat correction crop mode did not update crop bounds: ${JSON.stringify(evidence)}`);
   }
   const afterCropEdit = evidence.sceneAfterCropEdit?.sceneTransform;
