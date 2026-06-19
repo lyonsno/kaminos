@@ -680,6 +680,7 @@ async function main() {
         assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit used the wrong depth policy');
         assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit did not preserve depth policy');
         assert.ok(Array.isArray(state.clayPointerLastHit.rawCenter), 'cube pointer hit did not preserve raw ray hit');
+        assert.deepEqual(state.clayPointerLastHit.surfaceNormal, [0, 0, -1], 'cube front-face pointer hit did not preserve inward surface normal');
         assert.ok((state.clayPointerLastHit.rawCenter[2] ?? 0) > 0.25, 'cube pointer raw hit landed behind the visible front face');
         assert.ok(Math.abs(state.clayPointerLastHit.z - state.clayPointerLastHit.rawCenter[2]) <= 1e-6, 'cube pointer effective hit was inset from the raw cube face hit');
         assert.ok(Math.abs(state.clayPointerLastHit.y - state.clayPointerLastHit.rawCenter[1]) <= 1e-6, 'cube pointer effective hit lost ray-derived cube height');

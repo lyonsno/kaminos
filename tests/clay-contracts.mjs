@@ -80,6 +80,7 @@ assert.match(core, /export function normalizeClayCubeConfig/, 'clay module expor
 assert.match(core, /export function seedClayCubeMaterialPoints/, 'clay module exports deterministic cube material-point seeding');
 assert.match(core, /export function runClayCubeFirstLoopOracle/, 'clay module exports deterministic cube first-loop oracle');
 assert.match(core, /export function normalizeClayCubePointerCollider/, 'clay module exports cube-specific pointer collider normalization');
+assert.match(core, /surfaceNormal/, 'clay cube pointer and collider paths preserve surface normals');
 assert.match(core, /clayCubeEnabled/, 'clay debug state records whether the cube witness is enabled');
 assert.match(core, /clayCubeParticleCount/, 'clay debug state records cube material-point count');
 assert.match(core, /clayCubeActiveGridCellCount/, 'clay debug state records cube active grid-cell count');
@@ -115,6 +116,7 @@ assert.match(core, /clayCubeMaxDisplacementFace/, 'clay debug state records whic
 assert.match(index, /clay-cube-front-back/, 'clay panel surfaces cube front/back deformation ratio');
 assert.match(index, /clay-cube-brush-contact/, 'clay panel surfaces cube brush/contact centroid alignment');
 assert.match(index, /clay-cube-edge-corner/, 'clay panel surfaces cube edge/corner deformation counts');
+assert.match(index, /cubePointerInwardNormal/, 'clay cube pointer route derives inward face normals from ray-box hits');
 assert.match(index, /CLAY_CUBE_CAMERA_FRAME/, 'cube route has a dedicated witness camera frame');
 assert.match(core, /deterministic-js-oracle-not-runtime-fallback/, 'clay cube CPU oracle is explicitly not runtime fallback');
 assert.match(core, /vendor\/webgpu-geometry-primitives\/point-triangle\.js/, 'clay route consumes the package primitive bridge');
@@ -322,6 +324,7 @@ assert.match(witness, /screenshotWritten/, 'clay witness failure reports say whe
 assert.match(witness, /clayPointerDragStepCount/, 'clay witness records pointer-driven drag steps');
 assert.match(witness, /clayPointerLastHit/, 'clay witness records pointer hit coordinates');
 assert.match(witness, /clayPointerLastHit\.y/, 'clay witness verifies pointer hit height');
+assert.match(witness, /surfaceNormal/, 'clay witness verifies cube pointer surface normal');
 assert.match(witness, /clayPointerLastHit\.radius/, 'clay witness verifies pointer hit radius');
 assert.match(witness, /clayPointerLastHit\.strength/, 'clay witness verifies pointer hit strength');
 assert.match(witness, /cube pointer effective hit was inset from the raw cube face hit/, 'cube witness rejects old heightfield clamp insetting cube hits');

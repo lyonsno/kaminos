@@ -62,6 +62,7 @@ const cubePointer = normalizeClayCubePointerCollider({
   id: 'front-face-pointer',
   center: [0.0968, 0.4468, 0.34],
   rawCenter: [0.0968, 0.4468, 0.34],
+  surfaceNormal: [0, 0, -1],
   radius: 0.17,
   strength: 1.18,
 });
@@ -71,5 +72,46 @@ assert.equal(cubePointer.center[0], 0.0968);
 assert.equal(cubePointer.center[1], 0.4468);
 assert.equal(cubePointer.center[2], 0.34, 'cube pointer normalization must not inset a front-face hit with the old heightfield edge clamp');
 assert.deepEqual(cubePointer.rawCenter, [0.0968, 0.4468, 0.34]);
+assert.deepEqual(cubePointer.surfaceNormal, [0, 0, -1], 'cube pointer preserves inward face normal for front-face contact');
 assert.equal(cubePointer.radius, 0.17);
 assert.equal(cubePointer.strength, 1.18);
+
+const frontFaceOracle = runClayCubeFirstLoopOracle({
+  basePositions: particles,
+  previousPositions: particles,
+  config,
+  colliders: [cubePointer],
+});
+
+let maxAbsY = 0;
+let maxInwardZ = 0;
+for (let i = 0; i < config.particleCount; i += 1) {
+  const offset = i * 4;
+  maxAbsY = Math.max(maxAbsY, Math.abs(frontFaceOracle.positions[offset + 1] - particles[offset + 1]));
+  maxInwardZ = Math.max(maxInwardZ, particles[offset + 2] - frontFaceOracle.positions[offset + 2]);
+}
+assert.ok(maxInwardZ > maxAbsY * 2, `front-face cube brush should press inward along Z, not down like the top surface: z=${maxInwardZ} y=${maxAbsY}`);
+
+const leftFacePointer = normalizeClayCubePointerCollider({
+  id: 'left-face-pointer',
+  center: [-0.44, 0.34, 0.02],
+  rawCenter: [-0.44, 0.34, 0.02],
+  surfaceNormal: [1, 0, 0],
+  radius: 0.17,
+  strength: 1.18,
+});
+const leftFaceOracle = runClayCubeFirstLoopOracle({
+  basePositions: particles,
+  previousPositions: particles,
+  config,
+  colliders: [leftFacePointer],
+});
+
+let maxInwardX = 0;
+let leftMaxAbsY = 0;
+for (let i = 0; i < config.particleCount; i += 1) {
+  const offset = i * 4;
+  maxInwardX = Math.max(maxInwardX, leftFaceOracle.positions[offset] - particles[offset]);
+  leftMaxAbsY = Math.max(leftMaxAbsY, Math.abs(leftFaceOracle.positions[offset + 1] - particles[offset + 1]));
+}
+assert.ok(maxInwardX > leftMaxAbsY * 2, `side-face cube brush should press inward along X, not down like the top surface: x=${maxInwardX} y=${leftMaxAbsY}`);

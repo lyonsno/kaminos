@@ -84,6 +84,18 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+function normalizeVec3(vector, fallback = [0, -1, 0]) {
+  const x = Number(vector?.[0]);
+  const y = Number(vector?.[1]);
+  const z = Number(vector?.[2]);
+  const fx = Number.isFinite(x) ? x : fallback[0];
+  const fy = Number.isFinite(y) ? y : fallback[1];
+  const fz = Number.isFinite(z) ? z : fallback[2];
+  const length = Math.sqrt(fx * fx + fy * fy + fz * fz);
+  if (length <= 1e-6) return fallback.slice();
+  return [fx / length, fy / length, fz / length];
+}
+
 function percentile(values, q) {
   if (!values.length) return 0;
   const sorted = values.slice().sort((a, b) => a - b);
@@ -283,14 +295,28 @@ export function seedClayCubeMaterialPoints(config = normalizeClayCubeConfig()) {
 }
 
 function normalizedCubeCollider(collider, index) {
-  const normalized = normalizeCollider(collider, index);
+  const center = Array.isArray(collider?.center) ? collider.center : [0, 0, 0];
+  const rawX = clampFinite(center[0], -1.2, 1.2, 0);
   const sourceY = Number(collider?.center?.[1]);
+  const rawZ = clampFinite(center[2], -1.2, 1.2, 0);
+  const x = clampFinite(rawX, -CLAY_CUBE_EXTENTS.halfX, CLAY_CUBE_EXTENTS.halfX, 0);
   const y = Number.isFinite(sourceY) && Math.abs(sourceY) > 1e-5
     ? clampFinite(collider.center[1], CLAY_CUBE_EXTENTS.minY, CLAY_CUBE_EXTENTS.maxY, 0.34)
     : 0.34;
+  const z = clampFinite(rawZ, -CLAY_CUBE_EXTENTS.halfZ, CLAY_CUBE_EXTENTS.halfZ, 0);
   return {
-    ...normalized,
-    center: [normalized.center[0], y, normalized.center[2]],
+    id: collider?.id || `clay-cube-collider-${index}`,
+    center: [x, y, z],
+    radius: clampFinite(collider?.radius, 0.035, 0.35, 0.12),
+    strength: clampFinite(collider?.strength, 0, 5, 1),
+    source: collider?.source || null,
+    sourceBackend: collider?.sourceBackend || null,
+    sampleAuthority: Number.isFinite(collider?.sampleAuthority) ? collider.sampleAuthority : null,
+    pressureAxis: Number.isFinite(collider?.pressureAxis) ? collider.pressureAxis : null,
+    pressureScale: Number.isFinite(collider?.pressureScale) ? collider.pressureScale : null,
+    boundaryClamped: Math.abs(x - rawX) > 1e-6 || Math.abs(z - rawZ) > 1e-6,
+    boundaryMargin: [0, 0, 0],
+    surfaceNormal: normalizeVec3(collider?.surfaceNormal, [0, -1, 0]),
   };
 }
 
@@ -307,6 +333,7 @@ export function normalizeClayCubePointerCollider(payload = {}) {
     id: payload.id || 'cube-pointer-drag',
     center: [clampedX, clampedY, clampedZ],
     rawCenter: rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+    surfaceNormal: normalizeVec3(payload.surfaceNormal, [0, -1, 0]),
     radius: clampFinite(payload.radius, 0.035, 0.35, 0.18),
     strength: clampFinite(payload.strength, 0, 5, 1.15),
     source: payload.source || 'cube-pointer',
@@ -488,9 +515,12 @@ export function runClayCubeFirstLoopOracle({
       if (reach <= 0) continue;
       const force = reach * reach * collider.strength;
       const invDist = 1 / Math.max(dist, 0.025);
+      const surfaceNormal = normalizeVec3(collider.surfaceNormal, [0, -1, 0]);
       pushX += dx * invDist * force * 0.028;
-      pushY -= force * 0.082;
+      pushX += surfaceNormal[0] * force * 0.082;
+      pushY += surfaceNormal[1] * force * 0.082;
       pushZ += dz * invDist * force * 0.028;
+      pushZ += surfaceNormal[2] * force * 0.082;
       contact += 1;
     }
 
@@ -660,7 +690,8 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
     if (reach > 0.0) {
       let force = reach * reach * forceLane.x;
       let direction = delta / max(dist, 0.025);
-      push = push + vec3f(direction.x * 0.028, -0.082, direction.z * 0.028) * force;
+      let surfaceNormal = normalize(forceLane.yzw);
+      push = push + (vec3f(direction.x * 0.028, 0.0, direction.z * 0.028) + surfaceNormal * 0.082) * force;
       contact = contact + 1.0;
     }
   }
@@ -1626,7 +1657,9 @@ export function createKaminosClayPrototype({
       cubeColliderForceData[index * 4] = Number.isFinite(collider.effectiveStrength) && collider.effectiveStrength > 0
         ? collider.effectiveStrength
         : cubeCollider.strength;
-      cubeColliderForceData[index * 4 + 1] = Number.isFinite(collider.sampleAuthority) ? collider.sampleAuthority : -1;
+      cubeColliderForceData[index * 4 + 1] = cubeCollider.surfaceNormal[0];
+      cubeColliderForceData[index * 4 + 2] = cubeCollider.surfaceNormal[1];
+      cubeColliderForceData[index * 4 + 3] = cubeCollider.surfaceNormal[2];
     });
     device.queue.writeBuffer(cubeColliderBuffer, 0, cubeColliderData);
     device.queue.writeBuffer(cubeColliderForceBuffer, 0, cubeColliderForceData);
@@ -1896,6 +1929,7 @@ export function createKaminosClayPrototype({
       id: payload.id || 'pointer-drag',
       center,
       rawCenter,
+      surfaceNormal: payload.surfaceNormal,
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
     };
@@ -1920,6 +1954,7 @@ export function createKaminosClayPrototype({
       rawCenter: Array.isArray(pointerCollider.rawCenter)
         ? pointerCollider.rawCenter
         : rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+      surfaceNormal: Array.isArray(pointerCollider.surfaceNormal) ? pointerCollider.surfaceNormal : null,
       depthPolicy: clayPointerDepthPolicy,
       radius: pointerCollider.radius,
       strength: pointerCollider.strength,

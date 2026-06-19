@@ -1842,6 +1842,18 @@ function installClayPointerInteraction(params) {
     return legacyInteractiveRoute || clayBrushModifierActive;
   };
 
+  const cubePointerInwardNormal = point => {
+    const distances = [
+      { distance: Math.abs(point.x - CLAY_CUBE_POINTER_BOUNDS.min[0]), normal: [1, 0, 0] },
+      { distance: Math.abs(point.x - CLAY_CUBE_POINTER_BOUNDS.max[0]), normal: [-1, 0, 0] },
+      { distance: Math.abs(point.y - CLAY_CUBE_POINTER_BOUNDS.min[1]), normal: [0, 1, 0] },
+      { distance: Math.abs(point.y - CLAY_CUBE_POINTER_BOUNDS.max[1]), normal: [0, -1, 0] },
+      { distance: Math.abs(point.z - CLAY_CUBE_POINTER_BOUNDS.min[2]), normal: [0, 0, 1] },
+      { distance: Math.abs(point.z - CLAY_CUBE_POINTER_BOUNDS.max[2]), normal: [0, 0, -1] },
+    ].sort((a, b) => a.distance - b.distance);
+    return distances[0].normal;
+  };
+
   const intersectClayCubeBounds = ray => {
     let tMin = Number.NEGATIVE_INFINITY;
     let tMax = Number.POSITIVE_INFINITY;
@@ -1866,7 +1878,11 @@ function installClayPointerInteraction(params) {
     }
     const t = tMin >= 0 ? tMin : tMax;
     if (t < 0) return null;
-    return ray.at(t, new THREE.Vector3());
+    const point = ray.at(t, new THREE.Vector3());
+    return {
+      point,
+      surfaceNormal: cubePointerInwardNormal(point),
+    };
   };
 
   const updateBrushModifier = event => {
@@ -1891,9 +1907,12 @@ function installClayPointerInteraction(params) {
     );
     pointerRaycaster.setFromCamera(ndc, camera);
     let hitPoint = null;
+    let surfaceNormal = null;
     let depthPolicy = 'horizontal-plane-y0';
     if (cubePointerRoute) {
-      hitPoint = intersectClayCubeBounds(pointerRaycaster.ray);
+      const cubeHit = intersectClayCubeBounds(pointerRaycaster.ray);
+      hitPoint = cubeHit?.point || null;
+      surfaceNormal = cubeHit?.surfaceNormal || null;
       depthPolicy = CLAY_CUBE_POINTER_DEPTH_POLICY;
     } else if (pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) {
       hitPoint = pointerPoint;
@@ -1913,6 +1932,7 @@ function installClayPointerInteraction(params) {
     return {
       center,
       rawCenter: [hitPoint.x, hitPoint.y, hitPoint.z],
+      surfaceNormal,
       depthPolicy,
       radius: clayPointerBrushRadius,
       strength: event.shiftKey ? clayPointerBrushStrength * 0.5 : clayPointerBrushStrength,
