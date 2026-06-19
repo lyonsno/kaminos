@@ -45,6 +45,23 @@ function normalizeWindHeight(value) {
   return clampFinite(value, -0.8, 0.8, 0.15);
 }
 
+function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
+  return clampFinite(value, 0, max, fallback);
+}
+
+function normalizeBonfireAblationControls(controls = {}) {
+  return {
+    recenter: normalizeBonfireAblationValue(controls.bonfireRecenter),
+    lateralDamping: normalizeBonfireAblationValue(controls.bonfireLateralDamping),
+    shear: normalizeBonfireAblationValue(controls.bonfireShear),
+    detailForces: normalizeBonfireAblationValue(controls.bonfireDetailForces),
+    depinch: normalizeBonfireAblationValue(controls.bonfireDepinch),
+    projection: normalizeBonfireAblationValue(controls.bonfireProjection),
+    temporal: normalizeBonfireAblationValue(controls.bonfireTemporal),
+    instabilityProbe: normalizeBonfireAblationValue(controls.bonfireInstabilityProbe, 0, 1),
+  };
+}
+
 function volumeSceneMode(value) {
   const scene = normalizeVolumeScene(value);
   if (scene === 'tall_plume') return 1;
@@ -176,6 +193,8 @@ struct Uniforms {
   temporal_controls: vec4<f32>,
   scale_controls: vec4<f32>,
   scene_controls: vec4<f32>,
+  bonfire_ablation_controls: vec4<f32>,
+  bonfire_ablation_controls2: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -636,7 +655,8 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let c = vec3<i32>(gid);
   let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
   let bonfireScene = step(1.5, sceneMode);
-  let projection = clamp(u.source_controls.z, 0.0, 1.5);
+  let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
+  let projection = clamp(u.source_controls.z, 0.0, 1.5) * bonfireProjectionAblation;
   let pressureGradient = vec3<f32>(
     pressureRead(c + vec3<i32>(1, 0, 0)).y - pressureRead(c + vec3<i32>(-1, 0, 0)).y,
     pressureRead(c + vec3<i32>(0, 1, 0)).y - pressureRead(c + vec3<i32>(0, -1, 0)).y,
@@ -1287,6 +1307,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireScene = step(1.5, sceneMode);
+  let bonfireRecenterAblation = mix(1.0, clamp(u.bonfire_ablation_controls.x, 0.0, 1.5), bonfireScene);
+  let bonfireLateralDampingAblation = mix(1.0, clamp(u.bonfire_ablation_controls.y, 0.0, 1.5), bonfireScene);
+  let bonfireShearAblation = mix(1.0, clamp(u.bonfire_ablation_controls.z, 0.0, 1.5), bonfireScene);
+  let bonfireDetailForcesAblation = mix(1.0, clamp(u.bonfire_ablation_controls.w, 0.0, 1.5), bonfireScene);
+  let bonfireDepinchAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.x, 0.0, 1.5), bonfireScene);
+  let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
+  let bonfireInstabilityProbe = clamp(u.bonfire_ablation_controls2.w, 0.0, 1.0) * bonfireScene;
+  let effectiveProjection = projection * bonfireProjectionAblation;
   let bonfireThermalRiseDirection = 1.0 - bonfireScene * 2.0;
   let thermalAdvectionRiseDirection = bonfireThermalRiseDirection;
   let fireLayerRiseDirection = bonfireThermalRiseDirection;
@@ -1333,7 +1361,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
   let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
   let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
-  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.020;
+  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.020 * bonfireRecenterAblation;
   let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
   let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
   let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
@@ -1586,7 +1614,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
-  let bonfireLocalLateralForceGain = mix(1.0, max(explicitWindAuthority, 0.86), bonfireScene);
+  let bonfireLocalLateralForceTarget = mix(1.0, max(explicitWindAuthority, 0.86), bonfireScene);
+  let bonfireLocalLateralForceGain = mix(1.0, bonfireLocalLateralForceTarget, bonfireLateralDampingAblation);
   let bonfireDetailLateralDamping = bonfireLocalLateralForceGain;
   let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
@@ -1599,15 +1628,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
   let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
   let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
-  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y);
-  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y);
-  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y);
+  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
+  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
+  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
   let symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
   let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
-  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y);
-  let projectionCorrection = pressureProjectionCorrection(cellI, projection);
+  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
+  let projectionCorrection = pressureProjectionCorrection(cellI, effectiveProjection);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
@@ -1630,7 +1659,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
-  let bonfireNonWindLateralDamping = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
+  let bonfireNonWindLateralDampingTarget = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
+  let bonfireNonWindLateralDamping = mix(1.0, bonfireNonWindLateralDampingTarget, bonfireLateralDampingAblation);
   vel.x = vel.x * bonfireNonWindLateralDamping;
   vel.z = vel.z * bonfireNonWindLateralDamping;
   let bonfireCenteringCarrier = clamp(source * 0.58 + smoke * 0.62 + heat * 0.24, 0.0, 1.5);
@@ -1641,7 +1671,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     + bonfireTopDriftGuard;
   let bonfireDepinchRecenteringRelief = 1.0 - bonfireUpperDepinchBand * 0.84;
   let bonfireBreathingRecenteringGain = (0.068 + speed * 0.012) * bonfireAxisEntrainmentBand * bonfireDepinchRecenteringRelief;
-  let bonfireNonWindRecenteringGain = bonfireBreathingRecenteringGain;
+  let bonfireNonWindRecenteringGain = bonfireBreathingRecenteringGain * bonfireRecenterAblation;
   let bonfireNonWindCenteringForce = vec3<f32>(-p.x, 0.0, -p.z) * bonfireNonWindAuthority * bonfireCenteringCarrier * bonfireNonWindRecenteringGain;
   let bonfireUpperDepinchRadial = max(length(p.xz), 0.025);
   let bonfireUpperDepinchDir = p.xz / bonfireUpperDepinchRadial;
@@ -1673,8 +1703,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
   vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
   vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
-  vel = vel + bonfireLayeredPlumeShear * bonfireNonWindAuthority;
-  vel = vel + bonfireUpperDepinchOutflow;
+  vel = vel + bonfireLayeredPlumeShear * bonfireNonWindAuthority * bonfireShearAblation;
+  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.4;
+  vel = vel + bonfireCellRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.2;
+  vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
@@ -2005,7 +2037,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(72);
+  const uniforms = new Float32Array(80);
   let controlsSnapshot = getControls();
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -2045,6 +2077,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
     windHeight: normalizeWindHeight(controlsSnapshot.windHeight),
+    bonfireAblation: normalizeBonfireAblationControls(controlsSnapshot),
     pressureProjectionEnabled: false,
     pressureProjectionIterations: 0,
     externalEmitterMode: 'off',
@@ -2415,6 +2448,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.windStrength,
       snapshot.windAngle,
       snapshot.windHeight,
+      snapshot.bonfireRecenter,
+      snapshot.bonfireLateralDamping,
+      snapshot.bonfireShear,
+      snapshot.bonfireDetailForces,
+      snapshot.bonfireDepinch,
+      snapshot.bonfireProjection,
+      snapshot.bonfireTemporal,
+      snapshot.bonfireInstabilityProbe,
       snapshot.inputRadius,
       snapshot.flowRate,
       snapshot.resolution,
@@ -2876,7 +2917,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[41] = controlsSnapshot.majorantSkip ?? 0.70;
     uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
     uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
-    const requestedTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
+    const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
+    const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
+    const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
     uniforms[44] = historyValid ? requestedTemporalAccum : 0;
     uniforms[45] = controlsSnapshot.temporalJitter ?? 0.85;
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
@@ -2890,7 +2933,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
     uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
     uniforms[55] = normalizeWindHeight(controlsSnapshot.windHeight);
-    uniforms.set(previousViewProj.elements, 56);
+    uniforms[56] = bonfireAblation.recenter;
+    uniforms[57] = bonfireAblation.lateralDamping;
+    uniforms[58] = bonfireAblation.shear;
+    uniforms[59] = bonfireAblation.detailForces;
+    uniforms[60] = bonfireAblation.depinch;
+    uniforms[61] = bonfireAblation.projection;
+    uniforms[62] = bonfireAblation.temporal;
+    uniforms[63] = bonfireAblation.instabilityProbe;
+    uniforms.set(previousViewProj.elements, 64);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -2908,6 +2959,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
     state.windHeight = uniforms[55];
+    state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
     state.temporalAccumEffective = uniforms[44];
@@ -2959,7 +3011,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodePressureProjection(encoder) {
     if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2) return;
-    const projection = Math.max(0, Math.min(1.5, controlsSnapshot.projection ?? 0.65));
+    const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
+      ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
+      : 1;
+    const projection = Math.max(0, Math.min(1.5, controlsSnapshot.projection ?? 0.65)) * bonfireProjectionAblation;
     if (projection <= 0.001) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
@@ -3743,6 +3798,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         plumeHeight: state.plumeHeight,
+        bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
         externalEmitterCoordinateSpace: state.externalEmitterCoordinateSpace,
         externalEmitterCount: state.externalEmitterCount,
@@ -3979,6 +4035,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       windStrength: state.windStrength,
       windAngle: state.windAngle,
       windHeight: state.windHeight,
+      bonfireAblation: { ...state.bonfireAblation },
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
       displayWidth: state.displayWidth,
@@ -4058,6 +4115,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
       state.windHeight = normalizeWindHeight(controlsSnapshot.windHeight);
+      state.bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
       state.majorantGrid = majorantGridSize;

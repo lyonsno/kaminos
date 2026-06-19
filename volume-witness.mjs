@@ -156,6 +156,23 @@ const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
   : 0.85;
+function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
+  const requested = Number(routeParams.get(name));
+  return routeParams.has(name) && Number.isFinite(requested)
+    ? Math.max(0, Math.min(max, requested))
+    : fallback;
+}
+const expectedBonfireRecenter = expectedBonfireAblationParam('volume_bonfire_recenter');
+const expectedBonfireLateralDamping = expectedBonfireAblationParam('volume_bonfire_lateral_damping');
+const expectedBonfireShear = expectedBonfireAblationParam('volume_bonfire_shear');
+const expectedBonfireDetailForces = expectedBonfireAblationParam('volume_bonfire_detail_forces');
+const expectedBonfireDepinch = expectedBonfireAblationParam('volume_bonfire_depinch');
+const expectedBonfireProjection = expectedBonfireAblationParam('volume_bonfire_projection');
+const expectedBonfireTemporal = expectedBonfireAblationParam('volume_bonfire_temporal');
+const expectedBonfireInstabilityProbe = expectedBonfireAblationParam('volume_bonfire_instability_probe', 0, 1);
+const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
+  ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
+  : expectedTemporalAccum;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
 function delay(ms) {
@@ -424,7 +441,7 @@ async function main() {
     assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
     assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
     assert.ok(Math.abs((state.controls?.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'temporal accumulation route/control did not apply');
-    assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
+    assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedEffectiveTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
     assert.ok(Math.abs((state.controls?.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'temporal jitter route/control did not apply');
     assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
     assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
@@ -445,6 +462,22 @@ async function main() {
     assert.ok(Math.abs((state.windAngle ?? 0) - expectedWindAngle) < 0.001, 'effective wind direction state did not match route/control');
     assert.ok(Math.abs((state.controls?.windHeight ?? 0) - expectedWindHeight) < 0.001, 'wind height/ramp route/control did not apply');
     assert.ok(Math.abs((state.windHeight ?? 0) - expectedWindHeight) < 0.001, 'effective wind height/ramp state did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireRecenter ?? 0) - expectedBonfireRecenter) < 0.001, 'bonfire recenter ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.recenter ?? 0) - expectedBonfireRecenter) < 0.001, 'effective bonfire recenter ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireLateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'bonfire lateral damping ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.lateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'effective bonfire lateral damping ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireShear ?? 0) - expectedBonfireShear) < 0.001, 'bonfire shear ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.shear ?? 0) - expectedBonfireShear) < 0.001, 'effective bonfire shear ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireDetailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'bonfire detail-force ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.detailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'effective bonfire detail-force ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireDepinch ?? 0) - expectedBonfireDepinch) < 0.001, 'bonfire depinch ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.depinch ?? 0) - expectedBonfireDepinch) < 0.001, 'effective bonfire depinch ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireProjection ?? 0) - expectedBonfireProjection) < 0.001, 'bonfire projection ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.projection ?? 0) - expectedBonfireProjection) < 0.001, 'effective bonfire projection ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireTemporal ?? 0) - expectedBonfireTemporal) < 0.001, 'bonfire temporal ablation route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.temporal ?? 0) - expectedBonfireTemporal) < 0.001, 'effective bonfire temporal ablation did not match route/control');
+    assert.ok(Math.abs((state.controls?.bonfireInstabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'bonfire instability probe route/control did not apply');
+    assert.ok(Math.abs((state.bonfireAblation?.instabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'effective bonfire instability probe did not match route/control');
     assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
     assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
     assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
@@ -835,6 +868,16 @@ async function main() {
       expectedWindStrength,
       expectedWindAngle,
       expectedWindHeight,
+      expectedBonfireRecenter,
+      expectedBonfireLateralDamping,
+      expectedBonfireShear,
+      expectedBonfireDetailForces,
+      expectedBonfireDepinch,
+      expectedBonfireProjection,
+      expectedBonfireTemporal,
+      expectedBonfireInstabilityProbe,
+      expectedEffectiveTemporalAccum,
+      bonfireAblation: sample.bonfireAblation,
       expectedRenderScale,
       renderScale: sample.renderScale,
       renderPixelRatio: sample.renderPixelRatio,

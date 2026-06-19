@@ -1351,9 +1351,37 @@ const BONFIRE_VOLUME_CAMERA_FRAME = {
 
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
+const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
+  bonfireRecenter: 1,
+  bonfireLateralDamping: 1,
+  bonfireShear: 1,
+  bonfireDetailForces: 1,
+  bonfireDepinch: 1,
+  bonfireProjection: 1,
+  bonfireTemporal: 1,
+  bonfireInstabilityProbe: 0,
+};
+let routedBonfireAblationControls = { ...DEFAULT_BONFIRE_ABLATION_CONTROLS };
 
 function clampVolumeValue(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
+}
+
+function normalizeBonfireAblationControls(partial = {}) {
+  const normalized = {};
+  for (const [key, defaultValue] of Object.entries(DEFAULT_BONFIRE_ABLATION_CONTROLS)) {
+    const max = key === 'bonfireInstabilityProbe' ? 1 : 1.5;
+    const value = Number(partial[key]);
+    normalized[key] = Number.isFinite(value) ? clampVolumeValue(value, 0, max) : defaultValue;
+  }
+  return normalized;
+}
+
+function routeBonfireAblationControl(params, routeName, controlName) {
+  const value = Number(params.get(routeName));
+  return params.has(routeName) && Number.isFinite(value)
+    ? value
+    : DEFAULT_BONFIRE_ABLATION_CONTROLS[controlName];
 }
 
 function snapVolumeRaySteps(value) {
@@ -1476,6 +1504,7 @@ function readVolumeControls() {
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
+    ...routedBonfireAblationControls,
   };
 }
 
@@ -1557,6 +1586,16 @@ function frameVolumeCamera() {
 
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  routedBonfireAblationControls = normalizeBonfireAblationControls({
+    bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
+    bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
+    bonfireShear: routeBonfireAblationControl(params, 'volume_bonfire_shear', 'bonfireShear'),
+    bonfireDetailForces: routeBonfireAblationControl(params, 'volume_bonfire_detail_forces', 'bonfireDetailForces'),
+    bonfireDepinch: routeBonfireAblationControl(params, 'volume_bonfire_depinch', 'bonfireDepinch'),
+    bonfireProjection: routeBonfireAblationControl(params, 'volume_bonfire_projection', 'bonfireProjection'),
+    bonfireTemporal: routeBonfireAblationControl(params, 'volume_bonfire_temporal', 'bonfireTemporal'),
+    bonfireInstabilityProbe: routeBonfireAblationControl(params, 'volume_bonfire_instability_probe', 'bonfireInstabilityProbe'),
+  });
   const routeVolumeScene = params.get('volume_scene');
   if (routeVolumeScene) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
