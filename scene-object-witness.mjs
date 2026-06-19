@@ -2492,10 +2492,10 @@ async function runSplatCorrectionSidecarScenario(ws) {
         input.dispatchEvent(new Event('change', { bubbles: true }));
       };
       setField('crop.enabled', true);
-      setField('crop.min.x', 0.45);
+      setField('crop.min.x', -0.05);
       setField('crop.min.y', -0.05);
       setField('crop.min.z', -0.05);
-      setField('crop.max.x', 0.55);
+      setField('crop.max.x', 0.05);
       setField('crop.max.y', 0.05);
       setField('crop.max.z', 0.05);
       const saveResult = await window.kaminosSaveSelectedSplatCorrection();
@@ -2649,7 +2649,7 @@ async function runSplatCorrectionModeScenario(ws) {
       const sceneAfterCropToggle = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const cropMode = await window.setSplatCorrectionEditMode('crop');
       const cropEdit = window.kaminosSetSplatCorrectionCropTransform({
-        position: [0.2, 0.3, 1.4],
+        position: [0, 0, 1],
         scale: [0.4, 0.4, 0.4],
       });
       const sceneAfterCropEdit = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
@@ -2756,10 +2756,10 @@ async function runSplatCorrectionModeScenario(ws) {
   }
   const cropEditCorrection = evidence.cropEdit?.draftCorrection || evidence.sceneAfterCropEdit?.splat?.correction || null;
   if (!cropEditCorrection?.crop?.enabled
-      || Math.abs(cropEditCorrection.crop.min?.[0] - 0) > 1e-6
-      || Math.abs(cropEditCorrection.crop.max?.[0] - 0.4) > 1e-6
-      || Math.abs(cropEditCorrection.crop.min?.[2] - 1.2) > 1e-6
-      || Math.abs(cropEditCorrection.crop.max?.[2] - 1.6) > 1e-6) {
+      || Math.abs(cropEditCorrection.crop.min?.[0] + 0.2) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[0] - 0.2) > 1e-6
+      || Math.abs(cropEditCorrection.crop.min?.[2] - 0.8) > 1e-6
+      || Math.abs(cropEditCorrection.crop.max?.[2] - 1.2) > 1e-6) {
     throw new Error(`splat correction crop mode did not update crop bounds: ${JSON.stringify(evidence)}`);
   }
   const afterCropEdit = evidence.sceneAfterCropEdit?.sceneTransform;

@@ -4863,17 +4863,17 @@ function replaceSplatPointGeometry(points, geometry) {
   points.geometry = geometry;
 }
 
-function splatCorrectedPointCoordinates(positions, index, correction) {
+function splatCropPointCoordinates(positions, index, correction) {
   const offset = index * 3;
   return [
-    positions[offset + 0] * correction.axisFlips[0] + correction.centroidOffset[0],
-    positions[offset + 1] * correction.axisFlips[1] + correction.centroidOffset[1],
-    positions[offset + 2] * correction.axisFlips[2] + correction.centroidOffset[2],
+    positions[offset + 0] * correction.axisFlips[0],
+    positions[offset + 1] * correction.axisFlips[1],
+    positions[offset + 2] * correction.axisFlips[2],
   ];
 }
 
 function splatPointInsideCrop(positions, index, correction, cropMin, cropMax) {
-  const [x, y, z] = splatCorrectedPointCoordinates(positions, index, correction);
+  const [x, y, z] = splatCropPointCoordinates(positions, index, correction);
   return x >= cropMin[0] && x <= cropMax[0]
     && y >= cropMin[1] && y <= cropMax[1]
     && z >= cropMin[2] && z <= cropMax[2];
