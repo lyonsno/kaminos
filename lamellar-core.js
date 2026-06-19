@@ -143,6 +143,9 @@ function normalizeLayerOverrides(overrides) {
     const stripCount = Number(override?.stripCount);
     const radiusOffset = Number(override?.radiusOffset ?? override?.radius);
     const thicknessScale = Number(override?.thicknessScale ?? override?.layerThicknessScale ?? override?.massScale);
+    const shellSetCount = Number(override?.shellSetCount ?? override?.shellSets ?? (
+      override?.shellTopologyFamilyCount === undefined ? NaN : Number(override.shellTopologyFamilyCount) + 1
+    ));
     return {
       layerIndex: Number.isFinite(Number(override?.layerIndex)) ? Math.round(Number(override.layerIndex)) : layerIndex,
       chirality: chirality < 0 ? -1 : 1,
@@ -150,6 +153,7 @@ function normalizeLayerOverrides(overrides) {
       stripCount: Number.isFinite(stripCount) ? Math.round(clamp(stripCount, 1, 4)) : null,
       radiusOffset: Number.isFinite(radiusOffset) ? Number(clamp(radiusOffset, -0.24, 0.24).toFixed(4)) : null,
       thicknessScale: Number.isFinite(thicknessScale) ? Number(clamp(thicknessScale, 0.35, 2.5).toFixed(4)) : null,
+      shellSetCount: Number.isFinite(shellSetCount) ? Math.round(clamp(shellSetCount, 1, 5)) : null,
     };
   });
 }
@@ -303,6 +307,7 @@ function defaultStripCountForLayer(layerIndex, role) {
 export function generateLamellarLayerSpecs(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
   const numLayers = Math.round(clamp(Number(input.layerCount ?? input.numLayers ?? 2), 1, MAX_LAYER_COUNT));
+  const defaultShellSetCount = normalizeStripTopologyCount(input) + 1;
   const depthSpacing = clamp(Number(input.depthSpacing ?? 0.035), 0.015, 0.09);
   const overlapBias = clamp(Number(input.overlapBias ?? 0.38), 0, 1);
   const chunkinessBase = clamp(Number(input.chunkinessBase ?? 0.48), 0.05, 1);
@@ -324,6 +329,8 @@ export function generateLamellarLayerSpecs(input = {}) {
     const chunkiness = Number((layerOverride?.chunkiness ?? clamp(chunkinessBase + layerWeight + variance, 0.05, 1)).toFixed(3));
     const stripCount = layerOverride?.stripCount ?? defaultStripCountForLayer(layerIndex, role);
     const thicknessScale = Number((layerOverride?.thicknessScale ?? 1).toFixed(4));
+    const shellSetCount = Math.round(clamp(layerOverride?.shellSetCount ?? defaultShellSetCount, 1, 5));
+    const shellTopologyFamilyCount = Math.max(0, shellSetCount - 1);
     const baseThickness = Number((0.006 + chunkiness * 0.022).toFixed(4));
     const stripIds = Array.from({ length: stripCount }, (_, stripIndex) => `seed-${seed}-layer-${layerIndex}-strip-${stripIndex}`);
     layerSpecs.push({
@@ -345,6 +352,9 @@ export function generateLamellarLayerSpecs(input = {}) {
       baseThickness,
       thicknessScale,
       thicknessOverrideMode: "hierarchical-thickness-override-v0",
+      shellSetCount,
+      shellTopologyFamilyCount,
+      shellSetOverrideMode: "layer-shell-family-set-count-v0",
       stripCount,
       stripIds,
       segmentCount: stripCount,
@@ -367,6 +377,9 @@ export function generateLamellarLayerSpecs(input = {}) {
       chunkinessVariance: Number(chunkinessVariance.toFixed(4)),
       depthSpacing: Number(depthSpacing.toFixed(4)),
       diagnosticLayerSeparationScale: DIAGNOSTIC_LAYER_SEPARATION_SCALE,
+      defaultShellSetCount,
+      defaultShellTopologyFamilyCount: Math.max(0, defaultShellSetCount - 1),
+      shellSetOverrideMode: "layer-shell-family-set-count-v0",
       layerRadiusMode: "layer-shell-radius-offset-before-curve-mesh-derivation",
       overlapBias: Number(overlapBias.toFixed(4)),
       layerOverrides: layerOverrides.slice(0, numLayers),
@@ -957,16 +970,24 @@ function normalizeIntraStripTopologyCount(input = {}) {
 }
 
 function generateShellTopologyFamilyDescriptors(primaryCurves = [], input = {}) {
-  const stripTopologyCount = normalizeStripTopologyCount(input);
-  if (stripTopologyCount <= 0) return [];
+  const defaultStripTopologyCount = normalizeStripTopologyCount(input);
+  const layerSpecs = Array.isArray(input.layerSpecs) ? input.layerSpecs : [];
   const topologyDescriptors = [];
   const lamellaCurves = primaryCurves.filter(curve => curve.populationRole === "lamella" && !curve.topologyRole);
-  for (let shellTopologyFamilyIndex = 0; shellTopologyFamilyIndex < stripTopologyCount; shellTopologyFamilyIndex++) {
-    const centered = shellTopologyFamilyIndex - (stripTopologyCount - 1) / 2;
-    const orientationBearing = Number(((shellTopologyFamilyIndex + 1) * TAU / (stripTopologyCount + 1)).toFixed(6));
-    const familyChirality = shellTopologyFamilyIndex % 2 === 0 ? 1 : -1;
-    const latitudeBand = Number((centered * 1.04).toFixed(6));
-    for (const curve of lamellaCurves) {
+  for (const curve of lamellaCurves) {
+    const layerSpec = layerSpecs.find(spec => spec.id === curve.layerSpecId || spec.layerIndex === curve.layerIndex);
+    const stripTopologyCount = Math.round(clamp(
+      Number(layerSpec?.shellTopologyFamilyCount ?? defaultStripTopologyCount),
+      0,
+      4
+    ));
+    if (stripTopologyCount <= 0) continue;
+    for (let shellTopologyFamilyIndex = 0; shellTopologyFamilyIndex < stripTopologyCount; shellTopologyFamilyIndex++) {
+      const centered = shellTopologyFamilyIndex - (stripTopologyCount - 1) / 2;
+      const orientationBearing = Number(((shellTopologyFamilyIndex + 1) * TAU / (stripTopologyCount + 1)).toFixed(6));
+      const familyChirality = shellTopologyFamilyIndex % 2 === 0 ? 1 : -1;
+      const latitudeBand = Number((centered * 1.04).toFixed(6));
+      const parentChirality = curve.chirality < 0 ? -1 : 1;
       const intervalInset = Math.min(0.032, Math.max(0.012, (curve.interval[1] - curve.interval[0]) * 0.045));
       const interval = [
         Number(clamp(curve.interval[0] + intervalInset * 0.5, 0.05, 0.86).toFixed(4)),
@@ -987,6 +1008,8 @@ function generateShellTopologyFamilyDescriptors(primaryCurves = [], input = {}) 
         topologyRole: "shell-family-member",
         shellTopologyFamilyIndex,
         shellTopologyFamilyCount: stripTopologyCount,
+        shellSetCount: stripTopologyCount + 1,
+        shellSetOverrideMode: "layer-shell-family-set-count-v0",
         topologyOrientationBearing: orientationBearing,
         orientationBand: latitudeBand,
         populationId: familyPopulationId,
@@ -997,9 +1020,9 @@ function generateShellTopologyFamilyDescriptors(primaryCurves = [], input = {}) 
         sliceParticipation: "shell-distributed-topology-family",
         interval,
         theta0: Number((curve.theta0 + orientationBearing + centered * 0.18 + localWave * 0.04).toFixed(6)),
-        thetaTwist: Number((Math.abs(curve.thetaTwist) * familyChirality * (0.72 + shellTopologyFamilyIndex * 0.08)).toFixed(6)),
+        thetaTwist: Number((Math.abs(curve.thetaTwist) * parentChirality * familyChirality * (0.72 + shellTopologyFamilyIndex * 0.08)).toFixed(6)),
         phi0: Number((curve.phi0 * 0.42 + latitudeBand + Math.cos(orientationBearing + curve.bearingPhase) * 0.22).toFixed(6)),
-        phiSlope: Number(((curve.phiSlope * (0.68 + shellTopologyFamilyIndex * 0.12)) * (shellTopologyFamilyIndex % 2 === 0 ? 1 : -1)).toFixed(6)),
+        phiSlope: Number(((Math.abs(curve.phiSlope) * parentChirality * (0.68 + shellTopologyFamilyIndex * 0.12)) * (shellTopologyFamilyIndex % 2 === 0 ? 1 : -1)).toFixed(6)),
         phase: Number((curve.phase + orientationBearing * 0.5 + centered * 0.27).toFixed(6)),
         bearingPhase: Number(((curve.bearingPhase ?? 0) + orientationBearing).toFixed(6)),
         width: Number(clamp(curve.width * 0.78, 0.018, 0.07).toFixed(4)),
@@ -1121,7 +1144,7 @@ export function generateLamellarSectionSegments(input = {}) {
     selectedShape,
     selectedPhase,
   });
-  const shellTopologyFamilyDescriptors = generateShellTopologyFamilyDescriptors(primarySphereCurveDescriptors, { stripTopologyCount });
+  const shellTopologyFamilyDescriptors = generateShellTopologyFamilyDescriptors(primarySphereCurveDescriptors, { stripTopologyCount, layerSpecs });
   const intraStripTopologyDescriptors = generateIntraStripTopologyDescriptors(primarySphereCurveDescriptors, { intraStripTopologyCount });
   const stripTopologyDescriptors = [...shellTopologyFamilyDescriptors, ...intraStripTopologyDescriptors];
   const sphereCurveDescriptors = [...primarySphereCurveDescriptors, ...stripTopologyDescriptors];

@@ -211,6 +211,7 @@ async function main() {
           popoverDisplay: getComputedStyle(layerPopover).display,
           layerToolheadDisplay: getComputedStyle(document.getElementById('lamellar-layer-toolhead')).display,
           popoverLayerRadiusValue: Number(document.getElementById('lamellar-popover-layer-radius')?.value || 0),
+          popoverShellSetValue: Number(document.getElementById('lamellar-popover-shell-set-count')?.value || 0),
           populationChipCount: document.querySelectorAll('#lamellar-popover-populations [data-population-id]').length,
         };
         const firstPopulationId = document.querySelector('#lamellar-popover-populations [data-population-id]')?.dataset.populationId || '';
@@ -393,6 +394,38 @@ async function main() {
           afterDescriptorProfileSources: Array.from(new Set(layerMassAfterDescriptors.map(descriptor => descriptor.profileOverrideSource || descriptor.stripProfileDescriptor?.overrideSource || null))),
           missingSourceCurveIds: layerMassAfterDescriptors.filter(descriptor => !descriptor.sourceCurveId).length,
         };
+        const layerShellSetBeforeState = layerMassAfterState;
+        const beforeLayerShellFamilyIndexes = Array.from(new Set((layerShellSetBeforeState.shellTopologyFamilyDescriptors || [])
+          .filter(descriptor => descriptor.layerIndex === selectedLayerIndexForRadius)
+          .map(descriptor => descriptor.shellTopologyFamilyIndex))).sort((a, b) => a - b);
+        const beforeGlobalStripTopologyCount = Number(layerShellSetBeforeState.composerDescriptor?.stripTopologyCount ?? NaN);
+        const selectedLayerShellSetEl = document.getElementById('lamellar-popover-shell-set-count');
+        if (selectedLayerShellSetEl) {
+          selectedLayerShellSetEl.value = '5';
+          selectedLayerShellSetEl.dispatchEvent(new Event('input', { bubbles: true }));
+          selectedLayerShellSetEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const layerShellSetAfterState = w ? w.debugState() : layerShellSetBeforeState;
+        const afterLayerShellFamilyIndexes = Array.from(new Set((layerShellSetAfterState.shellTopologyFamilyDescriptors || [])
+          .filter(descriptor => descriptor.layerIndex === selectedLayerIndexForRadius)
+          .map(descriptor => descriptor.shellTopologyFamilyIndex))).sort((a, b) => a - b);
+        const afterLayerShellFamilyDescriptors = (layerShellSetAfterState.shellTopologyFamilyDescriptors || [])
+          .filter(descriptor => descriptor.layerIndex === selectedLayerIndexForRadius);
+        const selectedLayerShellSetReceipt = {
+          mode: 'selected-layer-shell-family-set-count-v0',
+          layerIndex: selectedLayerIndexForRadius,
+          beforeVisibleShellSets: beforeLayerShellFamilyIndexes.length + 1,
+          afterVisibleShellSets: afterLayerShellFamilyIndexes.length + 1,
+          beforeFamilyIndexes: beforeLayerShellFamilyIndexes,
+          afterFamilyIndexes: afterLayerShellFamilyIndexes,
+          afterLayerSpecShellSetCount: (layerShellSetAfterState.layerSpecs || []).find(layer => layer.layerIndex === selectedLayerIndexForRadius)?.shellSetCount ?? null,
+          afterDescriptorShellSetCounts: Array.from(new Set(afterLayerShellFamilyDescriptors.map(descriptor => descriptor.shellSetCount ?? null))),
+          sidebarSelectedLayerShellSetValue: Number(document.getElementById('lamellar-selected-layer-shell-set-count')?.value || 0),
+          popoverShellSetValue: Number(selectedLayerShellSetEl?.value || 0),
+          beforeGlobalStripTopologyCount,
+          afterGlobalStripTopologyCount: Number(layerShellSetAfterState.composerDescriptor?.stripTopologyCount ?? NaN),
+          sidebarGlobalStripTopologyCount: Number(document.getElementById('lamellar-strip-topology-count')?.value || 0),
+        };
         if (firstStrip) window.__kaminosLamellarDrillIntoStrip?.(firstStrip.stripInstanceId);
         let authoringRoundTripReceipt = null;
         if (${authoringRoundTripSmoke ? 'true' : 'false'}) {
@@ -493,6 +526,7 @@ async function main() {
           populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
           selectedLayerMassReceipt,
+          selectedLayerShellSetReceipt,
           authoringRoundTripReceipt,
           authoringSlotRoundTripReceipt,
           popoverPinnedDuringSliderReceipt,
@@ -519,10 +553,12 @@ async function main() {
             layerSelectorsDisplay: getComputedStyle(document.getElementById('lamellar-layer-selectors')).display,
             selectedRadiusDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-radius')).display,
             selectedLayerMassDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-thickness-scale')).display,
+            selectedLayerShellSetDisplay: getComputedStyle(document.getElementById('lamellar-selected-layer-shell-set-count')).display,
             selectedLayerText: document.getElementById('lamellar-selected-layer-index')?.textContent || '',
             selectedStripCount: Number(document.getElementById('lamellar-selected-layer-strip-count')?.value || 0),
             selectedRadius: Number(document.getElementById('lamellar-selected-layer-radius')?.value || 0),
             selectedLayerMass: Number(document.getElementById('lamellar-selected-layer-thickness-scale')?.value || 0),
+            selectedLayerShellSets: Number(document.getElementById('lamellar-selected-layer-shell-set-count')?.value || 0),
             selectedStripReadout: document.getElementById('lamellar-selected-layer-strips')?.textContent || '',
             selectedStripIds: Array.from(document.querySelectorAll('#lamellar-selected-layer-strips [data-strip-id]')).map(el => el.dataset.stripId),
           },
@@ -606,6 +642,7 @@ async function main() {
     assert.notEqual(state.selectedLayerUi?.layerSelectorsDisplay, 'none', 'Lamellar layer selectors are hidden in the sidebar');
     assert.notEqual(state.selectedLayerUi?.selectedRadiusDisplay, 'none', 'Lamellar selected-layer radius slider is hidden in the sidebar');
     assert.notEqual(state.selectedLayerUi?.selectedLayerMassDisplay, 'none', 'Lamellar selected-layer mass slider is hidden in the sidebar');
+    assert.notEqual(state.selectedLayerUi?.selectedLayerShellSetDisplay, 'none', 'Lamellar selected-layer shell-set slider is hidden in the sidebar');
     assert.ok((state.selectedLayerUi?.selectedStripIds || []).length >= 1, 'Lamellar selected-layer UI did not render strip ids');
     assert.equal(state.selectedLayerRadiusReceipt?.mode, 'selected-layer-shell-radius-before-curve-mesh-derivation-v0', 'Lamellar witness did not record selected-layer radius mutation');
     assert.equal(state.selectedLayerRadiusReceipt?.afterLayerSpecRadiusOffset, 0.11, 'Lamellar selected-layer radius control did not mutate layer shell radius');
@@ -631,6 +668,26 @@ async function main() {
       'Lamellar selected-layer mass scale did not reach emitted descriptors'
     );
     assert.equal(state.selectedLayerMassReceipt?.missingSourceCurveIds, 0, 'Lamellar selected-layer mass descriptors lost source curve ancestry');
+    assert.equal(state.selectedLayerShellSetReceipt?.mode, 'selected-layer-shell-family-set-count-v0', 'Lamellar witness did not record selected-layer shell-set mutation');
+    assert.equal(state.selectedLayerShellSetReceipt?.afterVisibleShellSets, 5, 'Lamellar selected-layer shell-set control did not create five visible shell sets');
+    assert.equal(state.selectedLayerShellSetReceipt?.afterLayerSpecShellSetCount, 5, 'Lamellar selected-layer shell-set control did not mutate the layer spec');
+    assert.deepEqual(
+      state.selectedLayerShellSetReceipt?.afterDescriptorShellSetCounts,
+      [5],
+      'Lamellar selected-layer shell-set count did not reach derived shell-family descriptors'
+    );
+    assert.equal(
+      state.selectedLayerShellSetReceipt?.afterGlobalStripTopologyCount,
+      state.selectedLayerShellSetReceipt?.beforeGlobalStripTopologyCount,
+      'Lamellar selected-layer shell-set control mutated the global shell-family default'
+    );
+    if (requested.has('lamellar_strip_topology_count')) {
+      assert.equal(
+        state.selectedLayerShellSetReceipt?.sidebarGlobalStripTopologyCount,
+        Number(requested.get('lamellar_strip_topology_count')),
+        'Lamellar selected-layer shell-set control changed the sidebar global shell-family slider'
+      );
+    }
     assert.equal(state.layerSelectionUi?.selectionLevel, 'layer', 'Lamellar single-click selection did not select the layer first');
     assert.ok((state.layerSelectionUi?.selectedLayerStripIds || []).length >= 1, 'Lamellar layer selection did not carry same-shell strip ids');
     assert.equal(state.layerSelectionUi?.selectedStripInstanceId, null, 'Lamellar layer selection should not immediately select a strip');
@@ -785,6 +842,7 @@ async function main() {
       populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,
       selectedLayerMassReceipt: state.selectedLayerMassReceipt,
+      selectedLayerShellSetReceipt: state.selectedLayerShellSetReceipt,
       authoringRoundTripReceipt: state.authoringRoundTripReceipt,
       authoringSlotRoundTripReceipt: state.authoringSlotRoundTripReceipt,
       popoverPinnedDuringSliderReceipt: state.popoverPinnedDuringSliderReceipt,

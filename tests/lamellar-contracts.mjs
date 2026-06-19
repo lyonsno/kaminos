@@ -57,6 +57,7 @@ assert.match(index, /id="lamellar-layer-0-chirality"/, 'Lamellar tab exposes lay
 assert.match(index, /id="lamellar-layer-0-chunkiness"/, 'Lamellar tab exposes layer 0 chunkiness override');
 assert.match(index, /id="lamellar-layer-0-strip-count"/, 'Lamellar tab exposes layer 0 strip-count override');
 assert.match(index, /id="lamellar-layer-0-radius"/, 'Lamellar tab exposes layer 0 shell radius override');
+assert.match(index, /id="lamellar-layer-0-shell-set-count"/, 'Lamellar tab stores layer 0 shell-set count as a layer override');
 assert.match(index, /id="lamellar-layer-detail"/, 'Lamellar tab exposes selected-layer authoring detail panel');
 assert.doesNotMatch(index, /id="lamellar-layer-detail"[^>]*display:none/, 'Lamellar selected-layer authoring panel is visible in the normal sidebar flow');
 assert.doesNotMatch(index, /id="lamellar-layer-selectors"[^>]*display:none/, 'Lamellar layer selectors are visible with the selected-layer authoring panel');
@@ -67,6 +68,8 @@ assert.match(index, /id="lamellar-selected-layer-strip-count"/, 'Lamellar tab ex
 assert.match(index, /id="lamellar-selected-layer-radius"/, 'Lamellar tab exposes selected-layer shell radius editor');
 assert.match(index, /id="lamellar-selected-layer-thickness-scale"/, 'Lamellar tab exposes a selected-layer descendant thickness control');
 assert.match(index, /id="lamellar-selected-layer-thickness-scale"[^>]*data-scope="layer-descendants"/, 'selected-layer thickness control declares that it scopes to descendant strips');
+assert.match(index, /id="lamellar-selected-layer-shell-set-count"/, 'Lamellar tab exposes selected-layer shell-set count control');
+assert.match(index, /id="lamellar-selected-layer-shell-set-count"[^>]*data-scope="layer-shell-families"/, 'selected-layer shell-set control declares that it scopes to layer shell families');
 assert.match(index, /id="lamellar-selected-strip-thickness"[^>]*data-scope="strip-local"/, 'selected-strip thickness control declares that it is a local override');
 assert.match(index, /function applySelectedLayerThicknessScale\(/, 'Lamellar UI can write selected-layer descendant thickness overrides');
 assert.match(index, /id="lamellar-add-strip"/, 'Lamellar tab exposes add-strip control for the selected layer');
@@ -104,6 +107,9 @@ assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar populat
 assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
 assert.match(index, /id="lamellar-population-radial-spacing"/, 'Lamellar population toolhead exposes radial shell spacing control');
 assert.match(index, /id="lamellar-popover-layer-thickness-scale"/, 'Lamellar layer popover exposes descendant thickness control at the selection site');
+assert.match(index, /id="lamellar-popover-shell-set-count"/, 'Lamellar layer popover exposes visible shell-set count control');
+assert.match(index, /id="lamellar-popover-shell-set-count"[^>]*data-scope="layer-shell-families"/, 'Lamellar shell-set count declares layer shell-family scope');
+assert.match(index, /function applyLamellarShellSetCount\(/, 'Lamellar UI can write visible shell-set count from the selection popover');
 assert.match(index, /id="lamellar-strip-profile"/, 'Lamellar tab exposes selected-strip profile authoring panel');
 assert.doesNotMatch(index, /id="lamellar-strip-select"/, 'Lamellar strip selection is viewport-driven rather than dropdown-driven');
 assert.match(index, /id="lamellar-selected-strip-index"/, 'Lamellar tab reports the selected strip identity');
@@ -138,6 +144,7 @@ assert.match(index, /lamellar_layer_chiralities/, 'URL route can override per-la
 assert.match(index, /lamellar_layer_chunkiness/, 'URL route can override per-layer chunkiness values');
 assert.match(index, /lamellar_layer_strip_counts/, 'URL route can override per-layer strip counts');
 assert.match(index, /lamellar_layer_radii/, 'URL route can override per-layer shell radii');
+assert.match(index, /lamellar_layer_shell_sets/, 'URL route can override per-layer shell-set counts');
 assert.match(index, /lamellar_population_count/, 'URL route can override macro strip population count');
 assert.match(index, /lamellar_cutter_count/, 'URL route can override macro cutter population count');
 assert.match(index, /lamellar_population_bearing_variance/, 'URL route can override macro direction variance');
@@ -266,6 +273,7 @@ assert.match(core, /selectBySectionId/, 'Lamellar witness exposes section-id sel
 assert.match(core, /pickFromClientPoint/, 'Lamellar witness exposes raycast picking from the viewport');
 assert.match(core, /selectedLamellarObject/, 'Lamellar debug state reports selected viewport object');
 assert.match(core, /generateLamellarLayerSpecs/, 'Lamellar core generates per-layer specs before section descriptors');
+assert.match(core, /layer-shell-family-set-count-v0/, 'Lamellar core names layer-scoped shell-family set overrides');
 assert.match(core, /generateLamellarStripInstances/, 'Lamellar core expands layer specs into strip instances before mesh emission');
 assert.match(core, /generateLamellarSectionSegments/, 'Lamellar core generates data-first section descriptors before mesh emission');
 assert.match(core, /sliceLamellarSectionSegments/, 'Lamellar core slices section descriptors before mesh emission');
@@ -660,6 +668,50 @@ assert.ok(
   'shell topology families expand the sphere-curve substrate before envelope meshing'
 );
 
+const layerScopedShellSets = coreModule.generateLamellarSectionSegments({
+  seed: 17,
+  layerCount: 3,
+  populationCount: 4,
+  cutterCount: 1,
+  populationBearingVariance: 1,
+  stripTopologyCount: 1,
+  shellEnclosure: 0.55,
+  layerOverrides: [
+    { layerIndex: 0, shellSetCount: 5 },
+  ],
+});
+const shellFamilyIndexesForLayer = layerIndex => new Set(
+  layerScopedShellSets.shellTopologyFamilyDescriptors
+    .filter(member => member.layerIndex === layerIndex)
+    .map(member => member.shellTopologyFamilyIndex)
+);
+assert.equal(
+  layerScopedShellSets.layerSpecs.find(layer => layer.layerIndex === 0)?.shellSetCount,
+  5,
+  'selected layer shell-set override records five visible shell sets'
+);
+assert.equal(
+  shellFamilyIndexesForLayer(0).size,
+  4,
+  'selected layer shell-set override creates four derived shell families around the primary family'
+);
+assert.equal(
+  layerScopedShellSets.layerSpecs.find(layer => layer.layerIndex === 2)?.shellSetCount,
+  2,
+  'non-selected layer keeps the global shell-family default as two visible shell sets'
+);
+assert.equal(
+  shellFamilyIndexesForLayer(2).size,
+  1,
+  'non-selected layer keeps one derived shell family from the global default'
+);
+assert.ok(
+  layerScopedShellSets.shellTopologyFamilyDescriptors
+    .filter(member => member.layerIndex === 0)
+    .every(member => member.shellSetOverrideMode === 'layer-shell-family-set-count-v0' && member.shellSetCount === 5),
+  'derived shell-family descriptors carry the selected layer set-count receipt'
+);
+
 const withIntraStripTopologyMembers = coreModule.generateLamellarSectionSegments({
   seed: 17,
   layerCount: 3,
@@ -948,6 +1000,27 @@ for (const count of [4, 5, 6]) {
   assert.ok(
     positiveDescriptors.some((descriptor, index) => Math.sign(descriptor.thetaTwist || 0) !== Math.sign(negativeDescriptors[index]?.thetaTwist || 0)),
     'population chirality flip changes emitted curve twist direction'
+  );
+  const positiveFamilies = coreModule.generateLamellarSectionSegments({
+    ...chiralityBase,
+    stripTopologyCount: 2,
+  });
+  const negativeFamilies = coreModule.generateLamellarSectionSegments({
+    ...chiralityBase,
+    stripTopologyCount: 2,
+    stripPopulations: [{ ...chiralityBase.stripPopulations[0], chirality: -1 }],
+  });
+  const positiveFamilyDescriptors = positiveFamilies.descriptors.filter(descriptor =>
+    descriptor.topologyRole === 'shell-family-member' && descriptor.sourceParentPopulationId === 'flip-target'
+  );
+  const negativeFamilyDescriptors = negativeFamilies.descriptors.filter(descriptor =>
+    descriptor.topologyRole === 'shell-family-member' && descriptor.sourceParentPopulationId === 'flip-target'
+  );
+  assert.ok(positiveFamilyDescriptors.length > 0, 'shell-family chirality test emitted derived family descriptors');
+  assert.equal(positiveFamilyDescriptors.length, negativeFamilyDescriptors.length, 'shell-family chirality flip preserves derived family count');
+  assert.ok(
+    positiveFamilyDescriptors.every((descriptor, index) => Math.sign(descriptor.thetaTwist || 0) === -Math.sign(negativeFamilyDescriptors[index]?.thetaTwist || 0)),
+    'population chirality flip propagates into all derived shell-family sets'
   );
 }
 assert.ok(
