@@ -16,6 +16,7 @@ const LAMELLAR_ENVELOPE_MODE = "curve-family-envelope-loft-v0";
 const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-composition-v0";
 const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
 const SHELL_ENCLOSURE_MODE = "sphere-shell-enclosure-composition-v0";
+export const LAMELLAR_SHELL_RECIPE_MODE = "shell-recipe-composition-v0";
 const STRIP_TOPOLOGY_MODE = "intra-strip-topology-members-v0";
 const SHELL_TOPOLOGY_FAMILY_MODE = "shell-distributed-topology-families-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
@@ -35,6 +36,23 @@ const DEFAULT_POPULATION_RADIAL_SPACING = 0.04;
 const MAX_POPULATION_RADIAL_SPACING = 0.14;
 const MAX_POPULATION_RADIUS_OFFSET = 0.24;
 const DIAGNOSTIC_LAYER_SEPARATION_SCALE = 2.15;
+export const LAMELLAR_SHELL_RECIPE_IDS = [
+  "custom",
+  "equator-belts",
+  "opposing-belts",
+  "polar-crown",
+  "diagonal-cage",
+  "nested-cup",
+];
+
+const LAMELLAR_SHELL_RECIPE_LABELS = {
+  custom: "Custom",
+  "equator-belts": "Equator belts",
+  "opposing-belts": "Opposing belts",
+  "polar-crown": "Polar crown",
+  "diagonal-cage": "Diagonal cage",
+  "nested-cup": "Nested cup",
+};
 
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
@@ -44,6 +62,142 @@ const VIEW_PRESETS = {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+export function normalizeLamellarShellRecipe(recipe) {
+  return LAMELLAR_SHELL_RECIPE_IDS.includes(recipe) ? recipe : "custom";
+}
+
+function recipePopulation(recipe, recipeRole, patch = {}) {
+  const role = ["lamella", "cutter", "accent"].includes(patch.role) ? patch.role : "lamella";
+  const layerIndex = Number.isFinite(Number(patch.layerIndex)) ? Math.round(Number(patch.layerIndex)) : 0;
+  return {
+    id: `${recipe}-${recipeRole}`,
+    recipe,
+    recipeRole,
+    recipeMode: LAMELLAR_SHELL_RECIPE_MODE,
+    layerIndex,
+    role,
+    count: 4,
+    chirality: 1,
+    layoutPreset: "coverage",
+    bearingOffset: 0,
+    bearingVariance: 1,
+    laneSpan: 0.84,
+    phaseStagger: 0.12,
+    radialSpacing: 0.04,
+    radiusOffset: 0,
+    gapPattern: role === "cutter" ? "crosscut" : "solid",
+    ...patch,
+    role,
+    layerIndex,
+  };
+}
+
+export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
+  const shellRecipe = normalizeLamellarShellRecipe(recipe);
+  const seed = Math.round(clamp(Number(overrides.seed ?? 17), 0, 99999));
+  const base = {
+    shellRecipe,
+    shellRecipeLabel: LAMELLAR_SHELL_RECIPE_LABELS[shellRecipe] || "Custom",
+    shellRecipeMode: LAMELLAR_SHELL_RECIPE_MODE,
+    seed,
+  };
+  if (shellRecipe === "custom") return base;
+  const recipes = {
+    "equator-belts": {
+      layerCount: 3,
+      chiralityPattern: "same",
+      depthSpacing: 0.032,
+      chunkinessBase: 0.56,
+      chunkinessVariance: 0.08,
+      overlapBias: 0.42,
+      populationCount: 5,
+      cutterCount: 1,
+      populationBearingVariance: 1.15,
+      shellEnclosure: 0.42,
+      stripTopologyCount: 1,
+      stripPopulations: [
+        recipePopulation(shellRecipe, "equator-primary", { layerIndex: 0, count: 6, bearingOffset: 0.05, bearingVariance: 1.18, laneSpan: 0.62, phaseStagger: 0.08, radialSpacing: 0.05, radiusOffset: 0.02 }),
+        recipePopulation(shellRecipe, "equator-counter", { layerIndex: 1, count: 5, chirality: -1, bearingOffset: 3.08, bearingVariance: 1.02, laneSpan: 0.52, phaseStagger: -0.08, radialSpacing: 0.045, radiusOffset: 0.08 }),
+        recipePopulation(shellRecipe, "equator-cutters", { layerIndex: 1, role: "cutter", count: 2, chirality: -1, bearingOffset: 0.58, bearingVariance: 0.38, laneSpan: 0.22, phaseStagger: 0.18, radialSpacing: 0.025, radiusOffset: 0.12 }),
+      ],
+    },
+    "opposing-belts": {
+      layerCount: 4,
+      chiralityPattern: "alternating",
+      depthSpacing: 0.04,
+      chunkinessBase: 0.52,
+      chunkinessVariance: 0.14,
+      overlapBias: 0.36,
+      populationCount: 6,
+      cutterCount: 2,
+      populationBearingVariance: 0.82,
+      shellEnclosure: 0.7,
+      stripTopologyCount: 2,
+      stripPopulations: [
+        recipePopulation(shellRecipe, "north-belt", { layerIndex: 0, count: 5, bearingOffset: -0.65, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: 0.22, radialSpacing: 0.06, radiusOffset: 0.06 }),
+        recipePopulation(shellRecipe, "south-belt", { layerIndex: 2, count: 5, chirality: -1, bearingOffset: 2.48, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: -0.22, radialSpacing: 0.06, radiusOffset: -0.02 }),
+        recipePopulation(shellRecipe, "belt-cutters", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: 0.74, bearingVariance: 0.55, laneSpan: 0.34, phaseStagger: 0.18, radialSpacing: 0.035, radiusOffset: 0.13 }),
+      ],
+    },
+    "polar-crown": {
+      layerCount: 5,
+      chiralityPattern: "counterpatch",
+      depthSpacing: 0.045,
+      chunkinessBase: 0.44,
+      chunkinessVariance: 0.18,
+      overlapBias: 0.5,
+      populationCount: 7,
+      cutterCount: 2,
+      populationBearingVariance: 1.35,
+      shellEnclosure: 0.92,
+      stripTopologyCount: 3,
+      stripPopulations: [
+        recipePopulation(shellRecipe, "crown-rim", { layerIndex: 0, count: 7, bearingOffset: 0.25, bearingVariance: 1.35, laneSpan: 1.0, phaseStagger: 0.36, radialSpacing: 0.055, radiusOffset: 0.11 }),
+        recipePopulation(shellRecipe, "inner-crown", { layerIndex: 2, count: 5, chirality: -1, bearingOffset: -1.18, bearingVariance: 0.86, laneSpan: 0.52, phaseStagger: -0.28, radialSpacing: 0.045, radiusOffset: -0.02 }),
+        recipePopulation(shellRecipe, "crown-windows", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: 1.04, bearingVariance: 0.48, laneSpan: 0.36, phaseStagger: 0.22, radialSpacing: 0.025, radiusOffset: 0.16 }),
+      ],
+    },
+    "diagonal-cage": {
+      layerCount: 4,
+      chiralityPattern: "alternating",
+      depthSpacing: 0.038,
+      chunkinessBase: 0.5,
+      chunkinessVariance: 0.12,
+      overlapBias: 0.34,
+      populationCount: 6,
+      cutterCount: 3,
+      populationBearingVariance: 1.2,
+      shellEnclosure: 0.82,
+      stripTopologyCount: 3,
+      stripPopulations: [
+        recipePopulation(shellRecipe, "primary-diagonal", { layerIndex: 0, count: 6, bearingOffset: -0.42, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: 0.32, radialSpacing: 0.06, radiusOffset: 0.04 }),
+        recipePopulation(shellRecipe, "counter-diagonal", { layerIndex: 1, count: 6, chirality: -1, bearingOffset: 1.92, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: -0.32, radialSpacing: 0.06, radiusOffset: 0.1 }),
+        recipePopulation(shellRecipe, "equator-lock", { layerIndex: 2, count: 4, bearingOffset: 0.9, bearingVariance: 0.7, laneSpan: 0.42, phaseStagger: 0.12, radialSpacing: 0.035, radiusOffset: -0.03 }),
+        recipePopulation(shellRecipe, "cage-cutters", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: -0.88, bearingVariance: 0.46, laneSpan: 0.32, phaseStagger: 0.28, radialSpacing: 0.03, radiusOffset: 0.16 }),
+      ],
+    },
+    "nested-cup": {
+      layerCount: 5,
+      chiralityPattern: "same",
+      depthSpacing: 0.03,
+      chunkinessBase: 0.66,
+      chunkinessVariance: 0.1,
+      overlapBias: 0.58,
+      populationCount: 5,
+      cutterCount: 1,
+      populationBearingVariance: 0.7,
+      shellEnclosure: 0.62,
+      stripTopologyCount: 2,
+      stripPopulations: [
+        recipePopulation(shellRecipe, "outer-cup", { layerIndex: 0, count: 5, bearingOffset: 0.15, bearingVariance: 0.7, laneSpan: 0.72, phaseStagger: 0.14, radialSpacing: 0.07, radiusOffset: 0.1 }),
+        recipePopulation(shellRecipe, "inner-cup", { layerIndex: 2, count: 4, bearingOffset: -0.46, bearingVariance: 0.52, laneSpan: 0.48, phaseStagger: 0.1, radialSpacing: 0.045, radiusOffset: -0.04 }),
+        recipePopulation(shellRecipe, "cup-mouth-cutter", { layerIndex: 1, role: "cutter", count: 1, chirality: -1, bearingOffset: 0.78, bearingVariance: 0.22, laneSpan: 0, phaseStagger: 0, radialSpacing: 0, radiusOffset: 0.18 }),
+      ],
+    },
+  };
+  return { ...base, ...(recipes[shellRecipe] || {}) };
 }
 
 function mulberry32(seed) {
@@ -225,7 +379,10 @@ function normalizeStripPopulations(populations) {
       radialSpacing,
       radiusOffset,
       gapPattern: normalizeGapPattern(population?.gapPattern),
-      source: "macro-strip-population",
+      recipe: typeof population?.recipe === "string" ? population.recipe : null,
+      recipeRole: typeof population?.recipeRole === "string" ? population.recipeRole : null,
+      recipeMode: population?.recipeMode === LAMELLAR_SHELL_RECIPE_MODE ? LAMELLAR_SHELL_RECIPE_MODE : null,
+      source: population?.recipeRole ? "shell-recipe-population" : "macro-strip-population",
     };
   }).filter(population => population.count > 0);
 }
@@ -1106,6 +1263,7 @@ function generateIntraStripTopologyDescriptors(primaryCurves = [], input = {}) {
 
 export function generateLamellarSectionSegments(input = {}) {
   const seed = Math.round(clamp(Number(input.seed ?? 17), 0, 99999));
+  const shellRecipe = normalizeLamellarShellRecipe(input.shellRecipe ?? input.recipe);
   const shellEnclosure = Number(clamp(Number(input.shellEnclosure ?? input.enclosure ?? 0), 0, 1).toFixed(4));
   const stripTopologyCount = normalizeStripTopologyCount(input);
   const intraStripTopologyCount = normalizeIntraStripTopologyCount(input);
@@ -1127,6 +1285,18 @@ export function generateLamellarSectionSegments(input = {}) {
     stripPopulationKind: "StripPopulationDescriptor",
     stripProfileKind: "StripProfileDescriptor",
     proceduralSeed: seed,
+    shellRecipe,
+    shellRecipeLabel: LAMELLAR_SHELL_RECIPE_LABELS[shellRecipe] || "Custom",
+    shellRecipeMode: LAMELLAR_SHELL_RECIPE_MODE,
+    recipeEffectiveParameters: {
+      layerCount: Number(input.layerCount ?? input.numLayers ?? layerStackDescriptor.numLayers),
+      populationCount: Number(input.populationCount ?? 0),
+      cutterCount: Number(input.cutterCount ?? 0),
+      populationBearingVariance: Number(input.populationBearingVariance ?? 0),
+      shellEnclosure,
+      stripTopologyCount,
+      authoredPopulationCount: Array.isArray(input.stripPopulations) ? input.stripPopulations.length : 0,
+    },
     chiralityPattern: layerStackDescriptor.chiralityPattern,
     layerCount: layerStackDescriptor.numLayers,
     numLayers: layerStackDescriptor.numLayers,
@@ -1631,6 +1801,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     chunkinessBase: 0.48,
     chunkinessVariance: 0.22,
     layerOverrides: [],
+    shellRecipe: "custom",
     populationCount: 4,
     cutterCount: 1,
     populationBearingVariance: 1,
@@ -2018,6 +2189,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     clear();
     const generated = generateLamellarSectionSegments({
       seed: state.proceduralSeed,
+      shellRecipe: state.shellRecipe,
       chirality: state.chiralityMode,
       chiralityPattern: state.chiralityPattern,
       layerCount: state.layerCount,
@@ -2347,6 +2519,7 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.cutRadius = clamp(Number(next.cutRadius ?? state.cutRadius), 0.018, 0.12);
     state.layerCount = Math.round(clamp(Number(next.layerCount ?? state.layerCount), 1, MAX_LAYER_COUNT));
     state.proceduralSeed = Math.round(clamp(Number(next.seed ?? state.proceduralSeed), 0, 99999));
+    state.shellRecipe = normalizeLamellarShellRecipe(next.shellRecipe ?? state.shellRecipe);
     state.chiralityMode = ["same", "counterpatch", "mixed"].includes(next.chirality) ? next.chirality : state.chiralityMode;
     state.chiralityPattern = clampPattern(next.chiralityPattern ?? state.chiralityPattern);
     state.depthSpacing = clamp(Number(next.depthSpacing ?? state.depthSpacing), 0.015, 0.09);

@@ -19,6 +19,14 @@ assert.match(index, /id="lamellar-layer-count"[^>]*max="12"/, 'Lamellar macro la
 assert.match(index, /id="lamellar-seed"/, 'Lamellar tab exposes procedural seed control');
 assert.match(index, /id="lamellar-chirality"/, 'Lamellar tab exposes chirality control');
 assert.match(index, /id="lamellar-chirality-pattern"/, 'Lamellar tab exposes chirality pattern through layers');
+assert.match(index, /id="lamellar-shell-recipe"/, 'Lamellar tab exposes a shell recipe selector for coherent procedural starts');
+assert.match(index, /equator-belts/, 'Lamellar shell recipes include an equator belt start');
+assert.match(index, /opposing-belts/, 'Lamellar shell recipes include an opposing belts start');
+assert.match(index, /polar-crown/, 'Lamellar shell recipes include a polar crown start');
+assert.match(index, /diagonal-cage/, 'Lamellar shell recipes include a diagonal cage start');
+assert.match(index, /nested-cup/, 'Lamellar shell recipes include a nested cup start');
+assert.match(index, /function applyLamellarShellRecipe\(/, 'Lamellar UI can apply a selected shell recipe to macro controls');
+assert.match(index, /__kaminosLamellarApplyShellRecipe/, 'Lamellar UI exposes recipe application for browser witnesses');
 assert.match(index, /id="lamellar-depth-spacing"/, 'Lamellar tab exposes layer depth spacing control');
 assert.match(index, /id="lamellar-chunkiness"/, 'Lamellar tab exposes layer chunkiness control');
 assert.match(index, /id="lamellar-chunkiness-variance"/, 'Lamellar tab exposes chunkiness variance control');
@@ -140,6 +148,7 @@ assert.match(index, /lamellar_layers/, 'URL route can override Lamellar placehol
 assert.match(index, /lamellar_seed/, 'URL route can override Lamellar procedural seed');
 assert.match(index, /lamellar_chirality/, 'URL route can override Lamellar chirality');
 assert.match(index, /lamellar_chirality_pattern/, 'URL route can override Lamellar layer chirality pattern');
+assert.match(index, /lamellar_shell_recipe/, 'URL route can open directly into a named Lamellar shell recipe');
 assert.match(index, /lamellar_depth_spacing/, 'URL route can override Lamellar depth spacing');
 assert.match(index, /lamellar_chunkiness/, 'URL route can override Lamellar layer chunkiness');
 assert.match(index, /lamellar_chunkiness_variance/, 'URL route can override Lamellar chunkiness variance');
@@ -366,8 +375,38 @@ assert.match(witness, /blank frame/i, 'witness fails loudly on blank visual outp
 assert.match(witness, /assertVisualDiversity/, 'witness checks screenshot pixel diversity, not only file size');
 assert.match(witness, /manualEnable/, 'witness can exercise the plain-load Lamellar tab Enable path');
 assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera and visibility state');
+assert.match(witness, /recipeSmoke/, 'witness can run a focused shell-recipe smoke without the full mutation sweep');
+assert.match(witness, /--recipe-smoke/, 'witness exposes a focused shell-recipe smoke CLI flag');
+assert.match(witness, /shellRecipeReceipt/, 'witness records focused shell-recipe selection and generated population evidence');
+assert.match(witness, /recipeSmokeReceipt/, 'witness records a focused shell-recipe visual/report receipt');
+assert.match(witness, /cdpTimeoutMs/, 'witness bounds CDP request waits instead of hanging silently');
+assert.match(witness, /requestPhase/, 'witness records the phase that failed before primary output');
+assert.match(witness, /captureScreenshotWithFallback/, 'witness can fall back when primary Chrome screenshot capture stalls');
+assert.match(witness, /screenshotFallbackReceipt/, 'witness records which screenshot capture route produced visual evidence');
+assert.match(witness, /mac-screencapture-display/, 'witness records macOS display capture as a last-resort visual evidence route');
 
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
+assert.equal(coreModule.LAMELLAR_SHELL_RECIPE_MODE, 'shell-recipe-composition-v0', 'Lamellar core exposes a stable shell recipe mode');
+assert.ok(Array.isArray(coreModule.LAMELLAR_SHELL_RECIPE_IDS), 'Lamellar core exports recipe ids for UI/test reuse');
+assert.ok(coreModule.LAMELLAR_SHELL_RECIPE_IDS.includes('diagonal-cage'), 'Lamellar recipe ids include diagonal cage');
+assert.equal(typeof coreModule.controlsForLamellarShellRecipe, 'function', 'Lamellar core exposes recipe-to-controls expansion');
+{
+  const diagonalControls = coreModule.controlsForLamellarShellRecipe('diagonal-cage', { seed: 17 });
+  assert.equal(diagonalControls.shellRecipe, 'diagonal-cage', 'recipe controls record requested recipe id');
+  assert.equal(diagonalControls.shellRecipeMode, 'shell-recipe-composition-v0', 'recipe controls record shell recipe mode');
+  assert.ok(diagonalControls.layerCount >= 4, 'diagonal cage recipe creates a multi-layer starting point');
+  assert.ok(diagonalControls.populationCount >= 5, 'diagonal cage recipe creates enough lamella members to read as a cage');
+  assert.ok(diagonalControls.stripTopologyCount >= 2, 'diagonal cage recipe creates multiple shell-family orientations');
+  assert.ok(diagonalControls.shellEnclosure >= 0.65, 'diagonal cage recipe starts as an enclosing shell composition');
+  assert.ok((diagonalControls.stripPopulations || []).length >= 2, 'diagonal cage recipe emits authored population sets instead of only raw macro defaults');
+  const diagonal = coreModule.generateLamellarSectionSegments(diagonalControls);
+  assert.equal(diagonal.composerDescriptor.shellRecipe, 'diagonal-cage', 'composer descriptor records the effective shell recipe');
+  assert.equal(diagonal.composerDescriptor.shellRecipeMode, 'shell-recipe-composition-v0', 'composer descriptor records the recipe mode');
+  assert.equal(diagonal.composerDescriptor.recipeEffectiveParameters.populationCount, diagonalControls.populationCount, 'composer descriptor records effective recipe controls');
+  assert.ok(diagonal.stripPopulationDescriptors.some(population => population.recipeRole === 'primary-diagonal'), 'diagonal cage recipe emits a named primary diagonal population');
+  assert.ok(diagonal.stripPopulationDescriptors.some(population => population.recipeRole === 'counter-diagonal'), 'diagonal cage recipe emits a named counter diagonal population');
+  assert.ok(diagonal.lamellarEnvelopeDescriptors.length >= 2, 'diagonal cage recipe creates multiple envelope bodies from its population families');
+}
 const envelopeGenerated = coreModule.generateLamellarSectionSegments({
   seed: 17,
   layerCount: 4,

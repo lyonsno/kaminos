@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { inflateSync } from 'node:zlib';
 
 const args = new Map();
@@ -15,11 +15,14 @@ const port = Number(args.get('--debug-port') || 9441);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lamellar-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1000);
+const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 15000);
 const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
+const recipeSmoke = args.get('--recipe-smoke') === '1' || requested.get('recipe_smoke') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
 const authoringSlotSmoke = requested.get('authoring_slot_smoke') === '1';
+let requestPhase = 'startup';
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -46,10 +49,15 @@ function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveReq, rejectReq) => {
+    const timer = setTimeout(() => {
+      ws.removeEventListener('message', onMessage);
+      rejectReq(new Error(`${method} timed out after ${cdpTimeoutMs}ms during ${requestPhase}`));
+    }, cdpTimeoutMs);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
       ws.removeEventListener('message', onMessage);
+      clearTimeout(timer);
       if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
       else resolveReq(msg.result);
     };
@@ -153,6 +161,69 @@ function assertVisualDiversity(buffer) {
   return stats;
 }
 
+async function captureScreenshotWithFallback(ws, phaseBase) {
+  requestPhase = `${phaseBase}-screenshot`;
+  try {
+    const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+    return {
+      data: screenshot.data,
+      screenshotFallbackReceipt: {
+        mode: 'chrome-screenshot-fallback-v0',
+        captureRoute: 'fromSurface',
+        fallbackUsed: false,
+        primaryPhase: requestPhase,
+        primaryError: null,
+      },
+    };
+  } catch (err) {
+    const primaryPhase = requestPhase;
+    const primaryError = String(err.stack || err);
+    requestPhase = `${phaseBase}-screenshot-fallback`;
+    try {
+      const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: false });
+      return {
+        data: screenshot.data,
+        screenshotFallbackReceipt: {
+          mode: 'chrome-screenshot-fallback-v0',
+          captureRoute: 'view',
+          fallbackUsed: true,
+          primaryPhase,
+          primaryError,
+          fallbackPhase: requestPhase,
+          fallbackError: null,
+        },
+      };
+    } catch (fallbackErr) {
+      const fallbackPhase = requestPhase;
+      const fallbackError = String(fallbackErr.stack || fallbackErr);
+      requestPhase = `${phaseBase}-screenshot-mac-activate`;
+      const activate = spawnSync('/usr/bin/osascript', ['-e', 'tell application "Google Chrome" to activate'], { encoding: 'utf8' });
+      await delay(350);
+      requestPhase = `${phaseBase}-screenshot-mac-screencapture`;
+      const capture = spawnSync('/usr/sbin/screencapture', ['-x', out], { encoding: 'utf8' });
+      if (capture.status !== 0) {
+        throw new Error(`mac-screencapture-display failed after CDP screenshot routes; primary=${primaryError}; fallback=${fallbackError}; activateStatus=${activate.status}; activateStderr=${activate.stderr || ''}; stderr=${capture.stderr || ''}`);
+      }
+      return {
+        data: readFileSync(out).toString('base64'),
+        screenshotFallbackReceipt: {
+          mode: 'chrome-screenshot-fallback-v0',
+          captureRoute: 'mac-screencapture-display',
+          fallbackUsed: true,
+          primaryPhase,
+          primaryError,
+          fallbackPhase,
+          fallbackError,
+          macActivatePhase: `${phaseBase}-screenshot-mac-activate`,
+          macActivateStatus: activate.status,
+          macActivateStderr: activate.stderr || null,
+          macPhase: requestPhase,
+        },
+      };
+    }
+  }
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -174,12 +245,18 @@ async function main() {
     const pages = await cdpFetch('/json');
     const page = pages.find(p => p.type === 'page') || pages[0];
     const ws = new WebSocket(page.webSocketDebuggerUrl);
+    requestPhase = 'websocket-open';
     await waitForWebSocketOpen(ws);
+    requestPhase = 'runtime-enable';
     await wsRequest(ws, 'Runtime.enable');
+    requestPhase = 'page-enable';
     await wsRequest(ws, 'Page.enable');
+    requestPhase = 'page-bring-to-front';
     await wsRequest(ws, 'Page.bringToFront');
+    requestPhase = 'settle';
     await delay(settleMs);
     if (manualEnable) {
+      requestPhase = 'manual-enable';
       await wsRequest(ws, 'Runtime.evaluate', {
         expression: `(() => {
           document.querySelector('[data-tab="lamellar"]')?.click();
@@ -191,10 +268,128 @@ async function main() {
       await delay(600);
     }
 
+    if (recipeSmoke) {
+      requestPhase = 'recipe-smoke-evaluate';
+      const recipeResult = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const w = window.__kaminosLamellarWitness;
+          const state = w ? w.debugState() : { active: false, missing: true };
+          const initialRecipe = document.getElementById('lamellar-shell-recipe')?.value || 'custom';
+          const recipePopulationDescriptors = (state.stripPopulationDescriptors || []).filter(population => population.recipe === initialRecipe);
+          const shellRecipeReceipt = {
+            mode: 'shell-recipe-composition-v0',
+            selectedRecipe: initialRecipe,
+            composerRecipe: state.composerDescriptor?.shellRecipe || null,
+            composerRecipeMode: state.composerDescriptor?.shellRecipeMode || null,
+            recipeLabel: state.composerDescriptor?.shellRecipeLabel || null,
+            effectiveParameters: state.composerDescriptor?.recipeEffectiveParameters || null,
+            populationRoles: recipePopulationDescriptors.map(population => population.recipeRole).filter(Boolean),
+            populationCount: recipePopulationDescriptors.length,
+            envelopeCount: (state.lamellarEnvelopeDescriptors || []).filter(envelope => recipePopulationDescriptors.some(population => population.id === envelope.populationId)).length,
+            layerCountValue: Number(document.getElementById('lamellar-layer-count')?.value || 0),
+            populationCountValue: Number(document.getElementById('lamellar-population-count')?.value || 0),
+            cutterCountValue: Number(document.getElementById('lamellar-cutter-count')?.value || 0),
+            enclosureValue: Number(document.getElementById('lamellar-shell-enclosure')?.value || 0),
+            shellFamiliesValue: Number(document.getElementById('lamellar-strip-topology-count')?.value || 0),
+          };
+          return {
+            ...state,
+            shellRecipeReceipt,
+            recipeSmokeReceipt: {
+              mode: 'focused-shell-recipe-smoke-v0',
+              requestedRecipe: new URL(location.href).searchParams.get('lamellar_shell_recipe') || null,
+              selectedRecipe: initialRecipe,
+              segmentCount: (state.sectionSegments || []).length,
+              descriptorCount: state.segmentDescriptorCount || 0,
+              populationCount: recipePopulationDescriptors.length,
+              envelopeCount: shellRecipeReceipt.envelopeCount,
+              populationRoles: shellRecipeReceipt.populationRoles,
+            },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const state = recipeResult.result.value;
+      assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
+      assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
+      assert.ok(state.active, 'Lamellar witness route was not active');
+      assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar recipe smoke did not build section segments');
+      assert.ok((state.segmentDescriptorCount || 0) >= 3, 'Lamellar recipe smoke did not export generated section descriptors');
+      assert.ok(state.composerDescriptor?.mode, 'Lamellar recipe smoke did not export composer descriptor');
+      if (requested.has('lamellar_shell_recipe')) {
+        const requestedRecipe = requested.get('lamellar_shell_recipe');
+        assert.equal(state.shellRecipeReceipt?.selectedRecipe, requestedRecipe, 'Lamellar recipe smoke did not select requested shell recipe');
+        assert.equal(state.shellRecipeReceipt?.composerRecipe, requestedRecipe, 'Lamellar recipe smoke composer descriptor did not record requested shell recipe');
+        assert.equal(state.shellRecipeReceipt?.composerRecipeMode, 'shell-recipe-composition-v0', 'Lamellar recipe smoke did not record recipe mode');
+        assert.ok((state.shellRecipeReceipt?.populationRoles || []).length >= 2, 'Lamellar recipe smoke did not emit named recipe population roles');
+        assert.ok((state.shellRecipeReceipt?.populationCount || 0) >= 2, 'Lamellar recipe smoke did not create authored recipe populations');
+        assert.ok((state.shellRecipeReceipt?.envelopeCount || 0) >= 1, 'Lamellar recipe smoke did not create envelope bodies from recipe populations');
+        if (requestedRecipe === 'diagonal-cage') {
+          assert.ok(
+            (state.shellRecipeReceipt?.populationRoles || []).includes('primary-diagonal'),
+            'Lamellar diagonal-cage recipe smoke did not emit the primary diagonal role'
+          );
+          assert.ok(
+            (state.shellRecipeReceipt?.populationRoles || []).includes('counter-diagonal'),
+            'Lamellar diagonal-cage recipe smoke did not emit the counter diagonal role'
+          );
+        }
+      }
+      const { data: screenshotData, screenshotFallbackReceipt } = await captureScreenshotWithFallback(ws, 'recipe-smoke');
+      const buffer = Buffer.from(screenshotData, 'base64');
+      writeFileSync(out, buffer);
+      const visualStats = assertVisualDiversity(buffer);
+      const report = {
+        schema: 'kaminos.lamellar-witness.v0',
+        mode: 'focused-shell-recipe-smoke-v0',
+        requestedUrl: url,
+        requestPhase,
+        cdpTimeoutMs,
+        requestedView: requested.get('lamellar_view') || 'cap_profile',
+        effectiveView: state.effectiveView,
+        requestedShellRecipe: requested.get('lamellar_shell_recipe') || null,
+        effectiveRoute: state.effectiveRoute,
+        witnessIdentity: state.witnessIdentity,
+        composerDescriptor: state.composerDescriptor,
+        shellRecipeReceipt: state.shellRecipeReceipt,
+        recipeSmokeReceipt: state.recipeSmokeReceipt,
+        screenshotFallbackReceipt,
+        stripPopulationDescriptors: state.stripPopulationDescriptors,
+        lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
+        segmentDescriptorCount: state.segmentDescriptorCount,
+        sectionSegments: state.sectionSegments,
+        screenshot: out,
+        visualStats,
+        stderrTail: stderr.slice(-2000),
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+      ws.close();
+      return;
+    }
+
+    requestPhase = 'full-witness-evaluate';
     const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
       expression: `(() => {
         const w = window.__kaminosLamellarWitness;
         const preState = w ? w.debugState() : { active: false, missing: true };
+        const initialRecipe = document.getElementById('lamellar-shell-recipe')?.value || 'custom';
+        const recipePopulationDescriptors = (preState.stripPopulationDescriptors || []).filter(population => population.recipe === initialRecipe);
+        const shellRecipeReceipt = {
+          mode: 'shell-recipe-composition-v0',
+          selectedRecipe: initialRecipe,
+          composerRecipe: preState.composerDescriptor?.shellRecipe || null,
+          composerRecipeMode: preState.composerDescriptor?.shellRecipeMode || null,
+          recipeLabel: preState.composerDescriptor?.shellRecipeLabel || null,
+          effectiveParameters: preState.composerDescriptor?.recipeEffectiveParameters || null,
+          populationRoles: recipePopulationDescriptors.map(population => population.recipeRole).filter(Boolean),
+          populationCount: recipePopulationDescriptors.length,
+          envelopeCount: (preState.lamellarEnvelopeDescriptors || []).filter(envelope => recipePopulationDescriptors.some(population => population.id === envelope.populationId)).length,
+          layerCountValue: Number(document.getElementById('lamellar-layer-count')?.value || 0),
+          populationCountValue: Number(document.getElementById('lamellar-population-count')?.value || 0),
+          cutterCountValue: Number(document.getElementById('lamellar-cutter-count')?.value || 0),
+          enclosureValue: Number(document.getElementById('lamellar-shell-enclosure')?.value || 0),
+          shellFamiliesValue: Number(document.getElementById('lamellar-strip-topology-count')?.value || 0),
+        };
         const firstStrip = (preState.sectionSegments || []).find(segment => segment.stripInstanceId);
         if (firstStrip) window.__kaminosLamellarSelectLayerByStripInstanceId?.(firstStrip.stripInstanceId);
         const layerState = w ? w.debugState() : preState;
@@ -585,6 +780,7 @@ async function main() {
           manualEnableUi,
           layerSelectionUi,
           populationToolheadUi,
+          shellRecipeReceipt,
           selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
           populationControlReceipt,
           populationSliderSweepReceipt,
@@ -662,6 +858,33 @@ async function main() {
     assert.ok((state.sectionSegments || []).length >= 3, 'Lamellar witness did not build section segments');
     assert.ok((state.segmentDescriptorCount || 0) >= 3, 'Lamellar witness did not export generated section descriptors');
     assert.ok(state.composerDescriptor?.mode, 'Lamellar witness did not export composer descriptor');
+    if (requested.has('lamellar_shell_recipe')) {
+      const requestedRecipe = requested.get('lamellar_shell_recipe');
+      assert.equal(state.shellRecipeReceipt?.selectedRecipe, requestedRecipe, 'Lamellar route did not select requested shell recipe');
+      assert.equal(state.shellRecipeReceipt?.composerRecipe, requestedRecipe, 'Lamellar composer descriptor did not record requested shell recipe');
+      assert.equal(state.shellRecipeReceipt?.composerRecipeMode, 'shell-recipe-composition-v0', 'Lamellar shell recipe receipt did not record recipe mode');
+      assert.equal(state.composerDescriptor?.shellRecipe, requestedRecipe, 'Lamellar debug composer recipe mismatch');
+      assert.equal(state.composerDescriptor?.shellRecipeMode, 'shell-recipe-composition-v0', 'Lamellar debug composer recipe mode mismatch');
+      assert.ok((state.shellRecipeReceipt?.populationRoles || []).length >= 2, 'Lamellar shell recipe did not emit named recipe population roles');
+      assert.ok((state.shellRecipeReceipt?.populationCount || 0) >= 2, 'Lamellar shell recipe did not create authored recipe populations');
+      assert.ok((state.shellRecipeReceipt?.envelopeCount || 0) >= 1, 'Lamellar shell recipe did not create envelope bodies from recipe populations');
+      assert.equal(state.shellRecipeReceipt?.mode, 'shell-recipe-composition-v0', 'Lamellar shell recipe receipt mode mismatch');
+      assert.equal(
+        state.shellRecipeReceipt?.effectiveParameters?.authoredPopulationCount,
+        state.shellRecipeReceipt?.populationCount,
+        'Lamellar shell recipe effective parameters did not record authored populations'
+      );
+      if (requestedRecipe === 'diagonal-cage') {
+        assert.ok(
+          (state.shellRecipeReceipt?.populationRoles || []).includes('primary-diagonal'),
+          'Lamellar diagonal-cage recipe did not emit the primary diagonal role'
+        );
+        assert.ok(
+          (state.shellRecipeReceipt?.populationRoles || []).includes('counter-diagonal'),
+          'Lamellar diagonal-cage recipe did not emit the counter diagonal role'
+        );
+      }
+    }
     if (requested.has('lamellar_shell_enclosure')) {
       const requestedShellEnclosure = Number(requested.get('lamellar_shell_enclosure'));
       assert.equal(state.composerDescriptor?.shellEnclosure, requestedShellEnclosure, 'Lamellar witness effective shellEnclosure did not match requested route');
@@ -890,19 +1113,22 @@ async function main() {
     }
 
     if (state.populationControlReceipt?.populationId) {
+      requestPhase = 'full-witness-reselect-population';
       await wsRequest(ws, 'Runtime.evaluate', {
         expression: `window.__kaminosLamellarSelectPopulationById?.(${JSON.stringify(state.populationControlReceipt.populationId)})`,
       });
       await delay(250);
     }
-    const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
-    const buffer = Buffer.from(screenshot.data, 'base64');
+    const { data: screenshotData, screenshotFallbackReceipt } = await captureScreenshotWithFallback(ws, 'full-witness');
+    const buffer = Buffer.from(screenshotData, 'base64');
     writeFileSync(out, buffer);
     const visualStats = assertVisualDiversity(buffer);
 
     const report = {
       schema: 'kaminos.lamellar-witness.v0',
       requestedUrl: url,
+      requestPhase,
+      cdpTimeoutMs,
       requestedView: requested.get('lamellar_view') || 'cap_profile',
       effectiveView: state.effectiveView,
       requestedCutRadius: requested.get('lamellar_cut_radius') || null,
@@ -944,6 +1170,7 @@ async function main() {
       stripDrilldownUi: state.stripDrilldownUi,
       selectionPopoverUi: state.selectionPopoverUi,
       selectionUi: state.selectionUi,
+      screenshotFallbackReceipt,
       selectedLamellarObject: state.selectedLamellarObject,
       viewportPickReceipt: state.viewportPickReceipt,
       stripProfileOverrides: state.stripProfileOverrides,
@@ -974,6 +1201,8 @@ main().catch(err => {
     schema: 'kaminos.lamellar-witness.v0',
     requestedUrl: url,
     failurePhase: 'lamellar-witness',
+    requestPhase,
+    cdpTimeoutMs,
     error: String(err.stack || err),
   }, null, 2) + '\n');
   console.error(err);

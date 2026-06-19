@@ -610,6 +610,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-val" id="lamellar-chirality-pattern-val">same</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Shell recipe</span>
+        <select id="lamellar-shell-recipe" class="select-input">
+          <option value="custom" selected>custom</option>
+          <option value="equator-belts">equator-belts</option>
+          <option value="opposing-belts">opposing-belts</option>
+          <option value="polar-crown">polar-crown</option>
+          <option value="diagonal-cage">diagonal-cage</option>
+          <option value="nested-cup">nested-cup</option>
+        </select>
+        <span class="slider-val" id="lamellar-shell-recipe-val">custom</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Depth</span>
         <input type="range" id="lamellar-depth-spacing" min="0.015" max="0.09" step="0.001" value="0.035">
         <span class="slider-val" id="lamellar-depth-spacing-val">0.035</span>
@@ -953,7 +965,11 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { createKaminosLamellarWitness } from './lamellar-core.js';
+import {
+  createKaminosLamellarWitness,
+  controlsForLamellarShellRecipe,
+  normalizeLamellarShellRecipe,
+} from './lamellar-core.js';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -2286,6 +2302,7 @@ function readLamellarControls() {
     cutRadius: parseFloat(document.getElementById('lamellar-cut-radius').value),
     layerCount: parseInt(document.getElementById('lamellar-layer-count').value, 10),
     seed: parseInt(document.getElementById('lamellar-seed').value, 10),
+    shellRecipe: normalizeLamellarShellRecipe(document.getElementById('lamellar-shell-recipe').value),
     chirality: document.getElementById('lamellar-chirality').value,
     chiralityPattern: document.getElementById('lamellar-chirality-pattern').value,
     depthSpacing: parseFloat(document.getElementById('lamellar-depth-spacing').value),
@@ -2687,6 +2704,46 @@ function setControlValue(id, value, overridden = false) {
   else delete el.dataset.overridden;
 }
 
+function applyLamellarShellRecipe(recipe, options = {}) {
+  const recipeId = normalizeLamellarShellRecipe(recipe);
+  setControlValue('lamellar-shell-recipe', recipeId);
+  if (recipeId === 'custom') {
+    syncLamellarReadout();
+    return { shellRecipe: recipeId, applied: false };
+  }
+  const recipeControls = controlsForLamellarShellRecipe(recipeId, {
+    seed: parseInt(document.getElementById('lamellar-seed')?.value || '17', 10),
+  });
+  const macroControlMap = {
+    'lamellar-layer-count': recipeControls.layerCount,
+    'lamellar-chirality-pattern': recipeControls.chiralityPattern,
+    'lamellar-depth-spacing': recipeControls.depthSpacing,
+    'lamellar-chunkiness': recipeControls.chunkinessBase,
+    'lamellar-chunkiness-variance': recipeControls.chunkinessVariance,
+    'lamellar-overlap-bias': recipeControls.overlapBias,
+    'lamellar-population-count': recipeControls.populationCount,
+    'lamellar-cutter-count': recipeControls.cutterCount,
+    'lamellar-population-bearing-variance': recipeControls.populationBearingVariance,
+    'lamellar-shell-enclosure': recipeControls.shellEnclosure,
+    'lamellar-strip-topology-count': recipeControls.stripTopologyCount,
+  };
+  for (const [id, value] of Object.entries(macroControlMap)) setControlValue(id, value);
+  resetLamellarLayerOverrideControls();
+  replaceObjectContents(lamellarStripPopulationOverrides, recipeControls.stripPopulations || []);
+  selectedLamellarPopulationId = recipeControls.stripPopulations?.find(population => population.role === 'lamella')?.id || null;
+  selectedLamellarObject = null;
+  if (lamellarWitness && options.rebuild !== false) {
+    lamellarWitness.setControls(readLamellarControls());
+    syncLamellarReadout();
+    window._kaminosDirty?.();
+  }
+  return {
+    ...recipeControls,
+    applied: true,
+    stripPopulationOverrideCount: Object.keys(lamellarStripPopulationOverrides).length,
+  };
+}
+
 function resetLamellarLayerOverrideControls() {
   for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
     for (const suffix of ['chirality', 'chunkiness', 'strip-count', 'radius', 'thickness-scale', 'shell-set-count']) {
@@ -2714,6 +2771,7 @@ function applyLamellarAuthoringState(payload, options = {}) {
   setControlValue('lamellar-cut-radius', controlsState.cutRadius);
   setControlValue('lamellar-layer-count', controlsState.layerCount);
   setControlValue('lamellar-seed', controlsState.seed);
+  setControlValue('lamellar-shell-recipe', controlsState.shellRecipe || 'custom');
   setControlValue('lamellar-chirality', controlsState.chirality);
   setControlValue('lamellar-chirality-pattern', controlsState.chiralityPattern);
   setControlValue('lamellar-depth-spacing', controlsState.depthSpacing);
@@ -3514,6 +3572,7 @@ function syncLamellarReadout() {
   document.getElementById('lamellar-cut-radius-val').textContent = c.cutRadius.toFixed(3);
   document.getElementById('lamellar-layer-count-val').textContent = String(c.layerCount);
   document.getElementById('lamellar-seed-val').textContent = String(c.seed);
+  document.getElementById('lamellar-shell-recipe-val').textContent = c.shellRecipe || 'custom';
   document.getElementById('lamellar-chirality-pattern-val').textContent = c.chiralityPattern;
   document.getElementById('lamellar-depth-spacing-val').textContent = c.depthSpacing.toFixed(3);
   document.getElementById('lamellar-chunkiness-val').textContent = c.chunkinessBase.toFixed(2);
@@ -3669,6 +3728,8 @@ function applyLamellarRouteParams() {
       }
     });
   }
+  const shellRecipe = params.get('lamellar_shell_recipe');
+  if (shellRecipe) applyLamellarShellRecipe(shellRecipe, { rebuild: false });
   const populationCount = Number(params.get('lamellar_population_count'));
   if (params.has('lamellar_population_count') && Number.isFinite(populationCount)) {
     document.getElementById('lamellar-population-count').value = String(Math.max(1, Math.min(16, Math.round(populationCount))));
@@ -3729,6 +3790,7 @@ async function initLamellarRoute() {
   window.__kaminosLamellarLoadAuthoringSlot = id => loadLamellarAuthoringSlot(id);
   window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
   window.__kaminosLamellarRenameAuthoringSlot = (id, label) => renameLamellarAuthoringSlot(id, label);
+  window.__kaminosLamellarApplyShellRecipe = recipe => applyLamellarShellRecipe(recipe, { rebuild: true });
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
@@ -3775,6 +3837,9 @@ async function initLamellarRoute() {
     'lamellar-layer-3-thickness-scale',
     'lamellar-layer-3-shell-set-count',
   ];
+  document.getElementById('lamellar-shell-recipe').addEventListener('change', event => {
+    applyLamellarShellRecipe(event.target.value);
+  });
   for (const id of composerControlIds) {
     document.getElementById(id).addEventListener('input', () => {
       if (id.startsWith('lamellar-layer-')) document.getElementById(id).dataset.overridden = '1';
@@ -3833,6 +3898,8 @@ async function initLamellarRoute() {
   document.getElementById('lamellar-generate').addEventListener('click', () => {
     const seedInput = document.getElementById('lamellar-seed');
     seedInput.value = String((parseInt(seedInput.value || '0', 10) + 1) % 100000);
+    const recipe = normalizeLamellarShellRecipe(document.getElementById('lamellar-shell-recipe')?.value);
+    if (recipe !== 'custom') applyLamellarShellRecipe(recipe, { rebuild: false });
     lamellarWitness.setControls(readLamellarControls());
     syncLamellarReadout();
     window._kaminosDirty?.();
