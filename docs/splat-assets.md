@@ -109,19 +109,18 @@ Kaminos keeps scene placement separate from splat correction metadata.
 - Scene placement answers: where is this object in the current scene?
 - Asset correction answers: how should this source splat be oriented, flipped, centered, and cropped whenever it is imported?
 
-The preview and render handoff compose both:
+Pivot correction is a visible marker edit, not a scene translation edit. Moving the Pivot target updates `centroidOffset` and moves the pivot marker relative to the splat, but the splat preview position stays anchored at the scene placement.
+
+The preview and render handoff compose both without using `centroidOffset` as scene translation:
 
 ```text
-visual transform = sceneTransform + splatCorrection
-```
-
-For scale, axis flips are applied as:
-
-```text
+visual position = sceneTransform.position
+pivot marker = sceneTransform.position + centroidOffset
+visual rotation = sceneTransform.rotation + orientation.rotation
 visual scale = sceneTransform.scale * axisFlips
 ```
 
-This lets a correction flip an asset preview without dirtying the scene object's authored scale.
+This lets a correction move the pivot marker or flip an asset preview without dirtying the scene object's authored placement.
 
 ## Render-Handoff Boundary
 

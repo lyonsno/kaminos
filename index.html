@@ -1160,7 +1160,6 @@ function applySplatCorrectionToObject(object, correction = {}) {
   const normalized = normalizeSplatCorrection(correction);
   const transform = sceneObjectTransformState(object);
   transform.rotation = normalized.orientation.rotation;
-  transform.position = normalized.centroidOffset;
   transform.scale = transform.scale.map((value, index) => Math.abs(value) * normalized.axisFlips[index]);
   applySceneObjectTransformState(object, transform);
 }
@@ -1169,7 +1168,7 @@ function composeSplatVisualTransform(sceneTransform = {}, correction = {}) {
   const scenePlacement = cloneTransformState(sceneTransform);
   const normalized = normalizeSplatCorrection(correction);
   return {
-    position: scenePlacement.position.map((value, index) => value + normalized.centroidOffset[index]),
+    position: scenePlacement.position,
     rotation: scenePlacement.rotation.map((value, index) => value + normalized.orientation.rotation[index]),
     scale: scenePlacement.scale.map((value, index) => value * normalized.axisFlips[index]),
   };
@@ -1205,7 +1204,7 @@ function syncSplatSceneTransformFromVisual(record) {
   const visual = sceneObjectTransformState(record.object);
   const correction = normalizeSplatCorrection(record.splat?.correction);
   setSceneObjectSceneTransform(record, {
-    position: visual.position.map((value, index) => value - correction.centroidOffset[index]),
+    position: visual.position,
     rotation: visual.rotation.map((value, index) => value - correction.orientation.rotation[index]),
     scale: visual.scale.map((value, index) => value * correction.axisFlips[index]),
   });
@@ -1314,18 +1313,20 @@ function updateSplatCropTargetVisibility() {
 
 function setSplatCorrectionTargetsFromCorrection(correction) {
   if (!splatCorrectionMode) return;
-  setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, correction);
+  setSplatCorrectionTargetFromCorrection(splatCorrectionMode.target, correction, splatCorrectionMode.record);
   setSplatCropTargetFromCorrection(splatCorrectionMode.cropTarget, correction);
   updateSplatCropTargetVisibility();
 }
 
-function splatCorrectionFromTarget(target, fallback = {}) {
+function splatCorrectionFromTarget(target, fallback = {}, record = null) {
   const fields = readSplatCorrectionFields();
+  const basePosition = splatSceneTransformState(record).position;
+  const targetPosition = target?.position?.toArray?.();
   return normalizeSplatCorrection({
     ...fallback,
     orientation: { rotation: target?.rotation ? [target.rotation.x, target.rotation.y, target.rotation.z] : fallback?.orientation?.rotation },
     axisFlips: fields.axisFlips || fallback?.axisFlips,
-    centroidOffset: target?.position?.toArray?.() || fallback?.centroidOffset,
+    centroidOffset: targetPosition ? targetPosition.map((value, index) => value - basePosition[index]) : fallback?.centroidOffset,
     crop: fields.crop || fallback?.crop,
   });
 }
@@ -1408,7 +1409,7 @@ function setSplatCorrectionDraftDirty(dirty = true) {
 function syncSplatCorrectionDraftFromTarget() {
   if (!splatCorrectionMode) return null;
   const { record, target } = splatCorrectionMode;
-  const correction = splatCorrectionFromTarget(target, record.splat?.correction);
+  const correction = splatCorrectionFromTarget(target, record.splat?.correction, record);
   splatCorrectionMode.draftCorrection = correction;
   setSceneObjectSplatMetadata(record, {
     ...record.splat,
@@ -1422,9 +1423,10 @@ function syncSplatCorrectionDraftFromTarget() {
   return correction;
 }
 
-function setSplatCorrectionTargetFromCorrection(target, correction) {
+function setSplatCorrectionTargetFromCorrection(target, correction, record = null) {
   const normalized = normalizeSplatCorrection(correction);
-  target.position.fromArray(normalized.centroidOffset);
+  const basePosition = splatSceneTransformState(record).position;
+  target.position.fromArray(basePosition.map((value, index) => value + normalized.centroidOffset[index]));
   target.rotation.set(...normalized.orientation.rotation);
   target.scale.set(1, 1, 1);
 }
@@ -1505,7 +1507,7 @@ async function enterSplatCorrectionMode(id = activeSceneObjectId) {
   const savedCorrection = normalizeSplatCorrection(record.splat?.correction);
   const target = new THREE.Object3D();
   target.name = 'splat-correction-target';
-  setSplatCorrectionTargetFromCorrection(target, savedCorrection);
+  setSplatCorrectionTargetFromCorrection(target, savedCorrection, record);
   const axes = new THREE.AxesHelper(0.35);
   axes.name = 'splat-correction-target-axes';
   target.add(axes);
@@ -2429,8 +2431,10 @@ window.kaminosSplatCorrectionModeDebugState = function() {
 window.kaminosSetSplatCorrectionDraftTransform = function(transform = {}) {
   if (!splatCorrectionMode) throw new Error('Splat correction mode is not active');
   const current = sceneObjectTransformState(splatCorrectionMode.target);
+  const basePosition = splatSceneTransformState(splatCorrectionMode.record).position;
+  const correctionOffset = transform.position || current.position.map((value, index) => value - basePosition[index]);
   const next = cloneTransformState({
-    position: transform.position || current.position,
+    position: correctionOffset.map((value, index) => value + basePosition[index]),
     rotation: transform.rotation || current.rotation,
     scale: [1, 1, 1],
   });

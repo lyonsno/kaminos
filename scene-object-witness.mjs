@@ -2553,7 +2553,11 @@ async function runSplatCorrectionSidecarScenario(ws) {
   const reloaded = lastEvidence.splatCorrectionSidecar.reloadedSplat;
   if (!reloaded?.splat?.correction
       || reloaded.splat.correction.crop?.enabled !== true
-      || reloaded.transform?.position?.[0] !== 0.25
+      || reloaded.splat.correction.centroidOffset?.[0] !== 0.25
+      || reloaded.splat.correction.centroidOffset?.[2] !== 0.4
+      || reloaded.transform?.position?.[0] !== 0
+      || reloaded.transform?.position?.[1] !== 0
+      || reloaded.transform?.position?.[2] !== 0
       || reloaded.transform?.rotation?.[1] !== 0.2) {
     throw new Error(`splat correction did not reload from sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
@@ -2688,10 +2692,11 @@ async function runSplatCorrectionModeScenario(ws) {
   }
   const visual = evidence.sceneAfterDraft?.transform;
   if (!visual
-      || Math.abs(visual.position?.[0] - 1.2) > 1e-6
-      || Math.abs(visual.position?.[1] - 0.55) > 1e-6
+      || Math.abs(visual.position?.[0] - 1.0) > 1e-6
+      || Math.abs(visual.position?.[1] - 0.25) > 1e-6
+      || Math.abs(visual.position?.[2] + 0.5) > 1e-6
       || Math.abs(visual.rotation?.[2] - 0.25) > 1e-6) {
-    throw new Error(`splat correction mode did not compose draft correction into preview transform: ${JSON.stringify(evidence)}`);
+    throw new Error(`splat correction pivot edit moved splat preview: ${JSON.stringify(evidence)}`);
   }
   const flippedVisual = evidence.sceneAfterFlip?.transform;
   if (!flippedVisual || Math.abs(flippedVisual.scale?.[0] + 1.1) > 1e-6) {
