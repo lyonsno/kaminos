@@ -105,6 +105,7 @@ canvas { display: block; }
 #lamellar-population-toolhead .slider-label { min-width: 58px; }
 #lamellar-layer-toolhead input[type="range"],
 #lamellar-population-toolhead input[type="range"] { min-width: 96px; }
+.lamellar-toolhead-group { margin: 8px 0 4px; color: #7f8f8a; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -881,16 +882,28 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div id="lamellar-population-toolhead">
       <div id="lamellar-population-summary" class="slider-val">none</div>
+      <div class="lamellar-toolhead-group">Population layout</div>
       <div class="slider-row">
         <span class="slider-label">Spread</span>
         <input type="range" id="lamellar-population-bearing-spread" min="0.15" max="2" step="0.01" value="1">
         <span class="slider-val" id="lamellar-population-bearing-spread-val">0.00</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Lane span</span>
+        <input type="range" id="lamellar-population-lane-span" min="0" max="1.44" step="0.01" value="0.84">
+        <span class="slider-val" id="lamellar-population-lane-span-val">0.84</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Stagger</span>
+        <input type="range" id="lamellar-population-phase-stagger" min="-1.2" max="1.2" step="0.01" value="0.12">
+        <span class="slider-val" id="lamellar-population-phase-stagger-val">0.12</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Rotate</span>
         <input type="range" id="lamellar-population-bearing-offset" min="-6.283" max="6.283" step="0.01" value="0">
         <span class="slider-val" id="lamellar-population-bearing-offset-val">0.00</span>
       </div>
+      <div class="lamellar-toolhead-group">Shell radius</div>
       <div class="slider-row">
         <span class="slider-label">Spacing</span>
         <input type="range" id="lamellar-population-radial-spacing" min="0" max="0.14" step="0.001" value="0.04">
@@ -2856,6 +2869,8 @@ function ensureLamellarPopulationOverrides(state = null) {
       chirality: population.chirality,
       bearingOffset: population.bearingOffset,
       bearingVariance: population.bearingVariance,
+      laneSpan: population.laneSpan ?? population.coverageSpan ?? 0.84,
+      phaseStagger: population.phaseStagger ?? 0.12,
       radialSpacing: population.radialSpacing,
       radiusOffset: population.radiusOffset || 0,
       layoutPreset: population.layoutPreset || 'coverage',
@@ -2966,6 +2981,8 @@ function addLamellarPopulation(role = 'lamella') {
     layoutPreset: 'coverage',
     bearingOffset: normalizedRole === 'cutter' ? 0.42 : 0,
     bearingVariance: normalizedRole === 'cutter' ? 0.7 : 1,
+    laneSpan: 0.84,
+    phaseStagger: 0.12,
     radialSpacing: normalizedRole === 'cutter' ? 0.025 : 0.04,
     radiusOffset: 0,
     gapPattern: normalizedRole === 'cutter' ? 'crosscut' : 'solid',
@@ -3291,14 +3308,18 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   const toolhead = document.getElementById('lamellar-population-toolhead');
   const summary = document.getElementById('lamellar-population-summary');
   const spread = document.getElementById('lamellar-population-bearing-spread');
+  const laneSpan = document.getElementById('lamellar-population-lane-span');
+  const phaseStagger = document.getElementById('lamellar-population-phase-stagger');
   const offset = document.getElementById('lamellar-population-bearing-offset');
   const radial = document.getElementById('lamellar-population-radial-spacing');
   const radius = document.getElementById('lamellar-population-radius-offset');
   const spreadVal = document.getElementById('lamellar-population-bearing-spread-val');
+  const laneSpanVal = document.getElementById('lamellar-population-lane-span-val');
+  const phaseStaggerVal = document.getElementById('lamellar-population-phase-stagger-val');
   const offsetVal = document.getElementById('lamellar-population-bearing-offset-val');
   const radialVal = document.getElementById('lamellar-population-radial-spacing-val');
   const radiusVal = document.getElementById('lamellar-population-radius-offset-val');
-  if (!populations || !toolhead || !summary || !spread || !offset || !radial || !radius || !spreadVal || !offsetVal || !radialVal || !radiusVal) return;
+  if (!populations || !toolhead || !summary || !spread || !laneSpan || !phaseStagger || !offset || !radial || !radius || !spreadVal || !laneSpanVal || !phaseStaggerVal || !offsetVal || !radialVal || !radiusVal) return;
   const layerIndex = Number.isFinite(object?.layerIndex) ? object.layerIndex : selectedLamellarLayerIndex;
   const layerPopulations = lamellarPopulationsForLayer(current, layerIndex);
   selectedLamellarPopulationId = object?.selectionLevel === 'population' ? object.populationId : selectedLamellarPopulationId;
@@ -3316,12 +3337,16 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
     return;
   }
   toolhead.style.display = 'block';
-  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · span ${(selectedPopulation.coverageSpan || 0).toFixed(2)} · lane ${(selectedPopulation.shellLaneSpacing || 0).toFixed(2)} · radius ${(selectedPopulation.radiusOffset || 0).toFixed(3)} · spacing ${(selectedPopulation.radialSpacing || 0).toFixed(3)}`;
+  summary.textContent = `${selectedPopulation.layoutPreset || 'coverage'} · spread ${(selectedPopulation.bearingVariance || 0).toFixed(2)} · lane ${(selectedPopulation.laneSpan ?? selectedPopulation.coverageSpan ?? 0).toFixed(2)} · stagger ${(selectedPopulation.phaseStagger || 0).toFixed(2)} · radius ${(selectedPopulation.radiusOffset || 0).toFixed(3)}`;
   spread.value = String(selectedPopulation.bearingVariance ?? 0);
+  laneSpan.value = String(selectedPopulation.laneSpan ?? selectedPopulation.coverageSpan ?? 0);
+  phaseStagger.value = String(selectedPopulation.phaseStagger ?? 0);
   offset.value = String(selectedPopulation.bearingOffset ?? 0);
   radial.value = String(selectedPopulation.radialSpacing ?? 0);
   radius.value = String(selectedPopulation.radiusOffset ?? 0);
   spreadVal.textContent = Number(selectedPopulation.bearingVariance ?? 0).toFixed(2);
+  laneSpanVal.textContent = Number(selectedPopulation.laneSpan ?? selectedPopulation.coverageSpan ?? 0).toFixed(2);
+  phaseStaggerVal.textContent = Number(selectedPopulation.phaseStagger ?? 0).toFixed(2);
   offsetVal.textContent = Number(selectedPopulation.bearingOffset ?? 0).toFixed(2);
   radialVal.textContent = Number(selectedPopulation.radialSpacing ?? 0).toFixed(3);
   radiusVal.textContent = Number(selectedPopulation.radiusOffset ?? 0).toFixed(3);
@@ -3332,6 +3357,22 @@ function syncLamellarPopulationToolhead(state = null, object = selectedLamellarO
   spread.onchange = event => {
     pinLamellarSelectionPopover();
     applyLamellarPopulationOverride(selectedPopulation.id, { bearingVariance: parseFloat(event.target.value) }, { immediate: true });
+  };
+  laneSpan.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { laneSpan: parseFloat(event.target.value) });
+  };
+  laneSpan.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { laneSpan: parseFloat(event.target.value) }, { immediate: true });
+  };
+  phaseStagger.oninput = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { phaseStagger: parseFloat(event.target.value) });
+  };
+  phaseStagger.onchange = event => {
+    pinLamellarSelectionPopover();
+    applyLamellarPopulationOverride(selectedPopulation.id, { phaseStagger: parseFloat(event.target.value) }, { immediate: true });
   };
   offset.oninput = event => {
     pinLamellarSelectionPopover();

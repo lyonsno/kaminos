@@ -243,17 +243,68 @@ async function main() {
         };
         const sliderSweep = [];
         for (const bearingVariance of [0.15, 1, 2]) {
-          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance, bearingOffset: 0.23 });
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance, bearingOffset: 0.23, laneSpan: 0.5, phaseStagger: 0.2 });
           const sweepState = w ? w.debugState() : afterCountState;
           const sweepPopulation = (sweepState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
           const sweepStrips = (sweepState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
           sliderSweep.push({
             bearingVariance,
+            coverageSpacing: sweepPopulation?.coverageSpacing ?? null,
             coverageSpan: sweepPopulation?.coverageSpan ?? null,
+            laneSpan: sweepPopulation?.laneSpan ?? null,
+            phaseStagger: sweepPopulation?.phaseStagger ?? null,
             shellLaneSpacing: sweepPopulation?.shellLaneSpacing ?? null,
+            bearingPhaseRange: sweepStrips.length ? [
+              Math.min(...sweepStrips.map(strip => strip.bearingPhase ?? 0)),
+              Math.max(...sweepStrips.map(strip => strip.bearingPhase ?? 0)),
+            ] : [],
             laneOffsetRange: sweepStrips.length ? [
               Math.min(...sweepStrips.map(strip => strip.shellLaneOffset ?? 0)),
               Math.max(...sweepStrips.map(strip => strip.shellLaneOffset ?? 0)),
+            ] : [],
+            phaseOffsetRange: sweepStrips.length ? [
+              Math.min(...sweepStrips.map(strip => strip.phaseOffset ?? 0)),
+              Math.max(...sweepStrips.map(strip => strip.phaseOffset ?? 0)),
+            ] : [],
+          });
+        }
+        const laneSpanSweep = [];
+        for (const laneSpan of [0, 0.5, 1.2]) {
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, laneSpan, phaseStagger: 0.2 });
+          const laneState = w ? w.debugState() : afterCountState;
+          const lanePopulation = (laneState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+          const laneStrips = (laneState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
+          laneSpanSweep.push({
+            laneSpan,
+            populationLaneSpan: lanePopulation?.laneSpan ?? null,
+            coverageSpacing: lanePopulation?.coverageSpacing ?? null,
+            laneOffsetRange: laneStrips.length ? [
+              Math.min(...laneStrips.map(strip => strip.shellLaneOffset ?? 0)),
+              Math.max(...laneStrips.map(strip => strip.shellLaneOffset ?? 0)),
+            ] : [],
+            phaseOffsetRange: laneStrips.length ? [
+              Math.min(...laneStrips.map(strip => strip.phaseOffset ?? 0)),
+              Math.max(...laneStrips.map(strip => strip.phaseOffset ?? 0)),
+            ] : [],
+          });
+        }
+        const phaseStaggerSweep = [];
+        for (const phaseStagger of [0, 0.3, 0.75]) {
+          if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, laneSpan: 0.5, phaseStagger });
+          const phaseState = w ? w.debugState() : afterCountState;
+          const phasePopulation = (phaseState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
+          const phaseStrips = (phaseState.stripInstances || []).filter(strip => strip.populationId === firstPopulationId);
+          phaseStaggerSweep.push({
+            phaseStagger,
+            populationPhaseStagger: phasePopulation?.phaseStagger ?? null,
+            laneSpan: phasePopulation?.laneSpan ?? null,
+            laneOffsetRange: phaseStrips.length ? [
+              Math.min(...phaseStrips.map(strip => strip.shellLaneOffset ?? 0)),
+              Math.max(...phaseStrips.map(strip => strip.shellLaneOffset ?? 0)),
+            ] : [],
+            phaseOffsetRange: phaseStrips.length ? [
+              Math.min(...phaseStrips.map(strip => strip.phaseOffset ?? 0)),
+              Math.max(...phaseStrips.map(strip => strip.phaseOffset ?? 0)),
             ] : [],
           });
         }
@@ -292,7 +343,7 @@ async function main() {
             descriptorPopulationRadiusOffsets: Array.from(new Set(radiusDescriptors.map(descriptor => descriptor.populationRadiusOffset ?? null))),
           });
         }
-        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, radialSpacing: 0.07, radiusOffset: 0.05 });
+        if (firstPopulationId) window.__kaminosLamellarApplyPopulationOverride?.(firstPopulationId, { bearingVariance: 1, bearingOffset: 0.23, laneSpan: 0.52, phaseStagger: 0.31, radialSpacing: 0.07, radiusOffset: 0.05 });
         const populationState = w ? w.debugState() : afterCountState;
         const afterPopulation = (populationState.stripPopulationDescriptors || []).find(population => population.id === firstPopulationId) || null;
         const populationToolhead = document.getElementById('lamellar-population-toolhead');
@@ -306,6 +357,8 @@ async function main() {
           popoverPinned: document.getElementById('lamellar-selection-popover')?.dataset.popoverPinned === '1',
           popoverTitle: document.getElementById('lamellar-popover-title')?.textContent || '',
           spreadValue: Number(document.getElementById('lamellar-population-bearing-spread')?.value || 0),
+          laneSpanValue: Number(document.getElementById('lamellar-population-lane-span')?.value || 0),
+          phaseStaggerValue: Number(document.getElementById('lamellar-population-phase-stagger')?.value || 0),
           offsetValue: Number(document.getElementById('lamellar-population-bearing-offset')?.value || 0),
           radialSpacingValue: Number(document.getElementById('lamellar-population-radial-spacing')?.value || 0),
           radiusOffsetValue: Number(document.getElementById('lamellar-population-radius-offset')?.value || 0),
@@ -321,12 +374,15 @@ async function main() {
           afterFlipStripChiralities: Array.from(new Set(afterFlipStrips.map(strip => strip.chirality))),
           afterFlipThetaTwistSigns: Array.from(new Set(afterFlipDescriptors.map(descriptor => Math.sign(descriptor.thetaTwist || 0)))),
           afterBearingVariance: afterPopulation?.bearingVariance ?? null,
+          afterLaneSpan: afterPopulation?.laneSpan ?? null,
+          afterPhaseStagger: afterPopulation?.phaseStagger ?? null,
           afterBearingOffset: afterPopulation?.bearingOffset ?? null,
           afterRadialSpacing: afterPopulation?.radialSpacing ?? null,
           afterRadiusOffset: afterPopulation?.radiusOffset ?? null,
           layoutPreset: afterPopulation?.layoutPreset || null,
           coverageSpacing: afterPopulation?.coverageSpacing ?? null,
           coverageSpan: afterPopulation?.coverageSpan ?? null,
+          layoutControlMode: afterPopulation?.layoutControlMode ?? null,
           shellLaneSpacing: afterPopulation?.shellLaneSpacing ?? null,
         };
         const populationRadialSpacingReceipt = {
@@ -343,6 +399,16 @@ async function main() {
           mode: 'selected-population-toolhead-slider-sweep-v0',
           populationId: firstPopulationId,
           samples: sliderSweep,
+        };
+        const populationLaneSpanReceipt = {
+          mode: 'selected-population-lane-span-v0',
+          populationId: firstPopulationId,
+          samples: laneSpanSweep,
+        };
+        const populationPhaseStaggerReceipt = {
+          mode: 'selected-population-phase-stagger-v0',
+          populationId: firstPopulationId,
+          samples: phaseStaggerSweep,
         };
         if (firstStrip) window.__kaminosLamellarSelectLayerByStripInstanceId?.(firstStrip.stripInstanceId);
         const layerRadiusBeforeState = w ? w.debugState() : populationState;
@@ -522,6 +588,8 @@ async function main() {
           selectedPopulationObject: populationToolheadUi.selectedPopulationObject,
           populationControlReceipt,
           populationSliderSweepReceipt,
+          populationLaneSpanReceipt,
+          populationPhaseStaggerReceipt,
           populationRadialSpacingReceipt,
           populationRadiusOffsetReceipt,
           selectedLayerRadiusReceipt,
@@ -731,16 +799,41 @@ async function main() {
       'Lamellar visible Flip chirality button did not change emitted curve twist direction'
     );
     assert.equal(state.populationControlReceipt?.afterBearingVariance, 1, 'Lamellar population spread control did not mutate bearing variance');
+    assert.equal(state.populationControlReceipt?.afterLaneSpan, 0.52, 'Lamellar population lane span control did not mutate lane span');
+    assert.equal(state.populationControlReceipt?.afterPhaseStagger, 0.31, 'Lamellar population stagger control did not mutate phase stagger');
     assert.equal(state.populationControlReceipt?.afterBearingOffset, 0.23, 'Lamellar population rotate control did not mutate bearing offset');
     assert.equal(state.populationControlReceipt?.afterRadialSpacing, 0.07, 'Lamellar population radius control did not mutate radial spacing');
     assert.equal(state.populationControlReceipt?.afterRadiusOffset, 0.05, 'Lamellar population set radius control did not mutate selected population radius offset');
     assert.equal(state.populationControlReceipt?.layoutPreset, 'coverage', 'Lamellar selected population did not preserve coverage layout');
+    assert.equal(state.populationControlReceipt?.layoutControlMode, 'decoupled-population-layout-controls-v0', 'Lamellar selected population did not report decoupled layout controls');
     assert.ok((state.populationControlReceipt?.coverageSpacing || 0) > 0.6, 'Lamellar selected population did not preserve useful coverage spacing');
-    assert.ok((state.populationControlReceipt?.coverageSpan || 0) >= 0.66, 'Lamellar selected population did not preserve visible shell coverage span');
+    assert.equal(state.populationControlReceipt?.coverageSpan, state.populationControlReceipt?.afterLaneSpan, 'Lamellar coverage span should now be the explicit lane span');
     assert.equal(state.populationSliderSweepReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep spread endpoints and midpoint');
     assert.ok(
-      state.populationSliderSweepReceipt.samples[2].coverageSpan > state.populationSliderSweepReceipt.samples[0].coverageSpan,
-      'Lamellar spread slider sweep did not increase visible coverage span'
+      state.populationSliderSweepReceipt.samples[2].coverageSpacing > state.populationSliderSweepReceipt.samples[0].coverageSpacing,
+      'Lamellar spread slider sweep did not increase angular coverage spacing'
+    );
+    assert.equal(
+      state.populationSliderSweepReceipt.samples[2].laneOffsetRange[1] - state.populationSliderSweepReceipt.samples[2].laneOffsetRange[0],
+      state.populationSliderSweepReceipt.samples[0].laneOffsetRange[1] - state.populationSliderSweepReceipt.samples[0].laneOffsetRange[0],
+      'Lamellar spread slider sweep should not change lane span'
+    );
+    assert.equal(
+      state.populationSliderSweepReceipt.samples[2].phaseOffsetRange[1] - state.populationSliderSweepReceipt.samples[2].phaseOffsetRange[0],
+      state.populationSliderSweepReceipt.samples[0].phaseOffsetRange[1] - state.populationSliderSweepReceipt.samples[0].phaseOffsetRange[0],
+      'Lamellar spread slider sweep should not change phase staggering'
+    );
+    assert.equal(state.populationLaneSpanReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep lane span');
+    assert.ok(
+      state.populationLaneSpanReceipt.samples[2].laneOffsetRange[1] - state.populationLaneSpanReceipt.samples[2].laneOffsetRange[0]
+        > state.populationLaneSpanReceipt.samples[0].laneOffsetRange[1] - state.populationLaneSpanReceipt.samples[0].laneOffsetRange[0],
+      'Lamellar lane span sweep did not increase shell-lane separation'
+    );
+    assert.equal(state.populationPhaseStaggerReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep phase stagger');
+    assert.ok(
+      state.populationPhaseStaggerReceipt.samples[2].phaseOffsetRange[1] - state.populationPhaseStaggerReceipt.samples[2].phaseOffsetRange[0]
+        > state.populationPhaseStaggerReceipt.samples[0].phaseOffsetRange[1] - state.populationPhaseStaggerReceipt.samples[0].phaseOffsetRange[0],
+      'Lamellar phase stagger sweep did not increase per-strip curve phase separation'
     );
     assert.equal(state.populationRadialSpacingReceipt?.samples?.length, 3, 'Lamellar population witness did not sweep radial spacing');
     assert.ok(
@@ -838,6 +931,8 @@ async function main() {
       selectedPopulationObject: state.selectedPopulationObject,
       populationControlReceipt: state.populationControlReceipt,
       populationSliderSweepReceipt: state.populationSliderSweepReceipt,
+      populationLaneSpanReceipt: state.populationLaneSpanReceipt,
+      populationPhaseStaggerReceipt: state.populationPhaseStaggerReceipt,
       populationRadialSpacingReceipt: state.populationRadialSpacingReceipt,
       populationRadiusOffsetReceipt: state.populationRadiusOffsetReceipt,
       selectedLayerRadiusReceipt: state.selectedLayerRadiusReceipt,

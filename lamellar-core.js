@@ -8,6 +8,7 @@ const LAYER_STACK_MODE = "authored-lamellar-layer-stack-descriptor-v0";
 const LAYER_SHELL_MODE = "authored-lamellar-layer-shell-assemblage-v0";
 const STRIP_POPULATION_MODE = "same-shell-direction-population-authoring-v0";
 const POPULATION_COVERAGE_LAYOUT_MODE = "even-shell-coverage-layout-v0";
+const POPULATION_LAYOUT_CONTROL_MODE = "decoupled-population-layout-controls-v0";
 const STRIP_PROFILE_MODE = "selected-strip-profile-authoring-v0";
 const SPHERE_CURVE_MODE = "sphere-curve-source-before-strip-mesh-v0";
 const CURVE_INTERACTION_MODE = "sphere-curve-proximity-interaction-v0";
@@ -27,6 +28,9 @@ const POPULATION_LAYOUT_PRESETS = new Set(["coverage", "cluster"]);
 const MAX_LAYER_COUNT = 12;
 const TAU = Math.PI * 2;
 const MAX_COVERAGE_LANE_SPAN = 1.44;
+const DEFAULT_POPULATION_LANE_SPAN = 0.84;
+const DEFAULT_POPULATION_PHASE_STAGGER = 0.12;
+const MAX_POPULATION_PHASE_STAGGER = 1.2;
 const DEFAULT_POPULATION_RADIAL_SPACING = 0.04;
 const MAX_POPULATION_RADIAL_SPACING = 0.14;
 const MAX_POPULATION_RADIUS_OFFSET = 0.24;
@@ -166,6 +170,8 @@ function normalizeStripPopulations(populations) {
     const chirality = Number(population?.chirality);
     const bearingOffset = Number(population?.bearingOffset);
     const bearingVariance = Number(population?.bearingVariance);
+    const laneSpanInput = Number(population?.laneSpan ?? population?.coverageSpan ?? population?.shellLaneSpan);
+    const phaseStaggerInput = Number(population?.phaseStagger ?? population?.stagger);
     const radialSpacingInput = Number(population?.radialSpacing);
     const radiusOffsetInput = Number(population?.radiusOffset ?? population?.radius);
     const role = ["lamella", "cutter", "accent"].includes(population?.role) ? population.role : "lamella";
@@ -180,11 +186,14 @@ function normalizeStripPopulations(populations) {
     const coverageSpacing = normalizedCount > 1 && layoutPreset === "coverage"
       ? Number((TAU * coverageSpread / normalizedCount).toFixed(4))
       : 0;
-    const coverageSpan = normalizedCount > 1 && layoutPreset === "coverage"
-      ? Number(clamp(coverageSpread * 0.84, 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
+    const laneSpan = normalizedCount > 1 && layoutPreset === "coverage"
+      ? Number(clamp(Number.isFinite(laneSpanInput) ? laneSpanInput : DEFAULT_POPULATION_LANE_SPAN, 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
+      : 0;
+    const phaseStagger = normalizedCount > 1
+      ? Number(clamp(Number.isFinite(phaseStaggerInput) ? phaseStaggerInput : DEFAULT_POPULATION_PHASE_STAGGER, -MAX_POPULATION_PHASE_STAGGER, MAX_POPULATION_PHASE_STAGGER).toFixed(4))
       : 0;
     const shellLaneSpacing = normalizedCount > 1 && layoutPreset === "coverage"
-      ? Number((coverageSpan / (normalizedCount - 1)).toFixed(4))
+      ? Number((laneSpan / (normalizedCount - 1)).toFixed(4))
       : 0;
     const radialSpacing = normalizedCount > 1
       ? Number((Number.isFinite(radialSpacingInput)
@@ -198,6 +207,7 @@ function normalizeStripPopulations(populations) {
     return {
       kind: "StripPopulationDescriptor",
       mode: STRIP_POPULATION_MODE,
+      layoutControlMode: POPULATION_LAYOUT_CONTROL_MODE,
       coverageLayoutMode: POPULATION_COVERAGE_LAYOUT_MODE,
       id: typeof population?.id === "string" && population.id ? population.id : fallbackId,
       layerIndex: Number.isFinite(layerIndex) ? Math.round(clamp(layerIndex, 0, MAX_LAYER_COUNT - 1)) : 0,
@@ -208,8 +218,10 @@ function normalizeStripPopulations(populations) {
       bearingOffset: Number.isFinite(bearingOffset) ? Number(clamp(bearingOffset, -TAU, TAU).toFixed(4)) : 0,
       bearingVariance: coverageSpread,
       coverageSpacing,
-      coverageSpan,
+      coverageSpan: laneSpan,
+      laneSpan,
       shellLaneSpacing,
+      phaseStagger,
       radialSpacing,
       radiusOffset,
       gapPattern: normalizeGapPattern(population?.gapPattern),
@@ -411,11 +423,15 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         bearingOffset: 0,
         bearingVariance: 1,
         coverageSpacing: spec.stripCount > 1 ? Number((TAU / spec.stripCount).toFixed(4)) : 0,
-        coverageSpan: spec.stripCount > 1 ? 0.84 : 0,
-        shellLaneSpacing: spec.stripCount > 1 ? Number((0.84 / (spec.stripCount - 1)).toFixed(4)) : 0,
+        coverageSpan: spec.stripCount > 1 ? DEFAULT_POPULATION_LANE_SPAN : 0,
+        laneSpan: spec.stripCount > 1 ? DEFAULT_POPULATION_LANE_SPAN : 0,
+        shellLaneSpacing: spec.stripCount > 1 ? Number((DEFAULT_POPULATION_LANE_SPAN / (spec.stripCount - 1)).toFixed(4)) : 0,
+        phaseStagger: spec.stripCount > 1 ? DEFAULT_POPULATION_PHASE_STAGGER : 0,
         radialSpacing: spec.stripCount > 1 ? DEFAULT_POPULATION_RADIAL_SPACING : 0,
         radiusOffset: 0,
         layoutPreset: "coverage",
+        layoutControlMode: POPULATION_LAYOUT_CONTROL_MODE,
+        coverageLayoutMode: POPULATION_COVERAGE_LAYOUT_MODE,
         gapPattern: "solid",
         source: "layer-shell-default-population",
       }];
@@ -435,11 +451,14 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
         const coverageSpacing = population.count > 1 && layoutPreset === "coverage"
           ? Number((TAU * populationSpread / population.count).toFixed(4))
           : 0;
-        const coverageSpan = population.count > 1 && layoutPreset === "coverage"
-          ? Number(clamp((population.coverageSpan ?? populationSpread * 0.84), 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
+        const laneSpan = population.count > 1 && layoutPreset === "coverage"
+          ? Number(clamp((population.laneSpan ?? population.coverageSpan ?? DEFAULT_POPULATION_LANE_SPAN), 0, MAX_COVERAGE_LANE_SPAN).toFixed(4))
           : 0;
         const shellLaneSpacing = population.count > 1 && layoutPreset === "coverage"
-          ? Number((coverageSpan / (population.count - 1)).toFixed(4))
+          ? Number((laneSpan / (population.count - 1)).toFixed(4))
+          : 0;
+        const phaseStagger = population.count > 1
+          ? Number(clamp(population.phaseStagger ?? DEFAULT_POPULATION_PHASE_STAGGER, -MAX_POPULATION_PHASE_STAGGER, MAX_POPULATION_PHASE_STAGGER).toFixed(4))
           : 0;
         const radialSpacing = population.count > 1
           ? Number(clamp(population.radialSpacing ?? DEFAULT_POPULATION_RADIAL_SPACING, 0, MAX_POPULATION_RADIAL_SPACING).toFixed(4))
@@ -501,8 +520,10 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           populationIndex,
           layoutPreset,
           coverageSpacing,
-          coverageSpan,
+          coverageSpan: laneSpan,
+          laneSpan,
           shellLaneSpacing,
+          phaseStagger,
           shellLaneOffset,
           radialSpacing,
           radialOffset,
@@ -531,7 +552,7 @@ export function generateLamellarStripInstances(layerSpecs, input = {}) {
           thicknessVariance: stripProfileDescriptor.thicknessVariance,
           gapPattern,
           intervalOffset: Number((localOffset * 0.045 + stripIndex * 0.012).toFixed(4)),
-          phaseOffset: Number((localOffset * 0.12 + bearingPhase).toFixed(4)),
+          phaseOffset: Number((localOffset * 0.04 + centeredPopulationSlot * phaseStagger).toFixed(4)),
         });
         shellStripIndex += 1;
       }
@@ -633,8 +654,10 @@ export function generateSphereCurveDescriptors(input = {}) {
       layoutPreset: strip.layoutPreset,
       coverageSpacing: strip.coverageSpacing,
       coverageSpan: strip.coverageSpan,
+      laneSpan: strip.laneSpan,
       shellLaneSpacing: strip.shellLaneSpacing,
       shellLaneOffset: strip.shellLaneOffset,
+      phaseStagger: strip.phaseStagger,
       radialSpacing: strip.radialSpacing,
       radialOffset: strip.radialOffset,
       populationRadiusOffset: strip.populationRadiusOffset,
@@ -907,8 +930,10 @@ function emitCurveSectionDescriptor(output, curve, seed) {
     layoutPreset: curve.layoutPreset,
     coverageSpacing: curve.coverageSpacing,
     coverageSpan: curve.coverageSpan,
+    laneSpan: curve.laneSpan,
     shellLaneSpacing: curve.shellLaneSpacing,
     shellLaneOffset: curve.shellLaneOffset,
+    phaseStagger: curve.phaseStagger,
     radialSpacing: curve.radialSpacing,
     radialOffset: curve.radialOffset,
     radiusOffset: curve.radiusOffset || 0,
@@ -1735,8 +1760,11 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       layoutPreset: population?.layoutPreset || null,
       coverageSpacing: population?.coverageSpacing ?? null,
       coverageSpan: population?.coverageSpan ?? null,
+      laneSpan: population?.laneSpan ?? null,
       radialSpacing: population?.radialSpacing ?? null,
       radiusOffset: population?.radiusOffset ?? null,
+      phaseStagger: population?.phaseStagger ?? null,
+      layoutControlMode: population?.layoutControlMode ?? null,
       count: population?.count ?? populationStripIds.length,
       chirality: population?.chirality ?? null,
       bearingOffset: population?.bearingOffset ?? null,
@@ -2052,8 +2080,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
       layoutPreset: d.layoutPreset,
       coverageSpacing: d.coverageSpacing,
       coverageSpan: d.coverageSpan,
+      laneSpan: d.laneSpan,
       shellLaneSpacing: d.shellLaneSpacing,
       shellLaneOffset: d.shellLaneOffset,
+      phaseStagger: d.phaseStagger,
       radialSpacing: d.radialSpacing,
       radialOffset: d.radialOffset,
       radiusOffset: d.radiusOffset || 0,
@@ -2224,8 +2254,10 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
         layoutPreset: descriptor.layoutPreset || null,
         coverageSpacing: descriptor.coverageSpacing ?? null,
         coverageSpan: descriptor.coverageSpan ?? null,
+        laneSpan: descriptor.laneSpan ?? null,
         shellLaneSpacing: descriptor.shellLaneSpacing ?? null,
         shellLaneOffset: descriptor.shellLaneOffset ?? null,
+        phaseStagger: descriptor.phaseStagger ?? null,
         radialSpacing: descriptor.radialSpacing ?? null,
         radialOffset: descriptor.radialOffset ?? null,
         radiusOffset: descriptor.radiusOffset ?? null,

@@ -105,6 +105,9 @@ assert.match(index, /pinLamellarSelectionPopover/, 'Lamellar population toolhead
 assert.match(index, /data-popover-pinned/, 'Lamellar population toolhead exposes pinned state for witness/operator diagnostics');
 assert.match(index, /id="lamellar-population-bearing-spread"/, 'Lamellar population toolhead exposes bearing spread control');
 assert.match(index, /id="lamellar-population-bearing-offset"/, 'Lamellar population toolhead exposes bearing offset control');
+assert.match(index, /Population layout/, 'Lamellar population toolhead groups layout controls coherently');
+assert.match(index, /id="lamellar-population-lane-span"/, 'Lamellar population toolhead exposes lane span separately from spread');
+assert.match(index, /id="lamellar-population-phase-stagger"/, 'Lamellar population toolhead exposes phase stagger separately from spread');
 assert.match(index, /id="lamellar-population-radial-spacing"/, 'Lamellar population toolhead exposes radial shell spacing control');
 assert.match(index, /id="lamellar-popover-layer-thickness-scale"/, 'Lamellar layer popover exposes descendant thickness control at the selection site');
 assert.match(index, /id="lamellar-popover-shell-set-count"/, 'Lamellar layer popover exposes visible shell-set count control');
@@ -247,6 +250,7 @@ assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip
 assert.match(core, /stripPopulationDescriptors/, 'Lamellar debug state reports macro strip population descriptors');
 assert.match(core, /same-shell-direction-population-authoring-v0/, 'Lamellar core names same-shell direction population authoring mode');
 assert.match(core, /even-shell-coverage-layout-v0/, 'Lamellar core names even shell coverage population layout');
+assert.match(core, /decoupled-population-layout-controls-v0/, 'Lamellar core names decoupled population layout controls');
 assert.match(core, /sphere-shell-enclosure-composition-v0/, 'Lamellar core names macro sphere-shell enclosure composition mode');
 assert.match(core, /intra-strip-topology-members-v0/, 'Lamellar core names subordinate same-shell strip topology members');
 assert.match(core, /shell-distributed-topology-families-v0/, 'Lamellar core names shell-distributed topology families');
@@ -947,6 +951,54 @@ function circularMinGap(values) {
     return next - value;
   });
   return Math.min(...gaps);
+}
+
+function range(values) {
+  return Math.max(...values) - Math.min(...values);
+}
+
+{
+  const populationControlsBase = {
+    seed: 31,
+    layerCount: 2,
+    chiralityPattern: 'same',
+    chunkinessBase: 0.4,
+    chunkinessVariance: 0,
+    stripPopulations: [
+      {
+        id: 'spread-split-target',
+        layerIndex: 0,
+        role: 'lamella',
+        count: 5,
+        chirality: 1,
+        bearingOffset: 0,
+        bearingVariance: 0.35,
+        laneSpan: 0.42,
+        phaseStagger: 0.18,
+        radialSpacing: 0.04,
+        layoutPreset: 'coverage',
+      },
+    ],
+  };
+  const lowSpread = coreModule.generateLamellarSectionSegments(populationControlsBase);
+  const highSpread = coreModule.generateLamellarSectionSegments({
+    ...populationControlsBase,
+    stripPopulations: [
+      { ...populationControlsBase.stripPopulations[0], bearingVariance: 1.55 },
+    ],
+  });
+  const lowPopulation = lowSpread.stripPopulationDescriptors.find(population => population.id === 'spread-split-target');
+  const highPopulation = highSpread.stripPopulationDescriptors.find(population => population.id === 'spread-split-target');
+  const lowStrips = lowSpread.stripInstances.filter(strip => strip.populationId === 'spread-split-target');
+  const highStrips = highSpread.stripInstances.filter(strip => strip.populationId === 'spread-split-target');
+  assert.equal(lowPopulation?.layoutControlMode, 'decoupled-population-layout-controls-v0', 'population records decoupled layout-control mode');
+  assert.equal(lowPopulation?.laneSpan, 0.42, 'population records lane span independently from spread');
+  assert.equal(highPopulation?.laneSpan, 0.42, 'spread does not rewrite authored lane span');
+  assert.equal(lowPopulation?.phaseStagger, 0.18, 'population records phase stagger independently from spread');
+  assert.equal(highPopulation?.phaseStagger, 0.18, 'spread does not rewrite authored phase stagger');
+  assert.ok(range(highStrips.map(strip => strip.bearingPhase)) > range(lowStrips.map(strip => strip.bearingPhase)) * 3, 'spread still changes angular coverage');
+  assert.ok(Math.abs(range(highStrips.map(strip => strip.shellLaneOffset)) - range(lowStrips.map(strip => strip.shellLaneOffset))) < 0.001, 'spread must not change shell-lane span');
+  assert.ok(Math.abs(range(highStrips.map(strip => strip.phaseOffset)) - range(lowStrips.map(strip => strip.phaseOffset))) < 0.001, 'spread must not change curve phase staggering');
 }
 
 for (const count of [4, 5, 6]) {
