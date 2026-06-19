@@ -631,6 +631,9 @@ async function main() {
       assert.equal(state.claySculptSurfaceVisible, true, 'sculpt diagnostic surface was not visible');
       assert.ok((state.claySculptSurfaceVertexCount ?? 0) >= 400, 'sculpt diagnostic surface did not consume enough exterior particles');
       assert.ok((state.claySculptSurfaceTriangleCount ?? 0) > 0, 'sculpt diagnostic surface produced no triangles');
+      assert.equal(state.claySculptSurfaceNeedsRefresh, false, 'sculpt diagnostic surface was stale at assertion time');
+      assert.equal(state.claySculptSurfaceSkippedUpdateCount, 0, 'sculpt diagnostic surface skipped live pointer updates');
+      assert.ok((state.claySculptSurfaceUpdateCount ?? 0) >= 6, 'sculpt diagnostic surface did not update across the pointer smoke');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(

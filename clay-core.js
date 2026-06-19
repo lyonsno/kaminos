@@ -44,7 +44,7 @@ const CLAY_SCULPT_SURFACE_MAX_BALLS = 576;
 const CLAY_SCULPT_SURFACE_STRENGTH = 0.21;
 const CLAY_SCULPT_SURFACE_SUBTRACT = 7.0;
 const CLAY_SCULPT_SURFACE_ISOLATION = 1.45;
-const CLAY_SCULPT_SURFACE_UPDATE_STEP_INTERVAL = 12;
+const CLAY_SCULPT_SURFACE_UPDATE_STEP_INTERVAL = 1;
 const DEFAULT_CLAY_CUBE = '8x8x8';
 const CLAY_CUBE_PRESETS = Object.freeze({
   '6x6x6': Object.freeze({ cubeX: 6, cubeY: 6, cubeZ: 6, gridDimension: 12 }),
@@ -2702,12 +2702,7 @@ export function createKaminosClayPrototype({
     }
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
-    if (!claySculptSurfaceVisible || !clayPointerActive) {
-      refreshSculptBoundarySkin(sculptValues);
-    } else {
-      claySculptSurfaceNeedsRefresh = true;
-      claySculptSurfaceSkippedUpdateCount += 1;
-    }
+    refreshSculptBoundarySkin(sculptValues);
     claySculptStepStatus = 'pass';
     claySculptPointCloudVisible = !!sculptPointCloud?.visible;
     lastSculptStateValues = sculptValues;
