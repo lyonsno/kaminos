@@ -512,16 +512,37 @@ export function runClayCubeFirstLoopOracle({
       const radius = Math.max(collider.radius, 0.001);
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const reach = clamp01(1 - dist / radius);
-      if (reach <= 0) continue;
-      const force = reach * reach * collider.strength;
-      const invDist = 1 / Math.max(dist, 0.025);
       const surfaceNormal = normalizeVec3(collider.surfaceNormal, [0, -1, 0]);
-      pushX += dx * invDist * force * 0.028;
-      pushX += surfaceNormal[0] * force * 0.082;
-      pushY += surfaceNormal[1] * force * 0.082;
-      pushZ += dz * invDist * force * 0.028;
-      pushZ += surfaceNormal[2] * force * 0.082;
-      contact += 1;
+      const normalOffset = dx * surfaceNormal[0] + dy * surfaceNormal[1] + dz * surfaceNormal[2];
+      const tangentX = dx - surfaceNormal[0] * normalOffset;
+      const tangentY = dy - surfaceNormal[1] * normalOffset;
+      const tangentZ = dz - surfaceNormal[2] * normalOffset;
+      const tangentDistance = Math.sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+      const structuralReach = clamp01(1 - tangentDistance / (radius * 1.35))
+        * clamp01(1 - Math.abs(normalOffset) / (radius * 0.85));
+      const boundaryAxes = Number(Math.abs(Math.abs(baseX) - CLAY_CUBE_EXTENTS.halfX) <= 1e-5)
+        + Number(Math.abs(baseY - CLAY_CUBE_EXTENTS.minY) <= 1e-5 || Math.abs(baseY - CLAY_CUBE_EXTENTS.maxY) <= 1e-5)
+        + Number(Math.abs(Math.abs(baseZ) - CLAY_CUBE_EXTENTS.halfZ) <= 1e-5);
+      const boundaryWeight = boundaryAxes >= 3 ? 0.55 : boundaryAxes >= 2 ? 0.35 : 0;
+      let touched = false;
+      if (reach > 0) {
+        const force = reach * reach * collider.strength;
+        const invDist = 1 / Math.max(dist, 0.025);
+        pushX += dx * invDist * force * 0.028;
+        pushX += surfaceNormal[0] * force * 0.082;
+        pushY += surfaceNormal[1] * force * 0.082;
+        pushZ += dz * invDist * force * 0.028;
+        pushZ += surfaceNormal[2] * force * 0.082;
+        touched = true;
+      }
+      if (boundaryWeight > 0 && structuralReach > 0) {
+        const structuralForce = structuralReach * structuralReach * collider.strength * boundaryWeight;
+        pushX += surfaceNormal[0] * structuralForce * 0.082;
+        pushY += surfaceNormal[1] * structuralForce * 0.082;
+        pushZ += surfaceNormal[2] * structuralForce * 0.082;
+        touched = true;
+      }
+      if (touched) contact += 1;
     }
 
     x = x + pushX + (baseX - x) * 0.018;
@@ -687,11 +708,40 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
     let delta = p.xyz - collider.xyz;
     let dist = length(delta);
     let reach = clamp(1.0 - dist / radius, 0.0, 1.0);
+    let surfaceNormal = normalize(forceLane.yzw);
+    let normalOffset = dot(delta, surfaceNormal);
+    let tangentDelta = delta - surfaceNormal * normalOffset;
+    let structuralReach = clamp(1.0 - length(tangentDelta) / (radius * 1.35), 0.0, 1.0)
+      * clamp(1.0 - abs(normalOffset) / (radius * 0.85), 0.0, 1.0);
+    var boundaryAxes = 0.0;
+    if (abs(abs(base.x) - ${CLAY_CUBE_EXTENTS.halfX.toFixed(8)}) <= 0.00001) {
+      boundaryAxes = boundaryAxes + 1.0;
+    }
+    if (abs(base.y - ${CLAY_CUBE_EXTENTS.minY.toFixed(8)}) <= 0.00001 || abs(base.y - ${CLAY_CUBE_EXTENTS.maxY.toFixed(8)}) <= 0.00001) {
+      boundaryAxes = boundaryAxes + 1.0;
+    }
+    if (abs(abs(base.z) - ${CLAY_CUBE_EXTENTS.halfZ.toFixed(8)}) <= 0.00001) {
+      boundaryAxes = boundaryAxes + 1.0;
+    }
+    var boundaryWeight = 0.0;
+    if (boundaryAxes >= 3.0) {
+      boundaryWeight = 0.55;
+    } else if (boundaryAxes >= 2.0) {
+      boundaryWeight = 0.35;
+    }
+    var touched = false;
     if (reach > 0.0) {
       let force = reach * reach * forceLane.x;
       let direction = delta / max(dist, 0.025);
-      let surfaceNormal = normalize(forceLane.yzw);
       push = push + (vec3f(direction.x * 0.028, 0.0, direction.z * 0.028) + surfaceNormal * 0.082) * force;
+      touched = true;
+    }
+    if (boundaryWeight > 0.0 && structuralReach > 0.0) {
+      let structuralForce = structuralReach * structuralReach * forceLane.x * boundaryWeight;
+      push = push + surfaceNormal * 0.082 * structuralForce;
+      touched = true;
+    }
+    if (touched) {
       contact = contact + 1.0;
     }
   }

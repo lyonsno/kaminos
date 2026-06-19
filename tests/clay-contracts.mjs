@@ -305,6 +305,8 @@ assert.match(witness, /clayCubeBoundarySkinVisualMode/, 'clay witness records bo
 assert.match(witness, /clayCubeFaceMetricEvidenceKind/, 'clay witness records face-locality metric evidence kind');
 assert.match(witness, /clayCubeFrontBackDeformationRatio/, 'clay witness records front/back deformation ratio');
 assert.match(witness, /clayCubeBrushToContactCentroidDistance/, 'clay witness records brush/contact centroid alignment');
+assert.match(witness, /clay_corner_smoke/, 'clay witness can drive a corner-directed smoke route');
+assert.match(witness, /corner smoke did not exercise corner-band deformation/, 'clay witness verifies corner smoke actually exercises corner deformation');
 assert.match(witness, /requestedBrushRadius/, 'clay witness can verify routed pointer brush radius');
 assert.match(witness, /requestedBrushStrength/, 'clay witness can verify routed pointer brush strength');
 assert.match(witness, /Input\.dispatchKeyEvent/, 'clay witness sends real keyboard input for brush modifier mode');

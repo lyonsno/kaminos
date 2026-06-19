@@ -115,3 +115,48 @@ for (let i = 0; i < config.particleCount; i += 1) {
   leftMaxAbsY = Math.max(leftMaxAbsY, Math.abs(leftFaceOracle.positions[offset + 1] - particles[offset + 1]));
 }
 assert.ok(maxInwardX > leftMaxAbsY * 2, `side-face cube brush should press inward along X, not down like the top surface: x=${maxInwardX} y=${leftMaxAbsY}`);
+
+const cornerConfig = normalizeClayCubeConfig('10x10x10');
+const cornerParticles = seedClayCubeMaterialPoints(cornerConfig);
+const nearCornerPointer = normalizeClayCubePointerCollider({
+  id: 'front-upper-right-corner-pointer',
+  center: [0.36, 0.58, 0.34],
+  rawCenter: [0.36, 0.58, 0.34],
+  surfaceNormal: [0, 0, -1],
+  radius: 0.17,
+  strength: 1.18,
+});
+const nearCornerOracle = runClayCubeFirstLoopOracle({
+  basePositions: cornerParticles,
+  previousPositions: cornerParticles,
+  config: cornerConfig,
+  colliders: [nearCornerPointer],
+});
+
+let maxCornerDisplacement = 0;
+let maxNonCornerDisplacement = 0;
+for (let y = 0; y < cornerConfig.cubeY; y += 1) {
+  for (let z = 0; z < cornerConfig.cubeZ; z += 1) {
+    for (let x = 0; x < cornerConfig.cubeX; x += 1) {
+      const index = y * cornerConfig.cubeZ * cornerConfig.cubeX + z * cornerConfig.cubeX + x;
+      const offset = index * 4;
+      const displacement = Math.hypot(
+        nearCornerOracle.positions[offset] - cornerParticles[offset],
+        nearCornerOracle.positions[offset + 1] - cornerParticles[offset + 1],
+        nearCornerOracle.positions[offset + 2] - cornerParticles[offset + 2],
+      );
+      const boundaryAxes = Number(x === 0 || x === cornerConfig.cubeX - 1)
+        + Number(y === 0 || y === cornerConfig.cubeY - 1)
+        + Number(z === 0 || z === cornerConfig.cubeZ - 1);
+      if (boundaryAxes >= 3) {
+        maxCornerDisplacement = Math.max(maxCornerDisplacement, displacement);
+      } else {
+        maxNonCornerDisplacement = Math.max(maxNonCornerDisplacement, displacement);
+      }
+    }
+  }
+}
+assert.ok(
+  maxCornerDisplacement >= maxNonCornerDisplacement * 0.18,
+  `near-corner brush left the cube corner too pointed: corner=${maxCornerDisplacement} nonCorner=${maxNonCornerDisplacement}`,
+);

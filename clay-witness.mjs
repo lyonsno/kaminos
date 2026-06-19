@@ -13,6 +13,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_cube=1&clay_cube_grid=10x10x10&clay_steps=7&clay_debug_colliders=0&clay_benchmark_shadow=0&clay_normal_cadence=every_3&clay_colliders=clay_fixture_hand&clay_brush_hotkey=1';
 const routeUsesPointerDrag = url.includes('clay_interactive=1') || url.includes('clay_brush_hotkey=1');
 const routeUsesBrushHotkey = url.includes('clay_brush_hotkey=1');
+const cornerSmokeTarget = new URL(url).searchParams.get('clay_corner_smoke') || '';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9444);
@@ -409,14 +410,27 @@ async function main() {
             if (!(rect.width > 16 && rect.height > 16)) {
               return { ok: false, reason: 'missing clay canvas bounds', rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
             }
+            const cornerSmokeTarget = ${JSON.stringify(cornerSmokeTarget)};
+            const dragPlan = cornerSmokeTarget === 'front_upper_right'
+              ? {
+                startX: rect.left + rect.width * 0.62,
+                startY: rect.top + rect.height * 0.42,
+                midX: rect.left + rect.width * 0.68,
+                midY: rect.top + rect.height * 0.40,
+                endX: rect.left + rect.width * 0.74,
+                endY: rect.top + rect.height * 0.38,
+              }
+              : {
+                startX: rect.left + rect.width * 0.43,
+                startY: rect.top + rect.height * 0.50,
+                midX: rect.left + rect.width * 0.46,
+                midY: rect.top + rect.height * 0.50,
+                endX: rect.left + rect.width * 0.50,
+                endY: rect.top + rect.height * 0.51,
+              };
             return {
               ok: true,
-              startX: rect.left + rect.width * 0.43,
-              startY: rect.top + rect.height * 0.50,
-              midX: rect.left + rect.width * 0.46,
-              midY: rect.top + rect.height * 0.50,
-              endX: rect.left + rect.width * 0.50,
-              endY: rect.top + rect.height * 0.51,
+              ...dragPlan,
               rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
             };
           })()`,
@@ -687,6 +701,10 @@ async function main() {
         assert.ok((state.clayCubeFrontBackDeformationRatio ?? 0) > 1, `cube pointer brush deformation was not front-local: ${state.clayCubeFrontBackDeformationRatio}`);
         assert.ok(Number.isFinite(state.clayCubeBrushToContactCentroidDistance), 'cube pointer brush/contact centroid distance missing');
         assert.ok(state.clayCubeBrushToContactCentroidDistance < 0.5, `cube pointer brush/contact centroid drifted too far: ${state.clayCubeBrushToContactCentroidDistance}`);
+        if (cornerSmokeTarget === 'front_upper_right') {
+          assert.ok((state.clayCubeEdgeBandDeformedParticleCount ?? 0) > 0, 'corner smoke did not exercise edge-band deformation');
+          assert.ok((state.clayCubeCornerBandDeformedParticleCount ?? 0) > 0, 'corner smoke did not exercise corner-band deformation');
+        }
       }
       const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
       const requestedBrushStrength = Number(new URL(url).searchParams.get('clay_brush_strength') || 1.18);
