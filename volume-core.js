@@ -69,6 +69,17 @@ function volumeSceneMode(value) {
   return 0;
 }
 
+function bonfireReferenceConfinementDebug(value) {
+  const scene = normalizeVolumeScene(value);
+  return {
+    identity: 'bonfire-reference-front-gradient-confinement-v0',
+    enabled: scene === 'bonfire_plume',
+    storage: 'four-slot-existing-fluid-state',
+    forceSource: 'neighbor-slot-front-gradient-plus-curl',
+    radiancePolicy: 'front-contact-gated-emission',
+  };
+}
+
 function gridCellCount(gridSize) {
   return gridSize * gridSize * gridSize;
 }
@@ -735,6 +746,48 @@ fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
     (sy1 - sy0) * 0.72 - (hy1 - hy0) * 0.44 + (fy1 - fy0) * 0.38,
     (sz1 - sz0) * 0.72 - (hz1 - hz0) * 0.44 + (fz1 - fz0) * 0.38
   ) * 0.5;
+}
+
+fn bonfireReferenceFrontGradient(c: vec3<i32>) -> vec3<f32> {
+  let mx0 = readSlot(c + vec3<i32>(-1, 0, 0), 1u);
+  let mx1 = readSlot(c + vec3<i32>( 1, 0, 0), 1u);
+  let fx0 = readSlot(c + vec3<i32>(-1, 0, 0), 2u);
+  let fx1 = readSlot(c + vec3<i32>( 1, 0, 0), 2u);
+  let ux0 = readSlot(c + vec3<i32>(-1, 0, 0), 3u);
+  let ux1 = readSlot(c + vec3<i32>( 1, 0, 0), 3u);
+  let my0 = readSlot(c + vec3<i32>(0, -1, 0), 1u);
+  let my1 = readSlot(c + vec3<i32>(0,  1, 0), 1u);
+  let fy0 = readSlot(c + vec3<i32>(0, -1, 0), 2u);
+  let fy1 = readSlot(c + vec3<i32>(0,  1, 0), 2u);
+  let uy0 = readSlot(c + vec3<i32>(0, -1, 0), 3u);
+  let uy1 = readSlot(c + vec3<i32>(0,  1, 0), 3u);
+  let mz0 = readSlot(c + vec3<i32>(0, 0, -1), 1u);
+  let mz1 = readSlot(c + vec3<i32>(0, 0,  1), 1u);
+  let fz0 = readSlot(c + vec3<i32>(0, 0, -1), 2u);
+  let fz1 = readSlot(c + vec3<i32>(0, 0,  1), 2u);
+  let uz0 = readSlot(c + vec3<i32>(0, 0, -1), 3u);
+  let uz1 = readSlot(c + vec3<i32>(0, 0,  1), 3u);
+  let x = (fx1.w - fx0.w) * 0.70 + (fx1.z - fx0.z) * 0.42 + (mx1.y - mx0.y) * 0.32 + (mx1.x - mx0.x) * 0.24 + (ux1.y - ux0.y) * 0.22;
+  let y = (fy1.w - fy0.w) * 0.70 + (fy1.z - fy0.z) * 0.42 + (my1.y - my0.y) * 0.32 + (my1.x - my0.x) * 0.24 + (uy1.y - uy0.y) * 0.22;
+  let z = (fz1.w - fz0.w) * 0.70 + (fz1.z - fz0.z) * 0.42 + (mz1.y - mz0.y) * 0.32 + (mz1.x - mz0.x) * 0.24 + (uz1.y - uz0.y) * 0.22;
+  return vec3<f32>(x, y, z) * 0.5;
+}
+
+fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: f32, source: f32, frontContact: f32, strength: f32) -> vec3<f32> {
+  let frontGradient = bonfireReferenceFrontGradient(c);
+  let materialGradient = materialInterfaceGradient(c);
+  let curlMagnitudeGradient = vec3<f32>(
+    curlMagnitudeAtCell(c + vec3<i32>(1, 0, 0)) - curlMagnitudeAtCell(c + vec3<i32>(-1, 0, 0)),
+    curlMagnitudeAtCell(c + vec3<i32>(0, 1, 0)) - curlMagnitudeAtCell(c + vec3<i32>(0, -1, 0)),
+    curlMagnitudeAtCell(c + vec3<i32>(0, 0, 1)) - curlMagnitudeAtCell(c + vec3<i32>(0, 0, -1))
+  ) * 0.5;
+  let frontDirection = normalize(frontGradient * 0.76 + materialGradient * 0.34 + curlMagnitudeGradient * 0.48 + vec3<f32>(0.0001));
+  let localCurl = curlAtCell(c);
+  let confinement = cross(frontDirection, localCurl);
+  let frontShear = cross(normalize(frontGradient + vec3<f32>(0.0001)), normalize(materialGradient + curlMagnitudeGradient + vec3<f32>(0.0001)));
+  let carrier = clamp(frontContact * 0.72 + smoke * 0.34 + heat * 0.24 + flame * 0.22 + source * 0.10, 0.0, 1.9);
+  let frontEnergy = smoothstep(0.006, 0.16, length(frontGradient) + length(materialGradient) * 0.42);
+  return (confinement * 0.074 + frontShear * 0.018) * carrier * frontEnergy * clamp(strength, 0.0, 1.5);
 }
 
 fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
@@ -1535,6 +1588,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireFrontLiftGate
     * (0.22 + bonfireInterfaceBirth * 0.32 + bonfirePacketCombustion.y * 0.22 + bonfirePacketCombustion.z * 0.18)
     * (0.58 + bonfireLayeredBreakup * 0.26 + bonfireTongues * 0.18);
+  let bonfireCombustionFrontLiftCarrier = (
+    bonfireLiftedReactionFront * 0.72
+      + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
+      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
+  ) * (0.82 + bonfireLayeredBreakup * 0.18);
   let bonfireRadianceBreakup = clamp(
     0.46
       + (bonfireEdgeBreakup - 0.70) * 0.58
@@ -1544,12 +1602,31 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.22,
     1.12
   );
+  let bonfireRadianceSourceGate = clamp(
+    0.18
+      + bonfireFrontLiftGate * 0.42
+      + smoothstep(bonfireCoreRadius * 0.42, bonfireCoreRadius * 1.12, sourceRadial) * 0.24
+      + bonfireInterfaceBirth * 0.18
+      + bonfireCombustionFrontLiftCarrier * 0.22,
+    0.14,
+    1.0
+  );
+  let bonfireFrontContactRadiance = clamp(
+    bonfireReactionFront * 0.46
+      + bonfireLiftedReactionFront * 0.60
+      + bonfireCombustionFrontLiftCarrier * 0.46
+      + bonfireInteriorEmissionBridge * 0.78
+      + bonfirePacketCombustion.z * bonfireFrontLiftGate * 0.24,
+    0.0,
+    2.6
+  );
   let bonfireRadianceBirth = clamp(
-    bonfireFireBirth * bonfireFireSourceBinRelief * 0.26
-      + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.72
+    bonfireFireBirth * bonfireFireSourceBinRelief * bonfireRadianceSourceGate * 0.14
+      + bonfireFrontContactRadiance * bonfireRadianceBreakup * 0.72
+      + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.38
       + bonfireInteriorEmissionBridge * 1.28
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.42
-      + bonfireEmberRing * 0.18,
+      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * bonfireRadianceSourceGate * 0.28
+      + bonfireEmberRing * bonfireRadianceSourceGate * 0.12,
     0.0,
     2.4
   ) * (0.72 + bonfireRadianceBreakup * 0.34);
@@ -1593,11 +1670,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     1.35
   );
-  let bonfireCombustionFrontLiftCarrier = (
-    bonfireLiftedReactionFront * 0.72
-      + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
-  ) * (0.82 + bonfireLayeredBreakup * 0.18);
   let bonfireCombustionFrontBirth = bonfireScene * clamp(
     bonfireInterfaceBirth * 0.28
       + bonfireCombustion.z * 0.18
@@ -1613,6 +1685,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
+  let bonfireReferenceFrontContact = clamp(
+    bonfireFrontContactRadiance * 0.42
+      + bonfireCombustionFrontBirth * 0.44
+      + bonfireLiftedReactionFront * 0.22
+      + bonfireSootBirth * 0.14,
+    0.0,
+    2.4
+  );
+  let bonfireReferenceConfinement = bonfireReferenceConfinementForce(
+    cellI,
+    smoke,
+    heat,
+    flame,
+    source,
+    bonfireReferenceFrontContact,
+    0.18 + curl * 0.38 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.065
+  );
   let bonfireNonWindAuthority = bonfireScene * (1.0 - explicitWindAuthority);
   let bonfireLocalLateralForceTarget = mix(1.0, max(explicitWindAuthority, 0.86), bonfireScene);
   let bonfireLocalLateralForceGain = mix(1.0, bonfireLocalLateralForceTarget, bonfireLateralDampingAblation);
@@ -1640,6 +1729,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
+  vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
   vel = vel + microForce;
   vel = vel + shredForce;
@@ -1704,6 +1794,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
   vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
   vel = vel + bonfireLayeredPlumeShear * bonfireNonWindAuthority * bonfireShearAblation;
+  vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
   vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.4;
   vel = vel + bonfireCellRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.2;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
@@ -1756,16 +1847,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfirePacketCombustion.z * (0.24 + bonfireTongues * 0.16)
       + bonfirePacketCombustion.w * 0.11
   );
-  fireLick = max(fireLick, lickBirth.x + fireBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.34 + bonfireLiftedFireLobes * bonfireScene * 0.18 + bonfireBroadSupportSmokeSource * bonfireScene * 0.024 + bonfirePacketLickBirth);
+  let bonfireFireLickSourceBirth = clamp(bonfireFrontContactRadiance * 0.56 + bonfireRadianceBirth * 0.44 + bonfireCombustionFrontBirth * 0.18, 0.0, 2.6);
+  let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
+  fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireLobes * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfirePacketLickBirth);
   fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
   emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
   let columnFlameStorageBirth = fireBirth * (1.18 + 0.18 * bonfireTongues * bonfireScene) + heat * fuel * 0.060 + fireLick * 0.48;
-  let bonfireFlameStorageBirth = bonfireFlameOccupancy * (0.70 + bonfireTongues * 0.12)
-    + bonfireRadianceBirth * 0.24
-    + heat * fuel * 0.038
-    + fireLick * 0.30;
+  let bonfireFrontStorageOccupancy = clamp(
+    bonfireFlameOccupancy * bonfireRadianceSourceGate * 0.36
+      + bonfireFrontContactRadiance * 0.74
+      + bonfireCombustionFrontBirth * 0.34
+      + bonfireTransportedEmissionDetail * 0.18,
+    0.0,
+    3.0
+  );
+  let bonfireFlameStorageBirth = bonfireFrontStorageOccupancy * (0.66 + bonfireTongues * 0.10)
+    + bonfireRadianceBirth * 0.18
+    + heat * fuel * bonfireRadianceSourceGate * 0.024
+    + fireLick * 0.24;
   flame = max(flame, mix(columnFlameStorageBirth, bonfireFlameStorageBirth, bonfireScene));
   flame = max(flame, externalInjection.fire.x);
   ember = max(ember, mix(fireBirth * 0.78 + flame * 0.22, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
@@ -2078,6 +2179,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
     windHeight: normalizeWindHeight(controlsSnapshot.windHeight),
     bonfireAblation: normalizeBonfireAblationControls(controlsSnapshot),
+    bonfireReferenceConfinement: bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene),
     pressureProjectionEnabled: false,
     pressureProjectionIterations: 0,
     externalEmitterMode: 'off',
@@ -2945,6 +3047,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
     state.majorantSkip = uniforms[41];
@@ -4036,6 +4139,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       windAngle: state.windAngle,
       windHeight: state.windHeight,
       bonfireAblation: { ...state.bonfireAblation },
+      bonfireReferenceConfinement: { ...state.bonfireReferenceConfinement },
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
       displayWidth: state.displayWidth,
@@ -4101,6 +4205,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+      state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;

@@ -478,6 +478,11 @@ async function main() {
     assert.ok(Math.abs((state.bonfireAblation?.temporal ?? 0) - expectedBonfireTemporal) < 0.001, 'effective bonfire temporal ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireInstabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'bonfire instability probe route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.instabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'effective bonfire instability probe did not match route/control');
+    assert.equal(state.bonfireReferenceConfinement?.identity, 'bonfire-reference-front-gradient-confinement-v0', 'bonfire reference-confinement identity did not reach debug state');
+    if (expectedVolumeScene === 'bonfire_plume') {
+      assert.equal(state.bonfireReferenceConfinement?.enabled, true, 'bonfire reference-confinement route was not enabled for bonfire plume');
+      assert.equal(state.bonfireReferenceConfinement?.storage, 'four-slot-existing-fluid-state', 'bonfire reference-confinement did not preserve four-slot storage identity');
+    }
     assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
     assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
     assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
@@ -878,6 +883,7 @@ async function main() {
       expectedBonfireInstabilityProbe,
       expectedEffectiveTemporalAccum,
       bonfireAblation: sample.bonfireAblation,
+      bonfireReferenceConfinement: sample.bonfireReferenceConfinement,
       expectedRenderScale,
       renderScale: sample.renderScale,
       renderPixelRatio: sample.renderPixelRatio,

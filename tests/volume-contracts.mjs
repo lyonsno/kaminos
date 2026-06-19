@@ -334,6 +334,10 @@ assert.match(core, /bonfireAzimuthalBreakup/, 'bonfire smoke/detail source uses 
 assert.match(core, /bonfireMirrorBalancedBreakup/, 'bonfire smoke/detail source averages mirrored azimuthal breakup so local texture cannot shift the plume centerline');
 assert.match(core, /bonfireConvectiveCellRoll/, 'bonfire zero-wind plume injects local convective cells instead of only vertical lift plus recentering');
 assert.doesNotMatch(core, /bonfireConvectiveCellRoll[\s\S]*bonfireAzimuthalBreakup\(p \+ vec3<f32>\(/, 'bonfire convective cell roll must not use shifted one-handed azimuthal samples that bias centerline drift');
+assert.match(core, /bonfireReferenceFrontGradient/, 'bonfire reference repair derives front/contact gradients from transported fields before adding local roll');
+assert.match(core, /bonfireReferenceConfinementForce[\s\S]*readSlot/, 'bonfire reference confinement must read neighbor slots instead of being only source-relative procedural motion');
+assert.match(core, /bonfireReferenceConfinementForce[\s\S]*cross\(/, 'bonfire reference confinement must use curl/front-gradient directionality rather than a scalar texture shove');
+assert.doesNotMatch(core, /fn bonfireReferenceConfinementForce\([^)]*time/, 'bonfire reference confinement must not accept time as a direct phase input');
 assert.doesNotMatch(core, /hash31\(vec3<f32>\(sourceRadial \* 17\.0 \* scaledDetailFrequency, p\.y \* 11\.0, floor\(time \* 2\.0\)\)\)/, 'bonfire source breakup must not be keyed only by radius and height');
 assert.match(core, /bonfireEntrainedLift/, 'bonfire plume has named vertical entrainment separate from scalar symmetry');
 assert.match(core, /bonfireFireBirth/, 'fluid source shaping creates a bottom-local fireball birth field');
@@ -369,6 +373,9 @@ assert.match(core, /bonfireFireSourceBinRelief/, 'bonfire visible fire birth rel
 assert.match(core, /bonfireLiftedFlameBirth/, 'bonfire fire birth has a lifted/off-axis flame carrier derived from the reaction front');
 assert.match(core, /bonfireFlameOccupancy/, 'bonfire must name broad flame occupancy separately from visible emission so a lifted front does not render as a smooth shell');
 assert.match(core, /bonfireRadianceBirth/, 'bonfire must name visible radiance/emission birth separately from broad flame occupancy');
+assert.match(core, /bonfireRadianceSourceGate/, 'bonfire visible radiance has an explicit source gate so broad support/source occupancy cannot dominate emission');
+assert.match(core, /bonfireFrontContactRadiance/, 'bonfire visible radiance has a named front/contact carrier distinct from broad flame occupancy');
+assert.match(core, /bonfireRadianceBirth[\s\S]*bonfireFrontContactRadiance/, 'bonfire radiance birth must route through front/contact evidence');
 assert.match(core, /bonfireInteriorEmissionBridge/, 'bonfire radiance birth must bridge the lifted ring through interior contact so the flame does not become a goblet shell');
 assert.match(core, /bonfireEmissionDetailBirth/, 'bonfire visible emission detail must have its own named birth before storage');
 assert.match(core, /bonfireTransportedEmissionDetail/, 'bonfire visible emission detail must be transported in the existing fireLayer.z lane before raymarch transfer');
@@ -425,6 +432,7 @@ assert.match(core, /bonfireDetailForcesAblation/, 'bonfire shader can ablate det
 assert.match(core, /bonfireDepinchAblation/, 'bonfire shader can ablate upper depinch explicitly');
 assert.match(core, /bonfireProjectionAblation/, 'bonfire shader can ablate projection explicitly');
 assert.match(core, /state\.bonfireAblation/, 'debug state exposes effective bonfire ablation controls');
+assert.match(core, /state\.bonfireReferenceConfinement/, 'debug state exposes reference-confinement route identity for witness and ablation comparison');
 assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
 assert.match(core, /bonfireLocalLateralTransportGain/, 'zero-wind bonfire convection preserves local lateral circulation instead of killing horizontal transport');
 assert.match(core, /bonfireLocalLateralForceGain/, 'zero-wind bonfire detail forces preserve bounded local lateral motion for convection');
@@ -552,6 +560,7 @@ assert.match(witness, /expectedBonfireProjection/, 'witness verifies bonfire pro
 assert.match(witness, /expectedBonfireTemporal/, 'witness verifies bonfire temporal ablation route/control identity');
 assert.match(witness, /expectedBonfireInstabilityProbe/, 'witness verifies non-production instability probe route/control identity');
 assert.match(witness, /bonfireAblation/, 'witness records effective bonfire ablation controls in the report');
+assert.match(witness, /bonfireReferenceConfinement/, 'witness records effective bonfire reference-confinement route identity');
 assert.match(witness, /volumeScene/, 'witness records effective named volume scene identity');
 assert.match(witness, /renderScale/, 'witness records effective internal render scale');
 assert.match(witness, /displayWidth/, 'witness records displayed canvas width');
