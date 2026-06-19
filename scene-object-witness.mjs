@@ -2382,6 +2382,106 @@ async function runHybridSplatOverlayScenario(ws) {
   }
 }
 
+async function runRealSavedSplatCropVisibilityScenario(ws) {
+  phase = 'scenario-real-saved-splat-crop-visibility';
+  lastEvidence.realSavedSplatCropVisibility = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const waitForAssetRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 160; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      document.querySelector('[data-tab="greenroom"]').click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntry = (assetData.entries || []).find(entry => entry.name === 'evil_orb_multiview_emissive.ply') || null;
+      const beforeRows = rowState();
+      const assetRows = await waitForAssetRows();
+      const actionRows = assetRows.filter(row => [...row.querySelectorAll('button')]
+        .some(button => button.textContent.trim() === 'Import Splat'));
+      const actionRow = actionRows.find(row => row.textContent.includes('Evil Orb Multiview Emissive')) || null;
+      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Import Splat') : null;
+      if (actionButton) actionButton.click();
+      await waitForSceneRows(beforeRows.length + 1);
+      await wait(500);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splat = sceneDebug.find(record => record.type === 'splat' && record.source === assetEntry?.source)
+        || sceneDebug.find(record => record.type === 'splat' && /evil_orb_multiview_emissive\\.ply/.test(record.source || ''))
+        || null;
+      if (splat?.id) window.selectSceneObject?.(splat.id);
+      await wait(250);
+      const pivotBeforeMode = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
+      const previewBeforeMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+      const enteredMode = await window.enterSplatCorrectionMode?.(splat?.id);
+      await wait(250);
+      const previewInMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+      const exitedMode = window.exitSplatCorrectionMode?.({ revert: false, silent: true });
+      await wait(250);
+      const previewAfterClose = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+      const pivotAfterClose = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
+      return {
+        assetEntry,
+        actionExposed: !!actionButton,
+        splat,
+        pivotBeforeMode,
+        previewBeforeMode,
+        enteredMode,
+        previewInMode,
+        exitedMode,
+        previewAfterClose,
+        pivotAfterClose,
+      };
+    })()
+  `, { timeoutMs: 120000 });
+
+  const evidence = lastEvidence.realSavedSplatCropVisibility;
+  if (!evidence.assetEntry?.source || !evidence.actionExposed || !evidence.splat) {
+    throw new Error(`real saved splat crop witness could not import evil_orb_multiview_emissive.ply: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.splat.splat?.correction?.crop?.enabled) {
+    throw new Error(`real saved splat crop did not load crop correction from sidecar: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.previewBeforeMode
+      || evidence.previewBeforeMode.cropEnabled !== true
+      || evidence.previewBeforeMode.includedPointCount < 1
+      || evidence.previewBeforeMode.includedVisible !== true
+      || evidence.previewBeforeMode.excludedVisible !== false) {
+    throw new Error(`real saved splat crop did not show included points before edit mode: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.previewInMode
+      || evidence.previewInMode.excludedPointCount < 1
+      || evidence.previewInMode.excludedVisible !== true
+      || !(evidence.previewInMode.excludedOpacity < evidence.previewInMode.includedOpacity)) {
+    throw new Error(`real saved splat crop did not expose edit context: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.previewAfterClose
+      || evidence.previewAfterClose.includedPointCount < 1
+      || evidence.previewAfterClose.includedVisible !== true
+      || evidence.previewAfterClose.excludedVisible !== false) {
+    throw new Error(`real saved splat crop did not remain visible after edit mode closed: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSplatAssetInboxScenario(ws) {
   phase = 'scenario-splat-asset-inbox';
   lastEvidence.splatAssetInbox = await evaluate(ws, `
@@ -3133,6 +3233,8 @@ try {
     await runGreenroomSplatHandoffScenario(ws);
   } else if (scenario === 'hybrid-splat-overlay') {
     await runHybridSplatOverlayScenario(ws);
+  } else if (scenario === 'real-saved-splat-crop-visibility') {
+    await runRealSavedSplatCropVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {
     await runSplatAssetInboxScenario(ws);
   } else if (scenario === 'splat-direct-drop-ingest') {

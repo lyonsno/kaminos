@@ -171,6 +171,9 @@ assert.match(witness, /splat correction crop mode dirtied scene transform/, 'Spl
 assert.match(witness, /splat correction crop preview did not hide outside points/, 'Splat correction mode witness proves normal preview hides cropped-away points');
 assert.match(witness, /splat correction crop preview did not show edit context/, 'Splat correction mode witness proves edit mode shows cropped-away points faintly');
 assert.match(witness, /saved splat crop centroid preview did not show included points before edit mode/, 'Splat correction sidecar witness proves saved crop plus centroid offset remains visible outside edit mode');
+assert.match(witness, /real saved splat crop did not show included points before edit mode/, 'Real splat crop witness proves saved sidecars remain visible outside edit mode on production-scale assets');
+assert.match(witness, /real saved splat crop did not remain visible after edit mode closed/, 'Real splat crop witness proves closing edit mode restores the included crop preview');
+assert.match(witness, /evil_orb_multiview_emissive\.ply/, 'Real splat crop witness covers the operator-smoked multiview emissive asset');
 assert.match(witness, /hybrid splat overlay did not expose visible UI/, 'Hybrid Renderer witness requires a visible selected-splat control surface');
 assert.match(witness, /hybrid splat overlay did not load selected splat source/, 'Hybrid Renderer witness proves the overlay consumed the selected splat route');
 assert.match(witness, /hybrid splat overlay did not record dual-canvas capability/, 'Hybrid Renderer witness proves dual-canvas overlay status is explicit');

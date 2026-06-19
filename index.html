@@ -2728,6 +2728,8 @@ window.kaminosSplatPreviewDebugState = function(id = null) {
     previewKind: 'point-cloud',
     cropEnabled: !!preview.debug?.cropEnabled,
     editModeActive: !!preview.debug?.editModeActive,
+    cropFrame: preview.debug?.cropFrame || null,
+    cropFrameCounts: preview.debug?.cropFrameCounts || null,
     totalPointCount: preview.totalPointCount || 0,
     includedPointCount: preview.debug?.includedPointCount || 0,
     excludedPointCount: preview.debug?.excludedPointCount || 0,
@@ -5209,20 +5211,74 @@ function replaceSplatPointGeometry(points, geometry) {
   points.geometry = geometry;
 }
 
-function splatCropPointCoordinates(positions, index, correction) {
+function splatCropPointCoordinates(positions, index, correction, frame = 'axis-flipped-asset') {
   const offset = index * 3;
-  return [
+  const coordinates = [
     positions[offset + 0] * correction.axisFlips[0],
     positions[offset + 1] * correction.axisFlips[1],
     positions[offset + 2] * correction.axisFlips[2],
   ];
+  if (frame === 'pivot-local-minus-centroid') {
+    return coordinates.map((value, axis) => value - correction.centroidOffset[axis]);
+  }
+  return coordinates;
 }
 
-function splatPointInsideCrop(positions, index, correction, cropMin, cropMax) {
-  const [x, y, z] = splatCropPointCoordinates(positions, index, correction);
+function splatPointInsideCrop(positions, index, correction, cropMin, cropMax, frame = 'axis-flipped-asset') {
+  const [x, y, z] = splatCropPointCoordinates(positions, index, correction, frame);
   return x >= cropMin[0] && x <= cropMax[0]
     && y >= cropMin[1] && y <= cropMax[1]
     && z >= cropMin[2] && z <= cropMax[2];
+}
+
+function countSplatCropFrame(sourcePositions, pointCount, correction, cropMin, cropMax, frame) {
+  let count = 0;
+  for (let index = 0; index < pointCount; index++) {
+    if (splatPointInsideCrop(sourcePositions, index, correction, cropMin, cropMax, frame)) count++;
+  }
+  return count;
+}
+
+function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {
+  const canonicalFrame = 'axis-flipped-asset';
+  const canonicalCount = countSplatCropFrame(
+    preview.sourcePositions,
+    preview.totalPointCount,
+    correction,
+    cropMin,
+    cropMax,
+    canonicalFrame,
+  );
+  if (canonicalCount > 0) {
+    return { frame: canonicalFrame, includedPointCount: canonicalCount, canonicalPointCount: canonicalCount };
+  }
+  const hasCentroidOffset = correction.centroidOffset.some(value => Math.abs(value) > 1e-9);
+  if (!hasCentroidOffset) {
+    return { frame: canonicalFrame, includedPointCount: canonicalCount, canonicalPointCount: canonicalCount };
+  }
+  const pivotLocalFrame = 'pivot-local-minus-centroid';
+  const pivotLocalCount = countSplatCropFrame(
+    preview.sourcePositions,
+    preview.totalPointCount,
+    correction,
+    cropMin,
+    cropMax,
+    pivotLocalFrame,
+  );
+  if (pivotLocalCount > 0) {
+    return {
+      frame: pivotLocalFrame,
+      includedPointCount: pivotLocalCount,
+      canonicalPointCount: canonicalCount,
+      pivotLocalPointCount: pivotLocalCount,
+    };
+  }
+  return {
+    frame: canonicalFrame,
+    includedPointCount: canonicalCount,
+    canonicalPointCount: canonicalCount,
+    pivotLocalPointCount: pivotLocalCount,
+  };
 }
 
 function applySplatPointCloudCropPreview(record) {
@@ -5233,6 +5289,8 @@ function applySplatPointCloudCropPreview(record) {
   const editModeActive = splatCorrectionMode?.objectId === record.id;
   let includedIndices = null;
   let excludedIndices = [];
+  let cropFrame = 'uncropped';
+  let cropFrameCounts = null;
   if (correction.crop.enabled) {
     includedIndices = [];
     const cropMin = [
@@ -5245,8 +5303,11 @@ function applySplatPointCloudCropPreview(record) {
       Math.max(correction.crop.min[1], correction.crop.max[1]),
       Math.max(correction.crop.min[2], correction.crop.max[2]),
     ];
+    const frameChoice = chooseSplatCropFrame(preview, correction, cropMin, cropMax);
+    cropFrame = frameChoice.frame;
+    cropFrameCounts = frameChoice;
     for (let index = 0; index < preview.totalPointCount; index++) {
-      if (splatPointInsideCrop(preview.sourcePositions, index, correction, cropMin, cropMax)) includedIndices.push(index);
+      if (splatPointInsideCrop(preview.sourcePositions, index, correction, cropMin, cropMax, cropFrame)) includedIndices.push(index);
       else excludedIndices.push(index);
     }
   }
@@ -5269,6 +5330,8 @@ function applySplatPointCloudCropPreview(record) {
   preview.debug = {
     cropEnabled: correction.crop.enabled,
     editModeActive,
+    cropFrame,
+    cropFrameCounts,
     includedPointCount,
     excludedPointCount,
   };
