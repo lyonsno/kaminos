@@ -626,6 +626,11 @@ async function main() {
       assert.ok(Number.isFinite(state.claySculptReadbackWallMs) && state.claySculptReadbackWallMs > 0, 'sculpt readback timing missing');
       assert.ok((state.claySculptDispatchWorkgroups ?? 0) > 0, 'sculpt dispatch workgroup count missing');
       assert.equal(state.claySculptPointCloudVisible, true, 'sculpt point cloud was not visible');
+      assert.equal(state.claySculptSurfaceEvidenceKind, 'diagnostic-boundary-skin-from-sculpt-particles-not-solver-v0', 'sculpt diagnostic surface evidence kind missing');
+      assert.equal(state.claySculptSurfaceVisualMode, 'structured-lattice-boundary-skin-over-live-sculpt-particles-v0', 'sculpt diagnostic surface visual mode missing');
+      assert.equal(state.claySculptSurfaceVisible, true, 'sculpt diagnostic surface was not visible');
+      assert.ok((state.claySculptSurfaceVertexCount ?? 0) >= 400, 'sculpt diagnostic surface did not consume enough exterior particles');
+      assert.ok((state.claySculptSurfaceTriangleCount ?? 0) > 0, 'sculpt diagnostic surface produced no triangles');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(
@@ -902,6 +907,17 @@ async function main() {
       claySculptReadbackWallMs: state.claySculptReadbackWallMs,
       claySculptDispatchWorkgroups: state.claySculptDispatchWorkgroups,
       claySculptPointCloudVisible: state.claySculptPointCloudVisible,
+      claySculptSurfaceVisible: state.claySculptSurfaceVisible,
+      claySculptSurfaceEvidenceKind: state.claySculptSurfaceEvidenceKind,
+      claySculptSurfaceVisualMode: state.claySculptSurfaceVisualMode,
+      claySculptSurfaceResolution: state.claySculptSurfaceResolution,
+      claySculptSurfaceBallCount: state.claySculptSurfaceBallCount,
+      claySculptSurfaceVertexCount: state.claySculptSurfaceVertexCount,
+      claySculptSurfaceTriangleCount: state.claySculptSurfaceTriangleCount,
+      claySculptSurfaceNeedsRefresh: state.claySculptSurfaceNeedsRefresh,
+      claySculptSurfaceUpdateStepInterval: state.claySculptSurfaceUpdateStepInterval,
+      claySculptSurfaceUpdateCount: state.claySculptSurfaceUpdateCount,
+      claySculptSurfaceSkippedUpdateCount: state.claySculptSurfaceSkippedUpdateCount,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,

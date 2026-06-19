@@ -37,6 +37,14 @@ const CLAY_SCULPT_HASH_GRID_CONTRACT = 'fixed-capacity-uniform-grid-neighbor-bin
 const CLAY_SCULPT_HASH_GRID_EVIDENCE_KIND = 'deterministic-js-hash-grid-oracle-not-runtime-fallback';
 const CLAY_SCULPT_ORACLE_EVIDENCE_KIND = 'deterministic-js-sculpt-oracle-not-runtime-fallback';
 const CLAY_SCULPT_WEBGPU_EVIDENCE_KIND = 'webgpu-particle-hash-grid-readback';
+const CLAY_SCULPT_SURFACE_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-sculpt-particles-not-solver-v0';
+const CLAY_SCULPT_SURFACE_VISUAL_MODE = 'structured-lattice-boundary-skin-over-live-sculpt-particles-v0';
+const CLAY_SCULPT_SURFACE_RESOLUTION = 24;
+const CLAY_SCULPT_SURFACE_MAX_BALLS = 576;
+const CLAY_SCULPT_SURFACE_STRENGTH = 0.21;
+const CLAY_SCULPT_SURFACE_SUBTRACT = 7.0;
+const CLAY_SCULPT_SURFACE_ISOLATION = 1.45;
+const CLAY_SCULPT_SURFACE_UPDATE_STEP_INTERVAL = 12;
 const DEFAULT_CLAY_CUBE = '8x8x8';
 const CLAY_CUBE_PRESETS = Object.freeze({
   '6x6x6': Object.freeze({ cubeX: 6, cubeY: 6, cubeZ: 6, gridDimension: 12 }),
@@ -1240,6 +1248,9 @@ export function createKaminosClayPrototype({
   let mesh = null;
   let cubePointCloud = null;
   let sculptPointCloud = null;
+  let sculptBoundarySkin = null;
+  let sculptBoundarySkinSourceIndices = [];
+  let sculptIsoSurface = null;
   let cubeBoundingBox = null;
   let cubeIsoSurface = null;
   let cubeBoundarySkin = null;
@@ -1370,6 +1381,17 @@ export function createKaminosClayPrototype({
   let claySculptReadbackWallMs = 0;
   let claySculptDispatchWorkgroups = 0;
   let claySculptPointCloudVisible = claySculptEnabled;
+  let claySculptSurfaceVisible = false;
+  let claySculptSurfaceEvidenceKind = claySculptEnabled ? CLAY_SCULPT_SURFACE_EVIDENCE_KIND : 'disabled';
+  let claySculptSurfaceVisualMode = claySculptEnabled ? CLAY_SCULPT_SURFACE_VISUAL_MODE : 'disabled';
+  let claySculptSurfaceResolution = 0;
+  let claySculptSurfaceBallCount = 0;
+  let claySculptSurfaceVertexCount = 0;
+  let claySculptSurfaceTriangleCount = 0;
+  let claySculptSurfaceNeedsRefresh = false;
+  let claySculptSurfaceUpdateCount = 0;
+  let claySculptSurfaceSkippedUpdateCount = 0;
+  let claySculptSurfaceLastRefreshStep = -CLAY_SCULPT_SURFACE_UPDATE_STEP_INTERVAL;
   let lastSculptStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
@@ -1520,23 +1542,41 @@ export function createKaminosClayPrototype({
       sculptGeometry.setAttribute('position', new THREE.BufferAttribute(sculptPositions, 3));
       sculptGeometry.setAttribute('color', new THREE.BufferAttribute(sculptColors, 3));
       const sculptMaterial = new THREE.PointsMaterial({
-        size: 0.052,
+        size: 0.041,
         sizeAttenuation: true,
         vertexColors: true,
         transparent: true,
-        opacity: 0.94,
+        opacity: 0.54,
         depthTest: true,
         depthWrite: false,
       });
       sculptPointCloud = new THREE.Points(sculptGeometry, sculptMaterial);
       sculptPointCloud.name = 'kaminos-clay-particle-sculpt-hash-grid';
-      sculptPointCloud.renderOrder = 5;
+      sculptPointCloud.renderOrder = 6;
       scene.add(sculptPointCloud);
+      const sculptSkinMaterial = new THREE.MeshStandardMaterial({
+        color: 0xb9905d,
+        roughness: 0.9,
+        metalness: 0,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.86,
+        side: THREE.DoubleSide,
+        depthWrite: true,
+      });
+      sculptBoundarySkin = new THREE.Mesh(createSculptBoundarySkinGeometry(), sculptSkinMaterial);
+      sculptBoundarySkin.name = 'kaminos-clay-sculpt-diagnostic-boundary-skin';
+      sculptBoundarySkin.renderOrder = 4;
+      scene.add(sculptBoundarySkin);
     }
   }
 
   function cubeParticleIndex(x, y, z) {
     return y * cubeConfig.cubeZ * cubeConfig.cubeX + z * cubeConfig.cubeX + x;
+  }
+
+  function sculptParticleIndex(x, y, z) {
+    return y * sculptConfig.sculptZ * sculptConfig.sculptX + z * sculptConfig.sculptX + x;
   }
 
   function createCubeBoundarySkinGeometry() {
@@ -1627,6 +1667,91 @@ export function createKaminosClayPrototype({
     return geometry;
   }
 
+  function createSculptBoundarySkinGeometry() {
+    const positions = [];
+    const colors = [];
+    const indices = [];
+    const sourceIndices = [];
+    const sourceToVertex = new Map();
+
+    const pushVertex = sourceIndex => {
+      const existing = sourceToVertex.get(sourceIndex);
+      if (existing !== undefined) return existing;
+      const offset = sourceIndex * 4;
+      sourceIndices.push(sourceIndex);
+      positions.push(sculptBasePositions[offset], sculptBasePositions[offset + 1], sculptBasePositions[offset + 2]);
+      colors.push(0.72, 0.54, 0.34);
+      const vertexIndex = sourceIndices.length - 1;
+      sourceToVertex.set(sourceIndex, vertexIndex);
+      return vertexIndex;
+    };
+
+    const pushQuad = (a, b, c, d) => {
+      indices.push(a, b, c, c, b, d);
+    };
+
+    for (let y = 0; y < sculptConfig.sculptY - 1; y += 1) {
+      for (let x = 0; x < sculptConfig.sculptX - 1; x += 1) {
+        pushQuad(
+          pushVertex(sculptParticleIndex(x, y, 0)),
+          pushVertex(sculptParticleIndex(x + 1, y, 0)),
+          pushVertex(sculptParticleIndex(x, y + 1, 0)),
+          pushVertex(sculptParticleIndex(x + 1, y + 1, 0)),
+        );
+        pushQuad(
+          pushVertex(sculptParticleIndex(x + 1, y, sculptConfig.sculptZ - 1)),
+          pushVertex(sculptParticleIndex(x, y, sculptConfig.sculptZ - 1)),
+          pushVertex(sculptParticleIndex(x + 1, y + 1, sculptConfig.sculptZ - 1)),
+          pushVertex(sculptParticleIndex(x, y + 1, sculptConfig.sculptZ - 1)),
+        );
+      }
+    }
+
+    for (let y = 0; y < sculptConfig.sculptY - 1; y += 1) {
+      for (let z = 0; z < sculptConfig.sculptZ - 1; z += 1) {
+        pushQuad(
+          pushVertex(sculptParticleIndex(0, y, z + 1)),
+          pushVertex(sculptParticleIndex(0, y, z)),
+          pushVertex(sculptParticleIndex(0, y + 1, z + 1)),
+          pushVertex(sculptParticleIndex(0, y + 1, z)),
+        );
+        pushQuad(
+          pushVertex(sculptParticleIndex(sculptConfig.sculptX - 1, y, z)),
+          pushVertex(sculptParticleIndex(sculptConfig.sculptX - 1, y, z + 1)),
+          pushVertex(sculptParticleIndex(sculptConfig.sculptX - 1, y + 1, z)),
+          pushVertex(sculptParticleIndex(sculptConfig.sculptX - 1, y + 1, z + 1)),
+        );
+      }
+    }
+
+    for (let z = 0; z < sculptConfig.sculptZ - 1; z += 1) {
+      for (let x = 0; x < sculptConfig.sculptX - 1; x += 1) {
+        pushQuad(
+          pushVertex(sculptParticleIndex(x, 0, z + 1)),
+          pushVertex(sculptParticleIndex(x + 1, 0, z + 1)),
+          pushVertex(sculptParticleIndex(x, 0, z)),
+          pushVertex(sculptParticleIndex(x + 1, 0, z)),
+        );
+        pushQuad(
+          pushVertex(sculptParticleIndex(x, sculptConfig.sculptY - 1, z)),
+          pushVertex(sculptParticleIndex(x + 1, sculptConfig.sculptY - 1, z)),
+          pushVertex(sculptParticleIndex(x, sculptConfig.sculptY - 1, z + 1)),
+          pushVertex(sculptParticleIndex(x + 1, sculptConfig.sculptY - 1, z + 1)),
+        );
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    sculptBoundarySkinSourceIndices = sourceIndices;
+    claySculptSurfaceVertexCount = sourceIndices.length;
+    claySculptSurfaceTriangleCount = indices.length / 3;
+    return geometry;
+  }
+
   function refreshColliderMeshes() {
     if (!colliderGroup) return;
     colliderGroup.clear();
@@ -1678,6 +1803,87 @@ export function createKaminosClayPrototype({
     clayCubeIsoSurfaceTriangleCount = Math.floor((cubeIsoSurface.count || 0) / 3);
     clayCubeIsoSurfaceVisible = clayCubeIsoSurfaceTriangleCount > 0;
     cubeIsoSurface.visible = clayCubeIsoSurfaceVisible;
+  }
+
+  function refreshSculptIsoSurface(sculptValues) {
+    if (!sculptIsoSurface || !sculptValues) {
+      claySculptSurfaceVisible = false;
+      claySculptSurfaceBallCount = 0;
+      claySculptSurfaceTriangleCount = 0;
+      return;
+    }
+    sculptIsoSurface.reset();
+    claySculptSurfaceBallCount = 0;
+    const invX = 1 / (CLAY_SCULPT_EXTENTS.halfX * 2);
+    const invY = 1 / (CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY);
+    const invZ = 1 / (CLAY_SCULPT_EXTENTS.halfZ * 2);
+    const stride = Math.max(1, Math.ceil(sculptConfig.particleCount / CLAY_SCULPT_SURFACE_MAX_BALLS));
+    for (let i = 0; i < sculptConfig.particleCount; i += stride) {
+      const offset = i * 4;
+      const contact = sculptValues[offset + 3];
+      const x = (sculptValues[offset] + CLAY_SCULPT_EXTENTS.halfX) * invX;
+      const y = (sculptValues[offset + 1] - CLAY_SCULPT_EXTENTS.minY) * invY;
+      const z = (sculptValues[offset + 2] + CLAY_SCULPT_EXTENTS.halfZ) * invZ;
+      const contactBoost = contact > 0.5 ? 1.18 : 1;
+      sculptIsoSurface.addBall(
+        clamp01(x),
+        clamp01(y),
+        clamp01(z),
+        CLAY_SCULPT_SURFACE_STRENGTH * contactBoost,
+        CLAY_SCULPT_SURFACE_SUBTRACT,
+      );
+      claySculptSurfaceBallCount += 1;
+    }
+    sculptIsoSurface.update();
+    claySculptSurfaceTriangleCount = Math.floor((sculptIsoSurface.count || 0) / 3);
+    claySculptSurfaceVisible = claySculptSurfaceTriangleCount > 0;
+    claySculptSurfaceNeedsRefresh = false;
+    claySculptSurfaceUpdateCount += 1;
+    claySculptSurfaceLastRefreshStep = gpuStepCount;
+    sculptIsoSurface.visible = claySculptSurfaceVisible;
+  }
+
+  function refreshSculptBoundarySkin(sculptValues) {
+    const position = sculptBoundarySkin?.geometry?.attributes?.position || null;
+    const color = sculptBoundarySkin?.geometry?.attributes?.color || null;
+    if (!position || !sculptValues) {
+      claySculptSurfaceVisible = false;
+      claySculptSurfaceTriangleCount = 0;
+      return;
+    }
+    for (let i = 0; i < sculptBoundarySkinSourceIndices.length; i += 1) {
+      const sourceOffset = sculptBoundarySkinSourceIndices[i] * 4;
+      const x = sculptValues[sourceOffset];
+      const y = sculptValues[sourceOffset + 1];
+      const z = sculptValues[sourceOffset + 2];
+      const contact = sculptValues[sourceOffset + 3];
+      position.setXYZ(i, x, y, z);
+      if (color) {
+        const dx = x - sculptBasePositions[sourceOffset];
+        const dy = y - sculptBasePositions[sourceOffset + 1];
+        const dz = z - sculptBasePositions[sourceOffset + 2];
+        const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const heat = clamp01(displacement / 0.18);
+        const contactHeat = contact > 0.5 ? 1 : 0;
+        color.setXYZ(
+          i,
+          0.66 + contactHeat * 0.22 + heat * 0.08,
+          0.50 + heat * 0.28,
+          0.31 + (1 - contactHeat) * heat * 0.12,
+        );
+      }
+    }
+    position.needsUpdate = true;
+    if (color) color.needsUpdate = true;
+    sculptBoundarySkin.geometry.computeVertexNormals();
+    claySculptSurfaceBallCount = 0;
+    claySculptSurfaceVertexCount = sculptBoundarySkinSourceIndices.length;
+    claySculptSurfaceTriangleCount = Math.floor((sculptBoundarySkin.geometry.index?.count || 0) / 3);
+    claySculptSurfaceVisible = claySculptSurfaceTriangleCount > 0;
+    claySculptSurfaceNeedsRefresh = false;
+    claySculptSurfaceUpdateCount += 1;
+    claySculptSurfaceLastRefreshStep = gpuStepCount;
+    sculptBoundarySkin.visible = claySculptSurfaceVisible;
   }
 
   function refreshCubeBoundarySkin(cubeValues) {
@@ -2496,6 +2702,12 @@ export function createKaminosClayPrototype({
     }
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
+    if (!claySculptSurfaceVisible || !clayPointerActive) {
+      refreshSculptBoundarySkin(sculptValues);
+    } else {
+      claySculptSurfaceNeedsRefresh = true;
+      claySculptSurfaceSkippedUpdateCount += 1;
+    }
     claySculptStepStatus = 'pass';
     claySculptPointCloudVisible = !!sculptPointCloud?.visible;
     lastSculptStateValues = sculptValues;
@@ -2729,6 +2941,9 @@ export function createKaminosClayPrototype({
       refreshCubeIsoSurface(lastCubeStateValues);
       clayCubeIsoSurfaceNeedsRefresh = false;
     }
+    if (claySculptSurfaceNeedsRefresh && lastSculptStateValues) {
+      refreshSculptBoundarySkin(lastSculptStateValues);
+    }
     onStatus(debugState());
   }
 
@@ -2841,6 +3056,17 @@ export function createKaminosClayPrototype({
       claySculptReadbackWallMs,
       claySculptDispatchWorkgroups,
       claySculptPointCloudVisible,
+      claySculptSurfaceVisible,
+      claySculptSurfaceEvidenceKind,
+      claySculptSurfaceVisualMode,
+      claySculptSurfaceResolution,
+      claySculptSurfaceBallCount,
+      claySculptSurfaceVertexCount,
+      claySculptSurfaceTriangleCount,
+      claySculptSurfaceNeedsRefresh,
+      claySculptSurfaceUpdateStepInterval: CLAY_SCULPT_SURFACE_UPDATE_STEP_INTERVAL,
+      claySculptSurfaceUpdateCount,
+      claySculptSurfaceSkippedUpdateCount,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
       clayPhaseTimingDisclaimer,
@@ -2931,6 +3157,8 @@ export function createKaminosClayPrototype({
         if (mesh) mesh.visible = false;
         if (cubePointCloud) cubePointCloud.visible = false;
         if (sculptPointCloud) sculptPointCloud.visible = false;
+        if (sculptBoundarySkin) sculptBoundarySkin.visible = false;
+        if (sculptIsoSurface) sculptIsoSurface.visible = false;
         if (cubeBoundingBox) cubeBoundingBox.visible = false;
         if (cubeIsoSurface) cubeIsoSurface.visible = false;
         if (cubeBoundarySkin) cubeBoundarySkin.visible = false;
@@ -2945,6 +3173,8 @@ export function createKaminosClayPrototype({
       mesh.visible = claySculptEnabled ? false : clayCubeSurfaceVisible;
       if (cubePointCloud) cubePointCloud.visible = clayCubeEnabled;
       if (sculptPointCloud) sculptPointCloud.visible = claySculptEnabled;
+      if (sculptBoundarySkin) sculptBoundarySkin.visible = claySculptEnabled && claySculptSurfaceVisible;
+      if (sculptIsoSurface) sculptIsoSurface.visible = claySculptEnabled && claySculptSurfaceVisible;
       if (cubeBoundingBox) cubeBoundingBox.visible = clayCubeBoundingBoxVisible;
       if (cubeIsoSurface) cubeIsoSurface.visible = clayCubeEnabled && clayCubeIsoSurfaceVisible;
       if (cubeBoundarySkin) cubeBoundarySkin.visible = clayCubeEnabled && clayCubeBoundarySkinVisible;

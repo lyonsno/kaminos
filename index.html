@@ -559,6 +559,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Hash grid</span><span class="field-val" id="clay-sculpt-hash-grid">disabled</span></div>
       <div class="field"><span class="field-key">Sculpt contacts</span><span class="field-val" id="clay-sculpt-contacts">0</span></div>
       <div class="field"><span class="field-key">Sculpt displacement</span><span class="field-val" id="clay-sculpt-displacement">0.000</span></div>
+      <div class="field"><span class="field-key">Sculpt surface</span><span class="field-val" id="clay-sculpt-surface">hidden</span></div>
       <div class="field"><span class="field-key">Sculpt readback</span><span class="field-val" id="clay-sculpt-readback">-- ms</span></div>
       <div class="field"><span class="field-key">Hand backend</span><span class="field-val" id="clay-hand-pose-backend">--</span></div>
       <div class="field"><span class="field-key">Hand evidence</span><span class="field-val" id="clay-hand-pose-evidence">--</span></div>
@@ -1760,6 +1761,9 @@ function refreshClayReadout() {
   document.getElementById('clay-sculpt-displacement').textContent = s.claySculptEnabled && Number.isFinite(s.claySculptMaxDisplacement)
     ? `${s.claySculptMaxDisplacement.toFixed(3)} / avg n ${Number.isFinite(s.claySculptAverageNeighborCount) ? s.claySculptAverageNeighborCount.toFixed(2) : '--'}`
     : '0.000';
+  document.getElementById('clay-sculpt-surface').textContent = s.claySculptEnabled
+    ? `${s.claySculptSurfaceVisible ? 'skin' : 'hidden'}${s.claySculptSurfaceNeedsRefresh ? ' stale' : ''} / ${s.claySculptSurfaceTriangleCount ?? 0} tri / ${s.claySculptSurfaceVertexCount ?? 0} verts`
+    : 'hidden';
   document.getElementById('clay-sculpt-readback').textContent = s.claySculptEnabled && Number.isFinite(s.claySculptReadbackWallMs) ? `${s.claySculptReadbackWallMs.toFixed(2)} ms` : '-- ms';
   document.getElementById('clay-hand-pose-backend').textContent = s.effectiveHandPoseBackend || '--';
   document.getElementById('clay-hand-pose-evidence').textContent = s.handPoseEvidenceKind || '--';

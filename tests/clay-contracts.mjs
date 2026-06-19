@@ -79,6 +79,7 @@ assert.match(core, /runtimeCpuFallback:\s*false/, 'clay debug state refuses CPU 
 assert.match(core, /webgpu-clay-surface-lattice-scaffold-v0/, 'clay solver identity is stable');
 assert.match(core, /webgpu-clay-material-point-cube-first-loop-v0/, 'clay cube witness solver identity is stable');
 assert.match(core, /webgpu-clay-particle-sculpt-hash-grid-v0/, 'clay sculpt route has a stable particle/hash-grid solver identity');
+assert.match(core, /diagnostic-boundary-skin-from-sculpt-particles-not-solver-v0/, 'clay sculpt route names its diagnostic surface evidence kind');
 assert.match(core, /export function normalizeClayCubeConfig/, 'clay module exports cube config normalization');
 assert.match(core, /export function seedClayCubeMaterialPoints/, 'clay module exports deterministic cube material-point seeding');
 assert.match(core, /export function runClayCubeFirstLoopOracle/, 'clay module exports deterministic cube first-loop oracle');
@@ -87,6 +88,9 @@ assert.match(core, /export function seedClaySculptParticles/, 'clay module expor
 assert.match(core, /export function buildClaySculptHashGridOracle/, 'clay module exports deterministic sculpt hash-grid oracle');
 assert.match(core, /export function runClaySculptFirstBrushOracle/, 'clay module exports deterministic sculpt first-brush oracle');
 assert.match(core, /fixed-capacity-uniform-grid-neighbor-bins-v0/, 'clay sculpt route names its hash-grid neighbor contract');
+assert.match(core, /claySculptSurfaceEvidenceKind/, 'clay debug state records sculpt surface evidence kind');
+assert.match(core, /claySculptSurfaceVertexCount/, 'clay debug state records sculpt surface vertex count');
+assert.match(core, /claySculptSurfaceTriangleCount/, 'clay debug state records sculpt surface triangle count');
 assert.match(core, /export function normalizeClayCubePointerCollider/, 'clay module exports cube-specific pointer collider normalization');
 assert.match(core, /surfaceNormal/, 'clay cube pointer and collider paths preserve surface normals');
 assert.match(core, /clayCubeEnabled/, 'clay debug state records whether the cube witness is enabled');
@@ -295,6 +299,8 @@ assert.match(witness, /clay_brush_hotkey=1/, 'clay witness can drive the hold-B 
 assert.match(witness, /clay_cube=1/, 'clay witness can drive the volumetric cube route');
 assert.match(witness, /clay_sculpt=1/, 'clay witness can drive the particle sculpt route');
 assert.match(witness, /claySculptHashGridContract/, 'clay witness records sculpt hash-grid route identity');
+assert.match(witness, /claySculptSurfaceEvidenceKind/, 'clay witness records sculpt diagnostic surface identity');
+assert.match(witness, /claySculptSurfaceTriangleCount/, 'clay witness records sculpt diagnostic surface triangle count');
 assert.match(witness, /clayCubeParticleCount/, 'clay witness records cube material-point count');
 assert.match(witness, /clayCubeActiveGridCellCount/, 'clay witness records cube active grid-cell count');
 assert.match(witness, /clayCubeMaxDisplacement/, 'clay witness records cube max 3D displacement');
