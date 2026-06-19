@@ -96,6 +96,17 @@ assert.match(index, /class HybridMeshSplatRoute/, 'Kaminos exposes a named hybri
 assert.match(index, /meshDepthOcclusion:\s*false/, 'hybrid splat route stub must explicitly say mesh depth occlusion is not implemented yet');
 assert.match(index, /sharedCanvasComposite:\s*false/, 'hybrid splat route stub must explicitly say shared canvas compositing is not implemented yet');
 assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must not imply real splat rendering is active');
+assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');
+assert.match(index, /id="splat-hybrid-renderer-start-button"/, 'Hybrid Renderer UI has an explicit start control');
+assert.match(index, /id="splat-hybrid-renderer-status"/, 'Hybrid Renderer UI surfaces live route/status evidence');
+assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
+assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
+assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'selected splats can start the Hybrid Mesh Splat Renderer overlay from the UI');
+assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
+assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer route reports dual-canvas overlay mode when active');
+assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybrid Renderer overlay frame records how splat correction transforms are applied');
+assert.match(index, /cropAppliedByRenderer:\s*false/, 'Hybrid Renderer overlay must not pretend crop sidecars are renderer-applied in the P0 bridge');
+assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witnesses can inspect Hybrid Renderer overlay state without DOM inference');
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');
 assert.match(index, /function createSplatSceneObjectPlaceholder\(/, 'Greenroom splats register through an explicit placeholder scene-object factory');

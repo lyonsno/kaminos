@@ -69,6 +69,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
 canvas { display: block; }
+#hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+#hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
@@ -168,6 +170,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .splat-correction-tool-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .splat-correction-tool-row .btn { flex: 1 1 84px; margin: 0; }
 .splat-correction-note { color: #666; font-size: 10px; line-height: 1.35; }
+.splat-hybrid-renderer-panel { border-top: 1px solid #2a2a2a; padding-top: 9px; display: flex; flex-direction: column; gap: 7px; }
+.splat-hybrid-renderer-panel[hidden] { display: none; }
+.splat-hybrid-renderer-status { min-height: 26px; padding: 6px 7px; border: 1px solid #2b3b3f; border-radius: 5px; background: #161d1f; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.splat-hybrid-renderer-status.error { border-color: #5a3030; background: #221818; color: #e0a0a0; }
+.splat-hybrid-url { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
+.splat-hybrid-url:focus { border-color: #1976d2; color: #fff; background: #151b22; }
 .transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
 .transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
@@ -300,6 +308,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
             <button type="button" class="btn" onclick="resetSelectedSplatCorrection()">Reset Correction</button>
             <button type="button" class="btn" id="splat-correction-revert-button" onclick="revertSplatCorrectionDraft()" hidden>Revert Draft</button>
             <button type="button" class="btn" id="splat-correction-done-button" onclick="exitSplatCorrectionMode()" hidden>Done</button>
+          </div>
+          <div class="splat-hybrid-renderer-panel" id="splat-hybrid-renderer-panel" hidden>
+            <div class="transform-inspector-head">
+              <div class="transform-inspector-name">Hybrid Renderer</div>
+              <div class="splat-correction-note">Dual-canvas P0 overlay. Mesh depth, shared AO, and renderer-applied crop are still explicit gaps.</div>
+            </div>
+            <div class="splat-hybrid-renderer-status" id="splat-hybrid-renderer-status">Idle</div>
+            <input class="splat-hybrid-url" id="splat-hybrid-renderer-module-url" spellcheck="false" autocomplete="off" aria-label="Hybrid Renderer overlay module URL">
+            <div class="splat-correction-actions">
+              <button type="button" class="btn" id="splat-hybrid-renderer-start-button" onclick="startSelectedSplatHybridRenderer()">Start Hybrid</button>
+              <button type="button" class="btn" id="splat-hybrid-renderer-reload-button" onclick="reloadSelectedSplatHybridRenderer()">Reload</button>
+              <button type="button" class="btn" id="splat-hybrid-renderer-stop-button" onclick="stopHybridSplatOverlay()">Stop</button>
+            </div>
           </div>
         </div>
       </div>
@@ -606,6 +627,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
     <div class="splat-correction-mode-body" id="splat-correction-mode-status"></div>
@@ -733,6 +755,20 @@ let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
+const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
+let hybridSplatOverlayState = {
+  status: 'idle',
+  error: null,
+  moduleUrl: localStorage.getItem('kaminosHybridSplatOverlayModuleUrl') || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL,
+  module: null,
+  handle: null,
+  objectId: null,
+  loadedSource: null,
+  loadedFileName: null,
+  loadedAt: null,
+  lastFrame: null,
+  frameCount: 0,
+};
 
 class HybridMeshSplatRoute {
   constructor() {
@@ -743,11 +779,26 @@ class HybridMeshSplatRoute {
   }
 
   capabilities() {
+    const overlayActive = hybridSplatOverlayIsRendering();
+    if (!overlayActive) {
+      return {
+        meshDepthOcclusion: false,
+        sharedCanvasComposite: false,
+        activeAO: false,
+        realSplatRendering: false,
+        canvasMode: 'three-point-cloud-preview',
+        correctionAppliedMode: null,
+        cropAppliedByRenderer: false,
+      };
+    }
     return {
       meshDepthOcclusion: false,
       sharedCanvasComposite: false,
       activeAO: false,
-      realSplatRendering: false,
+      realSplatRendering: true,
+      canvasMode: 'dual-canvas-overlay',
+      correctionAppliedMode: 'visual-root-world-matrix',
+      cropAppliedByRenderer: false,
     };
   }
 
@@ -762,6 +813,7 @@ class HybridMeshSplatRoute {
       id: this.id,
       version: this.version,
       capabilities: this.capabilities(),
+      overlay: hybridSplatOverlayDebugState(),
       lastUpdatedAt: this.lastUpdatedAt,
       lastHandoff: this.lastHandoff,
     };
@@ -769,6 +821,204 @@ class HybridMeshSplatRoute {
 }
 
 const hybridMeshSplatRoute = new HybridMeshSplatRoute();
+
+function hybridSplatOverlayIsRendering() {
+  return !!hybridSplatOverlayState.handle
+    && hybridSplatOverlayState.status === 'rendering'
+    && !!hybridSplatOverlayState.objectId;
+}
+
+function hybridSplatOverlayDebugState() {
+  const handle = hybridSplatOverlayState.handle;
+  return {
+    status: hybridSplatOverlayState.status,
+    error: hybridSplatOverlayState.error,
+    moduleUrl: hybridSplatOverlayState.moduleUrl,
+    objectId: hybridSplatOverlayState.objectId,
+    loadedSource: hybridSplatOverlayState.loadedSource,
+    loadedFileName: hybridSplatOverlayState.loadedFileName,
+    loadedAt: hybridSplatOverlayState.loadedAt,
+    frameCount: hybridSplatOverlayState.frameCount,
+    canvasMode: hybridSplatOverlayIsRendering() ? 'dual-canvas-overlay' : null,
+    correctionAppliedMode: hybridSplatOverlayIsRendering() ? 'visual-root-world-matrix' : null,
+    cropAppliedByRenderer: false,
+    canvasConnected: !!handle?.canvas?.isConnected,
+    sceneLoaded: !!handle?.scene,
+    lastFrame: hybridSplatOverlayState.lastFrame,
+  };
+}
+
+function setHybridSplatOverlayStatus(status, error = null) {
+  hybridSplatOverlayState.status = status;
+  hybridSplatOverlayState.error = error ? String(error.message || error) : null;
+  updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
+}
+
+function hybridSplatOverlayModuleUrl() {
+  return hybridSplatOverlayState.moduleUrl || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
+}
+
+function setHybridSplatOverlayModuleUrl(url) {
+  const nextUrl = String(url || '').trim() || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
+  if (nextUrl !== hybridSplatOverlayState.moduleUrl) {
+    hybridSplatOverlayState.moduleUrl = nextUrl;
+    hybridSplatOverlayState.module = null;
+  }
+  localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
+  updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
+  return hybridSplatOverlayState.moduleUrl;
+}
+
+async function loadHybridSplatOverlayModule() {
+  const moduleUrl = hybridSplatOverlayModuleUrl();
+  if (hybridSplatOverlayState.module && hybridSplatOverlayState.moduleUrl === moduleUrl) {
+    return hybridSplatOverlayState.module;
+  }
+  const loaded = await import(moduleUrl);
+  if (typeof loaded.createSplatOverlay !== 'function') {
+    throw new Error('Hybrid overlay module did not export createSplatOverlay');
+  }
+  hybridSplatOverlayState.module = loaded;
+  hybridSplatOverlayState.moduleUrl = moduleUrl;
+  return loaded;
+}
+
+function updateHybridSplatOverlayPanel(entry) {
+  const panel = document.getElementById('splat-hybrid-renderer-panel');
+  if (!panel) return;
+  const isSplat = entry?.type === 'splat';
+  panel.hidden = !isSplat;
+  if (!isSplat) return;
+  const urlInput = document.getElementById('splat-hybrid-renderer-module-url');
+  if (urlInput && document.activeElement !== urlInput) urlInput.value = hybridSplatOverlayModuleUrl();
+  const statusEl = document.getElementById('splat-hybrid-renderer-status');
+  if (statusEl) {
+    const activeTarget = hybridSplatOverlayState.objectId === entry.id;
+    const source = hybridSplatOverlayState.loadedSource || entry.source || 'no source';
+    const cropNote = 'renderer crop=false';
+    const mode = hybridSplatOverlayIsRendering() ? 'dual-canvas P0' : 'point-cloud fallback';
+    const detail = activeTarget || hybridSplatOverlayState.status !== 'rendering'
+      ? `${hybridSplatOverlayState.status} · ${mode} · ${cropNote} · ${source}`
+      : `${hybridSplatOverlayState.status} on ${hybridSplatOverlayState.objectId} · ${mode} · ${cropNote}`;
+    statusEl.textContent = hybridSplatOverlayState.error
+      ? `${detail} · ${hybridSplatOverlayState.error}`
+      : detail;
+    statusEl.classList.toggle('error', hybridSplatOverlayState.status === 'error');
+  }
+  const startButton = document.getElementById('splat-hybrid-renderer-start-button');
+  const reloadButton = document.getElementById('splat-hybrid-renderer-reload-button');
+  const stopButton = document.getElementById('splat-hybrid-renderer-stop-button');
+  const busy = hybridSplatOverlayState.status === 'loading';
+  const hasSource = !!entry.source;
+  if (startButton) startButton.disabled = busy || !hasSource;
+  if (reloadButton) reloadButton.disabled = busy || !hasSource;
+  if (stopButton) stopButton.disabled = !hybridSplatOverlayState.handle;
+}
+
+async function ensureHybridSplatOverlayHandle() {
+  const host = document.getElementById('hybrid-splat-overlay-host');
+  if (!host) throw new Error('Hybrid overlay host is missing');
+  if (hybridSplatOverlayState.handle) return hybridSplatOverlayState.handle;
+  const module = await loadHybridSplatOverlayModule();
+  hybridSplatOverlayState.handle = await module.createSplatOverlay(host, {
+    alphaDensityMode: 'coverage-aware',
+  });
+  return hybridSplatOverlayState.handle;
+}
+
+function updateHybridSplatOverlayFrame() {
+  const handle = hybridSplatOverlayState.handle;
+  const record = selectedSplatRecord(hybridSplatOverlayState.objectId);
+  if (!handle || !record?.object || !camera) return null;
+  camera.updateMatrixWorld?.();
+  record.object.updateMatrixWorld?.(true);
+  const visualRoot = splatVisualRootFor(record.object) || record.object;
+  visualRoot.updateMatrixWorld?.(true);
+  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, visualRoot.matrixWorld);
+  const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
+  const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(visualRoot.matrixWorld).invert());
+  const view = new Float32Array(effectiveViewMatrix.elements);
+  const projection = new Float32Array(camera.projectionMatrix.elements);
+  const cameraPosition = new Float32Array(cameraLocal.toArray());
+  handle.setCameraMatrices(view, projection, cameraPosition);
+  hybridSplatOverlayState.frameCount += 1;
+  hybridSplatOverlayState.lastFrame = {
+    schema: 'kaminos.hybrid-splat-overlay.frame.v0',
+    objectId: record.id,
+    source: record.source || null,
+    canvasMode: 'dual-canvas-overlay',
+    correctionAppliedMode: 'visual-root-world-matrix',
+    cropAppliedByRenderer: false,
+    objectWorldMatrix: Array.from(record.object.matrixWorld.elements),
+    visualRootWorldMatrix: Array.from(visualRoot.matrixWorld.elements),
+    effectiveViewMatrix: Array.from(effectiveViewMatrix.elements),
+    projectionMatrix: Array.from(camera.projectionMatrix.elements),
+    cameraPositionInSplatLocal: Array.from(cameraPosition),
+    splatCorrection: normalizeSplatCorrection(record.splat?.correction),
+    updatedAt: new Date().toISOString(),
+  };
+  return hybridSplatOverlayState.lastFrame;
+}
+
+async function startSelectedSplatHybridRenderer() {
+  const entry = selectedSplatRecord();
+  if (!entry) {
+    setInfo('Select a splat first');
+    return null;
+  }
+  if (!entry.source) {
+    setInfo('Selected splat has no reloadable source');
+    return null;
+  }
+  try {
+    setHybridSplatOverlayStatus('loading');
+    if (hybridSplatOverlayState.handle && hybridSplatOverlayState.objectId && hybridSplatOverlayState.objectId !== entry.id) {
+      stopHybridSplatOverlay({ silent: true });
+    }
+    hybridSplatOverlayState.objectId = entry.id;
+    const handle = await ensureHybridSplatOverlayHandle();
+    updateHybridSplatOverlayFrame();
+    await handle.loadPly(entry.source, entry.fileName || entry.label || 'splat.ply');
+    handle.start();
+    hybridSplatOverlayState.loadedSource = entry.source;
+    hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;
+    hybridSplatOverlayState.loadedAt = new Date().toISOString();
+    setHybridSplatOverlayStatus('rendering');
+    buildRenderHandoffV0(entry);
+    window._kaminosDirty?.();
+    setInfo(`Hybrid renderer overlay started: ${entry.label || entry.fileName || entry.id}`);
+    return hybridSplatOverlayDebugState();
+  } catch (error) {
+    setHybridSplatOverlayStatus('error', error);
+    setInfo(`Hybrid renderer overlay failed: ${error.message}`);
+    throw error;
+  }
+}
+
+function stopHybridSplatOverlay(options = {}) {
+  const handle = hybridSplatOverlayState.handle;
+  if (handle) {
+    handle.stop?.();
+    handle.destroy?.();
+  }
+  hybridSplatOverlayState.handle = null;
+  hybridSplatOverlayState.objectId = null;
+  hybridSplatOverlayState.loadedSource = null;
+  hybridSplatOverlayState.loadedFileName = null;
+  hybridSplatOverlayState.loadedAt = null;
+  hybridSplatOverlayState.lastFrame = null;
+  hybridSplatOverlayState.frameCount = 0;
+  setHybridSplatOverlayStatus('idle');
+  const active = selectedSplatRecord();
+  if (active) buildRenderHandoffV0(active);
+  if (!options.silent) setInfo('Hybrid renderer overlay stopped');
+  return hybridSplatOverlayDebugState();
+}
+
+async function reloadSelectedSplatHybridRenderer() {
+  stopHybridSplatOverlay({ silent: true });
+  return startSelectedSplatHybridRenderer();
+}
 
 function cloneVolumePrimitive(primitive) {
   return JSON.parse(JSON.stringify(primitive));
@@ -949,6 +1199,8 @@ function buildRenderHandoffV0(record) {
   if (!record?.object) throw new Error('Render handoff requires a registered scene object');
   camera?.updateMatrixWorld?.();
   record.object.updateMatrixWorld?.(true);
+  const visualRoot = record.type === 'splat' ? splatVisualRootFor(record.object) : null;
+  visualRoot?.updateMatrixWorld?.(true);
   const size = new THREE.Vector2();
   if (renderer?.getDrawingBufferSize) {
     renderer.getDrawingBufferSize(size);
@@ -976,16 +1228,20 @@ function buildRenderHandoffV0(record) {
     } : null,
     object: {
       worldMatrix: Array.from(record.object.matrixWorld.elements),
+      visualRootWorldMatrix: visualRoot ? Array.from(visualRoot.matrixWorld.elements) : null,
       transform: sceneObjectTransformState(record.object),
       sceneTransform: record.type === 'splat' ? splatSceneTransformState(record) : null,
       splatCorrection: record.type === 'splat' ? normalizeSplatCorrection(record.splat?.correction) : null,
     },
     capabilities: renderHandoffCapabilities(),
+    hybridOverlay: record.type === 'splat' ? hybridSplatOverlayDebugState() : null,
     evidence: {
       schema: RENDER_HANDOFF_SCHEMA,
       routeId: hybridMeshSplatRoute.id,
       rendererId: 'kaminos-three-tsl-editor',
       sourcePreserved: !!record.source,
+      hybridOverlayActive: hybridSplatOverlayIsRendering(),
+      cropAppliedByRenderer: false,
       generatedAt: new Date().toISOString(),
     },
   };
@@ -1874,6 +2130,7 @@ function updateSplatCorrectionPanel(entry) {
   if (!panel) return;
   const isSplat = entry?.type === 'splat';
   panel.hidden = !isSplat;
+  updateHybridSplatOverlayPanel(entry);
   if (!isSplat) return;
   const correction = normalizeSplatCorrection(entry.splat?.correction);
   setSplatCorrectionField('centroidOffset.x', correction.centroidOffset[0]);
@@ -2091,6 +2348,8 @@ function initTransformInspector() {
       updateTransformInspector();
     });
   });
+  const hybridModuleInput = document.getElementById('splat-hybrid-renderer-module-url');
+  hybridModuleInput?.addEventListener('change', () => setHybridSplatOverlayModuleUrl(hybridModuleInput.value));
   updateTransformInspector();
 }
 
@@ -2098,6 +2357,11 @@ window.kaminosSaveSelectedSplatCorrection = saveSelectedSplatCorrection;
 window.kaminosResetSelectedSplatCorrection = resetSelectedSplatCorrection;
 window.saveSelectedSplatCorrection = saveSelectedSplatCorrection;
 window.resetSelectedSplatCorrection = resetSelectedSplatCorrection;
+window.kaminosHybridSplatOverlayDebugState = hybridSplatOverlayDebugState;
+window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
+window.startSelectedSplatHybridRenderer = startSelectedSplatHybridRenderer;
+window.reloadSelectedSplatHybridRenderer = reloadSelectedSplatHybridRenderer;
+window.stopHybridSplatOverlay = stopHybridSplatOverlay;
 
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
@@ -2632,6 +2896,9 @@ window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
+  if (hybridSplatOverlayState.objectId === entry.id) {
+    stopHybridSplatOverlay({ silent: true });
+  }
   if (splatCorrectionMode?.objectId === entry.id) {
     exitSplatCorrectionMode({ revert: false, silent: true });
   }
@@ -2936,6 +3203,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    updateHybridSplatOverlayFrame();
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
     if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {

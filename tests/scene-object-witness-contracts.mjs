@@ -171,6 +171,11 @@ assert.match(witness, /splat correction crop mode dirtied scene transform/, 'Spl
 assert.match(witness, /splat correction crop preview did not hide outside points/, 'Splat correction mode witness proves normal preview hides cropped-away points');
 assert.match(witness, /splat correction crop preview did not show edit context/, 'Splat correction mode witness proves edit mode shows cropped-away points faintly');
 assert.match(witness, /saved splat crop centroid preview did not show included points before edit mode/, 'Splat correction sidecar witness proves saved crop plus centroid offset remains visible outside edit mode');
+assert.match(witness, /hybrid splat overlay did not expose visible UI/, 'Hybrid Renderer witness requires a visible selected-splat control surface');
+assert.match(witness, /hybrid splat overlay did not load selected splat source/, 'Hybrid Renderer witness proves the overlay consumed the selected splat route');
+assert.match(witness, /hybrid splat overlay did not record dual-canvas capability/, 'Hybrid Renderer witness proves dual-canvas overlay status is explicit');
+assert.match(witness, /hybrid splat overlay falsely claimed crop renderer application/, 'Hybrid Renderer witness rejects false closure on crop sidecar application');
+assert.match(witness, /kaminosHybridSplatOverlayDebugState/, 'Hybrid Renderer witness reads the explicit overlay debug surface');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');
 assert.match(witness, /previewEnteredTemporaryMode/, 'Green Room action witness computes a temporary-preview predicate');

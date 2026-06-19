@@ -2261,6 +2261,127 @@ async function runGreenroomSplatHandoffScenario(ws) {
   }
 }
 
+async function runHybridSplatOverlayScenario(ws) {
+  phase = 'scenario-hybrid-splat-overlay';
+  lastEvidence.hybridSplatOverlay = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const waitForAssetRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      document.querySelector('[data-tab="greenroom"]').click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const beforeRows = rowState();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetRows = await waitForAssetRows();
+      const assetEntry = (assetData.entries || [])[0] || null;
+      const actionRow = assetRows.find(row => row.dataset.assetSource === assetEntry?.source
+        && [...row.querySelectorAll('button')].some(button => button.textContent.trim() === 'Import Splat'))
+        || assetRows.find(row => [...row.querySelectorAll('button')]
+        .some(button => button.textContent.trim() === 'Import Splat'));
+      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Import Splat') : null;
+      if (actionButton) actionButton.click();
+      await waitForSceneRows(beforeRows.length + 1);
+      const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      await wait(250);
+      const panel = document.getElementById('splat-hybrid-renderer-panel');
+      const startButton = document.getElementById('splat-hybrid-renderer-start-button');
+      const statusEl = document.getElementById('splat-hybrid-renderer-status');
+      const moduleSource = [
+        'export async function createSplatOverlay(container, options = {}) {',
+        '  const canvas = document.createElement("canvas");',
+        '  canvas.dataset.hybridSplatOverlayWitness = "1";',
+        '  canvas.width = 32;',
+        '  canvas.height = 32;',
+        '  container.appendChild(canvas);',
+        '  const state = { sources: [], frames: 0, started: false, stopped: false, destroyed: false, options };',
+        '  function publish() { window.__hybridSplatOverlayWitness = { ...state, canvasConnected: canvas.isConnected }; }',
+        '  publish();',
+        '  return {',
+        '    canvas,',
+        '    get scene() { return state.sources.length ? { witnessScene: true } : null; },',
+        '    setCameraMatrices(viewMatrix, projectionMatrix, cameraPosition) { state.frames += 1; state.lastViewLength = viewMatrix.length; state.lastProjectionLength = projectionMatrix.length; state.lastCameraLength = cameraPosition.length; publish(); },',
+        '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); publish(); },',
+        '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); publish(); },',
+        '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); publish(); },',
+        '    start() { state.started = true; publish(); },',
+        '    stop() { state.stopped = true; publish(); },',
+        '    destroy() { state.destroyed = true; canvas.remove(); publish(); },',
+        '  };',
+        '}',
+      ].join('\\n');
+      const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
+      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(500);
+      const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const witness = window.__hybridSplatOverlayWitness || null;
+      window.stopHybridSplatOverlay?.();
+      URL.revokeObjectURL(moduleUrl);
+      return {
+        actionExposed: !!actionButton,
+        assetRowCount: assetRows.length,
+        assetEntry,
+        splatObject,
+        panelVisible: !!panel && !panel.hidden,
+        startButtonVisible: !!startButton
+          && !startButton.hidden
+          && getComputedStyle(startButton).display !== 'none'
+          && getComputedStyle(startButton).visibility !== 'hidden',
+        statusText: statusEl?.textContent || null,
+        startResult,
+        overlayDebug,
+        handoffDebug,
+        witness,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+
+  if (!lastEvidence.hybridSplatOverlay.actionExposed || !lastEvidence.hybridSplatOverlay.splatObject) {
+    throw new Error(`hybrid splat overlay could not import a splat fixture: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (!lastEvidence.hybridSplatOverlay.panelVisible || !lastEvidence.hybridSplatOverlay.startButtonVisible) {
+    throw new Error(`hybrid splat overlay did not expose visible UI: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const splatSource = lastEvidence.hybridSplatOverlay.splatObject.source;
+  const loadedSource = lastEvidence.hybridSplatOverlay.overlayDebug?.loadedSource;
+  const witnessSource = lastEvidence.hybridSplatOverlay.witness?.sources?.[0]?.source;
+  if (!splatSource || loadedSource !== splatSource || witnessSource !== splatSource) {
+    throw new Error(`hybrid splat overlay did not load selected splat source: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const capabilities = lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.capabilities || {};
+  if (capabilities.realSplatRendering !== true || capabilities.canvasMode !== 'dual-canvas-overlay') {
+    throw new Error(`hybrid splat overlay did not record dual-canvas capability: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (lastEvidence.hybridSplatOverlay.overlayDebug?.cropAppliedByRenderer !== false
+    || capabilities.cropAppliedByRenderer !== false) {
+    throw new Error(`hybrid splat overlay falsely claimed crop renderer application: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+}
+
 async function runSplatAssetInboxScenario(ws) {
   phase = 'scenario-splat-asset-inbox';
   lastEvidence.splatAssetInbox = await evaluate(ws, `
@@ -3010,6 +3131,8 @@ try {
     await runGreenroomPreviewRaceScenario(ws);
   } else if (scenario === 'greenroom-splat-handoff') {
     await runGreenroomSplatHandoffScenario(ws);
+  } else if (scenario === 'hybrid-splat-overlay') {
+    await runHybridSplatOverlayScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {
     await runSplatAssetInboxScenario(ws);
   } else if (scenario === 'splat-direct-drop-ingest') {
