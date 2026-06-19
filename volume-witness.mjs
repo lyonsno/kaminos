@@ -424,7 +424,9 @@ async function main() {
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer`, 'fluid sim label does not match selected grid');
+    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected grid plus front sidecar identity');
+    assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
+    assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
@@ -533,6 +535,17 @@ async function main() {
     }
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (
+      sample.simReadback.frontFieldIdentity !== 'combustion-front-topology-sidecar-v0' ||
+      sample.simReadback.frontFieldBytes !== expectedGrid * expectedGrid * expectedGrid * 4 ||
+      !Number.isFinite(sample.simReadback.frontTopologyMean) ||
+      !Number.isFinite(sample.simReadback.frontTopologySourcePlugRatio) ||
+      !Number.isFinite(sample.simReadback.frontTopologyRisingBodyRatio) ||
+      !Number.isFinite(sample.simReadback.frontTopologyHeightSpread) ||
+      !Number.isFinite(sample.simReadback.frontTopologyRadianceCoupling)
+    ) {
+      throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
       throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
@@ -687,6 +700,11 @@ async function main() {
         combustionFrontRisingBodyRatio: sample.simReadback.combustionFrontRisingBodyRatio,
         maxCombustionFrontBinWeight: sample.simReadback.maxCombustionFrontBinWeight,
         combustionFrontWeight: sample.simReadback.combustionFrontWeight,
+        frontTopologyMean: sample.simReadback.frontTopologyMean,
+        frontTopologySourcePlugRatio: sample.simReadback.frontTopologySourcePlugRatio,
+        frontTopologyRisingBodyRatio: sample.simReadback.frontTopologyRisingBodyRatio,
+        frontTopologyHeightSpread: sample.simReadback.frontTopologyHeightSpread,
+        frontTopologyRadianceCoupling: sample.simReadback.frontTopologyRadianceCoupling,
         maxFireBinWeight: sample.simReadback.maxFireBinWeight,
         fireWeight: sample.simReadback.fireWeight,
         fireVisualRiseDisplacement: sample.simReadback.fireVisualRiseDisplacement,
@@ -843,6 +861,11 @@ async function main() {
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
       simGridLabel: sample.simGridLabel,
+      frontFieldIdentity: sample.frontFieldIdentity,
+      frontFieldBytes: sample.frontFieldBytes,
+      frontFieldReadIndex: sample.frontFieldReadIndex,
+      frontFieldWriteIndex: sample.frontFieldWriteIndex,
+      frontFieldProjectionPassthrough: sample.frontFieldProjectionPassthrough,
       simReadback: sample.simReadback,
       majorantReadback: sample.majorantReadback,
       gridOverlay: sample.gridOverlay,

@@ -1,5 +1,6 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
+const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -90,6 +91,10 @@ function fluidBufferBytes(gridSize) {
 
 function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function frontFieldBufferBytes(gridSize) {
+  return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function pressureBufferBytes(gridSize) {
@@ -231,6 +236,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(4) var historyTexture: texture_2d<f32>;
 @group(0) @binding(5) var historySampler: sampler;
 @group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
+@group(0) @binding(7) var<storage, read> frontSrc: array<f32>;
+@group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -449,6 +456,31 @@ fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
   return fluidSrc[slotIndex(c, slot)];
 }
 
+fn readFrontField(c: vec3<i32>) -> f32 {
+  return frontSrc[index3(clampCell(c))];
+}
+
+fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  let c000 = readFrontField(i0 + vec3<i32>(0, 0, 0));
+  let c100 = readFrontField(i0 + vec3<i32>(1, 0, 0));
+  let c010 = readFrontField(i0 + vec3<i32>(0, 1, 0));
+  let c110 = readFrontField(i0 + vec3<i32>(1, 1, 0));
+  let c001 = readFrontField(i0 + vec3<i32>(0, 0, 1));
+  let c101 = readFrontField(i0 + vec3<i32>(1, 0, 1));
+  let c011 = readFrontField(i0 + vec3<i32>(0, 1, 1));
+  let c111 = readFrontField(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
 fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
@@ -490,17 +522,22 @@ fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
   return sampleFluidSlot(cell, 3u);
 }
 
+fn sampleWorldFrontField(p: vec3<f32>) -> f32 {
+  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  return sampleFrontField(cell);
+}
+
 fn majorantIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
 }
 
-fn materialMajorantFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>) -> vec4<f32> {
+fn materialMajorantFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> vec4<f32> {
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
-  let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + microLayer.z * 0.70 + material.y * 0.28;
+  let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
   let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
-  let importance = clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + velMag * 0.36, 0.0, 3.0);
+  let importance = clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
   return vec4<f32>(density, fire, extinction, importance);
 }
 
@@ -678,6 +715,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let material = fluidSrc[base + 1u];
   let fireLayer = fluidSrc[base + 2u];
   let microLayer = fluidSrc[base + 3u];
+  frontDst[idx] = frontSrc[idx];
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
@@ -1312,7 +1350,7 @@ fn csMajorant(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
       for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
         let c = vec3<i32>(vec3<u32>(x, y, z));
-        let candidate = materialMajorantFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u));
+        let candidate = materialMajorantFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c));
         majorant = max(majorant, candidate);
       }
     }
@@ -1383,6 +1421,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection);
   var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection);
   var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalLateralSlipGain, microdetailRiseDirection);
+  var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
   let diffuseMaterial = (
     readSlot(cellI + vec3<i32>(-1, 0, 0), 1u) +
@@ -1408,9 +1447,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     readSlot(cellI + vec3<i32>(0, 0, -1), 3u) +
     readSlot(cellI + vec3<i32>(0, 0,  1), 3u)
   ) * (1.0 / 6.0);
+  let diffuseFrontTopology = (
+    readFrontField(cellI + vec3<i32>(-1, 0, 0)) +
+    readFrontField(cellI + vec3<i32>( 1, 0, 0)) +
+    readFrontField(cellI + vec3<i32>(0, -1, 0)) +
+    readFrontField(cellI + vec3<i32>(0,  1, 0)) +
+    readFrontField(cellI + vec3<i32>(0, 0, -1)) +
+    readFrontField(cellI + vec3<i32>(0, 0,  1))
+  ) * (1.0 / 6.0);
   material = mix(material, diffuseMaterial, bonfireTurbulentDiffusionMix);
   fireLayer = mix(fireLayer, diffuseFireLayer, bonfireTurbulentDiffusionMix * 0.55);
   microLayer = mix(microLayer, diffuseMicroLayer, bonfireTurbulentDiffusionMix * 0.90);
+  combustionFrontTopology = mix(combustionFrontTopology, diffuseFrontTopology, bonfireTurbulentDiffusionMix * 0.42);
   let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
   let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
   let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
@@ -1418,9 +1466,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
   let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
   let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
+  let symmetricFrontTopology = (combustionFrontTopology + readFrontField(mirrorXCell) + readFrontField(mirrorZCell) + readFrontField(mirrorXZCell)) * 0.25;
   material = mix(material, symmetricMaterial, bonfireScalarSymmetryBlend);
   fireLayer = mix(fireLayer, symmetricFireLayer, bonfireScalarSymmetryBlend * 0.70);
   microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
+  combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
@@ -1639,6 +1689,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
       + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
   ) * (0.82 + bonfireLayeredBreakup * 0.18);
+  let bonfireFrontTopologyBirth = bonfireScene * clamp(
+    bonfireCombustionFrontLiftCarrier * 1.24
+      + bonfireLiftedReactionFront * 0.42
+      + bonfireOffAxisReactionRing * (0.36 + bonfirePacketCombustion.z * 0.18)
+      + bonfireLiftedFireLobes * bonfireFrontLiftGate * 0.24
+      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.22,
+    0.0,
+    2.4
+  ) * (0.76 + bonfireLayeredBreakup * 0.20 + bonfireTongues * 0.12);
+  combustionFrontTopology = max(combustionFrontTopology, bonfireFrontTopologyBirth);
   let bonfireRadianceBreakup = clamp(
     0.46
       + (bonfireEdgeBreakup - 0.70) * 0.58
@@ -1661,14 +1721,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireReactionFront * 0.46
       + bonfireLiftedReactionFront * 0.60
       + bonfireCombustionFrontLiftCarrier * 0.46
+      + combustionFrontTopology * 0.12
       + bonfireInteriorEmissionBridge * 0.78
       + bonfirePacketCombustion.z * bonfireFrontLiftGate * 0.24,
     0.0,
     2.6
   );
+  let bonfireTopologyRadianceCarrier = clamp(
+    combustionFrontTopology * (0.22 + bonfireRadianceBreakup * 0.08)
+      + bonfireFrontTopologyBirth * 0.10
+      + bonfireCombustionFrontLiftCarrier * 0.08,
+    0.0,
+    2.4
+  );
   let bonfireRadianceBirth = clamp(
     bonfireFireBirth * bonfireFireSourceBinRelief * bonfireRadianceSourceGate * 0.14
       + bonfireFrontContactRadiance * bonfireRadianceBreakup * 0.72
+      + bonfireTopologyRadianceCarrier * bonfireRadianceBreakup * 0.12
       + bonfireFuelHeatContact * bonfireRadianceSourceGate * 0.22
       + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.38
       + bonfireInteriorEmissionBridge * 0.42
@@ -1720,6 +1789,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireInterfaceBirth * 0.28
       + bonfireCombustion.z * 0.18
       + bonfireReactionFront * 0.28
+      + combustionFrontTopology * 0.12
       + bonfirePacketCombustion.y * 0.16
       + bonfirePacketCombustion.z * 0.14
       + bonfireLiftedFireLobes * 0.24
@@ -1729,6 +1799,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     1.85
   );
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
+  combustionFrontTopology = max(combustionFrontTopology, mix(columnCombustionFrontBirth * 0.32, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
@@ -1955,6 +2026,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ember = ember * mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade);
   flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
   combustionFront = combustionFront * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
+  combustionFrontTopology = combustionFrontTopology * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
   microSmoke = microSmoke * mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade);
   interfaceShred = interfaceShred * mix(0.18, 1.0, wallFade);
   fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, heatTopFade);
@@ -1966,6 +2038,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
+  frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
 }
 
 @fragment
@@ -2039,6 +2112,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let material = sampleWorldMaterial(p);
     let fireLayer = sampleWorldFireLayer(p);
     let microLayer = sampleWorldMicrodetail(p);
+    let combustionFrontTopology = sampleWorldFrontField(p);
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -2073,6 +2147,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         + ember * 0.42
         + emberFleck * 0.40
         + combustionFront * 0.18
+        + combustionFrontTopology * 0.06
         + heat * 0.14
         + velMag * 0.22,
       0.0,
@@ -2093,7 +2168,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
-    let interest = raymarchInterest(density, smoke, heat, temp, flame, flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
+    let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
@@ -2122,7 +2197,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     );
     let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16);
     let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
-    let bonfireVisibleEmission = flameDetail * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + flame * 0.20;
+    let bonfireVisibleEmission = flameDetail * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + combustionFrontTopology * 0.06 + flame * 0.20;
     let visibleFlameAlphaCarrier = mix(
       flame * 2.15 + ember * 0.86 + flameDetail * 0.82 + fireLick * 2.60 + emberFleck * 0.76 + interfaceShred * 0.26,
       bonfireVisibleEmission + interfaceShred * 0.16,
@@ -2209,7 +2284,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameCount: 0,
     simStepCount: 0,
     simGrid: gridSize,
-    simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`,
+    simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
@@ -2249,6 +2324,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
+    frontFieldIdentity: FRONT_FIELD_IDENTITY,
+    frontFieldBytes: frontFieldBufferBytes(gridSize),
+    frontFieldReadIndex: 0,
+    frontFieldWriteIndex: 1,
+    frontFieldProjectionPassthrough: false,
     lastFrameEnergy: 0,
     timing: {
       timingEvidenceSource: 'raf-and-queue-proxy',
@@ -2278,7 +2358,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectPipeline = null;
   let majorantComputePipeline = null;
   let bindGroups = [];
-  let majorantFluidBindGroups = [];
+  let majorantFrontBindGroups = [];
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
@@ -2301,8 +2381,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let externalEmitterState = normalizeExternalEmitters();
   let majorantBuffer = null;
   let fluidBuffers = [];
+  let frontBuffers = [];
   let pressureBuffers = [];
   let currentFluid = 0;
+  let currentFront = 0;
   let frameTexture = null;
   let frameTextureSize = '';
   let historyTexture = null;
@@ -2495,11 +2577,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function destroyFluidState() {
     for (const buffer of fluidBuffers) buffer.destroy();
+    for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     fluidBuffers = [];
+    frontBuffers = [];
     pressureBuffers = [];
     bindGroups = [];
-    majorantFluidBindGroups = [];
+    majorantFrontBindGroups = [];
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
@@ -2625,7 +2709,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || fluidBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -2638,6 +2722,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 4, resource: historyTexture.createView() },
           { binding: 5, resource: historySampler },
           { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: frontBuffers[0] } },
+          { binding: 8, resource: { buffer: frontBuffers[1] } },
         ],
       }),
       device.createBindGroup({
@@ -2651,6 +2737,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 4, resource: historyTexture.createView() },
           { binding: 5, resource: historySampler },
           { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: frontBuffers[1] } },
+          { binding: 8, resource: { buffer: frontBuffers[0] } },
         ],
       }),
     ];
@@ -2680,6 +2768,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     destroyMajorantState();
     ensureMajorantBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
+    const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextPressureBufferBytes = pressureBufferBytes(gridSize);
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
@@ -2689,6 +2778,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
       device.queue.writeBuffer(buffer, 0, initialFluid);
+      return buffer;
+    });
+    frontBuffers = [0, 1].map(i => {
+      const buffer = device.createBuffer({
+        label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}^3 ${i}`,
+        size: nextFrontBufferBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
     pressureBuffers = [0, 1].map(i => {
@@ -2739,19 +2837,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
-    majorantFluidBindGroups = [
+    majorantFrontBindGroups = [
       device.createBindGroup({
-        label: `kaminos majorant fluid-read bind group ${gridSize}^3 A`,
+        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 A`,
         layout: majorantFluidBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
+          { binding: 7, resource: { buffer: frontBuffers[0] } },
         ],
       }),
       device.createBindGroup({
-        label: `kaminos majorant fluid-read bind group ${gridSize}^3 B`,
+        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 B`,
         layout: majorantFluidBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
+          { binding: 7, resource: { buffer: frontBuffers[1] } },
         ],
       }),
     ];
@@ -2797,9 +2897,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }),
     ];
     currentFluid = 0;
+    currentFront = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
-    state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
+    state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+    state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
+    state.frontFieldBytes = nextFrontBufferBytes;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.frontFieldProjectionPassthrough = false;
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
@@ -2892,13 +2998,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
         },
+        {
+          binding: 7,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 8,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
       ],
     });
     majorantFluidBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos majorant fluid-read bind group layout',
+      label: 'kaminos majorant fluid-front read bind group layout',
       entries: [
         {
           binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
         },
@@ -3155,12 +3276,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
     currentFluid = 1 - currentFluid;
+    currentFront = 1 - currentFront;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.frontFieldProjectionPassthrough = false;
     encodePressureProjection(encoder);
     state.simStepCount += 1;
   }
 
   function encodePressureProjection(encoder) {
-    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2) return;
+    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) return;
     const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
       ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
       : 1;
@@ -3174,7 +3299,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     {
       const pass = encoder.beginComputePass({ label: 'kaminos divergence pressure pass' });
       pass.setPipeline(pressureDivergencePipeline);
-      pass.setBindGroup(0, majorantFluidBindGroups[currentFluid]);
+      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureWriteBindGroup);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
@@ -3197,15 +3322,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
       currentFluid = 1 - currentFluid;
+      currentFront = 1 - currentFront;
     }
     state.pressureProjectionEnabled = true;
     state.pressureProjectionIterations = pressureIterationCount;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.frontFieldProjectionPassthrough = true;
   }
 
   function encodeMajorant(encoder) {
     const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
     pass.setPipeline(majorantComputePipeline);
-    pass.setBindGroup(0, majorantFluidBindGroups[currentFluid]);
+    pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
     const workgroups = Math.ceil(majorantGridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
@@ -3268,11 +3397,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: fluidBufferBytes(gridSize),
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+    const frontReadback = device.createBuffer({
+      label: `kaminos ${FRONT_FIELD_IDENTITY} simReadback`,
+      size: frontFieldBufferBytes(gridSize),
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
     const encoder = device.createCommandEncoder({ label: 'kaminos fluid simReadback encoder' });
     encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, readback, 0, fluidBufferBytes(gridSize));
+    encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontFieldBufferBytes(gridSize));
     device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
+    await Promise.all([
+      readback.mapAsync(GPUMapMode.READ),
+      frontReadback.mapAsync(GPUMapMode.READ),
+    ]);
     const data = new Float32Array(readback.getMappedRange());
+    const frontData = new Float32Array(frontReadback.getMappedRange());
     let densitySum = 0;
     let densityMax = 0;
     let heatSum = 0;
@@ -3323,6 +3462,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let emissionDetailWeightedZ2 = 0;
     let emissionDetailWeightedCurlContact = 0;
     let combustionFrontWeightSum = 0;
+    let frontTopologySum = 0;
+    let frontTopologyWeightSum = 0;
+    let frontTopologyRadianceCouplingSum = 0;
     const plumeHeightBinCount = 8;
     const plumeHeightBins = Array.from({ length: plumeHeightBinCount }, (_, bin) => ({
       bin,
@@ -3354,6 +3496,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeDetailWeightedX2: 0,
       smokeDetailWeightedZ2: 0,
       combustionFrontWeight: 0,
+      frontTopologyWeight: 0,
     }));
     const sampleCells = new Set();
     const addSampleCell = (x, y, z) => {
@@ -3418,6 +3561,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const ember = data[i + 9];
       const flameDetail = data[i + 10];
       const combustionFront = data[i + 11];
+      const combustionFrontTopology = frontData[cell];
       const fireLayer = Math.max(flame, ember, flameDetail, combustionFront);
       const microdetail = data[i + 12];
       const interfaceShred = data[i + 13];
@@ -3426,7 +3570,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const radianceGain = controlsSnapshot.radiance ?? 1.65;
       const absorptionGain = controlsSnapshot.absorption ?? 0.85;
       const rawRadiance = Math.max(0, flame * 1.22 + ember * 0.46 + flameDetail * 0.40 + fireLick * 1.18 + emberFleck * 0.48 + heat * 0.20);
-      const bonfireEmissionRadiance = Math.max(0, flameDetail * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + flame * 0.20 + heat * 0.14);
+      const bonfireEmissionRadiance = Math.max(0, flameDetail * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + combustionFrontTopology * 0.06 + flame * 0.20 + heat * 0.14);
       const radiance = (isBonfireReadbackScene ? bonfireEmissionRadiance : rawRadiance) * radianceGain;
       const extinction = Math.max(0, smokeDensity * 0.74 + microdetail * 0.42 + interfaceShred * 0.34 + detail * 0.12) * (0.34 + absorptionGain * 0.46);
       if (plumeDriftCells.has(cell)) {
@@ -3436,6 +3580,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const smokeWeight = Math.max(0, extinction);
         const fireWeight = Math.max(0, radiance);
         const combustionFrontWeight = Math.max(0, combustionFront);
+        const frontTopologyWeight = Math.max(0, combustionFrontTopology);
         const lateralSpeed = Math.hypot(vx, vz);
         const radialDistance = Math.hypot(nx, nz);
         const sourceRadiusNorm = sourceRadius / Math.max(1, gridSize - 1) * 2;
@@ -3499,6 +3644,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bin.smokeDetailWeightedX2 += smokeDetailWeight * nx * nx;
         bin.smokeDetailWeightedZ2 += smokeDetailWeight * nz * nz;
         bin.combustionFrontWeight += combustionFrontWeight;
+        bin.frontTopologyWeight += frontTopologyWeight;
+        frontTopologyWeightSum += frontTopologyWeight;
+        frontTopologyRadianceCouplingSum += frontTopologyWeight * Math.min(1, fireWeight / Math.max(0.001, fireWeight + 0.05));
       }
       densitySum += d;
       densityMax = Math.max(densityMax, d);
@@ -3507,6 +3655,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireLayerSum += fireLayer;
       emissionDetailSum += flameDetail;
       combustionFrontSum += combustionFront;
+      frontTopologySum += combustionFrontTopology;
       radianceSum += radiance;
       extinctionSum += extinction;
       microdetailSum += microdetail;
@@ -3543,6 +3692,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     readback.unmap();
     readback.destroy();
+    frontReadback.unmap();
+    frontReadback.destroy();
     const smokeVelocityY = smokeWeightSum > 0 ? smokeWeightedVelocityY / smokeWeightSum : 0;
     const fireVelocityY = fireWeightSum > 0 ? fireWeightedVelocityY / fireWeightSum : 0;
     const visualRiseDirectionY = isBonfireReadbackScene ? -1 : 1;
@@ -3597,6 +3748,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeDetailCenterZ: smokeDetailCenterZBin,
         smokeDetailRadialBreadth: Math.sqrt(smokeDetailVarianceXBin + smokeDetailVarianceZBin),
         combustionFrontWeight: bin.combustionFrontWeight,
+        frontTopologyWeight: bin.frontTopologyWeight,
         smokeCenterX: smokeCenterXBin,
         smokeCenterZ: smokeCenterZBin,
         smokeRadialBreadth: Math.sqrt(smokeVarianceXBin + smokeVarianceZBin),
@@ -3716,9 +3868,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .filter(bin => bin.visualCenter > 0.08)
       .reduce((sum, bin) => sum + bin.combustionFrontWeight, 0);
     const combustionFrontRisingBodyRatio = combustionFrontWeightSum > 0 ? risingCombustionFrontWeight / combustionFrontWeightSum : 0;
+    const activeFrontTopologyBins = sourceRelativeVisualHeightBins.filter(bin => bin.frontTopologyWeight > 0);
+    const maxFrontTopologyBinWeight = activeFrontTopologyBins.reduce((maxWeight, bin) =>
+      Math.max(maxWeight, bin.frontTopologyWeight),
+      0
+    );
+    const frontTopologySourcePlugRatio = frontTopologyWeightSum > 0 ? maxFrontTopologyBinWeight / frontTopologyWeightSum : 0;
+    const risingFrontTopologyWeight = sourceRelativeVisualHeightBins
+      .filter(bin => bin.visualCenter > 0.08)
+      .reduce((sum, bin) => sum + bin.frontTopologyWeight, 0);
+    const frontTopologyRisingBodyRatio = frontTopologyWeightSum > 0 ? risingFrontTopologyWeight / frontTopologyWeightSum : 0;
+    const frontTopologyCenterHeight = frontTopologyWeightSum > 0
+      ? sourceRelativeVisualHeightBins.reduce((sum, bin) => sum + bin.frontTopologyWeight * bin.visualCenter, 0) / frontTopologyWeightSum
+      : 0;
+    const frontTopologyHeightSpread = frontTopologyWeightSum > 0
+      ? Math.sqrt(sourceRelativeVisualHeightBins.reduce((sum, bin) => sum + bin.frontTopologyWeight * Math.pow(bin.visualCenter - frontTopologyCenterHeight, 2), 0) / frontTopologyWeightSum)
+      : 0;
+    const frontTopologyRadianceCoupling = frontTopologyWeightSum > 0 ? frontTopologyRadianceCouplingSum / frontTopologyWeightSum : 0;
     return {
       grid: gridSize,
       gridLabel: state.simGridLabel,
+      frontFieldIdentity: state.frontFieldIdentity,
+      frontFieldBytes: state.frontFieldBytes,
+      frontFieldReadIndex: state.frontFieldReadIndex,
+      frontFieldWriteIndex: state.frontFieldWriteIndex,
+      frontFieldProjectionPassthrough: state.frontFieldProjectionPassthrough,
       samples,
       densityMean: densitySum / samples,
       densityMax,
@@ -3727,6 +3901,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireLayerMean: fireLayerSum / samples,
       emissionDetailMean: emissionDetailSum / samples,
       combustionFrontMean: combustionFrontSum / samples,
+      frontTopologyMean: frontTopologySum / samples,
       radianceMean: radianceSum / samples,
       extinctionMean: extinctionSum / samples,
       microdetailMean: microdetailSum / samples,
@@ -3794,6 +3969,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       combustionFrontSourcePlugRatio,
       combustionFrontRisingBodyRatio,
       maxCombustionFrontBinWeight,
+      frontTopologyWeight: frontTopologyWeightSum,
+      frontTopologySourcePlugRatio,
+      frontTopologyRisingBodyRatio,
+      frontTopologyHeightSpread,
+      frontTopologyRadianceCoupling,
+      maxFrontTopologyBinWeight,
       plumeHeightBins: plumeHeightBins.map(bin => ({
         bin: bin.bin,
         yMin: bin.yMin,
@@ -3836,6 +4017,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireCenterZ: bin.fireWeight > 0 ? bin.fireWeightedZ / bin.fireWeight : 0,
         fireVelocityY: bin.fireWeight > 0 ? bin.fireWeightedVelocityY / bin.fireWeight : 0,
         combustionFrontWeight: bin.combustionFrontWeight,
+        frontTopologyWeight: bin.frontTopologyWeight,
       })),
       sourceRelativeVisualHeightBins,
       liveVoxels,
@@ -3935,6 +4117,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepCount: state.simStepCount,
         simGrid: state.simGrid,
         simGridLabel: state.simGridLabel,
+        frontFieldIdentity: state.frontFieldIdentity,
+        frontFieldBytes: state.frontFieldBytes,
+        frontFieldReadIndex: state.frontFieldReadIndex,
+        frontFieldWriteIndex: state.frontFieldWriteIndex,
+        frontFieldProjectionPassthrough: state.frontFieldProjectionPassthrough,
         volumeScene: state.volumeScene,
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
@@ -4170,6 +4357,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simStepCount: state.simStepCount,
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
+      frontFieldIdentity: state.frontFieldIdentity,
+      frontFieldBytes: state.frontFieldBytes,
+      frontFieldReadIndex: state.frontFieldReadIndex,
+      frontFieldWriteIndex: state.frontFieldWriteIndex,
+      frontFieldProjectionPassthrough: state.frontFieldProjectionPassthrough,
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
@@ -4247,7 +4439,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         gridSize = requestedGrid;
         majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
-        state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer`;
+        state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+        state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
+        state.frontFieldBytes = frontFieldBufferBytes(gridSize);
+        state.frontFieldReadIndex = currentFront;
+        state.frontFieldWriteIndex = 1 - currentFront;
         state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
