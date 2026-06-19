@@ -528,6 +528,7 @@ async function main() {
     );
     const isPointerDragRoute = routeUsesPointerDrag;
     const isCubeRoute = url.includes('clay_cube=1');
+    const isSculptRoute = url.includes('clay_sculpt=1');
     assert.equal(state.primitiveContactPassStatus, 'pass');
     const expectedPrimitiveContacts = isPointerDragRoute
       ? 1
@@ -601,6 +602,30 @@ async function main() {
       assert.ok((state.clayCubeHeightRange ?? 0) > 0.25, 'cube height range too small for volumetric witness');
       assert.ok(Number.isFinite(state.clayCubeReadbackWallMs) && state.clayCubeReadbackWallMs > 0, 'cube readback timing missing');
       assert.ok((state.clayCubeDispatchWorkgroups ?? 0) > 0, 'cube dispatch workgroup count missing');
+    }
+    assert.equal(state.claySculptEnabled, isSculptRoute, 'sculpt witness enablement did not match clay_sculpt route parameter');
+    if (isSculptRoute) {
+      assert.equal(state.claySculptSolverIdentity, 'webgpu-clay-particle-sculpt-hash-grid-v0', 'sculpt solver identity missing');
+      assert.equal(state.claySculptStepStatus, 'pass', 'sculpt hash-grid step did not pass');
+      assert.equal(state.claySculptEvidenceKind, 'webgpu-particle-hash-grid-readback', 'sculpt evidence did not come from WebGPU readback');
+      assert.equal(state.claySculptHashGridContract, 'fixed-capacity-uniform-grid-neighbor-bins-v0', 'sculpt hash-grid contract missing');
+      assert.equal(state.claySculptHashGridEvidenceKind, 'deterministic-js-hash-grid-oracle-not-runtime-fallback', 'sculpt hash-grid oracle evidence kind missing');
+      assert.equal(state.claySculptOracleEvidenceKind, 'deterministic-js-sculpt-oracle-not-runtime-fallback', 'sculpt oracle evidence kind missing');
+      assert.ok((state.claySculptParticleCount ?? 0) >= 384, 'sculpt particle count too small for first hash-grid witness');
+      assert.ok((state.claySculptHashGridDimension ?? 0) >= 12, 'sculpt hash-grid dimension missing');
+      assert.ok((state.claySculptHashGridCellCapacity ?? 0) >= 8, 'sculpt hash-grid capacity missing');
+      assert.ok((state.claySculptActiveCellCount ?? 0) > 0, 'sculpt hash-grid active cells missing');
+      assert.ok((state.claySculptMaxCellOccupancy ?? 0) > 1, 'sculpt hash-grid never recorded multi-particle occupancy');
+      assert.equal(state.claySculptOverflowCount, 0, 'sculpt hash-grid overflowed in first witness preset');
+      assert.ok((state.claySculptNeighborSampleCount ?? 0) > 0, 'sculpt solver did not sample hash-grid neighbors');
+      assert.ok((state.claySculptAverageNeighborCount ?? 0) > 1, 'sculpt solver neighborhood density too low');
+      assert.ok((state.claySculptContactParticleCount ?? 0) > 0, 'sculpt brush did not contact particles');
+      assert.ok((state.claySculptDeformedParticleCount ?? 0) > 0, 'sculpt brush did not deform particles');
+      assert.ok((state.claySculptMaxDisplacement ?? 0) > 0.01, 'sculpt max displacement too small to prove brush influence');
+      assert.ok((state.claySculptNeighborCohesionDisplacement ?? 0) > 0, 'sculpt cohesion metric missing');
+      assert.ok(Number.isFinite(state.claySculptReadbackWallMs) && state.claySculptReadbackWallMs > 0, 'sculpt readback timing missing');
+      assert.ok((state.claySculptDispatchWorkgroups ?? 0) > 0, 'sculpt dispatch workgroup count missing');
+      assert.equal(state.claySculptPointCloudVisible, true, 'sculpt point cloud was not visible');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(
@@ -676,6 +701,9 @@ async function main() {
     if (isCubeRoute) {
       assert.ok((state.clayCubeMaxDisplacement ?? 0) > 0.05, 'cube route did not show readable material-point displacement');
       assert.ok((state.clayCubeDeformedParticleCount ?? 0) > 0, 'cube route did not report deformed material points');
+    } else if (isSculptRoute) {
+      assert.ok((state.claySculptMaxDisplacement ?? 0) > 0.01, 'sculpt route did not show readable particle displacement');
+      assert.ok((state.claySculptDeformedParticleCount ?? 0) > 0, 'sculpt route did not report deformed particles');
     } else {
       assert.ok((state.claySurfaceHeightRange ?? 0) > 0.05, 'clay surface height range did not show readable deformation');
       assert.ok((state.claySurfaceMeanAbsHeight ?? 0) > 0.01, 'clay mean absolute height did not show readable deformation');
@@ -849,6 +877,31 @@ async function main() {
       clayCubeBrushCentroid: state.clayCubeBrushCentroid,
       clayCubeBrushToDeformationCentroidDistance: state.clayCubeBrushToDeformationCentroidDistance,
       clayCubeBrushToContactCentroidDistance: state.clayCubeBrushToContactCentroidDistance,
+      claySculptEnabled: state.claySculptEnabled,
+      claySculptSolverIdentity: state.claySculptSolverIdentity,
+      claySculptStepStatus: state.claySculptStepStatus,
+      claySculptEvidenceKind: state.claySculptEvidenceKind,
+      requestedClaySculptParticles: state.requestedClaySculptParticles,
+      effectiveClaySculptParticles: state.effectiveClaySculptParticles,
+      claySculptConfigWarnings: state.claySculptConfigWarnings,
+      claySculptParticleCount: state.claySculptParticleCount,
+      claySculptHashGridContract: state.claySculptHashGridContract,
+      claySculptHashGridEvidenceKind: state.claySculptHashGridEvidenceKind,
+      claySculptOracleEvidenceKind: state.claySculptOracleEvidenceKind,
+      claySculptHashGridDimension: state.claySculptHashGridDimension,
+      claySculptHashGridCellCapacity: state.claySculptHashGridCellCapacity,
+      claySculptActiveCellCount: state.claySculptActiveCellCount,
+      claySculptMaxCellOccupancy: state.claySculptMaxCellOccupancy,
+      claySculptOverflowCount: state.claySculptOverflowCount,
+      claySculptNeighborSampleCount: state.claySculptNeighborSampleCount,
+      claySculptAverageNeighborCount: state.claySculptAverageNeighborCount,
+      claySculptContactParticleCount: state.claySculptContactParticleCount,
+      claySculptDeformedParticleCount: state.claySculptDeformedParticleCount,
+      claySculptMaxDisplacement: state.claySculptMaxDisplacement,
+      claySculptNeighborCohesionDisplacement: state.claySculptNeighborCohesionDisplacement,
+      claySculptReadbackWallMs: state.claySculptReadbackWallMs,
+      claySculptDispatchWorkgroups: state.claySculptDispatchWorkgroups,
+      claySculptPointCloudVisible: state.claySculptPointCloudVisible,
       clayTimingEvidenceSource: state.clayTimingEvidenceSource,
       clayTimingDisclaimer: state.clayTimingDisclaimer,
       clayPhaseTimingDisclaimer: state.clayPhaseTimingDisclaimer,

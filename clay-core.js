@@ -32,6 +32,11 @@ const CLAY_RELAXATION_FACTOR = 0.32;
 const CLAY_PLASTICITY_FACTOR = 0.10;
 const CLAY_CPU_SHADOW_EVIDENCE_KIND = 'benchmark-only-js-shadow-not-runtime-fallback';
 const CLAY_CUBE_ORACLE_EVIDENCE_KIND = 'deterministic-js-oracle-not-runtime-fallback';
+const SCULPT_SOLVER_IDENTITY = 'webgpu-clay-particle-sculpt-hash-grid-v0';
+const CLAY_SCULPT_HASH_GRID_CONTRACT = 'fixed-capacity-uniform-grid-neighbor-bins-v0';
+const CLAY_SCULPT_HASH_GRID_EVIDENCE_KIND = 'deterministic-js-hash-grid-oracle-not-runtime-fallback';
+const CLAY_SCULPT_ORACLE_EVIDENCE_KIND = 'deterministic-js-sculpt-oracle-not-runtime-fallback';
+const CLAY_SCULPT_WEBGPU_EVIDENCE_KIND = 'webgpu-particle-hash-grid-readback';
 const DEFAULT_CLAY_CUBE = '8x8x8';
 const CLAY_CUBE_PRESETS = Object.freeze({
   '6x6x6': Object.freeze({ cubeX: 6, cubeY: 6, cubeZ: 6, gridDimension: 12 }),
@@ -60,6 +65,18 @@ const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
 const CLAY_PRESSURE_AXIS_GAIN = 2.4;
+const DEFAULT_CLAY_SCULPT_PARTICLES = '12x8x12';
+const CLAY_SCULPT_PRESETS = Object.freeze({
+  '8x6x8': Object.freeze({ sculptX: 8, sculptY: 6, sculptZ: 8, hashGridDimension: 12, hashGridCellCapacity: 12 }),
+  '12x8x12': Object.freeze({ sculptX: 12, sculptY: 8, sculptZ: 12, hashGridDimension: 16, hashGridCellCapacity: 12 }),
+  '16x10x16': Object.freeze({ sculptX: 16, sculptY: 10, sculptZ: 16, hashGridDimension: 20, hashGridCellCapacity: 12 }),
+});
+const CLAY_SCULPT_EXTENTS = Object.freeze({
+  halfX: 0.50,
+  minY: 0.02,
+  maxY: 0.70,
+  halfZ: 0.38,
+});
 const SHARED_PRIMITIVE_PROBE_TRIANGLE_INDEX = 77;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_DISTANCE_SQ = 0.25;
 const SHARED_PRIMITIVE_PROBE_EXPECTED_FEATURE = POINT_TRIANGLE_FEATURE.FACE;
@@ -273,6 +290,27 @@ export function normalizeClayCubeConfig(requestedCube = DEFAULT_CLAY_CUBE) {
   };
 }
 
+export function normalizeClaySculptConfig(requestedParticles = DEFAULT_CLAY_SCULPT_PARTICLES) {
+  const requestedClaySculptParticles = String(requestedParticles || DEFAULT_CLAY_SCULPT_PARTICLES);
+  const preset = CLAY_SCULPT_PRESETS[requestedClaySculptParticles];
+  const claySculptConfigWarnings = [];
+  const effectiveClaySculptParticles = preset ? requestedClaySculptParticles : DEFAULT_CLAY_SCULPT_PARTICLES;
+  if (!preset) claySculptConfigWarnings.push(`unsupported-clay-sculpt-particles:${requestedClaySculptParticles}`);
+  const effectivePreset = preset || CLAY_SCULPT_PRESETS[DEFAULT_CLAY_SCULPT_PARTICLES];
+  const particleCount = effectivePreset.sculptX * effectivePreset.sculptY * effectivePreset.sculptZ;
+  return {
+    requestedClaySculptParticles,
+    effectiveClaySculptParticles,
+    sculptX: effectivePreset.sculptX,
+    sculptY: effectivePreset.sculptY,
+    sculptZ: effectivePreset.sculptZ,
+    hashGridDimension: effectivePreset.hashGridDimension,
+    hashGridCellCapacity: effectivePreset.hashGridCellCapacity,
+    particleCount,
+    claySculptConfigWarnings,
+  };
+}
+
 export function seedClayCubeMaterialPoints(config = normalizeClayCubeConfig()) {
   const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
   const positions = new Float32Array(cfg.particleCount * 4);
@@ -286,6 +324,34 @@ export function seedClayCubeMaterialPoints(config = normalizeClayCubeConfig()) {
         positions[cursor] = (fx - 0.5) * CLAY_CUBE_EXTENTS.halfX * 2;
         positions[cursor + 1] = CLAY_CUBE_EXTENTS.minY + fy * (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY);
         positions[cursor + 2] = (fz - 0.5) * CLAY_CUBE_EXTENTS.halfZ * 2;
+        positions[cursor + 3] = 1;
+        cursor += 4;
+      }
+    }
+  }
+  return positions;
+}
+
+export function seedClaySculptParticles(config = normalizeClaySculptConfig()) {
+  const cfg = config?.particleCount ? config : normalizeClaySculptConfig();
+  const positions = new Float32Array(cfg.particleCount * 4);
+  let cursor = 0;
+  for (let y = 0; y < cfg.sculptY; y += 1) {
+    const fy = cfg.sculptY === 1 ? 0.5 : y / (cfg.sculptY - 1);
+    for (let z = 0; z < cfg.sculptZ; z += 1) {
+      const fz = cfg.sculptZ === 1 ? 0.5 : z / (cfg.sculptZ - 1);
+      for (let x = 0; x < cfg.sculptX; x += 1) {
+        const fx = cfg.sculptX === 1 ? 0.5 : x / (cfg.sculptX - 1);
+        const roundX = Math.abs(fx - 0.5) * 2;
+        const roundZ = Math.abs(fz - 0.5) * 2;
+        const roundY = Math.abs(fy - 0.5) * 1.7;
+        const roundedShell = Math.max(0, Math.max(roundX, roundZ, roundY) - 0.72);
+        const ySkew = Math.sin(fx * Math.PI) * Math.sin(fz * Math.PI) * 0.018;
+        positions[cursor] = (fx - 0.5) * CLAY_SCULPT_EXTENTS.halfX * 2 * 0.68 * (1 - roundedShell * 0.08);
+        positions[cursor + 1] = CLAY_SCULPT_EXTENTS.minY
+          + (0.5 + (fy - 0.5) * 0.58) * (CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY)
+          + ySkew;
+        positions[cursor + 2] = (fz - 0.5) * CLAY_SCULPT_EXTENTS.halfZ * 2 * 0.62 * (1 - roundedShell * 0.08);
         positions[cursor + 3] = 1;
         cursor += 4;
       }
@@ -317,6 +383,213 @@ function normalizedCubeCollider(collider, index) {
     boundaryClamped: Math.abs(x - rawX) > 1e-6 || Math.abs(z - rawZ) > 1e-6,
     boundaryMargin: [0, 0, 0],
     surfaceNormal: normalizeVec3(collider?.surfaceNormal, [0, -1, 0]),
+  };
+}
+
+function sculptGridCoord(x, y, z, gridDimension) {
+  const gx = Math.max(0, Math.min(gridDimension - 1, Math.floor(((x / (CLAY_SCULPT_EXTENTS.halfX * 2)) + 0.5) * gridDimension)));
+  const gy = Math.max(0, Math.min(gridDimension - 1, Math.floor(((y - CLAY_SCULPT_EXTENTS.minY) / (CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY)) * gridDimension)));
+  const gz = Math.max(0, Math.min(gridDimension - 1, Math.floor(((z / (CLAY_SCULPT_EXTENTS.halfZ * 2)) + 0.5) * gridDimension)));
+  return [gx, gy, gz];
+}
+
+function sculptGridCellIndex(x, y, z, gridDimension) {
+  const [gx, gy, gz] = sculptGridCoord(x, y, z, gridDimension);
+  return gx + gy * gridDimension + gz * gridDimension * gridDimension;
+}
+
+function normalizeSculptBrush(brush = {}) {
+  const center = Array.isArray(brush.center) ? brush.center : [0.18, 0.42, 0.34];
+  return {
+    center: [
+      clampFinite(center[0], -CLAY_SCULPT_EXTENTS.halfX, CLAY_SCULPT_EXTENTS.halfX, 0.18),
+      clampFinite(center[1], CLAY_SCULPT_EXTENTS.minY, CLAY_SCULPT_EXTENTS.maxY, 0.42),
+      clampFinite(center[2], -CLAY_SCULPT_EXTENTS.halfZ, CLAY_SCULPT_EXTENTS.halfZ, 0.34),
+    ],
+    radius: clampFinite(brush.radius, 0.035, 0.45, 0.22),
+    strength: clampFinite(brush.strength, 0, 5, 1.1),
+    normal: normalizeVec3(brush.normal, [0, 0, -1]),
+  };
+}
+
+export function buildClaySculptHashGridOracle(particles, config = normalizeClaySculptConfig()) {
+  const cfg = config?.particleCount ? config : normalizeClaySculptConfig();
+  const particleValues = particles instanceof Float32Array && particles.length >= cfg.particleCount * 4
+    ? particles
+    : seedClaySculptParticles(cfg);
+  const cellCount = cfg.hashGridDimension ** 3;
+  const cellCounts = new Uint32Array(cellCount);
+  const cellEntries = new Uint32Array(cellCount * cfg.hashGridCellCapacity);
+  cellEntries.fill(0xffffffff);
+  let overflowCount = 0;
+  let activeCellCount = 0;
+  let maxCellOccupancy = 0;
+
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const cell = sculptGridCellIndex(
+      particleValues[offset],
+      particleValues[offset + 1],
+      particleValues[offset + 2],
+      cfg.hashGridDimension,
+    );
+    const slot = cellCounts[cell];
+    cellCounts[cell] += 1;
+    if (slot === 0) activeCellCount += 1;
+    maxCellOccupancy = Math.max(maxCellOccupancy, cellCounts[cell]);
+    if (slot < cfg.hashGridCellCapacity) {
+      cellEntries[cell * cfg.hashGridCellCapacity + slot] = i;
+    } else {
+      overflowCount += 1;
+    }
+  }
+
+  return {
+    evidenceKind: CLAY_SCULPT_HASH_GRID_EVIDENCE_KIND,
+    hashGridContract: CLAY_SCULPT_HASH_GRID_CONTRACT,
+    particleCount: cfg.particleCount,
+    hashGridDimension: cfg.hashGridDimension,
+    hashGridCellCapacity: cfg.hashGridCellCapacity,
+    activeCellCount,
+    maxCellOccupancy,
+    overflowCount,
+    cellCounts,
+    cellEntries,
+  };
+}
+
+export function runClaySculptFirstBrushOracle({
+  basePositions,
+  previousPositions = basePositions,
+  config = normalizeClaySculptConfig(),
+  brush = {},
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClaySculptConfig();
+  const base = basePositions instanceof Float32Array && basePositions.length >= cfg.particleCount * 4
+    ? basePositions
+    : seedClaySculptParticles(cfg);
+  const previous = previousPositions instanceof Float32Array && previousPositions.length === base.length ? previousPositions : base;
+  const normalizedBrush = normalizeSculptBrush(brush);
+  const grid = buildClaySculptHashGridOracle(previous, cfg);
+  const next = new Float32Array(base.length);
+  let contactParticleCount = 0;
+  let deformedParticleCount = 0;
+  let neighborSampleCount = 0;
+  let neighborCohesionDisplacement = 0;
+  let maxDisplacement = 0;
+  const neighborRadius = Math.max(
+    CLAY_SCULPT_EXTENTS.halfX * 2 / Math.max(1, cfg.sculptX - 1),
+    (CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY) / Math.max(1, cfg.sculptY - 1),
+    CLAY_SCULPT_EXTENTS.halfZ * 2 / Math.max(1, cfg.sculptZ - 1),
+  ) * 1.65;
+
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const baseX = base[offset];
+    const baseY = base[offset + 1];
+    const baseZ = base[offset + 2];
+    const x = previous[offset];
+    const y = previous[offset + 1];
+    const z = previous[offset + 2];
+    const [gx, gy, gz] = sculptGridCoord(x, y, z, cfg.hashGridDimension);
+    let neighborCount = 0;
+    let neighborX = 0;
+    let neighborY = 0;
+    let neighborZ = 0;
+
+    for (let dz = -1; dz <= 1; dz += 1) {
+      const cz = gz + dz;
+      if (cz < 0 || cz >= cfg.hashGridDimension) continue;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const cy = gy + dy;
+        if (cy < 0 || cy >= cfg.hashGridDimension) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const cx = gx + dx;
+          if (cx < 0 || cx >= cfg.hashGridDimension) continue;
+          const cell = cx + cy * cfg.hashGridDimension + cz * cfg.hashGridDimension * cfg.hashGridDimension;
+          const stored = Math.min(grid.cellCounts[cell], cfg.hashGridCellCapacity);
+          for (let slot = 0; slot < stored; slot += 1) {
+            const other = grid.cellEntries[cell * cfg.hashGridCellCapacity + slot];
+            if (other === 0xffffffff || other === i) continue;
+            const otherOffset = other * 4;
+            const ox = previous[otherOffset];
+            const oy = previous[otherOffset + 1];
+            const oz = previous[otherOffset + 2];
+            const ddx = ox - x;
+            const ddy = oy - y;
+            const ddz = oz - z;
+            if (ddx * ddx + ddy * ddy + ddz * ddz <= neighborRadius * neighborRadius) {
+              neighborCount += 1;
+              neighborX += ox;
+              neighborY += oy;
+              neighborZ += oz;
+            }
+          }
+        }
+      }
+    }
+
+    neighborSampleCount += neighborCount;
+    let pushX = (baseX - x) * 0.010;
+    let pushY = (baseY - y) * 0.012;
+    let pushZ = (baseZ - z) * 0.010;
+    let contact = 0;
+    const bdx = x - normalizedBrush.center[0];
+    const bdy = y - normalizedBrush.center[1];
+    const bdz = z - normalizedBrush.center[2];
+    const brushDistance = Math.sqrt(bdx * bdx + bdy * bdy + bdz * bdz);
+    const reach = clamp01(1 - brushDistance / normalizedBrush.radius);
+    if (reach > 0) {
+      const force = reach * reach * normalizedBrush.strength;
+      const invDistance = 1 / Math.max(brushDistance, 0.025);
+      pushX += normalizedBrush.normal[0] * force * 0.088 + bdx * invDistance * force * 0.022;
+      pushY += normalizedBrush.normal[1] * force * 0.088 + bdy * invDistance * force * 0.022;
+      pushZ += normalizedBrush.normal[2] * force * 0.088 + bdz * invDistance * force * 0.022;
+      contact = 1;
+    }
+    if (neighborCount > 0) {
+      const cx = neighborX / neighborCount;
+      const cy = neighborY / neighborCount;
+      const cz = neighborZ / neighborCount;
+      const cohesionScale = 0.020 + reach * 0.020;
+      const cohesionX = (cx - x) * cohesionScale;
+      const cohesionY = (cy - y) * cohesionScale;
+      const cohesionZ = (cz - z) * cohesionScale;
+      pushX += cohesionX;
+      pushY += cohesionY;
+      pushZ += cohesionZ;
+      neighborCohesionDisplacement += Math.sqrt(cohesionX * cohesionX + cohesionY * cohesionY + cohesionZ * cohesionZ);
+    }
+
+    const nx = clampFinite(x + pushX, -CLAY_SCULPT_EXTENTS.halfX * 1.12, CLAY_SCULPT_EXTENTS.halfX * 1.12, baseX);
+    const ny = clampFinite(y + pushY, -0.10, CLAY_SCULPT_EXTENTS.maxY * 1.10, baseY);
+    const nz = clampFinite(z + pushZ, -CLAY_SCULPT_EXTENTS.halfZ * 1.12, CLAY_SCULPT_EXTENTS.halfZ * 1.12, baseZ);
+    const disp = Math.sqrt((nx - baseX) ** 2 + (ny - baseY) ** 2 + (nz - baseZ) ** 2);
+    if (disp > 0.002) deformedParticleCount += 1;
+    if (contact > 0) contactParticleCount += 1;
+    maxDisplacement = Math.max(maxDisplacement, disp);
+    next[offset] = nx;
+    next[offset + 1] = ny;
+    next[offset + 2] = nz;
+    next[offset + 3] = contact;
+  }
+
+  return {
+    solverIdentity: SCULPT_SOLVER_IDENTITY,
+    evidenceKind: CLAY_SCULPT_ORACLE_EVIDENCE_KIND,
+    hashGridEvidenceKind: CLAY_SCULPT_HASH_GRID_EVIDENCE_KIND,
+    hashGridContract: CLAY_SCULPT_HASH_GRID_CONTRACT,
+    positions: next,
+    particleCount: cfg.particleCount,
+    activeCellCount: grid.activeCellCount,
+    maxCellOccupancy: grid.maxCellOccupancy,
+    overflowCount: grid.overflowCount,
+    neighborSampleCount,
+    averageNeighborCount: neighborSampleCount / Math.max(1, cfg.particleCount),
+    contactParticleCount,
+    deformedParticleCount,
+    maxDisplacement,
+    neighborCohesionDisplacement,
   };
 }
 
@@ -755,6 +1028,161 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
 `;
 }
 
+function claySculptHashGridShader() {
+  return /* wgsl */`
+struct SculptParams {
+  particleCount: u32,
+  hashGridDimension: u32,
+  hashGridCellCapacity: u32,
+  phase: u32,
+};
+
+@group(0) @binding(0) var<storage, read> basePositions: array<vec4f>;
+@group(0) @binding(1) var<storage, read> statePositions: array<vec4f>;
+@group(0) @binding(2) var<storage, read_write> outputPositions: array<vec4f>;
+@group(0) @binding(3) var<storage, read_write> cellCounts: array<atomic<u32>>;
+@group(0) @binding(4) var<storage, read_write> cellEntries: array<atomic<u32>>;
+@group(0) @binding(5) var<storage, read_write> metrics: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read> brush: array<vec4f>;
+@group(0) @binding(7) var<uniform> params: SculptParams;
+
+fn grid_coord(p: vec3f) -> vec3u {
+  let dim = params.hashGridDimension;
+  let maxIndex = f32(dim - 1u);
+  let gx = u32(clamp(floor(((p.x / ${(CLAY_SCULPT_EXTENTS.halfX * 2).toFixed(8)}) + 0.5) * f32(dim)), 0.0, maxIndex));
+  let gy = u32(clamp(floor(((p.y - ${CLAY_SCULPT_EXTENTS.minY.toFixed(8)}) / ${(CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY).toFixed(8)}) * f32(dim)), 0.0, maxIndex));
+  let gz = u32(clamp(floor(((p.z / ${(CLAY_SCULPT_EXTENTS.halfZ * 2).toFixed(8)}) + 0.5) * f32(dim)), 0.0, maxIndex));
+  return vec3u(gx, gy, gz);
+}
+
+fn cell_index(c: vec3u) -> u32 {
+  return c.x + c.y * params.hashGridDimension + c.z * params.hashGridDimension * params.hashGridDimension;
+}
+
+fn safe_normal(v: vec3f) -> vec3f {
+  let len = length(v);
+  if (len <= 0.000001) {
+    return vec3f(0.0, 0.0, -1.0);
+  }
+  return v / len;
+}
+
+@compute @workgroup_size(64)
+fn clay_particle_sculpt_hash_grid_main(@builtin(global_invocation_id) global_id: vec3u) {
+  let i = global_id.x;
+  let cellCount = params.hashGridDimension * params.hashGridDimension * params.hashGridDimension;
+  let entryCount = cellCount * params.hashGridCellCapacity;
+  if (params.phase == 0u) {
+    if (i < cellCount) {
+      atomicStore(&cellCounts[i], 0u);
+    }
+    if (i < entryCount) {
+      atomicStore(&cellEntries[i], 0xffffffffu);
+    }
+    if (i < 8u) {
+      atomicStore(&metrics[i], 0u);
+    }
+    return;
+  }
+  if (i >= params.particleCount) {
+    return;
+  }
+  if (params.phase == 1u) {
+    let p = statePositions[i].xyz;
+    let cell = cell_index(grid_coord(p));
+    let slot = atomicAdd(&cellCounts[cell], 1u);
+    if (slot == 0u) {
+      atomicAdd(&metrics[0], 1u);
+    }
+    atomicMax(&metrics[1], slot + 1u);
+    if (slot < params.hashGridCellCapacity) {
+      atomicStore(&cellEntries[cell * params.hashGridCellCapacity + slot], i);
+    } else {
+      atomicAdd(&metrics[2], 1u);
+    }
+    return;
+  }
+
+  let base = basePositions[i];
+  let p = statePositions[i];
+  let coord = grid_coord(p.xyz);
+  let neighborRadius = ${Math.max(
+    CLAY_SCULPT_EXTENTS.halfX * 2 / 11,
+    (CLAY_SCULPT_EXTENTS.maxY - CLAY_SCULPT_EXTENTS.minY) / 7,
+    CLAY_SCULPT_EXTENTS.halfZ * 2 / 11,
+  ).toFixed(8)} * 1.65;
+  var neighborCount = 0u;
+  var neighborSum = vec3f(0.0);
+  for (var oz = -1; oz <= 1; oz = oz + 1) {
+    let cz = i32(coord.z) + oz;
+    if (cz < 0 || cz >= i32(params.hashGridDimension)) {
+      continue;
+    }
+    for (var oy = -1; oy <= 1; oy = oy + 1) {
+      let cy = i32(coord.y) + oy;
+      if (cy < 0 || cy >= i32(params.hashGridDimension)) {
+        continue;
+      }
+      for (var ox = -1; ox <= 1; ox = ox + 1) {
+        let cx = i32(coord.x) + ox;
+        if (cx < 0 || cx >= i32(params.hashGridDimension)) {
+          continue;
+        }
+        let cell = cell_index(vec3u(u32(cx), u32(cy), u32(cz)));
+        let stored = min(atomicLoad(&cellCounts[cell]), params.hashGridCellCapacity);
+        for (var slot = 0u; slot < stored; slot = slot + 1u) {
+          let other = atomicLoad(&cellEntries[cell * params.hashGridCellCapacity + slot]);
+          if (other == 0xffffffffu || other == i) {
+            continue;
+          }
+          let q = statePositions[other].xyz;
+          let delta = q - p.xyz;
+          if (dot(delta, delta) <= neighborRadius * neighborRadius) {
+            neighborCount = neighborCount + 1u;
+            neighborSum = neighborSum + q;
+          }
+        }
+      }
+    }
+  }
+
+  let brushCenter = brush[0].xyz;
+  let brushRadius = max(brush[0].w, 0.001);
+  let brushNormal = safe_normal(brush[1].xyz);
+  let brushStrength = brush[1].w;
+  let brushDelta = p.xyz - brushCenter;
+  let brushDistance = length(brushDelta);
+  let reach = clamp(1.0 - brushDistance / brushRadius, 0.0, 1.0);
+  var push = (base.xyz - p.xyz) * vec3f(0.010, 0.012, 0.010);
+  var contact = 0.0;
+  if (reach > 0.0) {
+    let force = reach * reach * brushStrength;
+    push = push + brushNormal * force * 0.088 + safe_normal(brushDelta) * force * 0.022;
+    contact = 1.0;
+  }
+  if (neighborCount > 0u) {
+    let centroid = neighborSum / f32(neighborCount);
+    let cohesion = (centroid - p.xyz) * (0.020 + reach * 0.020);
+    push = push + cohesion;
+    atomicAdd(&metrics[6], u32(clamp(length(cohesion) * 1000000.0, 0.0, 4294967040.0)));
+  }
+  var next = p.xyz + push;
+  next.x = clamp(next.x, ${(-CLAY_SCULPT_EXTENTS.halfX * 1.12).toFixed(8)}, ${(CLAY_SCULPT_EXTENTS.halfX * 1.12).toFixed(8)});
+  next.y = clamp(next.y, -0.10000000, ${(CLAY_SCULPT_EXTENTS.maxY * 1.10).toFixed(8)});
+  next.z = clamp(next.z, ${(-CLAY_SCULPT_EXTENTS.halfZ * 1.12).toFixed(8)}, ${(CLAY_SCULPT_EXTENTS.halfZ * 1.12).toFixed(8)});
+  let disp = length(next - base.xyz);
+  if (contact > 0.5) {
+    atomicAdd(&metrics[3], 1u);
+  }
+  if (disp > 0.002) {
+    atomicAdd(&metrics[4], 1u);
+  }
+  atomicAdd(&metrics[5], neighborCount);
+  outputPositions[i] = vec4f(next, contact);
+}
+`;
+}
+
 export function createKaminosClayPrototype({
   THREE,
   scene,
@@ -765,13 +1193,17 @@ export function createKaminosClayPrototype({
   clayGrid = DEFAULT_CLAY_GRID,
   clayCube = false,
   clayCubeGrid = DEFAULT_CLAY_CUBE,
+  claySculpt = false,
+  claySculptParticles = DEFAULT_CLAY_SCULPT_PARTICLES,
   onStatus = () => {},
 }) {
   const gridConfig = normalizeClayGridConfig(clayGrid);
   const cubeConfig = normalizeClayCubeConfig(clayCubeGrid);
+  const sculptConfig = normalizeClaySculptConfig(claySculptParticles);
   const gridX = gridConfig.gridX;
   const gridZ = gridConfig.gridZ;
   const clayCubeEnabled = !!clayCube;
+  const claySculptEnabled = !!claySculpt;
   let active = false;
   let device = null;
   let gpuReadyPromise = null;
@@ -793,8 +1225,21 @@ export function createKaminosClayPrototype({
   let cubeStateBuffer = null;
   let cubeOutputBuffer = null;
   let cubeReadbackBuffer = null;
+  let sculptPipeline = null;
+  let sculptBindGroup = null;
+  let sculptBaseBuffer = null;
+  let sculptStateBuffer = null;
+  let sculptOutputBuffer = null;
+  let sculptReadbackBuffer = null;
+  let sculptCellCountsBuffer = null;
+  let sculptCellEntriesBuffer = null;
+  let sculptMetricsBuffer = null;
+  let sculptMetricsReadbackBuffer = null;
+  let sculptBrushBuffer = null;
+  let sculptParamsBuffer = null;
   let mesh = null;
   let cubePointCloud = null;
+  let sculptPointCloud = null;
   let cubeBoundingBox = null;
   let cubeIsoSurface = null;
   let cubeBoundarySkin = null;
@@ -910,6 +1355,22 @@ export function createKaminosClayPrototype({
   let clayCubeBrushToDeformationCentroidDistance = null;
   let clayCubeBrushToContactCentroidDistance = null;
   let lastCubeStateValues = null;
+  let claySculptStepStatus = claySculptEnabled ? 'not-run' : 'disabled';
+  let claySculptEvidenceKind = claySculptEnabled ? CLAY_SCULPT_WEBGPU_EVIDENCE_KIND : 'disabled';
+  let claySculptParticleCount = sculptConfig.particleCount;
+  let claySculptActiveCellCount = 0;
+  let claySculptMaxCellOccupancy = 0;
+  let claySculptOverflowCount = 0;
+  let claySculptContactParticleCount = 0;
+  let claySculptDeformedParticleCount = 0;
+  let claySculptNeighborSampleCount = 0;
+  let claySculptAverageNeighborCount = 0;
+  let claySculptNeighborCohesionDisplacement = 0;
+  let claySculptMaxDisplacement = 0;
+  let claySculptReadbackWallMs = 0;
+  let claySculptDispatchWorkgroups = 0;
+  let claySculptPointCloudVisible = claySculptEnabled;
+  let lastSculptStateValues = null;
   let handPoseAdapterState = normalizeClayHandPoseColliders({});
   const clayRelaxationFactor = CLAY_RELAXATION_FACTOR;
   const clayPlasticityFactor = CLAY_PLASTICITY_FACTOR;
@@ -917,6 +1378,9 @@ export function createKaminosClayPrototype({
   const vertexCount = gridX * gridZ;
   const basePositions = new Float32Array(vertexCount * 4);
   const cubeBasePositions = seedClayCubeMaterialPoints(cubeConfig);
+  const sculptBasePositions = seedClaySculptParticles(sculptConfig);
+  const sculptCellCount = sculptConfig.hashGridDimension ** 3;
+  const sculptEntryCount = sculptCellCount * sculptConfig.hashGridCellCapacity;
   let lastStateValues = null;
 
   for (let z = 0; z < gridZ; z += 1) {
@@ -938,8 +1402,8 @@ export function createKaminosClayPrototype({
       roughness: 0.82,
       metalness: 0,
       side: THREE.DoubleSide,
-      transparent: clayCubeEnabled,
-      opacity: clayCubeEnabled ? 0.58 : 1,
+      transparent: clayCubeEnabled || claySculptEnabled,
+      opacity: clayCubeEnabled || claySculptEnabled ? 0.30 : 1,
     });
     mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'kaminos-clay-surface-lattice';
@@ -1040,6 +1504,34 @@ export function createKaminosClayPrototype({
       cubeBoundingBox.position.set(0, (CLAY_CUBE_EXTENTS.minY + CLAY_CUBE_EXTENTS.maxY) * 0.5, 0);
       cubeBoundingBox.renderOrder = 6;
       scene.add(cubeBoundingBox);
+    }
+    if (claySculptEnabled) {
+      const sculptGeometry = new THREE.BufferGeometry();
+      const sculptPositions = new Float32Array(sculptConfig.particleCount * 3);
+      const sculptColors = new Float32Array(sculptConfig.particleCount * 3);
+      for (let i = 0; i < sculptConfig.particleCount; i += 1) {
+        sculptPositions[i * 3] = sculptBasePositions[i * 4];
+        sculptPositions[i * 3 + 1] = sculptBasePositions[i * 4 + 1];
+        sculptPositions[i * 3 + 2] = sculptBasePositions[i * 4 + 2];
+        sculptColors[i * 3] = 0.73;
+        sculptColors[i * 3 + 1] = 0.55;
+        sculptColors[i * 3 + 2] = 0.34;
+      }
+      sculptGeometry.setAttribute('position', new THREE.BufferAttribute(sculptPositions, 3));
+      sculptGeometry.setAttribute('color', new THREE.BufferAttribute(sculptColors, 3));
+      const sculptMaterial = new THREE.PointsMaterial({
+        size: 0.052,
+        sizeAttenuation: true,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.94,
+        depthTest: true,
+        depthWrite: false,
+      });
+      sculptPointCloud = new THREE.Points(sculptGeometry, sculptMaterial);
+      sculptPointCloud.name = 'kaminos-clay-particle-sculpt-hash-grid';
+      sculptPointCloud.renderOrder = 5;
+      scene.add(sculptPointCloud);
     }
   }
 
@@ -1558,7 +2050,13 @@ export function createKaminosClayPrototype({
   }
 
   async function ensureGpu() {
-    if (device && pipeline && bindGroup && (!clayCubeEnabled || (cubePipeline && cubeBindGroup))) return;
+    if (
+      device
+      && pipeline
+      && bindGroup
+      && (!clayCubeEnabled || (cubePipeline && cubeBindGroup))
+      && (!claySculptEnabled || (sculptPipeline && sculptBindGroup))
+    ) return;
     if (gpuReadyPromise) return gpuReadyPromise;
     gpuReadyPromise = (async () => {
       if (!navigator.gpu) {
@@ -1680,6 +2178,81 @@ export function createKaminosClayPrototype({
             { binding: 3, resource: { buffer: cubeStateBuffer } },
             { binding: 4, resource: { buffer: cubeOutputBuffer } },
             { binding: 5, resource: { buffer: cubeParamsBuffer } },
+          ],
+        });
+      }
+      if (claySculptEnabled && !sculptPipeline) {
+        sculptBaseBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-base-positions',
+          size: sculptBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        sculptStateBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-state-positions',
+          size: sculptBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+        sculptOutputBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-output-positions',
+          size: sculptBasePositions.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        sculptReadbackBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-readback',
+          size: sculptBasePositions.byteLength,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        sculptCellCountsBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-hash-cell-counts',
+          size: sculptCellCount * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE,
+        });
+        sculptCellEntriesBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-hash-cell-entries',
+          size: sculptEntryCount * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE,
+        });
+        sculptMetricsBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-hash-metrics',
+          size: 8 * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        sculptMetricsReadbackBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-hash-metrics-readback',
+          size: 8 * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        sculptBrushBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-brush',
+          size: 8 * Float32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        sculptParamsBuffer = device.createBuffer({
+          label: 'kaminos-clay-sculpt-params',
+          size: 4 * Uint32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(sculptBaseBuffer, 0, sculptBasePositions);
+        device.queue.writeBuffer(sculptStateBuffer, 0, sculptBasePositions);
+        sculptPipeline = device.createComputePipeline({
+          label: SCULPT_SOLVER_IDENTITY,
+          layout: 'auto',
+          compute: {
+            module: device.createShaderModule({ code: claySculptHashGridShader() }),
+            entryPoint: 'clay_particle_sculpt_hash_grid_main',
+          },
+        });
+        sculptBindGroup = device.createBindGroup({
+          layout: sculptPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: sculptBaseBuffer } },
+            { binding: 1, resource: { buffer: sculptStateBuffer } },
+            { binding: 2, resource: { buffer: sculptOutputBuffer } },
+            { binding: 3, resource: { buffer: sculptCellCountsBuffer } },
+            { binding: 4, resource: { buffer: sculptCellEntriesBuffer } },
+            { binding: 5, resource: { buffer: sculptMetricsBuffer } },
+            { binding: 6, resource: { buffer: sculptBrushBuffer } },
+            { binding: 7, resource: { buffer: sculptParamsBuffer } },
           ],
         });
       }
@@ -1807,6 +2380,127 @@ export function createKaminosClayPrototype({
     }
   }
 
+  function sculptBrushFromColliders(primitiveColliders) {
+    const fallback = {
+      center: [0.18, 0.42, 0.34],
+      radius: 0.22,
+      strength: 1.1,
+      normal: [0, 0, -1],
+    };
+    if (!primitiveColliders.length) return fallback;
+    const collider = primitiveColliders.slice().sort((a, b) => {
+      const aStrength = Number(a.effectiveStrength ?? a.strength ?? 0);
+      const bStrength = Number(b.effectiveStrength ?? b.strength ?? 0);
+      return bStrength - aStrength;
+    })[0];
+    const center = Array.isArray(collider.center) ? collider.center : fallback.center;
+    const y = Number.isFinite(center[1]) && Math.abs(center[1]) > 1e-5
+      ? center[1]
+      : fallback.center[1];
+    return normalizeSculptBrush({
+      center: [center[0], y, center[2]],
+      radius: collider.radius ?? fallback.radius,
+      strength: Number.isFinite(collider.effectiveStrength) && collider.effectiveStrength > 0
+        ? collider.effectiveStrength
+        : collider.strength ?? fallback.strength,
+      normal: collider.surfaceNormal || fallback.normal,
+    });
+  }
+
+  async function dispatchSculptPhase(phase, workgroups, label, copyReadback = false) {
+    device.queue.writeBuffer(sculptParamsBuffer, 0, new Uint32Array([
+      sculptConfig.particleCount,
+      sculptConfig.hashGridDimension,
+      sculptConfig.hashGridCellCapacity,
+      phase,
+    ]));
+    const encoder = device.createCommandEncoder({ label });
+    const pass = encoder.beginComputePass({ label: `${label}-pass` });
+    pass.setPipeline(sculptPipeline);
+    pass.setBindGroup(0, sculptBindGroup);
+    pass.dispatchWorkgroups(workgroups);
+    pass.end();
+    if (copyReadback) {
+      encoder.copyBufferToBuffer(sculptOutputBuffer, 0, sculptReadbackBuffer, 0, sculptBasePositions.byteLength);
+      encoder.copyBufferToBuffer(sculptOutputBuffer, 0, sculptStateBuffer, 0, sculptBasePositions.byteLength);
+      encoder.copyBufferToBuffer(sculptMetricsBuffer, 0, sculptMetricsReadbackBuffer, 0, 8 * Uint32Array.BYTES_PER_ELEMENT);
+    }
+    device.queue.submit([encoder.finish()]);
+    if (!copyReadback) await device.queue.onSubmittedWorkDone();
+  }
+
+  async function runSculptFirstBrush(primitiveColliders) {
+    if (!claySculptEnabled) return;
+    claySculptStepStatus = 'running';
+    claySculptEvidenceKind = CLAY_SCULPT_WEBGPU_EVIDENCE_KIND;
+    const sculptStartedAt = performance.now();
+    const brush = sculptBrushFromColliders(primitiveColliders);
+    device.queue.writeBuffer(sculptBrushBuffer, 0, new Float32Array([
+      brush.center[0],
+      brush.center[1],
+      brush.center[2],
+      brush.radius,
+      brush.normal[0],
+      brush.normal[1],
+      brush.normal[2],
+      brush.strength,
+    ]));
+    const clearWorkgroups = Math.ceil(Math.max(sculptEntryCount, sculptCellCount, 8) / 64);
+    const particleWorkgroups = Math.ceil(sculptConfig.particleCount / 64);
+    claySculptDispatchWorkgroups = clearWorkgroups + particleWorkgroups + particleWorkgroups;
+    await dispatchSculptPhase(0, clearWorkgroups, 'kaminos-clay-sculpt-hash-grid-clear');
+    await dispatchSculptPhase(1, particleWorkgroups, 'kaminos-clay-sculpt-hash-grid-insert');
+    await dispatchSculptPhase(2, particleWorkgroups, 'kaminos-clay-sculpt-hash-grid-solve', true);
+    await Promise.all([
+      sculptReadbackBuffer.mapAsync(GPUMapMode.READ),
+      sculptMetricsReadbackBuffer.mapAsync(GPUMapMode.READ),
+    ]);
+    const sculptValues = new Float32Array(sculptReadbackBuffer.getMappedRange()).slice();
+    const metrics = new Uint32Array(sculptMetricsReadbackBuffer.getMappedRange()).slice();
+    sculptReadbackBuffer.unmap();
+    sculptMetricsReadbackBuffer.unmap();
+    claySculptReadbackWallMs = performance.now() - sculptStartedAt;
+    claySculptActiveCellCount = metrics[0];
+    claySculptMaxCellOccupancy = metrics[1];
+    claySculptOverflowCount = metrics[2];
+    claySculptContactParticleCount = metrics[3];
+    claySculptDeformedParticleCount = metrics[4];
+    claySculptNeighborSampleCount = metrics[5];
+    claySculptAverageNeighborCount = claySculptNeighborSampleCount / Math.max(1, sculptConfig.particleCount);
+    claySculptNeighborCohesionDisplacement = metrics[6] / 1000000;
+    claySculptMaxDisplacement = 0;
+    const pointPosition = sculptPointCloud?.geometry?.attributes?.position || null;
+    const pointColor = sculptPointCloud?.geometry?.attributes?.color || null;
+    for (let i = 0; i < sculptConfig.particleCount; i += 1) {
+      const offset = i * 4;
+      const x = sculptValues[offset];
+      const y = sculptValues[offset + 1];
+      const z = sculptValues[offset + 2];
+      const contact = sculptValues[offset + 3];
+      const dx = x - sculptBasePositions[offset];
+      const dy = y - sculptBasePositions[offset + 1];
+      const dz = z - sculptBasePositions[offset + 2];
+      const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      claySculptMaxDisplacement = Math.max(claySculptMaxDisplacement, displacement);
+      if (pointPosition) pointPosition.setXYZ(i, x, y, z);
+      if (pointColor) {
+        const heat = clamp01(displacement / 0.16);
+        const contactHeat = contact > 0.5 ? 1 : 0;
+        pointColor.setXYZ(
+          i,
+          0.65 + contactHeat * 0.32 + heat * 0.10,
+          0.45 + heat * 0.34,
+          0.27 + (1 - contactHeat) * heat * 0.26,
+        );
+      }
+    }
+    if (pointPosition) pointPosition.needsUpdate = true;
+    if (pointColor) pointColor.needsUpdate = true;
+    claySculptStepStatus = 'pass';
+    claySculptPointCloudVisible = !!sculptPointCloud?.visible;
+    lastSculptStateValues = sculptValues;
+  }
+
   async function step() {
     if (!active) return;
     const stepStartedAt = performance.now();
@@ -1842,6 +2536,7 @@ export function createKaminosClayPrototype({
     readbackBuffer.unmap();
     clayLatticeReadbackWallMs = performance.now() - latticeStartedAt;
     await runCubeFirstLoop(primitiveColliders);
+    await runSculptFirstBrush(primitiveColliders);
 
     const meshUpdateStartedAt = performance.now();
     const position = mesh.geometry.attributes.position;
@@ -2121,6 +2816,31 @@ export function createKaminosClayPrototype({
       clayCubeBrushToDeformationCentroidDistance,
       clayCubeBrushToContactCentroidDistance,
       clayCubeOracleEvidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
+      claySculptEnabled,
+      claySculptSolverIdentity: SCULPT_SOLVER_IDENTITY,
+      claySculptStepStatus,
+      claySculptEvidenceKind,
+      requestedClaySculptParticles: sculptConfig.requestedClaySculptParticles,
+      effectiveClaySculptParticles: sculptConfig.effectiveClaySculptParticles,
+      claySculptConfigWarnings: sculptConfig.claySculptConfigWarnings.slice(),
+      claySculptParticleCount,
+      claySculptHashGridContract: CLAY_SCULPT_HASH_GRID_CONTRACT,
+      claySculptHashGridEvidenceKind: CLAY_SCULPT_HASH_GRID_EVIDENCE_KIND,
+      claySculptOracleEvidenceKind: CLAY_SCULPT_ORACLE_EVIDENCE_KIND,
+      claySculptHashGridDimension: sculptConfig.hashGridDimension,
+      claySculptHashGridCellCapacity: sculptConfig.hashGridCellCapacity,
+      claySculptActiveCellCount,
+      claySculptMaxCellOccupancy,
+      claySculptOverflowCount,
+      claySculptNeighborSampleCount,
+      claySculptAverageNeighborCount,
+      claySculptContactParticleCount,
+      claySculptDeformedParticleCount,
+      claySculptMaxDisplacement,
+      claySculptNeighborCohesionDisplacement,
+      claySculptReadbackWallMs,
+      claySculptDispatchWorkgroups,
+      claySculptPointCloudVisible,
       clayTimingEvidenceSource,
       clayTimingDisclaimer,
       clayPhaseTimingDisclaimer,
@@ -2210,6 +2930,7 @@ export function createKaminosClayPrototype({
       if (!active) {
         if (mesh) mesh.visible = false;
         if (cubePointCloud) cubePointCloud.visible = false;
+        if (sculptPointCloud) sculptPointCloud.visible = false;
         if (cubeBoundingBox) cubeBoundingBox.visible = false;
         if (cubeIsoSurface) cubeIsoSurface.visible = false;
         if (cubeBoundarySkin) cubeBoundarySkin.visible = false;
@@ -2221,8 +2942,9 @@ export function createKaminosClayPrototype({
       ensureMesh();
       clayCubeSurfaceVisible = clayCubeEnabled ? CLAY_CUBE_SURFACE_VISIBLE : true;
       clayCubeBoundingBoxVisible = clayCubeEnabled;
-      mesh.visible = clayCubeSurfaceVisible;
+      mesh.visible = claySculptEnabled ? false : clayCubeSurfaceVisible;
       if (cubePointCloud) cubePointCloud.visible = clayCubeEnabled;
+      if (sculptPointCloud) sculptPointCloud.visible = claySculptEnabled;
       if (cubeBoundingBox) cubeBoundingBox.visible = clayCubeBoundingBoxVisible;
       if (cubeIsoSurface) cubeIsoSurface.visible = clayCubeEnabled && clayCubeIsoSurfaceVisible;
       if (cubeBoundarySkin) cubeBoundarySkin.visible = clayCubeEnabled && clayCubeBoundarySkinVisible;
