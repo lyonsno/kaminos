@@ -72,6 +72,8 @@ assert.match(index, /window\.kaminosSaveSelectedSplatCorrection/, 'browser witne
 assert.match(index, /window\.saveSelectedSplatCorrection\s*=\s*saveSelectedSplatCorrection/, 'visible Save Correction button has the exact global handler named by its inline onclick');
 assert.match(index, /window\.resetSelectedSplatCorrection\s*=\s*resetSelectedSplatCorrection/, 'visible Reset Correction button has the exact global handler named by its inline onclick');
 assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
+assert.match(index, /function composeSplatObjectPivotTransform\(/, 'Corrected splat imports compose the scene object pivot from the saved centroid offset');
+assert.match(index, /function applySplatVisualRootOffset\(/, 'Corrected splat imports compensate the visual root so pivot corrections do not move the visible splat');
 assert.match(index, /Splat Correction Mode/, 'viewport exposes an explicit splat correction edit-mode badge');
 assert.match(index, /async function enterSplatCorrectionMode\(/, 'selected splats can enter correction mode without numeric-only editing');
 assert.match(index, /function exitSplatCorrectionMode\(/, 'splat correction mode has an explicit exit path');
@@ -79,6 +81,7 @@ assert.match(index, /handleViewportDoubleClick/, 'double-clicking the viewport c
 assert.match(index, /splatCorrectionTransformTarget\(/, 'gizmo attachment can retarget from scene placement to splat correction draft');
 assert.match(index, /sceneTransform/, 'splat scene placement is tracked separately from asset correction metadata');
 assert.match(index, /window\.kaminosSplatCorrectionModeDebugState/, 'browser witnesses can inspect correction-mode target and dirty state');
+assert.match(index, /window\.kaminosSplatPivotDebugState/, 'browser witnesses can inspect corrected splat pivot and visual-anchor state');
 assert.match(index, /window\.kaminosSetSplatCorrectionDraftTransform/, 'browser witnesses can move the correction draft without DOM inference');
 assert.match(index, /axisFlips/, 'splat correction metadata includes asset-local axis flip state');
 assert.match(index, /function toggleSplatCorrectionAxisFlip\(/, 'splat correction mode can flip axes without mutating scene placement');

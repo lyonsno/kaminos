@@ -19,5 +19,12 @@ assert.match(docs, /axisFlips/, 'Splat asset docs include correction axis flips'
 assert.match(docs, /orientation\.rotation/, 'Splat asset docs include orientation correction');
 assert.match(docs, /centroidOffset/, 'Splat asset docs include centroid correction');
 assert.match(docs, /crop/, 'Splat asset docs include crop correction');
+assert.match(docs, /bake_normals\.py/, 'Splat asset docs explain how the normals baking pipeline consumes correction sidecars');
+assert.match(docs, /bake_materials\.py/, 'Splat asset docs explain how the material baking pipeline consumes correction sidecars');
+assert.match(docs, /nx,\s*ny,\s*nz/, 'Splat asset docs name baked normal vertex attributes');
+assert.match(docs, /roughness/, 'Splat asset docs name baked roughness vertex attributes');
+assert.match(docs, /metallic/, 'Splat asset docs name baked metallic vertex attributes');
+assert.match(docs, /sidecar-corrected orientation/i, 'Splat asset docs state baking is relative to the sidecar-corrected orientation');
+assert.match(docs, /reversible sidecar state/i, 'Splat asset docs preserve crop as reversible sidecar state');
 assert.match(docs, /not a real Gaussian renderer/i, 'Splat asset docs preserve the render-handoff honesty boundary');
 assert.match(docs, /direct reingest/i, 'Splat asset docs explain direct reingest behavior');

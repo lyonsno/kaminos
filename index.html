@@ -1174,6 +1174,48 @@ function composeSplatVisualTransform(sceneTransform = {}, correction = {}) {
   };
 }
 
+function composeSplatObjectPivotTransform(sceneTransform = {}, correction = {}) {
+  const visualTransform = composeSplatVisualTransform(sceneTransform, correction);
+  const normalized = normalizeSplatCorrection(correction);
+  const scenePlacement = cloneTransformState(sceneTransform);
+  return {
+    ...visualTransform,
+    position: scenePlacement.position.map((value, index) => value + normalized.centroidOffset[index]),
+  };
+}
+
+function splatVisualRootFor(object) {
+  return object?.userData?.kaminosSplatVisualRoot || null;
+}
+
+function applySplatVisualRootOffset(record, sceneTransform = record?.sceneTransform, correction = record?.splat?.correction) {
+  const visualRoot = splatVisualRootFor(record?.object);
+  if (!record?.object || !visualRoot) return null;
+  const scenePlacement = cloneTransformState(sceneTransform);
+  record.object.updateMatrixWorld?.(true);
+  const anchorWorld = new THREE.Vector3(...scenePlacement.position);
+  const anchorLocal = record.object.worldToLocal(anchorWorld.clone());
+  visualRoot.position.copy(anchorLocal);
+  visualRoot.rotation.set(0, 0, 0);
+  visualRoot.scale.set(1, 1, 1);
+  visualRoot.updateMatrixWorld?.(true);
+  return anchorLocal.toArray();
+}
+
+function applySplatVisualRootOffsetForObject(object, sceneTransform = {}, correction = {}) {
+  const visualRoot = splatVisualRootFor(object);
+  if (!object || !visualRoot) return null;
+  const scenePlacement = cloneTransformState(sceneTransform);
+  object.updateMatrixWorld?.(true);
+  const anchorWorld = new THREE.Vector3(...scenePlacement.position);
+  const anchorLocal = object.worldToLocal(anchorWorld.clone());
+  visualRoot.position.copy(anchorLocal);
+  visualRoot.rotation.set(0, 0, 0);
+  visualRoot.scale.set(1, 1, 1);
+  visualRoot.updateMatrixWorld?.(true);
+  return anchorLocal.toArray();
+}
+
 function splatSceneTransformState(record) {
   if (!record) return identitySceneTransform();
   return cloneTransformState(record.sceneTransform || sceneObjectTransformState(record.object));
@@ -1192,7 +1234,8 @@ function applySplatCorrectionToRecord(record, correction = record?.splat?.correc
   const nextCorrection = normalizeSplatCorrection(correction);
   if (record.splat) record.splat.correction = nextCorrection;
   if (!record.sceneTransform) setSceneObjectSceneTransform(record, sceneObjectTransformState(record.object));
-  applySceneObjectTransformState(record.object, composeSplatVisualTransform(record.sceneTransform, nextCorrection));
+  applySceneObjectTransformState(record.object, composeSplatObjectPivotTransform(record.sceneTransform, nextCorrection));
+  applySplatVisualRootOffset(record, record.sceneTransform, nextCorrection);
   applySplatPointCloudCropPreview(record);
   if (record.object?.userData?.kaminosSceneObject) {
     record.object.userData.kaminosSceneObject.splat = record.splat;
@@ -1205,10 +1248,11 @@ function syncSplatSceneTransformFromVisual(record) {
   const visual = sceneObjectTransformState(record.object);
   const correction = normalizeSplatCorrection(record.splat?.correction);
   setSceneObjectSceneTransform(record, {
-    position: visual.position,
+    position: visual.position.map((value, index) => value - correction.centroidOffset[index]),
     rotation: visual.rotation.map((value, index) => value - correction.orientation.rotation[index]),
     scale: visual.scale.map((value, index) => value * correction.axisFlips[index]),
   });
+  applySplatVisualRootOffset(record, record.sceneTransform, correction);
 }
 
 function splatAssetRouteIdentity(splat = {}) {
@@ -2427,6 +2471,36 @@ window.kaminosSplatPreviewDebugState = function(id = null) {
     excludedVisible: !!preview.excludedPoints?.visible,
     includedOpacity: preview.includedMaterial?.opacity ?? null,
     excludedOpacity: preview.excludedMaterial?.opacity ?? null,
+  };
+};
+
+window.kaminosSplatPivotDebugState = function(id = null) {
+  const record = id
+    ? sceneObjects.find(item => item.id === id)
+    : selectedSplatRecord() || sceneObjects.find(item => item.type === 'splat');
+  if (!record || record.type !== 'splat') return null;
+  const visualRoot = splatVisualRootFor(record.object);
+  const sceneTransform = splatSceneTransformState(record);
+  const correction = normalizeSplatCorrection(record.splat?.correction);
+  record.object?.updateMatrixWorld?.(true);
+  visualRoot?.updateMatrixWorld?.(true);
+  const objectPivot = record.object
+    ? record.object.getWorldPosition(new THREE.Vector3()).toArray()
+    : null;
+  const sceneAnchor = [...sceneTransform.position];
+  const correctionPivot = sceneTransform.position.map((value, index) => value + correction.centroidOffset[index]);
+  const visualAnchor = visualRoot
+    ? visualRoot.localToWorld(new THREE.Vector3(0, 0, 0)).toArray()
+    : null;
+  return {
+    objectId: record.id,
+    sceneAnchorWorldPosition: sceneAnchor,
+    objectPivotWorldPosition: objectPivot,
+    correctionPivotWorldPosition: correctionPivot,
+    visualAnchorWorldPosition: visualAnchor,
+    visualRootLocalPosition: visualRoot?.position?.toArray?.() || null,
+    sceneTransform,
+    correction,
   };
 };
 
@@ -4648,6 +4722,8 @@ async function greenroomImportMesh(url, fileName, display) {
 
 function createSplatSceneObjectPlaceholder({ url, fileName, display, metadata = {} } = {}) {
   const group = new THREE.Group();
+  const visualRoot = new THREE.Group();
+  visualRoot.name = 'splat-visual-root';
   const marker = new THREE.Mesh(
     new THREE.BoxGeometry(1.35, 1.35, 1.35),
     new THREE.MeshStandardMaterial({
@@ -4663,8 +4739,10 @@ function createSplatSceneObjectPlaceholder({ url, fileName, display, metadata = 
   );
   marker.castShadow = false;
   marker.receiveShadow = false;
-  group.add(marker);
+  visualRoot.add(marker);
+  group.add(visualRoot);
   group.name = display?.title || metadata.label || fileName || 'Splat placeholder';
+  group.userData.kaminosSplatVisualRoot = visualRoot;
   group.userData.kaminosSplatPlaceholder = {
     schema: RENDER_HANDOFF_SCHEMA,
     source: url || null,
@@ -4931,6 +5009,8 @@ function applySplatPointCloudCropPreview(record) {
 
 function createSplatPointCloudObject(pointCloud, { url, fileName, display, metadata = {} } = {}) {
   const group = new THREE.Group();
+  const visualRoot = new THREE.Group();
+  visualRoot.name = 'splat-visual-root';
   const pointSize = Math.max(0.012, Math.min(0.085, 0.62 / Math.sqrt(pointCloud.pointCount)));
   const includedMaterial = new THREE.PointsMaterial({
     size: pointSize,
@@ -4965,9 +5045,11 @@ function createSplatPointCloudObject(pointCloud, { url, fileName, display, metad
   includedPoints.renderOrder = 10;
   excludedPoints.renderOrder = 9;
   excludedPoints.visible = false;
-  group.add(excludedPoints);
-  group.add(includedPoints);
+  visualRoot.add(excludedPoints);
+  visualRoot.add(includedPoints);
+  group.add(visualRoot);
   group.name = display?.title || metadata.label || fileName || 'Splat point cloud';
+  group.userData.kaminosSplatVisualRoot = visualRoot;
   group.userData.kaminosSplatPointCloudPreview = {
     sourcePositions: pointCloud.positions,
     sourceColors: pointCloud.colors,
@@ -5084,7 +5166,8 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
   };
   const sceneTransform = cloneTransformState(metadata.sceneTransform || metadata.transform || sceneObjectTransformState(object));
   if (splat.correction) {
-    applySceneObjectTransformState(object, composeSplatVisualTransform(sceneTransform, splat.correction));
+    applySceneObjectTransformState(object, composeSplatObjectPivotTransform(sceneTransform, splat.correction));
+    applySplatVisualRootOffsetForObject(object, sceneTransform, splat.correction);
   }
   scene.add(object);
   const record = registerSceneObject(object, {

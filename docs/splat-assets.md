@@ -111,18 +111,37 @@ Kaminos keeps scene placement separate from splat correction metadata.
 - Scene placement answers: where is this object in the current scene?
 - Asset correction answers: how should this source splat be oriented, flipped, centered, and cropped whenever it is imported?
 
-Pivot correction is a visible marker edit, not a scene translation edit. Moving the Pivot target updates `centroidOffset` and moves the pivot marker relative to the splat, but the splat preview position stays anchored at the scene placement.
+Pivot correction is a visible marker edit, not a scene translation edit. Moving the Pivot target updates `centroidOffset` and moves the working object pivot relative to the splat, but the splat preview position stays anchored at the scene placement. When a corrected splat is imported, the `THREE.Object3D` pivot is placed at the saved pivot so transform controls rotate and scale around the corrected pivot immediately.
 
 The preview and render handoff compose both without using `centroidOffset` as scene translation:
 
 ```text
-visual position = sceneTransform.position
-pivot marker = sceneTransform.position + centroidOffset
+visible splat anchor = sceneTransform.position
+object pivot = sceneTransform.position + centroidOffset
+visual root local offset = inverse(object pivot transform) * sceneTransform.position
 visual rotation = sceneTransform.rotation + orientation.rotation
 visual scale = sceneTransform.scale * axisFlips
 ```
 
-This lets a correction move the pivot marker or flip an asset preview without dirtying the scene object's authored placement.
+This lets a correction move the pivot or flip an asset preview without dirtying the scene object's authored placement or making the visible splat jump when it is imported.
+
+## Material Baking Interaction
+
+Human Splatipede consumes the same sidecar before material baking. The intended flow is:
+
+```text
+SHARP -> trim_splats -> Kaminos sidecar correction -> bake normals/materials
+```
+
+The baking scripts `bake_normals.py` and `bake_materials.py` read `<asset>.kaminos-splat.json` when it is present. They apply `orientation.rotation`, `axisFlips`, `centroidOffset`, and `crop` before projecting splats to the source image, so baked normals and materials are relative to the sidecar-corrected orientation rather than the raw SHARP orientation.
+
+The scripts add per-vertex PBR attributes to the PLY:
+
+- `nx, ny, nz`: baked normal. Cropped-out or unprojected splats keep the default `(0, -1, 0)`.
+- `roughness`: baked roughness. Cropped-out or unprojected splats keep the default `0.5`.
+- `metallic`: baked metallic value. Cropped-out or unprojected splats keep the default `0.0`.
+
+Crop remains reversible sidecar state. `trim_splats.py` may destructively remove low-confidence fog before Kaminos, but Kaminos `crop.enabled`, `crop.min`, and `crop.max` should not rewrite or delete the PLY. Consumers either skip cropped-out splats at load/projection time or mark them inactive while preserving the source asset as the complete record.
 
 ## Render-Handoff Boundary
 

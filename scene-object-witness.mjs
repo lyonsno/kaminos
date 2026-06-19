@@ -2530,9 +2530,11 @@ async function runSplatCorrectionSidecarScenario(ws) {
       await wait(250);
       const reloadedSceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const reloadedSplat = reloadedSceneDebug.find(record => record.type === 'splat') || null;
+      const reloadedPivotBeforeMode = window.kaminosSplatPivotDebugState?.(reloadedSplat?.id) || null;
       const reloadedPreviewBeforeMode = window.kaminosSplatPreviewDebugState?.(reloadedSplat?.id) || null;
       const enteredReloadedMode = await window.enterSplatCorrectionMode(reloadedSplat?.id);
       await wait(50);
+      const reloadedPivotInMode = window.kaminosSplatPivotDebugState?.(reloadedSplat?.id) || null;
       const reloadedPreviewInMode = window.kaminosSplatPreviewDebugState?.(reloadedSplat?.id) || null;
       const exitedReloadedMode = window.exitSplatCorrectionMode({ revert: false, silent: true });
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(reloadedSplat?.id) || null;
@@ -2543,8 +2545,10 @@ async function runSplatCorrectionSidecarScenario(ws) {
         savedAssetEntry,
         firstSplat,
         reloadedSplat,
+        reloadedPivotBeforeMode,
         reloadedPreviewBeforeMode,
         enteredReloadedMode,
+        reloadedPivotInMode,
         reloadedPreviewInMode,
         exitedReloadedMode,
         handoffDebug,
@@ -2565,11 +2569,19 @@ async function runSplatCorrectionSidecarScenario(ws) {
       || reloaded.splat.correction.crop?.enabled !== true
       || reloaded.splat.correction.centroidOffset?.[0] !== 0.5
       || reloaded.splat.correction.centroidOffset?.[2] !== 0
-      || reloaded.transform?.position?.[0] !== 0
+      || reloaded.sceneTransform?.position?.[0] !== 0
       || reloaded.transform?.position?.[1] !== 0
       || reloaded.transform?.position?.[2] !== 0
       || reloaded.transform?.rotation?.[1] !== 0.2) {
     throw new Error(`splat correction did not reload from sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const reloadedPivotBeforeMode = lastEvidence.splatCorrectionSidecar.reloadedPivotBeforeMode;
+  if (!reloadedPivotBeforeMode
+      || Math.abs(reloadedPivotBeforeMode.objectPivotWorldPosition?.[0] - 0.5) > 1e-6
+      || Math.abs(reloadedPivotBeforeMode.sceneAnchorWorldPosition?.[0] - 0) > 1e-6
+      || Math.abs(reloadedPivotBeforeMode.visualAnchorWorldPosition?.[0] - 0) > 1e-6
+      || Math.abs(reloadedPivotBeforeMode.correctionPivotWorldPosition?.[0] - 0.5) > 1e-6) {
+    throw new Error(`saved splat correction did not import with corrected pivot while preserving visual anchor: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
   const caps = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.capabilities || {};
   if (caps.realSplatRendering !== false || caps.meshDepthOcclusion !== false) {
@@ -2638,8 +2650,10 @@ async function runSplatCorrectionModeScenario(ws) {
         scale: [1, 1, 1],
       });
       const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const pivotAfterDraft = window.kaminosSplatPivotDebugState?.(splat.id) || null;
       const flipDraft = window.kaminosToggleSplatCorrectionAxisFlip('x');
       const sceneAfterFlip = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const pivotAfterFlip = window.kaminosSplatPivotDebugState?.(splat.id) || null;
       const cropEnabled = document.querySelector('[data-splat-correction-field="crop.enabled"]');
       if (!cropEnabled) throw new Error('Splat Correction Mode witness could not find crop enabled control');
       cropEnabled.checked = true;
@@ -2684,8 +2698,10 @@ async function runSplatCorrectionModeScenario(ws) {
         entered,
         draft,
         sceneAfterDraft,
+        pivotAfterDraft,
         flipDraft,
         sceneAfterFlip,
+        pivotAfterFlip,
         cropToggleDraft,
         sceneAfterCropToggle,
         cropMode,
@@ -2725,12 +2741,15 @@ async function runSplatCorrectionModeScenario(ws) {
   if (!flipPreservedSceneTransform) {
     throw new Error(`splat correction axis flip dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
-  const visual = evidence.sceneAfterDraft?.transform;
+  const visual = evidence.pivotAfterDraft;
   if (!visual
-      || Math.abs(visual.position?.[0] - 1.0) > 1e-6
-      || Math.abs(visual.position?.[1] - 0.25) > 1e-6
-      || Math.abs(visual.position?.[2] + 0.5) > 1e-6
-      || Math.abs(visual.rotation?.[2] - 0.25) > 1e-6) {
+      || Math.abs(visual.visualAnchorWorldPosition?.[0] - 1.0) > 1e-6
+      || Math.abs(visual.visualAnchorWorldPosition?.[1] - 0.25) > 1e-6
+      || Math.abs(visual.visualAnchorWorldPosition?.[2] + 0.5) > 1e-6
+      || Math.abs(visual.objectPivotWorldPosition?.[0] - 1.2) > 1e-6
+      || Math.abs(visual.objectPivotWorldPosition?.[1] - 0.55) > 1e-6
+      || Math.abs(visual.objectPivotWorldPosition?.[2] + 0.1) > 1e-6
+      || Math.abs(evidence.sceneAfterDraft?.transform?.rotation?.[2] - 0.25) > 1e-6) {
     throw new Error(`splat correction pivot edit moved splat preview: ${JSON.stringify(evidence)}`);
   }
   const flippedVisual = evidence.sceneAfterFlip?.transform;
