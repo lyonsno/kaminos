@@ -2606,6 +2606,9 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (evidence.splatObject?.splat?.previewKind === 'point-cloud') {
     const frame = evidence.overlayDebug?.lastFrame || {};
+    if (frame.modelMatrixFrameMode !== 'pbrnext-setModelMatrix-owned') {
+      throw new Error(`real hybrid splat overlay did not hand model matrix ownership to PBRnext: ${JSON.stringify(evidence)}`);
+    }
     if (frame.assetFrameMode !== 'raw-ply-to-normalized-preview'
       || !Array.isArray(frame.rawAssetToPreviewMatrix)
       || frame.rawAssetToPreviewMatrix.length !== 16

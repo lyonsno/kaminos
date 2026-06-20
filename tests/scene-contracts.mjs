@@ -108,6 +108,9 @@ assert.match(index, /function splatRawAssetToPreviewMatrix\(/, 'Hybrid Renderer 
 assert.match(index, /function hybridSplatOverlayProjectionMatrixForPbrnext\(/, 'Hybrid Renderer overlay compensates PBRnext camera projection into the Kaminos/Three screen frame');
 assert.match(index, /function hybridSplatOverlayProjectionProbe\(/, 'Hybrid Renderer overlay exposes a projection probe for camera-coherence witnesses');
 assert.match(index, /pbrnext-vertical-flip-precompensated/, 'Hybrid Renderer overlay records the PBRnext projection compensation mode');
+assert.match(index, /modelMatrixFrameMode:\s*'pbrnext-setModelMatrix-owned'/, 'Hybrid Renderer overlay records that PBRnext owns setModelMatrix transform application');
+assert.match(index, /const overlayViewMatrix = new THREE\.Matrix4\(\)\.copy\(camera\.matrixWorldInverse\)/, 'Hybrid Renderer overlay passes camera view without baking object matrix once PBRnext owns setModelMatrix');
+assert.match(index, /const cameraPosition = new Float32Array\(cameraWorld\.toArray\(\)\)/, 'Hybrid Renderer overlay passes world camera position for PBRnext model-local conversion');
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');

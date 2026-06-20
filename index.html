@@ -1065,13 +1065,14 @@ function updateHybridSplatOverlayFrame() {
   const overlayAssetWorldMatrix = assetFrame
     ? new THREE.Matrix4().multiplyMatrices(visualRoot.matrixWorld, assetFrame.matrix)
     : new THREE.Matrix4().copy(visualRoot.matrixWorld);
-  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, overlayAssetWorldMatrix);
+  const overlayViewMatrix = new THREE.Matrix4().copy(camera.matrixWorldInverse);
+  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(overlayViewMatrix, overlayAssetWorldMatrix);
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
   const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(overlayAssetWorldMatrix).invert());
-  const view = new Float32Array(effectiveViewMatrix.elements);
+  const view = new Float32Array(overlayViewMatrix.elements);
   const overlayProjectionMatrix = hybridSplatOverlayProjectionMatrixForPbrnext(camera.projectionMatrix);
   const projection = new Float32Array(overlayProjectionMatrix.elements);
-  const cameraPosition = new Float32Array(cameraLocal.toArray());
+  const cameraPosition = new Float32Array(cameraWorld.toArray());
   const viewport = currentHybridOverlayViewport();
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
   handle.setModelMatrix(new Float32Array(overlayAssetWorldMatrix.elements));
@@ -1084,6 +1085,7 @@ function updateHybridSplatOverlayFrame() {
     canvasMode: 'dual-canvas-overlay',
     correctionAppliedMode: 'visual-root-world-matrix',
     assetFrameMode: assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local',
+    modelMatrixFrameMode: 'pbrnext-setModelMatrix-owned',
     cropAppliedByRenderer: false,
     viewport,
     objectWorldMatrix: Array.from(record.object.matrixWorld.elements),
@@ -1093,11 +1095,13 @@ function updateHybridSplatOverlayFrame() {
     rawAssetToPreviewScale: assetFrame?.scale || null,
     rawAssetBoundsCenter: assetFrame?.center || null,
     rawAssetBoundsSize: assetFrame?.size || null,
+    overlayViewMatrix: Array.from(overlayViewMatrix.elements),
     effectiveViewMatrix: Array.from(effectiveViewMatrix.elements),
     projectionMatrix: Array.from(camera.projectionMatrix.elements),
     overlayProjectionMatrix: Array.from(overlayProjectionMatrix.elements),
     projectionFrameMode: 'pbrnext-vertical-flip-precompensated',
-    cameraPositionInSplatLocal: Array.from(cameraPosition),
+    cameraPositionWorld: Array.from(cameraPosition),
+    cameraPositionInSplatLocal: Array.from(cameraLocal.toArray()),
     splatCorrection: normalizeSplatCorrection(record.splat?.correction),
     overlayCapabilities: handle.capabilities || null,
     sourceIdentity: handle.sourceIdentity || null,
