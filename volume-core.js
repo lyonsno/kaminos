@@ -1781,16 +1781,25 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.10,
     1.0
   );
+  let bonfirePrimaryVisibleFrontEmission = clamp(
+    bonfireTopologyPacketTransfer * (1.34 + bonfireRadianceBreakup * 0.32)
+      + bonfireTopologyRadianceCarrier * (0.64 + bonfireRadianceBreakup * 0.18)
+      + bonfireVisibleFlamePacketGate * (0.42 + bonfireRadianceBreakup * 0.10)
+      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.32
+      + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.24,
+    0.0,
+    3.0
+  );
   let bonfireRadianceBirth = clamp(
-    bonfireFireBirth * bonfireFireSourceBinRelief * bonfireRadianceSourceGate * 0.14
-      + bonfireFrontContactRadiance * bonfireRadianceBreakup * 0.72
-      + bonfireTopologyRadianceCarrier * bonfireRadianceBreakup * 0.12
-      + bonfireVisibleFlamePacketGate * bonfireRadianceBreakup * 0.22
-      + bonfireFuelHeatContact * bonfireRadianceSourceGate * 0.22
-      + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.38
-      + bonfireInteriorEmissionBridge * 0.42
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * bonfireRadianceSourceGate * 0.28
-      + bonfireEmberRing * bonfireRadianceSourceGate * 0.12,
+    bonfirePrimaryVisibleFrontEmission * (0.92 + bonfireRadianceBreakup * 0.22)
+      + bonfireFrontContactRadiance * bonfireRadianceBreakup * bonfireFrontLiftGate * 0.24
+      + bonfireTopologyRadianceCarrier * bonfireRadianceBreakup * 0.10
+      + bonfireFireBirth * bonfireFireSourceBinRelief * bonfireRadianceSourceGate * 0.04
+      + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.06
+      + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.18
+      + bonfireInteriorEmissionBridge * bonfireVisibleSourcePlugRelief * 0.18
+      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * bonfireRadianceSourceGate * 0.12
+      + bonfireEmberRing * bonfireRadianceSourceGate * 0.04,
     0.0,
     2.4
   ) * (0.72 + bonfireRadianceBreakup * 0.34);
@@ -2054,7 +2063,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     3.0
   );
-  let bonfireVisibleFireCarrierBirth = bonfireTransportedEmissionDetail * (0.56 + bonfireRadianceBreakup * 0.12) * max(0.30, bonfireVisibleFireFrontGate)
+  let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFrontEmission * (0.72 + bonfireRadianceBreakup * 0.18)
+    + bonfireTransportedEmissionDetail * (0.34 + bonfireRadianceBreakup * 0.08) * max(0.30, bonfireVisibleFireFrontGate)
     + bonfireFrontAuthoredVisibleFireBirth
     + bonfireTopologyPacketTransfer * bonfireVisibleFireFrontGate * 0.10
     + bonfireRadianceBirth * 0.08 * bonfireVisibleSourcePlugRelief

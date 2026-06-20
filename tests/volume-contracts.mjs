@@ -419,6 +419,9 @@ assert.match(core, /bonfireRadianceBirth[\s\S]*bonfireTopologyRadianceCarrier/, 
 assert.match(core, /bonfireTopologyPacketTransfer/, 'bonfire sidecar-to-visible transfer has a named packet-preserving topology carrier');
 assert.match(core, /bonfireVisibleFlamePacketGate/, 'bonfire visible flame transfer has a named packet gate so sidecar topology does not become a smooth luminous body');
 assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleFlamePacketGate/, 'bonfire flame storage must route through the packet-preserving sidecar transfer gate');
+assert.match(core, /bonfirePrimaryVisibleFrontEmission/, 'bonfire visible emission has a named primary front/topology source instead of broad source occupancy plus topology garnish');
+assert.match(core, /let bonfireRadianceBirth = clamp\(\s*bonfirePrimaryVisibleFrontEmission/, 'bonfire radiance birth must start from primary front/topology emission');
+assert.match(core, /let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFrontEmission/, 'bonfire visible-fire carrier birth must start from primary front/topology emission');
 assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire visible-fire carrier storage must receive sidecar packet topology rather than only broad brightness');
 assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire fire-lick breakup must receive sidecar packet topology before rendering');
 assert.match(core, /visibleFireCarrier/, 'bonfire route names fireLayer.z as a visible-fire carrier rather than cosmetic detail');
