@@ -57,9 +57,12 @@ assert.match(index, /clay_sculpt_particles/, 'clay route accepts an explicit par
 assert.match(index, /clay_brush_radius/, 'clay route accepts pointer brush radius');
 assert.match(index, /clay_brush_strength/, 'clay route accepts pointer brush strength');
 assert.match(index, /clay_brush_ramp_steps/, 'clay route accepts pointer brush force ramp steps');
+assert.match(index, /clay_brush_ramp_min_scale/, 'clay route accepts pointer brush ramp floor');
 assert.match(index, /clay-brush-radius/, 'Clay panel exposes pointer brush radius control');
 assert.match(index, /clay-brush-strength/, 'Clay panel exposes pointer brush strength control');
 assert.match(index, /clay-brush-ramp-steps/, 'Clay panel exposes pointer brush force ramp control');
+assert.match(index, /clay-brush-ramp-min-scale/, 'Clay panel exposes pointer brush ramp floor control');
+assert.match(index, /clay-brush-effective-force/, 'Clay panel exposes effective brush force readout');
 assert.match(index, /installClayPointerInteraction/, 'clay route installs pointer drag interaction');
 assert.match(index, /CLAY_BRUSH_HOTKEY\s*=\s*'b'/, 'clay route defines hold-B as the brush/camera arbitration hotkey');
 assert.match(index, /clayBrushModifierActive/, 'clay route tracks brush hotkey state');
@@ -217,6 +220,7 @@ assert.match(core, /radius:\s*pointerCollider\.radius/, 'clay pointer hit record
 assert.match(core, /strength:\s*pointerCollider\.strength/, 'clay pointer hit records effective pointer strength');
 assert.match(core, /requestedStrength/, 'clay pointer hit records requested pre-ramp pointer strength');
 assert.match(core, /strengthScale/, 'clay pointer hit records ramp strength scale');
+assert.match(core, /brushRampMinScale/, 'clay pointer hit records requested ramp floor');
 assert.match(core, /CLAY_BRUSH_BOUNDARY_POLICY/, 'clay core names its brush boundary policy');
 assert.match(core, /clayBrushBoundaryPolicy/, 'clay debug state records brush boundary policy');
 assert.match(core, /clayBrushBoundaryClampCount/, 'clay debug state records brush boundary clamp count');
@@ -330,7 +334,9 @@ assert.match(witness, /corner smoke did not exercise corner-band deformation/, '
 assert.match(witness, /requestedBrushRadius/, 'clay witness can verify routed pointer brush radius');
 assert.match(witness, /requestedBrushStrength/, 'clay witness can verify routed pointer brush strength');
 assert.match(witness, /requestedBrushRampSteps/, 'clay witness can verify routed pointer brush force ramp');
+assert.match(witness, /requestedBrushRampMinScale/, 'clay witness can verify routed pointer brush ramp floor');
 assert.match(witness, /sculpt brush ramp did not reduce final pointer strength/, 'clay witness rejects full-throttle sculpt brush ramp false closure');
+assert.match(witness, /sculpt brush ramp floor did not match route/, 'clay witness rejects ramp floor route/report mismatch');
 assert.match(witness, /Input\.dispatchKeyEvent/, 'clay witness sends real keyboard input for brush modifier mode');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real pointer input through Chrome');
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');

@@ -519,19 +519,25 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div class="slider-row">
         <span class="slider-label">Brush size</span>
-        <input type="range" id="clay-brush-radius" min="0.06" max="0.32" step="0.01" value="0.17">
+        <input type="range" id="clay-brush-radius" min="0.02" max="0.50" step="0.01" value="0.17">
         <span class="slider-val" id="clay-brush-radius-val">0.17</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Brush force</span>
-        <input type="range" id="clay-brush-strength" min="0.25" max="2.20" step="0.05" value="1.18">
-        <span class="slider-val" id="clay-brush-strength-val">1.18</span>
+        <input type="range" id="clay-brush-strength" min="0.01" max="2.20" step="0.01" value="0.45">
+        <span class="slider-val" id="clay-brush-strength-val">0.45</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Force ramp</span>
-        <input type="range" id="clay-brush-ramp-steps" min="0" max="18" step="1" value="10">
-        <span class="slider-val" id="clay-brush-ramp-steps-val">10</span>
+        <input type="range" id="clay-brush-ramp-steps" min="0" max="64" step="1" value="24">
+        <span class="slider-val" id="clay-brush-ramp-steps-val">24</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Ramp floor</span>
+        <input type="range" id="clay-brush-ramp-min-scale" min="0" max="1" step="0.01" value="0.08">
+        <span class="slider-val" id="clay-brush-ramp-min-scale-val">0.08</span>
+      </div>
+      <div class="field"><span class="field-key">Effective force</span><span class="field-val" id="clay-brush-effective-force">0.036 start</span></div>
     </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Solver</span><span class="field-val" id="clay-solver">webgpu-clay-surface-lattice-scaffold-v0</span></div>
@@ -747,12 +753,16 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let clayPrototype = null;
-let clayPointerBrushRadius = 0.17;
-let clayPointerBrushStrength = 1.18;
-let clayPointerBrushRampSteps = 10;
+const CLAY_BRUSH_DEFAULT_RADIUS = 0.17;
+const CLAY_BRUSH_DEFAULT_STRENGTH = 0.45;
+const CLAY_BRUSH_DEFAULT_RAMP_STEPS = 24;
+const CLAY_BRUSH_DEFAULT_RAMP_MIN_SCALE = 0.08;
+let clayPointerBrushRadius = CLAY_BRUSH_DEFAULT_RADIUS;
+let clayPointerBrushStrength = CLAY_BRUSH_DEFAULT_STRENGTH;
+let clayPointerBrushRampSteps = CLAY_BRUSH_DEFAULT_RAMP_STEPS;
+let clayPointerBrushRampMinScale = CLAY_BRUSH_DEFAULT_RAMP_MIN_SCALE;
 let clayBrushModifierActive = false;
 const CLAY_BRUSH_HOTKEY = 'b';
-const CLAY_BRUSH_RAMP_MIN_SCALE = 0.30;
 const CLAY_CUBE_CAMERA_FRAME = Object.freeze({
   position: [0, 1.04, 1.82],
   target: [0, 0.34, 0],
@@ -1741,6 +1751,7 @@ function refreshClayReadout() {
   document.getElementById('clay-primitive-commit').textContent = s.packagePrimitiveCommit || 'none';
   document.getElementById('clay-primitive-contacts').textContent = `${s.primitiveContactActiveCount ?? 0} / ${s.primitiveContactJobCount ?? 0}`;
   document.getElementById('clay-primitive-force').textContent = Number.isFinite(s.primitiveContactForceSum) ? s.primitiveContactForceSum.toFixed(2) : '0.00';
+  refreshClayBrushEffectiveForce(s.clayPointerLastHit);
   document.getElementById('clay-persistent-state').textContent = s.persistentClayStateStatus || 'not-run';
   document.getElementById('clay-state-delta').textContent = Number.isFinite(s.persistentClayMaxDelta) ? s.persistentClayMaxDelta.toFixed(3) : '0.000';
   document.getElementById('clay-settling-ratio').textContent = Number.isFinite(s.persistentClaySettlingRatio) ? s.persistentClaySettlingRatio.toFixed(3) : '--';
@@ -1819,8 +1830,19 @@ function clampClayBrushValue(value, min, max, fallback) {
   return Math.max(min, Math.min(max, parsed));
 }
 
+function refreshClayBrushEffectiveForce(lastHit = null) {
+  const label = document.getElementById('clay-brush-effective-force');
+  if (!label) return;
+  if (lastHit && Number.isFinite(lastHit.strength) && Number.isFinite(lastHit.strengthScale)) {
+    label.textContent = `${lastHit.strength.toFixed(3)} (${lastHit.strengthScale.toFixed(2)}x)`;
+    return;
+  }
+  const startScale = clayPointerBrushRampSteps > 0 ? clayPointerBrushRampMinScale : 1;
+  label.textContent = `${(clayPointerBrushStrength * startScale).toFixed(3)} start`;
+}
+
 function setClayBrushRadius(nextRadius) {
-  clayPointerBrushRadius = clampClayBrushValue(nextRadius, 0.06, 0.32, 0.17);
+  clayPointerBrushRadius = clampClayBrushValue(nextRadius, 0.02, 0.50, CLAY_BRUSH_DEFAULT_RADIUS);
   const input = document.getElementById('clay-brush-radius');
   const label = document.getElementById('clay-brush-radius-val');
   if (input) input.value = clayPointerBrushRadius.toFixed(2);
@@ -1828,28 +1850,42 @@ function setClayBrushRadius(nextRadius) {
 }
 
 function setClayBrushStrength(nextStrength) {
-  clayPointerBrushStrength = clampClayBrushValue(nextStrength, 0.25, 2.20, 1.18);
+  clayPointerBrushStrength = clampClayBrushValue(nextStrength, 0.01, 2.20, CLAY_BRUSH_DEFAULT_STRENGTH);
   const input = document.getElementById('clay-brush-strength');
   const label = document.getElementById('clay-brush-strength-val');
   if (input) input.value = clayPointerBrushStrength.toFixed(2);
   if (label) label.textContent = clayPointerBrushStrength.toFixed(2);
+  refreshClayBrushEffectiveForce();
 }
 
 function setClayBrushRampSteps(nextRampSteps) {
-  clayPointerBrushRampSteps = Math.round(clampClayBrushValue(nextRampSteps, 0, 18, 10));
+  clayPointerBrushRampSteps = Math.round(clampClayBrushValue(nextRampSteps, 0, 64, CLAY_BRUSH_DEFAULT_RAMP_STEPS));
   const input = document.getElementById('clay-brush-ramp-steps');
   const label = document.getElementById('clay-brush-ramp-steps-val');
   if (input) input.value = String(clayPointerBrushRampSteps);
   if (label) label.textContent = String(clayPointerBrushRampSteps);
+  refreshClayBrushEffectiveForce();
+}
+
+function setClayBrushRampMinScale(nextRampMinScale) {
+  clayPointerBrushRampMinScale = clampClayBrushValue(nextRampMinScale, 0, 1, CLAY_BRUSH_DEFAULT_RAMP_MIN_SCALE);
+  const input = document.getElementById('clay-brush-ramp-min-scale');
+  const label = document.getElementById('clay-brush-ramp-min-scale-val');
+  if (input) input.value = clayPointerBrushRampMinScale.toFixed(2);
+  if (label) label.textContent = clayPointerBrushRampMinScale.toFixed(2);
+  refreshClayBrushEffectiveForce();
 }
 
 function initClayBrushControls(params) {
   setClayBrushRadius(params.get('clay_brush_radius') || clayPointerBrushRadius);
   setClayBrushStrength(params.get('clay_brush_strength') || clayPointerBrushStrength);
   setClayBrushRampSteps(params.get('clay_brush_ramp_steps') || clayPointerBrushRampSteps);
+  setClayBrushRampMinScale(params.get('clay_brush_ramp_min_scale') || clayPointerBrushRampMinScale);
   document.getElementById('clay-brush-radius')?.addEventListener('input', event => setClayBrushRadius(event.target.value));
   document.getElementById('clay-brush-strength')?.addEventListener('input', event => setClayBrushStrength(event.target.value));
   document.getElementById('clay-brush-ramp-steps')?.addEventListener('input', event => setClayBrushRampSteps(event.target.value));
+  document.getElementById('clay-brush-ramp-min-scale')?.addEventListener('input', event => setClayBrushRampMinScale(event.target.value));
+  refreshClayBrushEffectiveForce();
 }
 
 function frameClayCamera(cubeMode = false) {
@@ -1937,8 +1973,8 @@ function installClayPointerInteraction(params) {
 
   const sculptBrushStrengthScale = () => {
     if (!sculptPointerRoute || clayPointerBrushRampSteps <= 0 || !dragging) return 1;
-    const rampT = Math.max(0, Math.min(1, pointerDragSampleIndex / Math.max(1, clayPointerBrushRampSteps)));
-    return CLAY_BRUSH_RAMP_MIN_SCALE + (1 - CLAY_BRUSH_RAMP_MIN_SCALE) * rampT;
+    const rampT = Math.max(0, Math.min(1, (pointerDragSampleIndex - 1) / Math.max(1, clayPointerBrushRampSteps)));
+    return clayPointerBrushRampMinScale + (1 - clayPointerBrushRampMinScale) * rampT;
   };
 
   const updateBrushModifier = event => {
@@ -2021,6 +2057,7 @@ function installClayPointerInteraction(params) {
       requestedStrength,
       strengthScale,
       brushRampSteps: sculptPointerRoute ? clayPointerBrushRampSteps : 0,
+      brushRampMinScale: sculptPointerRoute ? clayPointerBrushRampMinScale : 1,
       brushSampleIndex: pointerDragSampleIndex,
       screenX: event.clientX,
       screenY: event.clientY,
