@@ -1478,7 +1478,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var materialDetail = material.w * 0.970;
   var flame = fireLayer.x * 0.938;
   var ember = fireLayer.y * 0.952;
-  var flameDetail = fireLayer.z * 0.922;
+  var visibleFireCarrier = fireLayer.z * 0.922;
+  var flameDetail = visibleFireCarrier;
   var combustionFront = fireLayer.w * 0.930;
   var microSmoke = microLayer.x * 0.972;
   var interfaceShred = microLayer.y * 0.948;
@@ -2027,23 +2028,45 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   flame = max(flame, externalInjection.fire.x);
   ember = max(ember, mix(fireBirth * 0.78 + flame * 0.22, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
   ember = max(ember, externalInjection.fire.y);
-  let bonfirePacketFlameDetailBirth = bonfireScene * (
+  let bonfirePacketVisibleCarrierBirth = bonfireScene * (
     bonfirePacketCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
       + bonfirePacketCombustion.y * 0.34
       + bonfirePacketCombustion.w * 0.18
   ) * (0.52 + bonfireTongues * 0.34 + fireLickOperatorGain * 0.12);
   let columnFlameDetailBirth = (fireBirth * 1.02 + heatExpansion.y * 4.0) * (0.42 + 0.42 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34;
-  let bonfireFlameDetailBirth = bonfireTransportedEmissionDetail * (0.94 + bonfireRadianceBreakup * 0.20)
-    + bonfireRadianceBirth * 0.26
-    + bonfireTopologyPacketTransfer * (0.72 + bonfireRadianceBreakup * 0.18)
-    + bonfireInteriorEmissionBridge * 0.22
-    + heatExpansion.y * 3.2
-    + bonfireCombustion.z * 0.10
-    + bonfirePacketFlameDetailBirth * 0.64
+  flameDetail = flameDetail * mix(1.0, max(0.12, bonfireVisibleSourcePlugRelief), bonfireScene);
+  visibleFireCarrier = flameDetail;
+  let bonfireVisibleFireFrontGate = clamp(
+    max(
+      bonfireFrontLiftGate,
+      smoothstep(0.13, 0.42, bonfireVisualAboveSource) * (1.0 - smoothstep(0.96, 1.28, bonfireVisualAboveSource))
+    )
+      + bonfireTopologyPacketTransfer * 0.06,
+    0.0,
+    1.0
+  );
+  let bonfireFrontAuthoredVisibleFireBirth = clamp(
+    bonfireVisibleFlamePacketGate * (0.72 + bonfireRadianceBreakup * 0.16)
+      + bonfireTopologyPacketTransfer * (1.06 + bonfireRadianceBreakup * 0.26)
+      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.36
+      + bonfireFrontContactRadiance * bonfireVisibleFireFrontGate * 0.24
+      + bonfirePacketVisibleCarrierBirth * 0.46,
+    0.0,
+    3.0
+  );
+  let bonfireVisibleFireCarrierBirth = bonfireTransportedEmissionDetail * (0.56 + bonfireRadianceBreakup * 0.12) * max(0.30, bonfireVisibleFireFrontGate)
+    + bonfireFrontAuthoredVisibleFireBirth
+    + bonfireTopologyPacketTransfer * bonfireVisibleFireFrontGate * 0.10
+    + bonfireRadianceBirth * 0.08 * bonfireVisibleSourcePlugRelief
+    + bonfireInteriorEmissionBridge * bonfireVisibleFireFrontGate * 0.14
+    + heatExpansion.y * 0.92 * bonfireVisibleFireFrontGate
+    + bonfireCombustion.z * 0.08
     + lickBirth.z
-    + fireLick * 0.30;
-  flameDetail = max(flameDetail, mix(columnFlameDetailBirth, bonfireFlameDetailBirth, bonfireScene));
+    + fireLick * 0.18;
+  flameDetail = max(flameDetail, mix(columnFlameDetailBirth, bonfireVisibleFireCarrierBirth, bonfireScene));
+  visibleFireCarrier = flameDetail;
   flameDetail = max(flameDetail, externalInjection.fire.z);
+  visibleFireCarrier = flameDetail;
   combustionFront = max(combustionFront, combustionFrontBirth);
 
   let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.68, bonfireSourceY - 0.08, p.y), bonfireScene);
@@ -2579,8 +2602,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const seedMaterialDetail = isBonfireInitialScene
             ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
             : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
-          const seedFlameDetail = isBonfireInitialScene
-            ? 0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC
+          const seedVisibleAboveSource = fy + 0.74;
+          const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
+          const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
+          const seedVisibleFireCarrierRelief = isBonfireInitialScene
+            ? Math.max(0.16, Math.max(seedVisibleHeightRelief, seedVisibleRadialRelief))
+            : 1;
+          const seedVisibleFireCarrier = isBonfireInitialScene
+            ? (0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
             : 0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2;
           const seedMicroSmoke = isBonfireInitialScene
             ? 0.20 + 0.30 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
@@ -2602,7 +2631,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           data[i + 7] = source * seedMaterialDetail;
           data[i + 8] = source * 0.90;
           data[i + 9] = source * 0.42;
-          data[i + 10] = source * seedFlameDetail;
+          data[i + 10] = source * seedVisibleFireCarrier;
           data[i + 11] = 0;
           data[i + 12] = source * seedMicroSmoke;
           data[i + 13] = source * seedInterfaceShred;
@@ -3610,7 +3639,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const detail = data[i + 7];
       const flame = data[i + 8];
       const ember = data[i + 9];
-      const flameDetail = data[i + 10];
+      const visibleFireCarrier = data[i + 10];
+      const flameDetail = visibleFireCarrier;
       const combustionFront = data[i + 11];
       const combustionFrontTopology = frontData[cell];
       const fireLayer = Math.max(flame, ember, flameDetail, combustionFront);
@@ -3621,7 +3651,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const radianceGain = controlsSnapshot.radiance ?? 1.65;
       const absorptionGain = controlsSnapshot.absorption ?? 0.85;
       const rawRadiance = Math.max(0, flame * 1.22 + ember * 0.46 + flameDetail * 0.40 + fireLick * 1.18 + emberFleck * 0.48 + heat * 0.20);
-      const bonfireEmissionRadiance = Math.max(0, flameDetail * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + combustionFrontTopology * 0.06 + flame * 0.20 + heat * 0.14);
+      const bonfireEmissionRadiance = Math.max(0, visibleFireCarrier * 1.58 + fireLick * 1.42 + ember * 0.52 + emberFleck * 0.46 + combustionFront * 0.16 + combustionFrontTopology * 0.06 + flame * 0.20 + heat * 0.14);
       const radiance = (isBonfireReadbackScene ? bonfireEmissionRadiance : rawRadiance) * radianceGain;
       const extinction = Math.max(0, smokeDensity * 0.74 + microdetail * 0.42 + interfaceShred * 0.34 + detail * 0.12) * (0.34 + absorptionGain * 0.46);
       if (plumeDriftCells.has(cell)) {
@@ -3634,7 +3664,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const frontTopologyWeight = Math.max(0, combustionFrontTopology);
         const fireFlameWeight = Math.max(0, flame * 0.20);
         const fireEmberWeight = Math.max(0, ember * 0.52 + emberFleck * 0.46);
-        const fireFlameDetailWeight = Math.max(0, flameDetail * 1.58);
+        const fireFlameDetailWeight = Math.max(0, visibleFireCarrier * 1.58);
         const fireLickWeight = Math.max(0, fireLick * 1.42);
         const fireHeatWeight = Math.max(0, heat * 0.14);
         const lateralSpeed = Math.hypot(vx, vz);
@@ -3642,7 +3672,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const sourceRadiusNorm = sourceRadius / Math.max(1, gridSize - 1) * 2;
         const fireInteriorWeight = radialDistance < sourceRadiusNorm * 0.70 ? fireWeight : 0;
         const fireRingWeight = radialDistance > sourceRadiusNorm * 0.86 ? fireWeight : 0;
-        const emissionDetailWeight = Math.max(0, flameDetail);
+        const emissionDetailWeight = Math.max(0, visibleFireCarrier);
         const smokeDetailWeight = Math.max(0, microdetail * 0.70 + interfaceShred * 0.55 + detail * 0.32);
         const radialVelocity = radialDistance > 0.0001 ? (nx * vx + nz * vz) / radialDistance : 0;
         smokeWeightSum += smokeWeight;
@@ -3925,11 +3955,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fireFlameSourcePlugRatio = sourcePlugRatioFor('fireFlameWeight', fireFlameWeightSum);
     const fireEmberSourcePlugRatio = sourcePlugRatioFor('fireEmberWeight', fireEmberWeightSum);
     const fireFlameDetailSourcePlugRatio = sourcePlugRatioFor('fireFlameDetailWeight', fireFlameDetailWeightSum);
+    const fireVisibleCarrierSourcePlugRatio = fireFlameDetailSourcePlugRatio;
     const fireLickSourcePlugRatio = sourcePlugRatioFor('fireLickWeight', fireLickWeightSum);
     const fireHeatSourcePlugRatio = sourcePlugRatioFor('fireHeatWeight', fireHeatWeightSum);
     const fireFlameRisingBodyRatio = risingBodyRatioFor('fireFlameWeight', fireFlameWeightSum);
     const fireEmberRisingBodyRatio = risingBodyRatioFor('fireEmberWeight', fireEmberWeightSum);
     const fireFlameDetailRisingBodyRatio = risingBodyRatioFor('fireFlameDetailWeight', fireFlameDetailWeightSum);
+    const fireVisibleCarrierRisingBodyRatio = fireFlameDetailRisingBodyRatio;
     const fireLickRisingBodyRatio = risingBodyRatioFor('fireLickWeight', fireLickWeightSum);
     const fireHeatRisingBodyRatio = risingBodyRatioFor('fireHeatWeight', fireHeatWeightSum);
     const fireChannelSourcePlugDominant = [
@@ -4065,11 +4097,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireFlameSourcePlugRatio,
       fireEmberSourcePlugRatio,
       fireFlameDetailSourcePlugRatio,
+      fireVisibleCarrierSourcePlugRatio,
       fireLickSourcePlugRatio,
       fireHeatSourcePlugRatio,
       fireFlameRisingBodyRatio,
       fireEmberRisingBodyRatio,
       fireFlameDetailRisingBodyRatio,
+      fireVisibleCarrierRisingBodyRatio,
       fireLickRisingBodyRatio,
       fireHeatRisingBodyRatio,
       fireChannelSourcePlugDominant,

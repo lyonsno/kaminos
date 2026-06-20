@@ -324,6 +324,8 @@ assert.match(core, /frontTopologyFlameDetailCoupling/, 'sim readback reports whe
 assert.match(core, /frontTopologyFireLickCoupling/, 'sim readback reports whether sidecar topology survives into fire-lick breakup');
 assert.match(core, /frontTopologyVisibleTransferLoss/, 'sim readback reports when rising sidecar topology is lost before visible flame transfer');
 assert.match(core, /fireFlameDetailSourcePlugRatio/, 'sim readback reports whether flame-detail is the visible source-plug carrier');
+assert.match(core, /fireVisibleCarrierSourcePlugRatio/, 'sim readback exposes the clearer visible-fire carrier alias for legacy flameDetail source-plug evidence');
+assert.match(core, /fireVisibleCarrierRisingBodyRatio/, 'sim readback exposes the clearer visible-fire carrier alias for legacy flameDetail rising-body evidence');
 assert.match(core, /fireLickSourcePlugRatio/, 'sim readback reports whether fire-lick storage is the visible source-plug carrier');
 assert.match(core, /fireHeatSourcePlugRatio/, 'sim readback reports whether heat is the visible source-plug carrier');
 assert.match(core, /fireChannelSourcePlugDominant/, 'sim readback names the dominant visible fire source-plug channel');
@@ -398,7 +400,7 @@ assert.match(core, /bonfireCombustionPacketField/, 'bonfire source uses solver-v
 assert.match(core, /bonfirePacketFireBirth/, 'bonfire fire birth is routed through packetized combustion lobes');
 assert.match(core, /bonfirePacketRisingFireGate/, 'bonfire packet fire is gated out of the base bin and into the rising plume so one source slice cannot dominate radiance');
 assert.match(core, /bonfirePacketLickBirth/, 'bonfire packet combustion feeds fire-lick detail before rendering so visible breakup is simulation-authored');
-assert.match(core, /bonfirePacketFlameDetailBirth/, 'bonfire packet combustion feeds flame-detail birth before rendering so the base cannot collapse into a smooth plug');
+assert.match(core, /bonfirePacketVisibleCarrierBirth/, 'bonfire packet combustion feeds visible-fire carrier birth before rendering so the base cannot collapse into a smooth plug');
 assert.match(core, /bonfirePacketLiftImpulse/, 'bonfire lift is applied to packetized combustion pockets so fire rises as separated lobes');
 assert.match(core, /bonfireSourcePlugSuppressor/, 'bonfire source suppresses the smooth central plug rather than merely adding lobe noise on top');
 assert.match(core, /bonfireCoreHeat/, 'bonfire source splits core heat from visible flame birth before fire transfer');
@@ -417,8 +419,16 @@ assert.match(core, /bonfireRadianceBirth[\s\S]*bonfireTopologyRadianceCarrier/, 
 assert.match(core, /bonfireTopologyPacketTransfer/, 'bonfire sidecar-to-visible transfer has a named packet-preserving topology carrier');
 assert.match(core, /bonfireVisibleFlamePacketGate/, 'bonfire visible flame transfer has a named packet gate so sidecar topology does not become a smooth luminous body');
 assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleFlamePacketGate/, 'bonfire flame storage must route through the packet-preserving sidecar transfer gate');
-assert.match(core, /bonfireFlameDetailBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire flame-detail storage must receive sidecar packet topology rather than only broad brightness');
+assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire visible-fire carrier storage must receive sidecar packet topology rather than only broad brightness');
 assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire fire-lick breakup must receive sidecar packet topology before rendering');
+assert.match(core, /visibleFireCarrier/, 'bonfire route names fireLayer.z as a visible-fire carrier rather than cosmetic detail');
+assert.match(core, /seedVisibleFireCarrier/, 'bonfire CPU seed names fireLayer.z as a visible-fire carrier rather than flame detail');
+assert.match(core, /seedVisibleFireCarrierRelief/, 'bonfire CPU visible-fire carrier seed applies source-plug relief before writing fireLayer.z');
+assert.match(core, /data\[i \+ 10\]\s*=\s*source \* seedVisibleFireCarrier/, 'bonfire CPU seed writes the visible-fire carrier, not a smooth flame-detail blob, into fireLayer.z');
+assert.match(core, /bonfireFrontAuthoredVisibleFireBirth/, 'bonfire visible-fire carrier birth is authored from front/contact/topology evidence');
+assert.match(core, /bonfireVisibleFireCarrierBirth/, 'bonfire visible-fire carrier storage has a clear macro-fire birth name');
+assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireFrontAuthoredVisibleFireBirth/, 'visible-fire carrier storage must route through front-authored birth');
+assert.match(core, /flameDetail = flameDetail \* mix\(1\.0,[\s\S]*bonfireVisibleSourcePlugRelief/, 'existing visible-fire carrier storage must be source-relief damped before new front-authored birth can win');
 assert.match(core, /bonfireVisibleSourcePlugRelief/, 'bonfire visible flame storage has a named relief gate for the smooth source plug');
 assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire flame storage applies visible source-plug relief instead of retaining a smooth lower body');
 assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire fire-lick source birth applies visible source-plug relief before feeding storage');
@@ -436,8 +446,8 @@ assert.match(core, /bonfireEmissionDetailCurlFold/, 'bonfire emission detail mus
 assert.match(core, /bonfireTransportedEmissionDetail[\s\S]*bonfireEmissionDetailCurlFold/, 'transported bonfire emission detail must use curl/contact folding before storage');
 assert.match(core, /bonfireSmokeDetailCurlFold/, 'bonfire smoke detail must have a named curl/contact fold so smoke cannot remain vertical curtains');
 assert.match(core, /bonfireMicroSmokeBirth[\s\S]*bonfireSmokeDetailCurlFold/, 'bonfire smoke-detail birth must use the curl/contact fold instead of only source-layer breakup');
-assert.match(core, /bonfireFlameDetailBirth[\s\S]*bonfireTransportedEmissionDetail/, 'fireLayer.z/flameDetail birth must receive transported emission detail instead of only derived brightness');
-assert.match(core, /flameDetail = max\(flameDetail,[\s\S]*bonfireFlameDetailBirth/, 'fireLayer.z/flameDetail storage must write the transported emission detail birth into the existing lane');
+assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireTransportedEmissionDetail/, 'fireLayer.z visible-fire carrier birth must receive transported emission detail instead of only derived brightness');
+assert.match(core, /flameDetail = max\(flameDetail,[\s\S]*bonfireVisibleFireCarrierBirth/, 'fireLayer.z legacy storage must write the transported visible-fire carrier birth into the existing lane');
 assert.match(core, /let fireBirth = mix\(columnFireBirth, bonfireRadianceBirth, bonfireScene\);/, 'bonfire fire birth must use radiance birth rather than raw lifted flame occupancy');
 assert.doesNotMatch(core, /let fireBirth = mix\(columnFireBirth, bonfireLiftedFlameBirth, bonfireScene\);/, 'bonfire fire birth must not directly render the broad lifted flame occupancy as visible emission');
 assert.match(core, /bonfireFireBirth[\s\S]*bonfireReactionFront/, 'bonfire fire birth must route through reactionFront rather than directly through the smooth source core');
