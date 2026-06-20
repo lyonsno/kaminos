@@ -2512,6 +2512,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const afterSample = sampleCanvas(overlayCanvas);
       const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const previewDebug = window.kaminosSplatPreviewDebugState?.(splatObject?.id) || null;
       const statusText = document.getElementById('splat-hybrid-renderer-status')?.textContent || null;
       return {
         assetEntry,
@@ -2521,6 +2522,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
         startResult,
         overlayDebug,
         handoffDebug,
+        previewDebug,
         statusText,
         beforeSample,
         afterSample,
@@ -2565,6 +2567,17 @@ async function runRealHybridSplatOverlayScenario(ws) {
     || (evidence.overlayCanvas?.width || 0) < 64
     || (evidence.overlayCanvas?.height || 0) < 64) {
     throw new Error(`real hybrid splat overlay canvas has no visible geometry: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.splatObject?.splat?.previewKind === 'point-cloud') {
+    const frame = evidence.overlayDebug?.lastFrame || {};
+    if (frame.assetFrameMode !== 'raw-ply-to-normalized-preview'
+      || !Array.isArray(frame.rawAssetToPreviewMatrix)
+      || frame.rawAssetToPreviewMatrix.length !== 16
+      || frame.rawAssetToPreviewScale <= 0
+      || !Array.isArray(frame.rawAssetBoundsCenter)
+      || frame.rawAssetBoundsCenter.length !== 3) {
+      throw new Error(`real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame: ${JSON.stringify(evidence)}`);
+    }
   }
 }
 

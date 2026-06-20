@@ -905,6 +905,28 @@ function applyHybridSplatOverlayCorrectionIdentity(handle, record) {
   return correctionIdentity;
 }
 
+function splatRawAssetToPreviewMatrix(record) {
+  if (record?.splat?.previewKind !== 'point-cloud') return null;
+  const bounds = record.splat?.bounds || null;
+  const center = Array.isArray(bounds?.center) ? bounds.center.map(Number) : null;
+  const size = Array.isArray(bounds?.size) ? bounds.size.map(Number) : null;
+  if (!center || center.length !== 3 || !center.every(Number.isFinite)
+      || !size || size.length !== 3 || !size.every(Number.isFinite)) {
+    return null;
+  }
+  const maxExtent = Math.max(size[0], size[1], size[2], 1e-6);
+  const scale = 2 / maxExtent;
+  const matrix = new THREE.Matrix4()
+    .makeScale(scale, scale, scale)
+    .multiply(new THREE.Matrix4().makeTranslation(-center[0], -center[1], -center[2]));
+  return {
+    matrix,
+    scale,
+    center,
+    size,
+  };
+}
+
 async function loadHybridSplatOverlayModule() {
   const moduleUrl = hybridSplatOverlayModuleUrl();
   if (hybridSplatOverlayState.module && hybridSplatOverlayState.moduleUrl === moduleUrl) {
@@ -981,15 +1003,19 @@ function updateHybridSplatOverlayFrame() {
   record.object.updateMatrixWorld?.(true);
   const visualRoot = splatVisualRootFor(record.object) || record.object;
   visualRoot.updateMatrixWorld?.(true);
-  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, visualRoot.matrixWorld);
+  const assetFrame = splatRawAssetToPreviewMatrix(record);
+  const overlayAssetWorldMatrix = assetFrame
+    ? new THREE.Matrix4().multiplyMatrices(visualRoot.matrixWorld, assetFrame.matrix)
+    : new THREE.Matrix4().copy(visualRoot.matrixWorld);
+  const effectiveViewMatrix = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, overlayAssetWorldMatrix);
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
-  const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(visualRoot.matrixWorld).invert());
+  const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(overlayAssetWorldMatrix).invert());
   const view = new Float32Array(effectiveViewMatrix.elements);
   const projection = new Float32Array(camera.projectionMatrix.elements);
   const cameraPosition = new Float32Array(cameraLocal.toArray());
   const viewport = currentHybridOverlayViewport();
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
-  handle.setModelMatrix(new Float32Array(record.object.matrixWorld.elements));
+  handle.setModelMatrix(new Float32Array(overlayAssetWorldMatrix.elements));
   handle.setCameraMatrices(view, projection, cameraPosition);
   hybridSplatOverlayState.frameCount += 1;
   hybridSplatOverlayState.lastFrame = {
@@ -998,10 +1024,16 @@ function updateHybridSplatOverlayFrame() {
     source: record.source || null,
     canvasMode: 'dual-canvas-overlay',
     correctionAppliedMode: 'visual-root-world-matrix',
+    assetFrameMode: assetFrame ? 'raw-ply-to-normalized-preview' : 'preview-local',
     cropAppliedByRenderer: false,
     viewport,
     objectWorldMatrix: Array.from(record.object.matrixWorld.elements),
     visualRootWorldMatrix: Array.from(visualRoot.matrixWorld.elements),
+    overlayAssetWorldMatrix: Array.from(overlayAssetWorldMatrix.elements),
+    rawAssetToPreviewMatrix: assetFrame ? Array.from(assetFrame.matrix.elements) : null,
+    rawAssetToPreviewScale: assetFrame?.scale || null,
+    rawAssetBoundsCenter: assetFrame?.center || null,
+    rawAssetBoundsSize: assetFrame?.size || null,
     effectiveViewMatrix: Array.from(effectiveViewMatrix.elements),
     projectionMatrix: Array.from(camera.projectionMatrix.elements),
     cameraPositionInSplatLocal: Array.from(cameraPosition),
