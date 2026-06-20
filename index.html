@@ -853,6 +853,64 @@ function hybridSplatOverlayDebugState() {
   };
 }
 
+function hybridSplatOverlayProjectionMatrixForPbrnext(projectionMatrix) {
+  const compensated = new THREE.Matrix4().copy(projectionMatrix);
+  // PBRnext's standalone overlay internally applies a vertical clip-space flip.
+  // Kaminos already supplies a Three camera in its own screen frame, so pre-flip
+  // the Y projection row to make PBRnext's internal flip cancel back to Kaminos.
+  compensated.elements[5] *= -1;
+  return compensated;
+}
+
+function hybridSplatOverlayPbrnextEffectiveProjection(projectionMatrixPassedToPbrnext) {
+  const effective = new THREE.Matrix4().copy(projectionMatrixPassedToPbrnext);
+  effective.elements[5] *= -1;
+  return effective;
+}
+
+function hybridSplatOverlayProjectToScreen(point, viewMatrix, projectionMatrix, viewport) {
+  const clip = new THREE.Vector4(point[0], point[1], point[2], 1)
+    .applyMatrix4(viewMatrix)
+    .applyMatrix4(projectionMatrix);
+  const safeW = Math.abs(clip.w) > 1e-8 ? clip.w : 1e-8;
+  const ndc = [clip.x / safeW, clip.y / safeW, clip.z / safeW];
+  return {
+    x: (ndc[0] * 0.5 + 0.5) * viewport.width,
+    y: (1 - (ndc[1] * 0.5 + 0.5)) * viewport.height,
+    ndc,
+    clip: [clip.x, clip.y, clip.z, clip.w],
+    w: clip.w,
+  };
+}
+
+function hybridSplatOverlayProjectionProbe(frame = hybridSplatOverlayState.lastFrame) {
+  if (!frame?.effectiveViewMatrix || !frame?.projectionMatrix || !frame?.viewport) return null;
+  const probePoint = Array.isArray(frame.rawAssetBoundsCenter) && frame.rawAssetBoundsCenter.length === 3
+    ? [
+        frame.rawAssetBoundsCenter[0],
+        frame.rawAssetBoundsCenter[1] + (Array.isArray(frame.rawAssetBoundsSize) ? (frame.rawAssetBoundsSize[1] || 0) * 0.25 : 0.25),
+        frame.rawAssetBoundsCenter[2],
+      ]
+    : [0, 0, 0];
+  const viewMatrix = new THREE.Matrix4().fromArray(frame.effectiveViewMatrix);
+  const hostProjection = new THREE.Matrix4().fromArray(frame.projectionMatrix);
+  const overlayProjectionArgument = new THREE.Matrix4().fromArray(frame.overlayProjectionMatrix || frame.projectionMatrix);
+  const overlayEffectiveProjection = hybridSplatOverlayPbrnextEffectiveProjection(overlayProjectionArgument);
+  const uncompensatedOverlayEffectiveProjection = hybridSplatOverlayPbrnextEffectiveProjection(hostProjection);
+  return {
+    schema: 'kaminos.hybrid-splat-overlay.projection-probe.v0',
+    objectId: frame.objectId || null,
+    source: frame.source || null,
+    projectionFrameMode: frame.projectionFrameMode || 'uncompensated',
+    probePoint,
+    probePointRole: 'raw-asset-upper-quarter',
+    viewport: frame.viewport,
+    kaminosPreviewScreen: hybridSplatOverlayProjectToScreen(probePoint, viewMatrix, hostProjection, frame.viewport),
+    pbrnextOverlayScreen: hybridSplatOverlayProjectToScreen(probePoint, viewMatrix, overlayEffectiveProjection, frame.viewport),
+    pbrnextUncompensatedScreen: hybridSplatOverlayProjectToScreen(probePoint, viewMatrix, uncompensatedOverlayEffectiveProjection, frame.viewport),
+  };
+}
+
 function setHybridSplatOverlayStatus(status, error = null) {
   hybridSplatOverlayState.status = status;
   hybridSplatOverlayState.error = error ? String(error.message || error) : null;
@@ -1011,7 +1069,8 @@ function updateHybridSplatOverlayFrame() {
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
   const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(overlayAssetWorldMatrix).invert());
   const view = new Float32Array(effectiveViewMatrix.elements);
-  const projection = new Float32Array(camera.projectionMatrix.elements);
+  const overlayProjectionMatrix = hybridSplatOverlayProjectionMatrixForPbrnext(camera.projectionMatrix);
+  const projection = new Float32Array(overlayProjectionMatrix.elements);
   const cameraPosition = new Float32Array(cameraLocal.toArray());
   const viewport = currentHybridOverlayViewport();
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
@@ -1036,12 +1095,15 @@ function updateHybridSplatOverlayFrame() {
     rawAssetBoundsSize: assetFrame?.size || null,
     effectiveViewMatrix: Array.from(effectiveViewMatrix.elements),
     projectionMatrix: Array.from(camera.projectionMatrix.elements),
+    overlayProjectionMatrix: Array.from(overlayProjectionMatrix.elements),
+    projectionFrameMode: 'pbrnext-vertical-flip-precompensated',
     cameraPositionInSplatLocal: Array.from(cameraPosition),
     splatCorrection: normalizeSplatCorrection(record.splat?.correction),
     overlayCapabilities: handle.capabilities || null,
     sourceIdentity: handle.sourceIdentity || null,
     updatedAt: new Date().toISOString(),
   };
+  hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);
   return hybridSplatOverlayState.lastFrame;
 }
 
@@ -2444,10 +2506,28 @@ window.kaminosResetSelectedSplatCorrection = resetSelectedSplatCorrection;
 window.saveSelectedSplatCorrection = saveSelectedSplatCorrection;
 window.resetSelectedSplatCorrection = resetSelectedSplatCorrection;
 window.kaminosHybridSplatOverlayDebugState = hybridSplatOverlayDebugState;
+window.kaminosHybridSplatOverlayProjectionProbe = () => hybridSplatOverlayProjectionProbe();
 window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
 window.startSelectedSplatHybridRenderer = startSelectedSplatHybridRenderer;
 window.reloadSelectedSplatHybridRenderer = reloadSelectedSplatHybridRenderer;
 window.stopHybridSplatOverlay = stopHybridSplatOverlay;
+window.kaminosCameraDebugState = function() {
+  return {
+    position: camera ? camera.position.toArray() : null,
+    target: controls ? controls.target.toArray() : null,
+    projectionMatrix: camera ? Array.from(camera.projectionMatrix.elements) : null,
+    matrixWorldInverse: camera ? Array.from(camera.matrixWorldInverse.elements) : null,
+  };
+};
+window.kaminosSetCameraDebugPose = function(pose = {}) {
+  if (!camera || !controls) throw new Error('Kaminos camera debug pose unavailable before viewport initialization');
+  if (Array.isArray(pose.position) && pose.position.length === 3) camera.position.fromArray(pose.position);
+  if (Array.isArray(pose.target) && pose.target.length === 3) controls.target.fromArray(pose.target);
+  controls.update();
+  camera.updateMatrixWorld?.();
+  updateHybridSplatOverlayFrame();
+  return window.kaminosCameraDebugState();
+};
 
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;

@@ -105,6 +105,9 @@ assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'select
 assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
 assert.match(index, /function prepareHybridSplatOverlayHost\(/, 'Hybrid Renderer overlay host layout is stamped inline before external modules can mutate it');
 assert.match(index, /function splatRawAssetToPreviewMatrix\(/, 'Hybrid Renderer overlay maps raw PLY coordinates into Kaminos normalized point-cloud preview coordinates');
+assert.match(index, /function hybridSplatOverlayProjectionMatrixForPbrnext\(/, 'Hybrid Renderer overlay compensates PBRnext camera projection into the Kaminos/Three screen frame');
+assert.match(index, /function hybridSplatOverlayProjectionProbe\(/, 'Hybrid Renderer overlay exposes a projection probe for camera-coherence witnesses');
+assert.match(index, /pbrnext-vertical-flip-precompensated/, 'Hybrid Renderer overlay records the PBRnext projection compensation mode');
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');

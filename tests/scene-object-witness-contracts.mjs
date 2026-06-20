@@ -185,6 +185,9 @@ assert.match(witness, /hybrid splat overlay did not expose renderer source ident
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
 assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');
+assert.match(witness, /hybrid splat overlay camera motion inverted relative to Kaminos preview/, 'Real Hybrid Renderer witness fails when the overlay layer moves inverted under camera motion');
+assert.match(witness, /kaminosSetCameraDebugPose/, 'Real Hybrid Renderer witness can move the Kaminos camera through an explicit debug surface');
+assert.match(witness, /kaminosHybridSplatOverlayProjectionProbe/, 'Real Hybrid Renderer witness reads the overlay projection coherence probe');
 assert.match(witness, /kaminosHybridSplatOverlayDebugState/, 'Hybrid Renderer witness reads the explicit overlay debug surface');
 assert.match(witness, /greenroom preview race did not prove delayed route A completed after route B owned preview/, 'Green Room race witness fails if inverted completion is not load-bearing');
 assert.match(witness, /scene-object-meta/, 'Green Room action witness records scene-object source metadata');

@@ -2505,6 +2505,41 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const beforeSample = sampleCanvas(beforeOverlayCanvas);
       const startResult = await window.startSelectedSplatHybridRenderer?.();
       await wait(2200);
+      const cameraPoseA = window.kaminosSetCameraDebugPose?.({ position: [0, 0.6, 3], target: [0, 0, 0] }) || null;
+      await wait(300);
+      const projectionProbeA = window.kaminosHybridSplatOverlayProjectionProbe?.() || null;
+      const cameraPoseB = window.kaminosSetCameraDebugPose?.({ position: [0, 1.55, 3], target: [0, 0, 0] }) || null;
+      await wait(300);
+      const projectionProbeB = window.kaminosHybridSplatOverlayProjectionProbe?.() || null;
+      const screenDelta = (key) => {
+        const a = projectionProbeA?.[key];
+        const b = projectionProbeB?.[key];
+        if (!a || !b) return null;
+        return {
+          x: Number((b.x - a.x).toFixed(4)),
+          y: Number((b.y - a.y).toFixed(4)),
+          a: { x: Number(a.x.toFixed(4)), y: Number(a.y.toFixed(4)) },
+          b: { x: Number(b.x.toFixed(4)), y: Number(b.y.toFixed(4)) },
+        };
+      };
+      const sign = value => Math.abs(value || 0) < 0.001 ? 0 : Math.sign(value);
+      const cameraCoherence = {
+        cameraPoseA,
+        cameraPoseB,
+        projectionProbeA,
+        projectionProbeB,
+        previewDelta: screenDelta('kaminosPreviewScreen'),
+        overlayDelta: screenDelta('pbrnextOverlayScreen'),
+        uncompensatedDelta: screenDelta('pbrnextUncompensatedScreen'),
+      };
+      cameraCoherence.previewYSign = sign(cameraCoherence.previewDelta?.y);
+      cameraCoherence.overlayYSign = sign(cameraCoherence.overlayDelta?.y);
+      cameraCoherence.uncompensatedYSign = sign(cameraCoherence.uncompensatedDelta?.y);
+      cameraCoherence.coherent = cameraCoherence.previewYSign !== 0
+        && cameraCoherence.previewYSign === cameraCoherence.overlayYSign;
+      cameraCoherence.uncompensatedWouldInvert = cameraCoherence.previewYSign !== 0
+        && cameraCoherence.uncompensatedYSign !== 0
+        && cameraCoherence.previewYSign !== cameraCoherence.uncompensatedYSign;
       const overlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
       const computed = overlayCanvas ? getComputedStyle(overlayCanvas) : null;
       const host = document.getElementById('hybrid-splat-overlay-host');
@@ -2523,6 +2558,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
         overlayDebug,
         handoffDebug,
         previewDebug,
+        cameraCoherence,
         statusText,
         beforeSample,
         afterSample,
@@ -2578,6 +2614,16 @@ async function runRealHybridSplatOverlayScenario(ws) {
       || frame.rawAssetBoundsCenter.length !== 3) {
       throw new Error(`real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame: ${JSON.stringify(evidence)}`);
     }
+  }
+  const cameraCoherence = evidence.cameraCoherence || {};
+  if (!cameraCoherence.projectionProbeA || !cameraCoherence.projectionProbeB) {
+    throw new Error(`real hybrid splat overlay did not expose camera coherence projection probes: ${JSON.stringify(evidence)}`);
+  }
+  if (!cameraCoherence.coherent) {
+    throw new Error(`hybrid splat overlay camera motion inverted relative to Kaminos preview: ${JSON.stringify(cameraCoherence)}`);
+  }
+  if (!cameraCoherence.uncompensatedWouldInvert) {
+    throw new Error(`hybrid splat overlay camera witness did not prove the old PBRnext vertical flip failure path: ${JSON.stringify(cameraCoherence)}`);
   }
 }
 
