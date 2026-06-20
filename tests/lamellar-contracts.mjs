@@ -377,6 +377,10 @@ assert.match(witness, /manualEnable/, 'witness can exercise the plain-load Lamel
 assert.match(witness, /manualEnableUi/, 'witness records manual-enable camera and visibility state');
 assert.match(witness, /recipeSmoke/, 'witness can run a focused shell-recipe smoke without the full mutation sweep');
 assert.match(witness, /--recipe-smoke/, 'witness exposes a focused shell-recipe smoke CLI flag');
+assert.match(witness, /recipeComparisonSmoke/, 'witness can run a locked shell-recipe comparison smoke');
+assert.match(witness, /--recipe-comparison-smoke/, 'witness exposes a locked shell-recipe comparison smoke CLI flag');
+assert.match(witness, /recipeComparisonReceipt/, 'witness records per-recipe comparison evidence');
+assert.match(witness, /recipeQualityReceipts/, 'witness records constrained grammar quality receipts across recipes');
 assert.match(witness, /shellRecipeReceipt/, 'witness records focused shell-recipe selection and generated population evidence');
 assert.match(witness, /recipeSmokeReceipt/, 'witness records a focused shell-recipe visual/report receipt');
 assert.match(witness, /cdpTimeoutMs/, 'witness bounds CDP request waits instead of hanging silently');
@@ -387,13 +391,29 @@ assert.match(witness, /mac-screencapture-display/, 'witness records macOS displa
 
 const coreModule = await import(`${pathToFileURL(corePath).href}?contract=${Date.now()}`);
 assert.equal(coreModule.LAMELLAR_SHELL_RECIPE_MODE, 'shell-recipe-composition-v0', 'Lamellar core exposes a stable shell recipe mode');
+assert.equal(
+  coreModule.LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE,
+  'constrained-shell-recipe-grammar-v0',
+  'Lamellar core exposes a stable constrained recipe grammar mode'
+);
 assert.ok(Array.isArray(coreModule.LAMELLAR_SHELL_RECIPE_IDS), 'Lamellar core exports recipe ids for UI/test reuse');
 assert.ok(coreModule.LAMELLAR_SHELL_RECIPE_IDS.includes('diagonal-cage'), 'Lamellar recipe ids include diagonal cage');
 assert.equal(typeof coreModule.controlsForLamellarShellRecipe, 'function', 'Lamellar core exposes recipe-to-controls expansion');
+assert.equal(typeof coreModule.describeLamellarShellRecipeGrammar, 'function', 'Lamellar core exposes recipe grammar descriptions');
+assert.equal(typeof coreModule.evaluateLamellarShellRecipeQuality, 'function', 'Lamellar core exposes recipe quality receipts');
 {
   const diagonalControls = coreModule.controlsForLamellarShellRecipe('diagonal-cage', { seed: 17 });
+  const diagonalGrammar = coreModule.describeLamellarShellRecipeGrammar('diagonal-cage');
   assert.equal(diagonalControls.shellRecipe, 'diagonal-cage', 'recipe controls record requested recipe id');
   assert.equal(diagonalControls.shellRecipeMode, 'shell-recipe-composition-v0', 'recipe controls record shell recipe mode');
+  assert.equal(diagonalControls.recipeGrammar.mode, 'constrained-shell-recipe-grammar-v0', 'recipe controls carry constrained grammar metadata');
+  assert.equal(diagonalGrammar.mode, 'constrained-shell-recipe-grammar-v0', 'recipe grammar records constrained grammar mode');
+  assert.ok(diagonalGrammar.orientationFamilies.includes('diagonal'), 'diagonal cage grammar declares a diagonal orientation family');
+  assert.ok(diagonalGrammar.orientationFamilies.includes('counter-diagonal'), 'diagonal cage grammar declares a counter-diagonal orientation family');
+  assert.ok(diagonalGrammar.coverageBands.length >= 2, 'diagonal cage grammar declares named coverage bands');
+  assert.ok(diagonalGrammar.budgets.maxPopulations <= 4, 'diagonal cage grammar constrains authored population count');
+  assert.ok(diagonalGrammar.budgets.maxEnvelopes <= 4, 'diagonal cage grammar constrains envelope count');
+  assert.ok(diagonalGrammar.visibilityPriority.primaryFamilies.includes('diagonal'), 'diagonal cage grammar names visual priority families');
   assert.ok(diagonalControls.layerCount >= 4, 'diagonal cage recipe creates a multi-layer starting point');
   assert.ok(diagonalControls.populationCount >= 5, 'diagonal cage recipe creates enough lamella members to read as a cage');
   assert.ok(diagonalControls.stripTopologyCount >= 2, 'diagonal cage recipe creates multiple shell-family orientations');
@@ -405,6 +425,15 @@ assert.equal(typeof coreModule.controlsForLamellarShellRecipe, 'function', 'Lame
   assert.equal(diagonal.composerDescriptor.recipeEffectiveParameters.populationCount, diagonalControls.populationCount, 'composer descriptor records effective recipe controls');
   assert.ok(diagonal.stripPopulationDescriptors.some(population => population.recipeRole === 'primary-diagonal'), 'diagonal cage recipe emits a named primary diagonal population');
   assert.ok(diagonal.stripPopulationDescriptors.some(population => population.recipeRole === 'counter-diagonal'), 'diagonal cage recipe emits a named counter diagonal population');
+  assert.ok(diagonal.stripPopulationDescriptors.every(population => population.orientationFamily), 'recipe populations carry orientation families for comparison and UI grouping');
+  assert.equal(diagonal.composerDescriptor.recipeQualityReceipt.mode, 'shell-recipe-quality-receipt-v0', 'composer descriptor records a constrained recipe quality receipt');
+  assert.equal(diagonal.composerDescriptor.recipeQualityReceipt.grammarMode, 'constrained-shell-recipe-grammar-v0', 'recipe quality receipt records the grammar mode');
+  assert.equal(diagonal.composerDescriptor.recipeQualityReceipt.status, 'pass', 'diagonal cage stays inside the constrained recipe quality budget');
+  assert.equal(
+    coreModule.evaluateLamellarShellRecipeQuality('diagonal-cage', diagonal).status,
+    'pass',
+    'recipe quality helper can evaluate generated descriptor counts directly'
+  );
   assert.ok(diagonal.lamellarEnvelopeDescriptors.length >= 2, 'diagonal cage recipe creates multiple envelope bodies from its population families');
 }
 const envelopeGenerated = coreModule.generateLamellarSectionSegments({

@@ -968,6 +968,8 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import {
   createKaminosLamellarWitness,
   controlsForLamellarShellRecipe,
+  describeLamellarShellRecipeGrammar,
+  evaluateLamellarShellRecipeQuality,
   normalizeLamellarShellRecipe,
 } from './lamellar-core.js';
 
@@ -3791,6 +3793,8 @@ async function initLamellarRoute() {
   window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
   window.__kaminosLamellarRenameAuthoringSlot = (id, label) => renameLamellarAuthoringSlot(id, label);
   window.__kaminosLamellarApplyShellRecipe = recipe => applyLamellarShellRecipe(recipe, { rebuild: true });
+  window.__kaminosLamellarDescribeShellRecipeGrammar = recipe => describeLamellarShellRecipeGrammar(recipe);
+  window.__kaminosLamellarEvaluateShellRecipeQuality = (recipe, summary) => evaluateLamellarShellRecipeQuality(recipe, summary || lamellarWitness?.debugState?.() || {});
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());

@@ -17,6 +17,7 @@ const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-c
 const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
 const SHELL_ENCLOSURE_MODE = "sphere-shell-enclosure-composition-v0";
 export const LAMELLAR_SHELL_RECIPE_MODE = "shell-recipe-composition-v0";
+export const LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE = "constrained-shell-recipe-grammar-v0";
 const STRIP_TOPOLOGY_MODE = "intra-strip-topology-members-v0";
 const SHELL_TOPOLOGY_FAMILY_MODE = "shell-distributed-topology-families-v0";
 const RIBBON_SHELL_OFFSET_MODE = "ribbon-shell-angular-offset-v0";
@@ -54,6 +55,77 @@ const LAMELLAR_SHELL_RECIPE_LABELS = {
   "nested-cup": "Nested cup",
 };
 
+const DEFAULT_RECIPE_GRAMMAR = {
+  mode: LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE,
+  orientationFamilies: ["equator"],
+  coverageBands: ["primary"],
+  budgets: {
+    maxPopulations: 3,
+    maxEnvelopes: 3,
+    maxVisibleSegments: 80,
+    maxTopologyFamilies: 3,
+  },
+  visibilityPriority: {
+    primaryFamilies: ["equator"],
+    demoteRoles: ["cutter"],
+  },
+  separationBudget: {
+    minRadialSpacing: 0.024,
+    preferredRadialSpacing: 0.05,
+    minRadiusOffsetStep: 0.035,
+  },
+};
+
+const LAMELLAR_SHELL_RECIPE_GRAMMARS = {
+  custom: {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["custom"],
+    coverageBands: ["operator-authored"],
+    visibilityPriority: { primaryFamilies: ["custom"], demoteRoles: [] },
+  },
+  "equator-belts": {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["equator", "counter-equator", "crosscut"],
+    coverageBands: ["waist", "counter-waist", "window"],
+    visibilityPriority: { primaryFamilies: ["equator", "counter-equator"], demoteRoles: ["cutter"] },
+  },
+  "opposing-belts": {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["north-belt", "south-belt", "crosscut"],
+    coverageBands: ["north", "south", "window"],
+    visibilityPriority: { primaryFamilies: ["north-belt", "south-belt"], demoteRoles: ["cutter"] },
+  },
+  "polar-crown": {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["polar-rim", "inner-crown", "crosscut"],
+    coverageBands: ["rim", "inner", "window"],
+    visibilityPriority: { primaryFamilies: ["polar-rim", "inner-crown"], demoteRoles: ["cutter"] },
+  },
+  "diagonal-cage": {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["diagonal", "counter-diagonal", "equator-lock", "crosscut"],
+    coverageBands: ["primary-diagonal", "counter-diagonal", "equator-lock", "window"],
+    budgets: {
+      maxPopulations: 4,
+      maxEnvelopes: 4,
+      maxVisibleSegments: 96,
+      maxTopologyFamilies: 3,
+    },
+    visibilityPriority: { primaryFamilies: ["diagonal", "counter-diagonal"], demoteRoles: ["cutter"] },
+    separationBudget: {
+      minRadialSpacing: 0.03,
+      preferredRadialSpacing: 0.06,
+      minRadiusOffsetStep: 0.04,
+    },
+  },
+  "nested-cup": {
+    ...DEFAULT_RECIPE_GRAMMAR,
+    orientationFamilies: ["outer-cup", "inner-cup", "mouth-cut"],
+    coverageBands: ["outer", "inner", "mouth"],
+    visibilityPriority: { primaryFamilies: ["outer-cup", "inner-cup"], demoteRoles: ["cutter"] },
+  },
+};
+
 const VIEW_PRESETS = {
   cut_radius_coupling: { yaw: 0.72, pitch: 0.35, distance: 3.2 },
   cap_profile: { yaw: 1.42, pitch: 0.44, distance: 2.7 },
@@ -68,9 +140,90 @@ export function normalizeLamellarShellRecipe(recipe) {
   return LAMELLAR_SHELL_RECIPE_IDS.includes(recipe) ? recipe : "custom";
 }
 
+export function describeLamellarShellRecipeGrammar(recipe) {
+  const shellRecipe = normalizeLamellarShellRecipe(recipe);
+  const grammar = LAMELLAR_SHELL_RECIPE_GRAMMARS[shellRecipe] || DEFAULT_RECIPE_GRAMMAR;
+  return {
+    ...grammar,
+    recipe: shellRecipe,
+    mode: LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE,
+    orientationFamilies: [...(grammar.orientationFamilies || [])],
+    coverageBands: [...(grammar.coverageBands || [])],
+    budgets: { ...DEFAULT_RECIPE_GRAMMAR.budgets, ...(grammar.budgets || {}) },
+    visibilityPriority: {
+      primaryFamilies: [...(grammar.visibilityPriority?.primaryFamilies || [])],
+      demoteRoles: [...(grammar.visibilityPriority?.demoteRoles || [])],
+    },
+    separationBudget: { ...DEFAULT_RECIPE_GRAMMAR.separationBudget, ...(grammar.separationBudget || {}) },
+  };
+}
+
+function countRecipeEnvelopeDescriptors(generated, recipe) {
+  const recipePopulationIds = new Set((generated?.stripPopulationDescriptors || [])
+    .filter(population => population.recipe === recipe)
+    .map(population => population.id));
+  return (generated?.lamellarEnvelopeDescriptors || [])
+    .filter(envelope => !recipePopulationIds.size || recipePopulationIds.has(envelope.populationId)).length;
+}
+
+export function evaluateLamellarShellRecipeQuality(recipe, generatedOrSummary = {}) {
+  const shellRecipe = normalizeLamellarShellRecipe(recipe);
+  const grammar = describeLamellarShellRecipeGrammar(shellRecipe);
+  const populations = generatedOrSummary.stripPopulationDescriptors || generatedOrSummary.populations || [];
+  const recipePopulations = populations.filter(population => !population.recipe || population.recipe === shellRecipe);
+  const visibleSegments = Number(generatedOrSummary.segmentDescriptorCount
+    ?? generatedOrSummary.descriptorCount
+    ?? generatedOrSummary.descriptors?.length
+    ?? generatedOrSummary.sectionSegments?.length
+    ?? 0);
+  const topologyFamilies = Number(generatedOrSummary.composerDescriptor?.stripTopologyCount
+    ?? generatedOrSummary.stripTopologyCount
+    ?? generatedOrSummary.shellTopologyFamilyCount
+    ?? 0);
+  const envelopeCount = Number(generatedOrSummary.envelopeCount
+    ?? countRecipeEnvelopeDescriptors(generatedOrSummary, shellRecipe)
+    ?? 0);
+  const roleFamilies = [...new Set(recipePopulations.map(population => population.recipeRole || population.role).filter(Boolean))];
+  const orientationFamilies = [...new Set(recipePopulations.map(population => population.orientationFamily).filter(Boolean))];
+  const degradedReasons = [];
+  if (recipePopulations.length > grammar.budgets.maxPopulations) degradedReasons.push("population-budget-exceeded");
+  if (envelopeCount > grammar.budgets.maxEnvelopes) degradedReasons.push("envelope-budget-exceeded");
+  if (visibleSegments > grammar.budgets.maxVisibleSegments) degradedReasons.push("visible-segment-budget-exceeded");
+  if (topologyFamilies > grammar.budgets.maxTopologyFamilies) degradedReasons.push("topology-family-budget-exceeded");
+  if (shellRecipe !== "custom" && orientationFamilies.length && !grammar.visibilityPriority.primaryFamilies.some(family => orientationFamilies.includes(family))) {
+    degradedReasons.push("missing-primary-orientation-family");
+  }
+  return {
+    mode: "shell-recipe-quality-receipt-v0",
+    recipe: shellRecipe,
+    grammarMode: LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE,
+    status: degradedReasons.length ? "degraded" : "pass",
+    degraded: degradedReasons.length > 0,
+    degradedReasons,
+    measured: {
+      populationCount: recipePopulations.length,
+      envelopeCount,
+      visibleSegments,
+      topologyFamilies,
+    },
+    budgets: { ...grammar.budgets },
+    roleFamilies,
+    orientationFamilies,
+    coverageBands: [...grammar.coverageBands],
+    visibilityPriority: { ...grammar.visibilityPriority, primaryFamilies: [...grammar.visibilityPriority.primaryFamilies] },
+    separationBudget: { ...grammar.separationBudget },
+  };
+}
+
 function recipePopulation(recipe, recipeRole, patch = {}) {
   const role = ["lamella", "cutter", "accent"].includes(patch.role) ? patch.role : "lamella";
   const layerIndex = Number.isFinite(Number(patch.layerIndex)) ? Math.round(Number(patch.layerIndex)) : 0;
+  const orientationFamily = typeof patch.orientationFamily === "string" && patch.orientationFamily
+    ? patch.orientationFamily
+    : recipeRole;
+  const coverageBand = typeof patch.coverageBand === "string" && patch.coverageBand
+    ? patch.coverageBand
+    : recipeRole;
   return {
     id: `${recipe}-${recipeRole}`,
     recipe,
@@ -87,10 +240,15 @@ function recipePopulation(recipe, recipeRole, patch = {}) {
     phaseStagger: 0.12,
     radialSpacing: 0.04,
     radiusOffset: 0,
+    orientationFamily,
+    coverageBand,
+    visibilityRole: role === "cutter" ? "secondary-cutter" : "primary-visible-family",
     gapPattern: role === "cutter" ? "crosscut" : "solid",
     ...patch,
     role,
     layerIndex,
+    orientationFamily: patch.orientationFamily || orientationFamily,
+    coverageBand: patch.coverageBand || coverageBand,
   };
 }
 
@@ -101,6 +259,7 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
     shellRecipe,
     shellRecipeLabel: LAMELLAR_SHELL_RECIPE_LABELS[shellRecipe] || "Custom",
     shellRecipeMode: LAMELLAR_SHELL_RECIPE_MODE,
+    recipeGrammar: describeLamellarShellRecipeGrammar(shellRecipe),
     seed,
   };
   if (shellRecipe === "custom") return base;
@@ -118,9 +277,9 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
       shellEnclosure: 0.42,
       stripTopologyCount: 1,
       stripPopulations: [
-        recipePopulation(shellRecipe, "equator-primary", { layerIndex: 0, count: 6, bearingOffset: 0.05, bearingVariance: 1.18, laneSpan: 0.62, phaseStagger: 0.08, radialSpacing: 0.05, radiusOffset: 0.02 }),
-        recipePopulation(shellRecipe, "equator-counter", { layerIndex: 1, count: 5, chirality: -1, bearingOffset: 3.08, bearingVariance: 1.02, laneSpan: 0.52, phaseStagger: -0.08, radialSpacing: 0.045, radiusOffset: 0.08 }),
-        recipePopulation(shellRecipe, "equator-cutters", { layerIndex: 1, role: "cutter", count: 2, chirality: -1, bearingOffset: 0.58, bearingVariance: 0.38, laneSpan: 0.22, phaseStagger: 0.18, radialSpacing: 0.025, radiusOffset: 0.12 }),
+        recipePopulation(shellRecipe, "equator-primary", { layerIndex: 0, count: 6, orientationFamily: "equator", coverageBand: "waist", bearingOffset: 0.05, bearingVariance: 1.18, laneSpan: 0.62, phaseStagger: 0.08, radialSpacing: 0.05, radiusOffset: 0.02 }),
+        recipePopulation(shellRecipe, "equator-counter", { layerIndex: 1, count: 5, orientationFamily: "counter-equator", coverageBand: "counter-waist", chirality: -1, bearingOffset: 3.08, bearingVariance: 1.02, laneSpan: 0.52, phaseStagger: -0.08, radialSpacing: 0.045, radiusOffset: 0.08 }),
+        recipePopulation(shellRecipe, "equator-cutters", { layerIndex: 1, role: "cutter", count: 2, orientationFamily: "crosscut", coverageBand: "window", chirality: -1, bearingOffset: 0.58, bearingVariance: 0.38, laneSpan: 0.22, phaseStagger: 0.18, radialSpacing: 0.025, radiusOffset: 0.12 }),
       ],
     },
     "opposing-belts": {
@@ -136,9 +295,9 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
       shellEnclosure: 0.7,
       stripTopologyCount: 2,
       stripPopulations: [
-        recipePopulation(shellRecipe, "north-belt", { layerIndex: 0, count: 5, bearingOffset: -0.65, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: 0.22, radialSpacing: 0.06, radiusOffset: 0.06 }),
-        recipePopulation(shellRecipe, "south-belt", { layerIndex: 2, count: 5, chirality: -1, bearingOffset: 2.48, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: -0.22, radialSpacing: 0.06, radiusOffset: -0.02 }),
-        recipePopulation(shellRecipe, "belt-cutters", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: 0.74, bearingVariance: 0.55, laneSpan: 0.34, phaseStagger: 0.18, radialSpacing: 0.035, radiusOffset: 0.13 }),
+        recipePopulation(shellRecipe, "north-belt", { layerIndex: 0, count: 5, orientationFamily: "north-belt", coverageBand: "north", bearingOffset: -0.65, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: 0.22, radialSpacing: 0.06, radiusOffset: 0.06 }),
+        recipePopulation(shellRecipe, "south-belt", { layerIndex: 2, count: 5, orientationFamily: "south-belt", coverageBand: "south", chirality: -1, bearingOffset: 2.48, bearingVariance: 0.76, laneSpan: 0.86, phaseStagger: -0.22, radialSpacing: 0.06, radiusOffset: -0.02 }),
+        recipePopulation(shellRecipe, "belt-cutters", { layerIndex: 1, role: "cutter", count: 3, orientationFamily: "crosscut", coverageBand: "window", chirality: -1, bearingOffset: 0.74, bearingVariance: 0.55, laneSpan: 0.34, phaseStagger: 0.18, radialSpacing: 0.035, radiusOffset: 0.13 }),
       ],
     },
     "polar-crown": {
@@ -154,9 +313,9 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
       shellEnclosure: 0.92,
       stripTopologyCount: 3,
       stripPopulations: [
-        recipePopulation(shellRecipe, "crown-rim", { layerIndex: 0, count: 7, bearingOffset: 0.25, bearingVariance: 1.35, laneSpan: 1.0, phaseStagger: 0.36, radialSpacing: 0.055, radiusOffset: 0.11 }),
-        recipePopulation(shellRecipe, "inner-crown", { layerIndex: 2, count: 5, chirality: -1, bearingOffset: -1.18, bearingVariance: 0.86, laneSpan: 0.52, phaseStagger: -0.28, radialSpacing: 0.045, radiusOffset: -0.02 }),
-        recipePopulation(shellRecipe, "crown-windows", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: 1.04, bearingVariance: 0.48, laneSpan: 0.36, phaseStagger: 0.22, radialSpacing: 0.025, radiusOffset: 0.16 }),
+        recipePopulation(shellRecipe, "crown-rim", { layerIndex: 0, count: 7, orientationFamily: "polar-rim", coverageBand: "rim", bearingOffset: 0.25, bearingVariance: 1.35, laneSpan: 1.0, phaseStagger: 0.36, radialSpacing: 0.055, radiusOffset: 0.11 }),
+        recipePopulation(shellRecipe, "inner-crown", { layerIndex: 2, count: 5, orientationFamily: "inner-crown", coverageBand: "inner", chirality: -1, bearingOffset: -1.18, bearingVariance: 0.86, laneSpan: 0.52, phaseStagger: -0.28, radialSpacing: 0.045, radiusOffset: -0.02 }),
+        recipePopulation(shellRecipe, "crown-windows", { layerIndex: 1, role: "cutter", count: 3, orientationFamily: "crosscut", coverageBand: "window", chirality: -1, bearingOffset: 1.04, bearingVariance: 0.48, laneSpan: 0.36, phaseStagger: 0.22, radialSpacing: 0.025, radiusOffset: 0.16 }),
       ],
     },
     "diagonal-cage": {
@@ -172,10 +331,10 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
       shellEnclosure: 0.82,
       stripTopologyCount: 3,
       stripPopulations: [
-        recipePopulation(shellRecipe, "primary-diagonal", { layerIndex: 0, count: 6, bearingOffset: -0.42, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: 0.32, radialSpacing: 0.06, radiusOffset: 0.04 }),
-        recipePopulation(shellRecipe, "counter-diagonal", { layerIndex: 1, count: 6, chirality: -1, bearingOffset: 1.92, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: -0.32, radialSpacing: 0.06, radiusOffset: 0.1 }),
-        recipePopulation(shellRecipe, "equator-lock", { layerIndex: 2, count: 4, bearingOffset: 0.9, bearingVariance: 0.7, laneSpan: 0.42, phaseStagger: 0.12, radialSpacing: 0.035, radiusOffset: -0.03 }),
-        recipePopulation(shellRecipe, "cage-cutters", { layerIndex: 1, role: "cutter", count: 3, chirality: -1, bearingOffset: -0.88, bearingVariance: 0.46, laneSpan: 0.32, phaseStagger: 0.28, radialSpacing: 0.03, radiusOffset: 0.16 }),
+        recipePopulation(shellRecipe, "primary-diagonal", { layerIndex: 0, count: 6, orientationFamily: "diagonal", coverageBand: "primary-diagonal", bearingOffset: -0.42, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: 0.32, radialSpacing: 0.06, radiusOffset: 0.04 }),
+        recipePopulation(shellRecipe, "counter-diagonal", { layerIndex: 1, count: 6, orientationFamily: "counter-diagonal", coverageBand: "counter-diagonal", chirality: -1, bearingOffset: 1.92, bearingVariance: 1.12, laneSpan: 0.92, phaseStagger: -0.32, radialSpacing: 0.06, radiusOffset: 0.1 }),
+        recipePopulation(shellRecipe, "equator-lock", { layerIndex: 2, count: 4, orientationFamily: "equator-lock", coverageBand: "equator-lock", bearingOffset: 0.9, bearingVariance: 0.7, laneSpan: 0.42, phaseStagger: 0.12, radialSpacing: 0.035, radiusOffset: -0.03 }),
+        recipePopulation(shellRecipe, "cage-cutters", { layerIndex: 1, role: "cutter", count: 3, orientationFamily: "crosscut", coverageBand: "window", chirality: -1, bearingOffset: -0.88, bearingVariance: 0.46, laneSpan: 0.32, phaseStagger: 0.28, radialSpacing: 0.03, radiusOffset: 0.16 }),
       ],
     },
     "nested-cup": {
@@ -191,9 +350,9 @@ export function controlsForLamellarShellRecipe(recipe, overrides = {}) {
       shellEnclosure: 0.62,
       stripTopologyCount: 2,
       stripPopulations: [
-        recipePopulation(shellRecipe, "outer-cup", { layerIndex: 0, count: 5, bearingOffset: 0.15, bearingVariance: 0.7, laneSpan: 0.72, phaseStagger: 0.14, radialSpacing: 0.07, radiusOffset: 0.1 }),
-        recipePopulation(shellRecipe, "inner-cup", { layerIndex: 2, count: 4, bearingOffset: -0.46, bearingVariance: 0.52, laneSpan: 0.48, phaseStagger: 0.1, radialSpacing: 0.045, radiusOffset: -0.04 }),
-        recipePopulation(shellRecipe, "cup-mouth-cutter", { layerIndex: 1, role: "cutter", count: 1, chirality: -1, bearingOffset: 0.78, bearingVariance: 0.22, laneSpan: 0, phaseStagger: 0, radialSpacing: 0, radiusOffset: 0.18 }),
+        recipePopulation(shellRecipe, "outer-cup", { layerIndex: 0, count: 5, orientationFamily: "outer-cup", coverageBand: "outer", bearingOffset: 0.15, bearingVariance: 0.7, laneSpan: 0.72, phaseStagger: 0.14, radialSpacing: 0.07, radiusOffset: 0.1 }),
+        recipePopulation(shellRecipe, "inner-cup", { layerIndex: 2, count: 4, orientationFamily: "inner-cup", coverageBand: "inner", bearingOffset: -0.46, bearingVariance: 0.52, laneSpan: 0.48, phaseStagger: 0.1, radialSpacing: 0.045, radiusOffset: -0.04 }),
+        recipePopulation(shellRecipe, "cup-mouth-cutter", { layerIndex: 1, role: "cutter", count: 1, orientationFamily: "mouth-cut", coverageBand: "mouth", chirality: -1, bearingOffset: 0.78, bearingVariance: 0.22, laneSpan: 0, phaseStagger: 0, radialSpacing: 0, radiusOffset: 0.18 }),
       ],
     },
   };
@@ -382,6 +541,15 @@ function normalizeStripPopulations(populations) {
       recipe: typeof population?.recipe === "string" ? population.recipe : null,
       recipeRole: typeof population?.recipeRole === "string" ? population.recipeRole : null,
       recipeMode: population?.recipeMode === LAMELLAR_SHELL_RECIPE_MODE ? LAMELLAR_SHELL_RECIPE_MODE : null,
+      orientationFamily: typeof population?.orientationFamily === "string" && population.orientationFamily
+        ? population.orientationFamily
+        : (typeof population?.recipeRole === "string" && population.recipeRole ? population.recipeRole : role),
+      coverageBand: typeof population?.coverageBand === "string" && population.coverageBand
+        ? population.coverageBand
+        : (typeof population?.recipeRole === "string" && population.recipeRole ? population.recipeRole : "macro"),
+      visibilityRole: typeof population?.visibilityRole === "string" && population.visibilityRole
+        ? population.visibilityRole
+        : (role === "cutter" ? "secondary-cutter" : "primary-visible-family"),
       source: population?.recipeRole ? "shell-recipe-population" : "macro-strip-population",
     };
   }).filter(population => population.count > 0);
@@ -1288,6 +1456,7 @@ export function generateLamellarSectionSegments(input = {}) {
     shellRecipe,
     shellRecipeLabel: LAMELLAR_SHELL_RECIPE_LABELS[shellRecipe] || "Custom",
     shellRecipeMode: LAMELLAR_SHELL_RECIPE_MODE,
+    recipeGrammar: describeLamellarShellRecipeGrammar(shellRecipe),
     recipeEffectiveParameters: {
       layerCount: Number(input.layerCount ?? input.numLayers ?? layerStackDescriptor.numLayers),
       populationCount: Number(input.populationCount ?? 0),
@@ -1349,6 +1518,13 @@ export function generateLamellarSectionSegments(input = {}) {
   for (const curve of sphereCurveDescriptors) {
     emitCurveSectionDescriptor(descriptors, curve, seed);
   }
+
+  composerDescriptor.recipeQualityReceipt = evaluateLamellarShellRecipeQuality(shellRecipe, {
+    stripPopulationDescriptors,
+    lamellarEnvelopeDescriptors,
+    descriptors,
+    composerDescriptor,
+  });
 
   return {
     composerDescriptor,

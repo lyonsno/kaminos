@@ -19,6 +19,7 @@ const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 15000);
 const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
 const recipeSmoke = args.get('--recipe-smoke') === '1' || requested.get('recipe_smoke') === '1';
+const recipeComparisonSmoke = args.get('--recipe-comparison-smoke') === '1' || requested.get('recipe_comparison_smoke') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
 const authoringSlotSmoke = requested.get('authoring_slot_smoke') === '1';
@@ -266,6 +267,140 @@ async function main() {
         })()`,
       });
       await delay(600);
+    }
+
+    if (recipeComparisonSmoke) {
+      requestPhase = 'recipe-comparison-smoke-evaluate';
+      const comparisonResult = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const recipes = Array.from(document.querySelectorAll('#lamellar-shell-recipe option'))
+            .map(option => option.value)
+            .filter(recipe => recipe && recipe !== 'custom');
+          const settleFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const recipeQualityReceipts = [];
+          const cards = [];
+          for (const recipe of recipes) {
+            const applied = window.__kaminosLamellarApplyShellRecipe?.(recipe);
+            await settleFrame();
+            const w = window.__kaminosLamellarWitness;
+            const state = w ? w.debugState() : { active: false, missing: true };
+            const grammar = window.__kaminosLamellarDescribeShellRecipeGrammar?.(recipe) || state.composerDescriptor?.recipeGrammar || null;
+            const quality = window.__kaminosLamellarEvaluateShellRecipeQuality?.(recipe, state)
+              || state.composerDescriptor?.recipeQualityReceipt
+              || null;
+            const populations = (state.stripPopulationDescriptors || []).filter(population => population.recipe === recipe);
+            const receipt = {
+              mode: 'shell-recipe-comparison-entry-v0',
+              recipe,
+              appliedRecipe: applied?.shellRecipe || null,
+              composerRecipe: state.composerDescriptor?.shellRecipe || null,
+              grammarMode: grammar?.mode || null,
+              qualityStatus: quality?.status || 'missing',
+              degradedReasons: quality?.degradedReasons || [],
+              orientationFamilies: grammar?.orientationFamilies || [],
+              primaryFamilies: grammar?.visibilityPriority?.primaryFamilies || [],
+              populationRoles: populations.map(population => population.recipeRole).filter(Boolean),
+              populationOrientations: [...new Set(populations.map(population => population.orientationFamily).filter(Boolean))],
+              populationCount: populations.length,
+              envelopeCount: (state.lamellarEnvelopeDescriptors || []).filter(envelope => populations.some(population => population.id === envelope.populationId)).length,
+              segmentCount: (state.generatedSegmentDescriptors || state.sectionSegments || []).length,
+              budgetMeasured: quality?.measured || null,
+              budgets: quality?.budgets || null,
+            };
+            recipeQualityReceipts.push({ ...receipt, qualityReceipt: quality, grammar });
+            cards.push(receipt);
+          }
+          const lastRecipe = recipes.includes('diagonal-cage') ? 'diagonal-cage' : recipes[0];
+          if (lastRecipe) {
+            window.__kaminosLamellarApplyShellRecipe?.(lastRecipe);
+            await settleFrame();
+            window.__kaminosLamellarWitness?.frameCamera?.();
+          }
+          let overlay = document.getElementById('lamellar-recipe-comparison-overlay');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'lamellar-recipe-comparison-overlay';
+            document.getElementById('viewport')?.appendChild(overlay);
+          }
+          overlay.style.cssText = [
+            'position:absolute',
+            'right:18px',
+            'top:18px',
+            'z-index:20',
+            'width:360px',
+            'max-width:calc(100% - 36px)',
+            'padding:12px',
+            'border:1px solid rgba(255,255,255,0.16)',
+            'border-radius:8px',
+            'background:rgba(8,8,8,0.72)',
+            'backdrop-filter:blur(10px)',
+            'box-shadow:0 12px 32px rgba(0,0,0,0.38)',
+            'font:11px SFMono-Regular,Menlo,Consolas,monospace',
+            'color:#d7d7d7'
+          ].join(';');
+          overlay.innerHTML = '<div style="font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#fff;margin-bottom:8px">Lamellar Recipe Comparison</div>'
+            + cards.map(card => {
+              const ok = card.qualityStatus === 'pass';
+              const families = card.populationOrientations.slice(0, 3).join(' / ') || 'none';
+              return '<div style="display:grid;grid-template-columns:104px 1fr 44px;gap:7px;align-items:center;border-top:1px solid rgba(255,255,255,0.08);padding:7px 0">'
+                + '<span style="color:#fff;font-weight:700">' + card.recipe + '</span>'
+                + '<span style="color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + families + ' · p' + card.populationCount + ' e' + card.envelopeCount + ' s' + card.segmentCount + '</span>'
+                + '<span style="justify-self:end;color:' + (ok ? '#86d394' : '#f0b05d') + '">' + card.qualityStatus + '</span>'
+                + '</div>';
+            }).join('');
+          const state = window.__kaminosLamellarWitness?.debugState?.() || {};
+          return {
+            ...state,
+            recipeComparisonReceipt: {
+              mode: 'locked-shell-recipe-comparison-smoke-v0',
+              grammarMode: 'constrained-shell-recipe-grammar-v0',
+              comparedRecipes: recipes,
+              displayedRecipe: lastRecipe,
+              recipeQualityReceipts,
+              passCount: recipeQualityReceipts.filter(entry => entry.qualityStatus === 'pass').length,
+              degradedCount: recipeQualityReceipts.filter(entry => entry.qualityStatus !== 'pass').length,
+            },
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const state = comparisonResult.result.value;
+      assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
+      assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
+      assert.ok(state.active, 'Lamellar comparison route was not active');
+      assert.ok((state.recipeComparisonReceipt?.comparedRecipes || []).length >= 5, 'Lamellar comparison smoke did not compare all shell recipes');
+      assert.equal(state.recipeComparisonReceipt?.grammarMode, 'constrained-shell-recipe-grammar-v0', 'Lamellar comparison smoke did not record constrained grammar mode');
+      assert.ok((state.recipeComparisonReceipt?.recipeQualityReceipts || []).every(entry => entry.qualityStatus === 'pass'), 'Lamellar comparison smoke found a degraded shell recipe');
+      assert.ok((state.recipeComparisonReceipt?.recipeQualityReceipts || []).every(entry => (entry.populationOrientations || []).length >= 1), 'Lamellar comparison smoke found a recipe without orientation families');
+      const { data: screenshotData, screenshotFallbackReceipt } = await captureScreenshotWithFallback(ws, 'recipe-comparison-smoke');
+      const buffer = Buffer.from(screenshotData, 'base64');
+      writeFileSync(out, buffer);
+      const visualStats = assertVisualDiversity(buffer);
+      const report = {
+        schema: 'kaminos.lamellar-witness.v0',
+        mode: 'locked-shell-recipe-comparison-smoke-v0',
+        requestedUrl: url,
+        requestPhase,
+        cdpTimeoutMs,
+        requestedView: requested.get('lamellar_view') || 'cap_profile',
+        effectiveView: state.effectiveView,
+        effectiveRoute: state.effectiveRoute,
+        witnessIdentity: state.witnessIdentity,
+        composerDescriptor: state.composerDescriptor,
+        recipeComparisonReceipt: state.recipeComparisonReceipt,
+        recipeQualityReceipts: state.recipeComparisonReceipt.recipeQualityReceipts,
+        stripPopulationDescriptors: state.stripPopulationDescriptors,
+        lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
+        segmentDescriptorCount: state.segmentDescriptorCount,
+        screenshotFallbackReceipt,
+        screenshot: out,
+        visualStats,
+        stderrTail: stderr.slice(-2000),
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+      ws.close();
+      return;
     }
 
     if (recipeSmoke) {
