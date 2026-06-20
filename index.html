@@ -3792,12 +3792,20 @@ async function initLamellarRoute() {
   window.__kaminosLamellarLoadAuthoringSlot = id => loadLamellarAuthoringSlot(id);
   window.__kaminosLamellarDeleteAuthoringSlot = id => deleteLamellarAuthoringSlot(id);
   window.__kaminosLamellarRenameAuthoringSlot = (id, label) => renameLamellarAuthoringSlot(id, label);
+  window.__kaminosLamellarSetFamilyBodyIsolation = options => lamellarWitness.setFamilyBodyIsolation?.(options);
   window.__kaminosLamellarApplyShellRecipe = recipe => applyLamellarShellRecipe(recipe, { rebuild: true });
   window.__kaminosLamellarDescribeShellRecipeGrammar = recipe => describeLamellarShellRecipeGrammar(recipe);
   window.__kaminosLamellarEvaluateShellRecipeQuality = (recipe, summary) => evaluateLamellarShellRecipeQuality(recipe, summary || lamellarWitness?.debugState?.() || {});
   window.__kaminosLamellarSync = syncLamellarReadout;
   applyLamellarRouteParams();
   lamellarWitness.setControls(readLamellarControls());
+  if (params.get('lamellar_family_body_isolated') === '1' || params.get('family_body_isolated') === '1') {
+    lamellarWitness.setFamilyBodyIsolation?.({
+      enabled: true,
+      bodyId: params.get('lamellar_family_body_id') || null,
+      showSourceEnvelope: params.get('lamellar_family_body_source') === '1',
+    });
+  }
   const composerControlIds = [
     'lamellar-view',
     'lamellar-cut-radius',

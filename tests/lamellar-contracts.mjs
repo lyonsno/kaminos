@@ -259,6 +259,10 @@ assert.match(core, /generateLamellarFamilyBodyDescriptors/, 'Lamellar core gener
 assert.match(core, /makeLamellarFamilyBodyGeometry/, 'Lamellar core builds a distinct family-body mesh instead of reusing broad envelope panes');
 assert.match(core, /familyBodyDescriptors/, 'Lamellar debug state reports family body descriptors');
 assert.match(core, /familyBodyContinuityReceipt/, 'Lamellar family body descriptors carry a continuity receipt');
+assert.match(core, /family-body-isolated-witness-v0/, 'Lamellar core names the isolated family-body witness mode');
+assert.match(core, /setFamilyBodyIsolation/, 'Lamellar core exposes an isolated family-body visibility control');
+assert.match(core, /applyFamilyBodyIsolation/, 'Lamellar core applies isolated family-body visibility after rebuilds');
+assert.match(core, /isolatedFamilyBodyReceipt/, 'Lamellar debug state reports isolated family-body witness receipts');
 assert.match(core, /ribbon-shell-angular-offset-v0/, 'Lamellar ribbon mesh emission records shell-angular width offsets instead of flat tangent-plane offsets');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
@@ -346,6 +350,10 @@ assert.match(witness, /familyBodyDescriptors/, 'witness records primary family b
 assert.match(witness, /familyBodySmoke/, 'witness can run a focused family-body smoke');
 assert.match(witness, /--family-body-smoke/, 'witness exposes a focused family-body smoke CLI flag');
 assert.match(witness, /familyBodyComparisonReceipt/, 'witness records family-body comparison evidence');
+assert.match(witness, /familyBodyIsolatedSmoke/, 'witness can run an isolated family-body smoke');
+assert.match(witness, /--family-body-isolated-smoke/, 'witness exposes an isolated family-body smoke CLI flag');
+assert.match(witness, /isolatedFamilyBodyReceipt/, 'witness records isolated family-body visibility evidence');
+assert.match(witness, /family-body-isolated-witness-v0/, 'witness records the isolated family-body witness mode');
 assert.match(witness, /authoringRoundTripReceipt/, 'witness records Lamellar authoring save/load round-trip evidence');
 assert.match(witness, /authoringSlotRoundTripReceipt/, 'witness records Lamellar in-app saved-state slot round-trip evidence');
 assert.match(witness, /thumbnailDataUrl/, 'witness records Lamellar saved-slot thumbnail data');

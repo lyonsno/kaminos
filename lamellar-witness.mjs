@@ -21,6 +21,9 @@ const manualEnable = args.get('--manual-enable') === '1';
 const recipeSmoke = args.get('--recipe-smoke') === '1' || requested.get('recipe_smoke') === '1';
 const recipeComparisonSmoke = args.get('--recipe-comparison-smoke') === '1' || requested.get('recipe_comparison_smoke') === '1';
 const familyBodySmoke = args.get('--family-body-smoke') === '1' || requested.get('family_body_smoke') === '1';
+const familyBodyIsolatedSmoke = args.get('--family-body-isolated-smoke') === '1'
+  || requested.get('family_body_isolated_smoke') === '1'
+  || requested.get('lamellar_family_body_isolated') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
 const authoringSlotSmoke = requested.get('authoring_slot_smoke') === '1';
@@ -394,6 +397,126 @@ async function main() {
         stripPopulationDescriptors: state.stripPopulationDescriptors,
         lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
         segmentDescriptorCount: state.segmentDescriptorCount,
+        screenshotFallbackReceipt,
+        screenshot: out,
+        visualStats,
+        stderrTail: stderr.slice(-2000),
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+      ws.close();
+      return;
+    }
+
+    if (familyBodyIsolatedSmoke) {
+      requestPhase = 'family-body-isolated-smoke-evaluate';
+      const isolatedResult = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const settleFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const requestedRecipe = new URL(location.href).searchParams.get('lamellar_shell_recipe') || 'nested-cup';
+          window.__kaminosLamellarApplyShellRecipe?.(requestedRecipe);
+          await settleFrame();
+          const before = window.__kaminosLamellarWitness?.debugState?.() || {};
+          const body = (before.familyBodyDescriptors || [])[0] || null;
+          const receipt = window.__kaminosLamellarSetFamilyBodyIsolation?.({
+            enabled: true,
+            bodyId: body?.id || null,
+            showSourceEnvelope: false,
+          });
+          await settleFrame();
+          let smokeStyle = document.getElementById('lamellar-family-body-isolated-smoke-style');
+          if (!smokeStyle) {
+            smokeStyle = document.createElement('style');
+            smokeStyle.id = 'lamellar-family-body-isolated-smoke-style';
+            document.head.appendChild(smokeStyle);
+          }
+          smokeStyle.textContent = '#sidebar{display:none!important}#viewport{width:100vw!important;height:100vh!important;flex:1 1 auto!important}';
+          window.dispatchEvent(new Event('resize'));
+          await settleFrame();
+          window.__kaminosLamellarWitness?.frameCamera?.();
+          await settleFrame();
+          const state = window.__kaminosLamellarWitness?.debugState?.() || {};
+          const isolatedFamilyBodyReceipt = state.isolatedFamilyBodyReceipt || receipt || null;
+          const isolatedBodyDescriptor = (state.familyBodyDescriptors || []).find(candidate => candidate.id === isolatedFamilyBodyReceipt?.bodyId) || body;
+          let overlay = document.getElementById('lamellar-family-body-isolated-smoke-overlay');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'lamellar-family-body-isolated-smoke-overlay';
+            document.getElementById('viewport')?.appendChild(overlay);
+          }
+          overlay.style.cssText = [
+            'position:absolute',
+            'right:18px',
+            'top:18px',
+            'z-index:20',
+            'width:390px',
+            'max-width:calc(100% - 36px)',
+            'padding:12px',
+            'border:1px solid rgba(255,255,255,0.18)',
+            'border-radius:8px',
+            'background:rgba(7,7,7,0.76)',
+            'backdrop-filter:blur(10px)',
+            'box-shadow:0 12px 32px rgba(0,0,0,0.38)',
+            'font:11px SFMono-Regular,Menlo,Consolas,monospace',
+            'color:#d7d7d7'
+          ].join(';');
+          const visibleKinds = Object.entries(isolatedFamilyBodyReceipt?.visibleKinds || {})
+            .map(([kind, count]) => kind + ':' + count)
+            .join(' · ');
+          overlay.innerHTML = '<div style="font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#fff;margin-bottom:8px">Isolated Family Body</div>'
+            + '<div style="color:#aaa;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (isolatedFamilyBodyReceipt?.bodyId || 'missing-body') + '</div>'
+            + '<div style="display:grid;grid-template-columns:132px 1fr;gap:4px 10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">'
+            + '<span>mode</span><span style="color:#fff">family-body-isolated-witness-v0</span>'
+            + '<span>rows x columns</span><span style="color:#fff">' + (isolatedFamilyBodyReceipt?.rowCount ?? 0) + ' x ' + (isolatedFamilyBodyReceipt?.columnCount ?? 0) + '</span>'
+            + '<span>continuity</span><span style="color:#fff">' + (isolatedFamilyBodyReceipt?.continuityStatus || 'missing') + '</span>'
+            + '<span>visible / hidden</span><span style="color:#fff">' + (isolatedFamilyBodyReceipt?.visibleObjectCount ?? 0) + ' / ' + (isolatedFamilyBodyReceipt?.hiddenObjectCount ?? 0) + '</span>'
+            + '<span>visible kinds</span><span style="color:#fff">' + visibleKinds + '</span>'
+            + '</div>';
+          return {
+            ...state,
+            beforeIsolationSummary: {
+              familyBodyCount: (before.familyBodyDescriptors || []).length,
+              envelopeCount: (before.lamellarEnvelopeDescriptors || []).length,
+              childCount: before.childCount || 0,
+              recipe: before.composerDescriptor?.shellRecipe || requestedRecipe,
+            },
+            isolatedFamilyBodyReceipt,
+            isolatedBodyDescriptor,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const state = isolatedResult.result.value;
+      assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
+      assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
+      assert.ok(state.active, 'Lamellar isolated family body route was not active');
+      assert.ok((state.familyBodyDescriptors || []).length >= 1, 'Lamellar isolated family body smoke did not export family body descriptors');
+      assert.equal(state.isolatedFamilyBodyReceipt?.mode, 'family-body-isolated-witness-v0', 'isolated family body smoke did not record the isolated witness mode');
+      assert.equal(state.isolatedFamilyBodyReceipt?.visibleFamilyBodyCount, 1, 'isolated family body smoke did not show exactly one family body');
+      assert.ok((state.isolatedFamilyBodyReceipt?.hiddenObjectCount || 0) > (state.isolatedFamilyBodyReceipt?.visibleObjectCount || 0), 'isolated family body smoke did not hide the crowded scene');
+      assert.equal(state.isolatedFamilyBodyReceipt?.continuityStatus, 'pass', 'isolated family body continuity is degraded');
+      const { data: screenshotData, screenshotFallbackReceipt } = await captureScreenshotWithFallback(ws, 'family-body-isolated-smoke');
+      const buffer = Buffer.from(screenshotData, 'base64');
+      writeFileSync(out, buffer);
+      const visualStats = assertVisualDiversity(buffer);
+      const report = {
+        schema: 'kaminos.lamellar-witness.v0',
+        mode: 'family-body-isolated-witness-v0',
+        requestedUrl: url,
+        requestPhase,
+        cdpTimeoutMs,
+        requestedView: requested.get('lamellar_view') || 'cap_profile',
+        effectiveView: state.effectiveView,
+        effectiveRoute: state.effectiveRoute,
+        witnessIdentity: state.witnessIdentity,
+        composerDescriptor: state.composerDescriptor,
+        beforeIsolationSummary: state.beforeIsolationSummary,
+        isolatedFamilyBodyReceipt: state.isolatedFamilyBodyReceipt,
+        isolatedBodyDescriptor: state.isolatedBodyDescriptor,
+        familyBodyDescriptors: state.familyBodyDescriptors,
+        lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
+        segmentDescriptorCount: state.segmentDescriptorCount,
+        sectionSegments: state.sectionSegments,
         screenshotFallbackReceipt,
         screenshot: out,
         visualStats,

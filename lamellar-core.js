@@ -17,6 +17,7 @@ const LAMELLAR_ENVELOPE_COMPOSITION_MODE = "multi-eligible-population-envelope-c
 const LAMELLAR_ENVELOPE_EDGE_MODE = "smooth-envelope-body-crisp-rail-debug-v0";
 export const LAMELLAR_FAMILY_BODY_MODE = "family-envelope-body-mesh-v0";
 const LAMELLAR_FAMILY_BODY_EDGE_MODE = "smooth-family-body-crisp-rail-cap-v0";
+const LAMELLAR_FAMILY_BODY_ISOLATED_WITNESS_MODE = "family-body-isolated-witness-v0";
 const SHELL_ENCLOSURE_MODE = "sphere-shell-enclosure-composition-v0";
 export const LAMELLAR_SHELL_RECIPE_MODE = "shell-recipe-composition-v0";
 export const LAMELLAR_SHELL_RECIPE_GRAMMAR_MODE = "constrained-shell-recipe-grammar-v0";
@@ -2193,6 +2194,8 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     intraStripTopologyDescriptors: [],
     lamellarEnvelopeDescriptors: [],
     familyBodyDescriptors: [],
+    familyBodyIsolation: null,
+    isolatedFamilyBodyReceipt: null,
     curveInteractionReceipt: null,
     generatedSegmentDescriptors: [],
     sliceToolDescriptor: null,
@@ -2547,9 +2550,106 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     }
   }
 
+  function applyFamilyBodyIsolation() {
+    const isolation = state.familyBodyIsolation;
+    if (!isolation?.enabled) {
+      state.isolatedFamilyBodyReceipt = null;
+      return null;
+    }
+    const familyBodies = state.familyBodyDescriptors || [];
+    const requestedBody = familyBodies.find(body => body.id === isolation.bodyId) || familyBodies[0] || null;
+    if (!requestedBody) {
+      state.isolatedFamilyBodyReceipt = {
+        mode: LAMELLAR_FAMILY_BODY_ISOLATED_WITNESS_MODE,
+        status: "missing-family-body",
+        enabled: true,
+        requestedBodyId: isolation.bodyId || null,
+        visibleObjectCount: 0,
+        hiddenObjectCount: group.children.length,
+      };
+      for (const child of group.children) child.visible = false;
+      return state.isolatedFamilyBodyReceipt;
+    }
+
+    const showSourceEnvelope = isolation.showSourceEnvelope !== false;
+    const visibleKinds = {};
+    const hiddenKinds = {};
+    let visibleObjectCount = 0;
+    let hiddenObjectCount = 0;
+    let visibleFamilyBodyCount = 0;
+    let visibleRailCount = 0;
+    let visibleSourceEnvelopeRailCount = 0;
+
+    for (const child of group.children) {
+      const userData = child.userData || {};
+      const kind = userData.lamellarObjectKind || userData.lamellarRole || child.type || "unknown";
+      const isSelectedBody = kind === "LamellarFamilyBodyDescriptor" && userData.lamellarSectionId === requestedBody.id;
+      const isSelectedBodyRail = kind === "LamellarFamilyBodyRail" && userData.lamellarSectionId === requestedBody.id;
+      const isSourceEnvelopeRail = showSourceEnvelope
+        && kind === "LamellarEnvelopeRail"
+        && userData.lamellarSectionId === requestedBody.sourceEnvelopeId;
+      const visible = Boolean(isSelectedBody || isSelectedBodyRail || isSourceEnvelopeRail);
+      child.visible = visible;
+      if (visible) {
+        visibleObjectCount += 1;
+        visibleKinds[kind] = (visibleKinds[kind] || 0) + 1;
+        if (isSelectedBody) visibleFamilyBodyCount += 1;
+        if (isSelectedBodyRail) visibleRailCount += 1;
+        if (isSourceEnvelopeRail) visibleSourceEnvelopeRailCount += 1;
+      } else {
+        hiddenObjectCount += 1;
+        hiddenKinds[kind] = (hiddenKinds[kind] || 0) + 1;
+      }
+    }
+
+    state.isolatedFamilyBodyReceipt = {
+      mode: LAMELLAR_FAMILY_BODY_ISOLATED_WITNESS_MODE,
+      status: visibleFamilyBodyCount === 1 ? "pass" : "degraded",
+      enabled: true,
+      bodyId: requestedBody.id,
+      requestedBodyId: isolation.bodyId || null,
+      sourceEnvelopeId: requestedBody.sourceEnvelopeId || null,
+      populationId: requestedBody.populationId || null,
+      layerSpecId: requestedBody.layerSpecId || null,
+      layerIndex: requestedBody.layerIndex ?? null,
+      rowCount: requestedBody.rowCount || 0,
+      columnCount: requestedBody.columnCount || 0,
+      shellRadiusRange: requestedBody.shellRadiusRange || null,
+      continuityStatus: requestedBody.familyBodyContinuityReceipt?.status || "missing",
+      continuityReceipt: requestedBody.familyBodyContinuityReceipt || null,
+      showSourceEnvelope,
+      visibleObjectCount,
+      hiddenObjectCount,
+      visibleFamilyBodyCount,
+      visibleRailCount,
+      visibleSourceEnvelopeRailCount,
+      visibleKinds,
+      hiddenKinds,
+    };
+    return state.isolatedFamilyBodyReceipt;
+  }
+
+  function setFamilyBodyIsolation(next = {}) {
+    const enabled = next === true || next?.enabled === true;
+    if (!enabled) {
+      state.familyBodyIsolation = null;
+      applySoloVisibility();
+      return applyFamilyBodyIsolation();
+    }
+    state.familyBodyIsolation = {
+      mode: LAMELLAR_FAMILY_BODY_ISOLATED_WITNESS_MODE,
+      enabled: true,
+      bodyId: typeof next?.bodyId === "string" && next.bodyId ? next.bodyId : state.familyBodyDescriptors?.[0]?.id || null,
+      showSourceEnvelope: next?.showSourceEnvelope === true,
+    };
+    applySoloVisibility();
+    return applyFamilyBodyIsolation();
+  }
+
   function setSoloLayer(layerIndex = null) {
     state.soloLayerIndex = Number.isInteger(layerIndex) ? clamp(layerIndex, 0, MAX_LAYER_COUNT - 1) : null;
     applySoloVisibility();
+    applyFamilyBodyIsolation();
     return state.soloLayerIndex;
   }
 
@@ -2928,11 +3028,35 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     state.lastBuildAt = new Date().toISOString();
     rehydrateSelection();
     applySoloVisibility();
+    applyFamilyBodyIsolation();
     if (frame) frameCamera();
   }
 
   function frameCamera() {
     const preset = VIEW_PRESETS[state.effectiveView] || VIEW_PRESETS.cap_profile;
+    if (state.familyBodyIsolation?.enabled) {
+      const box = new THREE.Box3();
+      let hasVisible = false;
+      for (const child of group.children) {
+        if (!child.visible) continue;
+        box.expandByObject(child);
+        hasVisible = true;
+      }
+      if (hasVisible && !box.isEmpty()) {
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const span = Math.max(size.x, size.y, size.z, 0.8);
+        const direction = new THREE.Vector3(
+          Math.cos(preset.pitch) * Math.sin(preset.yaw),
+          Math.sin(preset.pitch),
+          Math.cos(preset.pitch) * Math.cos(preset.yaw),
+        ).normalize();
+        camera.position.copy(center).add(direction.multiplyScalar(span * 1.85));
+        controls.target.copy(center);
+        controls.update();
+        return;
+      }
+    }
     const x = Math.cos(preset.pitch) * Math.sin(preset.yaw) * preset.distance;
     const y = Math.sin(preset.pitch) * preset.distance;
     const z = Math.cos(preset.pitch) * Math.cos(preset.yaw) * preset.distance;
@@ -2998,5 +3122,5 @@ export function createKaminosLamellarWitness({ THREE, scene, camera, controls })
     };
   }
 
-  return { setActive, setControls, update, frameCamera, debugState, selectBySectionId, selectByStripInstanceId, selectLayerByStripInstanceId, selectStripByStripInstanceId, selectPopulationByPopulationId, setSoloLayer, pickFromClientPoint };
+  return { setActive, setControls, update, frameCamera, debugState, selectBySectionId, selectByStripInstanceId, selectLayerByStripInstanceId, selectStripByStripInstanceId, selectPopulationByPopulationId, setSoloLayer, setFamilyBodyIsolation, pickFromClientPoint };
 }
