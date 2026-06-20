@@ -2926,6 +2926,10 @@ export function createKaminosClayPrototype({
       surfaceSource: payload.surfaceSource || null,
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
+      requestedStrength: payload.requestedStrength ?? payload.strength ?? 1.15,
+      strengthScale: payload.strengthScale ?? 1,
+      brushRampSteps: payload.brushRampSteps ?? 0,
+      brushSampleIndex: payload.brushSampleIndex ?? null,
     };
     const pointerCollider = payload.depthPolicy === CLAY_CUBE_POINTER_DEPTH_POLICY
       ? normalizeClayCubePointerCollider(pointerPayload)
@@ -2955,6 +2959,10 @@ export function createKaminosClayPrototype({
       depthPolicy: clayPointerDepthPolicy,
       radius: pointerCollider.radius,
       strength: pointerCollider.strength,
+      requestedStrength: Number.isFinite(pointerPayload.requestedStrength) ? pointerPayload.requestedStrength : pointerCollider.strength,
+      strengthScale: Number.isFinite(pointerPayload.strengthScale) ? pointerPayload.strengthScale : 1,
+      brushRampSteps: Number.isFinite(pointerPayload.brushRampSteps) ? pointerPayload.brushRampSteps : 0,
+      brushSampleIndex: Number.isFinite(pointerPayload.brushSampleIndex) ? pointerPayload.brushSampleIndex : null,
       screenX: Number.isFinite(payload.screenX) ? payload.screenX : null,
       screenY: Number.isFinite(payload.screenY) ? payload.screenY : null,
     };

@@ -895,8 +895,22 @@ async function main() {
       }
       const requestedBrushRadius = Number(new URL(url).searchParams.get('clay_brush_radius') || 0.17);
       const requestedBrushStrength = Number(new URL(url).searchParams.get('clay_brush_strength') || 1.18);
+      const requestedBrushRampSteps = Number(new URL(url).searchParams.get('clay_brush_ramp_steps') || (isSculptRoute ? 10 : 0));
       assert.ok(Math.abs(state.clayPointerLastHit.radius - requestedBrushRadius) <= 1e-6, 'pointer hit radius did not match route');
-      assert.ok(Math.abs(state.clayPointerLastHit.strength - requestedBrushStrength) <= 1e-6, 'pointer hit strength did not match route');
+      assert.ok(Math.abs(state.clayPointerLastHit.requestedStrength - requestedBrushStrength) <= 1e-6, 'pointer hit requested strength did not match route');
+      assert.equal(state.clayPointerLastHit.brushRampSteps, requestedBrushRampSteps, 'pointer hit ramp steps did not match route');
+      assert.ok(Number.isFinite(state.clayPointerLastHit.strengthScale), 'pointer hit did not report strength scale');
+      assert.ok(
+        Math.abs(state.clayPointerLastHit.strength - requestedBrushStrength * state.clayPointerLastHit.strengthScale) <= 1e-6,
+        'pointer hit strength did not match requested strength times ramp scale',
+      );
+      if (isSculptRoute && requestedBrushRampSteps > 0) {
+        assert.ok(state.clayPointerLastHit.strength < requestedBrushStrength, 'sculpt brush ramp did not reduce final pointer strength');
+        assert.ok(state.clayPointerLastHit.strengthScale >= 0.30, 'sculpt brush ramp fell below minimum usable force scale');
+        assert.ok(state.clayPointerLastHit.strengthScale < 1, 'sculpt brush ramp reached full force during default smoke');
+      } else {
+        assert.ok(Math.abs(state.clayPointerLastHit.strength - requestedBrushStrength) <= 1e-6, 'pointer hit strength did not match route');
+      }
     }
     if (url.includes('hand_pose_fixture') || handPosePayloadPath) {
       const expectedHandPose = injectedHandPosePayload || {
