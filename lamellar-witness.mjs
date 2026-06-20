@@ -20,6 +20,7 @@ const requested = new URL(url).searchParams;
 const manualEnable = args.get('--manual-enable') === '1';
 const recipeSmoke = args.get('--recipe-smoke') === '1' || requested.get('recipe_smoke') === '1';
 const recipeComparisonSmoke = args.get('--recipe-comparison-smoke') === '1' || requested.get('recipe_comparison_smoke') === '1';
+const familyBodySmoke = args.get('--family-body-smoke') === '1' || requested.get('family_body_smoke') === '1';
 const multiEnvelopeSmoke = requested.get('multi_envelope_smoke') === '1';
 const authoringRoundTripSmoke = requested.get('authoring_roundtrip_smoke') === '1';
 const authoringSlotSmoke = requested.get('authoring_slot_smoke') === '1';
@@ -393,6 +394,121 @@ async function main() {
         stripPopulationDescriptors: state.stripPopulationDescriptors,
         lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
         segmentDescriptorCount: state.segmentDescriptorCount,
+        screenshotFallbackReceipt,
+        screenshot: out,
+        visualStats,
+        stderrTail: stderr.slice(-2000),
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
+      ws.close();
+      return;
+    }
+
+    if (familyBodySmoke) {
+      requestPhase = 'family-body-smoke-evaluate';
+      const bodyResult = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const recipes = ['nested-cup', 'equator-belts'];
+          const settleFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const familyBodyReceipts = [];
+          for (const recipe of recipes) {
+            window.__kaminosLamellarApplyShellRecipe?.(recipe);
+            await settleFrame();
+            const state = window.__kaminosLamellarWitness?.debugState?.() || {};
+            const populations = (state.stripPopulationDescriptors || []).filter(population => population.recipe === recipe);
+            const familyBodies = state.familyBodyDescriptors || [];
+            familyBodyReceipts.push({
+              mode: 'family-body-comparison-entry-v0',
+              recipe,
+              composerRecipe: state.composerDescriptor?.shellRecipe || null,
+              populationCount: populations.length,
+              envelopeCount: (state.lamellarEnvelopeDescriptors || []).length,
+              familyBodyCount: familyBodies.length,
+              bodyModes: [...new Set(familyBodies.map(body => body.mode).filter(Boolean))],
+              sourceEnvelopeIds: familyBodies.map(body => body.sourceEnvelopeId).filter(Boolean),
+              continuityStatuses: familyBodies.map(body => body.familyBodyContinuityReceipt?.status || 'missing'),
+              rowCounts: familyBodies.map(body => body.rowCount || 0),
+              columnCounts: familyBodies.map(body => body.columnCount || 0),
+              visualPriorities: [...new Set(familyBodies.map(body => body.visualPriority).filter(Boolean))],
+            });
+          }
+          window.__kaminosLamellarApplyShellRecipe?.('nested-cup');
+          await settleFrame();
+          window.__kaminosLamellarWitness?.frameCamera?.();
+          let overlay = document.getElementById('lamellar-family-body-smoke-overlay');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'lamellar-family-body-smoke-overlay';
+            document.getElementById('viewport')?.appendChild(overlay);
+          }
+          overlay.style.cssText = [
+            'position:absolute',
+            'right:18px',
+            'top:18px',
+            'z-index:20',
+            'width:340px',
+            'max-width:calc(100% - 36px)',
+            'padding:12px',
+            'border:1px solid rgba(255,255,255,0.16)',
+            'border-radius:8px',
+            'background:rgba(8,8,8,0.72)',
+            'backdrop-filter:blur(10px)',
+            'box-shadow:0 12px 32px rgba(0,0,0,0.38)',
+            'font:11px SFMono-Regular,Menlo,Consolas,monospace',
+            'color:#d7d7d7'
+          ].join(';');
+          overlay.innerHTML = '<div style="font:700 13px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#fff;margin-bottom:8px">Family Body Smoke</div>'
+            + familyBodyReceipts.map(card => {
+              const ok = card.familyBodyCount > 0 && card.continuityStatuses.every(status => status === 'pass');
+              return '<div style="display:grid;grid-template-columns:96px 1fr 44px;gap:7px;align-items:center;border-top:1px solid rgba(255,255,255,0.08);padding:7px 0">'
+                + '<span style="color:#fff;font-weight:700">' + card.recipe + '</span>'
+                + '<span style="color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">b' + card.familyBodyCount + ' e' + card.envelopeCount + ' rows ' + card.rowCounts.join('/') + '</span>'
+                + '<span style="justify-self:end;color:' + (ok ? '#86d394' : '#f0b05d') + '">' + (ok ? 'pass' : 'check') + '</span>'
+                + '</div>';
+            }).join('');
+          const state = window.__kaminosLamellarWitness?.debugState?.() || {};
+          return {
+            ...state,
+            familyBodyComparisonReceipt: {
+              mode: 'family-envelope-body-smoke-v0',
+              displayedRecipe: 'nested-cup',
+              comparedRecipes: recipes,
+              familyBodyReceipts,
+              passCount: familyBodyReceipts.filter(entry => entry.familyBodyCount > 0 && entry.continuityStatuses.every(status => status === 'pass')).length,
+            },
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const state = bodyResult.result.value;
+      assert.equal(state.effectiveRoute, 'sphere-domain-section-segment-witness-v0', 'effective Lamellar route mismatch');
+      assert.equal(state.witnessIdentity, 'kaminos-lamellar-witness-v0', 'Lamellar witness identity mismatch');
+      assert.ok(state.active, 'Lamellar family body route was not active');
+      assert.ok((state.familyBodyDescriptors || []).length >= 1, 'Lamellar family body smoke did not export family body descriptors');
+      assert.ok((state.familyBodyComparisonReceipt?.familyBodyReceipts || []).every(entry => entry.familyBodyCount >= 1), 'Lamellar family body smoke found a recipe without family bodies');
+      assert.ok((state.familyBodyComparisonReceipt?.familyBodyReceipts || []).every(entry => entry.continuityStatuses.every(status => status === 'pass')), 'Lamellar family body smoke found a degraded body continuity receipt');
+      const { data: screenshotData, screenshotFallbackReceipt } = await captureScreenshotWithFallback(ws, 'family-body-smoke');
+      const buffer = Buffer.from(screenshotData, 'base64');
+      writeFileSync(out, buffer);
+      const visualStats = assertVisualDiversity(buffer);
+      const report = {
+        schema: 'kaminos.lamellar-witness.v0',
+        mode: 'family-envelope-body-smoke-v0',
+        requestedUrl: url,
+        requestPhase,
+        cdpTimeoutMs,
+        requestedView: requested.get('lamellar_view') || 'cap_profile',
+        effectiveView: state.effectiveView,
+        effectiveRoute: state.effectiveRoute,
+        witnessIdentity: state.witnessIdentity,
+        composerDescriptor: state.composerDescriptor,
+        familyBodyComparisonReceipt: state.familyBodyComparisonReceipt,
+        stripPopulationDescriptors: state.stripPopulationDescriptors,
+        lamellarEnvelopeDescriptors: state.lamellarEnvelopeDescriptors,
+        familyBodyDescriptors: state.familyBodyDescriptors,
+        segmentDescriptorCount: state.segmentDescriptorCount,
+        sectionSegments: state.sectionSegments,
         screenshotFallbackReceipt,
         screenshot: out,
         visualStats,

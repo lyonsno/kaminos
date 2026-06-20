@@ -253,6 +253,12 @@ assert.match(core, /LamellarEnvelopeDescriptor/, 'Lamellar core names curve-fami
 assert.match(core, /curve-family-envelope-loft-v0/, 'Lamellar core records the curve-family envelope loft mode');
 assert.match(core, /multi-eligible-population-envelope-composition-v0/, 'Lamellar envelope generation records multi-population composition mode');
 assert.match(core, /smooth-envelope-body-crisp-rail-debug-v0/, 'Lamellar envelope geometry records smooth body plus crisp rail debug mode');
+assert.match(core, /LamellarFamilyBodyDescriptor/, 'Lamellar core names the primary family body descriptor explicitly');
+assert.match(core, /family-envelope-body-mesh-v0/, 'Lamellar core records the family envelope body mesh mode');
+assert.match(core, /generateLamellarFamilyBodyDescriptors/, 'Lamellar core generates primary family bodies from curve-family envelopes');
+assert.match(core, /makeLamellarFamilyBodyGeometry/, 'Lamellar core builds a distinct family-body mesh instead of reusing broad envelope panes');
+assert.match(core, /familyBodyDescriptors/, 'Lamellar debug state reports family body descriptors');
+assert.match(core, /familyBodyContinuityReceipt/, 'Lamellar family body descriptors carry a continuity receipt');
 assert.match(core, /ribbon-shell-angular-offset-v0/, 'Lamellar ribbon mesh emission records shell-angular width offsets instead of flat tangent-plane offsets');
 assert.match(core, /StripProfileDescriptor/, 'Lamellar core names selected-strip profile descriptors explicitly');
 assert.match(core, /StripPopulationDescriptor/, 'Lamellar core names macro strip population descriptors explicitly');
@@ -336,6 +342,10 @@ assert.match(witness, /layerSpecs/, 'witness records per-layer specs');
 assert.match(witness, /stripInstances/, 'witness records layer-owned strip instances');
 assert.match(witness, /sphereCurveDescriptors/, 'witness records upstream sphere curve descriptors');
 assert.match(witness, /lamellarEnvelopeDescriptors/, 'witness records curve-family envelope descriptors');
+assert.match(witness, /familyBodyDescriptors/, 'witness records primary family body descriptors');
+assert.match(witness, /familyBodySmoke/, 'witness can run a focused family-body smoke');
+assert.match(witness, /--family-body-smoke/, 'witness exposes a focused family-body smoke CLI flag');
+assert.match(witness, /familyBodyComparisonReceipt/, 'witness records family-body comparison evidence');
 assert.match(witness, /authoringRoundTripReceipt/, 'witness records Lamellar authoring save/load round-trip evidence');
 assert.match(witness, /authoringSlotRoundTripReceipt/, 'witness records Lamellar in-app saved-state slot round-trip evidence');
 assert.match(witness, /thumbnailDataUrl/, 'witness records Lamellar saved-slot thumbnail data');
@@ -396,11 +406,13 @@ assert.equal(
   'constrained-shell-recipe-grammar-v0',
   'Lamellar core exposes a stable constrained recipe grammar mode'
 );
+assert.equal(coreModule.LAMELLAR_FAMILY_BODY_MODE, 'family-envelope-body-mesh-v0', 'Lamellar core exposes a stable family body mode');
 assert.ok(Array.isArray(coreModule.LAMELLAR_SHELL_RECIPE_IDS), 'Lamellar core exports recipe ids for UI/test reuse');
 assert.ok(coreModule.LAMELLAR_SHELL_RECIPE_IDS.includes('diagonal-cage'), 'Lamellar recipe ids include diagonal cage');
 assert.equal(typeof coreModule.controlsForLamellarShellRecipe, 'function', 'Lamellar core exposes recipe-to-controls expansion');
 assert.equal(typeof coreModule.describeLamellarShellRecipeGrammar, 'function', 'Lamellar core exposes recipe grammar descriptions');
 assert.equal(typeof coreModule.evaluateLamellarShellRecipeQuality, 'function', 'Lamellar core exposes recipe quality receipts');
+assert.equal(typeof coreModule.generateLamellarFamilyBodyDescriptors, 'function', 'Lamellar core exposes family body generation for tests and witnesses');
 {
   const diagonalControls = coreModule.controlsForLamellarShellRecipe('diagonal-cage', { seed: 17 });
   const diagonalGrammar = coreModule.describeLamellarShellRecipeGrammar('diagonal-cage');
@@ -467,6 +479,35 @@ assert.equal(
   'sphere-shell-enclosure-composition-v0',
   'envelope descriptor records the macro enclosure composition mode'
 );
+assert.ok((envelopeGenerated.familyBodyDescriptors || []).length >= 3, 'curve-family generation emits primary family body descriptors across eligible layer populations');
+const firstFamilyBody = envelopeGenerated.familyBodyDescriptors[0];
+assert.equal(firstFamilyBody.kind, 'LamellarFamilyBodyDescriptor', 'family body descriptor carries explicit kind');
+assert.equal(firstFamilyBody.mode, 'family-envelope-body-mesh-v0', 'family body descriptor carries explicit body-mesh mode');
+assert.equal(firstFamilyBody.sourceEnvelopeId, firstEnvelope.id, 'family body descriptor cites the source envelope it replaces visually');
+assert.equal(firstFamilyBody.meshSource, 'family-envelope-body-from-curve-envelope', 'family body descriptor records its derivation path');
+assert.equal(firstFamilyBody.visualPriority, 'primary-family-body', 'family body descriptor marks the body as the primary visual surface');
+assert.ok((firstFamilyBody.bodyRows || []).length >= 8, 'family body descriptor records sampled body rows');
+assert.ok((firstFamilyBody.bodyRows?.[0]?.points || []).length >= 5, 'family body rows have enough cross-section columns to read as a curved body');
+assert.ok((firstFamilyBody.bodyRails || []).length >= 2, 'family body descriptor records crisp rails');
+assert.equal(firstFamilyBody.familyBodyContinuityReceipt?.mode, 'family-body-continuity-receipt-v0', 'family body descriptor records a continuity receipt mode');
+assert.equal(firstFamilyBody.familyBodyContinuityReceipt?.status, 'pass', 'family body continuity receipt passes for the base envelope fixture');
+assert.ok(
+  firstFamilyBody.familyBodyContinuityReceipt?.maxRowStep > 0
+    && firstFamilyBody.familyBodyContinuityReceipt?.maxRowStep < 0.8,
+  'family body continuity receipt measures a bounded row-to-row step'
+);
+const nestedCupBody = coreModule.generateLamellarSectionSegments(
+  coreModule.controlsForLamellarShellRecipe('nested-cup', { seed: 17 })
+);
+assert.ok((nestedCupBody.familyBodyDescriptors || []).length >= 1, 'nested-cup recipe emits at least one primary family body');
+assert.ok(
+  nestedCupBody.familyBodyDescriptors.every(body => body.familyBodyContinuityReceipt?.status === 'pass'),
+  'nested-cup family bodies preserve continuity receipts for all generated bodies'
+);
+const equatorBeltBody = coreModule.generateLamellarSectionSegments(
+  coreModule.controlsForLamellarShellRecipe('equator-belts', { seed: 17 })
+);
+assert.ok((equatorBeltBody.familyBodyDescriptors || []).length >= 1, 'equator-belts recipe emits at least one primary family body');
 
 const openEnclosure = coreModule.generateLamellarSectionSegments({
   seed: 17,
