@@ -787,16 +787,19 @@ class HybridMeshSplatRoute {
         activeAO: false,
         realSplatRendering: false,
         canvasMode: 'three-point-cloud-preview',
+        sharedCommandEncoder: false,
         correctionAppliedMode: null,
         cropAppliedByRenderer: false,
       };
     }
+    const overlayCapabilities = hybridSplatOverlayState.handle?.capabilities || {};
     return {
-      meshDepthOcclusion: false,
-      sharedCanvasComposite: false,
+      meshDepthOcclusion: overlayCapabilities.meshDepthOcclusion === false ? false : false,
+      sharedCanvasComposite: overlayCapabilities.sharedCanvasComposite === false ? false : false,
+      sharedCommandEncoder: overlayCapabilities.sharedCommandEncoder === false ? false : false,
       activeAO: false,
       realSplatRendering: true,
-      canvasMode: 'dual-canvas-overlay',
+      canvasMode: overlayCapabilities.canvasMode || 'dual-canvas-overlay',
       correctionAppliedMode: 'visual-root-world-matrix',
       cropAppliedByRenderer: false,
     };
@@ -844,6 +847,8 @@ function hybridSplatOverlayDebugState() {
     cropAppliedByRenderer: false,
     canvasConnected: !!handle?.canvas?.isConnected,
     sceneLoaded: !!handle?.scene,
+    handleCapabilities: handle?.capabilities || null,
+    sourceIdentity: handle?.sourceIdentity || null,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
@@ -867,6 +872,37 @@ function setHybridSplatOverlayModuleUrl(url) {
   localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
   return hybridSplatOverlayState.moduleUrl;
+}
+
+function currentHybridOverlayViewport() {
+  const size = new THREE.Vector2();
+  if (renderer?.getDrawingBufferSize) {
+    renderer.getDrawingBufferSize(size);
+  } else {
+    size.set(window.innerWidth || 0, window.innerHeight || 0);
+  }
+  return {
+    width: size.x,
+    height: size.y,
+    devicePixelRatio: window.devicePixelRatio || 1,
+  };
+}
+
+function splatOverlayCorrectionIdentity(record) {
+  const correction = normalizeSplatCorrection(record?.splat?.correction);
+  return {
+    rotation: correction.orientation.rotation.slice(),
+    axisFlips: correction.axisFlips.map(value => value < 0),
+    centroidOffset: correction.centroidOffset.slice(),
+    crop: JSON.parse(JSON.stringify(correction.crop)),
+  };
+}
+
+function applyHybridSplatOverlayCorrectionIdentity(handle, record) {
+  if (!handle || !record) return null;
+  const correctionIdentity = splatOverlayCorrectionIdentity(record);
+  handle.setCorrectionIdentity(correctionIdentity);
+  return correctionIdentity;
 }
 
 async function loadHybridSplatOverlayModule() {
@@ -940,6 +976,9 @@ function updateHybridSplatOverlayFrame() {
   const view = new Float32Array(effectiveViewMatrix.elements);
   const projection = new Float32Array(camera.projectionMatrix.elements);
   const cameraPosition = new Float32Array(cameraLocal.toArray());
+  const viewport = currentHybridOverlayViewport();
+  handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
+  handle.setModelMatrix(new Float32Array(record.object.matrixWorld.elements));
   handle.setCameraMatrices(view, projection, cameraPosition);
   hybridSplatOverlayState.frameCount += 1;
   hybridSplatOverlayState.lastFrame = {
@@ -949,12 +988,15 @@ function updateHybridSplatOverlayFrame() {
     canvasMode: 'dual-canvas-overlay',
     correctionAppliedMode: 'visual-root-world-matrix',
     cropAppliedByRenderer: false,
+    viewport,
     objectWorldMatrix: Array.from(record.object.matrixWorld.elements),
     visualRootWorldMatrix: Array.from(visualRoot.matrixWorld.elements),
     effectiveViewMatrix: Array.from(effectiveViewMatrix.elements),
     projectionMatrix: Array.from(camera.projectionMatrix.elements),
     cameraPositionInSplatLocal: Array.from(cameraPosition),
     splatCorrection: normalizeSplatCorrection(record.splat?.correction),
+    overlayCapabilities: handle.capabilities || null,
+    sourceIdentity: handle.sourceIdentity || null,
     updatedAt: new Date().toISOString(),
   };
   return hybridSplatOverlayState.lastFrame;
@@ -977,8 +1019,9 @@ async function startSelectedSplatHybridRenderer() {
     }
     hybridSplatOverlayState.objectId = entry.id;
     const handle = await ensureHybridSplatOverlayHandle();
-    updateHybridSplatOverlayFrame();
     await handle.loadPly(entry.source, entry.fileName || entry.label || 'splat.ply');
+    applyHybridSplatOverlayCorrectionIdentity(handle, entry);
+    updateHybridSplatOverlayFrame();
     handle.start();
     hybridSplatOverlayState.loadedSource = entry.source;
     hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;

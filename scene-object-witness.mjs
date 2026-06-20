@@ -2316,16 +2316,22 @@ async function runHybridSplatOverlayScenario(ws) {
         '  canvas.width = 32;',
         '  canvas.height = 32;',
         '  container.appendChild(canvas);',
-        '  const state = { sources: [], frames: 0, started: false, stopped: false, destroyed: false, options };',
+        '  const capabilities = Object.freeze({ canvasMode: "dual-canvas-overlay", meshDepthOcclusion: false, sharedCanvasComposite: false, sharedCommandEncoder: false });',
+        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], started: false, stopped: false, destroyed: false, options, sourceIdentity: null, capabilities };',
         '  function publish() { window.__hybridSplatOverlayWitness = { ...state, canvasConnected: canvas.isConnected }; }',
         '  publish();',
         '  return {',
         '    canvas,',
         '    get scene() { return state.sources.length ? { witnessScene: true } : null; },',
+        '    get capabilities() { return capabilities; },',
+        '    get sourceIdentity() { return state.sourceIdentity; },',
         '    setCameraMatrices(viewMatrix, projectionMatrix, cameraPosition) { state.frames += 1; state.lastViewLength = viewMatrix.length; state.lastProjectionLength = projectionMatrix.length; state.lastCameraLength = cameraPosition.length; publish(); },',
-        '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); publish(); },',
-        '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); publish(); },',
-        '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); publish(); },',
+        '    setModelMatrix(matrix) { state.modelMatrices.push(Array.from(matrix)); publish(); },',
+        '    setViewport(width, height, devicePixelRatio = 1) { state.viewports.push({ width, height, devicePixelRatio }); publish(); },',
+        '    setCorrectionIdentity(correction) { state.corrections.push(correction); if (state.sourceIdentity) state.sourceIdentity = { ...state.sourceIdentity, correctionApplied: true, correctionIdentity: correction }; publish(); },',
+        '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); state.sourceIdentity = { source: String(source), loadMethod: "ply-url", correctionApplied: false }; publish(); },',
+        '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); state.sourceIdentity = { source: String(url), loadMethod: "manifest", correctionApplied: false }; publish(); },',
+        '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); state.sourceIdentity = { source: String(attributes?.sourceKind || "attributes"), loadMethod: "attributes", correctionApplied: false }; publish(); },',
         '    start() { state.started = true; publish(); },',
         '    stop() { state.stopped = true; publish(); },',
         '    destroy() { state.destroyed = true; canvas.remove(); publish(); },',
@@ -2379,6 +2385,24 @@ async function runHybridSplatOverlayScenario(ws) {
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.cropAppliedByRenderer !== false
     || capabilities.cropAppliedByRenderer !== false) {
     throw new Error(`hybrid splat overlay falsely claimed crop renderer application: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (capabilities.sharedCommandEncoder !== false) {
+    throw new Error(`hybrid splat overlay lost sharedCommandEncoder=false: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const witness = lastEvidence.hybridSplatOverlay.witness || {};
+  const lastFrame = lastEvidence.hybridSplatOverlay.overlayDebug?.lastFrame || {};
+  if (!witness.modelMatrices?.length || !Array.isArray(lastFrame.objectWorldMatrix)) {
+    throw new Error(`hybrid splat overlay did not receive model matrix: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (!witness.viewports?.length || !lastFrame.viewport?.width || !lastFrame.viewport?.height) {
+    throw new Error(`hybrid splat overlay did not receive viewport identity: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (!witness.corrections?.length || witness.sourceIdentity?.correctionApplied !== true) {
+    throw new Error(`hybrid splat overlay did not receive correction identity: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (lastEvidence.hybridSplatOverlay.overlayDebug?.sourceIdentity?.source !== splatSource
+      || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== splatSource) {
+    throw new Error(`hybrid splat overlay did not expose renderer source identity: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
 }
 

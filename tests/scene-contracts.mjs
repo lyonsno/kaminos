@@ -103,6 +103,11 @@ assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay h
 assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
 assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'selected splats can start the Hybrid Mesh Splat Renderer overlay from the UI');
 assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
+assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the selected splat objectWorldMatrix through the PBRnext frame contract');
+assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
+assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');
+assert.match(index, /sourceIdentity/, 'Hybrid Renderer debug state exposes renderer-reported source identity');
+assert.match(index, /sharedCommandEncoder/, 'Hybrid Renderer route capabilities preserve explicit no-shared-command-encoder truth');
 assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer route reports dual-canvas overlay mode when active');
 assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybrid Renderer overlay frame records how splat correction transforms are applied');
 assert.match(index, /cropAppliedByRenderer:\s*false/, 'Hybrid Renderer overlay must not pretend crop sidecars are renderer-applied in the P0 bridge');
