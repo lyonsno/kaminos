@@ -422,6 +422,14 @@ assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleFlamePacketGate
 assert.match(core, /bonfirePrimaryVisibleFrontEmission/, 'bonfire visible emission has a named primary front/topology source instead of broad source occupancy plus topology garnish');
 assert.match(core, /let bonfireRadianceBirth = clamp\(\s*bonfirePrimaryVisibleFrontEmission/, 'bonfire radiance birth must start from primary front/topology emission');
 assert.match(core, /let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFrontEmission/, 'bonfire visible-fire carrier birth must start from primary front/topology emission');
+assert.match(core, /seedBonfireFlameSourceRelief/, 'bonfire initial flame seed must name source-band relief instead of seeding broad source flame directly');
+assert.doesNotMatch(core, /data\[i \+ 8\] = source \* 0\.90;/, 'bonfire initial flame storage must not seed a smooth source plug as source * 0.90');
+assert.match(core, /bonfireFlameStorageSourceRelief/, 'bonfire live flame storage needs its own stricter source-band relief instead of reusing broad visible-source relief');
+assert.match(core, /flame = flame \* mix\(1\.0, max\(0\.08, bonfireFlameStorageSourceRelief\)/, 'bonfire flame retention must use the stricter flame storage source relief');
+assert.match(core, /bonfireRenderedFireEdgeCarrier/, 'bonfire raymarch emission needs a named edge carrier so storage relief does not flatten visible fire edges');
+assert.match(core, /let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier/, 'bonfire visible emission must start from the rendered edge carrier before broad body emission');
+assert.match(core, /seedBonfireSourceY = isBonfireInitialScene \? 0\.62 : -0\.74/, 'bonfire initial fluid seed must use the same source Y as the live bonfire solver');
+assert.match(core, /seedVisibleAboveSource = isBonfireInitialScene \? seedBonfireSourceY - fy : fy \+ 0\.74/, 'bonfire initial visible relief must use the live solver source-up convention');
 assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire visible-fire carrier storage must receive sidecar packet topology rather than only broad brightness');
 assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire fire-lick breakup must receive sidecar packet topology before rendering');
 assert.match(core, /visibleFireCarrier/, 'bonfire route names fireLayer.z as a visible-fire carrier rather than cosmetic detail');
