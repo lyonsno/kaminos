@@ -1940,13 +1940,34 @@ function installClayPointerInteraction(params) {
     pointerRaycaster.setFromCamera(ndc, camera);
     let hitPoint = null;
     let surfaceNormal = null;
+    let surfaceSource = null;
     let depthPolicy = 'horizontal-plane-y0';
     let solidPointerBounds = null;
-    if (cubePointerRoute || sculptPointerRoute) {
+    let sculptSurfaceHit = null;
+    if (sculptPointerRoute && clayPrototype?.intersectSculptSurfaceRay) {
+      sculptSurfaceHit = clayPrototype.intersectSculptSurfaceRay({
+        origin: pointerRaycaster.ray.origin.toArray(),
+        direction: pointerRaycaster.ray.direction.toArray(),
+      });
+    }
+    if (sculptSurfaceHit?.point) {
+      hitPoint = new THREE.Vector3(
+        sculptSurfaceHit.point[0],
+        sculptSurfaceHit.point[1],
+        sculptSurfaceHit.point[2],
+      );
+      surfaceNormal = sculptSurfaceHit.surfaceNormal || null;
+      surfaceSource = sculptSurfaceHit.source || null;
+      depthPolicy = CLAY_SCULPT_POINTER_DEPTH_POLICY;
+      solidPointerBounds = CLAY_SCULPT_POINTER_BOUNDS;
+    } else if (sculptPointerRoute && clayPrototype?.intersectSculptSurfaceRay) {
+      return null;
+    } else if (cubePointerRoute || sculptPointerRoute) {
       solidPointerBounds = cubePointerRoute ? CLAY_CUBE_POINTER_BOUNDS : CLAY_SCULPT_POINTER_BOUNDS;
       const solidHit = intersectPointerBounds(pointerRaycaster.ray, solidPointerBounds);
       hitPoint = solidHit?.point || null;
       surfaceNormal = solidHit?.surfaceNormal || null;
+      surfaceSource = cubePointerRoute ? 'cube-pointer-bounds-raycast-v0' : 'sculpt-pointer-bounds-raycast-fallback-v0';
       depthPolicy = cubePointerRoute ? CLAY_CUBE_POINTER_DEPTH_POLICY : CLAY_SCULPT_POINTER_DEPTH_POLICY;
     } else if (pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) {
       hitPoint = pointerPoint;
@@ -1967,6 +1988,7 @@ function installClayPointerInteraction(params) {
       center,
       rawCenter: [hitPoint.x, hitPoint.y, hitPoint.z],
       surfaceNormal,
+      surfaceSource,
       depthPolicy,
       radius: clayPointerBrushRadius,
       strength: event.shiftKey ? clayPointerBrushStrength * 0.5 : clayPointerBrushStrength,

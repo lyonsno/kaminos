@@ -1302,6 +1302,18 @@ export function createKaminosClayPrototype({
   let clayPointerDragStepCount = 0;
   let clayPointerLastHit = null;
   let clayPointerDepthPolicy = null;
+  const sculptSurfaceRayOrigin = new THREE.Vector3();
+  const sculptSurfaceRayDirection = new THREE.Vector3();
+  const sculptSurfaceRayA = new THREE.Vector3();
+  const sculptSurfaceRayB = new THREE.Vector3();
+  const sculptSurfaceRayC = new THREE.Vector3();
+  const sculptSurfaceRayEdge1 = new THREE.Vector3();
+  const sculptSurfaceRayEdge2 = new THREE.Vector3();
+  const sculptSurfaceRayH = new THREE.Vector3();
+  const sculptSurfaceRayS = new THREE.Vector3();
+  const sculptSurfaceRayQ = new THREE.Vector3();
+  const sculptSurfaceRayPoint = new THREE.Vector3();
+  const sculptSurfaceWorldNormal = new THREE.Vector3();
   let clayBrushBoundaryClampCount = 0;
   const clayBrushBoundaryWarnings = [];
   const clayTimingEvidenceSource = 'webgpu-step-readback-wall-time';
@@ -2911,6 +2923,7 @@ export function createKaminosClayPrototype({
       center,
       rawCenter,
       surfaceNormal: payload.surfaceNormal,
+      surfaceSource: payload.surfaceSource || null,
       radius: payload.radius ?? 0.18,
       strength: payload.strength ?? 1.15,
     };
@@ -2938,6 +2951,7 @@ export function createKaminosClayPrototype({
         ? pointerCollider.rawCenter
         : rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
       surfaceNormal: Array.isArray(pointerCollider.surfaceNormal) ? pointerCollider.surfaceNormal : null,
+      surfaceSource: pointerPayload.surfaceSource,
       depthPolicy: clayPointerDepthPolicy,
       radius: pointerCollider.radius,
       strength: pointerCollider.strength,
@@ -2951,6 +2965,69 @@ export function createKaminosClayPrototype({
       active: clayPointerActive,
       colliderCount: clayPointerColliderCount,
       lastHit: clayPointerLastHit,
+    };
+  }
+
+  function intersectSculptSurfaceRay(payload = {}) {
+    if (!claySculptEnabled || !sculptBoundarySkin || !claySculptSurfaceVisible) return null;
+    const origin = Array.isArray(payload.origin) ? payload.origin : null;
+    const direction = Array.isArray(payload.direction) ? payload.direction : null;
+    if (!origin || !direction) return null;
+    const ox = Number(origin[0]);
+    const oy = Number(origin[1]);
+    const oz = Number(origin[2]);
+    const dx = Number(direction[0]);
+    const dy = Number(direction[1]);
+    const dz = Number(direction[2]);
+    if (![ox, oy, oz, dx, dy, dz].every(Number.isFinite)) return null;
+    sculptSurfaceRayOrigin.set(ox, oy, oz);
+    sculptSurfaceRayDirection.set(dx, dy, dz);
+    if (sculptSurfaceRayDirection.lengthSq() < 1e-12) return null;
+    sculptSurfaceRayDirection.normalize();
+    sculptBoundarySkin.updateMatrixWorld(true);
+    const geometry = sculptBoundarySkin.geometry;
+    const position = geometry?.attributes?.position || null;
+    const index = geometry?.index || null;
+    if (!position || !index) return null;
+
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestNormal = null;
+    const epsilon = 1e-7;
+    for (let i = 0; i < index.count; i += 3) {
+      sculptSurfaceRayA.fromBufferAttribute(position, index.getX(i)).applyMatrix4(sculptBoundarySkin.matrixWorld);
+      sculptSurfaceRayB.fromBufferAttribute(position, index.getX(i + 1)).applyMatrix4(sculptBoundarySkin.matrixWorld);
+      sculptSurfaceRayC.fromBufferAttribute(position, index.getX(i + 2)).applyMatrix4(sculptBoundarySkin.matrixWorld);
+      sculptSurfaceRayEdge1.subVectors(sculptSurfaceRayB, sculptSurfaceRayA);
+      sculptSurfaceRayEdge2.subVectors(sculptSurfaceRayC, sculptSurfaceRayA);
+      sculptSurfaceRayH.crossVectors(sculptSurfaceRayDirection, sculptSurfaceRayEdge2);
+      const determinant = sculptSurfaceRayEdge1.dot(sculptSurfaceRayH);
+      if (Math.abs(determinant) < epsilon) continue;
+      const inverseDeterminant = 1 / determinant;
+      sculptSurfaceRayS.subVectors(sculptSurfaceRayOrigin, sculptSurfaceRayA);
+      const u = inverseDeterminant * sculptSurfaceRayS.dot(sculptSurfaceRayH);
+      if (u < -epsilon || u > 1 + epsilon) continue;
+      sculptSurfaceRayQ.crossVectors(sculptSurfaceRayS, sculptSurfaceRayEdge1);
+      const v = inverseDeterminant * sculptSurfaceRayDirection.dot(sculptSurfaceRayQ);
+      if (v < -epsilon || u + v > 1 + epsilon) continue;
+      const distance = inverseDeterminant * sculptSurfaceRayEdge2.dot(sculptSurfaceRayQ);
+      if (distance <= epsilon || distance >= bestDistance) continue;
+      bestDistance = distance;
+      sculptSurfaceWorldNormal.crossVectors(sculptSurfaceRayEdge1, sculptSurfaceRayEdge2).normalize();
+      if (sculptSurfaceWorldNormal.dot(sculptSurfaceRayDirection) < 0) {
+        sculptSurfaceWorldNormal.multiplyScalar(-1);
+      }
+      bestNormal = sculptSurfaceWorldNormal.toArray();
+    }
+    if (!Number.isFinite(bestDistance)) return null;
+    sculptSurfaceRayPoint
+      .copy(sculptSurfaceRayDirection)
+      .multiplyScalar(bestDistance)
+      .add(sculptSurfaceRayOrigin);
+    return {
+      point: sculptSurfaceRayPoint.toArray(),
+      surfaceNormal: bestNormal,
+      distance: bestDistance,
+      source: 'sculpt-boundary-skin-raycast-v0',
     };
   }
 
@@ -3210,6 +3287,7 @@ export function createKaminosClayPrototype({
     },
     setColliders,
     setHandPoseFrame,
+    intersectSculptSurfaceRay,
     setPointerClayCollider,
     clearPointerClayCollider,
     setCpuShadowBenchmarkEnabled,

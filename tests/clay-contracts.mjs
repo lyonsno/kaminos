@@ -330,6 +330,13 @@ assert.match(witness, /Input\.dispatchMouseEvent/, 'clay witness sends real poin
 assert.match(witness, /pointer-drag-geometry/, 'clay witness reports pointer drag geometry failures before dispatch');
 assert.match(index, /CLAY_CUBE_POINTER_DEPTH_POLICY\s*=\s*'camera-ray-nearest-cube-surface'/, 'cube brush depth is anchored on the nearest cube surface, not a back-plane hit');
 assert.match(index, /intersectClayCubeBounds/, 'cube pointer brush computes a camera-ray/cube-bounds intersection');
+assert.match(core, /intersectSculptSurfaceRay/, 'clay prototype exposes live sculpt boundary-skin ray picking');
+assert.match(index, /intersectSculptSurfaceRay/, 'sculpt pointer brush asks the live sculpt surface before proxy bounds');
+assert.match(index, /sculptSurfaceHit\?\.point/, 'sculpt pointer brush prefers live surface hit point over proxy bounds');
+assert.match(core, /surfaceSource/, 'clay debug state preserves pointer surface-picking source identity');
+assert.match(core, /sculpt-boundary-skin-raycast-v0/, 'sculpt pointer brush can report live boundary-skin pick source identity');
+assert.match(witness, /clay_orbit_probe/, 'clay witness can exercise camera-orbit sculpt picking');
+assert.match(witness, /sculpt orbit probe did not change hit normal/, 'clay witness rejects sculpt picking that is frozen to the launch view');
 assert.match(witness, /visualRecording/, 'clay witness reports automatic visual recording metadata');
 assert.match(witness, /recordFrame/, 'clay witness records frame PNGs during dynamic brush smoke');
 assert.match(witness, /writeFilmstripPng/, 'clay witness writes an inspectable filmstrip PNG');

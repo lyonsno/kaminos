@@ -13,6 +13,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 const url = args.get('--url') || 'http://127.0.0.1:8098/?kaminos_clay_sim=1&clay_cube=1&clay_cube_grid=10x10x10&clay_steps=7&clay_debug_colliders=0&clay_benchmark_shadow=0&clay_normal_cadence=every_3&clay_colliders=clay_fixture_hand&clay_brush_hotkey=1';
 const routeUsesPointerDrag = url.includes('clay_interactive=1') || url.includes('clay_brush_hotkey=1');
 const routeUsesBrushHotkey = url.includes('clay_brush_hotkey=1');
+const routeUsesOrbitProbe = url.includes('clay_orbit_probe=1');
 const cornerSmokeTarget = new URL(url).searchParams.get('clay_corner_smoke') || '';
 const out = resolve(args.get('--out') || '/tmp/kaminos-clay-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
@@ -283,12 +284,22 @@ function pickClayHandPosePayload(json) {
     || null;
 }
 
+function vectorDistance(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length < 3 || b.length < 3) return Number.POSITIVE_INFINITY;
+  const dx = Number(a[0]) - Number(b[0]);
+  const dy = Number(a[1]) - Number(b[1]);
+  const dz = Number(a[2]) - Number(b[2]);
+  if (![dx, dy, dz].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   let phase = 'launch';
   const [width, height] = windowSize.split(',').map(v => Number(v.trim()) || 0);
   const recordingFrames = [];
+  let sculptOrbitProbe = null;
   let filmstripWritten = false;
   let filmstripMetadata = null;
   const proc = spawn(chrome, [
@@ -395,6 +406,90 @@ async function main() {
       await recordFrame('hand-pose-payload');
     }
 
+    if (routeUsesOrbitProbe) {
+      phase = 'camera-orbit-probe';
+      const readCenterHit = async label => {
+        const evalResult = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const canvas = document.querySelector('canvas');
+            const pointerInteraction = window.__kaminosClayPointerInteraction;
+            if (!canvas) return { ok: false, reason: 'missing clay canvas' };
+            if (!pointerInteraction?.eventToClayHit) return { ok: false, reason: 'missing pointer interaction hit sampler' };
+            const rect = canvas.getBoundingClientRect();
+            if (!(rect.width > 16 && rect.height > 16)) {
+              return { ok: false, reason: 'missing clay canvas bounds', rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
+            }
+            const isSculptRoute = ${JSON.stringify(url.includes('clay_sculpt=1'))};
+            const liveSculptSource = 'sculpt-boundary-skin-raycast-v0';
+            let screenX = rect.left + rect.width * 0.50;
+            let screenY = rect.top + rect.height * 0.50;
+            let hit = pointerInteraction.eventToClayHit({ clientX: screenX, clientY: screenY, shiftKey: false });
+            if (isSculptRoute && hit?.surfaceSource !== liveSculptSource) {
+              let best = null;
+              for (const fy of [0.34, 0.38, 0.42, 0.46, 0.50, 0.54, 0.58, 0.62]) {
+                for (const fx of [0.28, 0.34, 0.40, 0.46, 0.52, 0.58, 0.64, 0.70, 0.76]) {
+                  const x = rect.left + rect.width * fx;
+                  const y = rect.top + rect.height * fy;
+                  const candidate = pointerInteraction.eventToClayHit({ clientX: x, clientY: y, shiftKey: false });
+                  if (candidate?.surfaceSource !== liveSculptSource) continue;
+                  const distance = (fx - 0.50) ** 2 + (fy - 0.50) ** 2;
+                  if (!best || distance < best.distance) best = { x, y, hit: candidate, distance };
+                }
+              }
+              if (best) {
+                screenX = best.x;
+                screenY = best.y;
+                hit = best.hit;
+              }
+            }
+            return {
+              ok: !!hit,
+              label: ${JSON.stringify(label)},
+              reason: hit ? null : 'center ray missed clay',
+              hit,
+              screenX,
+              screenY,
+              rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            };
+          })()`,
+          returnByValue: true,
+        });
+        if (evalResult.exceptionDetails) {
+          throw new Error(`sculpt orbit probe hit evaluation failed: ${evalResult.exceptionDetails.text || 'unknown exception'}`);
+        }
+        return evalResult.result?.value;
+      };
+      const before = await readCenterHit('before-orbit');
+      assert.ok(before?.ok, before?.reason || 'sculpt orbit probe could not sample the pre-orbit hit');
+      await recordFrame('orbit-before');
+      const orbit = before.rect;
+      const y = orbit.top + orbit.height * 0.52;
+      const startX = orbit.left + orbit.width * 0.68;
+      const midX = orbit.left + orbit.width * 0.38;
+      const endX = orbit.left + orbit.width * 0.18;
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: startX, y });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: startX, y, button: 'left', buttons: 1, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: midX, y, button: 'left', buttons: 1 });
+      await delay(80);
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: endX, y, button: 'left', buttons: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: endX, y, button: 'left', buttons: 0, clickCount: 1 });
+      await delay(450);
+      const after = await readCenterHit('after-orbit');
+      assert.ok(after?.ok, after?.reason || 'sculpt orbit probe could not sample the post-orbit hit');
+      sculptOrbitProbe = {
+        evidenceKind: 'cdp-orbit-controls-center-surface-raycast-v0',
+        before,
+        after,
+        normalDelta: vectorDistance(before.hit?.surfaceNormal, after.hit?.surfaceNormal),
+        rawCenterDelta: vectorDistance(before.hit?.rawCenter, after.hit?.rawCenter),
+      };
+      assert.ok(
+        sculptOrbitProbe.normalDelta > 0.15,
+        `sculpt orbit probe did not change hit normal: ${JSON.stringify(sculptOrbitProbe)}`,
+      );
+      await recordFrame('orbit-after');
+    }
+
     if (routeUsesPointerDrag) {
       phase = 'pointer-drag-geometry';
       let drag = null;
@@ -411,6 +506,47 @@ async function main() {
               return { ok: false, reason: 'missing clay canvas bounds', rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
             }
             const cornerSmokeTarget = ${JSON.stringify(cornerSmokeTarget)};
+            const isSculptRoute = ${JSON.stringify(url.includes('clay_sculpt=1'))};
+            const liveSculptSource = 'sculpt-boundary-skin-raycast-v0';
+            const liveSculptSamples = [];
+            if (isSculptRoute) {
+              for (const fy of [0.34, 0.38, 0.42, 0.46, 0.50, 0.54, 0.58, 0.62]) {
+                for (const fx of [0.28, 0.34, 0.40, 0.46, 0.52, 0.58, 0.64, 0.70, 0.76]) {
+                  const x = rect.left + rect.width * fx;
+                  const y = rect.top + rect.height * fy;
+                  const hit = pointerInteraction.eventToClayHit({ clientX: x, clientY: y, shiftKey: false });
+                  if (hit?.surfaceSource === liveSculptSource) {
+                    liveSculptSamples.push({ x, y, fx, fy, hit });
+                  }
+                }
+              }
+              if (liveSculptSamples.length < 3) {
+                return {
+                  ok: false,
+                  reason: 'missing live sculpt surface samples',
+                  liveSculptSampleCount: liveSculptSamples.length,
+                  rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                };
+              }
+              const nearestLiveSample = (targetFx, targetFy) => liveSculptSamples
+                .slice()
+                .sort((a, b) => ((a.fx - targetFx) ** 2 + (a.fy - targetFy) ** 2) - ((b.fx - targetFx) ** 2 + (b.fy - targetFy) ** 2))[0];
+              const start = nearestLiveSample(0.42, 0.50);
+              const mid = nearestLiveSample(0.48, 0.50);
+              const end = nearestLiveSample(0.56, 0.51);
+              return {
+                ok: true,
+                startX: start.x,
+                startY: start.y,
+                midX: mid.x,
+                midY: mid.y,
+                endX: end.x,
+                endY: end.y,
+                liveSculptSampleCount: liveSculptSamples.length,
+                liveSculptSampleSources: liveSculptSamples.slice(0, 5).map(sample => sample.hit.surfaceSource),
+                rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+              };
+            }
             const dragPlan = cornerSmokeTarget === 'front_upper_right'
               ? {
                 startX: rect.left + rect.width * 0.62,
@@ -636,9 +772,18 @@ async function main() {
       assert.ok((state.claySculptSurfaceUpdateCount ?? 0) >= 6, 'sculpt diagnostic surface did not update across the pointer smoke');
       assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-sculpt-surface', 'sculpt pointer hit used the old heightfield depth policy');
       assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-sculpt-surface', 'sculpt pointer hit did not preserve depth policy');
-      assert.deepEqual(state.clayPointerLastHit.surfaceNormal, [0, 0, -1], 'sculpt front-face pointer hit did not preserve inward surface normal');
-      assert.ok((state.clayPointerLastHit.rawCenter?.[2] ?? 0) > 0.30, 'sculpt pointer raw hit landed behind the visible front face');
-      assert.ok(Math.abs(state.clayPointerLastHit.z - state.clayPointerLastHit.rawCenter[2]) <= 1e-6, 'sculpt pointer effective hit was inset from the raw sculpt face hit');
+      assert.equal(state.clayPointerLastHit.surfaceSource, 'sculpt-boundary-skin-raycast-v0', 'sculpt pointer hit used proxy bounds instead of live boundary-skin picking');
+      assert.ok(Array.isArray(state.clayPointerLastHit.surfaceNormal), 'sculpt pointer hit did not preserve inward surface normal');
+      assert.ok(
+        vectorDistance(state.clayPointerLastHit.surfaceNormal, [0, 0, 0]) > 0.90,
+        'sculpt pointer hit normal was not normalized enough to drive brush force',
+      );
+      if (!routeUsesOrbitProbe) {
+        assert.ok((state.clayPointerLastHit.surfaceNormal[2] ?? 0) < -0.20, 'sculpt front-face pointer hit did not drive inward from the visible face');
+        assert.ok(Math.abs(state.clayPointerLastHit.z - state.clayPointerLastHit.rawCenter[2]) <= 1e-6, 'sculpt pointer effective hit was inset from the raw sculpt face hit');
+      } else {
+        assert.ok(sculptOrbitProbe, 'sculpt orbit probe did not record hit evidence');
+      }
       assert.ok((state.claySculptDeformedParticleCount ?? Infinity) < (state.claySculptParticleCount ?? 0) * 0.50, 'sculpt brush leaked deformation into most of the particle body');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
@@ -1008,6 +1153,7 @@ async function main() {
       brightOrangePixels: metrics.brightOrangePixels,
       litPixels: metrics.litPixels,
       visualRecording: visualRecordingReport,
+      sculptOrbitProbe,
       recordingFrameCount: visualRecordingReport.recordingFrameCount,
       recordingFrames: visualRecordingReport.recordingFrames,
       filmstrip: visualRecordingReport.filmstrip,
@@ -1057,6 +1203,7 @@ async function main() {
       screenshot: out,
       screenshotWritten: failureScreenshotWritten,
       visualRecording: visualRecording(),
+      sculptOrbitProbe,
       recordingFrameCount: recordingFrames.length,
       recordingFrames: recordingFrames.slice(),
       filmstrip: recordingFilmstripPath,
