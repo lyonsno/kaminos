@@ -543,7 +543,10 @@ async function main() {
       !Number.isFinite(sample.simReadback.frontTopologySourcePlugRatio) ||
       !Number.isFinite(sample.simReadback.frontTopologyRisingBodyRatio) ||
       !Number.isFinite(sample.simReadback.frontTopologyHeightSpread) ||
-      !Number.isFinite(sample.simReadback.frontTopologyRadianceCoupling)
+      !Number.isFinite(sample.simReadback.frontTopologyRadianceCoupling) ||
+      !Number.isFinite(sample.simReadback.frontTopologyFlameDetailCoupling) ||
+      !Number.isFinite(sample.simReadback.frontTopologyFireLickCoupling) ||
+      !Number.isFinite(sample.simReadback.frontTopologyVisibleTransferLoss)
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -684,6 +687,17 @@ async function main() {
       throw new Error(`bonfire plume retained smooth fire source plug: ${JSON.stringify({
         fireSourcePlugRatio: sample.simReadback.fireSourcePlugRatio,
         fireRisingBodyRatio: sample.simReadback.fireRisingBodyRatio,
+        fireChannelSourcePlugDominant: sample.simReadback.fireChannelSourcePlugDominant,
+        fireFlameSourcePlugRatio: sample.simReadback.fireFlameSourcePlugRatio,
+        fireEmberSourcePlugRatio: sample.simReadback.fireEmberSourcePlugRatio,
+        fireFlameDetailSourcePlugRatio: sample.simReadback.fireFlameDetailSourcePlugRatio,
+        fireLickSourcePlugRatio: sample.simReadback.fireLickSourcePlugRatio,
+        fireHeatSourcePlugRatio: sample.simReadback.fireHeatSourcePlugRatio,
+        fireFlameRisingBodyRatio: sample.simReadback.fireFlameRisingBodyRatio,
+        fireEmberRisingBodyRatio: sample.simReadback.fireEmberRisingBodyRatio,
+        fireFlameDetailRisingBodyRatio: sample.simReadback.fireFlameDetailRisingBodyRatio,
+        fireLickRisingBodyRatio: sample.simReadback.fireLickRisingBodyRatio,
+        fireHeatRisingBodyRatio: sample.simReadback.fireHeatRisingBodyRatio,
         liftedFireShellRatio: sample.simReadback.liftedFireShellRatio,
         liftedFireInteriorRatio: sample.simReadback.liftedFireInteriorRatio,
         emissionDetailMean: sample.simReadback.emissionDetailMean,
@@ -705,6 +719,9 @@ async function main() {
         frontTopologyRisingBodyRatio: sample.simReadback.frontTopologyRisingBodyRatio,
         frontTopologyHeightSpread: sample.simReadback.frontTopologyHeightSpread,
         frontTopologyRadianceCoupling: sample.simReadback.frontTopologyRadianceCoupling,
+        frontTopologyFlameDetailCoupling: sample.simReadback.frontTopologyFlameDetailCoupling,
+        frontTopologyFireLickCoupling: sample.simReadback.frontTopologyFireLickCoupling,
+        frontTopologyVisibleTransferLoss: sample.simReadback.frontTopologyVisibleTransferLoss,
         maxFireBinWeight: sample.simReadback.maxFireBinWeight,
         fireWeight: sample.simReadback.fireWeight,
         fireVisualRiseDisplacement: sample.simReadback.fireVisualRiseDisplacement,

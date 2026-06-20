@@ -320,6 +320,13 @@ assert.match(core, /frontTopologySourcePlugRatio/, 'sim readback reports whether
 assert.match(core, /frontTopologyRisingBodyRatio/, 'sim readback reports whether the sidecar front topology rises out of the source bin');
 assert.match(core, /frontTopologyHeightSpread/, 'sim readback reports sidecar front topology height distribution breadth');
 assert.match(core, /frontTopologyRadianceCoupling/, 'sim readback reports whether visible bonfire radiance is coupled to front topology');
+assert.match(core, /frontTopologyFlameDetailCoupling/, 'sim readback reports whether sidecar topology survives into flame-detail storage');
+assert.match(core, /frontTopologyFireLickCoupling/, 'sim readback reports whether sidecar topology survives into fire-lick breakup');
+assert.match(core, /frontTopologyVisibleTransferLoss/, 'sim readback reports when rising sidecar topology is lost before visible flame transfer');
+assert.match(core, /fireFlameDetailSourcePlugRatio/, 'sim readback reports whether flame-detail is the visible source-plug carrier');
+assert.match(core, /fireLickSourcePlugRatio/, 'sim readback reports whether fire-lick storage is the visible source-plug carrier');
+assert.match(core, /fireHeatSourcePlugRatio/, 'sim readback reports whether heat is the visible source-plug carrier');
+assert.match(core, /fireChannelSourcePlugDominant/, 'sim readback names the dominant visible fire source-plug channel');
 assert.match(core, /radianceMean/, 'sim readback reports fire radiance evidence');
 assert.match(core, /extinctionMean/, 'sim readback reports smoke extinction evidence');
 assert.match(core, /microdetailMean/, 'sim readback reports transported microdetail evidence');
@@ -407,6 +414,14 @@ assert.match(core, /bonfireFrontTopologyBirth[\s\S]*bonfireCombustionFrontLiftCa
 assert.match(core, /frontDst\[idx\]\s*=\s*clamp\(combustionFrontTopology/, 'compute pass writes the independent combustion-front topology sidecar');
 assert.match(core, /bonfireTopologyRadianceCarrier/, 'bonfire visible radiance has a named carrier derived from the sidecar topology field');
 assert.match(core, /bonfireRadianceBirth[\s\S]*bonfireTopologyRadianceCarrier/, 'bonfire radiance birth must use the sidecar front topology distribution');
+assert.match(core, /bonfireTopologyPacketTransfer/, 'bonfire sidecar-to-visible transfer has a named packet-preserving topology carrier');
+assert.match(core, /bonfireVisibleFlamePacketGate/, 'bonfire visible flame transfer has a named packet gate so sidecar topology does not become a smooth luminous body');
+assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleFlamePacketGate/, 'bonfire flame storage must route through the packet-preserving sidecar transfer gate');
+assert.match(core, /bonfireFlameDetailBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire flame-detail storage must receive sidecar packet topology rather than only broad brightness');
+assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireTopologyPacketTransfer/, 'bonfire fire-lick breakup must receive sidecar packet topology before rendering');
+assert.match(core, /bonfireVisibleSourcePlugRelief/, 'bonfire visible flame storage has a named relief gate for the smooth source plug');
+assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire flame storage applies visible source-plug relief instead of retaining a smooth lower body');
+assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire fire-lick source birth applies visible source-plug relief before feeding storage');
 assert.match(core, /bonfireFireSourceBinRelief/, 'bonfire visible fire birth relieves the source bin in simulation space before raymarch transfer');
 assert.match(core, /bonfireLiftedFlameBirth/, 'bonfire fire birth has a lifted/off-axis flame carrier derived from the reaction front');
 assert.match(core, /bonfireFlameOccupancy/, 'bonfire must name broad flame occupancy separately from visible emission so a lifted front does not render as a smooth shell');
