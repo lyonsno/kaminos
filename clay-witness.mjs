@@ -634,6 +634,12 @@ async function main() {
       assert.equal(state.claySculptSurfaceNeedsRefresh, false, 'sculpt diagnostic surface was stale at assertion time');
       assert.equal(state.claySculptSurfaceSkippedUpdateCount, 0, 'sculpt diagnostic surface skipped live pointer updates');
       assert.ok((state.claySculptSurfaceUpdateCount ?? 0) >= 6, 'sculpt diagnostic surface did not update across the pointer smoke');
+      assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-sculpt-surface', 'sculpt pointer hit used the old heightfield depth policy');
+      assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-sculpt-surface', 'sculpt pointer hit did not preserve depth policy');
+      assert.deepEqual(state.clayPointerLastHit.surfaceNormal, [0, 0, -1], 'sculpt front-face pointer hit did not preserve inward surface normal');
+      assert.ok((state.clayPointerLastHit.rawCenter?.[2] ?? 0) > 0.30, 'sculpt pointer raw hit landed behind the visible front face');
+      assert.ok(Math.abs(state.clayPointerLastHit.z - state.clayPointerLastHit.rawCenter[2]) <= 1e-6, 'sculpt pointer effective hit was inset from the raw sculpt face hit');
+      assert.ok((state.claySculptDeformedParticleCount ?? Infinity) < (state.claySculptParticleCount ?? 0) * 0.50, 'sculpt brush leaked deformation into most of the particle body');
     }
     assert.equal(state.clayTimingEvidenceSource, 'webgpu-step-readback-wall-time', 'clay timing evidence source did not reach debug state');
     assert.equal(

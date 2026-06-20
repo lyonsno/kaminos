@@ -751,9 +751,14 @@ const CLAY_CUBE_CAMERA_FRAME = Object.freeze({
   target: [0, 0.34, 0],
 });
 const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
+const CLAY_SCULPT_POINTER_DEPTH_POLICY = 'camera-ray-nearest-sculpt-surface';
 const CLAY_CUBE_POINTER_BOUNDS = Object.freeze({
   min: [-0.44, 0.04, -0.34],
   max: [0.44, 0.68, 0.34],
+});
+const CLAY_SCULPT_POINTER_BOUNDS = Object.freeze({
+  min: [-0.50, 0.02, -0.38],
+  max: [0.50, 0.70, 0.38],
 });
 
 // --- HDR Environments ---
@@ -1846,6 +1851,7 @@ function installClayPointerInteraction(params) {
   const canvas = renderer.domElement;
   const legacyInteractiveRoute = params.get('clay_interactive') === '1';
   const cubePointerRoute = params.get('clay_cube') === '1';
+  const sculptPointerRoute = params.get('clay_sculpt') === '1';
   const pointerRaycaster = new THREE.Raycaster();
   const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02);
   const pointerPoint = new THREE.Vector3();
@@ -1864,25 +1870,27 @@ function installClayPointerInteraction(params) {
     return legacyInteractiveRoute || clayBrushModifierActive;
   };
 
-  const cubePointerInwardNormal = point => {
+  const pointerBoundsInwardNormal = (point, bounds) => {
     const distances = [
-      { distance: Math.abs(point.x - CLAY_CUBE_POINTER_BOUNDS.min[0]), normal: [1, 0, 0] },
-      { distance: Math.abs(point.x - CLAY_CUBE_POINTER_BOUNDS.max[0]), normal: [-1, 0, 0] },
-      { distance: Math.abs(point.y - CLAY_CUBE_POINTER_BOUNDS.min[1]), normal: [0, 1, 0] },
-      { distance: Math.abs(point.y - CLAY_CUBE_POINTER_BOUNDS.max[1]), normal: [0, -1, 0] },
-      { distance: Math.abs(point.z - CLAY_CUBE_POINTER_BOUNDS.min[2]), normal: [0, 0, 1] },
-      { distance: Math.abs(point.z - CLAY_CUBE_POINTER_BOUNDS.max[2]), normal: [0, 0, -1] },
+      { distance: Math.abs(point.x - bounds.min[0]), normal: [1, 0, 0] },
+      { distance: Math.abs(point.x - bounds.max[0]), normal: [-1, 0, 0] },
+      { distance: Math.abs(point.y - bounds.min[1]), normal: [0, 1, 0] },
+      { distance: Math.abs(point.y - bounds.max[1]), normal: [0, -1, 0] },
+      { distance: Math.abs(point.z - bounds.min[2]), normal: [0, 0, 1] },
+      { distance: Math.abs(point.z - bounds.max[2]), normal: [0, 0, -1] },
     ].sort((a, b) => a.distance - b.distance);
     return distances[0].normal;
   };
 
-  const intersectClayCubeBounds = ray => {
+  const cubePointerInwardNormal = point => pointerBoundsInwardNormal(point, CLAY_CUBE_POINTER_BOUNDS);
+
+  const intersectPointerBounds = (ray, bounds) => {
     let tMin = Number.NEGATIVE_INFINITY;
     let tMax = Number.POSITIVE_INFINITY;
     for (const [axis, min, max] of [
-      ['x', CLAY_CUBE_POINTER_BOUNDS.min[0], CLAY_CUBE_POINTER_BOUNDS.max[0]],
-      ['y', CLAY_CUBE_POINTER_BOUNDS.min[1], CLAY_CUBE_POINTER_BOUNDS.max[1]],
-      ['z', CLAY_CUBE_POINTER_BOUNDS.min[2], CLAY_CUBE_POINTER_BOUNDS.max[2]],
+      ['x', bounds.min[0], bounds.max[0]],
+      ['y', bounds.min[1], bounds.max[1]],
+      ['z', bounds.min[2], bounds.max[2]],
     ]) {
       const origin = ray.origin[axis];
       const direction = ray.direction[axis];
@@ -1903,9 +1911,11 @@ function installClayPointerInteraction(params) {
     const point = ray.at(t, new THREE.Vector3());
     return {
       point,
-      surfaceNormal: cubePointerInwardNormal(point),
+      surfaceNormal: pointerBoundsInwardNormal(point, bounds),
     };
   };
+
+  const intersectClayCubeBounds = ray => intersectPointerBounds(ray, CLAY_CUBE_POINTER_BOUNDS);
 
   const updateBrushModifier = event => {
     if (hotkeyEventTargetsInput(event)) return;
@@ -1931,20 +1941,22 @@ function installClayPointerInteraction(params) {
     let hitPoint = null;
     let surfaceNormal = null;
     let depthPolicy = 'horizontal-plane-y0';
-    if (cubePointerRoute) {
-      const cubeHit = intersectClayCubeBounds(pointerRaycaster.ray);
-      hitPoint = cubeHit?.point || null;
-      surfaceNormal = cubeHit?.surfaceNormal || null;
-      depthPolicy = CLAY_CUBE_POINTER_DEPTH_POLICY;
+    let solidPointerBounds = null;
+    if (cubePointerRoute || sculptPointerRoute) {
+      solidPointerBounds = cubePointerRoute ? CLAY_CUBE_POINTER_BOUNDS : CLAY_SCULPT_POINTER_BOUNDS;
+      const solidHit = intersectPointerBounds(pointerRaycaster.ray, solidPointerBounds);
+      hitPoint = solidHit?.point || null;
+      surfaceNormal = solidHit?.surfaceNormal || null;
+      depthPolicy = cubePointerRoute ? CLAY_CUBE_POINTER_DEPTH_POLICY : CLAY_SCULPT_POINTER_DEPTH_POLICY;
     } else if (pointerRaycaster.ray.intersectPlane(pointerPlane, pointerPoint)) {
       hitPoint = pointerPoint;
     }
     if (!hitPoint) return null;
-    const center = cubePointerRoute
+    const center = solidPointerBounds
       ? [
-        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[0], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[0], hitPoint.x)),
-        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[1], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[1], hitPoint.y)),
-        Math.max(CLAY_CUBE_POINTER_BOUNDS.min[2], Math.min(CLAY_CUBE_POINTER_BOUNDS.max[2], hitPoint.z)),
+        Math.max(solidPointerBounds.min[0], Math.min(solidPointerBounds.max[0], hitPoint.x)),
+        Math.max(solidPointerBounds.min[1], Math.min(solidPointerBounds.max[1], hitPoint.y)),
+        Math.max(solidPointerBounds.min[2], Math.min(solidPointerBounds.max[2], hitPoint.z)),
       ]
       : [
         Math.max(-0.82, Math.min(0.82, hitPoint.x)),

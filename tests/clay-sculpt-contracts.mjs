@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildClaySculptHashGridOracle,
+  normalizeClaySculptPointerCollider,
   normalizeClaySculptConfig,
   runClaySculptFirstBrushOracle,
   seedClaySculptParticles,
@@ -17,6 +18,19 @@ assert.equal(config.particleCount, 1152);
 assert.equal(config.hashGridDimension, 16);
 assert.equal(config.hashGridCellCapacity, 12);
 assert.deepEqual(config.claySculptConfigWarnings, []);
+
+const sculptPointer = normalizeClaySculptPointerCollider({
+  id: 'front-face-sculpt-pointer',
+  center: [0.12, 0.36, 0.38],
+  rawCenter: [0.12, 0.36, 0.38],
+  surfaceNormal: [0, 0, -1],
+  radius: 0.17,
+  strength: 1.18,
+});
+assert.equal(sculptPointer.id, 'front-face-sculpt-pointer');
+assert.deepEqual(sculptPointer.center, [0.12, 0.36, 0.38]);
+assert.deepEqual(sculptPointer.surfaceNormal, [0, 0, -1], 'sculpt pointer preserves inward face normal for front-face contact');
+assert.equal(sculptPointer.boundaryClamped, false, 'sculpt pointer should not be inset by the old heightfield margin clamp');
 
 const fallbackConfig = normalizeClaySculptConfig('999x1x1');
 assert.equal(fallbackConfig.effectiveClaySculptParticles, '12x8x12');
@@ -34,6 +48,20 @@ assert.equal(hashGrid.hashGridCellCapacity, config.hashGridCellCapacity);
 assert.ok(hashGrid.activeCellCount > 0, 'hash grid oracle records active occupied cells');
 assert.ok(hashGrid.maxCellOccupancy > 1, 'seeded sculpt blob should put multiple particles in at least one cell');
 assert.equal(hashGrid.overflowCount, 0, 'first sculpt seed should not overflow fixed cell capacity');
+
+const firstIdleOracle = runClaySculptFirstBrushOracle({
+  basePositions: particles,
+  previousPositions: particles,
+  config,
+  brush: {
+    center: [9, 9, 9],
+    radius: 0.05,
+    strength: 1,
+    normal: [0, 0, -1],
+  },
+});
+assert.equal(firstIdleOracle.neighborCohesionDisplacement, 0, 'seed particle w lane is active mass and must not be treated as previous contact');
+assert.equal(firstIdleOracle.deformedParticleCount, 0, 'idle sculpt brush should not deform on the first step');
 
 const oracle = runClaySculptFirstBrushOracle({
   basePositions: particles,
@@ -59,3 +87,50 @@ assert.ok(oracle.deformedParticleCount > 0, 'sculpt brush deforms particles');
 assert.ok(oracle.maxDisplacement > 0.02, 'sculpt brush produces readable displacement');
 assert.ok(oracle.averageNeighborCount > 1, 'sculpt seed has meaningful neighborhood density');
 assert.ok(oracle.neighborCohesionDisplacement > 0, 'sculpt oracle applies a first cohesion term from hash-grid neighbors');
+
+let idleState = particles;
+for (let step = 0; step < 4; step += 1) {
+  idleState = runClaySculptFirstBrushOracle({
+    basePositions: particles,
+    previousPositions: idleState,
+    config,
+    brush: {
+      center: [9, 9, 9],
+      radius: 0.05,
+      strength: 1,
+      normal: [0, 0, -1],
+    },
+  }).positions;
+}
+const idleOracle = runClaySculptFirstBrushOracle({
+  basePositions: particles,
+  previousPositions: idleState,
+  config,
+  brush: {
+    center: [9, 9, 9],
+    radius: 0.05,
+    strength: 1,
+    normal: [0, 0, -1],
+  },
+});
+assert.equal(idleOracle.contactParticleCount, 0, 'idle sculpt brush should not contact particles');
+assert.equal(idleOracle.deformedParticleCount, 0, 'hash-grid cohesion must not shrink the whole sculpt body without brush contact');
+
+let repeatedBrushState = particles;
+let repeatedBrushOracle = null;
+for (let step = 0; step < 8; step += 1) {
+  repeatedBrushOracle = runClaySculptFirstBrushOracle({
+    basePositions: particles,
+    previousPositions: repeatedBrushState,
+    config,
+    brush: {
+      center: [0.18, 0.42, 0.34],
+      radius: 0.22,
+      strength: 1.1,
+      normal: [0, 0, -1],
+    },
+  });
+  repeatedBrushState = repeatedBrushOracle.positions;
+}
+assert.ok(repeatedBrushOracle.deformedParticleCount < config.particleCount * 0.45, 'small sculpt brush leaked deformation into most of the body');
+assert.ok(repeatedBrushOracle.contactParticleCount < config.particleCount * 0.20, 'small sculpt brush contact footprint grew too broad');

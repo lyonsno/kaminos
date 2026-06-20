@@ -39,6 +39,7 @@ const CLAY_SCULPT_ORACLE_EVIDENCE_KIND = 'deterministic-js-sculpt-oracle-not-run
 const CLAY_SCULPT_WEBGPU_EVIDENCE_KIND = 'webgpu-particle-hash-grid-readback';
 const CLAY_SCULPT_SURFACE_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-sculpt-particles-not-solver-v0';
 const CLAY_SCULPT_SURFACE_VISUAL_MODE = 'structured-lattice-boundary-skin-over-live-sculpt-particles-v0';
+const CLAY_SCULPT_POINTER_DEPTH_POLICY = 'camera-ray-nearest-sculpt-surface';
 const CLAY_SCULPT_SURFACE_RESOLUTION = 24;
 const CLAY_SCULPT_SURFACE_MAX_BALLS = 576;
 const CLAY_SCULPT_SURFACE_STRENGTH = 0.21;
@@ -555,11 +556,11 @@ export function runClaySculptFirstBrushOracle({
       pushZ += normalizedBrush.normal[2] * force * 0.088 + bdz * invDistance * force * 0.022;
       contact = 1;
     }
-    if (neighborCount > 0) {
+    if (neighborCount > 0 && reach > 0.001) {
       const cx = neighborX / neighborCount;
       const cy = neighborY / neighborCount;
       const cz = neighborZ / neighborCount;
-      const cohesionScale = 0.020 + reach * 0.020;
+      const cohesionScale = (0.020 + reach * 0.020) * reach;
       const cohesionX = (cx - x) * cohesionScale;
       const cohesionY = (cy - y) * cohesionScale;
       const cohesionZ = (cz - z) * cohesionScale;
@@ -618,6 +619,34 @@ export function normalizeClayCubePointerCollider(payload = {}) {
     radius: clampFinite(payload.radius, 0.035, 0.35, 0.18),
     strength: clampFinite(payload.strength, 0, 5, 1.15),
     source: payload.source || 'cube-pointer',
+    sourceBackend: payload.sourceBackend || null,
+    sampleAuthority: Number.isFinite(payload.sampleAuthority) ? payload.sampleAuthority : null,
+    pressureAxis: Number.isFinite(payload.pressureAxis) ? payload.pressureAxis : null,
+    pressureScale: Number.isFinite(payload.pressureScale) ? payload.pressureScale : null,
+    boundaryClamped: Math.abs(clampedX - rawX) > 1e-6
+      || Math.abs(clampedY - rawY) > 1e-6
+      || Math.abs(clampedZ - rawZ) > 1e-6,
+    boundaryMargin: [0, 0, 0],
+  };
+}
+
+export function normalizeClaySculptPointerCollider(payload = {}) {
+  const center = Array.isArray(payload.center) ? payload.center : [payload.x, payload.y, payload.z];
+  const rawCenter = Array.isArray(payload.rawCenter) ? payload.rawCenter : center;
+  const rawX = clampFinite(center[0], -1.2, 1.2, 0);
+  const rawY = clampFinite(center[1], -1.2, 1.2, CLAY_SCULPT_EXTENTS.maxY * 0.5);
+  const rawZ = clampFinite(center[2], -1.2, 1.2, 0);
+  const clampedX = clampFinite(rawX, -CLAY_SCULPT_EXTENTS.halfX, CLAY_SCULPT_EXTENTS.halfX, 0);
+  const clampedY = clampFinite(rawY, CLAY_SCULPT_EXTENTS.minY, CLAY_SCULPT_EXTENTS.maxY, CLAY_SCULPT_EXTENTS.maxY * 0.5);
+  const clampedZ = clampFinite(rawZ, -CLAY_SCULPT_EXTENTS.halfZ, CLAY_SCULPT_EXTENTS.halfZ, 0);
+  return {
+    id: payload.id || 'sculpt-pointer-drag',
+    center: [clampedX, clampedY, clampedZ],
+    rawCenter: rawCenter.slice(0, 3).map(value => Number.isFinite(Number(value)) ? Number(value) : null),
+    surfaceNormal: normalizeVec3(payload.surfaceNormal, [0, 0, -1]),
+    radius: clampFinite(payload.radius, 0.035, 0.45, 0.18),
+    strength: clampFinite(payload.strength, 0, 5, 1.15),
+    source: payload.source || 'sculpt-pointer',
     sourceBackend: payload.sourceBackend || null,
     sampleAuthority: Number.isFinite(payload.sampleAuthority) ? payload.sampleAuthority : null,
     pressureAxis: Number.isFinite(payload.pressureAxis) ? payload.pressureAxis : null,
@@ -1168,9 +1197,9 @@ fn clay_particle_sculpt_hash_grid_main(@builtin(global_invocation_id) global_id:
     push = push + brushNormal * force * 0.088 + safe_normal(brushDelta) * force * 0.022;
     contact = 1.0;
   }
-  if (neighborCount > 0u) {
+  if (neighborCount > 0u && reach > 0.001) {
     let centroid = neighborSum / f32(neighborCount);
-    let cohesion = (centroid - p.xyz) * (0.020 + reach * 0.020);
+    let cohesion = (centroid - p.xyz) * ((0.020 + reach * 0.020) * reach);
     push = push + cohesion;
     atomicAdd(&metrics[6], u32(clamp(length(cohesion) * 1000000.0, 0.0, 4294967040.0)));
   }
@@ -2887,7 +2916,9 @@ export function createKaminosClayPrototype({
     };
     const pointerCollider = payload.depthPolicy === CLAY_CUBE_POINTER_DEPTH_POLICY
       ? normalizeClayCubePointerCollider(pointerPayload)
-      : normalizeCollider(pointerPayload, 0);
+      : payload.depthPolicy === CLAY_SCULPT_POINTER_DEPTH_POLICY
+        ? normalizeClaySculptPointerCollider(pointerPayload)
+        : normalizeCollider(pointerPayload, 0);
     clayPointerDepthPolicy = payload.depthPolicy || null;
     clayBrushBoundaryWarnings.length = 0;
     clayBrushBoundaryClampCount = pointerCollider.boundaryClamped ? 1 : 0;
