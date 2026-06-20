@@ -10,7 +10,7 @@ const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
-const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'tall_plume', 'bonfire_plume']);
+const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -65,6 +65,7 @@ function normalizeBonfireAblationControls(controls = {}) {
 
 function volumeSceneMode(value) {
   const scene = normalizeVolumeScene(value);
+  if (scene === 'canonical_plume') return 3;
   if (scene === 'tall_plume') return 1;
   if (scene === 'bonfire_plume') return 2;
   return 0;
@@ -78,6 +79,17 @@ function bonfireReferenceConfinementDebug(value) {
     storage: 'four-slot-existing-fluid-state',
     forceSource: 'neighbor-slot-front-gradient-plus-curl',
     radiancePolicy: 'front-contact-gated-emission',
+  };
+}
+
+function minimalPlumeProofDebug(value) {
+  const scene = normalizeVolumeScene(value);
+  return {
+    identity: 'minimal-canonical-plume-proof-v0',
+    enabled: scene === 'canonical_plume',
+    fieldView: 'density-smoke-readback',
+    raymarchView: 'same-field-linear-volume-render',
+    excluded: 'bonfire-front-topology/fire-licks/microdetail/authored-bonfire-shape',
   };
 }
 
@@ -701,8 +713,9 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = index3(gid);
   let base = idx * SLOTS_PER_CELL;
   let c = vec3<i32>(gid);
-  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
-  let bonfireScene = step(1.5, sceneMode);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  let canonicalPlumeScene = step(2.5, sceneMode);
+  let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
   let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
   let projection = clamp(u.source_controls.z, 0.0, 1.5) * bonfireProjectionAblation;
   let pressureGradient = vec3<f32>(
@@ -1390,14 +1403,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.18, plumeHeight01), scaledDetailFrequency);
   let time = u.cameraPos_time.w;
-  let sceneMode = clamp(u.scene_controls.x, 0.0, 2.0);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
-  let bonfireScene = step(1.5, sceneMode);
+  let canonicalPlumeScene = step(2.5, sceneMode);
+  let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
   let bonfireRecenterAblation = mix(1.0, clamp(u.bonfire_ablation_controls.x, 0.0, 1.5), bonfireScene);
   let bonfireLateralDampingAblation = mix(1.0, clamp(u.bonfire_ablation_controls.y, 0.0, 1.5), bonfireScene);
   let bonfireShearAblation = mix(1.0, clamp(u.bonfire_ablation_controls.z, 0.0, 1.5), bonfireScene);
@@ -1490,6 +1504,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
+  let canonicalSourceY = -0.74;
+  let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
   let breakup = clamp(
     0.64
       + 0.24 * sin(p.x * 19.0 * scaledDetailFrequency + p.z * 7.0 * scaledDetailFrequency + time * 1.7)
@@ -1503,6 +1519,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
+  let canonicalSource = exp(-sourceRadial * sourceRadial / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius * 1.20)) * canonicalSourceBand * inputFlow;
   let bonfireSourceY = 0.62;
   let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
@@ -1598,7 +1615,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireBroadSupportSmokeBand = smoothstep(0.30, 0.52, p.y) * (1.0 - smoothstep(0.82, 0.99, p.y));
   let bonfireBroadSupportSmokeSource = exp(-sourceRadial * sourceRadial / max(0.0082, bonfireSmokeRadius * bonfireSmokeRadius * 1.32)) * bonfireBroadSupportSmokeBand * (0.30 + 0.18 * bonfireSourceBreakup + 0.18 * bonfireLayeredBreakup) * inputFlow;
   let bonfireSmokeSource = max(bonfireNarrowInterfaceSmokeSource * bonfireLayeredSmokeBreakup, bonfireBroadSupportSmokeSource * (0.54 + bonfireLayeredBreakup * 0.20));
-  let source = mix(columnSource, max(bonfireSmokeSource, bonfireSourceCarrier * inputFlow * 0.72), bonfireScene);
+  let source = mix(mix(columnSource, canonicalSource, canonicalPlumeScene), max(bonfireSmokeSource, bonfireSourceCarrier * inputFlow * 0.72), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
   let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
@@ -1606,7 +1623,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireInterfaceSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
       + bonfireCombustion.z * 0.18
   ) * inputFlow;
-  let emberRing = mix(columnEmberRing, bonfireEmberRing, bonfireScene);
+  let emberRing = mix(columnEmberRing * (1.0 - canonicalPlumeScene), bonfireEmberRing, bonfireScene);
   let fireBirthBand = smoothstep(-0.99, -0.82, p.y) * (1.0 - smoothstep(-0.22, 0.16, p.y));
   let columnFireBirth = exp(-sourceRadial * sourceRadial * fireSourceFalloff * mix(2.45, 1.35, smoothstep(0.35, 1.30, fireScale))) * fireBirthBand * inputFlow * sourceScaleCompensation * (0.72 + 0.66 * breakup);
   let bonfireCoreHeat = clamp(
@@ -1908,6 +1925,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection;
+  let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
+  vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) + smoke * (0.010 + speed * 0.002));
+  let canonicalRadial = max(length(p.xz), 0.025);
+  let canonicalRadialSpreadBand = canonicalPlumeScene * smoothstep(-0.66, -0.20, p.y) * (1.0 - smoothstep(0.42, 0.82, p.y));
+  let canonicalRadialSpread = vec3<f32>(p.x / canonicalRadial, 0.0, p.z / canonicalRadial)
+    * smoke
+    * canonicalRadialSpreadBand
+    * (0.018 + speed * 0.004);
+  vel = vel + canonicalRadialSpread;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
   let bonfirePacketLiftImpulse = bonfirePacketCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
@@ -1976,14 +2002,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
+  let canonicalSmokeBirth = source * 1.28 + heat * 0.10;
   let bonfireAdvectedSmokeBirth = (bonfireSmokeSource * 0.060 + bonfireBroadSupportSmokeSource * 0.028) * bonfireLayeredSmokeBreakup + bonfireSootBirth * 0.20 + bonfireInterfaceBirth * 0.050 + bonfireCombustion.z * 0.010 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.060;
-  let columnSmokeTransport = max(smoke + smokeFromHeat, columnSmokeBirth);
+  let columnSmokeTransport = mix(max(smoke + smokeFromHeat, columnSmokeBirth), max(smoke * 0.992 + smokeFromHeat * 0.38, canonicalSmokeBirth), canonicalPlumeScene);
   let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth);
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
   let columnHeatBirth = source * 0.74 + emberRing * 0.18;
+  let canonicalHeatBirth = source * 1.16;
   let bonfireHeatBirth = bonfireCoreHeat * 0.78 + bonfireReactionFront * inputFlow * sourceScaleCompensation * 0.20 + bonfireEmberRing * 0.08;
-  heat = max(heat, mix(columnHeatBirth, bonfireHeatBirth, bonfireScene));
+  heat = max(heat, mix(mix(columnHeatBirth, canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene));
   heat = max(heat, externalInjection.material.y * 0.92);
   let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
@@ -2113,6 +2141,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * mix(0.18, 1.0, wallFade);
   fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, heatTopFade);
   emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
+  let canonicalProofCarrierMask = 1.0 - canonicalPlumeScene;
+  fuel = fuel * canonicalProofCarrierMask;
+  materialDetail = materialDetail * canonicalProofCarrierMask;
+  flame = flame * canonicalProofCarrierMask;
+  ember = ember * canonicalProofCarrierMask;
+  flameDetail = flameDetail * canonicalProofCarrierMask;
+  combustionFront = combustionFront * canonicalProofCarrierMask;
+  combustionFrontTopology = combustionFrontTopology * canonicalProofCarrierMask;
+  microSmoke = microSmoke * canonicalProofCarrierMask;
+  interfaceShred = interfaceShred * canonicalProofCarrierMask;
+  fireLick = fireLick * canonicalProofCarrierMask;
+  emberFleck = emberFleck * canonicalProofCarrierMask;
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
@@ -2145,7 +2185,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
   let scaledDetailFrequency = clamp(detailScale / max(fireScale, 0.45), 0.55, 5.40);
   let scaleDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), scaledDetailFrequency);
-  let bonfireRenderScene = step(1.5, clamp(u.scene_controls.x, 0.0, 2.0));
+  let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  let minimalPlumeRenderScene = step(2.5, renderSceneMode);
+  let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
@@ -2389,6 +2431,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     windHeight: normalizeWindHeight(controlsSnapshot.windHeight),
     bonfireAblation: normalizeBonfireAblationControls(controlsSnapshot),
     bonfireReferenceConfinement: bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene),
+    minimalPlumeProof: minimalPlumeProofDebug(controlsSnapshot.volumeScene),
     pressureProjectionEnabled: false,
     pressureProjectionIterations: 0,
     externalEmitterMode: 'off',
@@ -2602,7 +2645,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function makeInitialFluid(nextGridSize) {
     const data = new Float32Array(gridCellCount(nextGridSize) * FLUID_COMPONENTS);
-    const isBonfireInitialScene = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume';
+    const initialScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const isBonfireInitialScene = initialScene === 'bonfire_plume';
+    const isCanonicalInitialScene = initialScene === 'canonical_plume';
     const seedLateralVelocity = isBonfireInitialScene ? 0 : 0.11;
     for (let z = 0; z < nextGridSize; z += 1) {
       for (let y = 0; y < nextGridSize; y += 1) {
@@ -2626,9 +2671,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * scaledDetailFrequency + fy * 4);
           const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * scaledDetailFrequency - fy * 8);
           const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * scaledDetailFrequency) + (fy * 5)) ** 2;
-          const seedMaterialDetail = isBonfireInitialScene
-            ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
-            : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
+          const seedMaterialDetail = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
+              : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
           const seedVisibleAboveSource = isBonfireInitialScene ? seedBonfireSourceY - fy : fy + 0.74;
           const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
           const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
@@ -2638,38 +2685,48 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const seedBonfireFlameSourceRelief = isBonfireInitialScene
             ? Math.max(0.18, Math.max(seedVisibleHeightRelief * 0.92, seedVisibleRadialRelief * 0.78))
             : 1;
-          const seedBonfireFlame = isBonfireInitialScene
-            ? (0.22 + 0.28 * radialSeedDetail + 0.22 * azimuthalSeedA + 0.18 * azimuthalSeedC) * seedBonfireFlameSourceRelief
-            : 0.90;
-          const seedVisibleFireCarrier = isBonfireInitialScene
-            ? (0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
-            : 0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2;
-          const seedMicroSmoke = isBonfireInitialScene
-            ? 0.20 + 0.30 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
-            : 0.22 + 0.78 * Math.sin((fx * 31 * scaledDetailFrequency) - (fz * 19 * scaledDetailFrequency)) ** 2;
-          const seedInterfaceShred = isBonfireInitialScene
-            ? 0.12 + 0.18 * Math.cos((radial * 27 * scaledDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
-            : 0.12 + 0.50 * Math.cos((fx * 23 * scaledDetailFrequency) + (fy * 17) - (fz * 29 * scaledDetailFrequency)) ** 2;
-          const seedFireLick = isBonfireInitialScene
-            ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * scaledDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
-            : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * scaledDetailFrequency)) ** 2;
+          const seedBonfireFlame = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? (0.22 + 0.28 * radialSeedDetail + 0.22 * azimuthalSeedA + 0.18 * azimuthalSeedC) * seedBonfireFlameSourceRelief
+              : 0.90;
+          const seedVisibleFireCarrier = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? (0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
+              : 0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2;
+          const seedMicroSmoke = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? 0.20 + 0.30 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
+              : 0.22 + 0.78 * Math.sin((fx * 31 * scaledDetailFrequency) - (fz * 19 * scaledDetailFrequency)) ** 2;
+          const seedInterfaceShred = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? 0.12 + 0.18 * Math.cos((radial * 27 * scaledDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
+              : 0.12 + 0.50 * Math.cos((fx * 23 * scaledDetailFrequency) + (fy * 17) - (fz * 29 * scaledDetailFrequency)) ** 2;
+          const seedFireLick = isCanonicalInitialScene
+            ? 0
+            : isBonfireInitialScene
+              ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * scaledDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
+              : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * scaledDetailFrequency)) ** 2;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * seedLateralVelocity;
           data[i + 1] = source * 0.22;
           data[i + 2] = fx * source * seedLateralVelocity;
           data[i + 3] = source * 1.25;
           data[i + 4] = source * 0.74;
-          data[i + 5] = source * 1.28;
-          data[i + 6] = source * 1.0;
+          data[i + 5] = source * (isCanonicalInitialScene ? 0.72 : 1.28);
+          data[i + 6] = source * (isCanonicalInitialScene ? 0 : 1.0);
           data[i + 7] = source * seedMaterialDetail;
           data[i + 8] = source * seedBonfireFlame;
-          data[i + 9] = source * 0.42;
+          data[i + 9] = source * (isCanonicalInitialScene ? 0 : 0.42);
           data[i + 10] = source * seedVisibleFireCarrier;
           data[i + 11] = 0;
           data[i + 12] = source * seedMicroSmoke;
           data[i + 13] = source * seedInterfaceShred;
           data[i + 14] = source * seedFireLick;
-          data[i + 15] = source * 0.16;
+          data[i + 15] = source * (isCanonicalInitialScene ? 0 : 0.16);
         }
       }
     }
@@ -3317,6 +3374,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
+    state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
     state.majorantSkip = uniforms[41];
@@ -4566,6 +4624,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       windHeight: state.windHeight,
       bonfireAblation: { ...state.bonfireAblation },
       bonfireReferenceConfinement: { ...state.bonfireReferenceConfinement },
+      minimalPlumeProof: { ...state.minimalPlumeProof },
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
       displayWidth: state.displayWidth,
@@ -4636,6 +4695,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
+      state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
       state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;

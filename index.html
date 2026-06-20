@@ -285,6 +285,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
         <option value="compact_plume" selected>Compact plume</option>
+        <option value="canonical_plume">Canonical plume</option>
         <option value="tall_plume">Tall plume</option>
         <option value="bonfire_plume">Bonfire plume</option>
       </select>
@@ -297,7 +298,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <div class="slider-row">
       <span class="slider-label">Fire</span>
-      <input type="range" id="volume-fire" min="0.2" max="3.5" step="0.05" value="1.4">
+      <input type="range" id="volume-fire" min="0" max="3.5" step="0.05" value="1.4">
       <span class="slider-val" id="volume-fire-val">1.40</span>
     </div>
     <div class="slider-row">
@@ -1268,6 +1269,29 @@ const VOLUME_RAY_BUDGET_PRESETS = {
 };
 
 const VOLUME_SCENE_PRESETS = {
+  canonical_plume: {
+    label: 'simple',
+    density: 5.40,
+    fire: 0.00,
+    radiance: 0.00,
+    absorption: 1.35,
+    glow: 0.00,
+    smoke: 2.60,
+    curl: 0.90,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
+    projection: 0.65,
+    speed: 4.20,
+    inputRadius: 0.12,
+    flowRate: 0.45,
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
+  },
   compact_plume: {
     label: 'compact',
     density: 4.20,

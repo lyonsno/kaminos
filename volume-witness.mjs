@@ -23,6 +23,18 @@ const fullScreenshot = args.has('--full-screenshot')
   : '';
 const routeParams = new URL(url).searchParams;
 const VOLUME_SCENE_PRESETS = {
+  canonical_plume: {
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    curl: 0.90,
+    microdetail: 0,
+    interfaceShred: 0,
+    fireLicks: 0,
+    windStrength: 0,
+    windAngle: 0,
+    windHeight: 0.15,
+  },
   compact_plume: {},
   tall_plume: {
     fireScale: 0.35,
@@ -53,6 +65,7 @@ const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
   : 'compact_plume';
+const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const scenePreset = VOLUME_SCENE_PRESETS[expectedVolumeScene] || {};
 const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : 96;
@@ -485,6 +498,11 @@ async function main() {
       assert.equal(state.bonfireReferenceConfinement?.enabled, true, 'bonfire reference-confinement route was not enabled for bonfire plume');
       assert.equal(state.bonfireReferenceConfinement?.storage, 'four-slot-existing-fluid-state', 'bonfire reference-confinement did not preserve four-slot storage identity');
     }
+    assert.equal(state.minimalPlumeProof?.identity, 'minimal-canonical-plume-proof-v0', 'minimal plume proof identity did not reach debug state');
+    if (expectsCanonicalPlumeProof) {
+      assert.equal(state.minimalPlumeProof?.enabled, true, 'canonical plume route did not enable the minimal plume proof branch');
+      assert.match(state.minimalPlumeProof?.excluded || '', /bonfire-front-topology/, 'canonical plume proof did not declare bonfire complexity exclusion');
+    }
     assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
     assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
     assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
@@ -565,13 +583,13 @@ async function main() {
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005) {
+    if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
+    if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) {
+    if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     if (
@@ -597,7 +615,8 @@ async function main() {
     ) {
       throw new Error(`GPU sim readback shows bonfire fire without transported combustion-front evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= 0.0005) {
+    const expectedExtinctionFloor = expectsCanonicalPlumeProof ? 0.00025 : 0.0005;
+    if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= expectedExtinctionFloor) {
       throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
     }
     const expectsMicrodetailEvidence = (state.controls?.microdetail ?? expectedMicrodetail) > 0.01;
@@ -619,6 +638,40 @@ async function main() {
     }
     if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
       throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (expectsCanonicalPlumeProof) {
+      const risingBins = sample.simReadback.sourceRelativeVisualHeightBins || [];
+      const hasRisingSmokeAboveSource = risingBins.some(bin =>
+        bin.visualCenter > 0.12 &&
+        bin.smokeWeight > 0.4 &&
+        bin.smokeVisualRiseVelocity > 0.001
+      );
+      if (
+        !Number.isFinite(sample.simReadback.smokeVisualRiseVelocity) ||
+        sample.simReadback.smokeVisualRiseVelocity <= 0.004 ||
+        !Number.isFinite(sample.simReadback.smokeVisualRiseDisplacement) ||
+        sample.simReadback.smokeVisualRiseDisplacement <= 0.030 ||
+        !Number.isFinite(sample.simReadback.risingSmokeWeight) ||
+        sample.simReadback.risingSmokeWeight <= 0.4 ||
+        !hasRisingSmokeAboveSource
+      ) {
+        throw new Error(`canonical plume did not show simple source-relative smoke rise: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (
+        sample.simReadback.fireLayerMean > 0.0005 ||
+        sample.simReadback.radianceMean > 0.0005 ||
+        sample.simReadback.microdetailMean > 0.0005 ||
+        sample.simReadback.interfaceShredMean > 0.0005 ||
+        sample.simReadback.fireLickMean > 0.0005
+      ) {
+        throw new Error(`canonical plume leaked bonfire/fire/detail carriers: ${JSON.stringify({
+          fireLayerMean: sample.simReadback.fireLayerMean,
+          radianceMean: sample.simReadback.radianceMean,
+          microdetailMean: sample.simReadback.microdetailMean,
+          interfaceShredMean: sample.simReadback.interfaceShredMean,
+          fireLickMean: sample.simReadback.fireLickMean,
+        })}`);
+      }
     }
     if (expectsBonfireVerticalTransport) {
       const risingBins = sample.simReadback.sourceRelativeVisualHeightBins || [];
@@ -861,7 +914,16 @@ async function main() {
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
-    if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+    if (expectsCanonicalPlumeProof) {
+      if (
+        metrics.litPixels < 220 ||
+        (metrics.volumeBounds?.pixelCount ?? 0) < 180 ||
+        metrics.verticalFillRatio < 0.12 ||
+        metrics.meanLuma < 1.5
+      ) {
+        throw new Error(`blank frame or missing canonical smoke volume: ${JSON.stringify(metrics)}`);
+      }
+    } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
     const reportControls = {

@@ -103,6 +103,7 @@ assert.match(index, /<option value="96" selected>96\^3<\/option>/, 'smoke route 
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
+assert.match(index, /canonical_plume/, 'Volume tab exposes a minimal canonical plume proof scene');
 assert.match(index, /tall_plume/, 'Volume tab exposes a tall plume scale-test scene');
 assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
 assert.match(index, /BONFIRE_VOLUME_CAMERA_FRAME/, 'Bonfire scene has a straight-on camera frame that does not make vertical smoke look wind-blown');
@@ -149,6 +150,15 @@ assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable 
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
 assert.match(core, /DEFAULT_GRID_SIZE\s*=\s*96/, 'smoke route defaults to the operator-found 96^3 grid size');
 assert.match(core, /SUPPORTED_GRID_SIZES/, 'fluid sim declares supported resolution choices');
+assert.match(core, /'canonical_plume'/, 'fluid sim supports a minimal canonical plume proof scene');
+assert.match(core, /canonicalPlumeScene/, 'fluid shader names the canonical plume branch separately from bonfire complexity');
+assert.match(core, /minimalPlumeProof/, 'debug state exposes the minimal plume proof contract identity');
+assert.doesNotMatch(core, /canonicalPlumeScene[\s\S]{0,1600}bonfireRenderedFireEdgeCarrier/, 'canonical plume proof scene must not depend on bonfire rendered fire carriers');
+assert.match(core, /canonicalSourceBand/, 'canonical plume uses a named low source band instead of inheriting the compact vertical source band');
+assert.match(core, /let source = mix\(mix\(columnSource, canonicalSource, canonicalPlumeScene\)/, 'canonical plume live injection must route through the canonical low source before bonfire override');
+assert.match(core, /canonicalLiftGate/, 'canonical plume uses a named smoke-only lift term instead of renderer-only height shaping');
+assert.match(core, /canonicalSmokeBirth/, 'canonical plume uses a named smoke-only birth term separate from compact plume fire/detail transport');
+assert.match(core, /canonicalRadialSpread/, 'canonical plume uses named radial field spread so the simple smoke proof is not only a vertical tube');
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');
@@ -625,6 +635,8 @@ assert.match(witness, /expectedCurl/, 'witness verifies curl route/control ident
 assert.match(witness, /expectedMicrodetail/, 'witness verifies microdetail route/control identity for force-isolation probes');
 assert.match(witness, /expectedRenderScale/, 'witness verifies internal render-scale route/control identity');
 assert.match(witness, /expectedVolumeScene/, 'witness verifies named volume scene route/control identity');
+assert.match(witness, /canonical_plume/, 'witness recognizes the minimal canonical plume scene');
+assert.match(witness, /expectsCanonicalPlumeProof/, 'witness has a dedicated simple-plume proof branch separate from bonfire fire checks');
 assert.match(witness, /expectedWindStrength/, 'witness verifies explicit wind strength route/control identity');
 assert.match(witness, /expectedWindAngle/, 'witness verifies explicit wind direction route/control identity');
 assert.match(witness, /expectedWindHeight/, 'witness verifies explicit wind height/ramp route/control identity');
