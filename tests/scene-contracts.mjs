@@ -103,6 +103,7 @@ assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay h
 assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
 assert.match(index, /async function startSelectedSplatHybridRenderer\(/, 'selected splats can start the Hybrid Mesh Splat Renderer overlay from the UI');
 assert.match(index, /function updateHybridSplatOverlayFrame\(/, 'Hybrid Renderer overlay receives per-frame camera/object matrices from Kaminos');
+assert.match(index, /function prepareHybridSplatOverlayHost\(/, 'Hybrid Renderer overlay host layout is stamped inline before external modules can mutate it');
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the selected splat objectWorldMatrix through the PBRnext frame contract');
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');

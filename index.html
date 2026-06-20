@@ -951,9 +951,20 @@ function updateHybridSplatOverlayPanel(entry) {
   if (stopButton) stopButton.disabled = !hybridSplatOverlayState.handle;
 }
 
+function prepareHybridSplatOverlayHost(host) {
+  if (!host) return null;
+  host.style.position = 'absolute';
+  host.style.inset = '0';
+  host.style.pointerEvents = 'none';
+  host.style.overflow = 'hidden';
+  host.style.zIndex = '2';
+  return host;
+}
+
 async function ensureHybridSplatOverlayHandle() {
   const host = document.getElementById('hybrid-splat-overlay-host');
   if (!host) throw new Error('Hybrid overlay host is missing');
+  prepareHybridSplatOverlayHost(host);
   if (hybridSplatOverlayState.handle) return hybridSplatOverlayState.handle;
   const module = await loadHybridSplatOverlayModule();
   hybridSplatOverlayState.handle = await module.createSplatOverlay(host, {

@@ -2406,6 +2406,168 @@ async function runHybridSplatOverlayScenario(ws) {
   }
 }
 
+async function runRealHybridSplatOverlayScenario(ws) {
+  phase = 'scenario-real-hybrid-splat-overlay';
+  lastEvidence.realHybridSplatOverlay = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
+      }));
+      const waitForAssetRows = async () => {
+        for (let i = 0; i < 100; i++) {
+          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+          if (rows.length) return rows;
+          await wait(125);
+        }
+        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      };
+      const waitForSceneRows = async count => {
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length >= count) return rows;
+          await wait(125);
+        }
+        return rowState();
+      };
+      const sampleCanvas = canvas => {
+        if (!canvas) return { sampled: false, error: 'missing canvas', visiblePixels: 0, alphaPixels: 0 };
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.min(320, Math.floor(rect.width || canvas.width || 1)));
+        const height = Math.max(1, Math.min(240, Math.floor(rect.height || canvas.height || 1)));
+        const probe = document.createElement('canvas');
+        probe.width = width;
+        probe.height = height;
+        const ctx = probe.getContext('2d', { willReadFrequently: true });
+        try {
+          ctx.drawImage(canvas, 0, 0, width, height);
+          const data = ctx.getImageData(0, 0, width, height).data;
+          let visiblePixels = 0;
+          let alphaPixels = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] > 8) alphaPixels += 1;
+            if (data[i + 3] > 8 && data[i] + data[i + 1] + data[i + 2] > 24) visiblePixels += 1;
+          }
+          return { sampled: true, width, height, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, visiblePixels, alphaPixels };
+        } catch (error) {
+          return { sampled: false, width, height, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, error: String(error?.message || error), visiblePixels: 0, alphaPixels: 0 };
+        }
+      };
+      document.querySelector('[data-tab="greenroom"]').click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const beforeRows = rowState();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntry = (assetData.entries || []).find(entry => /evil_orb\\.ply$/i.test(entry.path || entry.name || ''))
+        || (assetData.entries || []).find(entry => (entry.size || 0) > 4096)
+        || (assetData.entries || [])[0]
+        || null;
+      const assetRows = await waitForAssetRows();
+      const display = assetEntry?.display || { title: assetEntry?.name || assetEntry?.path || 'Splat' };
+      const actionExposed = !!assetEntry && typeof window.greenroomImportSplat === 'function';
+      if (actionExposed) {
+        await window.greenroomImportSplat(assetEntry.source, assetEntry.name || assetEntry.path || 'splat.ply', display, {
+          clear: false,
+          metadata: {
+            source: assetEntry.source,
+            fileName: assetEntry.name || assetEntry.path || 'splat.ply',
+            label: display.title || assetEntry.name || 'Splat',
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: assetEntry.source,
+              fileName: assetEntry.name || assetEntry.path || 'splat.ply',
+              format: 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              correction: assetEntry.correction || null,
+              provenance: {
+                source_group: assetEntry.stage === 'production' ? 'splat-production' : 'splat-inbox',
+                source_url: assetEntry.source,
+                root_id: assetEntry.root_id || null,
+                root_label: assetEntry.root_label || null,
+                asset_stage: assetEntry.stage || 'experimental',
+                asset_path: assetEntry.path || null,
+              },
+            },
+          },
+        });
+      }
+      await waitForSceneRows(beforeRows.length + 1);
+      const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      await wait(250);
+      window.kaminosSetHybridSplatOverlayModuleUrl?.('http://127.0.0.1:5173/src/splatOverlay.ts');
+      const beforeOverlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
+      const beforeSample = sampleCanvas(beforeOverlayCanvas);
+      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(2200);
+      const overlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
+      const computed = overlayCanvas ? getComputedStyle(overlayCanvas) : null;
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      const hostStyle = host ? getComputedStyle(host) : null;
+      const afterSample = sampleCanvas(overlayCanvas);
+      const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const statusText = document.getElementById('splat-hybrid-renderer-status')?.textContent || null;
+      return {
+        assetEntry,
+        actionExposed,
+        assetRowCount: assetRows.length,
+        splatObject,
+        startResult,
+        overlayDebug,
+        handoffDebug,
+        statusText,
+        beforeSample,
+        afterSample,
+        overlayCanvas: overlayCanvas ? {
+          width: overlayCanvas.width,
+          height: overlayCanvas.height,
+          connected: overlayCanvas.isConnected,
+          style: computed ? {
+            display: computed.display,
+            visibility: computed.visibility,
+            opacity: computed.opacity,
+            zIndex: computed.zIndex,
+            position: computed.position,
+          } : null,
+        } : null,
+        overlayHost: host ? {
+          rect: (() => { const r = host.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })(),
+          style: hostStyle ? {
+            display: hostStyle.display,
+            visibility: hostStyle.visibility,
+            opacity: hostStyle.opacity,
+            zIndex: hostStyle.zIndex,
+            position: hostStyle.position,
+          } : null,
+        } : null,
+      };
+    })()
+  `, { timeoutMs: 90000 });
+
+  const evidence = lastEvidence.realHybridSplatOverlay;
+  if (!evidence.actionExposed || !evidence.splatObject) {
+    throw new Error(`real hybrid splat overlay could not import a splat fixture: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.overlayDebug?.status !== 'rendering' || !evidence.overlayDebug?.canvasConnected) {
+    throw new Error(`real hybrid splat overlay did not reach connected rendering state: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source) {
+    throw new Error(`real hybrid splat overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
+  }
+  if ((evidence.overlayHost?.rect?.width || 0) < 64
+    || (evidence.overlayHost?.rect?.height || 0) < 64
+    || (evidence.overlayCanvas?.width || 0) < 64
+    || (evidence.overlayCanvas?.height || 0) < 64) {
+    throw new Error(`real hybrid splat overlay canvas has no visible geometry: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runRealSavedSplatCropVisibilityScenario(ws) {
   phase = 'scenario-real-saved-splat-crop-visibility';
   lastEvidence.realSavedSplatCropVisibility = await evaluate(ws, `
@@ -3257,6 +3419,8 @@ try {
     await runGreenroomSplatHandoffScenario(ws);
   } else if (scenario === 'hybrid-splat-overlay') {
     await runHybridSplatOverlayScenario(ws);
+  } else if (scenario === 'real-hybrid-splat-overlay') {
+    await runRealHybridSplatOverlayScenario(ws);
   } else if (scenario === 'real-saved-splat-crop-visibility') {
     await runRealSavedSplatCropVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {
@@ -3288,10 +3452,21 @@ try {
   writeReport(report);
   console.log(JSON.stringify({ report: reportPath, ...report }, null, 2));
 } catch (error) {
+  let failureShot = null;
+  try {
+    if (ws) {
+      phase = 'capturing-failure-screenshot';
+      failureShot = await capturePngScreenshot(ws, out);
+    }
+  } catch (captureError) {
+    failureShot = { path: null, bytes: 0, error: String(captureError?.message || captureError) };
+  }
   writeReport({
     ok: false,
     error: error.stack || String(error),
-    screenshot: null,
+    screenshot: failureShot?.path || null,
+    screenshotBytes: failureShot?.bytes || 0,
+    screenshotError: failureShot?.error || null,
     evidence: lastEvidence,
   });
   throw error;
