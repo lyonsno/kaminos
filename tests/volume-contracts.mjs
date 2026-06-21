@@ -155,10 +155,15 @@ assert.match(core, /canonicalPlumeScene/, 'fluid shader names the canonical plum
 assert.match(core, /minimalPlumeProof/, 'debug state exposes the minimal plume proof contract identity');
 assert.doesNotMatch(core, /canonicalPlumeScene[\s\S]{0,1600}bonfireRenderedFireEdgeCarrier/, 'canonical plume proof scene must not depend on bonfire rendered fire carriers');
 assert.match(core, /canonicalSourceBand/, 'canonical plume uses a named low source band instead of inheriting the compact vertical source band');
+assert.match(core, /canonicalSourceBreakup/, 'canonical plume source birth has low-order smoke-only breakup instead of one smooth radial plug');
 assert.match(core, /let source = mix\(mix\(columnSource, canonicalSource, canonicalPlumeScene\)/, 'canonical plume live injection must route through the canonical low source before bonfire override');
 assert.match(core, /canonicalLiftGate/, 'canonical plume uses a named smoke-only lift term instead of renderer-only height shaping');
 assert.match(core, /canonicalSmokeBirth/, 'canonical plume uses a named smoke-only birth term separate from compact plume fire/detail transport');
 assert.match(core, /canonicalRadialSpread/, 'canonical plume uses named radial field spread so the simple smoke proof is not only a vertical tube');
+assert.match(core, /canonicalEntrainmentCell/, 'canonical plume has a named low-order entrainment cell instead of a smooth tube');
+assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalRadialSpread/, 'canonical entrainment participates in smoke transport before final canonical spreading');
+assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalPlumeScene/, 'canonical entrainment is scene-gated to the minimal plume proof');
+assert.doesNotMatch(core, /let canonicalEntrainmentVelocity =[^;]*(bonfire|fireLick|frontTopology|radiance|microdetail)/, 'canonical entrainment must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');

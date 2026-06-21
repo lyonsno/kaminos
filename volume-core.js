@@ -1519,7 +1519,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
-  let canonicalSource = exp(-sourceRadial * sourceRadial / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius * 1.20)) * canonicalSourceBand * inputFlow;
+  let canonicalSourceCell = vec2<f32>(
+    sin(p.x * 8.1 + p.z * 2.7 + time * 0.43),
+    cos(p.z * 7.6 - p.x * 3.2 - time * 0.39)
+  );
+  let canonicalSourceWarp = sourceCenter + canonicalSourceCell * scaledSmokeSourceRadius * 0.16;
+  let canonicalSourceBreakup = clamp(
+    0.78
+      + 0.16 * sin(atan2(p.z, p.x) * 3.0 + time * 0.33)
+      + 0.12 * cos(sourceRadial * 22.0 - time * 0.46)
+      + 0.08 * hash31(vec3<f32>(p.x * 5.0, p.y * 2.0, p.z * 5.0) + vec3<f32>(floor(time * 0.75))),
+    0.48,
+    1.18
+  );
+  let canonicalSource = exp(-dot(canonicalSourceWarp, canonicalSourceWarp) / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius * 1.20))
+    * canonicalSourceBand
+    * canonicalSourceBreakup
+    * inputFlow;
   let bonfireSourceY = 0.62;
   let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
@@ -1928,6 +1944,22 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) + smoke * (0.010 + speed * 0.002));
   let canonicalRadial = max(length(p.xz), 0.025);
+  let canonicalEntrainmentCell = vec3<f32>(
+    sin(p.y * 5.2 + p.z * 3.1 + time * 0.37),
+    sin(p.x * 4.7 - p.z * 2.9 - time * 0.31) * 0.35,
+    cos(p.y * 4.8 - p.x * 3.4 + time * 0.41)
+  );
+  let canonicalEntrainmentBand = canonicalPlumeScene
+    * smoothstep(-0.64, -0.28, p.y)
+    * (1.0 - smoothstep(0.50, 0.86, p.y));
+  let canonicalTangent = vec3<f32>(-p.z / canonicalRadial, 0.0, p.x / canonicalRadial);
+  let canonicalInward = vec3<f32>(-p.x / canonicalRadial, 0.0, -p.z / canonicalRadial);
+  let canonicalEntrainmentVelocity = (
+    canonicalTangent * canonicalEntrainmentCell.x * 0.030
+      + canonicalInward * max(canonicalEntrainmentCell.z, -0.25) * 0.018
+      + vec3<f32>(0.0, canonicalEntrainmentCell.y * 0.009, 0.0)
+  ) * smoke * canonicalEntrainmentBand * (0.75 + speed * 0.12);
+  vel = vel + canonicalEntrainmentVelocity;
   let canonicalRadialSpreadBand = canonicalPlumeScene * smoothstep(-0.66, -0.20, p.y) * (1.0 - smoothstep(0.42, 0.82, p.y));
   let canonicalRadialSpread = vec3<f32>(p.x / canonicalRadial, 0.0, p.z / canonicalRadial)
     * smoke
