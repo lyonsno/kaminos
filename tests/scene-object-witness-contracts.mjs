@@ -193,6 +193,8 @@ assert.match(witness, /hybrid splat overlay did not receive viewport identity/, 
 assert.match(witness, /hybrid splat overlay did not receive correction identity/, 'Hybrid Renderer witness proves Kaminos sends sidecar correction identity through the renderer API');
 assert.match(witness, /hybrid splat overlay did not expose renderer source identity/, 'Hybrid Renderer witness proves Kaminos reads renderer-reported source identity');
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
+assert.match(witness, /hybrid splat overlay obscures editor gizmos instead of yielding composition/, 'Hybrid Renderer witness fails if a dual-canvas overlay visually buries active editor gizmos');
+assert.match(witness, /editorSovereign/, 'Hybrid Renderer witness records the explicit editor-sovereignty debug state');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
 assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');
 assert.match(witness, /real hybrid splat overlay did not hand model matrix ownership to PBRnext/, 'Real Hybrid Renderer witness fails while Kaminos still bakes object matrices into camera view');

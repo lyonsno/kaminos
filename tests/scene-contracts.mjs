@@ -129,6 +129,9 @@ assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer rout
 assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybrid Renderer overlay frame records how splat correction transforms are applied');
 assert.match(index, /function hybridSplatOverlayCropAppliedByRenderer\(/, 'Hybrid Renderer overlay reads live renderer crop application instead of hardcoding crop=false');
 assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRenderer\(\)/, 'Hybrid Renderer handoff reports renderer-side crop application from the active overlay handle');
+assert.match(index, /function hybridSplatOverlayEditorSovereigntyState\(/, 'Hybrid Renderer overlay exposes an editor-sovereignty compositing rule');
+assert.match(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas/, 'Hybrid Renderer overlay dims its external canvas when editor gizmos are active');
+assert.match(index, /editorSovereign:\s*editorSovereignty\.active/, 'Hybrid Renderer debug state reports editor-overlay sovereignty instead of leaving it as CSS inference');
 assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witnesses can inspect Hybrid Renderer overlay state without DOM inference');
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');

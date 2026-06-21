@@ -2523,7 +2523,21 @@ async function runHybridSplatOverlayScenario(ws) {
       const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
       const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
       const witness = window.__hybridSplatOverlayWitness || null;
-      window.stopHybridSplatOverlay?.();
+      const overlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
+      const overlayCanvasStyle = overlayCanvas ? getComputedStyle(overlayCanvas) : null;
+      const overlayHost = document.getElementById('hybrid-splat-overlay-host');
+      const overlayHostStyle = overlayHost ? getComputedStyle(overlayHost) : null;
+      const correctionMode = window.kaminosSplatCorrectionModeDebugState?.() || null;
+      const transformBar = document.getElementById('transform-bar');
+      const editorOverlay = {
+        correctionMode,
+        transformBarVisible: !!transformBar && transformBar.classList.contains('visible'),
+        overlayCanvasOpacity: overlayCanvasStyle ? Number.parseFloat(overlayCanvasStyle.getPropertyValue('opacity') || '1') : null,
+        overlayCanvasPointerEvents: overlayCanvasStyle?.getPropertyValue('pointer-events') || null,
+        overlayHostPointerEvents: overlayHostStyle?.getPropertyValue('pointer-events') || null,
+        overlayHostClassName: overlayHost?.className || '',
+        editorSovereign: overlayDebug?.editorSovereign || false,
+      };
       URL.revokeObjectURL(moduleUrl);
       return {
         actionExposed: !!actionButton,
@@ -2540,6 +2554,7 @@ async function runHybridSplatOverlayScenario(ws) {
         overlayDebug,
         handoffDebug,
         witness,
+        editorOverlay,
       };
     })()
   `, { timeoutMs: 60000 });
@@ -2582,6 +2597,16 @@ async function runHybridSplatOverlayScenario(ws) {
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sourceIdentity?.source !== splatSource
       || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== splatSource) {
     throw new Error(`hybrid splat overlay did not expose renderer source identity: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const editorOverlay = lastEvidence.hybridSplatOverlay.editorOverlay || {};
+  if (!editorOverlay.correctionMode?.active || !editorOverlay.transformBarVisible) {
+    throw new Error(`hybrid splat overlay witness did not enter an editor-gizmo state: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (editorOverlay.editorSovereign !== true
+      || !(editorOverlay.overlayCanvasOpacity > 0 && editorOverlay.overlayCanvasOpacity <= 0.62)
+      || editorOverlay.overlayCanvasPointerEvents !== 'none'
+      || editorOverlay.overlayHostPointerEvents !== 'none') {
+    throw new Error(`hybrid splat overlay obscures editor gizmos instead of yielding composition: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
 }
 

@@ -71,6 +71,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 canvas { display: block; }
 #hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#hybrid-splat-overlay-host.editor-sovereign canvas { opacity: 0.58 !important; pointer-events: none !important; }
 
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
@@ -756,6 +757,7 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
+const HYBRID_SPLAT_OVERLAY_EDITOR_OPACITY = 0.58;
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
@@ -863,8 +865,33 @@ function hybridSplatOverlayCropAppliedByRenderer() {
   return false;
 }
 
+function hybridSplatOverlayEditorSovereigntyState() {
+  const host = document.getElementById('hybrid-splat-overlay-host');
+  const editorTarget = transformControls?.object || null;
+  const overlayActive = !!hybridSplatOverlayState.handle && !!hybridSplatOverlayState.objectId;
+  const editorActive = overlayActive
+    && !!editorTarget
+    && transformControls?.visible !== false;
+  if (host) {
+    host.classList.toggle('editor-sovereign', editorActive);
+    host.style.pointerEvents = 'none';
+    for (const canvas of host.querySelectorAll('canvas')) {
+      canvas.style.pointerEvents = 'none';
+    }
+  }
+  return {
+    active: editorActive,
+    opacity: editorActive ? HYBRID_SPLAT_OVERLAY_EDITOR_OPACITY : 1,
+    reason: editorActive
+      ? (splatCorrectionMode ? 'splat-correction-gizmo-active' : 'transform-gizmo-active')
+      : null,
+    transformTargetName: editorTarget?.name || null,
+  };
+}
+
 function hybridSplatOverlayDebugState() {
   const handle = hybridSplatOverlayState.handle;
+  const editorSovereignty = hybridSplatOverlayEditorSovereigntyState();
   return {
     status: hybridSplatOverlayState.status,
     error: hybridSplatOverlayState.error,
@@ -882,6 +909,10 @@ function hybridSplatOverlayDebugState() {
     handleCapabilities: handle?.capabilities || null,
     sourceIdentity: handle?.sourceIdentity || null,
     correctionApplication: handle?.correctionApplication || null,
+    editorSovereign: editorSovereignty.active,
+    editorSovereignOpacity: editorSovereignty.opacity,
+    editorSovereignReason: editorSovereignty.reason,
+    editorSovereignTransformTargetName: editorSovereignty.transformTargetName,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
@@ -947,6 +978,7 @@ function hybridSplatOverlayProjectionProbe(frame = hybridSplatOverlayState.lastF
 function setHybridSplatOverlayStatus(status, error = null) {
   hybridSplatOverlayState.status = status;
   hybridSplatOverlayState.error = error ? String(error.message || error) : null;
+  hybridSplatOverlayEditorSovereigntyState();
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
 }
 
@@ -1096,6 +1128,7 @@ function prepareHybridSplatOverlayHost(host) {
   host.style.pointerEvents = 'none';
   host.style.overflow = 'hidden';
   host.style.zIndex = '2';
+  hybridSplatOverlayEditorSovereigntyState();
   return host;
 }
 
@@ -1135,6 +1168,7 @@ function updateHybridSplatOverlayFrame() {
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
   handle.setModelMatrix(new Float32Array(overlayAssetWorldMatrix.elements));
   handle.setCameraMatrices(view, projection, cameraPosition);
+  const editorSovereignty = hybridSplatOverlayEditorSovereigntyState();
   hybridSplatOverlayState.frameCount += 1;
   hybridSplatOverlayState.lastFrame = {
     schema: 'kaminos.hybrid-splat-overlay.frame.v0',
@@ -1164,6 +1198,10 @@ function updateHybridSplatOverlayFrame() {
     overlayCapabilities: handle.capabilities || null,
     sourceIdentity: handle.sourceIdentity || null,
     correctionApplication: handle.correctionApplication || null,
+    editorSovereign: editorSovereignty.active,
+    editorSovereignOpacity: editorSovereignty.opacity,
+    editorSovereignReason: editorSovereignty.reason,
+    editorSovereignTransformTargetName: editorSovereignty.transformTargetName,
     updatedAt: new Date().toISOString(),
   };
   hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);
@@ -1909,6 +1947,7 @@ function updateSplatCorrectionModeUi() {
   if (revertButton) revertButton.hidden = !active;
   if (doneButton) doneButton.hidden = !active;
   updateSplatCropTargetVisibility();
+  hybridSplatOverlayEditorSovereigntyState();
 }
 
 function attachTransformControlsToCurrentTarget() {
@@ -1921,6 +1960,7 @@ function attachTransformControlsToCurrentTarget() {
     transformControls.visible = true;
     document.getElementById('transform-bar')?.classList.add('visible');
   }
+  hybridSplatOverlayEditorSovereigntyState();
 }
 
 function setSplatCorrectionDraftDirty(dirty = true) {
@@ -2071,6 +2111,7 @@ function exitSplatCorrectionMode(options = {}) {
     applySplatCorrectionToRecord(mode.record, mode.savedCorrection);
   }
   transformControls?.detach?.();
+  hybridSplatOverlayEditorSovereigntyState();
   scene.remove(mode.target);
   mode.cropTarget.parent?.remove(mode.cropTarget);
   disposeObjectTree(mode.target);
