@@ -89,6 +89,22 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     canonicalBodyBalance: 1.50,
   },
 };
+const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
+  current: 0,
+  passive_bottom: 1,
+  forced_bottom: 2,
+  buoyant_bottom: 3,
+};
+function normalizeCanonicalSourceMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
+}
+function canonicalSourceDefaults(mode) {
+  const normalized = normalizeCanonicalSourceMode(mode);
+  if (normalized === 'passive_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 0.00 };
+  if (normalized === 'forced_bottom') return { sourceY: -0.82, injection: 1.00, buoyancy: 0.00 };
+  if (normalized === 'buoyant_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 1.00 };
+  return { sourceY: -0.74, injection: 1.00, buoyancy: 1.00 };
+}
 const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
@@ -105,6 +121,22 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
   ? requestedCanonicalMacroPreset
   : '';
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
+const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || 'current');
+const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
+const requestedCanonicalSourceY = Number(routeParams.get('volume_canonical_source_y'));
+const expectedCanonicalSourceY = routeParams.has('volume_canonical_source_y') && Number.isFinite(requestedCanonicalSourceY)
+  ? Math.max(-0.92, Math.min(-0.20, requestedCanonicalSourceY))
+  : canonicalSourceDefault.sourceY;
+const requestedCanonicalInjection = Number(routeParams.get('volume_canonical_injection'));
+const expectedCanonicalInjection = routeParams.has('volume_canonical_injection') && Number.isFinite(requestedCanonicalInjection)
+  ? Math.max(0, Math.min(1.5, requestedCanonicalInjection))
+  : canonicalSourceDefault.injection;
+const requestedCanonicalBuoyancy = Number(routeParams.get('volume_canonical_buoyancy'));
+const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') && Number.isFinite(requestedCanonicalBuoyancy)
+  ? Math.max(0, Math.min(1.5, requestedCanonicalBuoyancy))
+  : canonicalSourceDefault.buoyancy;
+const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
+const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : canonicalMacroPreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
@@ -551,6 +583,14 @@ async function main() {
     }
     assert.equal(state.controls?.canonicalMacroPreset || '', expectedCanonicalMacroPreset, 'canonical macro preset route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.macroPreset || '', expectedCanonicalMacroPreset, 'effective canonical macro preset did not reach debug state');
+    assert.equal(state.controls?.canonicalSourceMode || 'current', expectedCanonicalSourceMode, 'canonical source mode route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.sourceMode || 'current', expectedCanonicalSourceMode, 'effective canonical source mode did not reach debug state');
+    assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
+    assert.ok(Math.abs((state.canonicalPlumeControls?.sourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'effective canonical source height did not reach debug state');
+    assert.ok(Math.abs((state.controls?.canonicalSourceInjection ?? 0) - expectedCanonicalInjection) < 0.001, 'canonical source injection route/control did not apply');
+    assert.ok(Math.abs((state.canonicalPlumeControls?.sourceInjection ?? 0) - expectedCanonicalInjection) < 0.001, 'effective canonical source injection did not reach debug state');
+    assert.ok(Math.abs((state.controls?.canonicalBuoyancy ?? 0) - expectedCanonicalBuoyancy) < 0.001, 'canonical buoyancy route/control did not apply');
+    assert.ok(Math.abs((state.canonicalPlumeControls?.buoyancyLift ?? 0) - expectedCanonicalBuoyancy) < 0.001, 'effective canonical buoyancy did not reach debug state');
     if (expectedCanonicalMacroPreset === 'macro_foothold_0621') {
       assert.ok(Math.abs((state.controls?.density ?? 0) - canonicalMacroPreset.density) < 0.001, 'canonical macro preset density did not apply');
       assert.ok(Math.abs((state.controls?.smoke ?? 0) - canonicalMacroPreset.smoke) < 0.001, 'canonical macro preset smoke visibility did not apply');
@@ -724,7 +764,7 @@ async function main() {
     if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
       throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (expectsCanonicalPlumeProof) {
+    if (expectsCanonicalSmokeRise) {
       const risingBins = sample.simReadback.sourceRelativeVisualHeightBins || [];
       const hasRisingSmokeAboveSource = risingBins.some(bin =>
         bin.visualCenter > 0.12 &&
@@ -742,19 +782,37 @@ async function main() {
       ) {
         throw new Error(`canonical plume did not show simple source-relative smoke rise: ${JSON.stringify(sample.simReadback)}`);
       }
-      if (
+    }
+    if (
+      expectsCanonicalPlumeProof &&
+      (
         sample.simReadback.fireLayerMean > 0.0005 ||
         sample.simReadback.radianceMean > 0.0005 ||
         sample.simReadback.microdetailMean > 0.0005 ||
         sample.simReadback.interfaceShredMean > 0.0005 ||
         sample.simReadback.fireLickMean > 0.0005
+      )
+    ) {
+      throw new Error(`canonical plume leaked bonfire/fire/detail carriers: ${JSON.stringify({
+        fireLayerMean: sample.simReadback.fireLayerMean,
+        radianceMean: sample.simReadback.radianceMean,
+        microdetailMean: sample.simReadback.microdetailMean,
+        interfaceShredMean: sample.simReadback.interfaceShredMean,
+        fireLickMean: sample.simReadback.fireLickMean,
+      })}`);
+    }
+    if (canonicalPassiveBottomNonRiseProof) {
+      if (
+        Math.abs(expectedCanonicalInjection) > 0.001 ||
+        Math.abs(expectedCanonicalBuoyancy) > 0.001 ||
+        sample.simReadback.heatMean > 0.01
       ) {
-        throw new Error(`canonical plume leaked bonfire/fire/detail carriers: ${JSON.stringify({
-          fireLayerMean: sample.simReadback.fireLayerMean,
-          radianceMean: sample.simReadback.radianceMean,
-          microdetailMean: sample.simReadback.microdetailMean,
-          interfaceShredMean: sample.simReadback.interfaceShredMean,
-          fireLickMean: sample.simReadback.fireLickMean,
+        throw new Error(`passive bottom-source proof was contaminated by injection or buoyancy: ${JSON.stringify({
+          expectedCanonicalInjection,
+          expectedCanonicalBuoyancy,
+          heatMean: sample.simReadback.heatMean,
+          smokeVisualRiseVelocity: sample.simReadback.smokeVisualRiseVelocity,
+          smokeVisualRiseDisplacement: sample.simReadback.smokeVisualRiseDisplacement,
         })}`);
       }
     }
@@ -999,7 +1057,19 @@ async function main() {
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
-    if (expectsCanonicalPlumeProof) {
+    const canonicalPassiveBottomFieldProof = canonicalPassiveBottomNonRiseProof &&
+      (sample.simReadback?.smokeWeight ?? 0) > 20 &&
+      (canonicalFieldSlice?.xyActivePixelRatio ?? 0) > 0.001 &&
+      (canonicalFieldSlice?.xyMax ?? 0) > 0.005;
+    if (canonicalPassiveBottomNonRiseProof) {
+      if (!canonicalPassiveBottomFieldProof) {
+        throw new Error(`passive bottom-source proof did not leave live smoke in the field readback: ${JSON.stringify({
+          smokeWeight: sample.simReadback?.smokeWeight,
+          xyActivePixelRatio: canonicalFieldSlice?.xyActivePixelRatio,
+          xyMax: canonicalFieldSlice?.xyMax,
+        })}`);
+      }
+    } else if (expectsCanonicalPlumeProof) {
       if (
         metrics.litPixels < 220 ||
         (metrics.volumeBounds?.pixelCount ?? 0) < 180 ||
@@ -1114,6 +1184,13 @@ async function main() {
       majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       expectedCanonicalMacroPreset,
+      expectedCanonicalSourceMode,
+      expectedCanonicalSourceY,
+      expectedCanonicalInjection,
+      expectedCanonicalBuoyancy,
+      canonicalPassiveBottomNonRiseProof,
+      canonicalPassiveBottomFieldProof,
+      expectsCanonicalSmokeRise,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,

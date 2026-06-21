@@ -1452,6 +1452,25 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
   },
 };
 
+const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
+  current: 0,
+  passive_bottom: 1,
+  forced_bottom: 2,
+  buoyant_bottom: 3,
+};
+
+function normalizeCanonicalVolumeSourceMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
+}
+
+function canonicalVolumeSourceDefaults(mode) {
+  const normalized = normalizeCanonicalVolumeSourceMode(mode);
+  if (normalized === 'passive_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 0.00 };
+  if (normalized === 'forced_bottom') return { sourceY: -0.82, injection: 1.00, buoyancy: 0.00 };
+  if (normalized === 'buoyant_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 1.00 };
+  return { sourceY: -0.74, injection: 1.00, buoyancy: 1.00 };
+}
+
 const DEFAULT_VOLUME_CAMERA_FRAME = {
   position: [1.18, 0.28, 2.05],
   target: [0, 0.02, 0],
@@ -1465,6 +1484,10 @@ const BONFIRE_VOLUME_CAMERA_FRAME = {
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
 let activeCanonicalVolumeMacroPreset = '';
+let routedCanonicalSourceMode = 'current';
+let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
+let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
+let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -1661,6 +1684,11 @@ function readVolumeControls() {
     canonicalCenterline: parseFloat(document.getElementById('volume-canonical-centerline').value),
     canonicalBodyBalance: parseFloat(document.getElementById('volume-canonical-body-balance').value),
     canonicalMacroPreset: activeCanonicalVolumeMacroPreset,
+    canonicalSourceMode: routedCanonicalSourceMode,
+    canonicalSourceModeValue: CANONICAL_VOLUME_SOURCE_MODE_VALUES[routedCanonicalSourceMode] || 0,
+    canonicalSourceY: routedCanonicalSourceY,
+    canonicalSourceInjection: routedCanonicalInjection,
+    canonicalBuoyancy: routedCanonicalBuoyancy,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   };
@@ -1765,6 +1793,23 @@ async function initKaminosVolumeRoute() {
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
   if (routeCanonicalMacroPreset) {
     applyCanonicalVolumeMacroPreset(routeCanonicalMacroPreset);
+  }
+  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(params.get('volume_canonical_source_mode') || 'current');
+  const canonicalSourceDefaults = canonicalVolumeSourceDefaults(routedCanonicalSourceMode);
+  routedCanonicalSourceY = canonicalSourceDefaults.sourceY;
+  routedCanonicalInjection = canonicalSourceDefaults.injection;
+  routedCanonicalBuoyancy = canonicalSourceDefaults.buoyancy;
+  const routeCanonicalSourceY = Number(params.get('volume_canonical_source_y'));
+  if (params.has('volume_canonical_source_y') && Number.isFinite(routeCanonicalSourceY)) {
+    routedCanonicalSourceY = Math.max(-0.92, Math.min(-0.20, routeCanonicalSourceY));
+  }
+  const routeCanonicalInjection = Number(params.get('volume_canonical_injection'));
+  if (params.has('volume_canonical_injection') && Number.isFinite(routeCanonicalInjection)) {
+    routedCanonicalInjection = Math.max(0, Math.min(1.5, routeCanonicalInjection));
+  }
+  const routeCanonicalBuoyancy = Number(params.get('volume_canonical_buoyancy'));
+  if (params.has('volume_canonical_buoyancy') && Number.isFinite(routeCanonicalBuoyancy)) {
+    routedCanonicalBuoyancy = Math.max(0, Math.min(1.5, routeCanonicalBuoyancy));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {

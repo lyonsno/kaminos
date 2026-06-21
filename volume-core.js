@@ -11,6 +11,12 @@ const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
 const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
+const CANONICAL_SOURCE_MODE_VALUES = {
+  current: 0,
+  passive_bottom: 1,
+  forced_bottom: 2,
+  buoyant_bottom: 3,
+};
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -32,6 +38,14 @@ function normalizeRenderScale(value) {
 
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
+}
+
+function normalizeCanonicalSourceMode(value) {
+  return Object.hasOwn(CANONICAL_SOURCE_MODE_VALUES, value) ? value : 'current';
+}
+
+function canonicalSourceModeValue(value) {
+  return CANONICAL_SOURCE_MODE_VALUES[normalizeCanonicalSourceMode(value)] || 0;
 }
 
 function normalizeWindStrength(value) {
@@ -224,6 +238,7 @@ struct Uniforms {
   bonfire_ablation_controls: vec4<f32>,
   bonfire_ablation_controls2: vec4<f32>,
   canonical_controls: vec4<f32>,
+  canonical_source_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -1411,10 +1426,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSpreadGain = clamp(u.canonical_controls.x, 0.0, 1.6);
   let canonicalCenterlineGain = clamp(u.canonical_controls.y, 0.0, 1.8);
   let canonicalBodyBalanceGain = clamp(u.canonical_controls.z, 0.0, 1.5);
+  let canonicalSourceMode = clamp(u.canonical_controls.w, 0.0, 3.0);
+  let canonicalSourceYControl = clamp(u.canonical_source_controls.x, -0.92, -0.20);
+  let canonicalSourceInjection = clamp(u.canonical_source_controls.y, 0.0, 1.5);
+  let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let canonicalPlumeScene = step(2.5, sceneMode);
+  let canonicalPassiveBottomProof = canonicalPlumeScene * step(0.5, canonicalSourceMode) * (1.0 - step(1.5, canonicalSourceMode));
+  let canonicalBuoyantBottomProof = canonicalPlumeScene * step(2.5, canonicalSourceMode);
   let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
   let bonfireRecenterAblation = mix(1.0, clamp(u.bonfire_ablation_controls.x, 0.0, 1.5), bonfireScene);
   let bonfireLateralDampingAblation = mix(1.0, clamp(u.bonfire_ablation_controls.y, 0.0, 1.5), bonfireScene);
@@ -1508,7 +1529,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceCenter = p.xz;
   let sourceRadial = length(sourceCenter);
   let sourceBand = smoothstep(-0.99, -0.80, p.y) * (1.0 - smoothstep(0.18, 0.58, p.y));
-  let canonicalSourceY = -0.74;
+  let canonicalSourceY = canonicalSourceYControl;
   let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
   let breakup = clamp(
     0.64
@@ -1944,9 +1965,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + fineBreakup;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
-  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection;
+  vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
-  vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) + smoke * (0.010 + speed * 0.002));
+  vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
   let canonicalRadial = max(length(p.xz), 0.025);
   let canonicalEntrainmentCell = vec3<f32>(
     sin(p.y * 5.2 + p.z * 3.1 + time * 0.37),
@@ -2079,7 +2100,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
   let columnHeatBirth = source * 0.74 + emberRing * 0.18;
-  let canonicalHeatBirth = source * 1.16;
+  let canonicalHeatBirth = source * 1.16 * canonicalBuoyancyLift;
   let bonfireHeatBirth = bonfireCoreHeat * 0.78 + bonfireReactionFront * inputFlow * sourceScaleCompensation * 0.20 + bonfireEmberRing * 0.08;
   heat = max(heat, mix(mix(columnHeatBirth, canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene));
   heat = max(heat, externalInjection.material.y * 0.92);
@@ -2459,7 +2480,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(84);
+  const uniforms = new Float32Array(88);
   let controlsSnapshot = getControls();
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -2935,6 +2956,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       normalizeVolumeScene(snapshot.volumeScene),
       snapshot.inputRadius,
       snapshot.flowRate,
+      normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
+      snapshot.canonicalSourceY,
+      snapshot.canonicalSourceInjection,
+      snapshot.canonicalBuoyancy,
     ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
 
@@ -3454,8 +3479,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[64] = Math.max(0, Math.min(1.6, controlsSnapshot.canonicalSpread ?? 1));
     uniforms[65] = Math.max(0, Math.min(1.8, controlsSnapshot.canonicalCenterline ?? 1));
     uniforms[66] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBodyBalance ?? 0));
-    uniforms[67] = 0;
-    uniforms.set(previousViewProj.elements, 68);
+    uniforms[67] = canonicalSourceModeValue(controlsSnapshot.canonicalSourceMode);
+    uniforms[68] = Math.max(-0.92, Math.min(-0.20, controlsSnapshot.canonicalSourceY ?? -0.74));
+    uniforms[69] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalSourceInjection ?? 1));
+    uniforms[70] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBuoyancy ?? 1));
+    uniforms[71] = 0;
+    uniforms.set(previousViewProj.elements, 72);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -3481,6 +3510,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       centerlineRelief: uniforms[65],
       bodyBalance: uniforms[66],
       macroPreset: controlsSnapshot.canonicalMacroPreset || '',
+      sourceMode: normalizeCanonicalSourceMode(controlsSnapshot.canonicalSourceMode),
+      sourceModeValue: uniforms[67],
+      sourceY: uniforms[68],
+      sourceInjection: uniforms[69],
+      buoyancyLift: uniforms[70],
     };
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
@@ -3789,7 +3823,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const normalizedReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const isCanonicalReadbackScene = normalizedReadbackScene === 'canonical_plume';
     const isBonfireReadbackScene = normalizedReadbackScene === 'bonfire_plume';
-    const sourceY01 = isBonfireReadbackScene ? 0.81 : 0.13;
+    const canonicalReadbackSourceYNorm = clampFinite(controlsSnapshot.canonicalSourceY, -0.92, -0.20, -0.74);
+    const sourceY01 = isBonfireReadbackScene
+      ? 0.81
+      : isCanonicalReadbackScene
+        ? (canonicalReadbackSourceYNorm + 1) * 0.5
+        : 0.13;
     const sourceY = Math.floor(gridSize * sourceY01);
     const sourceRadius = Math.max(2, Math.ceil(gridSize * Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * 0.75));
     const localStep = Math.max(1, Math.floor(sourceRadius / 3));
