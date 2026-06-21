@@ -71,6 +71,7 @@ const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-mat
 const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
 const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-recovery-v0';
+const CLAY_CUBE_CORNER_SOFTENING_POLICY = 'contacted-boundary-axis-corner-softening-v0';
 const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
@@ -831,9 +832,10 @@ export function runClayCubeFirstLoopOracle({
       const tangentDistance = Math.sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
       const structuralReach = clamp01(1 - tangentDistance / (radius * 1.35))
         * clamp01(1 - Math.abs(normalOffset) / (radius * 0.85));
-      const boundaryAxes = Number(Math.abs(Math.abs(baseX) - CLAY_CUBE_EXTENTS.halfX) <= 1e-5)
-        + Number(Math.abs(baseY - CLAY_CUBE_EXTENTS.minY) <= 1e-5 || Math.abs(baseY - CLAY_CUBE_EXTENTS.maxY) <= 1e-5)
-        + Number(Math.abs(Math.abs(baseZ) - CLAY_CUBE_EXTENTS.halfZ) <= 1e-5);
+      const boundaryX = Math.abs(Math.abs(baseX) - CLAY_CUBE_EXTENTS.halfX) <= 1e-5;
+      const boundaryY = Math.abs(baseY - CLAY_CUBE_EXTENTS.minY) <= 1e-5 || Math.abs(baseY - CLAY_CUBE_EXTENTS.maxY) <= 1e-5;
+      const boundaryZ = Math.abs(Math.abs(baseZ) - CLAY_CUBE_EXTENTS.halfZ) <= 1e-5;
+      const boundaryAxes = Number(boundaryX) + Number(boundaryY) + Number(boundaryZ);
       const boundaryWeight = boundaryAxes >= 3 ? 0.55 : boundaryAxes >= 2 ? 0.35 : 0;
       let touched = false;
       if (reach > 0) {
@@ -851,6 +853,10 @@ export function runClayCubeFirstLoopOracle({
         pushX += surfaceNormal[0] * structuralForce * 0.082;
         pushY += surfaceNormal[1] * structuralForce * 0.082;
         pushZ += surfaceNormal[2] * structuralForce * 0.082;
+        const axisForce = structuralReach * structuralReach * collider.strength * (boundaryAxes >= 3 ? 0.055 : 0.032);
+        if (boundaryX) pushX += (baseX > 0 ? -1 : 1) * axisForce;
+        if (boundaryY) pushY += (baseY > (CLAY_CUBE_EXTENTS.minY + CLAY_CUBE_EXTENTS.maxY) * 0.5 ? -1 : 1) * axisForce;
+        if (boundaryZ) pushZ += (baseZ > 0 ? -1 : 1) * axisForce;
         touched = true;
       }
       if (touched) contact += 1;
@@ -1034,6 +1040,11 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
     if (abs(abs(base.z) - ${CLAY_CUBE_EXTENTS.halfZ.toFixed(8)}) <= 0.00001) {
       boundaryAxes = boundaryAxes + 1.0;
     }
+    let boundaryAxisDirection = vec3f(
+      select(0.0, -sign(base.x), abs(abs(base.x) - ${CLAY_CUBE_EXTENTS.halfX.toFixed(8)}) <= 0.00001),
+      select(0.0, select(1.0, -1.0, base.y > ${(CLAY_CUBE_EXTENTS.minY + CLAY_CUBE_EXTENTS.maxY) * 0.5}), abs(base.y - ${CLAY_CUBE_EXTENTS.minY.toFixed(8)}) <= 0.00001 || abs(base.y - ${CLAY_CUBE_EXTENTS.maxY.toFixed(8)}) <= 0.00001),
+      select(0.0, -sign(base.z), abs(abs(base.z) - ${CLAY_CUBE_EXTENTS.halfZ.toFixed(8)}) <= 0.00001)
+    );
     var boundaryWeight = 0.0;
     if (boundaryAxes >= 3.0) {
       boundaryWeight = 0.55;
@@ -1050,6 +1061,8 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
     if (boundaryWeight > 0.0 && structuralReach > 0.0) {
       let structuralForce = structuralReach * structuralReach * forceLane.x * boundaryWeight;
       push = push + surfaceNormal * 0.082 * structuralForce;
+      let axisForce = structuralReach * structuralReach * forceLane.x * select(0.032, 0.055, boundaryAxes >= 3.0);
+      push = push + boundaryAxisDirection * axisForce;
       touched = true;
     }
     if (touched) {
@@ -3133,6 +3146,7 @@ export function createKaminosClayPrototype({
       clayCubeBoundarySkinTriangleCount,
       clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: CLAY_CUBE_PLASTIC_REST_POLICY,
+      clayCubeCornerSofteningPolicy: CLAY_CUBE_CORNER_SOFTENING_POLICY,
       clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio,

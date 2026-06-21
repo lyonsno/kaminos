@@ -160,6 +160,10 @@ assert.ok(
   maxCornerDisplacement >= maxNonCornerDisplacement * 0.18,
   `near-corner brush left the cube corner too pointed: corner=${maxCornerDisplacement} nonCorner=${maxNonCornerDisplacement}`,
 );
+assert.ok(
+  maxCornerDisplacement >= maxNonCornerDisplacement * 0.45,
+  `near-corner brush did not materially soften the corner: corner=${maxCornerDisplacement} nonCorner=${maxNonCornerDisplacement}`,
+);
 
 const localAverageDisplacement = ({ basePositions, positions, center, radius, config: localConfig }) => {
   let displacementSum = 0;

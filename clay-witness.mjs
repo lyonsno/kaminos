@@ -884,6 +884,11 @@ async function main() {
           'plastic-current-state-no-birth-shape-recovery-v0',
           'cube route did not report plastic rest-state/no-birth-recovery policy',
         );
+        assert.equal(
+          state.clayCubeCornerSofteningPolicy,
+          'contacted-boundary-axis-corner-softening-v0',
+          'cube route did not report contacted boundary-axis corner-softening policy',
+        );
         assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit used the wrong depth policy');
         assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit did not preserve depth policy');
         assert.ok(Array.isArray(state.clayPointerLastHit.rawCenter), 'cube pointer hit did not preserve raw ray hit');
@@ -1050,6 +1055,7 @@ async function main() {
       clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
       clayCubeFaceMetricEvidenceKind: state.clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: state.clayCubePlasticRestPolicy,
+      clayCubeCornerSofteningPolicy: state.clayCubeCornerSofteningPolicy,
       clayCubeFrontFaceDeformedParticleCount: state.clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount: state.clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio: state.clayCubeFrontBackDeformationRatio,
