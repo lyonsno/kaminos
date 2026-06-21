@@ -490,6 +490,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Can Spread</span>
+      <input type="range" id="volume-canonical-spread" min="0" max="1.6" step="0.05" value="1">
+      <span class="slider-val" id="volume-canonical-spread-val">1.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Can Center</span>
+      <input type="range" id="volume-canonical-centerline" min="0" max="1.8" step="0.05" value="1">
+      <span class="slider-val" id="volume-canonical-centerline-val">1.00</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Can Body</span>
+      <input type="range" id="volume-canonical-body-balance" min="0" max="1.5" step="0.05" value="0">
+      <span class="slider-val" id="volume-canonical-body-balance-val">0.00</span>
+    </div>
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
       <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
@@ -1291,6 +1306,9 @@ const VOLUME_SCENE_PRESETS = {
     windStrength: 0.00,
     windAngle: 0,
     windHeight: 0.15,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
   },
   compact_plume: {
     label: 'compact',
@@ -1314,6 +1332,9 @@ const VOLUME_SCENE_PRESETS = {
     windStrength: 0.00,
     windAngle: 0,
     windHeight: 0.15,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
   },
   tall_plume: {
     label: 'tall',
@@ -1337,6 +1358,9 @@ const VOLUME_SCENE_PRESETS = {
     windStrength: 0.00,
     windAngle: 0,
     windHeight: 0.15,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
   },
   bonfire_plume: {
     label: 'bonfire',
@@ -1360,6 +1384,9 @@ const VOLUME_SCENE_PRESETS = {
     windStrength: 0.00,
     windAngle: 0,
     windHeight: 0.15,
+    canonicalSpread: 1.00,
+    canonicalCenterline: 1.00,
+    canonicalBodyBalance: 0.00,
   },
 };
 
@@ -1527,6 +1554,9 @@ function readVolumeControls() {
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+    canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
+    canonicalCenterline: parseFloat(document.getElementById('volume-canonical-centerline').value),
+    canonicalBodyBalance: parseFloat(document.getElementById('volume-canonical-body-balance').value),
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   };
@@ -1569,6 +1599,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-majorant-grid-val').textContent = `${c.majorantGrid}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+  document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
+  document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
+  document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
   syncRayBudgetGamutFromControls();
 }
 
@@ -1680,6 +1713,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
     document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
   }
+  const routeCanonicalSpread = Number(params.get('volume_canonical_spread'));
+  if (params.has('volume_canonical_spread') && Number.isFinite(routeCanonicalSpread)) {
+    document.getElementById('volume-canonical-spread').value = String(Math.max(0, Math.min(1.6, routeCanonicalSpread)));
+  }
+  const routeCanonicalCenterline = Number(params.get('volume_canonical_centerline'));
+  if (params.has('volume_canonical_centerline') && Number.isFinite(routeCanonicalCenterline)) {
+    document.getElementById('volume-canonical-centerline').value = String(Math.max(0, Math.min(1.8, routeCanonicalCenterline)));
+  }
+  const routeCanonicalBodyBalance = Number(params.get('volume_canonical_body_balance'));
+  if (params.has('volume_canonical_body_balance') && Number.isFinite(routeCanonicalBodyBalance)) {
+    document.getElementById('volume-canonical-body-balance').value = String(Math.max(0, Math.min(1.5, routeCanonicalBodyBalance)));
+  }
   const routeRayBudgetPreset = params.get('volume_ray_budget_preset');
   if (routeRayBudgetPreset) {
     applyRayBudgetPreset(routeRayBudgetPreset, { route: true });
@@ -1787,7 +1832,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

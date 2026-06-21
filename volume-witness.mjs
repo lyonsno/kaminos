@@ -990,6 +990,7 @@ async function main() {
       canonicalFieldSlice: simReadbackReport.canonicalSmokeFieldSlice || null,
       fieldSlice: fieldSliceOut || null,
       majorantReadback: sample.majorantReadback,
+      canonicalPlumeControls: state.canonicalPlumeControls || null,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
       volumeScene: sample.volumeScene,

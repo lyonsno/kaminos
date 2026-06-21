@@ -223,6 +223,7 @@ struct Uniforms {
   scene_controls: vec4<f32>,
   bonfire_ablation_controls: vec4<f32>,
   bonfire_ablation_controls2: vec4<f32>,
+  canonical_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -1407,6 +1408,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
+  let canonicalSpreadGain = clamp(u.canonical_controls.x, 0.0, 1.6);
+  let canonicalCenterlineGain = clamp(u.canonical_controls.y, 0.0, 1.8);
+  let canonicalBodyBalanceGain = clamp(u.canonical_controls.z, 0.0, 1.5);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
@@ -2052,12 +2056,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (1.0 - smoothstep(0.025, 0.13, canonicalScalarRadial))
     * smoothstep(-0.50, -0.08, p.y)
     * (1.0 - smoothstep(0.52, 0.86, p.y));
+  let canonicalBroadBodyRelief = canonicalPlumeScene
+    * smoothstep(-0.54, -0.12, p.y)
+    * (1.0 - smoothstep(0.20, 0.62, p.y))
+    * smoothstep(0.20, 0.44, canonicalScalarRadial);
+  let canonicalUpperChimneyRelief = canonicalPlumeScene
+    * smoothstep(0.30, 0.70, p.y)
+    * (1.0 - smoothstep(0.035, 0.16, canonicalScalarRadial));
+  let canonicalPlumeBodyBalance = clamp(canonicalBroadBodyRelief * 0.25 + canonicalUpperChimneyRelief * 0.22, 0.0, 0.34) * canonicalBodyBalanceGain;
+  let canonicalSmokeCapacity = mix(2.2, 0.88 - canonicalPlumeBodyBalance, canonicalPlumeScene);
   let canonicalSmokeTransport = min(
     max(
-      smoke * (0.968 - canonicalCenterlineRelief * 0.16) + smokeFromHeat * 0.18 + canonicalScalarSpread * 0.12,
+      smoke * (0.968 - canonicalCenterlineRelief * 0.16 * canonicalCenterlineGain - canonicalPlumeBodyBalance * 0.10)
+        + smokeFromHeat * 0.18
+        + canonicalScalarSpread * canonicalSpreadGain * (0.12 - canonicalBroadBodyRelief * canonicalBodyBalanceGain * 0.035),
       canonicalSmokeBirth
     ),
-    mix(2.2, 0.88, canonicalPlumeScene)
+    canonicalSmokeCapacity
   );
   let columnSmokeTransport = mix(max(smoke + smokeFromHeat, columnSmokeBirth), canonicalSmokeTransport, canonicalPlumeScene);
   let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth);
@@ -2444,7 +2459,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(80);
+  const uniforms = new Float32Array(84);
   let controlsSnapshot = getControls();
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -3424,7 +3439,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[61] = bonfireAblation.projection;
     uniforms[62] = bonfireAblation.temporal;
     uniforms[63] = bonfireAblation.instabilityProbe;
-    uniforms.set(previousViewProj.elements, 64);
+    uniforms[64] = Math.max(0, Math.min(1.6, controlsSnapshot.canonicalSpread ?? 1));
+    uniforms[65] = Math.max(0, Math.min(1.8, controlsSnapshot.canonicalCenterline ?? 1));
+    uniforms[66] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBodyBalance ?? 0));
+    uniforms[67] = 0;
+    uniforms.set(previousViewProj.elements, 68);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -3444,6 +3463,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
     state.windHeight = uniforms[55];
+    state.canonicalPlumeControls = {
+      identity: 'canonical-plume-tuning-cockpit-v0',
+      scalarSpread: uniforms[64],
+      centerlineRelief: uniforms[65],
+      bodyBalance: uniforms[66],
+    };
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
