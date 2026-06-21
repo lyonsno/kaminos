@@ -122,6 +122,12 @@ assert.match(core, /diagnostic-boundary-skin-from-material-points-not-solver-v0/
 assert.match(core, /clayCubeBoundarySkinVisible/, 'clay debug state records cube diagnostic boundary-skin visibility');
 assert.match(core, /clayCubeBoundarySkinTriangleCount/, 'clay debug state records cube diagnostic boundary-skin triangle count');
 assert.match(core, /shared-vertex-displacement-heat-boundary-skin-v0/, 'clay cube boundary skin names shared-vertex heat visual mode');
+assert.match(core, /CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY/, 'clay core names cube boundary-skin fairing policy');
+assert.match(core, /buildClayCubeBoundarySkinFrame/, 'clay core exposes boundary-skin frame builder for fairing metrics');
+assert.match(core, /clayCubeBoundarySkinFairingPolicy/, 'clay debug state records cube boundary-skin fairing policy');
+assert.match(core, /clayCubeBoundarySkinRawRoughness/, 'clay debug state records raw cube boundary-skin roughness');
+assert.match(core, /clayCubeBoundarySkinRoughness/, 'clay debug state records faired cube boundary-skin roughness');
+assert.match(core, /clayCubeBoundarySkinMaxFairingDisplacement/, 'clay debug state records max boundary-skin fairing displacement');
 assert.match(core, /clayCubeFaceMetricEvidenceKind/, 'clay debug state records cube face-locality metric evidence kind');
 assert.match(core, /clayCubeFrontFaceDeformedParticleCount/, 'clay debug state records front-face deformation count');
 assert.match(core, /clayCubeBackFaceDeformedParticleCount/, 'clay debug state records back-face deformation count');
@@ -330,6 +336,10 @@ assert.match(witness, /clayCubeBoundarySkinVisible/, 'clay witness verifies cube
 assert.match(witness, /clayCubeBoundarySkinEvidenceKind/, 'clay witness records diagnostic boundary-skin evidence kind');
 assert.match(witness, /clayCubeBoundarySkinTriangleCount/, 'clay witness records diagnostic boundary-skin triangle count');
 assert.match(witness, /clayCubeBoundarySkinVisualMode/, 'clay witness records boundary skin visual mode');
+assert.match(witness, /clayCubeBoundarySkinFairingPolicy/, 'clay witness records boundary-skin fairing policy');
+assert.match(witness, /clayCubeBoundarySkinRawRoughness/, 'clay witness records raw boundary-skin roughness');
+assert.match(witness, /clayCubeBoundarySkinRoughness/, 'clay witness records faired boundary-skin roughness');
+assert.match(witness, /clayCubeBoundarySkinMaxFairingDisplacement/, 'clay witness records max boundary-skin fairing displacement');
 assert.match(witness, /clayCubeFaceMetricEvidenceKind/, 'clay witness records face-locality metric evidence kind');
 assert.match(witness, /clayCubePlasticRestPolicy/, 'clay witness records cube plastic rest-state policy');
 assert.match(witness, /clayCubeCornerSofteningPolicy/, 'clay witness records cube corner-softening policy');

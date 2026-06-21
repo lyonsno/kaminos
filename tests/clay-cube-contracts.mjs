@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 
-import {
+import * as clayCore from '../clay-core.js';
+
+const {
   normalizeClayCubePointerCollider,
   normalizeClayCubeConfig,
   runClayCubeFirstLoopOracle,
   seedClayCubeMaterialPoints,
-} from '../clay-core.js';
+} = clayCore;
 
 const config = normalizeClayCubeConfig('8x8x8');
 assert.equal(config.requestedClayCube, '8x8x8');
@@ -163,6 +165,38 @@ assert.ok(
 assert.ok(
   maxCornerDisplacement >= maxNonCornerDisplacement * 0.45,
   `near-corner brush did not materially soften the corner: corner=${maxCornerDisplacement} nonCorner=${maxNonCornerDisplacement}`,
+);
+
+assert.equal(
+  typeof clayCore.buildClayCubeBoundarySkinFrame,
+  'function',
+  'cube route needs a boundary-skin fairing frame builder with roughness metrics',
+);
+
+const rawBoundaryFrame = clayCore.buildClayCubeBoundarySkinFrame({
+  basePositions: cornerParticles,
+  positions: nearCornerOracle.positions,
+  config: cornerConfig,
+  fair: false,
+});
+const fairedBoundaryFrame = clayCore.buildClayCubeBoundarySkinFrame({
+  basePositions: cornerParticles,
+  positions: nearCornerOracle.positions,
+  config: cornerConfig,
+  fair: true,
+});
+
+assert.equal(fairedBoundaryFrame.fairingPolicy, 'contacted-boundary-skin-curvature-fairing-v0');
+assert.equal(fairedBoundaryFrame.vertexCount, rawBoundaryFrame.vertexCount, 'fairing must preserve boundary-skin topology');
+assert.equal(fairedBoundaryFrame.triangleCount, rawBoundaryFrame.triangleCount, 'fairing must preserve boundary-skin triangle count');
+assert.ok(rawBoundaryFrame.maxBoundarySkinRoughness > 0, 'raw corner boundary frame should expose measurable roughness');
+assert.ok(
+  fairedBoundaryFrame.maxBoundarySkinRoughness <= rawBoundaryFrame.maxBoundarySkinRoughness * 0.72,
+  `corner fairing did not materially reduce skin roughness: raw=${rawBoundaryFrame.maxBoundarySkinRoughness} faired=${fairedBoundaryFrame.maxBoundarySkinRoughness}`,
+);
+assert.ok(
+  fairedBoundaryFrame.maxFairingDisplacement <= 0.055,
+  `corner fairing moved boundary skin too far from material points: ${fairedBoundaryFrame.maxFairingDisplacement}`,
 );
 
 const localAverageDisplacement = ({ basePositions, positions, center, radius, config: localConfig }) => {

@@ -719,6 +719,18 @@ async function main() {
       assert.ok((state.clayCubeBoundarySkinSharedVertexCount ?? 0) > 0, 'cube diagnostic boundary skin did not report shared vertices');
       assert.equal(state.clayCubeBoundarySkinSharedVertexCount, state.clayCubeBoundarySkinVertexCount, 'cube boundary skin still duplicates exterior material vertices');
       assert.ok((state.clayCubeBoundarySkinTriangleCount ?? 0) > 0, 'cube diagnostic boundary skin produced no triangles');
+      assert.equal(
+        state.clayCubeBoundarySkinFairingPolicy,
+        'contacted-boundary-skin-curvature-fairing-v0',
+        'cube boundary skin did not report contacted curvature fairing policy',
+      );
+      assert.ok(Number.isFinite(state.clayCubeBoundarySkinRawRoughness), 'cube boundary skin raw roughness metric missing');
+      assert.ok(Number.isFinite(state.clayCubeBoundarySkinRoughness), 'cube boundary skin faired roughness metric missing');
+      assert.ok(Number.isFinite(state.clayCubeBoundarySkinMaxFairingDisplacement), 'cube boundary skin fairing displacement metric missing');
+      assert.ok(
+        state.clayCubeBoundarySkinRoughness <= state.clayCubeBoundarySkinRawRoughness,
+        `cube boundary skin fairing increased roughness: raw=${state.clayCubeBoundarySkinRawRoughness} faired=${state.clayCubeBoundarySkinRoughness}`,
+      );
       assert.equal(state.clayCubeFaceMetricEvidenceKind, 'solver-space-material-point-face-locality-v0', 'cube face-locality metric evidence kind missing');
       assert.ok(Number.isFinite(state.clayCubeFrontFaceDeformedParticleCount), 'cube front-face deformation count missing');
       assert.ok(Number.isFinite(state.clayCubeBackFaceDeformedParticleCount), 'cube back-face deformation count missing');
@@ -1053,6 +1065,10 @@ async function main() {
       clayCubeBoundarySkinVertexCount: state.clayCubeBoundarySkinVertexCount,
       clayCubeBoundarySkinSharedVertexCount: state.clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
+      clayCubeBoundarySkinFairingPolicy: state.clayCubeBoundarySkinFairingPolicy,
+      clayCubeBoundarySkinRawRoughness: state.clayCubeBoundarySkinRawRoughness,
+      clayCubeBoundarySkinRoughness: state.clayCubeBoundarySkinRoughness,
+      clayCubeBoundarySkinMaxFairingDisplacement: state.clayCubeBoundarySkinMaxFairingDisplacement,
       clayCubeFaceMetricEvidenceKind: state.clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: state.clayCubePlasticRestPolicy,
       clayCubeCornerSofteningPolicy: state.clayCubeCornerSofteningPolicy,

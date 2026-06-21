@@ -69,6 +69,7 @@ const CLAY_CUBE_ISO_SURFACE_SUBTRACT = 10.0;
 const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
 const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
 const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
+const CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY = 'contacted-boundary-skin-curvature-fairing-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
 const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-recovery-v0';
 const CLAY_CUBE_CORNER_SOFTENING_POLICY = 'contacted-boundary-axis-corner-softening-v0';
@@ -341,6 +342,243 @@ export function seedClayCubeMaterialPoints(config = normalizeClayCubeConfig()) {
     }
   }
   return positions;
+}
+
+function clayCubeParticleIndexForConfig(config, x, y, z) {
+  return y * config.cubeZ * config.cubeX + z * config.cubeX + x;
+}
+
+function buildClayCubeBoundarySkinTopology(config = normalizeClayCubeConfig()) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const indices = [];
+  const sourceIndices = [];
+  const sourceToVertex = new Map();
+
+  const pushVertex = sourceIndex => {
+    const existing = sourceToVertex.get(sourceIndex);
+    if (existing !== undefined) return existing;
+    const vertexIndex = sourceIndices.length;
+    sourceIndices.push(sourceIndex);
+    sourceToVertex.set(sourceIndex, vertexIndex);
+    return vertexIndex;
+  };
+
+  const pushQuad = (a, b, c, d) => {
+    indices.push(a, b, c, c, b, d);
+  };
+
+  for (let y = 0; y < cfg.cubeY - 1; y += 1) {
+    for (let x = 0; x < cfg.cubeX - 1; x += 1) {
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, y, 0)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, y, 0)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, y + 1, 0)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, y + 1, 0)),
+      );
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, y, cfg.cubeZ - 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, y, cfg.cubeZ - 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, y + 1, cfg.cubeZ - 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, y + 1, cfg.cubeZ - 1)),
+      );
+    }
+  }
+
+  for (let y = 0; y < cfg.cubeY - 1; y += 1) {
+    for (let z = 0; z < cfg.cubeZ - 1; z += 1) {
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, 0, y, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, 0, y, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, 0, y + 1, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, 0, y + 1, z)),
+      );
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, cfg.cubeX - 1, y, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, cfg.cubeX - 1, y, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, cfg.cubeX - 1, y + 1, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, cfg.cubeX - 1, y + 1, z + 1)),
+      );
+    }
+  }
+
+  for (let z = 0; z < cfg.cubeZ - 1; z += 1) {
+    for (let x = 0; x < cfg.cubeX - 1; x += 1) {
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, 0, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, 0, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, 0, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, 0, z)),
+      );
+      pushQuad(
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, cfg.cubeY - 1, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, cfg.cubeY - 1, z)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x, cfg.cubeY - 1, z + 1)),
+        pushVertex(clayCubeParticleIndexForConfig(cfg, x + 1, cfg.cubeY - 1, z + 1)),
+      );
+    }
+  }
+
+  const neighbors = Array.from({ length: sourceIndices.length }, () => new Set());
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i];
+    const b = indices[i + 1];
+    const c = indices[i + 2];
+    neighbors[a].add(b);
+    neighbors[a].add(c);
+    neighbors[b].add(a);
+    neighbors[b].add(c);
+    neighbors[c].add(a);
+    neighbors[c].add(b);
+  }
+
+  return {
+    sourceIndices,
+    indices,
+    neighbors: neighbors.map(entry => [...entry]),
+  };
+}
+
+function measureClayCubeBoundarySkinRoughness(framePositions, sourceIndices, neighbors, basePositions, sourceValues) {
+  let maxBoundarySkinRoughness = 0;
+  let averageBoundarySkinRoughness = 0;
+  let sampled = 0;
+  for (let i = 0; i < sourceIndices.length; i += 1) {
+    const sourceOffset = sourceIndices[i] * 4;
+    const dx = sourceValues[sourceOffset] - basePositions[sourceOffset];
+    const dy = sourceValues[sourceOffset + 1] - basePositions[sourceOffset + 1];
+    const dz = sourceValues[sourceOffset + 2] - basePositions[sourceOffset + 2];
+    const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const contactWeight = sourceValues[sourceOffset + 3] > 0.5 ? 1 : 0;
+    const sampleWeight = Math.max(contactWeight, clamp01(displacement / 0.04));
+    const vertexNeighbors = neighbors[i] || [];
+    if (sampleWeight <= 0 || vertexNeighbors.length === 0) continue;
+    let avgX = 0;
+    let avgY = 0;
+    let avgZ = 0;
+    for (const neighbor of vertexNeighbors) {
+      const neighborOffset = neighbor * 3;
+      avgX += framePositions[neighborOffset];
+      avgY += framePositions[neighborOffset + 1];
+      avgZ += framePositions[neighborOffset + 2];
+    }
+    const invNeighborCount = 1 / vertexNeighbors.length;
+    avgX *= invNeighborCount;
+    avgY *= invNeighborCount;
+    avgZ *= invNeighborCount;
+    const frameOffset = i * 3;
+    const rx = framePositions[frameOffset] - avgX;
+    const ry = framePositions[frameOffset + 1] - avgY;
+    const rz = framePositions[frameOffset + 2] - avgZ;
+    const roughness = Math.sqrt(rx * rx + ry * ry + rz * rz) * sampleWeight;
+    maxBoundarySkinRoughness = Math.max(maxBoundarySkinRoughness, roughness);
+    averageBoundarySkinRoughness += roughness;
+    sampled += 1;
+  }
+  return {
+    maxBoundarySkinRoughness,
+    averageBoundarySkinRoughness: sampled > 0 ? averageBoundarySkinRoughness / sampled : 0,
+    boundarySkinRoughnessSampleCount: sampled,
+  };
+}
+
+export function buildClayCubeBoundarySkinFrame({
+  basePositions,
+  positions,
+  config = normalizeClayCubeConfig(),
+  fair = true,
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const sourceValues = positions || basePositions || seedClayCubeMaterialPoints(cfg);
+  const sourceBase = basePositions || sourceValues;
+  const topology = buildClayCubeBoundarySkinTopology(cfg);
+  const framePositions = new Float32Array(topology.sourceIndices.length * 3);
+  const fairingWeights = new Float32Array(topology.sourceIndices.length);
+  for (let i = 0; i < topology.sourceIndices.length; i += 1) {
+    const sourceOffset = topology.sourceIndices[i] * 4;
+    const frameOffset = i * 3;
+    framePositions[frameOffset] = sourceValues[sourceOffset];
+    framePositions[frameOffset + 1] = sourceValues[sourceOffset + 1];
+    framePositions[frameOffset + 2] = sourceValues[sourceOffset + 2];
+    const dx = sourceValues[sourceOffset] - sourceBase[sourceOffset];
+    const dy = sourceValues[sourceOffset + 1] - sourceBase[sourceOffset + 1];
+    const dz = sourceValues[sourceOffset + 2] - sourceBase[sourceOffset + 2];
+    const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const contactWeight = sourceValues[sourceOffset + 3] > 0.5 ? 1 : 0;
+    fairingWeights[i] = Math.max(contactWeight, clamp01(displacement / 0.055));
+  }
+
+  const rawMetrics = measureClayCubeBoundarySkinRoughness(
+    framePositions,
+    topology.sourceIndices,
+    topology.neighbors,
+    sourceBase,
+    sourceValues,
+  );
+  let maxFairingDisplacement = 0;
+  if (fair) {
+    const nextPositions = new Float32Array(framePositions);
+    for (let i = 0; i < topology.sourceIndices.length; i += 1) {
+      const weight = fairingWeights[i];
+      const vertexNeighbors = topology.neighbors[i] || [];
+      if (weight <= 0 || vertexNeighbors.length === 0) continue;
+      const frameOffset = i * 3;
+      let avgX = 0;
+      let avgY = 0;
+      let avgZ = 0;
+      for (const neighbor of vertexNeighbors) {
+        const neighborOffset = neighbor * 3;
+        avgX += framePositions[neighborOffset];
+        avgY += framePositions[neighborOffset + 1];
+        avgZ += framePositions[neighborOffset + 2];
+      }
+      const invNeighborCount = 1 / vertexNeighbors.length;
+      avgX *= invNeighborCount;
+      avgY *= invNeighborCount;
+      avgZ *= invNeighborCount;
+      const rawX = framePositions[frameOffset];
+      const rawY = framePositions[frameOffset + 1];
+      const rawZ = framePositions[frameOffset + 2];
+      const strength = 0.46 * weight;
+      let fx = (avgX - rawX) * strength;
+      let fy = (avgY - rawY) * strength;
+      let fz = (avgZ - rawZ) * strength;
+      const fairDistance = Math.sqrt(fx * fx + fy * fy + fz * fz);
+      const maxDistance = 0.052;
+      if (fairDistance > maxDistance) {
+        const scale = maxDistance / fairDistance;
+        fx *= scale;
+        fy *= scale;
+        fz *= scale;
+      }
+      nextPositions[frameOffset] = rawX + fx;
+      nextPositions[frameOffset + 1] = rawY + fy;
+      nextPositions[frameOffset + 2] = rawZ + fz;
+      maxFairingDisplacement = Math.max(maxFairingDisplacement, Math.sqrt(fx * fx + fy * fy + fz * fz));
+    }
+    framePositions.set(nextPositions);
+  }
+
+  const metrics = measureClayCubeBoundarySkinRoughness(
+    framePositions,
+    topology.sourceIndices,
+    topology.neighbors,
+    sourceBase,
+    sourceValues,
+  );
+  return {
+    fairingPolicy: CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY,
+    positions: framePositions,
+    indices: topology.indices,
+    sourceIndices: topology.sourceIndices,
+    vertexCount: topology.sourceIndices.length,
+    triangleCount: topology.indices.length / 3,
+    rawMaxBoundarySkinRoughness: rawMetrics.maxBoundarySkinRoughness,
+    rawAverageBoundarySkinRoughness: rawMetrics.averageBoundarySkinRoughness,
+    maxBoundarySkinRoughness: metrics.maxBoundarySkinRoughness,
+    averageBoundarySkinRoughness: metrics.averageBoundarySkinRoughness,
+    boundarySkinRoughnessSampleCount: metrics.boundarySkinRoughnessSampleCount,
+    maxFairingDisplacement,
+  };
 }
 
 export function seedClaySculptParticles(config = normalizeClaySculptConfig()) {
@@ -1407,6 +1645,10 @@ export function createKaminosClayPrototype({
   let clayCubeBoundarySkinVertexCount = 0;
   let clayCubeBoundarySkinTriangleCount = 0;
   let clayCubeBoundarySkinSharedVertexCount = 0;
+  let clayCubeBoundarySkinFairingPolicy = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY : 'disabled';
+  let clayCubeBoundarySkinRawRoughness = 0;
+  let clayCubeBoundarySkinRoughness = 0;
+  let clayCubeBoundarySkinMaxFairingDisplacement = 0;
   let clayCubeFaceMetricEvidenceKind = clayCubeEnabled ? CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND : 'disabled';
   let clayCubeFrontFaceDeformedParticleCount = 0;
   let clayCubeBackFaceDeformedParticleCount = 0;
@@ -1625,99 +1867,35 @@ export function createKaminosClayPrototype({
     }
   }
 
-  function cubeParticleIndex(x, y, z) {
-    return y * cubeConfig.cubeZ * cubeConfig.cubeX + z * cubeConfig.cubeX + x;
-  }
-
   function sculptParticleIndex(x, y, z) {
     return y * sculptConfig.sculptZ * sculptConfig.sculptX + z * sculptConfig.sculptX + x;
   }
 
   function createCubeBoundarySkinGeometry() {
-    const positions = [];
     const colors = [];
-    const indices = [];
-    const sourceIndices = [];
-    const sourceToVertex = new Map();
-
-    const pushVertex = sourceIndex => {
-      const existing = sourceToVertex.get(sourceIndex);
-      if (existing !== undefined) return existing;
-      const offset = sourceIndex * 4;
-      sourceIndices.push(sourceIndex);
-      positions.push(cubeBasePositions[offset], cubeBasePositions[offset + 1], cubeBasePositions[offset + 2]);
+    const frame = buildClayCubeBoundarySkinFrame({
+      basePositions: cubeBasePositions,
+      positions: cubeBasePositions,
+      config: cubeConfig,
+      fair: false,
+    });
+    for (let i = 0; i < frame.vertexCount; i += 1) {
       colors.push(0.74, 0.56, 0.34);
-      const vertexIndex = sourceIndices.length - 1;
-      sourceToVertex.set(sourceIndex, vertexIndex);
-      return vertexIndex;
-    };
-
-    const pushQuad = (a, b, c, d) => {
-      const base = indices.length;
-      indices.push(a, b, c, c, b, d);
-      return base;
-    };
-
-    for (let y = 0; y < cubeConfig.cubeY - 1; y += 1) {
-      for (let x = 0; x < cubeConfig.cubeX - 1; x += 1) {
-        pushQuad(
-          pushVertex(cubeParticleIndex(x, y, 0)),
-          pushVertex(cubeParticleIndex(x + 1, y, 0)),
-          pushVertex(cubeParticleIndex(x, y + 1, 0)),
-          pushVertex(cubeParticleIndex(x + 1, y + 1, 0)),
-        );
-        pushQuad(
-          pushVertex(cubeParticleIndex(x + 1, y, cubeConfig.cubeZ - 1)),
-          pushVertex(cubeParticleIndex(x, y, cubeConfig.cubeZ - 1)),
-          pushVertex(cubeParticleIndex(x + 1, y + 1, cubeConfig.cubeZ - 1)),
-          pushVertex(cubeParticleIndex(x, y + 1, cubeConfig.cubeZ - 1)),
-        );
-      }
-    }
-
-    for (let y = 0; y < cubeConfig.cubeY - 1; y += 1) {
-      for (let z = 0; z < cubeConfig.cubeZ - 1; z += 1) {
-        pushQuad(
-          pushVertex(cubeParticleIndex(0, y, z + 1)),
-          pushVertex(cubeParticleIndex(0, y, z)),
-          pushVertex(cubeParticleIndex(0, y + 1, z + 1)),
-          pushVertex(cubeParticleIndex(0, y + 1, z)),
-        );
-        pushQuad(
-          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y, z)),
-          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y, z + 1)),
-          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y + 1, z)),
-          pushVertex(cubeParticleIndex(cubeConfig.cubeX - 1, y + 1, z + 1)),
-        );
-      }
-    }
-
-    for (let z = 0; z < cubeConfig.cubeZ - 1; z += 1) {
-      for (let x = 0; x < cubeConfig.cubeX - 1; x += 1) {
-        pushQuad(
-          pushVertex(cubeParticleIndex(x, 0, z + 1)),
-          pushVertex(cubeParticleIndex(x + 1, 0, z + 1)),
-          pushVertex(cubeParticleIndex(x, 0, z)),
-          pushVertex(cubeParticleIndex(x + 1, 0, z)),
-        );
-        pushQuad(
-          pushVertex(cubeParticleIndex(x, cubeConfig.cubeY - 1, z)),
-          pushVertex(cubeParticleIndex(x + 1, cubeConfig.cubeY - 1, z)),
-          pushVertex(cubeParticleIndex(x, cubeConfig.cubeY - 1, z + 1)),
-          pushVertex(cubeParticleIndex(x + 1, cubeConfig.cubeY - 1, z + 1)),
-        );
-      }
     }
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(frame.positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
-    geometry.setIndex(indices);
+    geometry.setIndex(frame.indices);
     geometry.computeVertexNormals();
-    cubeBoundarySkinSourceIndices = sourceIndices;
-    clayCubeBoundarySkinVertexCount = sourceIndices.length;
-    clayCubeBoundarySkinSharedVertexCount = sourceToVertex.size;
-    clayCubeBoundarySkinTriangleCount = indices.length / 3;
+    cubeBoundarySkinSourceIndices = frame.sourceIndices;
+    clayCubeBoundarySkinVertexCount = frame.vertexCount;
+    clayCubeBoundarySkinSharedVertexCount = frame.vertexCount;
+    clayCubeBoundarySkinTriangleCount = frame.triangleCount;
+    clayCubeBoundarySkinFairingPolicy = frame.fairingPolicy;
+    clayCubeBoundarySkinRawRoughness = frame.rawMaxBoundarySkinRoughness;
+    clayCubeBoundarySkinRoughness = frame.maxBoundarySkinRoughness;
+    clayCubeBoundarySkinMaxFairingDisplacement = frame.maxFairingDisplacement;
     return geometry;
   }
 
@@ -1947,9 +2125,16 @@ export function createKaminosClayPrototype({
       clayCubeBoundarySkinVisible = false;
       return;
     }
+    const frame = buildClayCubeBoundarySkinFrame({
+      basePositions: cubeBasePositions,
+      positions: cubeValues,
+      config: cubeConfig,
+      fair: true,
+    });
     for (let i = 0; i < cubeBoundarySkinSourceIndices.length; i += 1) {
       const sourceOffset = cubeBoundarySkinSourceIndices[i] * 4;
-      position.setXYZ(i, cubeValues[sourceOffset], cubeValues[sourceOffset + 1], cubeValues[sourceOffset + 2]);
+      const frameOffset = i * 3;
+      position.setXYZ(i, frame.positions[frameOffset], frame.positions[frameOffset + 1], frame.positions[frameOffset + 2]);
       if (color) {
         const dx = cubeValues[sourceOffset] - cubeBasePositions[sourceOffset];
         const dy = cubeValues[sourceOffset + 1] - cubeBasePositions[sourceOffset + 1];
@@ -1968,6 +2153,10 @@ export function createKaminosClayPrototype({
     position.needsUpdate = true;
     if (color) color.needsUpdate = true;
     cubeBoundarySkin.geometry.computeVertexNormals();
+    clayCubeBoundarySkinFairingPolicy = frame.fairingPolicy;
+    clayCubeBoundarySkinRawRoughness = frame.rawMaxBoundarySkinRoughness;
+    clayCubeBoundarySkinRoughness = frame.maxBoundarySkinRoughness;
+    clayCubeBoundarySkinMaxFairingDisplacement = frame.maxFairingDisplacement;
     clayCubeBoundarySkinVisible = true;
     cubeBoundarySkin.visible = true;
   }
@@ -3144,6 +3333,10 @@ export function createKaminosClayPrototype({
       clayCubeBoundarySkinVertexCount,
       clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount,
+      clayCubeBoundarySkinFairingPolicy,
+      clayCubeBoundarySkinRawRoughness,
+      clayCubeBoundarySkinRoughness,
+      clayCubeBoundarySkinMaxFairingDisplacement,
       clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: CLAY_CUBE_PLASTIC_REST_POLICY,
       clayCubeCornerSofteningPolicy: CLAY_CUBE_CORNER_SOFTENING_POLICY,
