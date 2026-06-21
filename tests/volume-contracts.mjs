@@ -116,6 +116,32 @@ assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnos
 assert.match(index, /id="volume-canonical-spread"/, 'Volume tab exposes a canonical plume scalar-spread cockpit control');
 assert.match(index, /id="volume-canonical-centerline"/, 'Volume tab exposes a canonical plume centerline-relief cockpit control');
 assert.match(index, /id="volume-canonical-body-balance"/, 'Volume tab exposes a canonical plume body/chimney balance cockpit control');
+assert.match(index, /CANONICAL_VOLUME_HIDDEN_CONTROLS/, 'canonical plume has an explicit hidden-control registry');
+assert.match(index, /CANONICAL_VOLUME_HIDDEN_SECTIONS/, 'canonical plume has an explicit hidden-section registry');
+for (const hiddenCanonicalControl of [
+  'volume-fire',
+  'volume-radiance',
+  'volume-glow',
+  'volume-microdetail',
+  'volume-interface-shred',
+  'volume-fire-licks',
+  'volume-fire-scale',
+  'volume-detail-scale',
+  'volume-wind-strength',
+  'volume-wind-angle',
+  'volume-wind-height',
+]) {
+  assert.match(
+    index,
+    new RegExp(`CANONICAL_VOLUME_HIDDEN_CONTROLS[\\s\\S]*${hiddenCanonicalControl}`),
+    `canonical plume hides ${hiddenCanonicalControl} from the operator cockpit`,
+  );
+}
+assert.match(index, /id="volume-ray-budget-section"/, 'ray-budget gamut has a stable wrapper for canonical plume visibility');
+assert.match(index, /CANONICAL_VOLUME_HIDDEN_SECTIONS[\s\S]*volume-ray-budget-section/, 'canonical plume hides the coupled ray-budget gamut section');
+assert.match(index, /function syncCanonicalVolumeControlVisibility/, 'canonical plume cockpit visibility is synchronized by a named helper');
+assert.match(index, /closest\('\.slider-row'\)/, 'canonical plume hides whole slider rows instead of disabling only bare inputs');
+assert.match(index, /syncCanonicalVolumeControlVisibility\(c\.volumeScene\)/, 'volume label refresh also refreshes canonical cockpit visibility');
 assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
 assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');

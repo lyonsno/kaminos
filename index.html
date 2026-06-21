@@ -431,7 +431,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-render-scale" min="0.6" max="1" step="0.05" value="0.85">
       <span class="slider-val" id="volume-render-scale-val">0.85</span>
     </div>
-    <div class="ray-budget-wrap">
+    <div class="ray-budget-wrap" id="volume-ray-budget-section">
       <div class="ray-budget-grid">
         <div class="ray-budget-axis-y">Adaptive</div>
         <div id="volume-ray-budget-gamut" class="ray-budget-gamut" role="slider" tabindex="0" aria-label="Ray budget gamut" aria-valuemin="0" aria-valuemax="1">
@@ -1283,6 +1283,24 @@ const VOLUME_RAY_BUDGET_PRESETS = {
   hero: { raySteps: 144, adaptiveRays: 0.30, fire: 1.35, radiance: 1.60, absorption: 0.80 },
 };
 
+const CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
+  'volume-fire',
+  'volume-radiance',
+  'volume-glow',
+  'volume-microdetail',
+  'volume-interface-shred',
+  'volume-fire-licks',
+  'volume-fire-scale',
+  'volume-detail-scale',
+  'volume-wind-strength',
+  'volume-wind-angle',
+  'volume-wind-height',
+]);
+
+const CANONICAL_VOLUME_HIDDEN_SECTIONS = new Set([
+  'volume-ray-budget-section',
+]);
+
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
     label: 'simple',
@@ -1449,6 +1467,22 @@ function setVolumeControlValue(id, value) {
   el.value = String(value);
 }
 
+function volumeControlRow(id) {
+  return document.getElementById(id)?.closest('.slider-row') || null;
+}
+
+function syncCanonicalVolumeControlVisibility(volumeScene) {
+  const canonical = volumeScene === 'canonical_plume';
+  for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
+    const row = volumeControlRow(id);
+    if (row) row.style.display = canonical ? 'none' : '';
+  }
+  for (const id of CANONICAL_VOLUME_HIDDEN_SECTIONS) {
+    const section = document.getElementById(id);
+    if (section) section.style.display = canonical ? 'none' : '';
+  }
+}
+
 function volumeSceneControlId(key) {
   return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
 }
@@ -1602,6 +1636,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
+  syncCanonicalVolumeControlVisibility(c.volumeScene);
   syncRayBudgetGamutFromControls();
 }
 
