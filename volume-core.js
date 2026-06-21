@@ -2521,6 +2521,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalHistoryResetCount: 0,
     temporalHistoryResetReason: 'initial',
     temporalHistoryValid: false,
+    fluidStateResetCount: 0,
+    fluidStateResetReason: 'initial',
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
@@ -2928,6 +2930,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
 
+  function canonicalSourceControlSignature(snapshot = controlsSnapshot) {
+    return [
+      normalizeVolumeScene(snapshot.volumeScene),
+      snapshot.inputRadius,
+      snapshot.flowRate,
+    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
+  }
+
   function maybeResetTemporalHistoryForCamera() {
     const signature = temporalCameraSignature();
     if (lastTemporalCameraSignature && lastTemporalCameraSignature !== signature) {
@@ -2989,7 +2999,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
-  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize) {
+  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     destroyFluidState();
@@ -3137,8 +3147,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
-    resetTemporalHistory('grid-rebuilt');
-    emitStatus({ phase: 'grid-rebuilt' });
+    state.fluidStateResetCount += 1;
+    state.fluidStateResetReason = reason;
+    resetTemporalHistory(reason);
+    emitStatus({ phase: reason });
   }
 
   async function ensureGpu() {
@@ -4851,16 +4863,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
+      const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = { ...controlsSnapshot, ...next };
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
+      const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
         resetTemporalHistory('control-change');
       }
       lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+      const sourceStateResetNeeded = device
+        && requestedGrid === previousGrid
+        && requestedMajorantGrid === previousMajorantGrid
+        && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
+        && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
       if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid);
+      } else if (sourceStateResetNeeded) {
+        rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
       } else {
         gridSize = requestedGrid;
         majorantGridSize = requestedMajorantGrid;

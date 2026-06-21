@@ -208,6 +208,11 @@ assert.match(core, /canonicalSmokeCapacity[\s\S]*canonicalPlumeBodyBalance/, 'ca
 assert.match(core, /canonical_controls/, 'canonical plume cockpit controls reach the fluid shader through explicit uniform state');
 assert.match(core, /state\.canonicalPlumeControls/, 'debug state exposes effective canonical plume cockpit controls for witness/report identity');
 assert.doesNotMatch(core, /let canonicalPlumeBodyBalance =[^;]*(fire|radiance|microdetail|frontTopology|bonfire)/, 'canonical plume body balance must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
+assert.match(core, /canonicalSourceControlSignature/, 'canonical plume has a named source-control signature for trusted cockpit tuning');
+assert.match(core, /canonical-source-control-change/, 'canonical source-control edits record a durable fluid reset reason');
+assert.match(core, /sourceStateResetNeeded[\s\S]*rebuildFluidState\(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change'\)/, 'canonical source-control edits rebuild the live fluid field instead of only resetting temporal history');
+assert.match(core, /state\.fluidStateResetReason/, 'debug state exposes why the live fluid field was rebuilt');
+assert.match(core, /state\.fluidStateResetCount/, 'debug state exposes source-control fluid reset count');
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');
