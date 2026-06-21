@@ -6998,8 +6998,42 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  // Load HDR environment first; authored scene content stays empty until explicit import.
-  loadEnvironment('studio');
+  // Load HDR environment first, then auto-load deep-linked splat if present
+  loadEnvironment('studio').then(async () => {
+    const params = new URLSearchParams(window.location.search);
+    const loadSplat = params.get('load');
+    if (loadSplat) {
+      // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
+      // Format: root/path or root/subdir/path
+      const slashIdx = loadSplat.indexOf('/');
+      const root = slashIdx >= 0 ? loadSplat.slice(0, slashIdx) : 'splat-inbox';
+      const path = slashIdx >= 0 ? loadSplat.slice(slashIdx + 1) : loadSplat;
+      const url = `/api/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`;
+      const fileName = path.split('/').pop() || 'splat.ply';
+      try {
+        await greenroomImportSplat(url, fileName, { title: fileName }, {
+          clear: true,
+          metadata: {
+            source: url,
+            fileName,
+            label: fileName,
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: url,
+              fileName,
+              format: fileName.split('.').pop()?.toLowerCase() || 'ply',
+              rootId: root,
+              path,
+            },
+          },
+        });
+        setInfo(`Deep-link loaded: ${fileName}`);
+      } catch (err) {
+        console.error('Deep-link load failed:', err);
+        setInfo(`Deep-link load failed: ${err.message || err}`);
+      }
+    }
+  });
   initKaminosVolumeRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
