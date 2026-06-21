@@ -154,6 +154,9 @@ assert.match(core, /'canonical_plume'/, 'fluid sim supports a minimal canonical 
 assert.match(core, /canonicalPlumeScene/, 'fluid shader names the canonical plume branch separately from bonfire complexity');
 assert.match(core, /minimalPlumeProof/, 'debug state exposes the minimal plume proof contract identity');
 assert.doesNotMatch(core, /canonicalPlumeScene[\s\S]{0,1600}bonfireRenderedFireEdgeCarrier/, 'canonical plume proof scene must not depend on bonfire rendered fire carriers');
+assert.match(core, /canonicalSmokeFieldSlice/, 'canonical plume exposes a CPU-readback field-slice artifact instead of relying only on camera raymarch evidence');
+assert.match(core, /canonical-smoke-field-slice-v0/, 'canonical plume field slice has a stable witness identity');
+assert.match(core, /smoke-density-max-z-projection/, 'canonical plume field slice includes a smoke-density max-Z projection for field-shape diagnosis');
 assert.match(core, /canonicalSourceBand/, 'canonical plume uses a named low source band instead of inheriting the compact vertical source band');
 assert.match(core, /canonicalSourceBreakup/, 'canonical plume source birth has low-order smoke-only breakup instead of one smooth radial plug');
 assert.match(core, /let source = mix\(mix\(columnSource, canonicalSource, canonicalPlumeScene\)/, 'canonical plume live injection must route through the canonical low source before bonfire override');
@@ -188,6 +191,13 @@ assert.match(core, /syntheticHandTrailEmitters/, 'volume prototype can generate 
 assert.match(core, /externalEmitterCoordinateSpace/, 'debug state records external emitter coordinate space');
 assert.match(core, /externalEmitterCount/, 'debug state records effective external emitter count');
 assert.match(core, /externalEmitterAgeMs/, 'debug state records external emitter age for stale-input diagnosis');
+
+const fieldSliceWitnessPath = join(root, 'volume-witness.mjs');
+const fieldSliceWitness = existsSync(fieldSliceWitnessPath) ? readFileSync(fieldSliceWitnessPath, 'utf8') : '';
+assert.match(fieldSliceWitness, /--field-slice/, 'volume witness accepts an explicit field-slice artifact path');
+assert.match(fieldSliceWitness, /canonicalFieldSlice/, 'volume witness reports canonical field-slice evidence');
+assert.match(fieldSliceWitness, /writeRgbaPng\(fieldSliceOut/, 'volume witness writes the field slice as an inspectable PNG artifact');
+assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback'/, 'field-slice report names CPU fluid-buffer readback as the evidence backend');
 assert.match(core, /SUPPORTED_MAJORANT_GRID_SIZES\s*=\s*\[[^\]]*24[^\]]*32[^\]]*48[^\]]*\]/s, 'volume route supports a bounded majorant-grid sweep range');
 assert.match(core, /normalizeMajorantGridSize/, 'coarse majorant grid route/control values are normalized explicitly');
 assert.match(core, /majorantBufferBytes/, 'coarse majorant field has an explicit storage-buffer byte size');

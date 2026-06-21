@@ -3725,7 +3725,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeDriftCells.add(addSampleCell(x, y, z));
     };
     const center = Math.floor(gridSize * 0.5);
-    const isBonfireReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume';
+    const normalizedReadbackScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const isCanonicalReadbackScene = normalizedReadbackScene === 'canonical_plume';
+    const isBonfireReadbackScene = normalizedReadbackScene === 'bonfire_plume';
     const sourceY01 = isBonfireReadbackScene ? 0.81 : 0.13;
     const sourceY = Math.floor(gridSize * sourceY01);
     const sourceRadius = Math.max(2, Math.ceil(gridSize * Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * 0.75));
@@ -3746,6 +3748,102 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const cz = clampIndex(z);
       const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
       return [data[i], data[i + 1], data[i + 2]];
+    };
+    const smokeDensityAt = (x, y, z) => {
+      const cx = clampIndex(x);
+      const cy = clampIndex(y);
+      const cz = clampIndex(z);
+      const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
+      return Math.max(0, data[i + 4]);
+    };
+    const buildCanonicalSmokeFieldSlice = () => {
+      const panelWidth = 256;
+      const height = 256;
+      const width = panelWidth * 2;
+      const rgba = new Uint8Array(width * height * 4);
+      const zStep = Math.max(1, Math.floor(gridSize / 96));
+      const xzY = clampIndex(sourceY + sourceRadius * 3);
+      let xyMax = 0;
+      let xzMax = 0;
+      let xyActivePixels = 0;
+      let xzActivePixels = 0;
+      const fieldValueToColor = value => {
+        const normalized = Math.max(0, Math.min(1, value * 7.5));
+        const shaped = Math.sqrt(normalized);
+        return [
+          Math.round(18 + shaped * 64),
+          Math.round(24 + shaped * 118),
+          Math.round(28 + shaped * 134),
+          255,
+        ];
+      };
+      const setPixel = (x, y, value) => {
+        const dst = (y * width + x) * 4;
+        const color = fieldValueToColor(value);
+        rgba[dst] = color[0];
+        rgba[dst + 1] = color[1];
+        rgba[dst + 2] = color[2];
+        rgba[dst + 3] = color[3];
+      };
+      for (let py = 0; py < height; py += 1) {
+        const gy = clampIndex(Math.round((1 - py / Math.max(1, height - 1)) * (gridSize - 1)));
+        for (let px = 0; px < panelWidth; px += 1) {
+          const gx = clampIndex(Math.round(px / Math.max(1, panelWidth - 1) * (gridSize - 1)));
+          let maxSmoke = 0;
+          for (let gz = 0; gz < gridSize; gz += zStep) {
+            maxSmoke = Math.max(maxSmoke, smokeDensityAt(gx, gy, gz));
+          }
+          xyMax = Math.max(xyMax, maxSmoke);
+          if (maxSmoke > 0.015) xyActivePixels += 1;
+          setPixel(px, py, maxSmoke);
+        }
+      }
+      for (let py = 0; py < height; py += 1) {
+        const gz = clampIndex(Math.round((1 - py / Math.max(1, height - 1)) * (gridSize - 1)));
+        for (let px = 0; px < panelWidth; px += 1) {
+          const gx = clampIndex(Math.round(px / Math.max(1, panelWidth - 1) * (gridSize - 1)));
+          const smoke = smokeDensityAt(gx, xzY, gz);
+          xzMax = Math.max(xzMax, smoke);
+          if (smoke > 0.015) xzActivePixels += 1;
+          setPixel(panelWidth + px, py, smoke);
+        }
+      }
+      const sourceLineY = Math.max(0, Math.min(height - 1, Math.round((1 - sourceY / Math.max(1, gridSize - 1)) * (height - 1))));
+      const xzCenter = Math.max(0, Math.min(height - 1, Math.round((1 - center / Math.max(1, gridSize - 1)) * (height - 1))));
+      for (let px = 0; px < panelWidth; px += 1) {
+        const sourceDst = (sourceLineY * width + px) * 4;
+        rgba[sourceDst] = Math.max(rgba[sourceDst], 120);
+        rgba[sourceDst + 1] = Math.max(rgba[sourceDst + 1], 92);
+        rgba[sourceDst + 2] = Math.max(rgba[sourceDst + 2], 42);
+        const centerDst = (xzCenter * width + panelWidth + px) * 4;
+        rgba[centerDst] = Math.max(rgba[centerDst], 78);
+        rgba[centerDst + 1] = Math.max(rgba[centerDst + 1], 92);
+        rgba[centerDst + 2] = Math.max(rgba[centerDst + 2], 130);
+      }
+      for (let py = 0; py < height; py += 1) {
+        const seamDst = (py * width + panelWidth) * 4;
+        rgba[seamDst] = 96;
+        rgba[seamDst + 1] = 100;
+        rgba[seamDst + 2] = 104;
+        rgba[seamDst + 3] = 255;
+      }
+      return {
+        identity: 'canonical-smoke-field-slice-v0',
+        backend: 'cpu-fluid-buffer-readback',
+        mode: 'smoke-density-max-z-projection',
+        panels: ['xy-smoke-density-max-z-projection', 'xz-smoke-density-at-rising-body-y'],
+        coordinateSpace: 'simulation-grid',
+        width,
+        height,
+        panelWidth,
+        sourceY,
+        xzY,
+        xyMax,
+        xzMax,
+        xyActivePixelRatio: xyActivePixels / (panelWidth * height),
+        xzActivePixelRatio: xzActivePixels / (panelWidth * height),
+        rgba: Array.from(rgba),
+      };
     };
     let samples = 0;
     for (const cell of sampleCells) {
@@ -3912,6 +4010,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (d > 0.02) liveVoxels += 1;
       samples += 1;
     }
+    const canonicalSmokeFieldSlice = isCanonicalReadbackScene ? buildCanonicalSmokeFieldSlice() : null;
     readback.unmap();
     readback.destroy();
     frontReadback.unmap();
@@ -4195,6 +4294,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       plumeUpperRollingBodyBreadth: upperRollingBodyBreadth,
       plumeFieldColumnCoherence,
       plumeFieldBinCenterSpread: coherentBinCenterSpread,
+      canonicalSmokeFieldSlice,
       emissionDetailCurlContact,
       emissionDetailVerticalCoherence,
       emissionDetailBodyBreadth,

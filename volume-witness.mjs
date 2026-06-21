@@ -66,6 +66,11 @@ const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeS
   ? requestedVolumeScene
   : 'compact_plume';
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
+const fieldSliceOut = args.has('--field-slice')
+  ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
+  : expectsCanonicalPlumeProof
+    ? resolve(out.replace(/\.png$/i, '.field-slice.png'))
+    : '';
 const scenePreset = VOLUME_SCENE_PRESETS[expectedVolumeScene] || {};
 const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : 96;
@@ -551,6 +556,31 @@ async function main() {
     if (sample.preview?.rgba && Number.isFinite(sample.preview.width) && Number.isFinite(sample.preview.height)) {
       writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     }
+    let canonicalFieldSlice = null;
+    if (expectsCanonicalPlumeProof) {
+      canonicalFieldSlice = sample.simReadback?.canonicalSmokeFieldSlice || null;
+      if (
+        canonicalFieldSlice?.identity !== 'canonical-smoke-field-slice-v0' ||
+        canonicalFieldSlice?.backend !== 'cpu-fluid-buffer-readback' ||
+        canonicalFieldSlice?.mode !== 'smoke-density-max-z-projection' ||
+        !Number.isFinite(canonicalFieldSlice.width) ||
+        !Number.isFinite(canonicalFieldSlice.height) ||
+        !Array.isArray(canonicalFieldSlice.rgba) ||
+        canonicalFieldSlice.rgba.length !== canonicalFieldSlice.width * canonicalFieldSlice.height * 4
+      ) {
+        throw new Error(`canonical plume field-slice evidence is missing or incomplete: ${JSON.stringify({
+          identity: canonicalFieldSlice?.identity,
+          backend: canonicalFieldSlice?.backend,
+          mode: canonicalFieldSlice?.mode,
+          width: canonicalFieldSlice?.width,
+          height: canonicalFieldSlice?.height,
+          rgbaLength: canonicalFieldSlice?.rgba?.length,
+        })}`);
+      }
+      if (fieldSliceOut) {
+        writeRgbaPng(fieldSliceOut, canonicalFieldSlice.width, canonicalFieldSlice.height, canonicalFieldSlice.rgba);
+      }
+    }
     if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -930,6 +960,14 @@ async function main() {
       ...(state.controls || {}),
       rayBudgetPreset: state.controls?.rayBudgetPreset || rayBudgetPreset,
     };
+    const simReadbackReport = { ...(sample.simReadback || {}) };
+    if (simReadbackReport.canonicalSmokeFieldSlice) {
+      const { rgba, ...fieldSliceMetadata } = simReadbackReport.canonicalSmokeFieldSlice;
+      simReadbackReport.canonicalSmokeFieldSlice = {
+        ...fieldSliceMetadata,
+        path: fieldSliceOut || null,
+      };
+    }
     const report = {
       requestedRoute: url,
       settleMs,
@@ -947,7 +985,10 @@ async function main() {
       frontFieldReadIndex: sample.frontFieldReadIndex,
       frontFieldWriteIndex: sample.frontFieldWriteIndex,
       frontFieldProjectionPassthrough: sample.frontFieldProjectionPassthrough,
-      simReadback: sample.simReadback,
+      simReadback: simReadbackReport,
+      fieldSliceBackend: 'cpu-fluid-buffer-readback',
+      canonicalFieldSlice: simReadbackReport.canonicalSmokeFieldSlice || null,
+      fieldSlice: fieldSliceOut || null,
       majorantReadback: sample.majorantReadback,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
@@ -1029,6 +1070,7 @@ async function main() {
       expectsBonfireConvectionProof,
       screenshot: out,
       fullScreenshot: fullScreenshotPath || null,
+      fieldSliceScreenshot: fieldSliceOut || null,
       metrics,
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
