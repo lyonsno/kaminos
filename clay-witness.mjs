@@ -727,6 +727,14 @@ async function main() {
       assert.ok((state.clayCubeBoundarySkinSharedVertexCount ?? 0) > 0, 'cube diagnostic boundary skin did not report shared vertices');
       assert.equal(state.clayCubeBoundarySkinSharedVertexCount, state.clayCubeBoundarySkinVertexCount, 'cube boundary skin still duplicates exterior material vertices');
       assert.ok((state.clayCubeBoundarySkinTriangleCount ?? 0) > 0, 'cube diagnostic boundary skin produced no triangles');
+      assert.equal(state.clayCubeVisibleSurfaceSource, 'boundary-skin', 'cube visible surface source was not boundary skin');
+      assert.ok(['disabled', 'source-tint-visible-surfaces-v0'].includes(state.clayCubeSurfaceSourceDebug), 'cube surface source debug mode missing');
+      assert.equal(
+        state.clayCubeBoundarySkinCullingPolicy,
+        'boundary-skin-folded-triangle-cull-v0',
+        'cube boundary skin culling policy missing',
+      );
+      assert.ok(Number.isFinite(state.clayCubeBoundarySkinCulledTriangleCount), 'cube boundary skin culled-triangle count missing');
       assert.equal(
         state.clayCubeBoundarySkinFairingPolicy,
         'contacted-boundary-skin-curvature-fairing-v0',
@@ -1074,6 +1082,10 @@ async function main() {
       clayCubeBoundarySkinVertexCount: state.clayCubeBoundarySkinVertexCount,
       clayCubeBoundarySkinSharedVertexCount: state.clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
+      clayCubeVisibleSurfaceSource: state.clayCubeVisibleSurfaceSource,
+      clayCubeSurfaceSourceDebug: state.clayCubeSurfaceSourceDebug,
+      clayCubeBoundarySkinCullingPolicy: state.clayCubeBoundarySkinCullingPolicy,
+      clayCubeBoundarySkinCulledTriangleCount: state.clayCubeBoundarySkinCulledTriangleCount,
       clayCubeBoundarySkinFairingPolicy: state.clayCubeBoundarySkinFairingPolicy,
       clayCubeBoundarySkinRawRoughness: state.clayCubeBoundarySkinRawRoughness,
       clayCubeBoundarySkinRoughness: state.clayCubeBoundarySkinRoughness,

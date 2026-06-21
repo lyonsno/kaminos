@@ -125,7 +125,12 @@ assert.match(core, /clayCubeBoundarySkinVisible/, 'clay debug state records cube
 assert.match(core, /clayCubeBoundarySkinTriangleCount/, 'clay debug state records cube diagnostic boundary-skin triangle count');
 assert.match(core, /shared-vertex-displacement-heat-boundary-skin-v0/, 'clay cube boundary skin names shared-vertex heat visual mode');
 assert.match(core, /CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY/, 'clay core names cube boundary-skin fairing policy');
+assert.match(core, /CLAY_CUBE_BOUNDARY_SKIN_CULLING_POLICY/, 'clay core names cube boundary-skin culling policy');
 assert.match(core, /buildClayCubeBoundarySkinFrame/, 'clay core exposes boundary-skin frame builder for fairing metrics');
+assert.match(core, /clayCubeVisibleSurfaceSource/, 'clay debug state records active cube visible surface source');
+assert.match(core, /clayCubeSurfaceSourceDebug/, 'clay debug state records cube source-isolation debug mode');
+assert.match(core, /clayCubeBoundarySkinCullingPolicy/, 'clay debug state records cube boundary-skin culling policy');
+assert.match(core, /clayCubeBoundarySkinCulledTriangleCount/, 'clay debug state records culled boundary-skin triangle count');
 assert.match(core, /clayCubeBoundarySkinFairingPolicy/, 'clay debug state records cube boundary-skin fairing policy');
 assert.match(core, /clayCubeBoundarySkinRawRoughness/, 'clay debug state records raw cube boundary-skin roughness');
 assert.match(core, /clayCubeBoundarySkinRoughness/, 'clay debug state records faired cube boundary-skin roughness');
@@ -340,6 +345,10 @@ assert.match(witness, /clayCubeBoundarySkinVisible/, 'clay witness verifies cube
 assert.match(witness, /clayCubeBoundarySkinEvidenceKind/, 'clay witness records diagnostic boundary-skin evidence kind');
 assert.match(witness, /clayCubeBoundarySkinTriangleCount/, 'clay witness records diagnostic boundary-skin triangle count');
 assert.match(witness, /clayCubeBoundarySkinVisualMode/, 'clay witness records boundary skin visual mode');
+assert.match(witness, /clayCubeVisibleSurfaceSource/, 'clay witness records active cube visible surface source');
+assert.match(witness, /clayCubeSurfaceSourceDebug/, 'clay witness records cube source-isolation debug mode');
+assert.match(witness, /clayCubeBoundarySkinCullingPolicy/, 'clay witness records boundary-skin culling policy');
+assert.match(witness, /clayCubeBoundarySkinCulledTriangleCount/, 'clay witness records culled boundary-skin triangle count');
 assert.match(witness, /clayCubeBoundarySkinFairingPolicy/, 'clay witness records boundary-skin fairing policy');
 assert.match(witness, /clayCubeBoundarySkinRawRoughness/, 'clay witness records raw boundary-skin roughness');
 assert.match(witness, /clayCubeBoundarySkinRoughness/, 'clay witness records faired boundary-skin roughness');

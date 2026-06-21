@@ -2163,6 +2163,7 @@ async function initKaminosClayRoute() {
     clayGrid: params.get('clay_grid') || '48x32',
     clayCube: clayCubeRoute,
     clayCubeGrid: params.get('clay_cube_grid') || '8x8x8',
+    claySurfaceSourceDebug: params.get('clay_surface_source_debug') === '1' || params.get('clay_source_debug') === '1',
     claySculpt: claySculptRoute,
     claySculptParticles: params.get('clay_sculpt_particles') || '12x8x12',
     onStatus: refreshClayReadout,

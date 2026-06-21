@@ -71,6 +71,9 @@ const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
 const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
 const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
 const CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY = 'contacted-boundary-skin-curvature-fairing-v0';
+const CLAY_CUBE_BOUNDARY_SKIN_CULLING_POLICY = 'boundary-skin-folded-triangle-cull-v0';
+const CLAY_CUBE_VISIBLE_SURFACE_SOURCE = 'boundary-skin';
+const CLAY_CUBE_SURFACE_SOURCE_DEBUG_MODE = 'source-tint-visible-surfaces-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
 const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-recovery-v0';
 const CLAY_CUBE_CORNER_SOFTENING_POLICY = 'contacted-boundary-axis-corner-softening-v0';
@@ -482,6 +485,82 @@ function measureClayCubeBoundarySkinRoughness(framePositions, sourceIndices, nei
   };
 }
 
+function cullClayCubeBoundarySkinTriangles(
+  framePositions,
+  indices,
+  sourceIndices,
+  basePositions,
+  sourceValues,
+  config = normalizeClayCubeConfig(),
+) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const stepX = (CLAY_CUBE_EXTENTS.halfX * 2) / Math.max(1, cfg.cubeX - 1);
+  const stepY = (CLAY_CUBE_EXTENTS.maxY - CLAY_CUBE_EXTENTS.minY) / Math.max(1, cfg.cubeY - 1);
+  const stepZ = (CLAY_CUBE_EXTENTS.halfZ * 2) / Math.max(1, cfg.cubeZ - 1);
+  const maxEdge = Math.max(stepX, stepY, stepZ) * 2.55;
+  const minArea = Math.min(stepX * stepY, stepX * stepZ, stepY * stepZ) * 0.025;
+  const culledIndices = [];
+  let culledTriangleCount = 0;
+  const edgeLength = (a, b, values = framePositions, stride = 3, laneOffset = 0) => {
+    const ao = a * 3;
+    const bo = b * 3;
+    const dx = values[ao + laneOffset] - values[bo + laneOffset];
+    const dy = values[ao + laneOffset + 1] - values[bo + laneOffset + 1];
+    const dz = values[ao + laneOffset + 2] - values[bo + laneOffset + 2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  };
+  const normalFor = (values, a, b, c, stride = 3, sourceLookup = null) => {
+    const ai = sourceLookup ? sourceLookup[a] * stride : a * stride;
+    const bi = sourceLookup ? sourceLookup[b] * stride : b * stride;
+    const ci = sourceLookup ? sourceLookup[c] * stride : c * stride;
+    const ux = values[bi] - values[ai];
+    const uy = values[bi + 1] - values[ai + 1];
+    const uz = values[bi + 2] - values[ai + 2];
+    const vx = values[ci] - values[ai];
+    const vy = values[ci + 1] - values[ai + 1];
+    const vz = values[ci + 2] - values[ai + 2];
+    const nx = uy * vz - uz * vy;
+    const ny = uz * vx - ux * vz;
+    const nz = ux * vy - uy * vx;
+    const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (length <= 1e-8) return [0, 0, 0, 0];
+    return [nx / length, ny / length, nz / length, length * 0.5];
+  };
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i];
+    const b = indices[i + 1];
+    const c = indices[i + 2];
+    const ab = edgeLength(a, b);
+    const bc = edgeLength(b, c);
+    const ca = edgeLength(c, a);
+    const maxTriangleEdge = Math.max(ab, bc, ca);
+    const currentNormal = normalFor(framePositions, a, b, c);
+    const baseNormal = normalFor(basePositions, a, b, c, 4, sourceIndices);
+    const normalDot = currentNormal[0] * baseNormal[0] + currentNormal[1] * baseNormal[1] + currentNormal[2] * baseNormal[2];
+    let maxDisplacement = 0;
+    for (const vertex of [a, b, c]) {
+      const sourceOffset = sourceIndices[vertex] * 4;
+      const frameOffset = vertex * 3;
+      const dx = framePositions[frameOffset] - basePositions[sourceOffset];
+      const dy = framePositions[frameOffset + 1] - basePositions[sourceOffset + 1];
+      const dz = framePositions[frameOffset + 2] - basePositions[sourceOffset + 2];
+      const contactBoost = sourceValues[sourceOffset + 3] > 0.5 ? 0.025 : 0;
+      maxDisplacement = Math.max(maxDisplacement, Math.sqrt(dx * dx + dy * dy + dz * dz) + contactBoost);
+    }
+    const folded = maxDisplacement > 0.045 && normalDot < 0.12;
+    if (maxTriangleEdge > maxEdge || currentNormal[3] < minArea || folded) {
+      culledTriangleCount += 1;
+      continue;
+    }
+    culledIndices.push(a, b, c);
+  }
+  return {
+    indices: culledIndices,
+    culledTriangleCount,
+    cullingMaxEdge: maxEdge,
+  };
+}
+
 export function buildClayCubeBoundarySkinFrame({
   basePositions,
   positions,
@@ -566,13 +645,25 @@ export function buildClayCubeBoundarySkinFrame({
     sourceBase,
     sourceValues,
   );
+  const culling = cullClayCubeBoundarySkinTriangles(
+    framePositions,
+    topology.indices,
+    topology.sourceIndices,
+    sourceBase,
+    sourceValues,
+    cfg,
+  );
   return {
     fairingPolicy: CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY,
+    cullingPolicy: CLAY_CUBE_BOUNDARY_SKIN_CULLING_POLICY,
     positions: framePositions,
-    indices: topology.indices,
+    indices: culling.indices,
     sourceIndices: topology.sourceIndices,
     vertexCount: topology.sourceIndices.length,
-    triangleCount: topology.indices.length / 3,
+    triangleCount: culling.indices.length / 3,
+    rawTriangleCount: topology.indices.length / 3,
+    culledTriangleCount: culling.culledTriangleCount,
+    cullingMaxEdge: culling.cullingMaxEdge,
     rawMaxBoundarySkinRoughness: rawMetrics.maxBoundarySkinRoughness,
     rawAverageBoundarySkinRoughness: rawMetrics.averageBoundarySkinRoughness,
     maxBoundarySkinRoughness: metrics.maxBoundarySkinRoughness,
@@ -1482,6 +1573,7 @@ export function createKaminosClayPrototype({
   clayGrid = DEFAULT_CLAY_GRID,
   clayCube = false,
   clayCubeGrid = DEFAULT_CLAY_CUBE,
+  claySurfaceSourceDebug = false,
   claySculpt = false,
   claySculptParticles = DEFAULT_CLAY_SCULPT_PARTICLES,
   onStatus = () => {},
@@ -1493,6 +1585,7 @@ export function createKaminosClayPrototype({
   const gridZ = gridConfig.gridZ;
   const clayCubeEnabled = !!clayCube;
   const claySculptEnabled = !!claySculpt;
+  const clayCubeSurfaceSourceDebugEnabled = clayCubeEnabled && !!claySurfaceSourceDebug;
   let active = false;
   let device = null;
   let gpuReadyPromise = null;
@@ -1647,7 +1740,11 @@ export function createKaminosClayPrototype({
   let clayCubeBoundarySkinVertexCount = 0;
   let clayCubeBoundarySkinTriangleCount = 0;
   let clayCubeBoundarySkinSharedVertexCount = 0;
+  let clayCubeVisibleSurfaceSource = clayCubeEnabled ? CLAY_CUBE_VISIBLE_SURFACE_SOURCE : 'disabled';
+  let clayCubeSurfaceSourceDebug = clayCubeSurfaceSourceDebugEnabled ? CLAY_CUBE_SURFACE_SOURCE_DEBUG_MODE : 'disabled';
   let clayCubeBoundarySkinFairingPolicy = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_FAIRING_POLICY : 'disabled';
+  let clayCubeBoundarySkinCullingPolicy = clayCubeEnabled ? CLAY_CUBE_BOUNDARY_SKIN_CULLING_POLICY : 'disabled';
+  let clayCubeBoundarySkinCulledTriangleCount = 0;
   let clayCubeBoundarySkinRawRoughness = 0;
   let clayCubeBoundarySkinRoughness = 0;
   let clayCubeBoundarySkinMaxFairingDisplacement = 0;
@@ -1894,6 +1991,8 @@ export function createKaminosClayPrototype({
     clayCubeBoundarySkinVertexCount = frame.vertexCount;
     clayCubeBoundarySkinSharedVertexCount = frame.vertexCount;
     clayCubeBoundarySkinTriangleCount = frame.triangleCount;
+    clayCubeBoundarySkinCullingPolicy = frame.cullingPolicy;
+    clayCubeBoundarySkinCulledTriangleCount = frame.culledTriangleCount;
     clayCubeBoundarySkinFairingPolicy = frame.fairingPolicy;
     clayCubeBoundarySkinRawRoughness = frame.rawMaxBoundarySkinRoughness;
     clayCubeBoundarySkinRoughness = frame.maxBoundarySkinRoughness;
@@ -2144,17 +2243,30 @@ export function createKaminosClayPrototype({
         const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
         const heat = clamp01(displacement / 0.20);
         const contactHeat = cubeValues[sourceOffset + 3] > 0.5 ? 1 : 0;
-        color.setXYZ(
-          i,
-          0.63 + contactHeat * 0.25 + heat * 0.08,
-          0.49 + heat * 0.25,
-          0.32 - contactHeat * 0.06 + heat * 0.08,
-        );
+        if (clayCubeSurfaceSourceDebugEnabled) {
+          color.setXYZ(i, 0.32 + heat * 0.08, 0.76 + contactHeat * 0.18, 0.92);
+        } else {
+          color.setXYZ(
+            i,
+            0.63 + contactHeat * 0.25 + heat * 0.08,
+            0.49 + heat * 0.25,
+            0.32 - contactHeat * 0.06 + heat * 0.08,
+          );
+        }
       }
     }
+    if (cubeBoundarySkin.geometry.index?.array !== frame.indices) {
+      cubeBoundarySkin.geometry.setIndex(frame.indices);
+    }
+    cubeBoundarySkin.geometry.index.needsUpdate = true;
     position.needsUpdate = true;
     if (color) color.needsUpdate = true;
     cubeBoundarySkin.geometry.computeVertexNormals();
+    clayCubeVisibleSurfaceSource = CLAY_CUBE_VISIBLE_SURFACE_SOURCE;
+    clayCubeSurfaceSourceDebug = clayCubeSurfaceSourceDebugEnabled ? CLAY_CUBE_SURFACE_SOURCE_DEBUG_MODE : 'disabled';
+    clayCubeBoundarySkinCullingPolicy = frame.cullingPolicy;
+    clayCubeBoundarySkinCulledTriangleCount = frame.culledTriangleCount;
+    clayCubeBoundarySkinTriangleCount = frame.triangleCount;
     clayCubeBoundarySkinFairingPolicy = frame.fairingPolicy;
     clayCubeBoundarySkinRawRoughness = frame.rawMaxBoundarySkinRoughness;
     clayCubeBoundarySkinRoughness = frame.maxBoundarySkinRoughness;
@@ -3336,6 +3448,10 @@ export function createKaminosClayPrototype({
       clayCubeBoundarySkinVertexCount,
       clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount,
+      clayCubeVisibleSurfaceSource,
+      clayCubeSurfaceSourceDebug,
+      clayCubeBoundarySkinCullingPolicy,
+      clayCubeBoundarySkinCulledTriangleCount,
       clayCubeBoundarySkinFairingPolicy,
       clayCubeBoundarySkinRawRoughness,
       clayCubeBoundarySkinRoughness,

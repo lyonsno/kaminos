@@ -187,8 +187,10 @@ const fairedBoundaryFrame = clayCore.buildClayCubeBoundarySkinFrame({
 });
 
 assert.equal(fairedBoundaryFrame.fairingPolicy, 'contacted-boundary-skin-curvature-fairing-v0');
+assert.equal(fairedBoundaryFrame.cullingPolicy, 'boundary-skin-folded-triangle-cull-v0');
 assert.equal(fairedBoundaryFrame.vertexCount, rawBoundaryFrame.vertexCount, 'fairing must preserve boundary-skin topology');
 assert.equal(fairedBoundaryFrame.triangleCount, rawBoundaryFrame.triangleCount, 'fairing must preserve boundary-skin triangle count');
+assert.equal(fairedBoundaryFrame.culledTriangleCount, 0, 'ordinary near-corner fairing should not cull coherent boundary triangles');
 assert.ok(rawBoundaryFrame.maxBoundarySkinRoughness > 0, 'raw corner boundary frame should expose measurable roughness');
 assert.ok(
   fairedBoundaryFrame.maxBoundarySkinRoughness <= rawBoundaryFrame.maxBoundarySkinRoughness * 0.72,
@@ -197,6 +199,26 @@ assert.ok(
 assert.ok(
   fairedBoundaryFrame.maxFairingDisplacement <= 0.055,
   `corner fairing moved boundary skin too far from material points: ${fairedBoundaryFrame.maxFairingDisplacement}`,
+);
+
+const spikedBoundaryPositions = new Float32Array(nearCornerOracle.positions);
+const spikedCornerIndex = (cornerConfig.cubeY - 1) * cornerConfig.cubeZ * cornerConfig.cubeX
+  + (cornerConfig.cubeZ - 1) * cornerConfig.cubeX
+  + (cornerConfig.cubeX - 1);
+const spikedCornerOffset = spikedCornerIndex * 4;
+spikedBoundaryPositions[spikedCornerOffset] += 0.42;
+spikedBoundaryPositions[spikedCornerOffset + 1] += 0.30;
+spikedBoundaryPositions[spikedCornerOffset + 2] += 0.38;
+const spikedBoundaryFrame = clayCore.buildClayCubeBoundarySkinFrame({
+  basePositions: cornerParticles,
+  positions: spikedBoundaryPositions,
+  config: cornerConfig,
+  fair: true,
+});
+assert.ok(spikedBoundaryFrame.culledTriangleCount > 0, 'boundary-skin frame failed to cull a synthetic floating gribble spike');
+assert.ok(
+  spikedBoundaryFrame.triangleCount < rawBoundaryFrame.triangleCount,
+  `boundary-skin culling did not reduce rendered triangles: raw=${rawBoundaryFrame.triangleCount} spiked=${spikedBoundaryFrame.triangleCount}`,
 );
 
 const localAverageDisplacement = ({ basePositions, positions, center, radius, config: localConfig }) => {
