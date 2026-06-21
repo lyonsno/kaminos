@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -298,6 +299,21 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_runtime_config_exposes_hybrid_overlay_module_url_env():
+    previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
+    os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = "http://127.0.0.1:5174/src/splatOverlay.ts"
+    try:
+        config = serve.runtime_config()
+    finally:
+        if previous is None:
+            os.environ.pop("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL", None)
+        else:
+            os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = previous
+
+    assert config["schema"] == "kaminos.runtime-config.v0"
+    assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_volume_only_scene_save_name_uses_scene_fallback()
@@ -308,3 +324,4 @@ if __name__ == "__main__":
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
+    test_runtime_config_exposes_hybrid_overlay_module_url_env()

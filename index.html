@@ -756,10 +756,31 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
+const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
+  'hybrid_splat_overlay_module_url',
+  'hybridSplatOverlayModuleUrl',
+  'splat_overlay_module_url',
+];
+
+function hybridSplatOverlayModuleUrlFromSearch() {
+  const params = new URLSearchParams(window.location.search);
+  for (const name of HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS) {
+    const value = params.get(name);
+    if (value && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function initialHybridSplatOverlayModuleUrl() {
+  return hybridSplatOverlayModuleUrlFromSearch()
+    || localStorage.getItem('kaminosHybridSplatOverlayModuleUrl')
+    || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
+}
+
 let hybridSplatOverlayState = {
   status: 'idle',
   error: null,
-  moduleUrl: localStorage.getItem('kaminosHybridSplatOverlayModuleUrl') || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL,
+  moduleUrl: initialHybridSplatOverlayModuleUrl(),
   module: null,
   handle: null,
   objectId: null,
@@ -921,15 +942,35 @@ function hybridSplatOverlayModuleUrl() {
   return hybridSplatOverlayState.moduleUrl || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
 }
 
-function setHybridSplatOverlayModuleUrl(url) {
+function setHybridSplatOverlayModuleUrl(url, options = {}) {
+  const { persist = true } = options;
   const nextUrl = String(url || '').trim() || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
   if (nextUrl !== hybridSplatOverlayState.moduleUrl) {
     hybridSplatOverlayState.moduleUrl = nextUrl;
     hybridSplatOverlayState.module = null;
   }
-  localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
+  if (persist) localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
   return hybridSplatOverlayState.moduleUrl;
+}
+
+async function initializeHybridSplatOverlayModuleUrl() {
+  const queryUrl = hybridSplatOverlayModuleUrlFromSearch();
+  if (queryUrl) {
+    setHybridSplatOverlayModuleUrl(queryUrl, { persist: false });
+    return hybridSplatOverlayModuleUrl();
+  }
+  try {
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`runtime config ${response.status}`);
+    const config = await response.json();
+    if (config?.hybridSplatOverlayModuleUrl) {
+      setHybridSplatOverlayModuleUrl(config.hybridSplatOverlayModuleUrl, { persist: false });
+    }
+  } catch (error) {
+    console.warn('Hybrid Renderer runtime config unavailable; using stored/default module URL', error);
+  }
+  return hybridSplatOverlayModuleUrl();
 }
 
 function currentHybridOverlayViewport() {
@@ -3190,6 +3231,7 @@ const envCache = {};
 
 // --- Three.js Setup ---
 async function initScene() {
+  await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
 

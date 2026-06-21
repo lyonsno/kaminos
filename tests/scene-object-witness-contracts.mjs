@@ -187,6 +187,7 @@ assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/
 assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');
 assert.match(witness, /real hybrid splat overlay did not hand model matrix ownership to PBRnext/, 'Real Hybrid Renderer witness fails while Kaminos still bakes object matrices into camera view');
 assert.match(witness, /hybrid splat overlay camera motion inverted relative to Kaminos preview/, 'Real Hybrid Renderer witness fails when the overlay layer moves inverted under camera motion');
+assert.match(witness, /--hybrid-module-url/, 'Real Hybrid Renderer witness can target a non-default PBRnext module server without rewriting the witness');
 assert.match(witness, /kaminosSetCameraDebugPose/, 'Real Hybrid Renderer witness can move the Kaminos camera through an explicit debug surface');
 assert.match(witness, /kaminosHybridSplatOverlayProjectionProbe/, 'Real Hybrid Renderer witness reads the overlay projection coherence probe');
 assert.match(witness, /kaminosHybridSplatOverlayDebugState/, 'Hybrid Renderer witness reads the explicit overlay debug surface');

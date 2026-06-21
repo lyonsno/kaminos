@@ -18,6 +18,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-wi
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
+const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 
 let phase = 'initializing';
 let stderr = '';
@@ -2500,7 +2501,10 @@ async function runRealHybridSplatOverlayScenario(ws) {
       const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
       if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
       await wait(250);
-      window.kaminosSetHybridSplatOverlayModuleUrl?.('http://127.0.0.1:5173/src/splatOverlay.ts');
+      const requestedHybridModuleUrl = ${JSON.stringify(hybridModuleUrl)};
+      if (requestedHybridModuleUrl) {
+        window.kaminosSetHybridSplatOverlayModuleUrl?.(requestedHybridModuleUrl);
+      }
       const beforeOverlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
       const beforeSample = sampleCanvas(beforeOverlayCanvas);
       const startResult = await window.startSelectedSplatHybridRenderer?.();

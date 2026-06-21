@@ -47,6 +47,8 @@ GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
+HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -76,6 +78,19 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
+
+
+def runtime_config():
+    """Return runtime-only browser defaults for this dev server instance."""
+    module_url = (
+        os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV)
+        or os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY)
+        or ""
+    ).strip()
+    return {
+        "schema": "kaminos.runtime-config.v0",
+        "hybridSplatOverlayModuleUrl": module_url or None,
+    }
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -471,7 +486,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/browse":
+        if parsed.path == "/api/runtime-config":
+            self.handle_runtime_config()
+        elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
@@ -502,6 +519,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_splat_correction_post(parse_qs(parsed.query))
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_runtime_config(self):
+        self.send_json(runtime_config())
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.
