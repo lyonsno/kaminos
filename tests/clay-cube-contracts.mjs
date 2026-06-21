@@ -160,3 +160,112 @@ assert.ok(
   maxCornerDisplacement >= maxNonCornerDisplacement * 0.18,
   `near-corner brush left the cube corner too pointed: corner=${maxCornerDisplacement} nonCorner=${maxNonCornerDisplacement}`,
 );
+
+const localAverageDisplacement = ({ basePositions, positions, center, radius, config: localConfig }) => {
+  let displacementSum = 0;
+  let particleCount = 0;
+  for (let i = 0; i < localConfig.particleCount; i += 1) {
+    const offset = i * 4;
+    const seedDistance = Math.hypot(
+      basePositions[offset] - center[0],
+      basePositions[offset + 1] - center[1],
+      basePositions[offset + 2] - center[2],
+    );
+    if (seedDistance > radius) continue;
+    displacementSum += Math.hypot(
+      positions[offset] - basePositions[offset],
+      positions[offset + 1] - basePositions[offset + 1],
+      positions[offset + 2] - basePositions[offset + 2],
+    );
+    particleCount += 1;
+  }
+  return displacementSum / Math.max(1, particleCount);
+};
+
+const plasticConfig = normalizeClayCubeConfig('10x10x10');
+const plasticParticles = seedClayCubeMaterialPoints(plasticConfig);
+const plasticBrush = normalizeClayCubePointerCollider({
+  id: 'plastic-front-scribble-pointer',
+  center: [0.08, 0.34, 0.34],
+  rawCenter: [0.08, 0.34, 0.34],
+  surfaceNormal: [0, 0, -1],
+  radius: 0.22,
+  strength: 1.0,
+});
+const distantBrush = normalizeClayCubePointerCollider({
+  id: 'distant-pointer-for-no-popback',
+  center: [-0.30, 0.34, -0.34],
+  rawCenter: [-0.30, 0.34, -0.34],
+  surfaceNormal: [0, 0, 1],
+  radius: 0.18,
+  strength: 0.70,
+});
+
+let plasticState = plasticParticles;
+let firstScribbleAverage = 0;
+let sixthScribbleAverage = 0;
+for (let step = 0; step < 6; step += 1) {
+  plasticState = runClayCubeFirstLoopOracle({
+    basePositions: plasticParticles,
+    previousPositions: plasticState,
+    config: plasticConfig,
+    colliders: [plasticBrush],
+  }).positions;
+  const average = localAverageDisplacement({
+    basePositions: plasticParticles,
+    positions: plasticState,
+    center: plasticBrush.center,
+    radius: plasticBrush.radius,
+    config: plasticConfig,
+  });
+  if (step === 0) firstScribbleAverage = average;
+  if (step === 5) sixthScribbleAverage = average;
+}
+
+assert.ok(
+  sixthScribbleAverage > firstScribbleAverage * 2.4,
+  `repeated cube brushing should accumulate plastic deformation instead of plateauing immediately: first=${firstScribbleAverage} sixth=${sixthScribbleAverage}`,
+);
+
+const dentedAverage = sixthScribbleAverage;
+let idlePlasticState = plasticState;
+for (let step = 0; step < 8; step += 1) {
+  idlePlasticState = runClayCubeFirstLoopOracle({
+    basePositions: plasticParticles,
+    previousPositions: idlePlasticState,
+    config: plasticConfig,
+    colliders: [],
+  }).positions;
+}
+const idleRetainedAverage = localAverageDisplacement({
+  basePositions: plasticParticles,
+  positions: idlePlasticState,
+  center: plasticBrush.center,
+  radius: plasticBrush.radius,
+  config: plasticConfig,
+});
+assert.ok(
+  idleRetainedAverage >= dentedAverage * 0.98,
+  `plastic cube dent popped back during idle steps: dented=${dentedAverage} idle=${idleRetainedAverage}`,
+);
+
+let elsewherePlasticState = plasticState;
+for (let step = 0; step < 8; step += 1) {
+  elsewherePlasticState = runClayCubeFirstLoopOracle({
+    basePositions: plasticParticles,
+    previousPositions: elsewherePlasticState,
+    config: plasticConfig,
+    colliders: [distantBrush],
+  }).positions;
+}
+const elsewhereRetainedAverage = localAverageDisplacement({
+  basePositions: plasticParticles,
+  positions: elsewherePlasticState,
+  center: plasticBrush.center,
+  radius: plasticBrush.radius,
+  config: plasticConfig,
+});
+assert.ok(
+  elsewhereRetainedAverage >= dentedAverage * 0.98,
+  `plastic cube dent popped back while brushing elsewhere: dented=${dentedAverage} elsewhere=${elsewhereRetainedAverage}`,
+);

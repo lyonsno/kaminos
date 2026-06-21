@@ -70,6 +70,7 @@ const CLAY_CUBE_ISO_SURFACE_ISOLATION = 2.0;
 const CLAY_CUBE_BOUNDARY_SKIN_EVIDENCE_KIND = 'diagnostic-boundary-skin-from-material-points-not-solver-v0';
 const CLAY_CUBE_BOUNDARY_SKIN_VISUAL_MODE = 'shared-vertex-displacement-heat-boundary-skin-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
+const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-recovery-v0';
 const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
@@ -855,9 +856,9 @@ export function runClayCubeFirstLoopOracle({
       if (touched) contact += 1;
     }
 
-    x = x + pushX + (baseX - x) * 0.018;
-    y = y + pushY + (baseY - y) * 0.012;
-    z = z + pushZ + (baseZ - z) * 0.018;
+    x += pushX;
+    y += pushY;
+    z += pushZ;
     x = clampFinite(x, -CLAY_CUBE_EXTENTS.halfX * 1.08, CLAY_CUBE_EXTENTS.halfX * 1.08, baseX);
     y = clampFinite(y, -0.08, CLAY_CUBE_EXTENTS.maxY * 1.04, baseY);
     z = clampFinite(z, -CLAY_CUBE_EXTENTS.halfZ * 1.08, CLAY_CUBE_EXTENTS.halfZ * 1.08, baseZ);
@@ -1056,7 +1057,6 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
     }
   }
   var next = p.xyz + push;
-  next = next + (base.xyz - next) * vec3f(0.018, 0.012, 0.018);
   next.x = clamp(next.x, ${(-CLAY_CUBE_EXTENTS.halfX * 1.08).toFixed(8)}, ${(CLAY_CUBE_EXTENTS.halfX * 1.08).toFixed(8)});
   next.y = clamp(next.y, -0.08000000, ${(CLAY_CUBE_EXTENTS.maxY * 1.04).toFixed(8)});
   next.z = clamp(next.z, ${(-CLAY_CUBE_EXTENTS.halfZ * 1.08).toFixed(8)}, ${(CLAY_CUBE_EXTENTS.halfZ * 1.08).toFixed(8)});
@@ -3132,6 +3132,7 @@ export function createKaminosClayPrototype({
       clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount,
       clayCubeFaceMetricEvidenceKind,
+      clayCubePlasticRestPolicy: CLAY_CUBE_PLASTIC_REST_POLICY,
       clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio,

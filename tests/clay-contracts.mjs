@@ -128,6 +128,8 @@ assert.match(core, /clayCubeBackFaceDeformedParticleCount/, 'clay debug state re
 assert.match(core, /clayCubeFrontBackDeformationRatio/, 'clay debug state records front/back deformation ratio');
 assert.match(core, /clayCubeEdgeBandDeformedParticleCount/, 'clay debug state records edge-band deformation count');
 assert.match(core, /clayCubeCornerBandDeformedParticleCount/, 'clay debug state records corner-band deformation count');
+assert.match(core, /CLAY_CUBE_PLASTIC_REST_POLICY/, 'clay core names cube plastic rest-state policy');
+assert.match(core, /clayCubePlasticRestPolicy/, 'clay debug state records cube plastic rest-state policy');
 assert.match(core, /clayCubeBrushToContactCentroidDistance/, 'clay debug state records brush-to-contact centroid distance');
 assert.match(core, /clayCubeMaxDisplacementFace/, 'clay debug state records which face carried max displacement');
 assert.match(index, /clay-cube-front-back/, 'clay panel surfaces cube front/back deformation ratio');
@@ -327,6 +329,7 @@ assert.match(witness, /clayCubeBoundarySkinEvidenceKind/, 'clay witness records 
 assert.match(witness, /clayCubeBoundarySkinTriangleCount/, 'clay witness records diagnostic boundary-skin triangle count');
 assert.match(witness, /clayCubeBoundarySkinVisualMode/, 'clay witness records boundary skin visual mode');
 assert.match(witness, /clayCubeFaceMetricEvidenceKind/, 'clay witness records face-locality metric evidence kind');
+assert.match(witness, /clayCubePlasticRestPolicy/, 'clay witness records cube plastic rest-state policy');
 assert.match(witness, /clayCubeFrontBackDeformationRatio/, 'clay witness records front/back deformation ratio');
 assert.match(witness, /clayCubeBrushToContactCentroidDistance/, 'clay witness records brush/contact centroid alignment');
 assert.match(witness, /clay_corner_smoke/, 'clay witness can drive a corner-directed smoke route');

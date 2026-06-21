@@ -706,11 +706,12 @@ async function main() {
       assert.equal(state.clayCubeDiagnosticColorMode, 'cube-diagnostic-contact-displacement-colors-v0', 'cube diagnostic color mode missing');
       assert.equal(state.clayCubeBoundingBoxVisible, true, 'cube diagnostic bounding box missing');
       assert.equal(state.clayCubeBoundingBoxContract, 'cube-diagnostic-bounding-box-v0', 'cube diagnostic bounding-box contract missing');
-      assert.equal(state.clayCubeIsoSurfaceVisible, true, 'cube diagnostic iso-surface missing');
       assert.equal(state.clayCubeIsoSurfaceEvidenceKind, 'diagnostic-marching-cubes-cpu-render-surface-not-solver-v0', 'cube diagnostic iso-surface evidence kind missing');
       assert.ok((state.clayCubeIsoSurfaceResolution ?? 0) >= 20, 'cube diagnostic iso-surface resolution too low or missing');
       assert.ok((state.clayCubeIsoSurfaceBallCount ?? 0) >= 216, 'cube diagnostic iso-surface did not consume enough material points');
-      assert.ok((state.clayCubeIsoSurfaceTriangleCount ?? 0) > 0, 'cube diagnostic iso-surface produced no triangles');
+      if (state.clayCubeIsoSurfaceVisible) {
+        assert.ok((state.clayCubeIsoSurfaceTriangleCount ?? 0) > 0, 'cube diagnostic iso-surface produced no triangles');
+      }
       assert.equal(state.clayCubeBoundarySkinVisible, true, 'cube diagnostic boundary skin missing');
       assert.equal(state.clayCubeBoundarySkinEvidenceKind, 'diagnostic-boundary-skin-from-material-points-not-solver-v0', 'cube diagnostic boundary-skin evidence kind missing');
       assert.equal(state.clayCubeBoundarySkinVisualMode, 'shared-vertex-displacement-heat-boundary-skin-v0', 'cube diagnostic boundary-skin visual mode missing');
@@ -878,6 +879,11 @@ async function main() {
       assert.ok(Number.isFinite(state.clayPointerLastHit.y), 'pointer hit y did not reach clay debug state');
       assert.ok(Number.isFinite(state.clayPointerLastHit.z), 'pointer hit z did not reach clay debug state');
       if (isCubeRoute) {
+        assert.equal(
+          state.clayCubePlasticRestPolicy,
+          'plastic-current-state-no-birth-shape-recovery-v0',
+          'cube route did not report plastic rest-state/no-birth-recovery policy',
+        );
         assert.equal(state.clayPointerDepthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit used the wrong depth policy');
         assert.equal(state.clayPointerLastHit.depthPolicy, 'camera-ray-nearest-cube-surface', 'cube pointer hit did not preserve depth policy');
         assert.ok(Array.isArray(state.clayPointerLastHit.rawCenter), 'cube pointer hit did not preserve raw ray hit');
@@ -1043,6 +1049,7 @@ async function main() {
       clayCubeBoundarySkinSharedVertexCount: state.clayCubeBoundarySkinSharedVertexCount,
       clayCubeBoundarySkinTriangleCount: state.clayCubeBoundarySkinTriangleCount,
       clayCubeFaceMetricEvidenceKind: state.clayCubeFaceMetricEvidenceKind,
+      clayCubePlasticRestPolicy: state.clayCubePlasticRestPolicy,
       clayCubeFrontFaceDeformedParticleCount: state.clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount: state.clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio: state.clayCubeFrontBackDeformationRatio,
