@@ -185,7 +185,7 @@ assert.match(witness, /evil_orb_multiview_emissive\.ply/, 'Real splat crop witne
 assert.match(witness, /hybrid splat overlay did not expose visible UI/, 'Hybrid Renderer witness requires a visible selected-splat control surface');
 assert.match(witness, /hybrid splat overlay did not load selected splat source/, 'Hybrid Renderer witness proves the overlay consumed the selected splat route');
 assert.match(witness, /hybrid splat overlay did not record dual-canvas capability/, 'Hybrid Renderer witness proves dual-canvas overlay status is explicit');
-assert.match(witness, /hybrid splat overlay falsely claimed crop renderer application/, 'Hybrid Renderer witness rejects false closure on crop sidecar application');
+assert.match(witness, /hybrid splat overlay did not report renderer crop application/, 'Hybrid Renderer witness requires renderer-reported crop sidecar application');
 assert.match(witness, /hybrid splat overlay did not receive model matrix/, 'Hybrid Renderer witness proves Kaminos sends objectWorldMatrix through the renderer API');
 assert.match(witness, /hybrid splat overlay did not receive viewport identity/, 'Hybrid Renderer witness proves Kaminos sends viewport identity through the renderer API');
 assert.match(witness, /hybrid splat overlay did not receive correction identity/, 'Hybrid Renderer witness proves Kaminos sends sidecar correction identity through the renderer API');

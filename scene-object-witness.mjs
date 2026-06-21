@@ -2416,6 +2416,7 @@ async function runHybridSplatOverlayScenario(ws) {
       await waitForSceneRows(beforeRows.length + 1);
       const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
       if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      if (splatObject?.id) await window.setSplatCorrectionEditMode?.('crop');
       await wait(250);
       const panel = document.getElementById('splat-hybrid-renderer-panel');
       const startButton = document.getElementById('splat-hybrid-renderer-start-button');
@@ -2427,8 +2428,8 @@ async function runHybridSplatOverlayScenario(ws) {
         '  canvas.width = 32;',
         '  canvas.height = 32;',
         '  container.appendChild(canvas);',
-        '  const capabilities = Object.freeze({ canvasMode: "dual-canvas-overlay", meshDepthOcclusion: false, sharedCanvasComposite: false, sharedCommandEncoder: false });',
-        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], started: false, stopped: false, destroyed: false, options, sourceIdentity: null, capabilities };',
+        '  const capabilities = Object.freeze({ canvasMode: "dual-canvas-overlay", meshDepthOcclusion: false, sharedCanvasComposite: false, sharedCommandEncoder: false, cropAppliedByRenderer: true });',
+        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], started: false, stopped: false, destroyed: false, options, sourceIdentity: null, correctionApplication: null, capabilities };',
         '  function publish() { window.__hybridSplatOverlayWitness = { ...state, canvasConnected: canvas.isConnected }; }',
         '  publish();',
         '  return {',
@@ -2436,10 +2437,12 @@ async function runHybridSplatOverlayScenario(ws) {
         '    get scene() { return state.sources.length ? { witnessScene: true } : null; },',
         '    get capabilities() { return capabilities; },',
         '    get sourceIdentity() { return state.sourceIdentity; },',
+        '    get correctionApplication() { return state.correctionApplication; },',
+        '    get cropAppliedByRenderer() { return state.correctionApplication?.cropApplied; },',
         '    setCameraMatrices(viewMatrix, projectionMatrix, cameraPosition) { state.frames += 1; state.lastViewLength = viewMatrix.length; state.lastProjectionLength = projectionMatrix.length; state.lastCameraLength = cameraPosition.length; publish(); },',
         '    setModelMatrix(matrix) { state.modelMatrices.push(Array.from(matrix)); publish(); },',
         '    setViewport(width, height, devicePixelRatio = 1) { state.viewports.push({ width, height, devicePixelRatio }); publish(); },',
-        '    setCorrectionIdentity(correction) { state.corrections.push(correction); if (state.sourceIdentity) state.sourceIdentity = { ...state.sourceIdentity, correctionApplied: true, correctionIdentity: correction }; publish(); },',
+        '    setCorrectionIdentity(correction) { const cropApplied = correction?.crop?.enabled === true; state.corrections.push(correction); state.correctionApplication = { cropApplied, cropFrame: cropApplied ? "witness-renderer-crop" : "disabled", sourceCount: 3, keptCount: cropApplied ? 2 : 3 }; if (state.sourceIdentity) state.sourceIdentity = { ...state.sourceIdentity, correctionApplied: true, correctionIdentity: correction }; publish(); },',
         '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); state.sourceIdentity = { source: String(source), loadMethod: "ply-url", correctionApplied: false }; publish(); },',
         '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); state.sourceIdentity = { source: String(url), loadMethod: "manifest", correctionApplied: false }; publish(); },',
         '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); state.sourceIdentity = { source: String(attributes?.sourceKind || "attributes"), loadMethod: "attributes", correctionApplied: false }; publish(); },',
@@ -2493,9 +2496,10 @@ async function runHybridSplatOverlayScenario(ws) {
   if (capabilities.realSplatRendering !== true || capabilities.canvasMode !== 'dual-canvas-overlay') {
     throw new Error(`hybrid splat overlay did not record dual-canvas capability: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
-  if (lastEvidence.hybridSplatOverlay.overlayDebug?.cropAppliedByRenderer !== false
-    || capabilities.cropAppliedByRenderer !== false) {
-    throw new Error(`hybrid splat overlay falsely claimed crop renderer application: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  if (lastEvidence.hybridSplatOverlay.overlayDebug?.cropAppliedByRenderer !== true
+    || capabilities.cropAppliedByRenderer !== true
+    || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.evidence?.cropAppliedByRenderer !== true) {
+    throw new Error(`hybrid splat overlay did not report renderer crop application: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (capabilities.sharedCommandEncoder !== false) {
     throw new Error(`hybrid splat overlay lost sharedCommandEncoder=false: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
@@ -2572,7 +2576,8 @@ async function runRealHybridSplatOverlayScenario(ws) {
       if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
       const beforeRows = rowState();
       const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
-      const assetEntry = (assetData.entries || []).find(entry => /evil_orb\\.ply$/i.test(entry.path || entry.name || ''))
+      const assetEntry = (assetData.entries || []).find(entry => /evil_orb_cropped_only\\.ply$/i.test(entry.path || entry.name || ''))
+        || (assetData.entries || []).find(entry => /evil_orb\\.ply$/i.test(entry.path || entry.name || ''))
         || (assetData.entries || []).find(entry => (entry.size || 0) > 4096)
         || (assetData.entries || [])[0]
         || null;
@@ -2610,6 +2615,7 @@ async function runRealHybridSplatOverlayScenario(ws) {
       await waitForSceneRows(beforeRows.length + 1);
       const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
       if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      if (splatObject?.id) await window.setSplatCorrectionEditMode?.('crop');
       await wait(250);
       const requestedHybridModuleUrl = ${JSON.stringify(hybridModuleUrl)};
       if (requestedHybridModuleUrl) {
@@ -2711,6 +2717,12 @@ async function runRealHybridSplatOverlayScenario(ws) {
   }
   if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source) {
     throw new Error(`real hybrid splat overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
+  }
+  const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
+  if (evidence.previewDebug?.includedPointCount > 0
+    && correctionApplication.cropApplied === true
+    && !(correctionApplication.keptCount > 0)) {
+    throw new Error(`real hybrid splat overlay crop kept zero splats despite visible Kaminos preview crop: ${JSON.stringify(evidence)}`);
   }
   if ((evidence.overlayHost?.rect?.width || 0) < 64
     || (evidence.overlayHost?.rect?.height || 0) < 64

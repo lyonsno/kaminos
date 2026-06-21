@@ -122,11 +122,13 @@ assert.match(index, /const cameraPosition = new Float32Array\(cameraWorld\.toArr
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');
+assert.match(index, /cropCoordinateMatrix/, 'Hybrid Renderer correction identity carries the raw-asset-to-preview crop coordinate frame for PBRnext filtering');
 assert.match(index, /sourceIdentity/, 'Hybrid Renderer debug state exposes renderer-reported source identity');
 assert.match(index, /sharedCommandEncoder/, 'Hybrid Renderer route capabilities preserve explicit no-shared-command-encoder truth');
 assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer route reports dual-canvas overlay mode when active');
 assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybrid Renderer overlay frame records how splat correction transforms are applied');
-assert.match(index, /cropAppliedByRenderer:\s*false/, 'Hybrid Renderer overlay must not pretend crop sidecars are renderer-applied in the P0 bridge');
+assert.match(index, /function hybridSplatOverlayCropAppliedByRenderer\(/, 'Hybrid Renderer overlay reads live renderer crop application instead of hardcoding crop=false');
+assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRenderer\(\)/, 'Hybrid Renderer handoff reports renderer-side crop application from the active overlay handle');
 assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witnesses can inspect Hybrid Renderer overlay state without DOM inference');
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');
