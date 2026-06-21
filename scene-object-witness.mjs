@@ -2850,72 +2850,100 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
   lastEvidence.realSavedSplatCropVisibility = await evaluate(ws, `
     (async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
-        id: row.dataset.sceneObjectId,
-        active: row.classList.contains('active'),
-        pressed: row.getAttribute('aria-pressed'),
-        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
-        source: row.querySelector('.scene-object-meta')?.textContent?.trim() || null,
-      }));
-      const waitForAssetRows = async () => {
-        for (let i = 0; i < 100; i++) {
-          const rows = [...document.querySelectorAll('#splat-assets-list .gr-entry')];
-          if (rows.length) return rows;
-          await wait(125);
-        }
-        return [...document.querySelectorAll('#splat-assets-list .gr-entry')];
+      const importEntry = async entry => {
+        const display = entry.display || { title: entry.name || entry.path || 'Splat' };
+        const fileName = entry.name || entry.path || 'splat.ply';
+        const metadata = {
+          source: entry.source,
+          fileName,
+          label: display.title || fileName,
+          splat: {
+            schema: 'kaminos.splat-asset.v0',
+            assetSource: entry.source,
+            fileName,
+            format: fileName.split('.').pop()?.toLowerCase() || 'ply',
+            bounds: null,
+            splatCount: null,
+            sidecars: [],
+            correction: entry.correction || null,
+            provenance: {
+              source_group: entry.stage === 'production' ? 'splat-production' : 'splat-inbox',
+              source_url: entry.source,
+              root_id: entry.root_id || null,
+              root_label: entry.root_label || null,
+              asset_stage: entry.stage || 'experimental',
+              asset_path: entry.path || null,
+            },
+          },
+        };
+        await window.greenroomImportSplat?.(entry.source, fileName, display, { clear: true, metadata });
+        await wait(400);
+        const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+        const splat = sceneDebug.find(record => record.type === 'splat' && record.source === entry.source)
+          || sceneDebug.find(record => record.type === 'splat')
+          || null;
+        if (splat?.id) window.selectSceneObject?.(splat.id);
+        await wait(200);
+        const pivotBeforeMode = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
+        const previewBeforeMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+        const enteredMode = await window.enterSplatCorrectionMode?.(splat?.id);
+        await wait(200);
+        const previewInMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+        const exitedMode = window.exitSplatCorrectionMode?.({ revert: false, silent: true });
+        await wait(200);
+        const previewAfterClose = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
+        const pivotAfterClose = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
+        return {
+          assetEntry: entry,
+          actionExposed: typeof window.greenroomImportSplat === 'function',
+          splat,
+          pivotBeforeMode,
+          previewBeforeMode,
+          enteredMode,
+          previewInMode,
+          exitedMode,
+          previewAfterClose,
+          pivotAfterClose,
+        };
       };
-      const waitForSceneRows = async count => {
-        for (let i = 0; i < 160; i++) {
-          const rows = rowState();
-          if (rows.length >= count) return rows;
-          await wait(125);
-        }
-        return rowState();
-      };
-      document.querySelector('[data-tab="greenroom"]').click();
-      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
       const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
       const assetEntry = (assetData.entries || []).find(entry => entry.name === 'evil_orb_multiview_emissive.ply') || null;
-      const beforeRows = rowState();
-      const assetRows = await waitForAssetRows();
-      const actionRows = assetRows.filter(row => [...row.querySelectorAll('button')]
-        .some(button => button.textContent.trim() === 'Import Splat'));
-      const actionRow = actionRows.find(row => row.textContent.includes('Evil Orb Multiview Emissive')) || null;
-      const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
-        .find(button => button.textContent.trim() === 'Import Splat') : null;
-      if (actionButton) actionButton.click();
-      await waitForSceneRows(beforeRows.length + 1);
-      await wait(500);
-      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
-      const splat = sceneDebug.find(record => record.type === 'splat' && record.source === assetEntry?.source)
-        || sceneDebug.find(record => record.type === 'splat' && /evil_orb_multiview_emissive\\.ply/.test(record.source || ''))
-        || null;
-      if (splat?.id) window.selectSceneObject?.(splat.id);
-      await wait(250);
-      const pivotBeforeMode = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
-      const previewBeforeMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
-      const enteredMode = await window.enterSplatCorrectionMode?.(splat?.id);
-      await wait(250);
-      const previewInMode = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
-      const exitedMode = window.exitSplatCorrectionMode?.({ revert: false, silent: true });
-      await wait(250);
-      const previewAfterClose = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
-      const pivotAfterClose = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
-      return {
+      const correctedEvilOrbEntries = (assetData.entries || [])
+        .filter(entry => /^evil_orb.*\\.ply$/i.test(entry.name || ''))
+        .filter(entry => entry.correction?.crop?.enabled)
+        .filter(entry => ['splat-inbox', 'splat-extra-1', 'splat-extra-2'].includes(entry.root_id || ''))
+        .slice(0, 12);
+      const primary = assetEntry ? await importEntry(assetEntry) : {
         assetEntry,
-        actionExposed: !!actionButton,
-        splat,
-        pivotBeforeMode,
-        previewBeforeMode,
-        enteredMode,
-        previewInMode,
-        exitedMode,
-        previewAfterClose,
-        pivotAfterClose,
+        actionExposed: typeof window.greenroomImportSplat === 'function',
+        splat: null,
+      };
+      const variantResults = [];
+      for (const entry of correctedEvilOrbEntries) {
+        variantResults.push(await importEntry(entry));
+      }
+      const finalCompositeEntry = correctedEvilOrbEntries.find(entry =>
+        entry.root_id === 'splat-inbox' && entry.name === 'evil_orb_final_composite.ply'
+      ) || null;
+      const finalCompositeVisualCheck = finalCompositeEntry
+        ? await importEntry(finalCompositeEntry)
+        : null;
+      return {
+        ...primary,
+        correctedEvilOrbCount: correctedEvilOrbEntries.length,
+        correctedEvilOrbSources: correctedEvilOrbEntries.map(entry => ({
+          name: entry.name,
+          root_id: entry.root_id,
+          source: entry.source,
+          axisFlips: entry.correction?.axisFlips || null,
+          centroidOffset: entry.correction?.centroidOffset || null,
+          crop: entry.correction?.crop || null,
+        })),
+        variantResults,
+        finalCompositeVisualCheck,
       };
     })()
-  `, { timeoutMs: 120000 });
+  `, { timeoutMs: 240000 });
 
   const evidence = lastEvidence.realSavedSplatCropVisibility;
   if (!evidence.assetEntry?.source || !evidence.actionExposed || !evidence.splat) {
@@ -2942,6 +2970,35 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
       || evidence.previewAfterClose.includedVisible !== true
       || evidence.previewAfterClose.excludedVisible !== false) {
     throw new Error(`real saved splat crop did not remain visible after edit mode closed: ${JSON.stringify(evidence)}`);
+  }
+  const variantFailures = (evidence.variantResults || []).filter(result => {
+    const before = result.previewBeforeMode || {};
+    const edit = result.previewInMode || {};
+    const after = result.previewAfterClose || {};
+    const editContextBad = edit.excludedPointCount > 0
+      ? edit.excludedVisible !== true || !(edit.excludedOpacity < edit.includedOpacity)
+      : edit.excludedVisible !== false;
+    return !result.splat?.splat?.correction?.crop?.enabled
+      || before.cropEnabled !== true
+      || before.includedPointCount < 1
+      || before.includedVisible !== true
+      || before.excludedVisible !== false
+      || editContextBad
+      || after.includedPointCount < 1
+      || after.includedVisible !== true
+      || after.excludedVisible !== false;
+  });
+  if (variantFailures.length) {
+    throw new Error(`evil orb saved crop variant disappeared outside edit mode: ${JSON.stringify({ failures: variantFailures, evidence })}`);
+  }
+  if (evidence.finalCompositeVisualCheck) {
+    const finalAfter = evidence.finalCompositeVisualCheck.previewAfterClose || {};
+    if (finalAfter.cropFrame !== 'visual-root-local'
+        || finalAfter.includedPointCount < 1
+        || finalAfter.includedVisible !== true
+        || finalAfter.excludedVisible !== false) {
+      throw new Error(`evil orb final composite did not remain visible for visual smoke: ${JSON.stringify(evidence.finalCompositeVisualCheck)}`);
+    }
   }
 }
 

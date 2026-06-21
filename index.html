@@ -5528,6 +5528,13 @@ function replaceSplatPointGeometry(points, geometry) {
 
 function splatCropPointCoordinates(positions, index, correction, frame = 'axis-flipped-asset') {
   const offset = index * 3;
+  if (frame === 'visual-root-local') {
+    return [
+      positions[offset + 0],
+      positions[offset + 1],
+      positions[offset + 2],
+    ];
+  }
   const coordinates = [
     positions[offset + 0] * correction.axisFlips[0],
     positions[offset + 1] * correction.axisFlips[1],
@@ -5567,9 +5574,31 @@ function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {
   if (canonicalCount > 0) {
     return { frame: canonicalFrame, includedPointCount: canonicalCount, canonicalPointCount: canonicalCount };
   }
+  const visualRootFrame = 'visual-root-local';
+  const visualRootCount = countSplatCropFrame(
+    preview.sourcePositions,
+    preview.totalPointCount,
+    correction,
+    cropMin,
+    cropMax,
+    visualRootFrame,
+  );
+  if (visualRootCount > 0) {
+    return {
+      frame: visualRootFrame,
+      includedPointCount: visualRootCount,
+      canonicalPointCount: canonicalCount,
+      visualRootPointCount: visualRootCount,
+    };
+  }
   const hasCentroidOffset = correction.centroidOffset.some(value => Math.abs(value) > 1e-9);
   if (!hasCentroidOffset) {
-    return { frame: canonicalFrame, includedPointCount: canonicalCount, canonicalPointCount: canonicalCount };
+    return {
+      frame: canonicalFrame,
+      includedPointCount: canonicalCount,
+      canonicalPointCount: canonicalCount,
+      visualRootPointCount: visualRootCount,
+    };
   }
   const pivotLocalFrame = 'pivot-local-minus-centroid';
   const pivotLocalCount = countSplatCropFrame(
@@ -5585,6 +5614,7 @@ function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {
       frame: pivotLocalFrame,
       includedPointCount: pivotLocalCount,
       canonicalPointCount: canonicalCount,
+      visualRootPointCount: visualRootCount,
       pivotLocalPointCount: pivotLocalCount,
     };
   }
@@ -5592,6 +5622,7 @@ function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {
     frame: canonicalFrame,
     includedPointCount: canonicalCount,
     canonicalPointCount: canonicalCount,
+    visualRootPointCount: visualRootCount,
     pivotLocalPointCount: pivotLocalCount,
   };
 }

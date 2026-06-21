@@ -141,6 +141,7 @@ assert.match(index, /function createSplatPointCloudObject\(/, 'parseable splats 
 assert.match(index, /function applySplatPointCloudCropPreview\(/, 'PLY point-cloud splat previews can hide cropped-away points');
 assert.match(index, /function splatCropPointCoordinates\(/, 'PLY point-cloud crop previews evaluate points in axis-flipped crop coordinates');
 assert.match(index, /function chooseSplatCropFrame\(/, 'PLY point-cloud crop previews can preserve legacy pivot-local crop sidecars without changing the canonical crop frame');
+assert.match(index, /visual-root-local/, 'PLY point-cloud crop previews can recover crops authored in the visible crop-box frame');
 assert.match(index, /pivot-local-minus-centroid/, 'crop preview debug names the legacy pivot-local sidecar frame when it is used');
 assert.match(index, /new THREE\.Points\(/, 'PLY splat previews render through Three Points, not the placeholder mesh only');
 assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'PLY point-cloud previews use per-point colors when available');
