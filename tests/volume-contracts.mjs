@@ -167,6 +167,10 @@ assert.match(core, /canonicalEntrainmentCell/, 'canonical plume has a named low-
 assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalRadialSpread/, 'canonical entrainment participates in smoke transport before final canonical spreading');
 assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalPlumeScene/, 'canonical entrainment is scene-gated to the minimal plume proof');
 assert.doesNotMatch(core, /let canonicalEntrainmentVelocity =[^;]*(bonfire|fireLick|frontTopology|radiance|microdetail)/, 'canonical entrainment must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
+assert.match(core, /canonicalScalarSpread/, 'canonical plume has named smoke scalar spread after field-slice proved the scalar field itself is columnar');
+assert.match(core, /canonicalCenterlineRelief/, 'canonical plume has named centerline scalar relief to prevent preserving a solid vertical smoke tube');
+assert.match(core, /canonicalScalarSpread[\s\S]*readSlot/, 'canonical scalar spread uses neighboring fluid state, not visual noise or renderer shaping');
+assert.doesNotMatch(core, /let canonicalScalarSpread =[^;]*(fire|radiance|microdetail|frontTopology|bonfire)/, 'canonical scalar spread must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128[^\]]*160[^\]]*\]/s, 'fluid sim supports bounded larger 128^3 and 160^3 sweep grids');
 assert.match(core, /maxStorageBufferBindingSize/, 'larger sim grids request the required WebGPU storage-buffer binding limit');
 assert.match(core, /FLUID_SLOTS_PER_CELL\s*=\s*4/, 'fluid sim stores a distinct transported microdetail slot beyond fire and smoke material channels');

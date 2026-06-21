@@ -2036,7 +2036,30 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let canonicalSmokeBirth = source * 1.28 + heat * 0.10;
   let bonfireAdvectedSmokeBirth = (bonfireSmokeSource * 0.060 + bonfireBroadSupportSmokeSource * 0.028) * bonfireLayeredSmokeBreakup + bonfireSootBirth * 0.20 + bonfireInterfaceBirth * 0.050 + bonfireCombustion.z * 0.010 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.060;
-  let columnSmokeTransport = mix(max(smoke + smokeFromHeat, columnSmokeBirth), max(smoke * 0.992 + smokeFromHeat * 0.38, canonicalSmokeBirth), canonicalPlumeScene);
+  let canonicalScalarRadial = max(length(p.xz), 0.025);
+  let canonicalScalarSpread = canonicalPlumeScene
+    * smoothstep(-0.68, -0.20, p.y)
+    * (1.0 - smoothstep(0.42, 0.82, p.y))
+    * smoothstep(0.045, 0.25, canonicalScalarRadial)
+    * (1.0 - smoothstep(0.28, 0.58, canonicalScalarRadial))
+    * (
+      readSlot(cellI + vec3<i32>(1, 0, 0), 1u).x
+        + readSlot(cellI + vec3<i32>(-1, 0, 0), 1u).x
+        + readSlot(cellI + vec3<i32>(0, 0, 1), 1u).x
+        + readSlot(cellI + vec3<i32>(0, 0, -1), 1u).x
+    ) * 0.25;
+  let canonicalCenterlineRelief = canonicalPlumeScene
+    * (1.0 - smoothstep(0.025, 0.13, canonicalScalarRadial))
+    * smoothstep(-0.50, -0.08, p.y)
+    * (1.0 - smoothstep(0.52, 0.86, p.y));
+  let canonicalSmokeTransport = min(
+    max(
+      smoke * (0.968 - canonicalCenterlineRelief * 0.16) + smokeFromHeat * 0.18 + canonicalScalarSpread * 0.12,
+      canonicalSmokeBirth
+    ),
+    mix(2.2, 0.88, canonicalPlumeScene)
+  );
+  let columnSmokeTransport = mix(max(smoke + smokeFromHeat, columnSmokeBirth), canonicalSmokeTransport, canonicalPlumeScene);
   let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth);
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
