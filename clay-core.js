@@ -62,6 +62,7 @@ const CLAY_CUBE_SURFACE_VISIBLE = false;
 const CLAY_CUBE_DIAGNOSTIC_COLOR_MODE = 'cube-diagnostic-contact-displacement-colors-v0';
 const CLAY_CUBE_BOUNDING_BOX_CONTRACT = 'cube-diagnostic-bounding-box-v0';
 const CLAY_CUBE_ISO_SURFACE_EVIDENCE_KIND = 'diagnostic-marching-cubes-cpu-render-surface-not-solver-v0';
+const CLAY_CUBE_ISO_SURFACE_VISIBILITY_POLICY = 'hidden-while-boundary-skin-active-v0';
 const CLAY_CUBE_ISO_SURFACE_RESOLUTION = 22;
 const CLAY_CUBE_ISO_SURFACE_MAX_BALLS = 1000;
 const CLAY_CUBE_ISO_SURFACE_STRENGTH = 0.24;
@@ -1635,6 +1636,7 @@ export function createKaminosClayPrototype({
   let clayCubeIsoSurfaceEvidenceKind = clayCubeEnabled && MarchingCubes
     ? CLAY_CUBE_ISO_SURFACE_EVIDENCE_KIND
     : 'disabled';
+  let clayCubeIsoSurfaceVisibilityPolicy = clayCubeEnabled ? CLAY_CUBE_ISO_SURFACE_VISIBILITY_POLICY : 'disabled';
   let clayCubeIsoSurfaceResolution = clayCubeEnabled && MarchingCubes ? CLAY_CUBE_ISO_SURFACE_RESOLUTION : 0;
   let clayCubeIsoSurfaceBallCount = 0;
   let clayCubeIsoSurfaceTriangleCount = 0;
@@ -2033,7 +2035,7 @@ export function createKaminosClayPrototype({
     }
     cubeIsoSurface.update();
     clayCubeIsoSurfaceTriangleCount = Math.floor((cubeIsoSurface.count || 0) / 3);
-    clayCubeIsoSurfaceVisible = clayCubeIsoSurfaceTriangleCount > 0;
+    clayCubeIsoSurfaceVisible = clayCubeIsoSurfaceTriangleCount > 0 && !clayCubeBoundarySkinVisible;
     cubeIsoSurface.visible = clayCubeIsoSurfaceVisible;
   }
 
@@ -3324,6 +3326,7 @@ export function createKaminosClayPrototype({
       clayCubeDiagnosticHotParticleCount,
       clayCubeIsoSurfaceVisible,
       clayCubeIsoSurfaceEvidenceKind,
+      clayCubeIsoSurfaceVisibilityPolicy,
       clayCubeIsoSurfaceResolution,
       clayCubeIsoSurfaceBallCount,
       clayCubeIsoSurfaceTriangleCount,

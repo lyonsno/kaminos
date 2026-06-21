@@ -707,8 +707,16 @@ async function main() {
       assert.equal(state.clayCubeBoundingBoxVisible, true, 'cube diagnostic bounding box missing');
       assert.equal(state.clayCubeBoundingBoxContract, 'cube-diagnostic-bounding-box-v0', 'cube diagnostic bounding-box contract missing');
       assert.equal(state.clayCubeIsoSurfaceEvidenceKind, 'diagnostic-marching-cubes-cpu-render-surface-not-solver-v0', 'cube diagnostic iso-surface evidence kind missing');
+      assert.equal(
+        state.clayCubeIsoSurfaceVisibilityPolicy,
+        'hidden-while-boundary-skin-active-v0',
+        'cube diagnostic iso-surface visibility policy missing',
+      );
       assert.ok((state.clayCubeIsoSurfaceResolution ?? 0) >= 20, 'cube diagnostic iso-surface resolution too low or missing');
       assert.ok((state.clayCubeIsoSurfaceBallCount ?? 0) >= 216, 'cube diagnostic iso-surface did not consume enough material points');
+      if (state.clayCubeBoundarySkinVisible) {
+        assert.equal(state.clayCubeIsoSurfaceVisible, false, 'cube diagnostic iso-surface leaked visible fragments while boundary skin is active');
+      }
       if (state.clayCubeIsoSurfaceVisible) {
         assert.ok((state.clayCubeIsoSurfaceTriangleCount ?? 0) > 0, 'cube diagnostic iso-surface produced no triangles');
       }
@@ -1056,6 +1064,7 @@ async function main() {
       clayCubeDiagnosticHotParticleCount: state.clayCubeDiagnosticHotParticleCount,
       clayCubeIsoSurfaceVisible: state.clayCubeIsoSurfaceVisible,
       clayCubeIsoSurfaceEvidenceKind: state.clayCubeIsoSurfaceEvidenceKind,
+      clayCubeIsoSurfaceVisibilityPolicy: state.clayCubeIsoSurfaceVisibilityPolicy,
       clayCubeIsoSurfaceResolution: state.clayCubeIsoSurfaceResolution,
       clayCubeIsoSurfaceBallCount: state.clayCubeIsoSurfaceBallCount,
       clayCubeIsoSurfaceTriangleCount: state.clayCubeIsoSurfaceTriangleCount,

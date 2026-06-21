@@ -118,6 +118,8 @@ assert.match(core, /clayCubeIsoSurfaceVisible/, 'clay debug state records cube d
 assert.match(core, /clayCubeIsoSurfaceEvidenceKind/, 'clay debug state records diagnostic iso-surface evidence kind');
 assert.match(core, /clayCubeIsoSurfaceResolution/, 'clay debug state records diagnostic iso-surface resolution');
 assert.match(core, /clayCubeIsoSurfaceBallCount/, 'clay debug state records diagnostic iso-surface particle/ball count');
+assert.match(core, /CLAY_CUBE_ISO_SURFACE_VISIBILITY_POLICY/, 'clay core names cube iso-surface visibility policy');
+assert.match(core, /clayCubeIsoSurfaceVisibilityPolicy/, 'clay debug state records cube iso-surface visibility policy');
 assert.match(core, /diagnostic-boundary-skin-from-material-points-not-solver-v0/, 'clay cube witness labels boundary skin as diagnostic render evidence');
 assert.match(core, /clayCubeBoundarySkinVisible/, 'clay debug state records cube diagnostic boundary-skin visibility');
 assert.match(core, /clayCubeBoundarySkinTriangleCount/, 'clay debug state records cube diagnostic boundary-skin triangle count');
@@ -332,6 +334,8 @@ assert.match(witness, /clayCubeIsoSurfaceVisible/, 'clay witness verifies cube d
 assert.match(witness, /clayCubeIsoSurfaceEvidenceKind/, 'clay witness records diagnostic iso-surface evidence kind');
 assert.match(witness, /clayCubeIsoSurfaceResolution/, 'clay witness records diagnostic iso-surface resolution');
 assert.match(witness, /clayCubeIsoSurfaceBallCount/, 'clay witness records diagnostic iso-surface particle/ball count');
+assert.match(witness, /clayCubeIsoSurfaceVisibilityPolicy/, 'clay witness records cube iso-surface visibility policy');
+assert.match(witness, /cube diagnostic iso-surface leaked visible fragments/, 'clay witness rejects visible cube iso-surface fragments while boundary skin is active');
 assert.match(witness, /clayCubeBoundarySkinVisible/, 'clay witness verifies cube diagnostic boundary-skin visibility');
 assert.match(witness, /clayCubeBoundarySkinEvidenceKind/, 'clay witness records diagnostic boundary-skin evidence kind');
 assert.match(witness, /clayCubeBoundarySkinTriangleCount/, 'clay witness records diagnostic boundary-skin triangle count');
