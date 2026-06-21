@@ -191,6 +191,46 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
 
 
+def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        target_dir = root / "external-targets"
+        experimental.mkdir(parents=True)
+        target_dir.mkdir()
+        target = target_dir / "real-splat.ply"
+        target.write_text("ply\n")
+        pointer = experimental / "pointer-splat.ply"
+        pointer.symlink_to(target)
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        try:
+            entries = serve.list_asset_entries(kind="splat")
+            resolved = serve.resolve_splat_asset_path("splat-inbox", "pointer-splat.ply")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert len(entries) == 1
+        assert entries[0]["root_id"] == "splat-inbox"
+        assert entries[0]["path"] == "pointer-splat.ply"
+        assert entries[0]["source"] == "/api/read?root=splat-inbox&path=pointer-splat.ply"
+        assert resolved[2].name == "pointer-splat.ply"
+        assert resolved[2].read_text() == "ply\n"
+
+
 def test_splat_asset_ingest_writes_only_to_experimental_inbox():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -322,6 +362,7 @@ if __name__ == "__main__":
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
+    test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

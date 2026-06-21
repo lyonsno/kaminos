@@ -3432,6 +3432,11 @@ async function runSplatCorrectionModeScenario(ws) {
       || !evidence.cropMode?.cropBoxVisible) {
     throw new Error(`splat correction crop mode did not attach crop target: ${JSON.stringify(evidence)}`);
   }
+  if (evidence.cropMode?.cropTargetParentName !== 'splat-visual-root'
+      || evidence.cropEdit?.cropTargetParentName !== 'splat-visual-root'
+      || evidence.modeAfterSave?.cropTargetParentName !== 'splat-visual-root') {
+    throw new Error(`splat correction crop box was not parented in the preview crop frame: ${JSON.stringify(evidence)}`);
+  }
   const cropEditCorrection = evidence.cropEdit?.draftCorrection || evidence.sceneAfterCropEdit?.splat?.correction || null;
   if (!cropEditCorrection?.crop?.enabled
       || Math.abs(cropEditCorrection.crop.min?.[0] + 0.2) > 1e-6
@@ -3471,6 +3476,101 @@ async function runSplatCorrectionModeScenario(ws) {
   }
   if (savedCorrection.axisFlips?.[0] !== -1 || evidence.saveResult?.correction?.axisFlips?.[0] !== -1) {
     throw new Error(`splat correction mode did not save axis flip: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runSplatCropFrameScenario(ws) {
+  phase = 'scenario-splat-crop-frame';
+  lastEvidence.splatCropFrame = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const ply = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex 6',
+        'property float x',
+        'property float y',
+        'property float z',
+        'property uchar red',
+        'property uchar green',
+        'property uchar blue',
+        'end_header',
+        '-1 0 0 255 80 80',
+        '1 0 0 80 255 80',
+        '0 -1 0 80 80 255',
+        '0 1 0 255 220 80',
+        '0 0 -1 255 80 220',
+        '0 0 1 80 255 220',
+      ].join('\\n') + '\\n';
+      document.querySelector('[data-tab="greenroom"]').click();
+      const file = new File([ply], 'Witness Crop Frame.PLY', { type: 'application/octet-stream' });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: true });
+      await wait(250);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splat = sceneDebug.find(record => record.type === 'splat' && record.source === ingestResult?.entry?.source)
+        || sceneDebug.find(record => record.type === 'splat');
+      if (!splat) throw new Error('crop-frame scenario could not import splat');
+      window.selectSceneObject(splat.id);
+      const plannedSceneTransform = {
+        position: [1.0, 0.25, -0.5],
+        rotation: [0.4, -0.2, 0.1],
+        scale: [1.1, 1.2, 1.3],
+      };
+      const sceneBeforeMode = window.kaminosSetSceneObjectTransform(splat.id, plannedSceneTransform);
+      await window.enterSplatCorrectionMode(splat.id);
+      window.kaminosSetSplatCorrectionDraftTransform({
+        position: [0.2, 0.3, 0.4],
+        rotation: [0.05, 0.1, 0.15],
+        scale: [1, 1, 1],
+      });
+      window.kaminosToggleSplatCorrectionAxisFlip('x');
+      const cropMode = await window.setSplatCorrectionEditMode('crop');
+      const cropEdit = window.kaminosSetSplatCorrectionCropTransform({
+        position: [0, 0, 1],
+        scale: [0.4, 0.4, 0.4],
+      });
+      const cropEditPreview = window.kaminosSplatPreviewDebugState?.(splat.id) || null;
+      const sceneAfterCropEdit = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      return {
+        ingestResult: { entry: ingestResult?.entry || null },
+        sceneBeforeMode,
+        cropMode,
+        cropEdit,
+        cropEditPreview,
+        sceneAfterCropEdit,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.splatCropFrame;
+  if (evidence.cropMode?.cropTargetParentName !== 'splat-visual-root'
+      || evidence.cropEdit?.cropTargetParentName !== 'splat-visual-root') {
+    throw new Error(`splat correction crop box was not parented in the preview crop frame: ${JSON.stringify(evidence)}`);
+  }
+  const cropTransform = evidence.cropEdit?.cropTargetTransform || {};
+  if (!Array.isArray(cropTransform.position)
+      || Math.abs(cropTransform.position[0]) > 1e-6
+      || Math.abs(cropTransform.position[1]) > 1e-6
+      || Math.abs(cropTransform.position[2] - 1) > 1e-6
+      || Math.abs(cropTransform.scale?.[0] - 0.4) > 1e-6
+      || Math.abs(cropTransform.scale?.[1] - 0.4) > 1e-6
+      || Math.abs(cropTransform.scale?.[2] - 0.4) > 1e-6) {
+    throw new Error(`splat correction crop box did not keep local crop transform: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.cropEditPreview
+      || evidence.cropEditPreview.includedPointCount !== 1
+      || evidence.cropEditPreview.excludedPointCount !== 5
+      || evidence.cropEditPreview.excludedVisible !== true) {
+    throw new Error(`splat correction crop frame did not match preview crop predicate: ${JSON.stringify(evidence)}`);
+  }
+  const afterCropEdit = evidence.sceneAfterCropEdit?.sceneTransform;
+  const before = evidence.sceneBeforeMode?.sceneTransform;
+  const cropEditPreservedSceneTransform = Array.isArray(afterCropEdit?.position)
+    && before.position.every((value, index) => Math.abs(value - afterCropEdit.position[index]) < 1e-6)
+    && before.rotation.every((value, index) => Math.abs(value - afterCropEdit.rotation[index]) < 1e-6)
+    && before.scale.every((value, index) => Math.abs(value - afterCropEdit.scale[index]) < 1e-6);
+  if (!cropEditPreservedSceneTransform) {
+    throw new Error(`splat correction crop frame dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
 }
 
@@ -3687,6 +3787,8 @@ try {
     await runSplatCorrectionSidecarScenario(ws);
   } else if (scenario === 'splat-correction-mode') {
     await runSplatCorrectionModeScenario(ws);
+  } else if (scenario === 'splat-crop-frame') {
+    await runSplatCropFrameScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

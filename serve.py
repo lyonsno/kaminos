@@ -93,6 +93,10 @@ def runtime_config():
     }
 
 
+def splat_asset_root_allows_pointer(root_name):
+    return any(root.get("id") == root_name and root.get("kind") == "splat" for root in ASSET_ROOTS)
+
+
 def _clean_label(value, fallback="Untitled"):
     text = str(value or "").strip()
     if not text:
@@ -256,9 +260,12 @@ def list_asset_entries(kind="splat"):
 
 def build_asset_entry(root, path):
     root_id = root["id"]
-    root_path = Path(root["path"]).expanduser().resolve()
-    path = Path(path).resolve()
-    rel_path = path.relative_to(root_path).as_posix()
+    root_path = Path(root["path"]).expanduser()
+    path = Path(path)
+    try:
+        rel_path = path.relative_to(root_path).as_posix()
+    except ValueError:
+        rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
     correction_document = load_splat_asset_correction(root_id, rel_path)
     return {
@@ -289,14 +296,19 @@ def splat_asset_root(root_id):
     return None
 
 
+def _asset_relative_path(rel_path):
+    rel = Path(str(rel_path or ""))
+    if rel.is_absolute() or any(part == ".." for part in rel.parts):
+        raise PermissionError("Path traversal")
+    return rel
+
+
 def resolve_splat_asset_path(root_id, rel_path):
     root = splat_asset_root(root_id)
     if not root:
         raise FileNotFoundError(f"splat asset root not configured: {root_id}")
     root_path = Path(root["path"]).expanduser().resolve()
-    target = (root_path / str(rel_path or "")).resolve()
-    if not target.is_relative_to(root_path):
-        raise PermissionError("Path traversal")
+    target = root_path / _asset_relative_path(rel_path)
     if target.suffix.lower() not in SPLAT_EXTENSIONS:
         raise ValueError(f"Unsupported splat asset extension: {target.suffix or 'missing'}")
     if not target.is_file():
@@ -809,10 +821,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": f"Unknown root: {root_name}"}, 400)
             return
 
-        target = (root / sub_path).resolve()
+        lexical_target = root / sub_path
+        target = lexical_target.resolve()
         if not target.is_relative_to(root.resolve()):
-            self.send_json({"error": "Path traversal"}, 403)
-            return
+            if splat_asset_root_allows_pointer(root_name) and lexical_target.suffix.lower() in SPLAT_EXTENSIONS:
+                target = lexical_target
+            else:
+                self.send_json({"error": "Path traversal"}, 403)
+                return
 
         if not target.is_file():
             self.send_json({"error": "Not a file"}, 404)

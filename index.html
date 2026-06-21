@@ -1812,9 +1812,20 @@ function setSplatCropTargetFromCorrection(target, correction) {
   const normalized = normalizeSplatCorrection(correction);
   const bounds = cropCenterAndSize(normalized.crop);
   target.position.fromArray(bounds.center);
-  target.rotation.set(...normalized.orientation.rotation);
+  target.rotation.set(0, 0, 0);
   target.scale.fromArray(bounds.size);
   target.visible = !!normalized.crop.enabled;
+}
+
+function splatCropTargetParentForRecord(record) {
+  return splatVisualRootFor(record?.object) || record?.object || scene;
+}
+
+function attachSplatCropTargetToRecord(target, record) {
+  if (!target) return null;
+  const parent = splatCropTargetParentForRecord(record);
+  if (target.parent !== parent) parent.add(target);
+  return parent;
 }
 
 function updateSplatCropTargetVisibility() {
@@ -2027,7 +2038,7 @@ async function enterSplatCorrectionMode(id = activeSceneObjectId) {
   scene.add(target);
   const cropTarget = createSplatCorrectionCropTarget();
   setSplatCropTargetFromCorrection(cropTarget, savedCorrection);
-  scene.add(cropTarget);
+  attachSplatCropTargetToRecord(cropTarget, record);
   splatCorrectionMode = {
     objectId: record.id,
     record,
@@ -2061,7 +2072,7 @@ function exitSplatCorrectionMode(options = {}) {
   }
   transformControls?.detach?.();
   scene.remove(mode.target);
-  scene.remove(mode.cropTarget);
+  mode.cropTarget.parent?.remove(mode.cropTarget);
   disposeObjectTree(mode.target);
   disposeObjectTree(mode.cropTarget);
   splatCorrectionMode = null;
@@ -3014,7 +3025,9 @@ window.kaminosSplatCorrectionModeDebugState = function() {
     cropTargetAttached: !!mode?.cropTarget && transformControls?.object === mode.cropTarget,
     transformTargetName: transformControls?.object?.name || null,
     cropBoxVisible: !!mode?.cropTarget?.visible,
+    cropTargetParentName: mode?.cropTarget?.parent?.name || null,
     cropTargetTransform: mode?.cropTarget ? sceneObjectTransformState(mode.cropTarget) : null,
+    cropTargetWorldPosition: mode?.cropTarget ? mode.cropTarget.getWorldPosition(new THREE.Vector3()).toArray() : null,
     draftCorrection: mode?.draftCorrection ? normalizeSplatCorrection(mode.draftCorrection) : null,
     savedCorrection: mode?.savedCorrection ? normalizeSplatCorrection(mode.savedCorrection) : null,
     sceneTransform: record ? splatSceneTransformState(record) : null,
