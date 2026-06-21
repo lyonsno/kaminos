@@ -1408,6 +1408,50 @@ const VOLUME_SCENE_PRESETS = {
   },
 };
 
+const CANONICAL_VOLUME_MACRO_PRESETS = {
+  macro_foothold_0621: {
+    label: 'macro foothold 0621',
+    volumeScene: 'canonical_plume',
+    density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    absorption: 2.00,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    majorantSkip: 0.15,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    majorantGrid: 48,
+    gridOverlay: 0.00,
+    flowDebug: 0.00,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+  },
+};
+
 const DEFAULT_VOLUME_CAMERA_FRAME = {
   position: [1.18, 0.28, 2.05],
   target: [0, 0.02, 0],
@@ -1420,6 +1464,7 @@ const BONFIRE_VOLUME_CAMERA_FRAME = {
 
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
+let activeCanonicalVolumeMacroPreset = '';
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -1467,6 +1512,13 @@ function setVolumeControlValue(id, value) {
   el.value = String(value);
 }
 
+function formatVolumePresetControlValue(key, value) {
+  if (['raySteps', 'resolution', 'majorantGrid', 'windAngle'].includes(key)) {
+    return String(Math.round(value));
+  }
+  return typeof value === 'number' ? value.toFixed(2) : value;
+}
+
 function volumeControlRow(id) {
   return document.getElementById(id)?.closest('.slider-row') || null;
 }
@@ -1484,6 +1536,10 @@ function syncCanonicalVolumeControlVisibility(volumeScene) {
 }
 
 function volumeSceneControlId(key) {
+  const explicit = {
+    raySteps: 'volume-steps',
+  };
+  if (explicit[key]) return explicit[key];
   return `volume-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
 }
 
@@ -1499,7 +1555,20 @@ function applyVolumeScenePreset(scene, options = {}) {
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
   }
+  activeCanonicalVolumeMacroPreset = '';
   return normalizedScene;
+}
+
+function applyCanonicalVolumeMacroPreset(name) {
+  const preset = CANONICAL_VOLUME_MACRO_PRESETS[name];
+  if (!preset) return false;
+  applyVolumeScenePreset(preset.volumeScene || 'canonical_plume', { keepBudgetPreset: true });
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label' || key === 'volumeScene') continue;
+    setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
+  }
+  activeCanonicalVolumeMacroPreset = name;
+  return true;
 }
 
 function rayBudgetGamutPointFromControls() {
@@ -1591,6 +1660,7 @@ function readVolumeControls() {
     canonicalSpread: parseFloat(document.getElementById('volume-canonical-spread').value),
     canonicalCenterline: parseFloat(document.getElementById('volume-canonical-centerline').value),
     canonicalBodyBalance: parseFloat(document.getElementById('volume-canonical-body-balance').value),
+    canonicalMacroPreset: activeCanonicalVolumeMacroPreset,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   };
@@ -1691,6 +1761,10 @@ async function initKaminosVolumeRoute() {
   const routeVolumeScene = params.get('volume_scene');
   if (routeVolumeScene) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
+  }
+  const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
+  if (routeCanonicalMacroPreset) {
+    applyCanonicalVolumeMacroPreset(routeCanonicalMacroPreset);
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
@@ -1858,6 +1932,8 @@ async function initKaminosVolumeRoute() {
   const syncControls = event => {
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
+    } else if (event?.target?.id) {
+      activeCanonicalVolumeMacroPreset = '';
     }
     if (rayBudgetPresetOwnedControls.has(event?.target?.id)) {
       activeVolumeRayBudgetPreset = '';

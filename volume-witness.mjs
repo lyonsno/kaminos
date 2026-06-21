@@ -61,6 +61,34 @@ const VOLUME_SCENE_PRESETS = {
     windHeight: 0.15,
   },
 };
+const CANONICAL_VOLUME_MACRO_PRESETS = {
+  macro_foothold_0621: {
+    density: 0.45,
+    smoke: 2.80,
+    absorption: 2.00,
+    curl: 1.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    majorantSkip: 0.15,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    plumeHeight: 1.45,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    majorantGrid: 48,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+  },
+};
 const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
@@ -72,10 +100,15 @@ const fieldSliceOut = args.has('--field-slice')
     ? resolve(out.replace(/\.png$/i, '.field-slice.png'))
     : '';
 const scenePreset = VOLUME_SCENE_PRESETS[expectedVolumeScene] || {};
+const requestedCanonicalMacroPreset = routeParams.get('volume_canonical_preset') || '';
+const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESETS, requestedCanonicalMacroPreset)
+  ? requestedCanonicalMacroPreset
+  : '';
+const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : 96;
+const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : canonicalMacroPreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
-const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : 48;
+const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : canonicalMacroPreset.majorantGrid ?? 48;
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
@@ -91,27 +124,27 @@ const presetBudget = RAY_BUDGET_PRESETS[rayBudgetPreset] || null;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
 const expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
   ? Math.max(24, Math.min(160, requestedRaySteps))
-  : presetBudget?.raySteps ?? 96;
+  : presetBudget?.raySteps ?? canonicalMacroPreset.raySteps ?? 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
 const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
-  : presetBudget?.adaptiveRays ?? 0.65;
+  : presetBudget?.adaptiveRays ?? canonicalMacroPreset.adaptiveRays ?? 0.65;
 const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
 const expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
-  : 0.35;
+  : canonicalMacroPreset.occupancySkip ?? 0.35;
 const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
 const expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
   ? Math.max(0, Math.min(1, requestedMajorantSkip))
-  : 0.70;
+  : canonicalMacroPreset.majorantSkip ?? 0.70;
 const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
 const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
   ? Math.max(0, Math.min(1, requestedMajorantSmooth))
-  : 0.85;
+  : canonicalMacroPreset.majorantSmooth ?? 0.85;
 const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
 const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
   ? Math.max(0, Math.min(1, requestedMajorantGuard))
-  : 0.75;
+  : canonicalMacroPreset.majorantGuard ?? 0.75;
 const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_stripe_ratio'));
 const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
   ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
@@ -121,15 +154,15 @@ const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_rat
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
 const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
   ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
-  : 0.25;
+  : canonicalMacroPreset.temporalAccum ?? 0.25;
 const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
 const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
   ? Math.max(0, Math.min(1, requestedTemporalJitter))
-  : 0.85;
+  : canonicalMacroPreset.temporalJitter ?? 0.85;
 const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
 const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
   ? Math.max(0, Math.min(1, requestedHistoryClamp))
-  : 0.70;
+  : canonicalMacroPreset.historyClamp ?? 0.70;
 const requestedFireScale = Number(routeParams.get('volume_fire_scale'));
 const expectedFireScale = routeParams.has('volume_fire_scale') && Number.isFinite(requestedFireScale)
   ? Math.max(0.35, Math.min(1.3, requestedFireScale))
@@ -141,11 +174,11 @@ const expectedDetailScale = routeParams.has('volume_detail_scale') && Number.isF
 const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
-  : scenePreset.plumeHeight ?? 1.45;
+  : canonicalMacroPreset.plumeHeight ?? scenePreset.plumeHeight ?? 1.45;
 const requestedCurl = Number(routeParams.get('volume_curl'));
 const expectedCurl = routeParams.has('volume_curl') && Number.isFinite(requestedCurl)
   ? Math.max(0, Math.min(5, requestedCurl))
-  : scenePreset.curl ?? 2.65;
+  : canonicalMacroPreset.curl ?? scenePreset.curl ?? 2.65;
 const requestedMicrodetail = Number(routeParams.get('volume_microdetail'));
 const expectedMicrodetail = routeParams.has('volume_microdetail') && Number.isFinite(requestedMicrodetail)
   ? Math.max(0, Math.min(2.5, requestedMicrodetail))
@@ -173,7 +206,15 @@ const expectedWindHeight = routeParams.has('volume_wind_height') && Number.isFin
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
-  : 0.85;
+  : canonicalMacroPreset.renderScale ?? 0.85;
+const requestedInputRadius = Number(routeParams.get('volume_input_radius'));
+const expectedInputRadius = routeParams.has('volume_input_radius') && Number.isFinite(requestedInputRadius)
+  ? Math.max(0.08, Math.min(0.7, requestedInputRadius))
+  : canonicalMacroPreset.inputRadius ?? null;
+const requestedFlowRate = Number(routeParams.get('volume_flow_rate'));
+const expectedFlowRate = routeParams.has('volume_flow_rate') && Number.isFinite(requestedFlowRate)
+  ? Math.max(0, Math.min(2.5, requestedFlowRate))
+  : canonicalMacroPreset.flowRate ?? null;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
   return routeParams.has(name) && Number.isFinite(requested)
@@ -507,6 +548,20 @@ async function main() {
     if (expectsCanonicalPlumeProof) {
       assert.equal(state.minimalPlumeProof?.enabled, true, 'canonical plume route did not enable the minimal plume proof branch');
       assert.match(state.minimalPlumeProof?.excluded || '', /bonfire-front-topology/, 'canonical plume proof did not declare bonfire complexity exclusion');
+    }
+    assert.equal(state.controls?.canonicalMacroPreset || '', expectedCanonicalMacroPreset, 'canonical macro preset route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.macroPreset || '', expectedCanonicalMacroPreset, 'effective canonical macro preset did not reach debug state');
+    if (expectedCanonicalMacroPreset === 'macro_foothold_0621') {
+      assert.ok(Math.abs((state.controls?.density ?? 0) - canonicalMacroPreset.density) < 0.001, 'canonical macro preset density did not apply');
+      assert.ok(Math.abs((state.controls?.smoke ?? 0) - canonicalMacroPreset.smoke) < 0.001, 'canonical macro preset smoke visibility did not apply');
+      assert.ok(Math.abs((state.controls?.absorption ?? 0) - canonicalMacroPreset.absorption) < 0.001, 'canonical macro preset absorption did not apply');
+      assert.ok(Math.abs((state.controls?.speed ?? 0) - canonicalMacroPreset.speed) < 0.001, 'canonical macro preset speed did not apply');
+      assert.ok(Math.abs((state.controls?.projection ?? 0) - canonicalMacroPreset.projection) < 0.001, 'canonical macro preset projection did not apply');
+      assert.ok(Math.abs((state.controls?.canonicalSpread ?? 0) - canonicalMacroPreset.canonicalSpread) < 0.001, 'canonical macro preset scalar spread did not apply');
+      assert.ok(Math.abs((state.controls?.canonicalCenterline ?? 0) - canonicalMacroPreset.canonicalCenterline) < 0.001, 'canonical macro preset centerline relief did not apply');
+      assert.ok(Math.abs((state.controls?.canonicalBodyBalance ?? 0) - canonicalMacroPreset.canonicalBodyBalance) < 0.001, 'canonical macro preset body balance did not apply');
+      if (expectedInputRadius != null) assert.ok(Math.abs((state.controls?.inputRadius ?? 0) - expectedInputRadius) < 0.001, 'canonical macro preset input radius did not apply');
+      if (expectedFlowRate != null) assert.ok(Math.abs((state.controls?.flowRate ?? 0) - expectedFlowRate) < 0.001, 'canonical macro preset flow rate did not apply');
     }
     assert.ok(Math.abs((state.controls?.renderScale ?? 0) - expectedRenderScale) < 0.001, 'render scale route/control did not apply');
     assert.ok(Math.abs((state.renderScale ?? 0) - expectedRenderScale) < 0.001, 'effective render scale state did not match route/control');
@@ -1058,6 +1113,7 @@ async function main() {
       majorantGrid: sample.majorantGrid,
       majorantBuilt: sample.majorantBuilt,
       rayBudgetPreset: reportControls.rayBudgetPreset,
+      expectedCanonicalMacroPreset,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,

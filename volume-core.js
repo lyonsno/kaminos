@@ -3480,6 +3480,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       scalarSpread: uniforms[64],
       centerlineRelief: uniforms[65],
       bodyBalance: uniforms[66],
+      macroPreset: controlsSnapshot.canonicalMacroPreset || '',
     };
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);

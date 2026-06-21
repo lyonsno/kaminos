@@ -149,6 +149,14 @@ assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic
 assert.match(index, /volume_canonical_spread/, 'URL route can override canonical plume scalar-spread cockpit gain');
 assert.match(index, /volume_canonical_centerline/, 'URL route can override canonical plume centerline-relief cockpit gain');
 assert.match(index, /volume_canonical_body_balance/, 'URL route can override canonical plume body/chimney cockpit gain');
+assert.match(index, /CANONICAL_VOLUME_MACRO_PRESETS/, 'canonical plume has named macro presets for operator-accepted regimes');
+assert.match(index, /macro_foothold_0621/, 'canonical plume preserves the 2026-06-21 operator-accepted macro foothold by stable route identity');
+assert.match(index, /volume_canonical_preset/, 'URL route can select a named canonical plume macro preset');
+assert.match(index, /applyCanonicalVolumeMacroPreset/, 'canonical macro preset application is a named control path before route overrides');
+assert.match(index, /canonicalMacroPreset/, 'volume controls carry effective canonical macro preset identity into renderer debug state');
+assert.match(index, /density:\s*0\.45/, 'canonical macro foothold preserves the operator-tuned low density control');
+assert.match(index, /smoke:\s*2\.80/, 'canonical macro foothold preserves the operator-tuned smoke visibility control');
+assert.match(index, /flowRate:\s*1\.90/, 'canonical macro foothold preserves the operator-tuned flow-rate control');
 assert.match(index, /volume_microdetail/, 'URL route can override transported microdetail strength');
 assert.match(index, /volume_curl/, 'URL route can override curl strength for force-isolation witnesses');
 assert.match(index, /volume_interface_shred/, 'URL route can override interface shredding strength');
@@ -207,6 +215,7 @@ assert.match(core, /canonicalPlumeBodyBalance/, 'canonical plume has a named bod
 assert.match(core, /canonicalSmokeCapacity[\s\S]*canonicalPlumeBodyBalance/, 'canonical plume body balance constrains smoke capacity rather than only adding decorative velocity or renderer noise');
 assert.match(core, /canonical_controls/, 'canonical plume cockpit controls reach the fluid shader through explicit uniform state');
 assert.match(core, /state\.canonicalPlumeControls/, 'debug state exposes effective canonical plume cockpit controls for witness/report identity');
+assert.match(core, /macroPreset:\s*controlsSnapshot\.canonicalMacroPreset/, 'debug state exposes the effective canonical macro preset identity');
 assert.doesNotMatch(core, /let canonicalPlumeBodyBalance =[^;]*(fire|radiance|microdetail|frontTopology|bonfire)/, 'canonical plume body balance must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
 assert.match(core, /canonicalSourceControlSignature/, 'canonical plume has a named source-control signature for trusted cockpit tuning');
 assert.match(core, /canonical-source-control-change/, 'canonical source-control edits record a durable fluid reset reason');
@@ -243,6 +252,8 @@ const fieldSliceWitness = existsSync(fieldSliceWitnessPath) ? readFileSync(field
 assert.match(fieldSliceWitness, /--field-slice/, 'volume witness accepts an explicit field-slice artifact path');
 assert.match(fieldSliceWitness, /canonicalFieldSlice/, 'volume witness reports canonical field-slice evidence');
 assert.match(fieldSliceWitness, /canonicalPlumeControls/, 'volume witness reports effective canonical cockpit controls by stable identity');
+assert.match(fieldSliceWitness, /expectedCanonicalMacroPreset/, 'volume witness verifies requested canonical macro preset identity');
+assert.match(fieldSliceWitness, /macro_foothold_0621/, 'volume witness recognizes the accepted canonical macro foothold preset');
 assert.match(fieldSliceWitness, /writeRgbaPng\(fieldSliceOut/, 'volume witness writes the field slice as an inspectable PNG artifact');
 assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback'/, 'field-slice report names CPU fluid-buffer readback as the evidence backend');
 assert.match(core, /SUPPORTED_MAJORANT_GRID_SIZES\s*=\s*\[[^\]]*24[^\]]*32[^\]]*48[^\]]*\]/s, 'volume route supports a bounded majorant-grid sweep range');
@@ -699,6 +710,8 @@ assert.match(witness, /expectedRenderScale/, 'witness verifies internal render-s
 assert.match(witness, /expectedVolumeScene/, 'witness verifies named volume scene route/control identity');
 assert.match(witness, /canonical_plume/, 'witness recognizes the minimal canonical plume scene');
 assert.match(witness, /expectsCanonicalPlumeProof/, 'witness has a dedicated simple-plume proof branch separate from bonfire fire checks');
+assert.match(witness, /expectedCanonicalMacroPreset/, 'witness records and verifies the canonical macro preset route identity');
+assert.match(witness, /canonicalMacroPreset/, 'witness reports the effective canonical macro preset in controls/debug output');
 assert.match(witness, /expectedWindStrength/, 'witness verifies explicit wind strength route/control identity');
 assert.match(witness, /expectedWindAngle/, 'witness verifies explicit wind direction route/control identity');
 assert.match(witness, /expectedWindHeight/, 'witness verifies explicit wind height/ramp route/control identity');
