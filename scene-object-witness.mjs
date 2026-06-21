@@ -989,12 +989,18 @@ async function runSceneBoundaryRoundtripScenario(ws) {
         return { savedFile: newFiles[0], savedScene: await readScene(newFiles[0]) };
       };
 
+      if (rowState().length === 0) {
+        const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+        if (!demo) throw new Error('SuperMat Ring demo button missing for scene boundary setup');
+        demo.click();
+      }
       for (let i = 0; i < 80; i++) {
-        if (rowState().length === 1) break;
+        const rows = rowState();
+        if (rows.length === 1 && rows[0].active) break;
         await wait(125);
       }
       const initialRows = rowState();
-      if (initialRows.length !== 1) throw new Error('scene boundary setup did not start with one default object row: ' + JSON.stringify(initialRows));
+      if (initialRows.length !== 1) throw new Error('scene boundary setup did not create one explicit demo object row: ' + JSON.stringify(initialRows));
 
       const timestamp = new Date().toISOString();
       const volumeScene = {
@@ -1276,14 +1282,18 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
       if (!demo) throw new Error('SuperMat Ring demo button missing');
-      for (let i = 0; i < 80; i++) {
-        if (document.querySelectorAll('[data-scene-object-id]').length === 1) break;
-        await wait(125);
+      if (document.querySelectorAll('[data-scene-object-id]').length === 0) {
+        demo.click();
+        for (let i = 0; i < 80; i++) {
+          const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+          if (rows.length === 1 && rows[0].classList.contains('active')) break;
+          await wait(125);
+        }
       }
       const initialRows = [...document.querySelectorAll('[data-scene-object-id]')];
       const initialIds = initialRows.map(row => row.dataset.sceneObjectId);
       if (initialRows.length !== 1) {
-        throw new Error('default replace did not start from exactly one row: ' + JSON.stringify({ rowCount: initialRows.length, ids: initialIds }));
+        throw new Error('default replace did not create one explicit demo row before proving replace: ' + JSON.stringify({ rowCount: initialRows.length, ids: initialIds }));
       }
       const append = document.getElementById('append-import-toggle');
       if (!append) throw new Error('append import toggle missing');
@@ -1446,6 +1456,105 @@ async function runAppendSelectRemoveKeyboardScenario(ws) {
   }
 }
 
+async function runStartupEmptyScenario(ws) {
+  phase = 'scenario-startup-empty';
+  lastEvidence.startupEmpty = await evaluate(ws, `
+    (() => {
+      const rows = [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      }));
+      const empty = document.getElementById('scene-object-empty');
+      const transformBar = document.getElementById('transform-bar');
+      const demoButton = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      return {
+        rows,
+        emptyVisible: !!empty && getComputedStyle(empty).display !== 'none',
+        transformBarVisible: !!transformBar && transformBar.classList.contains('visible'),
+        demoButtonPresent: !!demoButton,
+        info: document.getElementById('info-bar')?.textContent?.trim() || '',
+      };
+    })()
+  `);
+  if (lastEvidence.startupEmpty.rows.length !== 0) {
+    throw new Error(`startup did not remain empty before explicit import: ${JSON.stringify(lastEvidence.startupEmpty)}`);
+  }
+  if (!lastEvidence.startupEmpty.emptyVisible) {
+    throw new Error(`startup empty scene did not show object-list empty state: ${JSON.stringify(lastEvidence.startupEmpty)}`);
+  }
+  if (lastEvidence.startupEmpty.transformBarVisible) {
+    throw new Error(`startup empty scene showed transform toolbar: ${JSON.stringify(lastEvidence.startupEmpty)}`);
+  }
+  if (!lastEvidence.startupEmpty.demoButtonPresent) {
+    throw new Error(`startup empty scene lost manual demo affordance: ${JSON.stringify(lastEvidence.startupEmpty)}`);
+  }
+}
+
+async function runSelectedDeleteShortcutScenario(ws) {
+  phase = 'scenario-selected-delete-shortcut';
+  lastEvidence.selectedDeleteSetup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
+      if (!demo) throw new Error('SuperMat Ring demo button missing');
+      const append = document.getElementById('append-import-toggle');
+      if (!append) throw new Error('append import toggle missing');
+      append.checked = false;
+      demo.click();
+      for (let i = 0; i < 80; i++) {
+        const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+        if (rows.length === 1 && rows[0].classList.contains('active')) break;
+        await wait(125);
+      }
+      window.__kaminosConfirmMessages = [];
+      window.confirm = message => {
+        window.__kaminosConfirmMessages.push(String(message));
+        return true;
+      };
+      return {
+        rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+          id: row.dataset.sceneObjectId,
+          active: row.classList.contains('active'),
+          pressed: row.getAttribute('aria-pressed'),
+        })),
+        transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      };
+    })()
+  `);
+  if (lastEvidence.selectedDeleteSetup.rows.length !== 1 || !lastEvidence.selectedDeleteSetup.rows[0].active) {
+    throw new Error(`selected delete setup did not create one selected object: ${JSON.stringify(lastEvidence.selectedDeleteSetup)}`);
+  }
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46, nativeVirtualKeyCode: 46 });
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46, nativeVirtualKeyCode: 46 });
+  await delay(700);
+  lastEvidence.selectedDeleteShortcut = await evaluate(ws, `
+    (() => ({
+      rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+      })),
+      confirmMessages: window.__kaminosConfirmMessages || [],
+      info: document.getElementById('info-bar').textContent.trim(),
+      transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      emptyVisible: getComputedStyle(document.getElementById('scene-object-empty')).display !== 'none',
+    }))()
+  `);
+  if (lastEvidence.selectedDeleteShortcut.confirmMessages.length !== 1) {
+    throw new Error(`selected delete shortcut did not ask for confirmation: ${JSON.stringify(lastEvidence.selectedDeleteShortcut)}`);
+  }
+  if (lastEvidence.selectedDeleteShortcut.rows.length !== 0) {
+    throw new Error(`selected delete shortcut did not remove active scene object: ${JSON.stringify(lastEvidence.selectedDeleteShortcut)}`);
+  }
+  if (!lastEvidence.selectedDeleteShortcut.info.startsWith('Removed:')) {
+    throw new Error(`selected delete shortcut did not report removal: ${JSON.stringify(lastEvidence.selectedDeleteShortcut)}`);
+  }
+  if (lastEvidence.selectedDeleteShortcut.transformBarVisible || !lastEvidence.selectedDeleteShortcut.emptyVisible) {
+    throw new Error(`selected delete shortcut did not leave an empty deselected scene: ${JSON.stringify(lastEvidence.selectedDeleteShortcut)}`);
+  }
+}
+
 async function runViewportClickSelectDeselectScenario(ws) {
   phase = 'scenario-viewport-click-select-deselect';
   lastEvidence.viewportClickSelectionSetup = await evaluate(ws, `
@@ -1460,13 +1569,14 @@ async function runViewportClickSelectDeselectScenario(ws) {
       const demo = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'SuperMat Ring');
       if (!demo) throw new Error('SuperMat Ring demo button missing');
       document.getElementById('append-import-toggle').checked = false;
-      for (let i = 0; i < 120; i++) {
-        const rows = rowState();
-        if (rows.length === 1 && rows[0].active && rows[0].pressed === 'true') break;
-        await wait(125);
-      }
       if (rowState().length !== 1) {
         demo.click();
+        for (let i = 0; i < 120; i++) {
+          const rows = rowState();
+          if (rows.length === 1 && rows[0].active && rows[0].pressed === 'true') break;
+          await wait(125);
+        }
+      } else {
         for (let i = 0; i < 120; i++) {
           const rows = rowState();
           if (rows.length === 1 && rows[0].active && rows[0].pressed === 'true') break;
@@ -3467,8 +3577,12 @@ try {
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
   assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'append-select-remove-keyboard') {
+  if (scenario === 'startup-empty') {
+    await runStartupEmptyScenario(ws);
+  } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
+  } else if (scenario === 'selected-delete-shortcut') {
+    await runSelectedDeleteShortcutScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'transform-inspector') {

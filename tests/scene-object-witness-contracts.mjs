@@ -10,6 +10,8 @@ assert.ok(existsSync(witnessPath), 'scene-object-witness.mjs must provide a reus
 const witness = readFileSync(witnessPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
+assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
+assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
 assert.match(witness, /scene-boundary-roundtrip/, 'witness supports a browser scene boundary roundtrip scenario');
@@ -47,8 +49,11 @@ assert.match(witness, /siblingPngPath\('-ao-on'\)/, 'AO route witness captures a
 assert.match(witness, /siblingPngPath\('-ao-off'\)/, 'AO route witness captures an AO-off screenshot artifact');
 assert.match(witness, /assertPngScreenshot\(/, 'witness validates screenshot output before claiming visual evidence');
 assert.match(witness, /default replace did not keep one row/, 'witness proves unchecked imports replace rather than append');
-assert.match(witness, /default replace did not start from exactly one row/, 'witness requires a pre-existing row before proving replace behavior');
+assert.match(witness, /default replace did not create one explicit demo row before proving replace/, 'witness creates an explicit demo row before proving replace behavior');
 assert.match(witness, /default replace did not complete with a new row/, 'witness waits for unchecked replace to complete instead of accepting a stale single row');
+assert.match(witness, /startup did not remain empty before explicit import/, 'witness proves startup does not silently load the demo asset');
+assert.match(witness, /startup empty scene did not show object-list empty state/, 'witness proves empty startup exposes the empty object list state');
+assert.match(witness, /startup empty scene lost manual demo affordance/, 'witness proves empty startup still exposes manual demo import');
 assert.match(witness, /append import did not produce two unique rows/, 'witness proves checked Append creates two unique object rows');
 assert.match(witness, /selection not exclusive/, 'witness proves row selection is exclusive');
 assert.match(witness, /selection did not activate the clicked row/, 'witness proves the clicked row becomes active');
@@ -60,6 +65,9 @@ assert.match(witness, /mouse remove did not report removal/, 'witness proves mou
 assert.match(witness, /mouse remove did not preserve transform toolbar/, 'witness proves mouse removal keeps transform controls on fallback object');
 assert.match(witness, /keyboard remove did not remove focused row/, 'witness proves focused keyboard removal');
 assert.match(witness, /keyboard remove did not preserve transform toolbar/, 'witness proves keyboard removal keeps transform controls on fallback object');
+assert.match(witness, /selected delete shortcut did not ask for confirmation/, 'witness proves selected-object Delete asks for confirmation');
+assert.match(witness, /selected delete shortcut did not remove active scene object/, 'witness proves selected-object Delete removes the active object');
+assert.match(witness, /selected delete shortcut did not leave an empty deselected scene/, 'witness proves selected-object Delete returns to an empty deselected scene');
 assert.match(witness, /append selection did not preserve transform toolbar/, 'witness proves transform controls after append selection');
 assert.match(witness, /viewport empty click did not deselect scene object/, 'witness proves empty viewport clicks clear object selection');
 assert.match(witness, /viewport empty click did not hide transform toolbar/, 'witness proves empty viewport clicks hide the transform toolbar');

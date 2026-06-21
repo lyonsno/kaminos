@@ -30,6 +30,11 @@ assert.match(index, /if \(drift > 5\)[\s\S]*viewportSuppressedClick/, 'viewport 
 assert.match(index, /greenroomPreviewIsActive\(\)/, 'viewport click selection preserves temporary Greenroom preview mode');
 assert.match(index, /function clearActiveSceneObjectSelection\(/, 'empty viewport clicks share a clear-selection helper');
 assert.match(index, /clearActiveSceneObjectSelection\(\);[\s\S]*setInfo\('Selection cleared'\)/, 'empty viewport clicks clear active object selection');
+assert.doesNotMatch(index, /loadEnvironment\('studio'\)[\s\S]{0,240}loadDemo\(DEMO_ASSETS\[0\]\)/, 'Kaminos startup should stay empty until the operator explicitly imports a demo or asset');
+assert.match(index, /function shouldIgnoreSceneObjectDeleteShortcut\(/, 'selected-object deletion has a focused shortcut guard');
+assert.match(index, /function removeActiveSceneObjectWithConfirmation\(/, 'selected-object deletion uses an explicit confirmation helper');
+assert.match(index, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/, 'selected-object deletion listens for Delete and Backspace');
+assert.match(index, /window\.confirm\(/, 'selected-object deletion asks before removing the active object');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
 assert.match(index, /data-scene-group-create/, 'Assets tab exposes a grouping command for authored objects');
 assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');

@@ -3141,6 +3141,36 @@ window.removeSceneObject = function(id) {
   window._kaminosDirty?.();
 };
 
+function shouldIgnoreSceneObjectDeleteShortcut(e) {
+  const target = e.target;
+  const tagName = target?.tagName;
+  if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
+  if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return true;
+  if (e.metaKey || e.ctrlKey || e.altKey) return true;
+  if (!(e.key === 'Delete' || e.key === 'Backspace')) return true;
+  if (greenroomPreviewIsActive() || splatCorrectionMode) return true;
+  return !activeSceneObjectId;
+}
+
+function removeActiveSceneObjectWithConfirmation() {
+  const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
+  if (!entry) return false;
+  const label = entry.label || entry.fileName || entry.id;
+  if (!window.confirm(`Delete "${label}" from the scene?`)) {
+    setInfo('Delete cancelled');
+    return false;
+  }
+  window.removeSceneObject(entry.id);
+  return true;
+}
+
+window.addEventListener('keydown', e => {
+  if (shouldIgnoreSceneObjectDeleteShortcut(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  removeActiveSceneObjectWithConfirmation();
+});
+
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
 const PERSISTED_SLIDERS = [
@@ -6936,12 +6966,8 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  // Load HDR environment first, then auto-load demo
-  loadEnvironment('studio').then(() => {
-    if (new URLSearchParams(window.location.search).get('witness') !== '1') {
-      loadDemo(DEMO_ASSETS[0]);
-    }
-  });
+  // Load HDR environment first; authored scene content stays empty until explicit import.
+  loadEnvironment('studio');
   initKaminosVolumeRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
