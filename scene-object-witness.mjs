@@ -1681,6 +1681,70 @@ async function runViewportClickSelectDeselectScenario(ws) {
   }
 }
 
+async function runSplatViewportEmptyDeselectScenario(ws) {
+  phase = 'scenario-splat-viewport-empty-deselect';
+  lastEvidence.splatViewportEmptyDeselectSetup = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        type: (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === row.dataset.sceneObjectId)?.type || null,
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntry = (assetData.entries || []).find(entry => entry.kind === 'splat' && entry.source && Number(entry.size || 0) > 1024)
+        || (assetData.entries || []).find(entry => entry.kind === 'splat' && entry.source)
+        || null;
+      if (!assetEntry) throw new Error('splat asset fixture missing');
+      await window.greenroomImportSplat(assetEntry.source, assetEntry.name || assetEntry.path || 'splat.ply', assetEntry.display || { title: assetEntry.name || 'Splat' }, { clear: true, metadata: { splat: { ...(assetEntry || {}), correction: assetEntry.correction, provenance: { root_id: assetEntry.root_id, asset_path: assetEntry.path } } } });
+      for (let i = 0; i < 120; i++) {
+        const rows = rowState();
+        if (rows.length === 1 && rows[0].type === 'splat' && rows[0].active && rows[0].pressed === 'true') break;
+        await wait(125);
+      }
+      const canvas = document.querySelector('#viewport canvas');
+      if (!canvas) throw new Error('viewport canvas missing');
+      const rect = canvas.getBoundingClientRect();
+      return {
+        rows: rowState(),
+        assetEntry,
+        transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+        emptyPoint: {
+          x: Math.round(rect.left + rect.width * 0.94),
+          y: Math.round(rect.top + rect.height * 0.88),
+        },
+      };
+    })()
+  `);
+  const setupActiveRows = lastEvidence.splatViewportEmptyDeselectSetup.rows.filter(row => row.active && row.pressed === 'true');
+  if (setupActiveRows.length !== 1 || setupActiveRows[0].type !== 'splat') {
+    throw new Error(`splat empty-click setup did not create one selected splat: ${JSON.stringify(lastEvidence.splatViewportEmptyDeselectSetup)}`);
+  }
+  await dispatchMouseClick(ws, lastEvidence.splatViewportEmptyDeselectSetup.emptyPoint);
+  await delay(700);
+  lastEvidence.splatViewportEmptyDeselectAfterClick = await evaluate(ws, `
+    (() => ({
+      rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        type: (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === row.dataset.sceneObjectId)?.type || null,
+      })),
+      transformBarVisible: document.getElementById('transform-bar').classList.contains('visible'),
+      info: document.getElementById('info-bar').textContent.trim(),
+    }))()
+  `);
+  const activeRows = lastEvidence.splatViewportEmptyDeselectAfterClick.rows.filter(row => row.active || row.pressed === 'true');
+  if (activeRows.length !== 0) {
+    throw new Error(`splat viewport empty click did not deselect: ${JSON.stringify(lastEvidence.splatViewportEmptyDeselectAfterClick)}`);
+  }
+  if (lastEvidence.splatViewportEmptyDeselectAfterClick.transformBarVisible) {
+    throw new Error(`splat viewport empty click did not hide transform toolbar: ${JSON.stringify(lastEvidence.splatViewportEmptyDeselectAfterClick)}`);
+  }
+}
+
 async function runGreenroomPickerDisplayScenario(ws) {
   phase = 'scenario-greenroom-picker-display';
   lastEvidence.greenroomPickerDisplay = await evaluate(ws, `
@@ -3627,6 +3691,8 @@ try {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
+  } else if (scenario === 'splat-viewport-empty-deselect') {
+    await runSplatViewportEmptyDeselectScenario(ws);
   } else {
     throw new Error(`Unsupported scene object witness scenario: ${scenario}`);
   }

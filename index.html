@@ -755,6 +755,7 @@ let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
+const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
@@ -2769,6 +2770,7 @@ function pickSceneObjectFromViewportPointer(event) {
     -(((event.clientY - rect.top) / rect.height) * 2 - 1),
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
   const hits = sceneRaycaster.intersectObjects(sceneObjects.map(record => record.object), true);
   for (const hit of hits) {
     const record = sceneObjectRecordForDescendant(hit.object);
