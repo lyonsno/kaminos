@@ -20,6 +20,7 @@ assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room p
 assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
+assert.match(witness, /image-library/, 'witness supports an Image Library browser scenario');
 assert.match(witness, /splat-correction-sidecar/, 'witness supports selected splat correction sidecar persistence');
 assert.match(witness, /splat-correction-mode/, 'witness supports viewport-driven splat correction mode');
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
@@ -162,6 +163,9 @@ assert.match(witness, /direct splat drop did not upload to the experimental inbo
 assert.match(witness, /direct splat drop did not import from the reloadable inbox route/, 'Direct splat drop witness rejects object URL/local-file imports');
 assert.match(witness, /direct splat drop did not register point-cloud splat/, 'Direct splat drop witness proves ingested PLY imports use the point-cloud preview path');
 assert.match(witness, /direct splat drop did not preserve ingest provenance/, 'Direct splat drop witness proves source/root/stage provenance survives import');
+assert.match(witness, /image library did not render an indexed thumbnail/, 'Image Library witness proves indexed image assets render as thumbnails');
+assert.match(witness, /image library selected preview did not bind to the selected asset/, 'Image Library witness proves selected assets preview in-app');
+assert.match(witness, /image library capture did not ingest a viewport image/, 'Image Library witness proves viewport capture writes to image-inbox');
 assert.match(witness, /splat correction did not persist to sidecar/, 'Splat correction witness proves corrections are server-persisted');
 assert.match(witness, /splat correction did not reload from sidecar/, 'Splat correction witness proves correction metadata reloads from the asset sidecar');
 assert.match(witness, /splat correction leaked into render truth claim/, 'Splat correction witness rejects claiming correction sidecars as real hybrid rendering');

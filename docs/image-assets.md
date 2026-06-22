@@ -58,6 +58,6 @@ The request body is the image bytes. Supported file extensions are `.png`, `.jpg
 
 ## UI
 
-Open `Greenroom -> Image Assets` to view the indexed image roots. The section shows experimental and production images, opens the `source` URL directly, and can copy the source route for a witness or another agent.
+Open `Library` to view indexed image roots as thumbnails. Selecting a thumbnail opens an in-app preview/detail panel with the asset root, stage, and `source` route. `Copy Source` copies the route for a witness or another agent; `Open File` is a utility action, not the primary browsing flow.
 
-Generated images use `Save Image`, which writes through `/api/ingest-image` instead of downloading into an operator-specific browser folder. Dropped loose raster files also ingest into `image-inbox`.
+Generated images use `Add to Library`, which writes through `/api/ingest-image` instead of downloading into an operator-specific browser folder. Dropped loose raster files also ingest into `image-inbox`. The Library tab can also capture the current Kaminos viewport into `image-inbox` through `Capture View`.

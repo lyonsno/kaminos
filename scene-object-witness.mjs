@@ -3186,6 +3186,74 @@ async function runSplatDirectDropIngestScenario(ws) {
   }
 }
 
+async function runImageLibraryScenario(ws) {
+  phase = 'scenario-image-library';
+  lastEvidence.imageLibrary = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const tinyPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+      const bytes = Uint8Array.from(atob(tinyPngBase64), char => char.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      if (typeof window.kaminosIngestImageAsset !== 'function') {
+        throw new Error('image library ingest debug surface missing');
+      }
+      if (typeof window.refreshImageLibrary !== 'function') {
+        throw new Error('image library refresh debug surface missing');
+      }
+      if (typeof window.kaminosImageLibraryDebugState !== 'function') {
+        throw new Error('image library debug state missing');
+      }
+      document.querySelector('[data-tab="library"]')?.click();
+      await wait(250);
+      const seeded = await window.kaminosIngestImageAsset(blob, 'image-library-witness.png');
+      await window.refreshImageLibrary({ selectId: seeded.id });
+      window.selectImageLibraryAsset(seeded.id);
+      await wait(500);
+      const afterSeed = window.kaminosImageLibraryDebugState();
+      const cards = [...document.querySelectorAll('.image-library-card')].map(card => ({
+        id: card.dataset.imageAssetId,
+        active: card.classList.contains('active'),
+        imgSrc: card.querySelector('img')?.getAttribute('src') || '',
+        title: card.querySelector('.image-library-title')?.textContent?.trim() || '',
+      }));
+      const preview = document.getElementById('image-library-preview');
+      const selectedPanelHidden = document.getElementById('image-library-selected')?.hidden ?? true;
+      const greenroomImageList = document.querySelector('#tab-greenroom #image-assets-list');
+      if (!cards.some(card => card.id === seeded.id && card.imgSrc === seeded.source)) {
+        throw new Error('image library did not render an indexed thumbnail: ' + JSON.stringify({ seeded, cards }));
+      }
+      if (selectedPanelHidden || preview?.getAttribute('src') !== seeded.source) {
+        throw new Error('image library selected preview did not bind to the selected asset: ' + JSON.stringify({ seeded, previewSrc: preview?.getAttribute('src'), selectedPanelHidden }));
+      }
+      if (greenroomImageList) {
+        throw new Error('image library still leaks the image asset browser under Greenroom');
+      }
+      const beforeCaptureCount = afterSeed.entries.length;
+      const captured = await window.captureViewportImageAsset();
+      await wait(700);
+      const afterCapture = window.kaminosImageLibraryDebugState();
+      if (!captured?.source || captured.root_id !== 'image-inbox') {
+        throw new Error('image library capture did not ingest a viewport image: ' + JSON.stringify({ captured }));
+      }
+      if (!afterCapture.entries.some(entry => entry.id === captured.id) || afterCapture.entries.length <= beforeCaptureCount) {
+        throw new Error('image library capture did not appear in the indexed library: ' + JSON.stringify({ beforeCaptureCount, captured, afterCapture }));
+      }
+      if (afterCapture.selectedId !== captured.id) {
+        throw new Error('image library capture did not select the captured asset: ' + JSON.stringify({ captured, afterCapture }));
+      }
+      return {
+        seeded: { id: seeded.id, source: seeded.source, root_id: seeded.root_id },
+        captured: { id: captured.id, source: captured.source, root_id: captured.root_id },
+        cardCount: cards.length,
+        roots: afterCapture.roots,
+        selectedId: afterCapture.selectedId,
+        activeTab: afterCapture.activeTab,
+        previewSrc: document.getElementById('image-library-preview')?.getAttribute('src') || null,
+      };
+    })()
+  `, { timeoutMs: 60000 });
+}
+
 async function runSplatCorrectionSidecarScenario(ws) {
   phase = 'scenario-splat-correction-sidecar';
   lastEvidence.splatCorrectionSidecar = await evaluate(ws, `
@@ -3865,6 +3933,8 @@ try {
     await runSplatAssetInboxScenario(ws);
   } else if (scenario === 'splat-direct-drop-ingest') {
     await runSplatDirectDropIngestScenario(ws);
+  } else if (scenario === 'image-library') {
+    await runImageLibraryScenario(ws);
   } else if (scenario === 'splat-correction-sidecar') {
     await runSplatCorrectionSidecarScenario(ws);
   } else if (scenario === 'splat-correction-mode') {

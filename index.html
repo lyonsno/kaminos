@@ -40,6 +40,24 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .channel-thumb:hover { border-color: #1976d2; }
 .channel-label { font-size: 9px; color: #555; margin-top: 3px; font-family: 'SF Mono', monospace; }
 
+/* Asset library */
+.library-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.library-drop-zone { border: 2px dashed #333; border-radius: 8px; padding: 14px; text-align: center; color: #666; font-size: 11px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+.library-drop-zone:hover, .library-drop-zone.dragover { border-color: #1976d2; color: #aaa; background: rgba(25,118,210,0.05); }
+.image-library-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.image-library-card { display: grid; gap: 5px; padding: 6px; border: 1px solid #2a2a2a; border-radius: 8px; background: #1c1c1c; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 0; }
+.image-library-card:hover { border-color: #444; background: #202020; }
+.image-library-card.active { border-color: #1976d2; background: #152131; }
+.image-library-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 5px; background: #0d0d0d; border: 1px solid #262626; }
+.image-library-title { color: #ddd; font-size: 10px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-library-subtitle { color: #777; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-library-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; border: 1px solid #2a2a2a; background: #0d0d0d; margin-bottom: 8px; }
+.image-library-empty { color: #555; font-size: 11px; padding: 10px 0; }
+.image-library-roots { color: #555; font: 9px 'SF Mono', monospace; margin-bottom: 8px; overflow-wrap: anywhere; }
+.image-library-root-row { margin-bottom: 3px; line-height: 1.25; }
+.image-library-root-id { color: #777; }
+.image-library-root-path { color: #4f4f4f; }
+
 /* Environment selector */
 .env-grid { display: flex; gap: 4px; flex-wrap: wrap; }
 .env-btn { padding: 5px 10px; background: #222; border: 1px solid #333; border-radius: 5px; color: #888; font-size: 10px; cursor: pointer; transition: all 0.15s; }
@@ -200,6 +218,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="library">Library</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
@@ -444,6 +463,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Library Tab -->
+  <div class="tab-content" id="tab-library">
+    <h2>Image Library</h2>
+    <div class="library-toolbar">
+      <button class="btn" id="image-library-capture-button" onclick="captureViewportImageAsset()">Capture View</button>
+      <button class="btn" id="image-library-refresh-button" onclick="refreshImageLibrary()">Refresh</button>
+    </div>
+    <div id="image-library-drop-zone" class="library-drop-zone" onclick="document.getElementById('image-library-file-input').click()">
+      Drop images here<br>or click to add
+      <input type="file" id="image-library-file-input" accept="image/png,image/jpeg,image/webp" multiple style="display:none">
+    </div>
+    <div id="image-library-roots" class="image-library-roots"></div>
+    <div id="image-library-grid" class="image-library-grid"></div>
+    <div class="panel" id="image-library-detail">
+      <div id="image-library-empty" class="image-library-empty">No image selected</div>
+      <div id="image-library-selected" hidden>
+        <img id="image-library-preview" class="image-library-preview" alt="">
+        <div class="field"><span class="field-key">Name</span><span class="field-val" id="image-library-name"></span></div>
+        <div class="field"><span class="field-key">Stage</span><span class="field-val" id="image-library-stage"></span></div>
+        <div class="field"><span class="field-key">Root</span><span class="field-val" id="image-library-root"></span></div>
+        <div class="field"><span class="field-key">Source</span><span class="field-val" id="image-library-source"></span></div>
+        <div class="library-toolbar" style="margin-top:8px; margin-bottom:0;">
+          <button class="btn" id="image-library-copy-source-button" onclick="copySelectedImageLibrarySource()">Copy Source</button>
+          <button class="btn" id="image-library-open-source-button" onclick="openSelectedImageLibrarySource()">Open File</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Volume Tab -->
   <div class="tab-content" id="tab-volume">
     <h2>Volume Renderer</h2>
@@ -569,8 +617,6 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div id="splat-assets-list"></div>
-    <h2 style="display:flex; align-items:center; gap:8px; margin-top:14px;">Image Assets <button class="btn" onclick="grBrowseImageAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
-    <div id="image-assets-list"></div>
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div class="env-grid" id="greenroom-root-buttons" style="margin-bottom: 10px;"></div>
     <div id="greenroom-breadcrumb" style="font-size: 10px; color: #555; font-family: 'SF Mono', monospace; margin-bottom: 8px;"></div>
@@ -622,7 +668,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <input type="text" class="gen-input" id="gen-prompt" placeholder="A gold ring on a dark surface, product photography">
     <button class="btn" id="gen-btn" onclick="generateImage()">Generate</button>
-    <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Save Image</button>
+    <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Add to Library</button>
     <img class="gen-preview" id="gen-preview">
     <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
   </div>
@@ -731,6 +777,9 @@ let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
 let receipt = null;
+let imageLibraryEntries = [];
+let imageLibraryRoots = [];
+let selectedImageLibraryAssetId = null;
 let currentEnvName = 'studio';
 let showEnvBg = false;
 let currentEnvMap = null;
@@ -4278,7 +4327,7 @@ async function ingestImageAsset(blobOrFile, name = 'image.png') {
   if (!resp.ok || data.error || !data.entry?.source) {
     throw new Error(data.error || `Image ingest failed ${resp.status}`);
   }
-  await grBrowseImageAssets();
+  await refreshImageLibrary({ selectId: data.entry.id });
   return data.entry;
 }
 
@@ -4782,6 +4831,16 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // --- Image Search (Pixabay) ---
+async function addRemoteImageToLibrary(url, filename) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Image fetch failed ${resp.status}`);
+  const blob = await resp.blob();
+  const entry = await ingestImageAsset(blob, filename);
+  setActiveTab('library');
+  setInfo(`Image asset added: ${entry.display?.title || entry.name}`);
+  return entry;
+}
+
 document.getElementById('search-input').addEventListener('keydown', async e => {
   if (e.key !== 'Enter') return;
   const query = e.target.value.trim();
@@ -4812,14 +4871,26 @@ document.getElementById('search-input').addEventListener('keydown', async e => {
       img.src = hit.previewURL;
       img.title = hit.tags;
       img.onclick = () => {
-        // Download full image and open in new tab for pipeline use
-        window.open(hit.largeImageURL, '_blank');
+        setActiveTab('library');
+        addRemoteImageToLibrary(hit.largeImageURL, `pixabay-${hit.id || Date.now()}.jpg`).catch(err => {
+          setInfo(`Image add failed: ${err.message}`);
+        });
       };
       div.appendChild(img);
       const attr = document.createElement('div');
       attr.className = 'search-attribution';
       attr.textContent = hit.user + ' / Pixabay CC0';
       div.appendChild(attr);
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn';
+      addBtn.textContent = 'Add to Library';
+      addBtn.onclick = (event) => {
+        event.stopPropagation();
+        addRemoteImageToLibrary(hit.largeImageURL, `pixabay-${hit.id || Date.now()}.jpg`).catch(err => {
+          setInfo(`Image add failed: ${err.message}`);
+        });
+      };
+      div.appendChild(addBtn);
       resultsEl.appendChild(div);
     }
   } catch (err) {
@@ -6090,70 +6161,183 @@ async function grBrowseSplatAssets() {
   }
 }
 
-async function grBrowseImageAssets() {
-  const listEl = document.getElementById('image-assets-list');
-  if (!listEl) return;
+function imageLibraryDisplay(entry = {}) {
+  const display = entry.display || {};
+  return {
+    title: display.title || entry.name || entry.path || 'Untitled Image',
+    subtitle: display.subtitle || [entry.stage, entry.root_label || entry.root_id].filter(Boolean).join(' / '),
+  };
+}
+
+function renderImageLibraryRoots(roots = []) {
+  const rootsEl = document.getElementById('image-library-roots');
+  if (!rootsEl) return;
+  rootsEl.innerHTML = '';
+  for (const root of roots) {
+    const row = document.createElement('div');
+    row.className = 'image-library-root-row';
+    const id = document.createElement('span');
+    id.className = 'image-library-root-id';
+    id.textContent = root.id || '';
+    row.appendChild(id);
+    row.appendChild(document.createTextNode(' '));
+    const path = document.createElement('span');
+    path.className = 'image-library-root-path';
+    path.textContent = root.path || '';
+    row.appendChild(path);
+    rootsEl.appendChild(row);
+  }
+}
+
+function renderImageLibraryGrid() {
+  const grid = document.getElementById('image-library-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (!imageLibraryEntries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'image-library-empty';
+    empty.textContent = 'No image assets indexed';
+    grid.appendChild(empty);
+    selectImageLibraryAsset(null);
+    return;
+  }
+  for (const entry of imageLibraryEntries) {
+    const display = imageLibraryDisplay(entry);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'image-library-card';
+    card.dataset.imageAssetId = entry.id || '';
+    card.dataset.assetStage = entry.stage || '';
+    card.dataset.assetRoot = entry.root_id || '';
+    card.classList.toggle('active', entry.id === selectedImageLibraryAssetId);
+
+    const img = document.createElement('img');
+    img.className = 'image-library-thumb';
+    img.src = entry.source;
+    img.alt = display.title;
+    card.appendChild(img);
+
+    const title = document.createElement('div');
+    title.className = 'image-library-title';
+    title.textContent = display.title;
+    title.title = entry.name || entry.path || display.title;
+    card.appendChild(title);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'image-library-subtitle';
+    subtitle.textContent = display.subtitle;
+    card.appendChild(subtitle);
+
+    card.onclick = () => selectImageLibraryAsset(entry.id);
+    grid.appendChild(card);
+  }
+  if (!imageLibraryEntries.some(entry => entry.id === selectedImageLibraryAssetId)) {
+    selectImageLibraryAsset(imageLibraryEntries[0]?.id || null);
+  }
+}
+
+function selectedImageLibraryAsset() {
+  return imageLibraryEntries.find(entry => entry.id === selectedImageLibraryAssetId) || null;
+}
+
+function selectImageLibraryAsset(id) {
+  selectedImageLibraryAssetId = id || null;
+  const entry = selectedImageLibraryAsset();
+  document.querySelectorAll('.image-library-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.imageAssetId === selectedImageLibraryAssetId);
+  });
+  const empty = document.getElementById('image-library-empty');
+  const selected = document.getElementById('image-library-selected');
+  if (!empty || !selected) return null;
+  if (!entry) {
+    empty.hidden = false;
+    selected.hidden = true;
+    return null;
+  }
+  const display = imageLibraryDisplay(entry);
+  empty.hidden = true;
+  selected.hidden = false;
+  document.getElementById('image-library-preview').src = entry.source;
+  document.getElementById('image-library-preview').alt = display.title;
+  document.getElementById('image-library-name').textContent = display.title;
+  document.getElementById('image-library-stage').textContent = entry.stage || '';
+  document.getElementById('image-library-root').textContent = entry.root_id || '';
+  document.getElementById('image-library-source').textContent = entry.source || '';
+  return entry;
+}
+
+async function refreshImageLibrary({ selectId = selectedImageLibraryAssetId } = {}) {
   const data = await grFetchApi('assets', { kind: 'image' });
   if (data.error) {
-    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:8px;">${escapeHtml(data.error)}</div>`;
+    const grid = document.getElementById('image-library-grid');
+    if (grid) grid.innerHTML = `<div class="image-library-empty">${escapeHtml(data.error)}</div>`;
     return;
   }
-  const entries = data.entries || [];
-  if (!entries.length) {
-    const roots = (data.roots || [])
-      .map(root => `${escapeHtml(root.id)}: ${escapeHtml(root.path || '')}`)
-      .join('<br>');
-    listEl.innerHTML = `<div style="font-size:11px; color:#444; padding:8px;">No image assets indexed${roots ? `<div style="font-family:'SF Mono', monospace; margin-top:6px;">${roots}</div>` : ''}</div>`;
-    return;
+  imageLibraryRoots = data.roots || [];
+  imageLibraryEntries = data.entries || [];
+  renderImageLibraryRoots(imageLibraryRoots);
+  selectedImageLibraryAssetId = selectId && imageLibraryEntries.some(entry => entry.id === selectId)
+    ? selectId
+    : imageLibraryEntries[0]?.id || null;
+  renderImageLibraryGrid();
+  selectImageLibraryAsset(selectedImageLibraryAssetId);
+}
+
+async function copySelectedImageLibrarySource() {
+  const entry = selectedImageLibraryAsset();
+  if (!entry?.source) return;
+  try {
+    await navigator.clipboard.writeText(entry.source);
+    setInfo(`Image source copied: ${entry.path || entry.name}`);
+  } catch {
+    setInfo(entry.source);
   }
-  listEl.innerHTML = '';
-  for (const entry of entries) {
-    const div = document.createElement('div');
-    div.className = 'gr-entry';
-    div.dataset.imageAssetId = entry.id || '';
-    div.dataset.assetStage = entry.stage || '';
-    div.dataset.assetRoot = entry.root_id || '';
+}
 
-    const icon = document.createElement('span');
-    icon.className = 'gr-icon';
-    icon.textContent = entry.stage === 'production' ? '\u25A3' : '\u25A2';
-    div.appendChild(icon);
+function openSelectedImageLibrarySource() {
+  const entry = selectedImageLibraryAsset();
+  if (entry?.source) window.open(entry.source, '_blank', 'noopener');
+}
 
-    renderGreenroomEntryIdentity(div, entry, { forceSubtitle: true });
+async function captureViewportImageAsset() {
+  const canvas = renderer?.domElement;
+  if (!canvas) throw new Error('Renderer canvas is not available');
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(value => value ? resolve(value) : reject(new Error('Viewport capture produced no image')), 'image/png');
+  });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const entry = await ingestImageAsset(blob, `viewport-capture-${stamp}.png`);
+  await refreshImageLibrary({ selectId: entry.id });
+  setActiveTab('library');
+  setInfo(`Viewport captured: ${entry.display?.title || entry.name}`);
+  return entry;
+}
 
-    const stage = document.createElement('span');
-    stage.className = `gr-stage ${entry.stage === 'production' ? 'production' : 'experimental'}`;
-    stage.textContent = entry.stage === 'production' ? 'production' : 'experimental';
-    stage.title = entry.root_label || entry.root_id || '';
-    div.appendChild(stage);
+function initImageLibraryDropZone() {
+  const dropZone = document.getElementById('image-library-drop-zone');
+  const input = document.getElementById('image-library-file-input');
+  if (!dropZone || !input) return;
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files || []).filter(file => isImageAssetName(file.name || ''));
+    if (!files.length) return;
+    const entries = await ingestDroppedImageFiles(files);
+    if (entries[0]) await refreshImageLibrary({ selectId: entries[0].id });
+  });
+  input.addEventListener('change', async e => {
+    const files = Array.from(e.target.files || []).filter(file => isImageAssetName(file.name || ''));
+    if (!files.length) return;
+    const entries = await ingestDroppedImageFiles(files);
+    input.value = '';
+    if (entries[0]) await refreshImageLibrary({ selectId: entries[0].id });
+  });
+}
 
-    const url = entry.source;
-    const viewBtn = document.createElement('button');
-    viewBtn.className = 'btn';
-    viewBtn.textContent = 'View';
-    viewBtn.onclick = (e) => {
-      e.stopPropagation();
-      window.open(url, '_blank', 'noopener');
-    };
-    div.appendChild(viewBtn);
-
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'btn';
-    copyBtn.textContent = 'Copy Source';
-    copyBtn.onclick = async (e) => {
-      e.stopPropagation();
-      try {
-        await navigator.clipboard.writeText(url);
-        setInfo(`Image source copied: ${entry.path || entry.name}`);
-      } catch {
-        setInfo(url);
-      }
-    };
-    div.appendChild(copyBtn);
-
-    div.onclick = () => window.open(url, '_blank', 'noopener');
-    listEl.appendChild(div);
-  }
+async function grBrowseImageAssets() {
+  return refreshImageLibrary();
 }
 
 async function grInit() {
@@ -6197,7 +6381,8 @@ async function grInit() {
   // Default: show done
   grCurrentPath = 'done';
   grBrowseSplatAssets();
-  grBrowseImageAssets();
+  initImageLibraryDropZone();
+  refreshImageLibrary();
   grBrowse();
   grBrowseScenes();
   grBrowseScratch();
@@ -6424,9 +6609,33 @@ async function ingestDroppedSplatFile(file, options = {}) {
 
 window.grBrowseSplatAssets = grBrowseSplatAssets;
 window.grBrowseImageAssets = grBrowseImageAssets;
+window.refreshImageLibrary = refreshImageLibrary;
+window.selectImageLibraryAsset = selectImageLibraryAsset;
+window.captureViewportImageAsset = captureViewportImageAsset;
+window.copySelectedImageLibrarySource = copySelectedImageLibrarySource;
+window.openSelectedImageLibrarySource = openSelectedImageLibrarySource;
 window.grBrowse = grBrowse;
 window.kaminosIngestImageAsset = ingestImageAsset;
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
+window.kaminosImageLibraryDebugState = () => ({
+  entries: imageLibraryEntries.map(entry => ({
+    id: entry.id,
+    kind: entry.kind,
+    stage: entry.stage,
+    root_id: entry.root_id,
+    path: entry.path,
+    source: entry.source,
+    title: imageLibraryDisplay(entry).title,
+  })),
+  roots: imageLibraryRoots.map(root => ({
+    id: root.id,
+    path: root.path,
+    exists: root.exists,
+  })),
+  selectedId: selectedImageLibraryAssetId,
+  selected: selectedImageLibraryAsset(),
+  activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+});
 
 async function grOpenJobDir(path) {
   const listEl = document.getElementById('greenroom-list');
