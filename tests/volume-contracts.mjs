@@ -9,6 +9,8 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
+assert.match(index, /volume-core\.js\?v=render-source-orientation-0621/, 'volume prototype import carries a cache key when render/source orientation changes');
+assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /initKaminosVolumeRoute/, 'index initializes the volume route explicitly');
 assert.match(index, /volume_external_emitters/, 'URL route can enable synthetic external volume emitters');
 assert.match(index, /synthetic_hand_trails/, 'Volume route exposes a synthetic hand-trail emitter smoke');
