@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as clayCore from '../clay-core.js';
 
 const {
+  applyClayCubeCellVolumeConstraints,
+  measureClayCubeCellVolumeMetrics,
   measureClayCubeVolumeProxy,
   normalizeClayCubePointerCollider,
   normalizeClayCubeConfig,
@@ -396,4 +398,77 @@ assert.ok(
 assert.ok(
   preserveVolumeOracle.maxDisplacement > ordinaryVolumeOracle.maxDisplacement * 0.70,
   `preserve-demo erased the visible clay deformation instead of compensating around it: ordinary=${ordinaryVolumeOracle.maxDisplacement} preserve=${preserveVolumeOracle.maxDisplacement}`,
+);
+
+assert.equal(
+  typeof measureClayCubeCellVolumeMetrics,
+  'function',
+  'cube route needs structured cell-volume metrics for real preservation',
+);
+assert.equal(
+  typeof applyClayCubeCellVolumeConstraints,
+  'function',
+  'cube route needs structured cell-volume projection for real preservation',
+);
+
+const seedCellMetrics = measureClayCubeCellVolumeMetrics({
+  basePositions: volumeParticles,
+  positions: volumeParticles,
+  config: volumeConfig,
+});
+assert.equal(seedCellMetrics.evidenceKind, 'structured-hexa-cell-volume-metrics-v0');
+assert.equal(seedCellMetrics.cellCount, (volumeConfig.cubeX - 1) * (volumeConfig.cubeY - 1) * (volumeConfig.cubeZ - 1));
+assert.ok(seedCellMetrics.meanCellVolume > 0, 'seed cube cell volume metric is missing');
+assert.ok(seedCellMetrics.maxRelativeVolumeError < 1e-5, `seed cube should have near-zero cell volume error: ${seedCellMetrics.maxRelativeVolumeError}`);
+
+let ordinaryCellState = volumeParticles;
+let volumeCellState = volumeParticles;
+let ordinaryCellOracle = null;
+let volumeCellOracle = null;
+for (let step = 0; step < 6; step += 1) {
+  ordinaryCellOracle = runClayCubeFirstLoopOracle({
+    basePositions: volumeParticles,
+    previousPositions: ordinaryCellState,
+    config: volumeConfig,
+    colliders: [volumeBrush],
+  });
+  ordinaryCellState = ordinaryCellOracle.positions;
+  volumeCellOracle = runClayCubeFirstLoopOracle({
+    basePositions: volumeParticles,
+    previousPositions: volumeCellState,
+    config: volumeConfig,
+    colliders: [volumeBrush],
+    volumePreservation: 'volume_cells',
+  });
+  volumeCellState = volumeCellOracle.positions;
+}
+
+assert.equal(volumeCellOracle.volumePreservationMode, 'volume_cells', 'cell-volume brush did not report effective mode');
+assert.equal(
+  volumeCellOracle.volumePreservationPolicy,
+  'structured-hexa-cell-volume-projection-js-postprocess-v0',
+  'cell-volume brush did not report the real volume-cell policy identity',
+);
+assert.equal(volumeCellOracle.cellVolumeEvidenceKind, 'structured-hexa-cell-volume-metrics-v0');
+assert.ok(volumeCellOracle.volumeCellConstraintIterationCount >= 2, 'cell-volume brush did not report projection iterations');
+assert.ok(volumeCellOracle.volumeCellConstrainedCellCount > 0, 'cell-volume brush did not constrain any cells');
+assert.ok(
+  volumeCellOracle.cellVolumeMeanRelativeErrorAfter <= volumeCellOracle.cellVolumeMeanRelativeErrorBefore * 1.08,
+  `cell-volume projection worsened mean local cell error too much: before=${volumeCellOracle.cellVolumeMeanRelativeErrorBefore} after=${volumeCellOracle.cellVolumeMeanRelativeErrorAfter}`,
+);
+assert.ok(
+  volumeCellOracle.cellVolumeMaxRelativeErrorAfter <= volumeCellOracle.cellVolumeMaxRelativeErrorBefore * 1.02,
+  `cell-volume projection worsened max local cell error too much: before=${volumeCellOracle.cellVolumeMaxRelativeErrorBefore} after=${volumeCellOracle.cellVolumeMaxRelativeErrorAfter}`,
+);
+assert.ok(
+  volumeCellOracle.volumeRatio >= ordinaryCellOracle.volumeRatio + 0.020,
+  `cell-volume mode did not retain materially more boundary volume: ordinary=${ordinaryCellOracle.volumeRatio} cells=${volumeCellOracle.volumeRatio}`,
+);
+assert.ok(
+  volumeCellOracle.volumeRatio >= 0.995,
+  `cell-volume mode did not preserve near-total cube volume: ${volumeCellOracle.volumeRatio}`,
+);
+assert.ok(
+  volumeCellOracle.maxDisplacement > ordinaryCellOracle.maxDisplacement * 0.55,
+  `cell-volume mode erased deformation instead of redistributing material: ordinary=${ordinaryCellOracle.maxDisplacement} cells=${volumeCellOracle.maxDisplacement}`,
 );

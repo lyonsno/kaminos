@@ -701,9 +701,17 @@ async function main() {
       const requestedVolumePreservation = new URL(url).searchParams.get('clay_volume_preservation')
         || new URL(url).searchParams.get('clay_volume_mode')
         || 'disabled';
-      const expectedVolumePreservation = ['preserve_demo', 'preserve-demo', 'demo', 'preserve', '1', 'true'].includes(String(requestedVolumePreservation).toLowerCase())
+      const normalizedVolumePreservation = String(requestedVolumePreservation).trim().toLowerCase().replaceAll('-', '_');
+      const expectedVolumePreservation = ['cells', 'cell', 'volume_cell', 'volume_cells'].includes(normalizedVolumePreservation)
+        ? 'volume_cells'
+        : ['preserve_demo', 'demo', 'preserve', '1', 'true'].includes(normalizedVolumePreservation)
         ? 'preserve_demo'
         : 'disabled';
+      const expectedVolumePolicy = expectedVolumePreservation === 'preserve_demo'
+        ? 'local-boundary-pressure-compensation-not-incompressible-mpm-v0'
+        : expectedVolumePreservation === 'volume_cells'
+          ? 'structured-hexa-cell-volume-projection-js-postprocess-v0'
+          : 'disabled';
       assert.equal(state.clayCubeSolverIdentity, 'webgpu-clay-material-point-cube-first-loop-v0', 'cube solver identity missing');
       assert.equal(state.clayCubeStepStatus, 'pass', 'cube first-loop step did not pass');
       assert.equal(state.clayCubeEvidenceKind, 'webgpu-material-point-readback', 'cube evidence did not come from WebGPU readback');
@@ -757,7 +765,7 @@ async function main() {
       assert.equal(state.clayCubeVolumePreservationMode, expectedVolumePreservation, 'cube volume-preservation mode did not match route');
       assert.equal(
         state.clayCubeVolumePreservationPolicy,
-        expectedVolumePreservation === 'preserve_demo' ? 'local-boundary-pressure-compensation-not-incompressible-mpm-v0' : 'disabled',
+        expectedVolumePolicy,
         'cube volume-preservation policy missing or mismatched',
       );
       assert.equal(state.clayCubeVolumeProxyEvidenceKind, 'signed-boundary-skin-volume-proxy-v0', 'cube volume proxy evidence kind missing');
@@ -765,9 +773,24 @@ async function main() {
       assert.ok((state.clayCubeVolumeProxy ?? 0) > 0, 'cube current volume proxy missing');
       assert.ok(Number.isFinite(state.clayCubeVolumeRatio), 'cube volume ratio missing');
       assert.ok(Number.isFinite(state.clayCubeVolumeCompensationCount), 'cube volume compensation count missing');
+      assert.equal(state.clayCubeCellVolumeEvidenceKind, 'structured-hexa-cell-volume-metrics-v0', 'cube cell-volume metric evidence kind missing');
+      assert.ok(Number.isFinite(state.clayCubeCellVolumeMeanRelativeErrorBefore), 'cube pre-projection mean cell-volume error missing');
+      assert.ok(Number.isFinite(state.clayCubeCellVolumeMeanRelativeErrorAfter), 'cube post-projection mean cell-volume error missing');
+      assert.ok(Number.isFinite(state.clayCubeCellVolumeMaxRelativeErrorBefore), 'cube pre-projection max cell-volume error missing');
+      assert.ok(Number.isFinite(state.clayCubeCellVolumeMaxRelativeErrorAfter), 'cube post-projection max cell-volume error missing');
+      assert.ok(Number.isFinite(state.clayCubeVolumeCellConstraintIterationCount), 'cube volume-cell iteration count missing');
+      assert.ok(Number.isFinite(state.clayCubeVolumeCellConstrainedCellCount), 'cube volume-cell constrained count missing');
       if (expectedVolumePreservation === 'preserve_demo') {
         assert.ok(state.clayCubeVolumeRatio >= 0.96, `preserve-demo cube volume ratio collapsed: ${state.clayCubeVolumeRatio}`);
         assert.ok(state.clayCubeVolumeCompensationCount > 0, 'preserve-demo did not touch any compensation particles');
+      } else if (expectedVolumePreservation === 'volume_cells') {
+        assert.ok(state.clayCubeVolumeRatio >= 0.98, `volume-cells cube volume ratio collapsed: ${state.clayCubeVolumeRatio}`);
+        assert.ok(state.clayCubeVolumeCellConstraintIterationCount >= 2, 'volume-cells mode did not report projection iterations');
+        assert.ok(state.clayCubeVolumeCellConstrainedCellCount > 0, 'volume-cells mode did not constrain any cells');
+        assert.ok(
+          state.clayCubeCellVolumeMaxRelativeErrorAfter <= state.clayCubeCellVolumeMaxRelativeErrorBefore * 1.05,
+          `volume-cells mode worsened max local cell-volume error too much: before=${state.clayCubeCellVolumeMaxRelativeErrorBefore} after=${state.clayCubeCellVolumeMaxRelativeErrorAfter}`,
+        );
       }
       assert.ok(Number.isFinite(state.clayCubeFrontFaceDeformedParticleCount), 'cube front-face deformation count missing');
       assert.ok(Number.isFinite(state.clayCubeBackFaceDeformedParticleCount), 'cube back-face deformation count missing');
@@ -945,7 +968,14 @@ async function main() {
         assert.ok((state.clayPointerLastHit.rawCenter[2] ?? 0) > 0.25, 'cube pointer raw hit landed behind the visible front face');
         assert.ok(Math.abs(state.clayPointerLastHit.z - state.clayPointerLastHit.rawCenter[2]) <= 1e-6, 'cube pointer effective hit was inset from the raw cube face hit');
         assert.ok(Math.abs(state.clayPointerLastHit.y - state.clayPointerLastHit.rawCenter[1]) <= 1e-6, 'cube pointer effective hit lost ray-derived cube height');
-        assert.ok((state.clayCubeFrontBackDeformationRatio ?? 0) > 1, `cube pointer brush deformation was not front-local: ${state.clayCubeFrontBackDeformationRatio}`);
+        if (state.clayCubeVolumePreservationMode === 'volume_cells') {
+          assert.ok(
+            (state.clayCubeFrontBackDeformationRatio ?? 0) > 0.85,
+            `volume-preserving cube pointer deformation became back-heavy: ${state.clayCubeFrontBackDeformationRatio}`,
+          );
+        } else {
+          assert.ok((state.clayCubeFrontBackDeformationRatio ?? 0) > 1, `cube pointer brush deformation was not front-local: ${state.clayCubeFrontBackDeformationRatio}`);
+        }
         assert.ok(Number.isFinite(state.clayCubeBrushToContactCentroidDistance), 'cube pointer brush/contact centroid distance missing');
         assert.ok(state.clayCubeBrushToContactCentroidDistance < 0.5, `cube pointer brush/contact centroid drifted too far: ${state.clayCubeBrushToContactCentroidDistance}`);
         if (cornerSmokeTarget === 'front_upper_right') {
@@ -1121,6 +1151,13 @@ async function main() {
       clayCubeVolumeProxy: state.clayCubeVolumeProxy,
       clayCubeVolumeRatio: state.clayCubeVolumeRatio,
       clayCubeVolumeCompensationCount: state.clayCubeVolumeCompensationCount,
+      clayCubeCellVolumeEvidenceKind: state.clayCubeCellVolumeEvidenceKind,
+      clayCubeCellVolumeMeanRelativeErrorBefore: state.clayCubeCellVolumeMeanRelativeErrorBefore,
+      clayCubeCellVolumeMeanRelativeErrorAfter: state.clayCubeCellVolumeMeanRelativeErrorAfter,
+      clayCubeCellVolumeMaxRelativeErrorBefore: state.clayCubeCellVolumeMaxRelativeErrorBefore,
+      clayCubeCellVolumeMaxRelativeErrorAfter: state.clayCubeCellVolumeMaxRelativeErrorAfter,
+      clayCubeVolumeCellConstraintIterationCount: state.clayCubeVolumeCellConstraintIterationCount,
+      clayCubeVolumeCellConstrainedCellCount: state.clayCubeVolumeCellConstrainedCellCount,
       clayCubeFrontFaceDeformedParticleCount: state.clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount: state.clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio: state.clayCubeFrontBackDeformationRatio,

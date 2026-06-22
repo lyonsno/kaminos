@@ -79,8 +79,12 @@ const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-reco
 const CLAY_CUBE_CORNER_SOFTENING_POLICY = 'contacted-boundary-axis-corner-softening-v0';
 const CLAY_CUBE_VOLUME_PROXY_EVIDENCE_KIND = 'signed-boundary-skin-volume-proxy-v0';
 const CLAY_CUBE_VOLUME_PRESERVATION_POLICY = 'local-boundary-pressure-compensation-not-incompressible-mpm-v0';
+const CLAY_CUBE_CELL_VOLUME_METRIC_EVIDENCE_KIND = 'structured-hexa-cell-volume-metrics-v0';
+const CLAY_CUBE_CELL_VOLUME_PRESERVATION_POLICY = 'structured-hexa-cell-volume-projection-js-postprocess-v0';
 const CLAY_CUBE_VOLUME_PRESERVATION_DISABLED = 'disabled';
 const CLAY_CUBE_VOLUME_PRESERVATION_DEMO = 'preserve_demo';
+const CLAY_CUBE_VOLUME_PRESERVATION_CELLS = 'volume_cells';
+const CLAY_CUBE_CELL_VOLUME_ITERATIONS = 6;
 const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
@@ -312,6 +316,9 @@ export function normalizeClayCubeConfig(requestedCube = DEFAULT_CLAY_CUBE) {
 
 export function normalizeClayCubeVolumePreservationMode(requestedMode = CLAY_CUBE_VOLUME_PRESERVATION_DISABLED) {
   const normalized = String(requestedMode || CLAY_CUBE_VOLUME_PRESERVATION_DISABLED).trim().toLowerCase().replaceAll('-', '_');
+  if (['cells', 'cell', 'volume_cell', CLAY_CUBE_VOLUME_PRESERVATION_CELLS].includes(normalized)) {
+    return CLAY_CUBE_VOLUME_PRESERVATION_CELLS;
+  }
   if (['1', 'true', 'demo', 'preserve', CLAY_CUBE_VOLUME_PRESERVATION_DEMO].includes(normalized)) {
     return CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
   }
@@ -502,6 +509,257 @@ export function measureClayCubeVolumeProxy({
     signedVolume: currentVolume.signedVolume,
     volumeRatio: baseVolume.volume > 0 ? currentVolume.volume / baseVolume.volume : 0,
     triangleCount: currentVolume.triangleCount,
+  };
+}
+
+function clayCubePoint3(positions, index) {
+  const offset = index * 4;
+  return [positions[offset], positions[offset + 1], positions[offset + 2]];
+}
+
+function vec3Subtract(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function vec3Cross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function vec3Dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function clayCubeCellCornerIndices(config, x, y, z) {
+  return [
+    clayCubeParticleIndexForConfig(config, x, y, z),
+    clayCubeParticleIndexForConfig(config, x + 1, y, z),
+    clayCubeParticleIndexForConfig(config, x, y + 1, z),
+    clayCubeParticleIndexForConfig(config, x + 1, y + 1, z),
+    clayCubeParticleIndexForConfig(config, x, y, z + 1),
+    clayCubeParticleIndexForConfig(config, x + 1, y, z + 1),
+    clayCubeParticleIndexForConfig(config, x, y + 1, z + 1),
+    clayCubeParticleIndexForConfig(config, x + 1, y + 1, z + 1),
+  ];
+}
+
+function clayCubeHexCellVolume(positions, indices) {
+  const p = indices.map(index => clayCubePoint3(positions, index));
+  const ex = [0, 0, 0];
+  const ey = [0, 0, 0];
+  const ez = [0, 0, 0];
+  for (const edge of [[1, 0], [3, 2], [5, 4], [7, 6]]) {
+    const delta = vec3Subtract(p[edge[0]], p[edge[1]]);
+    ex[0] += delta[0] * 0.25;
+    ex[1] += delta[1] * 0.25;
+    ex[2] += delta[2] * 0.25;
+  }
+  for (const edge of [[2, 0], [3, 1], [6, 4], [7, 5]]) {
+    const delta = vec3Subtract(p[edge[0]], p[edge[1]]);
+    ey[0] += delta[0] * 0.25;
+    ey[1] += delta[1] * 0.25;
+    ey[2] += delta[2] * 0.25;
+  }
+  for (const edge of [[4, 0], [5, 1], [6, 2], [7, 3]]) {
+    const delta = vec3Subtract(p[edge[0]], p[edge[1]]);
+    ez[0] += delta[0] * 0.25;
+    ez[1] += delta[1] * 0.25;
+    ez[2] += delta[2] * 0.25;
+  }
+  return Math.abs(vec3Dot(vec3Cross(ex, ey), ez));
+}
+
+export function measureClayCubeCellVolumeMetrics({
+  basePositions,
+  positions,
+  config = normalizeClayCubeConfig(),
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
+  const current = positions instanceof Float32Array && positions.length === base.length ? positions : base;
+  const cellCount = Math.max(0, (cfg.cubeX - 1) * (cfg.cubeY - 1) * (cfg.cubeZ - 1));
+  let restVolumeSum = 0;
+  let volumeSum = 0;
+  let absErrorSum = 0;
+  let relativeErrorSum = 0;
+  let maxAbsVolumeError = 0;
+  let maxRelativeVolumeError = 0;
+  let constrainedCellCount = 0;
+  for (let y = 0; y < cfg.cubeY - 1; y += 1) {
+    for (let z = 0; z < cfg.cubeZ - 1; z += 1) {
+      for (let x = 0; x < cfg.cubeX - 1; x += 1) {
+        const indices = clayCubeCellCornerIndices(cfg, x, y, z);
+        const restVolume = clayCubeHexCellVolume(base, indices);
+        const volume = clayCubeHexCellVolume(current, indices);
+        const absError = Math.abs(volume - restVolume);
+        const relativeError = absError / Math.max(restVolume, 1e-8);
+        restVolumeSum += restVolume;
+        volumeSum += volume;
+        absErrorSum += absError;
+        relativeErrorSum += relativeError;
+        maxAbsVolumeError = Math.max(maxAbsVolumeError, absError);
+        maxRelativeVolumeError = Math.max(maxRelativeVolumeError, relativeError);
+        if (relativeError > 1e-4) constrainedCellCount += 1;
+      }
+    }
+  }
+  return {
+    evidenceKind: CLAY_CUBE_CELL_VOLUME_METRIC_EVIDENCE_KIND,
+    cellCount,
+    constrainedCellCount,
+    restMeanCellVolume: cellCount > 0 ? restVolumeSum / cellCount : 0,
+    meanCellVolume: cellCount > 0 ? volumeSum / cellCount : 0,
+    totalRestVolume: restVolumeSum,
+    totalCellVolume: volumeSum,
+    cellVolumeRatio: restVolumeSum > 0 ? volumeSum / restVolumeSum : 0,
+    meanAbsVolumeError: cellCount > 0 ? absErrorSum / cellCount : 0,
+    maxAbsVolumeError,
+    meanRelativeVolumeError: cellCount > 0 ? relativeErrorSum / cellCount : 0,
+    maxRelativeVolumeError,
+  };
+}
+
+export function applyClayCubeCellVolumeConstraints({
+  basePositions,
+  positions,
+  config = normalizeClayCubeConfig(),
+  iterations = CLAY_CUBE_CELL_VOLUME_ITERATIONS,
+  stiffness = 1.2,
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
+  let current = positions instanceof Float32Array && positions.length === base.length
+    ? new Float32Array(positions)
+    : new Float32Array(base);
+  const before = measureClayCubeCellVolumeMetrics({ basePositions: base, positions: current, config: cfg });
+  const iterationCount = Math.max(0, Math.floor(clampFinite(iterations, 0, 8, CLAY_CUBE_CELL_VOLUME_ITERATIONS)));
+  const stepStiffness = clampFinite(stiffness, 0, 2.0, 1.2);
+  const correction = new Float32Array(cfg.particleCount * 3);
+  const weights = new Float32Array(cfg.particleCount);
+  const gradients = new Float32Array(8 * 3);
+  for (let iteration = 0; iteration < iterationCount; iteration += 1) {
+    correction.fill(0);
+    weights.fill(0);
+    for (let y = 0; y < cfg.cubeY - 1; y += 1) {
+      for (let z = 0; z < cfg.cubeZ - 1; z += 1) {
+        for (let x = 0; x < cfg.cubeX - 1; x += 1) {
+          const indices = clayCubeCellCornerIndices(cfg, x, y, z);
+          const restVolume = clayCubeHexCellVolume(base, indices);
+          const volume = clayCubeHexCellVolume(current, indices);
+          if (restVolume <= 1e-8) continue;
+          const volumeError = restVolume - volume;
+          if (Math.abs(volumeError) / restVolume <= 1e-5) continue;
+          const cellLength = Math.cbrt(restVolume);
+          const epsilon = Math.max(cellLength * 1e-4, 1e-6);
+          let gradientNormSq = 0;
+          gradients.fill(0);
+          for (let corner = 0; corner < indices.length; corner += 1) {
+            const index = indices[corner];
+            const offset = index * 4;
+            for (let axis = 0; axis < 3; axis += 1) {
+              const value = current[offset + axis];
+              current[offset + axis] = value + epsilon;
+              const plus = clayCubeHexCellVolume(current, indices);
+              current[offset + axis] = value - epsilon;
+              const minus = clayCubeHexCellVolume(current, indices);
+              current[offset + axis] = value;
+              const gradient = (plus - minus) / (2 * epsilon);
+              gradients[corner * 3 + axis] = gradient;
+              gradientNormSq += gradient * gradient;
+            }
+          }
+          if (gradientNormSq <= 1e-12) continue;
+          const scale = clampFinite(
+            (volumeError / gradientNormSq) * stepStiffness,
+            -cellLength * 0.28,
+            cellLength * 0.28,
+            0,
+          );
+          for (let corner = 0; corner < indices.length; corner += 1) {
+            const index = indices[corner];
+            const correctionOffset = index * 3;
+            correction[correctionOffset] += gradients[corner * 3] * scale;
+            correction[correctionOffset + 1] += gradients[corner * 3 + 1] * scale;
+            correction[correctionOffset + 2] += gradients[corner * 3 + 2] * scale;
+            weights[index] += 1;
+          }
+        }
+      }
+    }
+    const next = new Float32Array(current);
+    for (let i = 0; i < cfg.particleCount; i += 1) {
+      const weight = weights[i];
+      if (weight <= 0) continue;
+      const offset = i * 4;
+      const correctionOffset = i * 3;
+      const divisor = Math.sqrt(weight);
+      next[offset] = clampFinite(
+        current[offset] + correction[correctionOffset] / divisor,
+        -CLAY_CUBE_EXTENTS.halfX * 1.10,
+        CLAY_CUBE_EXTENTS.halfX * 1.10,
+        current[offset],
+      );
+      next[offset + 1] = clampFinite(
+        current[offset + 1] + correction[correctionOffset + 1] / divisor,
+        -0.10,
+        CLAY_CUBE_EXTENTS.maxY * 1.08,
+        current[offset + 1],
+      );
+      next[offset + 2] = clampFinite(
+        current[offset + 2] + correction[correctionOffset + 2] / divisor,
+        -CLAY_CUBE_EXTENTS.halfZ * 1.10,
+        CLAY_CUBE_EXTENTS.halfZ * 1.10,
+        current[offset + 2],
+      );
+    }
+    const iterationMetrics = measureClayCubeCellVolumeMetrics({ basePositions: base, positions: next, config: cfg });
+    if (iterationMetrics.totalCellVolume > 1e-8 && iterationMetrics.totalRestVolume > 1e-8) {
+      const targetScale = Math.cbrt(iterationMetrics.totalRestVolume / iterationMetrics.totalCellVolume);
+      const scale = clampFinite(targetScale, 0.985, 1.015, 1);
+      if (Math.abs(scale - 1) > 1e-5) {
+        const center = [0, 0, 0];
+        for (let i = 0; i < cfg.particleCount; i += 1) {
+          const offset = i * 4;
+          center[0] += next[offset] / cfg.particleCount;
+          center[1] += next[offset + 1] / cfg.particleCount;
+          center[2] += next[offset + 2] / cfg.particleCount;
+        }
+        for (let i = 0; i < cfg.particleCount; i += 1) {
+          const offset = i * 4;
+          next[offset] = clampFinite(
+            center[0] + (next[offset] - center[0]) * scale,
+            -CLAY_CUBE_EXTENTS.halfX * 1.10,
+            CLAY_CUBE_EXTENTS.halfX * 1.10,
+            next[offset],
+          );
+          next[offset + 1] = clampFinite(
+            center[1] + (next[offset + 1] - center[1]) * scale,
+            -0.10,
+            CLAY_CUBE_EXTENTS.maxY * 1.08,
+            next[offset + 1],
+          );
+          next[offset + 2] = clampFinite(
+            center[2] + (next[offset + 2] - center[2]) * scale,
+            -CLAY_CUBE_EXTENTS.halfZ * 1.10,
+            CLAY_CUBE_EXTENTS.halfZ * 1.10,
+            next[offset + 2],
+          );
+        }
+      }
+    }
+    current = next;
+  }
+  const after = measureClayCubeCellVolumeMetrics({ basePositions: base, positions: current, config: cfg });
+  return {
+    policy: CLAY_CUBE_CELL_VOLUME_PRESERVATION_POLICY,
+    positions: current,
+    iterationCount,
+    constrainedCellCount: before.constrainedCellCount,
+    before,
+    after,
   };
 }
 
@@ -1228,10 +1486,11 @@ export function runClayCubeFirstLoopOracle({
   const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
   const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
   const previous = previousPositions instanceof Float32Array && previousPositions.length === base.length ? previousPositions : base;
-  const next = new Float32Array(base.length);
+  let next = new Float32Array(base.length);
   const normalizedColliders = colliders.slice(0, MAX_COLLIDERS).map(normalizedCubeCollider);
   const volumePreservationMode = normalizeClayCubeVolumePreservationMode(volumePreservation);
   const preserveDemo = volumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
+  const volumeCells = volumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_CELLS;
   const activeCells = new Set();
   let deformedParticleCount = 0;
   let contactParticleCount = 0;
@@ -1336,6 +1595,49 @@ export function runClayCubeFirstLoopOracle({
     next[offset + 3] = contact;
   }
 
+  let cellVolumeBefore = measureClayCubeCellVolumeMetrics({ basePositions: base, positions: next, config: cfg });
+  let cellVolumeAfter = cellVolumeBefore;
+  let volumeCellConstraintIterationCount = 0;
+  let volumeCellConstrainedCellCount = 0;
+  if (volumeCells) {
+    const projected = applyClayCubeCellVolumeConstraints({
+      basePositions: base,
+      positions: next,
+      config: cfg,
+      iterations: CLAY_CUBE_CELL_VOLUME_ITERATIONS,
+    });
+    next = projected.positions;
+    cellVolumeBefore = projected.before;
+    cellVolumeAfter = projected.after;
+    volumeCellConstraintIterationCount = projected.iterationCount;
+    volumeCellConstrainedCellCount = projected.constrainedCellCount;
+    volumeCompensationCount = projected.constrainedCellCount;
+  }
+
+  activeCells.clear();
+  deformedParticleCount = 0;
+  contactParticleCount = 0;
+  maxDisplacement = 0;
+  minY = Number.POSITIVE_INFINITY;
+  maxY = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const x = next[offset];
+    const y = next[offset + 1];
+    const z = next[offset + 2];
+    const contact = next[offset + 3];
+    const dx = x - base[offset];
+    const dy = y - base[offset + 1];
+    const dz = z - base[offset + 2];
+    const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (displacement > 0.002) deformedParticleCount += 1;
+    if (contact > 0) contactParticleCount += 1;
+    maxDisplacement = Math.max(maxDisplacement, displacement);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+    activeCells.add(cubeGridCellIndex(x, y, z, cfg.gridDimension));
+  }
+
   const faceMetrics = computeCubeFaceMetrics({
     basePositions: base,
     cubeValues: next,
@@ -1355,12 +1657,23 @@ export function runClayCubeFirstLoopOracle({
     diagnosticColoredParticleCount: deformedParticleCount,
     diagnosticHotParticleCount: contactParticleCount,
     volumePreservationMode,
-    volumePreservationPolicy: preserveDemo ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled',
+    volumePreservationPolicy: preserveDemo
+      ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY
+      : volumeCells
+        ? CLAY_CUBE_CELL_VOLUME_PRESERVATION_POLICY
+        : 'disabled',
     volumeProxyEvidenceKind: volumeProxy.evidenceKind,
     baseVolumeProxy: volumeProxy.baseVolume,
     volumeProxy: volumeProxy.volume,
     volumeRatio: volumeProxy.volumeRatio,
     volumeCompensationCount,
+    cellVolumeEvidenceKind: cellVolumeAfter.evidenceKind,
+    cellVolumeMeanRelativeErrorBefore: cellVolumeBefore.meanRelativeVolumeError,
+    cellVolumeMeanRelativeErrorAfter: cellVolumeAfter.meanRelativeVolumeError,
+    cellVolumeMaxRelativeErrorBefore: cellVolumeBefore.maxRelativeVolumeError,
+    cellVolumeMaxRelativeErrorAfter: cellVolumeAfter.maxRelativeVolumeError,
+    volumeCellConstraintIterationCount,
+    volumeCellConstrainedCellCount,
     positions: next,
     particleCount: cfg.particleCount,
     gridDimension: cfg.gridDimension,
@@ -1738,6 +2051,7 @@ export function createKaminosClayPrototype({
     ? normalizeClayCubeVolumePreservationMode(clayCubeVolumePreservation)
     : CLAY_CUBE_VOLUME_PRESERVATION_DISABLED;
   const clayCubeVolumePreservationEnabled = clayCubeVolumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
+  const clayCubeVolumeCellsEnabled = clayCubeVolumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_CELLS;
   let active = false;
   let device = null;
   let gpuReadyPromise = null;
@@ -1912,12 +2226,23 @@ export function createKaminosClayPrototype({
   let clayCubeBrushCentroid = null;
   let clayCubeBrushToDeformationCentroidDistance = null;
   let clayCubeBrushToContactCentroidDistance = null;
-  let clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled';
+  let clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled
+    ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY
+    : clayCubeVolumeCellsEnabled
+      ? CLAY_CUBE_CELL_VOLUME_PRESERVATION_POLICY
+      : 'disabled';
   let clayCubeVolumeProxyEvidenceKind = clayCubeEnabled ? CLAY_CUBE_VOLUME_PROXY_EVIDENCE_KIND : 'disabled';
   let clayCubeBaseVolumeProxy = 0;
   let clayCubeVolumeProxy = 0;
   let clayCubeVolumeRatio = 0;
   let clayCubeVolumeCompensationCount = 0;
+  let clayCubeCellVolumeEvidenceKind = clayCubeEnabled ? CLAY_CUBE_CELL_VOLUME_METRIC_EVIDENCE_KIND : 'disabled';
+  let clayCubeCellVolumeMeanRelativeErrorBefore = 0;
+  let clayCubeCellVolumeMeanRelativeErrorAfter = 0;
+  let clayCubeCellVolumeMaxRelativeErrorBefore = 0;
+  let clayCubeCellVolumeMaxRelativeErrorAfter = 0;
+  let clayCubeVolumeCellConstraintIterationCount = 0;
+  let clayCubeVolumeCellConstrainedCellCount = 0;
   let lastCubeStateValues = null;
   let claySculptStepStatus = claySculptEnabled ? 'not-run' : 'disabled';
   let claySculptEvidenceKind = claySculptEnabled ? CLAY_SCULPT_WEBGPU_EVIDENCE_KIND : 'disabled';
@@ -1962,6 +2287,16 @@ export function createKaminosClayPrototype({
     clayCubeBaseVolumeProxy = seedVolumeProxy.baseVolume;
     clayCubeVolumeProxy = seedVolumeProxy.volume;
     clayCubeVolumeRatio = seedVolumeProxy.volumeRatio;
+    const seedCellVolume = measureClayCubeCellVolumeMetrics({
+      basePositions: cubeBasePositions,
+      positions: cubeBasePositions,
+      config: cubeConfig,
+    });
+    clayCubeCellVolumeEvidenceKind = seedCellVolume.evidenceKind;
+    clayCubeCellVolumeMeanRelativeErrorBefore = seedCellVolume.meanRelativeVolumeError;
+    clayCubeCellVolumeMeanRelativeErrorAfter = seedCellVolume.meanRelativeVolumeError;
+    clayCubeCellVolumeMaxRelativeErrorBefore = seedCellVolume.maxRelativeVolumeError;
+    clayCubeCellVolumeMaxRelativeErrorAfter = seedCellVolume.maxRelativeVolumeError;
   }
   const sculptBasePositions = seedClaySculptParticles(sculptConfig);
   const sculptCellCount = sculptConfig.hashGridDimension ** 3;
@@ -3038,8 +3373,36 @@ export function createKaminosClayPrototype({
     encoder.copyBufferToBuffer(cubeOutputBuffer, 0, cubeStateBuffer, 0, cubeBasePositions.byteLength);
     device.queue.submit([encoder.finish()]);
     await cubeReadbackBuffer.mapAsync(GPUMapMode.READ);
-    const cubeValues = new Float32Array(cubeReadbackBuffer.getMappedRange()).slice();
+    let cubeValues = new Float32Array(cubeReadbackBuffer.getMappedRange()).slice();
     cubeReadbackBuffer.unmap();
+    let cellVolumeBefore = measureClayCubeCellVolumeMetrics({
+      basePositions: cubeBasePositions,
+      positions: cubeValues,
+      config: cubeConfig,
+    });
+    let cellVolumeAfter = cellVolumeBefore;
+    clayCubeVolumeCellConstraintIterationCount = 0;
+    clayCubeVolumeCellConstrainedCellCount = 0;
+    if (clayCubeVolumeCellsEnabled) {
+      const projected = applyClayCubeCellVolumeConstraints({
+        basePositions: cubeBasePositions,
+        positions: cubeValues,
+        config: cubeConfig,
+        iterations: CLAY_CUBE_CELL_VOLUME_ITERATIONS,
+      });
+      cubeValues = projected.positions;
+      cellVolumeBefore = projected.before;
+      cellVolumeAfter = projected.after;
+      clayCubeVolumeCellConstraintIterationCount = projected.iterationCount;
+      clayCubeVolumeCellConstrainedCellCount = projected.constrainedCellCount;
+      device.queue.writeBuffer(cubeStateBuffer, 0, cubeValues);
+      device.queue.writeBuffer(cubeOutputBuffer, 0, cubeValues);
+    }
+    clayCubeCellVolumeEvidenceKind = cellVolumeAfter.evidenceKind;
+    clayCubeCellVolumeMeanRelativeErrorBefore = cellVolumeBefore.meanRelativeVolumeError;
+    clayCubeCellVolumeMeanRelativeErrorAfter = cellVolumeAfter.meanRelativeVolumeError;
+    clayCubeCellVolumeMaxRelativeErrorBefore = cellVolumeBefore.maxRelativeVolumeError;
+    clayCubeCellVolumeMaxRelativeErrorAfter = cellVolumeAfter.maxRelativeVolumeError;
     clayCubeReadbackWallMs = performance.now() - cubeStartedAt;
 
     const activeCells = new Set();
@@ -3084,13 +3447,15 @@ export function createKaminosClayPrototype({
     }
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
-    clayCubeVolumeCompensationCount = clayCubeVolumePreservationEnabled
-      ? countClayCubeVolumeCompensationParticles({
+    clayCubeVolumeCompensationCount = clayCubeVolumeCellsEnabled
+      ? clayCubeVolumeCellConstrainedCellCount
+      : clayCubeVolumePreservationEnabled
+        ? countClayCubeVolumeCompensationParticles({
         positions: cubeValues,
         config: cubeConfig,
         colliders: primitiveColliders,
       })
-      : 0;
+        : 0;
     const volumeProxy = measureClayCubeVolumeProxy({
       basePositions: cubeBasePositions,
       positions: cubeValues,
@@ -3100,7 +3465,11 @@ export function createKaminosClayPrototype({
     clayCubeBaseVolumeProxy = volumeProxy.baseVolume;
     clayCubeVolumeProxy = volumeProxy.volume;
     clayCubeVolumeRatio = volumeProxy.volumeRatio;
-    clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled';
+    clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled
+      ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY
+      : clayCubeVolumeCellsEnabled
+        ? CLAY_CUBE_CELL_VOLUME_PRESERVATION_POLICY
+        : 'disabled';
     refreshCubeBoundarySkin(cubeValues);
     const faceMetrics = computeCubeFaceMetrics({
       basePositions: cubeBasePositions,
@@ -3655,6 +4024,13 @@ export function createKaminosClayPrototype({
       clayCubeVolumeProxy,
       clayCubeVolumeRatio,
       clayCubeVolumeCompensationCount,
+      clayCubeCellVolumeEvidenceKind,
+      clayCubeCellVolumeMeanRelativeErrorBefore,
+      clayCubeCellVolumeMeanRelativeErrorAfter,
+      clayCubeCellVolumeMaxRelativeErrorBefore,
+      clayCubeCellVolumeMaxRelativeErrorAfter,
+      clayCubeVolumeCellConstraintIterationCount,
+      clayCubeVolumeCellConstrainedCellCount,
       clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio,
