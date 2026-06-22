@@ -58,6 +58,8 @@ assert.match(index, /clay_brush_radius/, 'clay route accepts pointer brush radiu
 assert.match(index, /clay_brush_strength/, 'clay route accepts pointer brush strength');
 assert.match(index, /clay_brush_ramp_steps/, 'clay route accepts pointer brush force ramp steps');
 assert.match(index, /clay_brush_ramp_min_scale/, 'clay route accepts pointer brush ramp floor');
+assert.match(index, /clay_volume_preservation/, 'clay route accepts optional cube volume preservation mode');
+assert.match(index, /clay_volume_mode/, 'clay route accepts compact cube volume mode alias');
 assert.match(index, /clay-brush-radius/, 'Clay panel exposes pointer brush radius control');
 assert.match(index, /clay-brush-strength/, 'Clay panel exposes pointer brush strength control');
 assert.match(index, /clay-brush-ramp-steps/, 'Clay panel exposes pointer brush force ramp control');
@@ -145,6 +147,14 @@ assert.match(core, /CLAY_CUBE_PLASTIC_REST_POLICY/, 'clay core names cube plasti
 assert.match(core, /clayCubePlasticRestPolicy/, 'clay debug state records cube plastic rest-state policy');
 assert.match(core, /CLAY_CUBE_CORNER_SOFTENING_POLICY/, 'clay core names cube corner-softening policy');
 assert.match(core, /clayCubeCornerSofteningPolicy/, 'clay debug state records cube corner-softening policy');
+assert.match(core, /CLAY_CUBE_VOLUME_PRESERVATION_POLICY/, 'clay core names cube volume-preservation policy');
+assert.match(core, /measureClayCubeVolumeProxy/, 'clay core exposes cube volume proxy measurement');
+assert.match(core, /clayCubeVolumePreservationMode/, 'clay debug state records cube volume-preservation mode');
+assert.match(core, /clayCubeVolumePreservationPolicy/, 'clay debug state records cube volume-preservation policy');
+assert.match(core, /clayCubeBaseVolumeProxy/, 'clay debug state records base cube volume proxy');
+assert.match(core, /clayCubeVolumeProxy/, 'clay debug state records current cube volume proxy');
+assert.match(core, /clayCubeVolumeRatio/, 'clay debug state records cube volume ratio');
+assert.match(core, /clayCubeVolumeCompensationCount/, 'clay debug state records particles touched by preserve-demo compensation');
 assert.match(core, /clayCubeBrushToContactCentroidDistance/, 'clay debug state records brush-to-contact centroid distance');
 assert.match(core, /clayCubeMaxDisplacementFace/, 'clay debug state records which face carried max displacement');
 assert.match(index, /clay-cube-front-back/, 'clay panel surfaces cube front/back deformation ratio');

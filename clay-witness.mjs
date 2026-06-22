@@ -698,6 +698,12 @@ async function main() {
     }
     assert.equal(state.clayCubeEnabled, isCubeRoute, 'cube witness enablement did not match clay_cube route parameter');
     if (isCubeRoute) {
+      const requestedVolumePreservation = new URL(url).searchParams.get('clay_volume_preservation')
+        || new URL(url).searchParams.get('clay_volume_mode')
+        || 'disabled';
+      const expectedVolumePreservation = ['preserve_demo', 'preserve-demo', 'demo', 'preserve', '1', 'true'].includes(String(requestedVolumePreservation).toLowerCase())
+        ? 'preserve_demo'
+        : 'disabled';
       assert.equal(state.clayCubeSolverIdentity, 'webgpu-clay-material-point-cube-first-loop-v0', 'cube solver identity missing');
       assert.equal(state.clayCubeStepStatus, 'pass', 'cube first-loop step did not pass');
       assert.equal(state.clayCubeEvidenceKind, 'webgpu-material-point-readback', 'cube evidence did not come from WebGPU readback');
@@ -748,6 +754,21 @@ async function main() {
         `cube boundary skin fairing increased roughness: raw=${state.clayCubeBoundarySkinRawRoughness} faired=${state.clayCubeBoundarySkinRoughness}`,
       );
       assert.equal(state.clayCubeFaceMetricEvidenceKind, 'solver-space-material-point-face-locality-v0', 'cube face-locality metric evidence kind missing');
+      assert.equal(state.clayCubeVolumePreservationMode, expectedVolumePreservation, 'cube volume-preservation mode did not match route');
+      assert.equal(
+        state.clayCubeVolumePreservationPolicy,
+        expectedVolumePreservation === 'preserve_demo' ? 'local-boundary-pressure-compensation-not-incompressible-mpm-v0' : 'disabled',
+        'cube volume-preservation policy missing or mismatched',
+      );
+      assert.equal(state.clayCubeVolumeProxyEvidenceKind, 'signed-boundary-skin-volume-proxy-v0', 'cube volume proxy evidence kind missing');
+      assert.ok((state.clayCubeBaseVolumeProxy ?? 0) > 0, 'cube base volume proxy missing');
+      assert.ok((state.clayCubeVolumeProxy ?? 0) > 0, 'cube current volume proxy missing');
+      assert.ok(Number.isFinite(state.clayCubeVolumeRatio), 'cube volume ratio missing');
+      assert.ok(Number.isFinite(state.clayCubeVolumeCompensationCount), 'cube volume compensation count missing');
+      if (expectedVolumePreservation === 'preserve_demo') {
+        assert.ok(state.clayCubeVolumeRatio >= 0.96, `preserve-demo cube volume ratio collapsed: ${state.clayCubeVolumeRatio}`);
+        assert.ok(state.clayCubeVolumeCompensationCount > 0, 'preserve-demo did not touch any compensation particles');
+      }
       assert.ok(Number.isFinite(state.clayCubeFrontFaceDeformedParticleCount), 'cube front-face deformation count missing');
       assert.ok(Number.isFinite(state.clayCubeBackFaceDeformedParticleCount), 'cube back-face deformation count missing');
       assert.ok(Number.isFinite(state.clayCubeFrontBackDeformationRatio), 'cube front/back deformation ratio missing');
@@ -1093,6 +1114,13 @@ async function main() {
       clayCubeFaceMetricEvidenceKind: state.clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: state.clayCubePlasticRestPolicy,
       clayCubeCornerSofteningPolicy: state.clayCubeCornerSofteningPolicy,
+      clayCubeVolumePreservationMode: state.clayCubeVolumePreservationMode,
+      clayCubeVolumePreservationPolicy: state.clayCubeVolumePreservationPolicy,
+      clayCubeVolumeProxyEvidenceKind: state.clayCubeVolumeProxyEvidenceKind,
+      clayCubeBaseVolumeProxy: state.clayCubeBaseVolumeProxy,
+      clayCubeVolumeProxy: state.clayCubeVolumeProxy,
+      clayCubeVolumeRatio: state.clayCubeVolumeRatio,
+      clayCubeVolumeCompensationCount: state.clayCubeVolumeCompensationCount,
       clayCubeFrontFaceDeformedParticleCount: state.clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount: state.clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio: state.clayCubeFrontBackDeformationRatio,

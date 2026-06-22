@@ -77,6 +77,10 @@ const CLAY_CUBE_SURFACE_SOURCE_DEBUG_MODE = 'source-tint-visible-surfaces-v0';
 const CLAY_CUBE_FACE_METRIC_EVIDENCE_KIND = 'solver-space-material-point-face-locality-v0';
 const CLAY_CUBE_PLASTIC_REST_POLICY = 'plastic-current-state-no-birth-shape-recovery-v0';
 const CLAY_CUBE_CORNER_SOFTENING_POLICY = 'contacted-boundary-axis-corner-softening-v0';
+const CLAY_CUBE_VOLUME_PROXY_EVIDENCE_KIND = 'signed-boundary-skin-volume-proxy-v0';
+const CLAY_CUBE_VOLUME_PRESERVATION_POLICY = 'local-boundary-pressure-compensation-not-incompressible-mpm-v0';
+const CLAY_CUBE_VOLUME_PRESERVATION_DISABLED = 'disabled';
+const CLAY_CUBE_VOLUME_PRESERVATION_DEMO = 'preserve_demo';
 const CLAY_CUBE_POINTER_DEPTH_POLICY = 'camera-ray-nearest-cube-surface';
 const CLAY_HAND_POSE_PRESSURE_CONTRACT = 'clay_local_y_axis_drives_fingertip_pressure';
 const CLAY_PRESSURE_NEUTRAL_AXIS = 0.22;
@@ -306,6 +310,14 @@ export function normalizeClayCubeConfig(requestedCube = DEFAULT_CLAY_CUBE) {
   };
 }
 
+export function normalizeClayCubeVolumePreservationMode(requestedMode = CLAY_CUBE_VOLUME_PRESERVATION_DISABLED) {
+  const normalized = String(requestedMode || CLAY_CUBE_VOLUME_PRESERVATION_DISABLED).trim().toLowerCase().replaceAll('-', '_');
+  if (['1', 'true', 'demo', 'preserve', CLAY_CUBE_VOLUME_PRESERVATION_DEMO].includes(normalized)) {
+    return CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
+  }
+  return CLAY_CUBE_VOLUME_PRESERVATION_DISABLED;
+}
+
 export function normalizeClaySculptConfig(requestedParticles = DEFAULT_CLAY_SCULPT_PARTICLES) {
   const requestedClaySculptParticles = String(requestedParticles || DEFAULT_CLAY_SCULPT_PARTICLES);
   const preset = CLAY_SCULPT_PRESETS[requestedClaySculptParticles];
@@ -440,6 +452,96 @@ function buildClayCubeBoundarySkinTopology(config = normalizeClayCubeConfig()) {
     indices,
     neighbors: neighbors.map(entry => [...entry]),
   };
+}
+
+function clayCubeBoundarySkinSignedVolume({ positions, config = normalizeClayCubeConfig() } = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const sourcePositions = positions instanceof Float32Array ? positions : seedClayCubeMaterialPoints(cfg);
+  const topology = buildClayCubeBoundarySkinTopology(cfg);
+  let signedVolume = 0;
+  for (let i = 0; i < topology.indices.length; i += 3) {
+    const sourceA = topology.sourceIndices[topology.indices[i]] * 4;
+    const sourceB = topology.sourceIndices[topology.indices[i + 1]] * 4;
+    const sourceC = topology.sourceIndices[topology.indices[i + 2]] * 4;
+    const ax = sourcePositions[sourceA];
+    const ay = sourcePositions[sourceA + 1];
+    const az = sourcePositions[sourceA + 2];
+    const bx = sourcePositions[sourceB];
+    const by = sourcePositions[sourceB + 1];
+    const bz = sourcePositions[sourceB + 2];
+    const cx = sourcePositions[sourceC];
+    const cy = sourcePositions[sourceC + 1];
+    const cz = sourcePositions[sourceC + 2];
+    signedVolume += (
+      ax * (by * cz - bz * cy)
+      - ay * (bx * cz - bz * cx)
+      + az * (bx * cy - by * cx)
+    ) / 6;
+  }
+  return {
+    signedVolume,
+    volume: Math.abs(signedVolume),
+    triangleCount: topology.indices.length / 3,
+  };
+}
+
+export function measureClayCubeVolumeProxy({
+  basePositions,
+  positions,
+  config = normalizeClayCubeConfig(),
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
+  const current = positions instanceof Float32Array && positions.length === base.length ? positions : base;
+  const baseVolume = clayCubeBoundarySkinSignedVolume({ positions: base, config: cfg });
+  const currentVolume = clayCubeBoundarySkinSignedVolume({ positions: current, config: cfg });
+  return {
+    evidenceKind: CLAY_CUBE_VOLUME_PROXY_EVIDENCE_KIND,
+    baseVolume: baseVolume.volume,
+    volume: currentVolume.volume,
+    signedVolume: currentVolume.signedVolume,
+    volumeRatio: baseVolume.volume > 0 ? currentVolume.volume / baseVolume.volume : 0,
+    triangleCount: currentVolume.triangleCount,
+  };
+}
+
+function countClayCubeVolumeCompensationParticles({
+  positions,
+  config = normalizeClayCubeConfig(),
+  colliders = [],
+} = {}) {
+  const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
+  if (!(positions instanceof Float32Array) || !colliders.length) return 0;
+  const normalizedColliders = colliders.slice(0, MAX_COLLIDERS).map(normalizedCubeCollider);
+  let compensated = 0;
+  for (let i = 0; i < cfg.particleCount; i += 1) {
+    const offset = i * 4;
+    const x = positions[offset];
+    const y = positions[offset + 1];
+    const z = positions[offset + 2];
+    let touched = false;
+    for (const collider of normalizedColliders) {
+      const dx = x - collider.center[0];
+      const dy = y - collider.center[1];
+      const dz = z - collider.center[2];
+      const radius = Math.max(collider.radius, 0.001);
+      const surfaceNormal = normalizeVec3(collider.surfaceNormal, [0, -1, 0]);
+      const normalOffset = dx * surfaceNormal[0] + dy * surfaceNormal[1] + dz * surfaceNormal[2];
+      const tangentX = dx - surfaceNormal[0] * normalOffset;
+      const tangentY = dy - surfaceNormal[1] * normalOffset;
+      const tangentZ = dz - surfaceNormal[2] * normalOffset;
+      const tangentDistance = Math.sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+      const tangentRatio = tangentDistance / radius;
+      const ringReach = clamp01(1 - Math.abs(tangentRatio - 0.82) / 0.55)
+        * clamp01(1 - Math.abs(normalOffset) / (radius * 0.45));
+      if (ringReach > 0) {
+        touched = true;
+        break;
+      }
+    }
+    if (touched) compensated += 1;
+  }
+  return compensated;
 }
 
 function measureClayCubeBoundarySkinRoughness(framePositions, sourceIndices, neighbors, basePositions, sourceValues) {
@@ -1121,15 +1223,19 @@ export function runClayCubeFirstLoopOracle({
   previousPositions = basePositions,
   config = normalizeClayCubeConfig(),
   colliders = [],
+  volumePreservation = CLAY_CUBE_VOLUME_PRESERVATION_DISABLED,
 } = {}) {
   const cfg = config?.particleCount ? config : normalizeClayCubeConfig();
   const base = basePositions instanceof Float32Array ? basePositions : seedClayCubeMaterialPoints(cfg);
   const previous = previousPositions instanceof Float32Array && previousPositions.length === base.length ? previousPositions : base;
   const next = new Float32Array(base.length);
   const normalizedColliders = colliders.slice(0, MAX_COLLIDERS).map(normalizedCubeCollider);
+  const volumePreservationMode = normalizeClayCubeVolumePreservationMode(volumePreservation);
+  const preserveDemo = volumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
   const activeCells = new Set();
   let deformedParticleCount = 0;
   let contactParticleCount = 0;
+  let volumeCompensationCount = 0;
   let maxDisplacement = 0;
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
@@ -1146,6 +1252,7 @@ export function runClayCubeFirstLoopOracle({
     let pushX = 0;
     let pushY = 0;
     let pushZ = 0;
+    let volumeCompensated = false;
 
     for (const collider of normalizedColliders) {
       const dx = x - collider.center[0];
@@ -1189,6 +1296,19 @@ export function runClayCubeFirstLoopOracle({
         if (boundaryZ) pushZ += (baseZ > 0 ? -1 : 1) * axisForce;
         touched = true;
       }
+      if (preserveDemo) {
+        const tangentRatio = tangentDistance / Math.max(radius, 0.001);
+        const ringReach = clamp01(1 - Math.abs(tangentRatio - 0.82) / 0.55)
+          * clamp01(1 - Math.abs(normalOffset) / (radius * 0.45));
+        if (ringReach > 0) {
+          const edgeAttenuation = boundaryAxes >= 2 ? 0.20 : 1;
+          const compensation = ringReach * ringReach * collider.strength * 0.052 * edgeAttenuation;
+          pushX -= surfaceNormal[0] * compensation;
+          pushY -= surfaceNormal[1] * compensation;
+          pushZ -= surfaceNormal[2] * compensation;
+          volumeCompensated = true;
+        }
+      }
       if (touched) contact += 1;
     }
 
@@ -1205,6 +1325,7 @@ export function runClayCubeFirstLoopOracle({
     const displacement = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (displacement > 0.002) deformedParticleCount += 1;
     if (contact > 0) contactParticleCount += 1;
+    if (volumeCompensated) volumeCompensationCount += 1;
     maxDisplacement = Math.max(maxDisplacement, displacement);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
@@ -1221,6 +1342,11 @@ export function runClayCubeFirstLoopOracle({
     config: cfg,
     colliders: normalizedColliders,
   });
+  const volumeProxy = measureClayCubeVolumeProxy({
+    basePositions: base,
+    positions: next,
+    config: cfg,
+  });
 
   return {
     evidenceKind: CLAY_CUBE_ORACLE_EVIDENCE_KIND,
@@ -1228,6 +1354,13 @@ export function runClayCubeFirstLoopOracle({
     diagnosticColorMode: CLAY_CUBE_DIAGNOSTIC_COLOR_MODE,
     diagnosticColoredParticleCount: deformedParticleCount,
     diagnosticHotParticleCount: contactParticleCount,
+    volumePreservationMode,
+    volumePreservationPolicy: preserveDemo ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled',
+    volumeProxyEvidenceKind: volumeProxy.evidenceKind,
+    baseVolumeProxy: volumeProxy.baseVolume,
+    volumeProxy: volumeProxy.volume,
+    volumeRatio: volumeProxy.volumeRatio,
+    volumeCompensationCount,
     positions: next,
     particleCount: cfg.particleCount,
     gridDimension: cfg.gridDimension,
@@ -1326,6 +1459,10 @@ struct CubeParams {
   colliderCount: u32,
   stepIndex: u32,
   gridDimension: u32,
+  volumePreservationMode: u32,
+  _pad0: u32,
+  _pad1: u32,
+  _pad2: u32,
 };
 
 @group(0) @binding(0) var<storage, read> basePositions: array<vec4f>;
@@ -1394,6 +1531,16 @@ fn clay_material_point_cube_first_loop_main(@builtin(global_invocation_id) globa
       let axisForce = structuralReach * structuralReach * forceLane.x * select(0.032, 0.055, boundaryAxes >= 3.0);
       push = push + boundaryAxisDirection * axisForce;
       touched = true;
+    }
+    if (params.volumePreservationMode == 1u) {
+      let tangentRatio = length(tangentDelta) / radius;
+      let ringReach = clamp(1.0 - abs(tangentRatio - 0.82) / 0.55, 0.0, 1.0)
+        * clamp(1.0 - abs(normalOffset) / (radius * 0.45), 0.0, 1.0);
+      if (ringReach > 0.0) {
+        let edgeAttenuation = select(1.0, 0.20, boundaryAxes >= 2.0);
+        let compensation = ringReach * ringReach * forceLane.x * 0.052 * edgeAttenuation;
+        push = push - surfaceNormal * compensation;
+      }
     }
     if (touched) {
       contact = contact + 1.0;
@@ -1574,6 +1721,7 @@ export function createKaminosClayPrototype({
   clayCube = false,
   clayCubeGrid = DEFAULT_CLAY_CUBE,
   claySurfaceSourceDebug = false,
+  clayCubeVolumePreservation = CLAY_CUBE_VOLUME_PRESERVATION_DISABLED,
   claySculpt = false,
   claySculptParticles = DEFAULT_CLAY_SCULPT_PARTICLES,
   onStatus = () => {},
@@ -1586,6 +1734,10 @@ export function createKaminosClayPrototype({
   const clayCubeEnabled = !!clayCube;
   const claySculptEnabled = !!claySculpt;
   const clayCubeSurfaceSourceDebugEnabled = clayCubeEnabled && !!claySurfaceSourceDebug;
+  const clayCubeVolumePreservationMode = clayCubeEnabled
+    ? normalizeClayCubeVolumePreservationMode(clayCubeVolumePreservation)
+    : CLAY_CUBE_VOLUME_PRESERVATION_DISABLED;
+  const clayCubeVolumePreservationEnabled = clayCubeVolumePreservationMode === CLAY_CUBE_VOLUME_PRESERVATION_DEMO;
   let active = false;
   let device = null;
   let gpuReadyPromise = null;
@@ -1760,6 +1912,12 @@ export function createKaminosClayPrototype({
   let clayCubeBrushCentroid = null;
   let clayCubeBrushToDeformationCentroidDistance = null;
   let clayCubeBrushToContactCentroidDistance = null;
+  let clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled';
+  let clayCubeVolumeProxyEvidenceKind = clayCubeEnabled ? CLAY_CUBE_VOLUME_PROXY_EVIDENCE_KIND : 'disabled';
+  let clayCubeBaseVolumeProxy = 0;
+  let clayCubeVolumeProxy = 0;
+  let clayCubeVolumeRatio = 0;
+  let clayCubeVolumeCompensationCount = 0;
   let lastCubeStateValues = null;
   let claySculptStepStatus = claySculptEnabled ? 'not-run' : 'disabled';
   let claySculptEvidenceKind = claySculptEnabled ? CLAY_SCULPT_WEBGPU_EVIDENCE_KIND : 'disabled';
@@ -1795,6 +1953,16 @@ export function createKaminosClayPrototype({
   const vertexCount = gridX * gridZ;
   const basePositions = new Float32Array(vertexCount * 4);
   const cubeBasePositions = seedClayCubeMaterialPoints(cubeConfig);
+  if (clayCubeEnabled) {
+    const seedVolumeProxy = measureClayCubeVolumeProxy({
+      basePositions: cubeBasePositions,
+      positions: cubeBasePositions,
+      config: cubeConfig,
+    });
+    clayCubeBaseVolumeProxy = seedVolumeProxy.baseVolume;
+    clayCubeVolumeProxy = seedVolumeProxy.volume;
+    clayCubeVolumeRatio = seedVolumeProxy.volumeRatio;
+  }
   const sculptBasePositions = seedClaySculptParticles(sculptConfig);
   const sculptCellCount = sculptConfig.hashGridDimension ** 3;
   const sculptEntryCount = sculptCellCount * sculptConfig.hashGridCellCapacity;
@@ -2704,7 +2872,7 @@ export function createKaminosClayPrototype({
         });
         cubeParamsBuffer = device.createBuffer({
           label: 'kaminos-clay-cube-params',
-          size: 4 * Uint32Array.BYTES_PER_ELEMENT,
+          size: 8 * Uint32Array.BYTES_PER_ELEMENT,
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         cubeStateBuffer = device.createBuffer({
@@ -2854,6 +3022,10 @@ export function createKaminosClayPrototype({
       Math.min(MAX_COLLIDERS, primitiveColliders.length),
       gpuStepCount + 1,
       cubeConfig.gridDimension,
+      clayCubeVolumePreservationEnabled ? 1 : 0,
+      0,
+      0,
+      0,
     ]));
     const encoder = device.createCommandEncoder({ label: 'kaminos-clay-cube-first-loop-step' });
     const pass = encoder.beginComputePass({ label: 'kaminos-clay-cube-first-loop-pass' });
@@ -2912,6 +3084,23 @@ export function createKaminosClayPrototype({
     }
     if (pointPosition) pointPosition.needsUpdate = true;
     if (pointColor) pointColor.needsUpdate = true;
+    clayCubeVolumeCompensationCount = clayCubeVolumePreservationEnabled
+      ? countClayCubeVolumeCompensationParticles({
+        positions: cubeValues,
+        config: cubeConfig,
+        colliders: primitiveColliders,
+      })
+      : 0;
+    const volumeProxy = measureClayCubeVolumeProxy({
+      basePositions: cubeBasePositions,
+      positions: cubeValues,
+      config: cubeConfig,
+    });
+    clayCubeVolumeProxyEvidenceKind = volumeProxy.evidenceKind;
+    clayCubeBaseVolumeProxy = volumeProxy.baseVolume;
+    clayCubeVolumeProxy = volumeProxy.volume;
+    clayCubeVolumeRatio = volumeProxy.volumeRatio;
+    clayCubeVolumePreservationPolicy = clayCubeVolumePreservationEnabled ? CLAY_CUBE_VOLUME_PRESERVATION_POLICY : 'disabled';
     refreshCubeBoundarySkin(cubeValues);
     const faceMetrics = computeCubeFaceMetrics({
       basePositions: cubeBasePositions,
@@ -3459,6 +3648,13 @@ export function createKaminosClayPrototype({
       clayCubeFaceMetricEvidenceKind,
       clayCubePlasticRestPolicy: CLAY_CUBE_PLASTIC_REST_POLICY,
       clayCubeCornerSofteningPolicy: CLAY_CUBE_CORNER_SOFTENING_POLICY,
+      clayCubeVolumePreservationMode,
+      clayCubeVolumePreservationPolicy,
+      clayCubeVolumeProxyEvidenceKind,
+      clayCubeBaseVolumeProxy,
+      clayCubeVolumeProxy,
+      clayCubeVolumeRatio,
+      clayCubeVolumeCompensationCount,
       clayCubeFrontFaceDeformedParticleCount,
       clayCubeBackFaceDeformedParticleCount,
       clayCubeFrontBackDeformationRatio,

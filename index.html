@@ -2164,6 +2164,7 @@ async function initKaminosClayRoute() {
     clayCube: clayCubeRoute,
     clayCubeGrid: params.get('clay_cube_grid') || '8x8x8',
     claySurfaceSourceDebug: params.get('clay_surface_source_debug') === '1' || params.get('clay_source_debug') === '1',
+    clayCubeVolumePreservation: params.get('clay_volume_preservation') || params.get('clay_volume_mode') || 'disabled',
     claySculpt: claySculptRoute,
     claySculptParticles: params.get('clay_sculpt_particles') || '12x8x12',
     onStatus: refreshClayReadout,

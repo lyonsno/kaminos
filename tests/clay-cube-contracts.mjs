@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as clayCore from '../clay-core.js';
 
 const {
+  measureClayCubeVolumeProxy,
   normalizeClayCubePointerCollider,
   normalizeClayCubeConfig,
   runClayCubeFirstLoopOracle,
@@ -328,4 +329,71 @@ const elsewhereRetainedAverage = localAverageDisplacement({
 assert.ok(
   elsewhereRetainedAverage >= dentedAverage * 0.98,
   `plastic cube dent popped back while brushing elsewhere: dented=${dentedAverage} elsewhere=${elsewhereRetainedAverage}`,
+);
+
+assert.equal(
+  typeof measureClayCubeVolumeProxy,
+  'function',
+  'cube route needs an explicit volume proxy for preserve-demo reporting',
+);
+
+const volumeConfig = normalizeClayCubeConfig('10x10x10');
+const volumeParticles = seedClayCubeMaterialPoints(volumeConfig);
+const volumeBrush = normalizeClayCubePointerCollider({
+  id: 'preserve-demo-front-face-pointer',
+  center: [0.08, 0.34, 0.34],
+  rawCenter: [0.08, 0.34, 0.34],
+  surfaceNormal: [0, 0, -1],
+  radius: 0.22,
+  strength: 1.20,
+});
+const seedVolumeProxy = measureClayCubeVolumeProxy({
+  basePositions: volumeParticles,
+  positions: volumeParticles,
+  config: volumeConfig,
+});
+assert.ok(seedVolumeProxy.volume > 0.35, 'cube seed volume proxy is too small to be useful');
+
+let ordinaryVolumeState = volumeParticles;
+let preserveVolumeState = volumeParticles;
+let ordinaryVolumeOracle = null;
+let preserveVolumeOracle = null;
+for (let step = 0; step < 6; step += 1) {
+  ordinaryVolumeOracle = runClayCubeFirstLoopOracle({
+    basePositions: volumeParticles,
+    previousPositions: ordinaryVolumeState,
+    config: volumeConfig,
+    colliders: [volumeBrush],
+  });
+  ordinaryVolumeState = ordinaryVolumeOracle.positions;
+  preserveVolumeOracle = runClayCubeFirstLoopOracle({
+    basePositions: volumeParticles,
+    previousPositions: preserveVolumeState,
+    config: volumeConfig,
+    colliders: [volumeBrush],
+    volumePreservation: 'preserve_demo',
+  });
+  preserveVolumeState = preserveVolumeOracle.positions;
+}
+
+assert.equal(ordinaryVolumeOracle.volumePreservationMode, 'disabled', 'ordinary cube brush should not silently preserve volume');
+assert.equal(preserveVolumeOracle.volumePreservationMode, 'preserve_demo', 'preserve-demo cube brush did not report effective mode');
+assert.equal(
+  preserveVolumeOracle.volumePreservationPolicy,
+  'local-boundary-pressure-compensation-not-incompressible-mpm-v0',
+  'preserve-demo cube brush did not report the honest policy identity',
+);
+assert.ok(Number.isFinite(ordinaryVolumeOracle.volumeRatio), 'ordinary cube brush did not report volume ratio');
+assert.ok(Number.isFinite(preserveVolumeOracle.volumeRatio), 'preserve-demo cube brush did not report volume ratio');
+assert.ok(
+  preserveVolumeOracle.volumeRatio >= ordinaryVolumeOracle.volumeRatio + 0.012,
+  `preserve-demo did not retain materially more volume: ordinary=${ordinaryVolumeOracle.volumeRatio} preserve=${preserveVolumeOracle.volumeRatio}`,
+);
+assert.ok(
+  preserveVolumeOracle.volumeRatio >= 0.985,
+  `preserve-demo volume loss is too large for hand-demo fake conservation: ${preserveVolumeOracle.volumeRatio}`,
+);
+assert.ok(
+  preserveVolumeOracle.maxDisplacement > ordinaryVolumeOracle.maxDisplacement * 0.70,
+  `preserve-demo erased the visible clay deformation instead of compensating around it: ordinary=${ordinaryVolumeOracle.maxDisplacement} preserve=${preserveVolumeOracle.maxDisplacement}`,
 );
