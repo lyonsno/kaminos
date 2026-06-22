@@ -279,6 +279,59 @@ def test_splat_asset_ingest_writes_only_to_experimental_inbox():
         assert not any(outside.iterdir())
 
 
+def test_image_asset_index_and_ingest_use_declared_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "images" / "inbox"
+        production = root / "images" / "production"
+        loose = root / "loose"
+        experimental.mkdir(parents=True)
+        production.mkdir(parents=True)
+        loose.mkdir()
+        (experimental / "hostile-greenroom-output-9f31c.png").write_bytes(b"png")
+        (production / "evil-orb-reference.webp").write_bytes(b"webp")
+        (loose / "lost-orb.jpg").write_bytes(b"lost")
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "image-inbox",
+                "label": "Experimental Image Inbox",
+                "kind": "image",
+                "stage": "experimental",
+                "path": experimental,
+            },
+            {
+                "id": "image-production",
+                "label": "Production Images",
+                "kind": "image",
+                "stage": "production",
+                "path": production,
+            },
+        ]
+        BROWSE_ROOTS["image-inbox"] = experimental
+        BROWSE_ROOTS["image-production"] = production
+        try:
+            entries = serve.list_asset_entries(kind="image")
+            ingested = serve.ingest_image_asset("../Evil Orb Test.PNG", b"orb")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert {entry["stage"] for entry in entries} == {"experimental", "production"}
+        assert [entry["root_id"] for entry in entries] == ["image-inbox", "image-production"]
+        assert all(entry["source"].startswith("/api/read?root=image-") for entry in entries)
+        assert "lost-orb.jpg" not in {entry["name"] for entry in entries}
+        assert ingested["kind"] == "image"
+        assert ingested["stage"] == "experimental"
+        assert ingested["root_id"] == "image-inbox"
+        assert ingested["name"] == "evil-orb-test.png"
+        assert ingested["source"] == "/api/read?root=image-inbox&path=evil-orb-test.png"
+        assert (experimental / "evil-orb-test.png").read_bytes() == b"orb"
+
+
 def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -364,5 +417,6 @@ if __name__ == "__main__":
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
+    test_image_asset_index_and_ingest_use_declared_roots()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

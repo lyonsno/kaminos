@@ -62,6 +62,11 @@ assert.match(index, /entry\.display \|\| greenroomEntryDisplay\(entry\)/, 'Green
 assert.match(index, /id="splat-assets-list"/, 'Greenroom tab exposes a dedicated Splat Assets list distinct from job output browsing');
 assert.match(index, /async function grBrowseSplatAssets\(/, 'Greenroom tab refreshes a declared splat asset index instead of requiring manual directory spelunking');
 assert.match(index, /grFetchApi\('assets',[\s\S]*kind:\s*'splat'/, 'Splat Assets UI queries /api/assets?kind=splat');
+assert.match(index, /id="image-assets-list"/, 'Greenroom tab exposes a dedicated Image Assets list for reference/test images');
+assert.match(index, /async function grBrowseImageAssets\(/, 'Greenroom tab refreshes a declared image asset index instead of relying on scratch folklore');
+assert.match(index, /grFetchApi\('assets',[\s\S]*kind:\s*'image'/, 'Image Assets UI queries /api/assets?kind=image');
+assert.match(index, /fetch\('\/api\/ingest-image'/, 'generated and dropped images ingest through a server route into the experimental image inbox');
+assert.match(index, /window\.kaminosIngestImageAsset/, 'browser witnesses and agents can ingest image assets without DOM inference');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
 assert.match(index, /async function ingestDroppedSplatFile\(/, 'loose PLY/SPZ drops ingest into the experimental splat inbox before import');

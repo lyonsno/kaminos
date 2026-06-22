@@ -29,12 +29,22 @@ KAMINOS_SPLAT_PRODUCTION_DIR = Path(os.environ.get(
     "KAMINOS_SPLAT_PRODUCTION_DIR",
     str(KAMINOS_ASSETS_DIR / "splats" / "production"),
 )).expanduser()
+KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
+    "KAMINOS_IMAGE_INBOX_DIR",
+    str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
+)).expanduser()
+KAMINOS_IMAGE_PRODUCTION_DIR = Path(os.environ.get(
+    "KAMINOS_IMAGE_PRODUCTION_DIR",
+    str(KAMINOS_ASSETS_DIR / "images" / "production"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
+    "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
+    "image-production": KAMINOS_IMAGE_PRODUCTION_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -46,6 +56,7 @@ BROWSE_ROOTS = {
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
@@ -64,6 +75,20 @@ ASSET_ROOTS = [
         "stage": "production",
         "path": KAMINOS_SPLAT_PRODUCTION_DIR,
     },
+    {
+        "id": "image-inbox",
+        "label": "Experimental Image Inbox",
+        "kind": "image",
+        "stage": "experimental",
+        "path": KAMINOS_IMAGE_INBOX_DIR,
+    },
+    {
+        "id": "image-production",
+        "label": "Production Images",
+        "kind": "image",
+        "stage": "production",
+        "path": KAMINOS_IMAGE_PRODUCTION_DIR,
+    },
 ]
 for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_ASSET_ROOTS", "").split(os.pathsep)), 1):
     root_id = f"splat-extra-{index}"
@@ -73,6 +98,17 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
         "id": root_id,
         "label": f"Experimental Splat Root {index}",
         "kind": "splat",
+        "stage": "experimental",
+        "path": root_path,
+    })
+for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_IMAGE_ASSET_ROOTS", "").split(os.pathsep)), 1):
+    root_id = f"image-extra-{index}"
+    root_path = Path(extra_root).expanduser()
+    BROWSE_ROOTS[root_id] = root_path
+    ASSET_ROOTS.append({
+        "id": root_id,
+        "label": f"Experimental Image Root {index}",
+        "kind": "image",
         "stage": "experimental",
         "path": root_path,
     })
@@ -95,6 +131,14 @@ def runtime_config():
 
 def splat_asset_root_allows_pointer(root_name):
     return any(root.get("id") == root_name and root.get("kind") == "splat" for root in ASSET_ROOTS)
+
+
+def asset_extensions_for_kind(kind):
+    if kind == "splat":
+        return SPLAT_EXTENSIONS
+    if kind == "image":
+        return IMAGE_EXTENSIONS
+    return MESH_EXTENSIONS
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -220,7 +264,7 @@ def build_asset_display_metadata(path, *, root_label, stage, size=None):
         "subtitle": " / ".join(subtitle_parts),
         "meta": f"raw {path.name}",
         "raw_name": path.name,
-        "load_label": "Import Splat",
+        "load_label": "Open Image" if path.suffix.lower() in IMAGE_EXTENSIONS else "Import Splat",
         "stage": stage,
         "root_label": root_label,
     }
@@ -248,7 +292,7 @@ def list_asset_entries(kind="splat"):
         root_path = Path(root["path"]).expanduser()
         if not root_path.is_dir():
             continue
-        suffixes = SPLAT_EXTENSIONS if root.get("kind") == "splat" else MESH_EXTENSIONS
+        suffixes = asset_extensions_for_kind(root.get("kind"))
         for path in sorted(root_path.rglob("*")):
             if any(part.startswith(".") for part in path.relative_to(root_path).parts):
                 continue
@@ -267,10 +311,11 @@ def build_asset_entry(root, path):
     except ValueError:
         rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
-    correction_document = load_splat_asset_correction(root_id, rel_path)
+    kind = root.get("kind")
+    correction_document = load_splat_asset_correction(root_id, rel_path) if kind == "splat" else None
     return {
         "id": f"{root_id}:{rel_path}",
-        "kind": root.get("kind"),
+        "kind": kind,
         "stage": root.get("stage", "experimental"),
         "root_id": root_id,
         "root_label": root.get("label") or root_id,
@@ -399,6 +444,33 @@ def splat_inbox_root():
     return None
 
 
+def image_asset_root(root_id):
+    for root in ASSET_ROOTS:
+        if root.get("id") == root_id and root.get("kind") == "image":
+            return root
+    return None
+
+
+def resolve_image_asset_path(root_id, rel_path):
+    root = image_asset_root(root_id)
+    if not root:
+        raise FileNotFoundError(f"image asset root not configured: {root_id}")
+    root_path = Path(root["path"]).expanduser().resolve()
+    target = root_path / _asset_relative_path(rel_path)
+    if target.suffix.lower() not in IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported image asset extension: {target.suffix or 'missing'}")
+    if not target.is_file():
+        raise FileNotFoundError("image asset not found")
+    return root, root_path, target
+
+
+def image_inbox_root():
+    for root in ASSET_ROOTS:
+        if root.get("id") == "image-inbox" and root.get("kind") == "image":
+            return root
+    return None
+
+
 def sanitize_splat_filename(filename):
     raw_name = Path(str(filename or "splat.ply")).name
     ext = Path(raw_name).suffix.lower()
@@ -406,6 +478,16 @@ def sanitize_splat_filename(filename):
         raise ValueError(f"Unsupported splat asset extension: {ext or 'missing'}")
     stem = Path(raw_name).stem.strip() or "splat"
     stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_") or "splat"
+    return f"{stem.lower()}{ext}"
+
+
+def sanitize_image_filename(filename):
+    raw_name = Path(str(filename or "image.png")).name
+    ext = Path(raw_name).suffix.lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported image asset extension: {ext or 'missing'}")
+    stem = Path(raw_name).stem.strip() or "image"
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_") or "image"
     return f"{stem.lower()}{ext}"
 
 
@@ -423,6 +505,20 @@ def ingest_splat_asset(filename, content):
     sidecar = splat_correction_sidecar_path(target)
     if sidecar.exists():
         sidecar.unlink()
+    return build_asset_entry(root, target)
+
+
+def ingest_image_asset(filename, content):
+    root = image_inbox_root()
+    if not root:
+        raise FileNotFoundError("image-inbox root is not configured")
+    root_path = Path(root["path"]).expanduser()
+    root_path.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_image_filename(filename)
+    target = (root_path / safe_name).resolve()
+    if not target.is_relative_to(root_path.resolve()):
+        raise PermissionError("Path traversal")
+    target.write_bytes(content)
     return build_asset_entry(root, target)
 
 
@@ -527,6 +623,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_save_scene()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
+        elif parsed.path == "/api/ingest-image":
+            self.handle_ingest_image(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
         else:
@@ -602,6 +700,34 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({
             "schema": "kaminos.asset-ingest.v0",
             "kind": "splat",
+            "entry": entry,
+        })
+
+    def handle_ingest_image(self, params):
+        """Write a dropped/generated raster into the experimental image inbox."""
+        filename = params.get("name", [""])[0]
+        if not filename:
+            self.send_json({"error": "name required"}, 400)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            entry = ingest_image_asset(filename, self.rfile.read(length))
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json({
+            "schema": "kaminos.asset-ingest.v0",
+            "kind": "image",
             "entry": entry,
         })
 
@@ -787,9 +913,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         })
 
     def handle_assets(self, params):
-        """List declared asset roots. v0 supports splat assets."""
+        """List declared asset roots. v0 supports splat and image assets."""
         kind = params.get("kind", ["splat"])[0]
-        if kind not in {"splat", "all"}:
+        if kind not in {"splat", "image", "all"}:
             self.send_json({"error": f"Unsupported asset kind: {kind}"}, 400)
             return
         roots = [
@@ -836,10 +962,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
-                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
@@ -1009,7 +1135,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    for path in (BROWSE_ROOTS.get("splat-inbox"), BROWSE_ROOTS.get("splat-production")):
+    for path in (
+        BROWSE_ROOTS.get("splat-inbox"),
+        BROWSE_ROOTS.get("splat-production"),
+        BROWSE_ROOTS.get("image-inbox"),
+        BROWSE_ROOTS.get("image-production"),
+    ):
         if path:
             path.mkdir(parents=True, exist_ok=True)
     print(f"Kaminos server at http://localhost:{PORT}")
@@ -1017,6 +1148,8 @@ if __name__ == "__main__":
     print(f"  Greenroom: {BROWSE_ROOTS['greenroom']}")
     print(f"  Splat inbox: {BROWSE_ROOTS['splat-inbox']}")
     print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
+    print(f"  Image inbox: {BROWSE_ROOTS['image-inbox']}")
+    print(f"  Production images: {BROWSE_ROOTS['image-production']}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()

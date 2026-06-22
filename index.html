@@ -569,6 +569,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div id="splat-assets-list"></div>
+    <h2 style="display:flex; align-items:center; gap:8px; margin-top:14px;">Image Assets <button class="btn" onclick="grBrowseImageAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
+    <div id="image-assets-list"></div>
     <h2 style="display:flex; align-items:center; gap:8px;">GPU Greenroom <button class="btn" onclick="grBrowse()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div class="env-grid" id="greenroom-root-buttons" style="margin-bottom: 10px;"></div>
     <div id="greenroom-breadcrumb" style="font-size: 10px; color: #555; font-family: 'SF Mono', monospace; margin-bottom: 8px;"></div>
@@ -620,7 +622,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
     <input type="text" class="gen-input" id="gen-prompt" placeholder="A gold ring on a dark surface, product photography">
     <button class="btn" id="gen-btn" onclick="generateImage()">Generate</button>
-    <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Save to Pipeline</button>
+    <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Save Image</button>
     <img class="gen-preview" id="gen-preview">
     <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
   </div>
@@ -4252,6 +4254,47 @@ async function initKaminosVolumeRoute() {
 }
 
 // --- File Input Handling ---
+function isImageAssetName(name = '') {
+  return /\.(png|jpe?g|webp)$/i.test(name);
+}
+
+function imageAssetFilenameFromPrompt(prompt = '', fallback = 'generated-input.png') {
+  const stem = String(prompt || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 64);
+  return `${stem || fallback.replace(/\.[^.]+$/, '')}.png`;
+}
+
+async function ingestImageAsset(blobOrFile, name = 'image.png') {
+  const resp = await fetch('/api/ingest-image' + '?' + new URLSearchParams({ name }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: blobOrFile,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error || !data.entry?.source) {
+    throw new Error(data.error || `Image ingest failed ${resp.status}`);
+  }
+  await grBrowseImageAssets();
+  return data.entry;
+}
+
+async function ingestDroppedImageFiles(files) {
+  const entries = [];
+  for (const file of files) {
+    const name = file?.name || 'dropped-image.png';
+    if (!isImageAssetName(name)) continue;
+    entries.push(await ingestImageAsset(file, name));
+  }
+  if (entries.length) {
+    setInfo(`Image asset ingested: ${entries.map(entry => entry.display?.title || entry.name).join(', ')}`);
+  }
+  return entries;
+}
+
 async function handleFiles(files, options = {}) {
   loadedFiles = {};
   receipt = null;
@@ -4288,7 +4331,11 @@ async function handleFiles(files, options = {}) {
     if (glb) return showGLB(loadedFiles[glb], loadOptions);
     else if (splat) return ingestDroppedSplatFile(loadedFiles[splat], loadOptions);
     else if (loadedFiles['depth_vis.png']) return showDepthSurface(loadOptions);
-    else setInfo('No recognized outputs \u2014 drop a sidecar output directory');
+    else {
+      const looseImages = Object.values(loadedFiles).filter(file => isImageAssetName(file.name || ''));
+      if (looseImages.length) return ingestDroppedImageFiles(looseImages);
+      setInfo('No recognized outputs \u2014 drop a sidecar output directory');
+    }
   }
   return null;
 }
@@ -4800,7 +4847,7 @@ window.generateImage = async function() {
     previewEl.src = imgUrl;
     previewEl.style.display = 'block';
     previewEl.onload = () => {
-      statusEl.textContent = 'Generated via Pollinations.ai (free). Right-click to save.';
+      statusEl.textContent = 'Generated via Pollinations.ai (free).';
       downloadBtn.style.display = 'inline-block';
       downloadBtn.dataset.url = imgUrl;
     };
@@ -4827,7 +4874,7 @@ window.generateImage = async function() {
         const imgData = data.artifacts[0].base64;
         previewEl.src = `data:image/png;base64,${imgData}`;
         previewEl.style.display = 'block';
-        statusEl.textContent = 'Generated via Stability AI. Right-click to save.';
+        statusEl.textContent = 'Generated via Stability AI.';
         downloadBtn.style.display = 'inline-block';
         downloadBtn.dataset.url = previewEl.src;
       } else {
@@ -4839,13 +4886,23 @@ window.generateImage = async function() {
   }
 };
 
-window.downloadGenerated = function() {
+window.downloadGenerated = async function() {
   const url = document.getElementById('gen-download-btn').dataset.url;
   if (!url) return;
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'generated_input.png';
-  a.click();
+  const statusEl = document.getElementById('gen-status');
+  const prompt = document.getElementById('gen-prompt').value.trim();
+  try {
+    statusEl.textContent = 'Saving image asset...';
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Generated image fetch failed ${resp.status}`);
+    const blob = await resp.blob();
+    const entry = await ingestImageAsset(blob, imageAssetFilenameFromPrompt(prompt));
+    statusEl.textContent = `Saved image asset: ${entry.path || entry.name}`;
+    setActiveTab('greenroom');
+    setInfo(`Image asset saved: ${entry.display?.title || entry.name}`);
+  } catch (err) {
+    statusEl.textContent = 'Image asset save failed: ' + err.message;
+  }
 };
 
 // Show/hide stability key based on provider
@@ -6033,6 +6090,72 @@ async function grBrowseSplatAssets() {
   }
 }
 
+async function grBrowseImageAssets() {
+  const listEl = document.getElementById('image-assets-list');
+  if (!listEl) return;
+  const data = await grFetchApi('assets', { kind: 'image' });
+  if (data.error) {
+    listEl.innerHTML = `<div style="font-size:11px; color:#555; padding:8px;">${escapeHtml(data.error)}</div>`;
+    return;
+  }
+  const entries = data.entries || [];
+  if (!entries.length) {
+    const roots = (data.roots || [])
+      .map(root => `${escapeHtml(root.id)}: ${escapeHtml(root.path || '')}`)
+      .join('<br>');
+    listEl.innerHTML = `<div style="font-size:11px; color:#444; padding:8px;">No image assets indexed${roots ? `<div style="font-family:'SF Mono', monospace; margin-top:6px;">${roots}</div>` : ''}</div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  for (const entry of entries) {
+    const div = document.createElement('div');
+    div.className = 'gr-entry';
+    div.dataset.imageAssetId = entry.id || '';
+    div.dataset.assetStage = entry.stage || '';
+    div.dataset.assetRoot = entry.root_id || '';
+
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    icon.textContent = entry.stage === 'production' ? '\u25A3' : '\u25A2';
+    div.appendChild(icon);
+
+    renderGreenroomEntryIdentity(div, entry, { forceSubtitle: true });
+
+    const stage = document.createElement('span');
+    stage.className = `gr-stage ${entry.stage === 'production' ? 'production' : 'experimental'}`;
+    stage.textContent = entry.stage === 'production' ? 'production' : 'experimental';
+    stage.title = entry.root_label || entry.root_id || '';
+    div.appendChild(stage);
+
+    const url = entry.source;
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn';
+    viewBtn.textContent = 'View';
+    viewBtn.onclick = (e) => {
+      e.stopPropagation();
+      window.open(url, '_blank', 'noopener');
+    };
+    div.appendChild(viewBtn);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn';
+    copyBtn.textContent = 'Copy Source';
+    copyBtn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(url);
+        setInfo(`Image source copied: ${entry.path || entry.name}`);
+      } catch {
+        setInfo(url);
+      }
+    };
+    div.appendChild(copyBtn);
+
+    div.onclick = () => window.open(url, '_blank', 'noopener');
+    listEl.appendChild(div);
+  }
+}
+
 async function grInit() {
   const rootBtns = document.getElementById('greenroom-root-buttons');
 
@@ -6074,6 +6197,7 @@ async function grInit() {
   // Default: show done
   grCurrentPath = 'done';
   grBrowseSplatAssets();
+  grBrowseImageAssets();
   grBrowse();
   grBrowseScenes();
   grBrowseScratch();
@@ -6299,7 +6423,9 @@ async function ingestDroppedSplatFile(file, options = {}) {
 }
 
 window.grBrowseSplatAssets = grBrowseSplatAssets;
+window.grBrowseImageAssets = grBrowseImageAssets;
 window.grBrowse = grBrowse;
+window.kaminosIngestImageAsset = ingestImageAsset;
 window.kaminosIngestDroppedSplatFile = ingestDroppedSplatFile;
 
 async function grOpenJobDir(path) {
