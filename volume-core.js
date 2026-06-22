@@ -103,6 +103,7 @@ function minimalPlumeProofDebug(value) {
     enabled: scene === 'canonical_plume',
     fieldView: 'density-smoke-readback',
     raymarchView: 'same-field-linear-volume-render',
+    canonicalRenderSourceOrientation: 'screen-y-matches-source-field-y',
     excluded: 'bonfire-front-topology/fire-licks/microdetail/authored-bonfire-shape',
   };
 }
@@ -2256,7 +2257,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, (1.0 - in.uv.y) * 2.0 - 1.0);
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
   let nearWorldRaw = u.invViewProj * nearClip;

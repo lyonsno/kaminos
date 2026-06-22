@@ -208,6 +208,8 @@ assert.match(core, /canonicalSourceMode/, 'canonical plume source physics mode r
 assert.match(core, /canonicalSourceYControl/, 'canonical plume source height is an explicit route/debug control');
 assert.match(core, /canonicalSourceInjection/, 'canonical plume separates source injection momentum from smoke birth flow rate');
 assert.match(core, /canonicalBuoyancyLift/, 'canonical plume separates explicit buoyant lift from source injection');
+assert.match(core, /canonicalRenderSourceOrientation/, 'canonical plume records the render/source orientation contract');
+assert.match(core, /let ndc = vec2<f32>\(in\.uv\.x \* 2\.0 - 1\.0, in\.uv\.y \* 2\.0 - 1\.0\)/, 'raymarch screen-to-world Y must match source/readback field orientation');
 assert.match(core, /canonicalPassiveBottomProof/, 'canonical plume has a passive bottom-source proof branch');
 assert.match(core, /canonicalBuoyantBottomProof/, 'canonical plume has a buoyant bottom-source proof branch');
 assert.match(core, /canonicalReadbackSourceYNorm/, 'canonical plume readback derives its source row from the same source-height control as the shader');
