@@ -279,6 +279,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Orientation</span><span class="field-val" id="volume-render-source-orientation">unverified</span></div>
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
+      <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
@@ -636,7 +637,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=smoke-only-frozen-diagnostic-0621';
+import { createKaminosVolumePrototype } from './volume-core.js?v=honest-smoke-fire-bridge-0622';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1453,6 +1454,51 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
   },
+  honest_smoke_0622: {
+    label: 'honest smoke 0622',
+    volumeScene: 'canonical_plume',
+    sourceMode: 'buoyant_bottom',
+    renderMode: 'smoke_only',
+    motionMode: 'frozen',
+    contentMode: 'smoke',
+    density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    absorption: 2.00,
+    glow: 0.00,
+    smoke: 2.80,
+    curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    majorantSkip: 0.15,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
+    plumeHeight: 1.45,
+    windStrength: 0.00,
+    windAngle: 0,
+    windHeight: 0.15,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    majorantGrid: 48,
+    gridOverlay: 0.00,
+    flowDebug: 0.00,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+  },
 };
 
 const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
@@ -1469,6 +1515,11 @@ const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
   animated: 0,
   frozen: 1,
 };
+const CANONICAL_VOLUME_CONTENT_MODE_VALUES = {
+  smoke: 0,
+  fire: 1,
+  fire_smoke: 2,
+};
 
 function normalizeCanonicalVolumeSourceMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
@@ -1480,6 +1531,10 @@ function normalizeCanonicalRenderMode(value) {
 
 function normalizeCanonicalMotionMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+}
+
+function normalizeCanonicalContentMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
 }
 
 function canonicalVolumeSourceDefaults(mode) {
@@ -1506,6 +1561,7 @@ let activeCanonicalVolumeMacroPreset = '';
 let routedCanonicalSourceMode = 'current';
 let routedCanonicalRenderMode = 'default';
 let routedCanonicalMotionMode = 'animated';
+let routedCanonicalContentMode = 'smoke';
 let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
 let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
@@ -1608,9 +1664,13 @@ function applyCanonicalVolumeMacroPreset(name) {
   if (!preset) return false;
   applyVolumeScenePreset(preset.volumeScene || 'canonical_plume', { keepBudgetPreset: true });
   for (const [key, value] of Object.entries(preset)) {
-    if (key === 'label' || key === 'volumeScene') continue;
+    if (key === 'label' || key === 'volumeScene' || key === 'sourceMode' || key === 'renderMode' || key === 'motionMode' || key === 'contentMode') continue;
     setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
   }
+  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(preset.sourceMode || routedCanonicalSourceMode);
+  routedCanonicalRenderMode = normalizeCanonicalRenderMode(preset.renderMode || routedCanonicalRenderMode);
+  routedCanonicalMotionMode = normalizeCanonicalMotionMode(preset.motionMode || routedCanonicalMotionMode);
+  routedCanonicalContentMode = normalizeCanonicalContentMode(preset.contentMode || routedCanonicalContentMode);
   activeCanonicalVolumeMacroPreset = name;
   return true;
 }
@@ -1711,6 +1771,8 @@ function readVolumeControls() {
     canonicalRenderModeValue: CANONICAL_VOLUME_RENDER_MODE_VALUES[routedCanonicalRenderMode] || 0,
     canonicalMotionMode: routedCanonicalMotionMode,
     canonicalMotionModeValue: CANONICAL_VOLUME_MOTION_MODE_VALUES[routedCanonicalMotionMode] || 0,
+    canonicalContentMode: routedCanonicalContentMode,
+    canonicalContentModeValue: CANONICAL_VOLUME_CONTENT_MODE_VALUES[routedCanonicalContentMode] || 0,
     canonicalSourceY: routedCanonicalSourceY,
     canonicalSourceInjection: routedCanonicalInjection,
     canonicalBuoyancy: routedCanonicalBuoyancy,
@@ -1772,6 +1834,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = s.canonicalPlumeControls?.renderMode || 'default';
   document.getElementById('volume-canonical-motion-mode-state').textContent = s.canonicalPlumeControls?.motionMode || 'animated';
+  document.getElementById('volume-canonical-content-mode-state').textContent = s.canonicalPlumeControls?.contentMode || 'smoke';
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
   document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
@@ -1822,9 +1885,10 @@ async function initKaminosVolumeRoute() {
   if (routeCanonicalMacroPreset) {
     applyCanonicalVolumeMacroPreset(routeCanonicalMacroPreset);
   }
-  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(params.get('volume_canonical_source_mode') || 'current');
-  routedCanonicalRenderMode = normalizeCanonicalRenderMode(params.get('volume_canonical_render_mode') || 'default');
-  routedCanonicalMotionMode = normalizeCanonicalMotionMode(params.get('volume_canonical_motion_mode') || 'animated');
+  routedCanonicalSourceMode = normalizeCanonicalVolumeSourceMode(params.get('volume_canonical_source_mode') || routedCanonicalSourceMode || 'current');
+  routedCanonicalRenderMode = normalizeCanonicalRenderMode(params.get('volume_canonical_render_mode') || routedCanonicalRenderMode || 'default');
+  routedCanonicalMotionMode = normalizeCanonicalMotionMode(params.get('volume_canonical_motion_mode') || routedCanonicalMotionMode || 'animated');
+  routedCanonicalContentMode = normalizeCanonicalContentMode(params.get('volume_canonical_content') || routedCanonicalContentMode || 'smoke');
   const canonicalSourceDefaults = canonicalVolumeSourceDefaults(routedCanonicalSourceMode);
   routedCanonicalSourceY = canonicalSourceDefaults.sourceY;
   routedCanonicalInjection = canonicalSourceDefaults.injection;

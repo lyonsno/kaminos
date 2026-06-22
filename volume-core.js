@@ -25,6 +25,11 @@ const CANONICAL_MOTION_MODE_VALUES = {
   animated: 0,
   frozen: 1,
 };
+const CANONICAL_CONTENT_MODE_VALUES = {
+  smoke: 0,
+  fire: 1,
+  fire_smoke: 2,
+};
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -70,6 +75,14 @@ function normalizeCanonicalMotionMode(value) {
 
 function canonicalMotionModeValue(value) {
   return CANONICAL_MOTION_MODE_VALUES[normalizeCanonicalMotionMode(value)] || 0;
+}
+
+function normalizeCanonicalContentMode(value) {
+  return Object.hasOwn(CANONICAL_CONTENT_MODE_VALUES, value) ? value : 'smoke';
+}
+
+function canonicalContentModeValue(value) {
+  return CANONICAL_CONTENT_MODE_VALUES[normalizeCanonicalContentMode(value)] || 0;
 }
 
 function normalizeWindStrength(value) {
@@ -1458,10 +1471,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
+  let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let canonicalPlumeScene = step(2.5, sceneMode);
+  let canonicalSmokeContent = 1.0 - canonicalPlumeScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
+  let canonicalFireContent = canonicalPlumeScene * step(0.5, canonicalContentMode);
   let canonicalFrozenMotion = canonicalPlumeScene * step(0.5, canonicalMotionMode);
   let canonicalPhaseTime = mix(time, 0.0, canonicalFrozenMotion);
   let canonicalPassiveBottomProof = canonicalPlumeScene * step(0.5, canonicalSourceMode) * (1.0 - step(1.5, canonicalSourceMode));
@@ -1930,6 +1946,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     2.4
   );
   let fireBirth = mix(columnFireBirth, bonfireRadianceBirth, bonfireScene);
+  let canonicalMinimalFireBirth = canonicalFireContent
+    * source
+    * (0.32 + canonicalSourceBreakup * 0.20)
+    * (0.58 + canonicalBuoyancyLift * 0.24)
+    * (1.0 - smoothstep(0.36, 0.90, p.y));
+  let canonicalMinimalFireHeat = canonicalMinimalFireBirth * (0.80 + canonicalBuoyancyLift * 0.30);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
@@ -2130,7 +2152,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
   let columnHeatBirth = source * 0.74 + emberRing * 0.18;
-  let canonicalHeatBirth = source * 1.16 * canonicalBuoyancyLift;
+  let canonicalHeatBirth = source * 1.16 * canonicalBuoyancyLift + canonicalMinimalFireHeat;
   let bonfireHeatBirth = bonfireCoreHeat * 0.78 + bonfireReactionFront * inputFlow * sourceScaleCompensation * 0.20 + bonfireEmberRing * 0.08;
   heat = max(heat, mix(mix(columnHeatBirth, canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene));
   heat = max(heat, externalInjection.material.y * 0.92);
@@ -2237,6 +2259,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   flameDetail = max(flameDetail, externalInjection.fire.z);
   visibleFireCarrier = flameDetail;
   combustionFront = max(combustionFront, combustionFrontBirth);
+  flame = max(flame, canonicalMinimalFireBirth * 1.04);
+  ember = max(ember, canonicalMinimalFireBirth * 0.36);
+  flameDetail = max(flameDetail, canonicalMinimalFireBirth * 0.42);
 
   let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.68, bonfireSourceY - 0.08, p.y), bonfireScene);
   flame = flame * bonfireFireCeiling;
@@ -2265,9 +2290,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalProofCarrierMask = 1.0 - canonicalPlumeScene;
   fuel = fuel * canonicalProofCarrierMask;
   materialDetail = materialDetail * canonicalProofCarrierMask;
-  flame = flame * canonicalProofCarrierMask;
-  ember = ember * canonicalProofCarrierMask;
-  flameDetail = flameDetail * canonicalProofCarrierMask;
+  smoke = smoke * canonicalSmokeContent;
+  flame = flame * (canonicalProofCarrierMask + canonicalFireContent);
+  ember = ember * (canonicalProofCarrierMask + canonicalFireContent);
+  flameDetail = flameDetail * (canonicalProofCarrierMask + canonicalFireContent);
   combustionFront = combustionFront * canonicalProofCarrierMask;
   combustionFrontTopology = combustionFrontTopology * canonicalProofCarrierMask;
   microSmoke = microSmoke * canonicalProofCarrierMask;
@@ -2310,6 +2336,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
+  let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
+  let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
+  let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
+  let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
@@ -2384,7 +2414,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
-    let canonicalDebugSmokeDensity = smokeDensity * u.viewport_steps_density.w;
+    let canonicalDebugSmokeDensity = smokeDensity * canonicalSmokeContent * u.viewport_steps_density.w;
     let density = mix(
       (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
       canonicalDebugSmokeDensity,
@@ -2408,7 +2438,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
     let smoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
-      smokeDensity * u.fire_smoke_curl_speed.y,
+      smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
     );
     let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
@@ -2469,7 +2499,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       bonfireRenderScene
     );
     let fireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
+      clamp(visibleFlameAlphaCarrier * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -3011,6 +3041,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.flowRate,
       normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
       normalizeCanonicalMotionMode(snapshot.canonicalMotionMode),
+      normalizeCanonicalContentMode(snapshot.canonicalContentMode),
       snapshot.canonicalSourceY,
       snapshot.canonicalSourceInjection,
       snapshot.canonicalBuoyancy,
@@ -3540,7 +3571,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[71] = 0;
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
     uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
-    uniforms[74] = 0;
+    uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
     uniforms[75] = 0;
     uniforms.set(previousViewProj.elements, 76);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -3577,6 +3608,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderModeValue: uniforms[72],
       motionMode: normalizeCanonicalMotionMode(controlsSnapshot.canonicalMotionMode),
       motionModeValue: uniforms[73],
+      contentMode: normalizeCanonicalContentMode(controlsSnapshot.canonicalContentMode),
+      contentModeValue: uniforms[74],
     };
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);

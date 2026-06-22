@@ -88,6 +88,36 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
   },
+  honest_smoke_0622: {
+    density: 0.45,
+    smoke: 2.80,
+    absorption: 2.00,
+    curl: 1.00,
+    projection: 1.05,
+    speed: 0.30,
+    raySteps: 148,
+    adaptiveRays: 0.05,
+    occupancySkip: 0.25,
+    majorantSkip: 0.15,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.00,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    plumeHeight: 1.45,
+    renderScale: 0.65,
+    inputRadius: 0.08,
+    flowRate: 1.90,
+    resolution: 128,
+    majorantGrid: 48,
+    canonicalSpread: 0.00,
+    canonicalCenterline: 0.50,
+    canonicalBodyBalance: 1.50,
+    sourceMode: 'buoyant_bottom',
+    renderMode: 'smoke_only',
+    motionMode: 'frozen',
+    contentMode: 'smoke',
+  },
 };
 const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
   current: 0,
@@ -103,6 +133,11 @@ const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
   animated: 0,
   frozen: 1,
 };
+const CANONICAL_VOLUME_CONTENT_MODE_VALUES = {
+  smoke: 0,
+  fire: 1,
+  fire_smoke: 2,
+};
 function normalizeCanonicalSourceMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
 }
@@ -111,6 +146,9 @@ function normalizeCanonicalRenderMode(value) {
 }
 function normalizeCanonicalMotionMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+}
+function normalizeCanonicalContentMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
 }
 function canonicalSourceDefaults(mode) {
   const normalized = normalizeCanonicalSourceMode(mode);
@@ -135,9 +173,11 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
   ? requestedCanonicalMacroPreset
   : '';
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
-const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || 'current');
-const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || 'default');
-const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || 'animated');
+const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || canonicalMacroPreset.sourceMode || 'current');
+const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || canonicalMacroPreset.renderMode || 'default');
+const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalContentMode = normalizeCanonicalContentMode(routeParams.get('volume_canonical_content') || canonicalMacroPreset.contentMode || 'smoke');
+const canonicalContentRequestsFire = expectedCanonicalContentMode === 'fire' || expectedCanonicalContentMode === 'fire_smoke';
 const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
 const requestedCanonicalSourceY = Number(routeParams.get('volume_canonical_source_y'));
 const expectedCanonicalSourceY = routeParams.has('volume_canonical_source_y') && Number.isFinite(requestedCanonicalSourceY)
@@ -605,13 +645,15 @@ async function main() {
     assert.equal(state.canonicalPlumeControls?.renderMode || 'default', expectedCanonicalRenderMode, 'effective canonical render diagnostic mode did not reach debug state');
     assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionMode, 'canonical motion diagnostic route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.motionMode || 'animated', expectedCanonicalMotionMode, 'effective canonical motion diagnostic mode did not reach debug state');
+    assert.equal(state.controls?.canonicalContentMode || 'smoke', expectedCanonicalContentMode, 'canonical content route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.contentMode || 'smoke', expectedCanonicalContentMode, 'effective canonical content mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
     assert.ok(Math.abs((state.canonicalPlumeControls?.sourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'effective canonical source height did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceInjection ?? 0) - expectedCanonicalInjection) < 0.001, 'canonical source injection route/control did not apply');
     assert.ok(Math.abs((state.canonicalPlumeControls?.sourceInjection ?? 0) - expectedCanonicalInjection) < 0.001, 'effective canonical source injection did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalBuoyancy ?? 0) - expectedCanonicalBuoyancy) < 0.001, 'canonical buoyancy route/control did not apply');
     assert.ok(Math.abs((state.canonicalPlumeControls?.buoyancyLift ?? 0) - expectedCanonicalBuoyancy) < 0.001, 'effective canonical buoyancy did not reach debug state');
-    if (expectedCanonicalMacroPreset === 'macro_foothold_0621') {
+    if (expectedCanonicalMacroPreset === 'macro_foothold_0621' || expectedCanonicalMacroPreset === 'honest_smoke_0622') {
       assert.ok(Math.abs((state.controls?.density ?? 0) - canonicalMacroPreset.density) < 0.001, 'canonical macro preset density did not apply');
       assert.ok(Math.abs((state.controls?.smoke ?? 0) - canonicalMacroPreset.smoke) < 0.001, 'canonical macro preset smoke visibility did not apply');
       assert.ok(Math.abs((state.controls?.absorption ?? 0) - canonicalMacroPreset.absorption) < 0.001, 'canonical macro preset absorption did not apply');
@@ -764,13 +806,13 @@ async function main() {
     if (!Number.isFinite(sample.simReadback.extinctionMean) || sample.simReadback.extinctionMean <= expectedExtinctionFloor) {
       throw new Error(`GPU sim readback does not show smoke extinction evidence: ${JSON.stringify(sample.simReadback)}`);
     }
-    const expectsMicrodetailEvidence = (state.controls?.microdetail ?? expectedMicrodetail) > 0.01;
+    const expectsMicrodetailEvidence = !expectsCanonicalPlumeProof && (state.controls?.microdetail ?? expectedMicrodetail) > 0.01;
     const expectsCurlEvidence = (state.controls?.curl ?? expectedCurl) > 0.01;
     if (expectsMicrodetailEvidence && (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
     }
-    const expectsInterfaceShredEvidence = (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
-    const expectsFireLickEvidence = (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
+    const expectsInterfaceShredEvidence = !expectsCanonicalPlumeProof && (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
+    const expectsFireLickEvidence = !expectsCanonicalPlumeProof && (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
     const expectsBonfireVerticalTransport = expectedVolumeScene === 'bonfire_plume';
     if (expectsInterfaceShredEvidence && (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025)) {
       throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
@@ -805,6 +847,7 @@ async function main() {
     }
     if (
       expectsCanonicalPlumeProof &&
+      !canonicalContentRequestsFire &&
       (
         sample.simReadback.fireLayerMean > 0.0005 ||
         sample.simReadback.radianceMean > 0.0005 ||
@@ -820,6 +863,25 @@ async function main() {
         interfaceShredMean: sample.simReadback.interfaceShredMean,
         fireLickMean: sample.simReadback.fireLickMean,
       })}`);
+    }
+    const expectsCanonicalFireEvidence = expectsCanonicalPlumeProof && canonicalContentRequestsFire;
+    if (expectsCanonicalFireEvidence) {
+      if (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) {
+        throw new Error(`canonical fire content did not produce transported fire evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (
+        sample.simReadback.microdetailMean > 0.0005 ||
+        sample.simReadback.interfaceShredMean > 0.0005 ||
+        sample.simReadback.fireLickMean > 0.0005 ||
+        sample.simReadback.frontTopologyMean > 0.0005
+      ) {
+        throw new Error(`canonical fire bridge leaked excluded detail/front carriers: ${JSON.stringify({
+          microdetailMean: sample.simReadback.microdetailMean,
+          interfaceShredMean: sample.simReadback.interfaceShredMean,
+          fireLickMean: sample.simReadback.fireLickMean,
+          frontTopologyMean: sample.simReadback.frontTopologyMean,
+        })}`);
+      }
     }
     if (canonicalPassiveBottomNonRiseProof) {
       if (
@@ -1207,12 +1269,14 @@ async function main() {
       expectedCanonicalSourceMode,
       expectedCanonicalRenderMode,
       expectedCanonicalMotionMode,
+      expectedCanonicalContentMode,
       expectedCanonicalSourceY,
       expectedCanonicalInjection,
       expectedCanonicalBuoyancy,
       canonicalPassiveBottomNonRiseProof,
       canonicalPassiveBottomFieldProof,
       expectsCanonicalSmokeRise,
+      expectsCanonicalFireEvidence,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
