@@ -95,8 +95,22 @@ const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
   forced_bottom: 2,
   buoyant_bottom: 3,
 };
+const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
+  default: 0,
+  smoke_only: 1,
+};
+const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
+  animated: 0,
+  frozen: 1,
+};
 function normalizeCanonicalSourceMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_SOURCE_MODE_VALUES, value) ? value : 'current';
+}
+function normalizeCanonicalRenderMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_RENDER_MODE_VALUES, value) ? value : 'default';
+}
+function normalizeCanonicalMotionMode(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
 }
 function canonicalSourceDefaults(mode) {
   const normalized = normalizeCanonicalSourceMode(mode);
@@ -122,6 +136,8 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
   : '';
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
 const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || 'current');
+const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || 'default');
+const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || 'animated');
 const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
 const requestedCanonicalSourceY = Number(routeParams.get('volume_canonical_source_y'));
 const expectedCanonicalSourceY = routeParams.has('volume_canonical_source_y') && Number.isFinite(requestedCanonicalSourceY)
@@ -585,6 +601,10 @@ async function main() {
     assert.equal(state.canonicalPlumeControls?.macroPreset || '', expectedCanonicalMacroPreset, 'effective canonical macro preset did not reach debug state');
     assert.equal(state.controls?.canonicalSourceMode || 'current', expectedCanonicalSourceMode, 'canonical source mode route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.sourceMode || 'current', expectedCanonicalSourceMode, 'effective canonical source mode did not reach debug state');
+    assert.equal(state.controls?.canonicalRenderMode || 'default', expectedCanonicalRenderMode, 'canonical render diagnostic route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.renderMode || 'default', expectedCanonicalRenderMode, 'effective canonical render diagnostic mode did not reach debug state');
+    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionMode, 'canonical motion diagnostic route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.motionMode || 'animated', expectedCanonicalMotionMode, 'effective canonical motion diagnostic mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
     assert.ok(Math.abs((state.canonicalPlumeControls?.sourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'effective canonical source height did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceInjection ?? 0) - expectedCanonicalInjection) < 0.001, 'canonical source injection route/control did not apply');
@@ -1185,6 +1205,8 @@ async function main() {
       rayBudgetPreset: reportControls.rayBudgetPreset,
       expectedCanonicalMacroPreset,
       expectedCanonicalSourceMode,
+      expectedCanonicalRenderMode,
+      expectedCanonicalMotionMode,
       expectedCanonicalSourceY,
       expectedCanonicalInjection,
       expectedCanonicalBuoyancy,

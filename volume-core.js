@@ -17,6 +17,14 @@ const CANONICAL_SOURCE_MODE_VALUES = {
   forced_bottom: 2,
   buoyant_bottom: 3,
 };
+const CANONICAL_RENDER_MODE_VALUES = {
+  default: 0,
+  smoke_only: 1,
+};
+const CANONICAL_MOTION_MODE_VALUES = {
+  animated: 0,
+  frozen: 1,
+};
 
 function normalizeGridSize(value) {
   const requested = Number(value);
@@ -46,6 +54,22 @@ function normalizeCanonicalSourceMode(value) {
 
 function canonicalSourceModeValue(value) {
   return CANONICAL_SOURCE_MODE_VALUES[normalizeCanonicalSourceMode(value)] || 0;
+}
+
+function normalizeCanonicalRenderMode(value) {
+  return Object.hasOwn(CANONICAL_RENDER_MODE_VALUES, value) ? value : 'default';
+}
+
+function canonicalRenderModeValue(value) {
+  return CANONICAL_RENDER_MODE_VALUES[normalizeCanonicalRenderMode(value)] || 0;
+}
+
+function normalizeCanonicalMotionMode(value) {
+  return Object.hasOwn(CANONICAL_MOTION_MODE_VALUES, value) ? value : 'animated';
+}
+
+function canonicalMotionModeValue(value) {
+  return CANONICAL_MOTION_MODE_VALUES[normalizeCanonicalMotionMode(value)] || 0;
 }
 
 function normalizeWindStrength(value) {
@@ -240,6 +264,7 @@ struct Uniforms {
   bonfire_ablation_controls2: vec4<f32>,
   canonical_controls: vec4<f32>,
   canonical_source_controls: vec4<f32>,
+  canonical_render_motion_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -1431,10 +1456,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSourceYControl = clamp(u.canonical_source_controls.x, -0.92, -0.20);
   let canonicalSourceInjection = clamp(u.canonical_source_controls.y, 0.0, 1.5);
   let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
+  let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
+  let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let canonicalPlumeScene = step(2.5, sceneMode);
+  let canonicalFrozenMotion = canonicalPlumeScene * step(0.5, canonicalMotionMode);
+  let canonicalPhaseTime = mix(time, 0.0, canonicalFrozenMotion);
   let canonicalPassiveBottomProof = canonicalPlumeScene * step(0.5, canonicalSourceMode) * (1.0 - step(1.5, canonicalSourceMode));
   let canonicalBuoyantBottomProof = canonicalPlumeScene * step(2.5, canonicalSourceMode);
   let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
@@ -1546,15 +1575,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
   let canonicalSourceCell = vec2<f32>(
-    sin(p.x * 8.1 + p.z * 2.7 + time * 0.43),
-    cos(p.z * 7.6 - p.x * 3.2 - time * 0.39)
+    sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
+    cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
   );
   let canonicalSourceWarp = sourceCenter + canonicalSourceCell * scaledSmokeSourceRadius * 0.16;
   let canonicalSourceBreakup = clamp(
     0.78
-      + 0.16 * sin(atan2(p.z, p.x) * 3.0 + time * 0.33)
-      + 0.12 * cos(sourceRadial * 22.0 - time * 0.46)
-      + 0.08 * hash31(vec3<f32>(p.x * 5.0, p.y * 2.0, p.z * 5.0) + vec3<f32>(floor(time * 0.75))),
+      + 0.16 * sin(atan2(p.z, p.x) * 3.0 + canonicalPhaseTime * 0.33)
+      + 0.12 * cos(sourceRadial * 22.0 - canonicalPhaseTime * 0.46)
+      + 0.08 * hash31(vec3<f32>(p.x * 5.0, p.y * 2.0, p.z * 5.0) + vec3<f32>(floor(canonicalPhaseTime * 0.75))),
     0.48,
     1.18
   );
@@ -1971,9 +2000,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
   let canonicalRadial = max(length(p.xz), 0.025);
   let canonicalEntrainmentCell = vec3<f32>(
-    sin(p.y * 5.2 + p.z * 3.1 + time * 0.37),
-    sin(p.x * 4.7 - p.z * 2.9 - time * 0.31) * 0.35,
-    cos(p.y * 4.8 - p.x * 3.4 + time * 0.41)
+    sin(p.y * 5.2 + p.z * 3.1 + canonicalPhaseTime * 0.37),
+    sin(p.x * 4.7 - p.z * 2.9 - canonicalPhaseTime * 0.31) * 0.35,
+    cos(p.y * 4.8 - p.x * 3.4 + canonicalPhaseTime * 0.41)
   );
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
@@ -2280,6 +2309,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
+  let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
+  let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = max(hit.x, 0.0);
   let endT = hit.y;
   let dtBase = (endT - startT) / steps;
@@ -2353,7 +2384,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
     let microBodyContribution = microSmoke * 0.10 + interfaceShred * 0.18 + fireLick * 0.06;
-    let density = (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w;
+    let canonicalDebugSmokeDensity = smokeDensity * u.viewport_steps_density.w;
+    let density = mix(
+      (smokeDensity * 0.84 + heat * 0.28 + materialDetail * 0.14 + microBodyContribution) * u.viewport_steps_density.w,
+      canonicalDebugSmokeDensity,
+      canonicalSmokeOnlyRender
+    );
     let y = clamp((p.y + 1.0) * 0.5, 0.0, 1.0);
     let fireGain = 0.42 + u.fire_smoke_curl_speed.x * 1.15;
     let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
@@ -2369,8 +2405,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.0,
       2.4
     );
-    let temp = mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain;
-    let smoke = (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y;
+    let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
+    let smoke = mix(
+      (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
+      smokeDensity * u.fire_smoke_curl_speed.y,
+      canonicalSmokeOnlyRender
+    );
     let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
     let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction);
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
@@ -2411,7 +2451,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       clamp(0.52 + bonfireFireRenderBreakup * 0.26 + flameDetail * 0.11 + fireLick * 0.09 + emberFleck * 0.06, 0.44, 1.04),
       bonfireRenderScene * smoothstep(0.030, 0.84, flame + flameDetail + fireLick)
     );
-    let smokeAlpha = clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16);
+    let smokeAlpha = mix(
+      clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16),
+      clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
+      canonicalSmokeOnlyRender
+    );
     let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
     let bonfireRenderedFireEdgeCarrier = fireLick * 1.18
       + emberFleck * 0.50
@@ -2424,7 +2468,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       bonfireVisibleEmission + interfaceShred * 0.16,
       bonfireRenderScene
     );
-    let fireAlpha = clamp(visibleFlameAlphaCarrier * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax);
+    let fireAlpha = mix(
+      clamp(visibleFlameAlphaCarrier * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
+      0.0,
+      canonicalSmokeOnlyRender
+    );
     let alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
     let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
@@ -2441,7 +2489,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
-    let smokeCol = vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26);
+    let smokeCol = mix(
+      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
+      vec3<f32>(0.28, 0.38, 0.42) * 0.62,
+      canonicalSmokeOnlyRender
+    );
     let flameCol = fireColor(temp) * (0.22 + temp * 0.82 + fireFilament * 0.82 + fireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
     let radianceEmission = fireRadianceEmission(temp, flameDetail, fireLick, emberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene);
     let smokeBacklight = fireColor(temp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, temp) * (0.13 + fireFilament * 0.10);
@@ -2481,7 +2533,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(88);
+  const uniforms = new Float32Array(92);
   let controlsSnapshot = getControls();
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -2958,6 +3010,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.inputRadius,
       snapshot.flowRate,
       normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
+      normalizeCanonicalMotionMode(snapshot.canonicalMotionMode),
       snapshot.canonicalSourceY,
       snapshot.canonicalSourceInjection,
       snapshot.canonicalBuoyancy,
@@ -3485,7 +3538,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[69] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalSourceInjection ?? 1));
     uniforms[70] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBuoyancy ?? 1));
     uniforms[71] = 0;
-    uniforms.set(previousViewProj.elements, 72);
+    uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
+    uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
+    uniforms[74] = 0;
+    uniforms[75] = 0;
+    uniforms.set(previousViewProj.elements, 76);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -3516,6 +3573,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceY: uniforms[68],
       sourceInjection: uniforms[69],
       buoyancyLift: uniforms[70],
+      renderMode: normalizeCanonicalRenderMode(controlsSnapshot.canonicalRenderMode),
+      renderModeValue: uniforms[72],
+      motionMode: normalizeCanonicalMotionMode(controlsSnapshot.canonicalMotionMode),
+      motionModeValue: uniforms[73],
     };
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
