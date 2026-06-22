@@ -367,7 +367,18 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
                 "orientation": {"rotation": [0.1, 0.2, 0.3]},
                 "axisFlips": [-1, 1, -1],
                 "centroidOffset": [1, 2, 3],
-                "crop": {"enabled": True, "min": [-0.5, -0.25, -0.1], "max": [0.5, 0.25, 0.9]},
+                "crop": {
+                    "enabled": True,
+                    "min": [-0.5, -0.25, -0.1],
+                    "max": [0.5, 0.25, 0.9],
+                    "frame": "visual-root-local",
+                    "sourceToCropMatrix": [
+                        2, 0, 0, 0,
+                        0, 2, 0, 0,
+                        0, 0, 2, 0,
+                        -1, -1, -1, 1,
+                    ],
+                },
             })
             loaded = serve.load_splat_asset_correction("splat-inbox", "plant-shelf.ply")
             entries = serve.list_asset_entries(kind="splat")
@@ -379,8 +390,16 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             assert loaded["correction"]["orientation"]["rotation"] == [0.1, 0.2, 0.3]
             assert loaded["correction"]["axisFlips"] == [-1, 1, -1]
             assert loaded["correction"]["centroidOffset"] == [1, 2, 3]
+            assert loaded["correction"]["crop"]["frame"] == "visual-root-local"
+            assert loaded["correction"]["crop"]["sourceToCropMatrix"] == [
+                2, 0, 0, 0,
+                0, 2, 0, 0,
+                0, 0, 2, 0,
+                -1, -1, -1, 1,
+            ]
             assert entries[0]["correction"]["axisFlips"] == [-1, 1, -1]
             assert entries[0]["correction"]["crop"]["enabled"] is True
+            assert entries[0]["correction"]["crop"]["frame"] == "visual-root-local"
 
             replacement = serve.ingest_splat_asset("plant-shelf.ply", b"replacement\n")
             assert replacement["path"] == "plant-shelf.ply"

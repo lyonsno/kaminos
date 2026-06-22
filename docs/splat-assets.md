@@ -63,7 +63,13 @@ Kaminos reloads an asset correction sidecar when the splat is imported from `Spl
 
 The `Splat Correction panel` exposes Pivot/Crop controls while correction mode is active. Pivot editing moves the asset-local centroid and orientation correction. Crop editing shows a visible crop bounds box in the viewport and retargets the transform gizmo to that box; translating or scaling it updates `crop.min` and `crop.max`, while the numeric crop fields remain available for exact values.
 
-In normal scene viewing, the point-cloud splat preview hides points outside the enabled crop. While Splat Correction Mode is active for that splat, the same preview shows those excluded points as faint crop context so the operator can still see what the crop is removing. New crop membership is evaluated in canonical axis-flipped asset coordinates: source point positions are tested after `axisFlips` and before `centroidOffset`, so pivot/centroid corrections move the marker without translating crop membership. For compatibility with earlier saved sidecars, Kaminos may fall back to the legacy `pivot-local-minus-centroid` crop frame only when the canonical frame would include zero points and the legacy frame includes points. That fallback is a loader/preview compatibility path for existing sidecars, not the preferred authoring frame for new corrections.
+In normal scene viewing, the point-cloud splat preview hides points outside the enabled crop. While Splat Correction Mode is active for that splat, the same preview shows those excluded points as faint crop context so the operator can still see what the crop is removing. Crop membership has an explicit frame:
+
+- `axis-flipped-asset`: canonical axis-flipped asset coordinates, meaning normalized preview coordinates after `axisFlips` and before `centroidOffset`, so pivot/centroid corrections move the marker without translating crop membership.
+- `visual-root-local`: the visible viewport crop-box frame under the selected splat's `splat-visual-root`. New viewport crop edits can land here because the box is parented to the same visual root as the point-cloud preview.
+- `pivot-local-minus-centroid`: legacy compatibility frame for earlier saved sidecars.
+
+For compatibility with earlier saved sidecars, Kaminos may fall back from `axis-flipped-asset` to `visual-root-local`, then to `pivot-local-minus-centroid`, when the canonical frame would include zero points and the later frame includes points. That fallback is a loader/preview compatibility path for existing sidecars, not a license for downstream renderers to guess. Saved corrections and render handoff metadata should carry `crop.frame` and `crop.sourceToCropMatrix`.
 
 The current UI does not yet show a dedicated `CORRECTED` chip, reveal-sidecar action, or reveal-asset action. Those should be added as a follow-up because the sidecar convention is otherwise too easy to miss.
 
@@ -76,7 +82,9 @@ The correction payload has these fields:
 - `orientation.rotation`: asset-local Euler rotation correction as `[x, y, z]`.
 - `axisFlips`: asset-local axis signs as `[1|-1, 1|-1, 1|-1]`.
 - `centroidOffset`: asset-local centroid or pivot offset as `[x, y, z]`.
-- `crop`: crop metadata with `enabled`, `min`, and `max`.
+- `crop`: crop metadata with `enabled`, `min`, `max`, optional `frame`, and optional `sourceToCropMatrix`.
+- `crop.frame`: one of `axis-flipped-asset`, `visual-root-local`, or `pivot-local-minus-centroid`.
+- `crop.sourceToCropMatrix`: 16 numeric `THREE.Matrix4.elements` values. Renderer consumers multiply raw PLY positions by this matrix, then test the resulting coordinates against `crop.min` and `crop.max`.
 
 Example:
 
@@ -92,11 +100,35 @@ Example:
     "crop": {
       "enabled": true,
       "min": [-0.2, -0.3, -0.4],
-      "max": [0.7, 0.8, 0.9]
+      "max": [0.7, 0.8, 0.9],
+      "frame": "visual-root-local",
+      "sourceToCropMatrix": [
+        0.22, 0, 0, 0,
+        0, 0.22, 0, 0,
+        0, 0, 0.22, 0,
+        -0.1, 0.04, 0.3, 1
+      ]
     }
   }
 }
 ```
+
+## Crop Coordinate Contract
+
+Renderer consumers should not infer the crop coordinate frame from `crop.min`, `crop.max`, `axisFlips`, and `centroidOffset` alone. Kaminos persists the effective crop predicate as:
+
+```text
+cropPoint = crop.sourceToCropMatrix * rawPlyPosition
+inside = crop.min <= cropPoint <= crop.max
+```
+
+`rawPlyPosition` means the source `.ply` vertex position before Kaminos preview normalization. For PLY point-cloud previews, Kaminos first normalizes raw positions into the visible preview frame, then composes the chosen crop frame:
+
+- `visual-root-local`: `raw PLY -> normalized preview`.
+- `axis-flipped-asset`: `raw PLY -> normalized preview -> axisFlips`.
+- `pivot-local-minus-centroid`: `raw PLY -> normalized preview -> axisFlips -> -centroidOffset`.
+
+The same decorated crop metadata is exposed in `kaminos.render-handoff.v0` as `object.splatCorrection.crop` and in the Hybrid Renderer correction identity as `cropCoordinateFrame` plus `cropCoordinateMatrix`.
 
 ## Reingest Behavior
 

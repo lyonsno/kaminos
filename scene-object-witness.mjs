@@ -2893,6 +2893,7 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
         await wait(200);
         const previewAfterClose = window.kaminosSplatPreviewDebugState?.(splat?.id) || null;
         const pivotAfterClose = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
+        const handoffDebug = window.kaminosRenderHandoffDebugState?.(splat?.id) || null;
         return {
           assetEntry: entry,
           actionExposed: typeof window.greenroomImportSplat === 'function',
@@ -2904,6 +2905,7 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
           exitedMode,
           previewAfterClose,
           pivotAfterClose,
+          handoffDebug,
         };
       };
       const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
@@ -2993,11 +2995,17 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
   }
   if (evidence.finalCompositeVisualCheck) {
     const finalAfter = evidence.finalCompositeVisualCheck.previewAfterClose || {};
+    const finalHandoffCrop = evidence.finalCompositeVisualCheck.handoffDebug?.activeHandoff?.object?.splatCorrection?.crop || {};
     if (finalAfter.cropFrame !== 'visual-root-local'
         || finalAfter.includedPointCount < 1
         || finalAfter.includedVisible !== true
         || finalAfter.excludedVisible !== false) {
       throw new Error(`evil orb final composite did not remain visible for visual smoke: ${JSON.stringify(evidence.finalCompositeVisualCheck)}`);
+    }
+    if (finalHandoffCrop.frame !== 'visual-root-local'
+        || !Array.isArray(finalHandoffCrop.sourceToCropMatrix)
+        || finalHandoffCrop.sourceToCropMatrix.length !== 16) {
+      throw new Error(`evil orb final composite handoff did not expose visual-root crop matrix: ${JSON.stringify(evidence.finalCompositeVisualCheck)}`);
     }
   }
 }
@@ -3373,6 +3381,11 @@ async function runSplatCorrectionSidecarScenario(ws) {
       || savedCorrection.orientation?.rotation?.[2] !== 0.3) {
     throw new Error(`splat correction did not persist to sidecar: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
+  if (!savedCorrection.crop?.frame
+      || !Array.isArray(savedCorrection.crop?.sourceToCropMatrix)
+      || savedCorrection.crop.sourceToCropMatrix.length !== 16) {
+    throw new Error(`splat correction sidecar did not persist explicit crop frame metadata: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
   const reloaded = lastEvidence.splatCorrectionSidecar.reloadedSplat;
   if (!reloaded?.splat?.correction
       || reloaded.splat.correction.crop?.enabled !== true
@@ -3395,6 +3408,12 @@ async function runSplatCorrectionSidecarScenario(ws) {
   const caps = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.capabilities || {};
   if (caps.realSplatRendering !== false || caps.meshDepthOcclusion !== false) {
     throw new Error(`splat correction leaked into render truth claim: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
+  }
+  const handoffCrop = lastEvidence.splatCorrectionSidecar.handoffDebug?.activeHandoff?.object?.splatCorrection?.crop || {};
+  if (!handoffCrop.frame
+      || !Array.isArray(handoffCrop.sourceToCropMatrix)
+      || handoffCrop.sourceToCropMatrix.length !== 16) {
+    throw new Error(`splat correction handoff did not expose explicit crop frame metadata: ${JSON.stringify(lastEvidence.splatCorrectionSidecar)}`);
   }
   const reloadedPreviewBeforeMode = lastEvidence.splatCorrectionSidecar.reloadedPreviewBeforeMode;
   if (!reloadedPreviewBeforeMode

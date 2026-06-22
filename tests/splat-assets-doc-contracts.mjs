@@ -17,6 +17,10 @@ assert.match(docs, /axis-flipped asset coordinates/i, 'Splat asset docs explain 
 assert.match(docs, /before `centroidOffset`/i, 'Splat asset docs explain centroid offset does not translate crop membership');
 assert.match(docs, /pivot-local-minus-centroid/i, 'Splat asset docs name the legacy pivot-local crop frame fallback');
 assert.match(docs, /canonical frame would include zero points/i, 'Splat asset docs constrain the legacy crop frame fallback to empty canonical crops');
+assert.match(docs, /visual-root-local/i, 'Splat asset docs name the visual-root crop frame used by the viewport crop box');
+assert.match(docs, /crop\.frame/, 'Splat asset docs document durable crop frame identity for renderer consumers');
+assert.match(docs, /crop\.sourceToCropMatrix/, 'Splat asset docs document the raw-source-to-crop matrix for renderer consumers');
+assert.match(docs, /raw PLY positions/i, 'Splat asset docs state renderer consumers test raw PLY positions through the crop matrix');
 assert.match(docs, /axisFlips/, 'Splat asset docs include correction axis flips');
 assert.match(docs, /orientation\.rotation/, 'Splat asset docs include orientation correction');
 assert.match(docs, /centroidOffset/, 'Splat asset docs include centroid correction');

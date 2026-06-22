@@ -137,6 +137,9 @@ assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the 
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');
 assert.match(index, /cropCoordinateMatrix/, 'Hybrid Renderer correction identity carries the raw-asset-to-preview crop coordinate frame for PBRnext filtering');
+assert.match(index, /function splatCorrectionWithCropFrameMetadata\(/, 'splat corrections can be decorated with explicit crop-frame metadata for sidecars and render handoff');
+assert.match(index, /sourceToCropMatrix/, 'splat crop metadata carries a raw-source-to-crop matrix for downstream renderers');
+assert.match(index, /cropCoordinateFrame = correction\.crop\.frame/, 'Hybrid Renderer correction identity uses the effective crop frame instead of a generic matrix label');
 assert.match(index, /sourceIdentity/, 'Hybrid Renderer debug state exposes renderer-reported source identity');
 assert.match(index, /sharedCommandEncoder/, 'Hybrid Renderer route capabilities preserve explicit no-shared-command-encoder truth');
 assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer route reports dual-canvas overlay mode when active');

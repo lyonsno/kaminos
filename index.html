@@ -1083,16 +1083,16 @@ function currentHybridOverlayViewport() {
 }
 
 function splatOverlayCorrectionIdentity(record, assetFrame = splatRawAssetToPreviewMatrix(record)) {
-  const correction = normalizeSplatCorrection(record?.splat?.correction);
+  const correction = splatCorrectionWithCropFrameMetadata(record, record?.splat?.correction, assetFrame);
   const identity = {
     rotation: correction.orientation.rotation.slice(),
     axisFlips: correction.axisFlips.map(value => value < 0),
     centroidOffset: correction.centroidOffset.slice(),
     crop: JSON.parse(JSON.stringify(correction.crop)),
   };
-  if (assetFrame?.matrix) {
-    identity.cropCoordinateMatrix = Array.from(assetFrame.matrix.elements);
-    identity.cropCoordinateFrame = 'kaminos-raw-asset-to-preview';
+  if (correction.crop?.sourceToCropMatrix) {
+    identity.cropCoordinateMatrix = correction.crop.sourceToCropMatrix.slice();
+    identity.cropCoordinateFrame = correction.crop.frame || 'axis-flipped-asset';
   }
   return identity;
 }
@@ -1124,6 +1124,70 @@ function splatRawAssetToPreviewMatrix(record) {
     center,
     size,
   };
+}
+
+function splatCropBounds(correction = {}) {
+  const normalized = normalizeSplatCorrection(correction);
+  return {
+    min: [
+      Math.min(normalized.crop.min[0], normalized.crop.max[0]),
+      Math.min(normalized.crop.min[1], normalized.crop.max[1]),
+      Math.min(normalized.crop.min[2], normalized.crop.max[2]),
+    ],
+    max: [
+      Math.max(normalized.crop.min[0], normalized.crop.max[0]),
+      Math.max(normalized.crop.min[1], normalized.crop.max[1]),
+      Math.max(normalized.crop.min[2], normalized.crop.max[2]),
+    ],
+  };
+}
+
+function chooseSplatCropFrameForRecord(record, correction) {
+  const normalized = normalizeSplatCorrection(correction);
+  const explicitFrame = cropFrameValue(normalized.crop.frame);
+  if (!normalized.crop.enabled) return explicitFrame || 'axis-flipped-asset';
+  const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
+  if (preview) {
+    const bounds = splatCropBounds(normalized);
+    const choice = chooseSplatCropFrame(preview, normalized, bounds.min, bounds.max);
+    return choice.frame || explicitFrame || 'axis-flipped-asset';
+  }
+  return explicitFrame || 'axis-flipped-asset';
+}
+
+function splatCropFrameMatrix(record, correction, frame = 'axis-flipped-asset', assetFrame = splatRawAssetToPreviewMatrix(record)) {
+  if (!assetFrame?.matrix) return null;
+  const normalized = normalizeSplatCorrection(correction);
+  const rawToPreview = assetFrame.matrix.clone();
+  if (frame === 'visual-root-local') return rawToPreview;
+  const frameMatrix = new THREE.Matrix4().makeScale(
+    normalized.axisFlips[0],
+    normalized.axisFlips[1],
+    normalized.axisFlips[2],
+  );
+  if (frame === 'pivot-local-minus-centroid') {
+    frameMatrix.premultiply(new THREE.Matrix4().makeTranslation(
+      -normalized.centroidOffset[0],
+      -normalized.centroidOffset[1],
+      -normalized.centroidOffset[2],
+    ));
+  }
+  return frameMatrix.multiply(rawToPreview);
+}
+
+function splatCorrectionWithCropFrameMetadata(record, correction = record?.splat?.correction, assetFrame = splatRawAssetToPreviewMatrix(record)) {
+  const normalized = normalizeSplatCorrection(correction);
+  if (!normalized.crop.enabled) return normalized;
+  const frame = chooseSplatCropFrameForRecord(record, normalized);
+  const matrix = splatCropFrameMatrix(record, normalized, frame, assetFrame);
+  return normalizeSplatCorrection({
+    ...normalized,
+    crop: {
+      ...normalized.crop,
+      frame,
+      ...(matrix ? { sourceToCropMatrix: Array.from(matrix.elements) } : {}),
+    },
+  });
 }
 
 async function loadHybridSplatOverlayModule() {
@@ -1501,6 +1565,9 @@ function buildRenderHandoffV0(record) {
   record.object.updateMatrixWorld?.(true);
   const visualRoot = record.type === 'splat' ? splatVisualRootFor(record.object) : null;
   visualRoot?.updateMatrixWorld?.(true);
+  const splatCorrection = record.type === 'splat'
+    ? splatCorrectionWithCropFrameMetadata(record, record.splat?.correction)
+    : null;
   const size = new THREE.Vector2();
   if (renderer?.getDrawingBufferSize) {
     renderer.getDrawingBufferSize(size);
@@ -1531,7 +1598,7 @@ function buildRenderHandoffV0(record) {
       visualRootWorldMatrix: visualRoot ? Array.from(visualRoot.matrixWorld.elements) : null,
       transform: sceneObjectTransformState(record.object),
       sceneTransform: record.type === 'splat' ? splatSceneTransformState(record) : null,
-      splatCorrection: record.type === 'splat' ? normalizeSplatCorrection(record.splat?.correction) : null,
+      splatCorrection,
     },
     capabilities: renderHandoffCapabilities(),
     hybridOverlay: record.type === 'splat' ? hybridSplatOverlayDebugState() : null,
@@ -1695,19 +1762,36 @@ function axisFlipTriplet(value, fallback = [1, 1, 1]) {
   return value.map(item => Number(item) < 0 ? -1 : 1);
 }
 
+const SPLAT_CROP_FRAMES = new Set(['axis-flipped-asset', 'visual-root-local', 'pivot-local-minus-centroid']);
+
+function cropFrameValue(value) {
+  return SPLAT_CROP_FRAMES.has(value) ? value : null;
+}
+
+function numberMatrix4(value) {
+  if (!Array.isArray(value) || value.length !== 16) return null;
+  const parsed = value.map(Number);
+  return parsed.every(Number.isFinite) ? parsed : null;
+}
+
 function normalizeSplatCorrection(correction = {}) {
   const defaults = defaultSplatCorrection();
+  const crop = {
+    enabled: !!correction?.crop?.enabled,
+    min: numberTriplet(correction?.crop?.min, defaults.crop.min),
+    max: numberTriplet(correction?.crop?.max, defaults.crop.max),
+  };
+  const frame = cropFrameValue(correction?.crop?.frame);
+  const sourceToCropMatrix = numberMatrix4(correction?.crop?.sourceToCropMatrix);
+  if (frame) crop.frame = frame;
+  if (sourceToCropMatrix) crop.sourceToCropMatrix = sourceToCropMatrix;
   return {
     orientation: {
       rotation: numberTriplet(correction?.orientation?.rotation, defaults.orientation.rotation),
     },
     axisFlips: axisFlipTriplet(correction?.axisFlips, defaults.axisFlips),
     centroidOffset: numberTriplet(correction?.centroidOffset, defaults.centroidOffset),
-    crop: {
-      enabled: !!correction?.crop?.enabled,
-      min: numberTriplet(correction?.crop?.min, defaults.crop.min),
-      max: numberTriplet(correction?.crop?.max, defaults.crop.max),
-    },
+    crop,
   };
 }
 
@@ -2467,10 +2551,11 @@ async function persistSelectedSplatCorrection(correction) {
   if (!entry || entry.type !== 'splat') throw new Error('No selected splat');
   const route = splatAssetRouteIdentity(entry.splat);
   if (!route) throw new Error('Selected splat is not backed by a declared splat asset root');
+  const persistentCorrection = splatCorrectionWithCropFrameMetadata(entry, correction);
   const resp = await fetch('/api/splat-correction' + '?' + new URLSearchParams(route), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ correction }),
+    body: JSON.stringify({ correction: persistentCorrection }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || data.error) throw new Error(data.error || `Splat correction save failed ${resp.status}`);

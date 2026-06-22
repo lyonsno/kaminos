@@ -168,6 +168,8 @@ assert.match(witness, /image library selected preview did not bind to the select
 assert.match(witness, /image library capture did not ingest a viewport image/, 'Image Library witness proves viewport capture writes to image-inbox');
 assert.match(witness, /splat correction did not persist to sidecar/, 'Splat correction witness proves corrections are server-persisted');
 assert.match(witness, /splat correction did not reload from sidecar/, 'Splat correction witness proves correction metadata reloads from the asset sidecar');
+assert.match(witness, /splat correction sidecar did not persist explicit crop frame metadata/, 'Splat correction witness proves sidecars expose renderer-usable crop frame metadata');
+assert.match(witness, /splat correction handoff did not expose explicit crop frame metadata/, 'Splat correction witness proves render handoff exposes renderer-usable crop frame metadata');
 assert.match(witness, /splat correction leaked into render truth claim/, 'Splat correction witness rejects claiming correction sidecars as real hybrid rendering');
 assert.match(witness, /splat correction mode did not retarget gizmo/, 'Splat correction mode witness proves gizmo retargets to correction draft');
 assert.match(witness, /splat correction mode dirtied scene transform/, 'Splat correction mode witness proves scene placement stays distinct from asset correction');
@@ -189,6 +191,7 @@ assert.match(witness, /real saved splat crop did not show included points before
 assert.match(witness, /real saved splat crop did not remain visible after edit mode closed/, 'Real splat crop witness proves closing edit mode restores the included crop preview');
 assert.match(witness, /evil_orb_multiview_emissive\.ply/, 'Real splat crop witness covers the operator-smoked multiview emissive asset');
 assert.match(witness, /evil orb saved crop variant disappeared outside edit mode/, 'Real splat crop witness sweeps corrected Evil Orb variants by root/path, not only one title');
+assert.match(witness, /evil orb final composite handoff did not expose visual-root crop matrix/, 'Real splat crop witness proves visual-root crops expose renderer-usable handoff matrices');
 assert.match(witness, /hybrid splat overlay did not expose visible UI/, 'Hybrid Renderer witness requires a visible selected-splat control surface');
 assert.match(witness, /hybrid splat overlay did not load selected splat source/, 'Hybrid Renderer witness proves the overlay consumed the selected splat route');
 assert.match(witness, /hybrid splat overlay did not record dual-canvas capability/, 'Hybrid Renderer witness proves dual-canvas overlay status is explicit');

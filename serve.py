@@ -58,6 +58,7 @@ MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+SPLAT_CROP_FRAMES = {"axis-flipped-asset", "visual-root-local", "pivot-local-minus-centroid"}
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -379,21 +380,38 @@ def _axis_flips(value):
     return [-1 if item < 0 else 1 for item in _number_list(value, length=3, fallback=[1, 1, 1])]
 
 
+def _matrix4(value):
+    if not isinstance(value, list) or len(value) != 16:
+        return None
+    try:
+        parsed = [float(item) for item in value]
+    except (TypeError, ValueError):
+        return None
+    return parsed if all(item == item and item not in (float("inf"), float("-inf")) for item in parsed) else None
+
+
 def normalize_splat_asset_correction(payload):
     source = payload if isinstance(payload, dict) else {}
     orientation = source.get("orientation") if isinstance(source.get("orientation"), dict) else {}
     crop = source.get("crop") if isinstance(source.get("crop"), dict) else {}
+    crop_payload = {
+        "enabled": bool(crop.get("enabled", False)),
+        "min": _number_list(crop.get("min"), length=3, fallback=[-0.5, -0.5, -0.5]),
+        "max": _number_list(crop.get("max"), length=3, fallback=[0.5, 0.5, 0.5]),
+    }
+    frame = crop.get("frame")
+    if isinstance(frame, str) and frame in SPLAT_CROP_FRAMES:
+        crop_payload["frame"] = frame
+    matrix = _matrix4(crop.get("sourceToCropMatrix"))
+    if matrix is not None:
+        crop_payload["sourceToCropMatrix"] = matrix
     return {
         "orientation": {
             "rotation": _number_list(orientation.get("rotation"), length=3, fallback=[0, 0, 0]),
         },
         "axisFlips": _axis_flips(source.get("axisFlips")),
         "centroidOffset": _number_list(source.get("centroidOffset"), length=3, fallback=[0, 0, 0]),
-        "crop": {
-            "enabled": bool(crop.get("enabled", False)),
-            "min": _number_list(crop.get("min"), length=3, fallback=[-0.5, -0.5, -0.5]),
-            "max": _number_list(crop.get("max"), length=3, fallback=[0.5, 0.5, 0.5]),
-        },
+        "crop": crop_payload,
     }
 
 
