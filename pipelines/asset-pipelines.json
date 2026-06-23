@@ -51,6 +51,122 @@
           "outputArtifact": "sidecar"
         }
       ]
+    },
+    {
+      "id": "prepared-splat-import-sidecar-v0",
+      "label": "Prepared Splat Import Sidecar",
+      "routeId": "prepared.splat-import-sidecar.v0",
+      "description": "Consumes an existing prepared splat artifact and emits local inspection evidence plus a Kaminos import sidecar. This route does not copy the prepared artifact into a global store and does not claim renderer truth.",
+      "artifacts": {
+        "input": {
+          "role": "prepared-splat",
+          "required": true
+        },
+        "inspection": {
+          "role": "prepared-artifact-inspection",
+          "pathTemplate": "artifacts/prepared-artifact.inspect.json"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/prepared-artifact.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "inspect-prepared-splat",
+          "label": "Inspect Prepared Splat",
+          "statusMode": "prepared-artifact",
+          "route": {
+            "id": "local.prepared-artifact-inspect.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-file-inspection"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "inspection"
+        },
+        {
+          "id": "write-prepared-splat-sidecar",
+          "label": "Write Prepared Splat Import Sidecar",
+          "statusMode": "prepared-artifact",
+          "route": {
+            "id": "local.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-sidecar-writer"
+          },
+          "inputArtifact": "inspection",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    },
+    {
+      "id": "live-model-route-adapter-check-v0",
+      "label": "Live Model Route Adapter Availability Check",
+      "routeId": "adapter.model-chain-availability.v0",
+      "description": "Checks whether live model stages have explicit local command configuration. It records availability without executing SHARP, MoGE, SuperMat, Trellis, or other model routes.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "sharpAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-sharp-image-to-splat.json"
+        },
+        "mogeAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-moge-normal-bake.json"
+        },
+        "supermatAdapter": {
+          "role": "route-adapter-availability-report",
+          "pathTemplate": "artifacts/adapter-supermat-material-bake.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "check-sharp-image-to-splat-adapter",
+          "label": "Check SHARP Image To Splat Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.sharp-image-to-splat.v0",
+            "tool": "SHARP",
+            "commandEnv": "KAMINOS_SHARP_COMMAND",
+            "modelFamily": "SHARP",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "sharpAdapter"
+        },
+        {
+          "id": "check-moge-normal-bake-adapter",
+          "label": "Check MoGE Normal Bake Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.moge-normal-bake.v0",
+            "tool": "MoGE",
+            "commandEnv": "KAMINOS_MOGE_COMMAND",
+            "modelFamily": "MoGE",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "mogeAdapter"
+        },
+        {
+          "id": "check-supermat-material-bake-adapter",
+          "label": "Check SuperMat Material Bake Adapter",
+          "statusMode": "adapter-check",
+          "route": {
+            "id": "adapter.supermat-material-bake.v0",
+            "tool": "SuperMat",
+            "commandEnv": "KAMINOS_SUPERMAT_COMMAND",
+            "modelFamily": "SuperMat",
+            "executesModel": false
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "supermatAdapter"
+        }
+      ]
     }
   ]
 }

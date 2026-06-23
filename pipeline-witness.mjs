@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -151,6 +151,123 @@ function makeSidecar(outputPath) {
   });
 }
 
+function classifyPreparedArtifact(path) {
+  const extension = extname(path).toLowerCase();
+  if (['.ply', '.spz'].includes(extension)) return { kind: 'splat', extension };
+  if (['.glb', '.gltf', '.obj'].includes(extension)) return { kind: 'mesh', extension };
+  if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) return { kind: 'source-image', extension };
+  return { kind: 'unknown', extension };
+}
+
+function makePreparedInspection(outputPath) {
+  const evidence = fileEvidence(inputPath);
+  const classification = classifyPreparedArtifact(inputPath);
+  writeJson(outputPath, {
+    schema: 'kaminos.prepared-artifact-inspection.v0',
+    artifact: {
+      ...evidence,
+      kind: classification.kind,
+      extension: classification.extension,
+      preparedElsewhere: true,
+    },
+    route: {
+      id: pipeline.routeId,
+      manifestPath,
+      manifestSha256,
+    },
+    truthBoundary: 'local prepared-artifact inspection only; no model execution and no renderer proof',
+  });
+}
+
+function makePreparedSidecar(outputPath) {
+  const inspectionPath = artifactPathFor('inspection');
+  const inspection = readJson(inspectionPath);
+  const inputEvidence = fileEvidence(inputPath);
+  writeJson(outputPath, {
+    schema: 'kaminos.pipeline-import-sidecar.v0',
+    pipeline: {
+      id: pipeline.id,
+      routeId: pipeline.routeId,
+      manifestPath,
+      manifestSha256,
+    },
+    source: {
+      inputPath,
+      inputSha256: inputEvidence.sha256,
+      preparedArtifactInspectionPath: inspectionPath,
+      preparedArtifactKind: inspection.artifact.kind,
+    },
+    asset: {
+      type: inspection.artifact.kind,
+      path: inputPath,
+      sha256: inputEvidence.sha256,
+      bytes: inputEvidence.bytes,
+      renderCapabilities: {
+        realHybridRender: false,
+        meshDepthOcclusion: false,
+        sharedCanvasComposite: false,
+        sharedCommandEncoder: false,
+      },
+    },
+    status: {
+      stageMode: 'prepared-artifact',
+      truthBoundary: 'prepared artifact sidecar; points at an existing local artifact and does not claim model generation or hybrid render proof',
+    },
+  });
+}
+
+function findCommand(command) {
+  if (!command) return null;
+  if (isAbsolute(command)) return existsSync(command) ? command : null;
+  for (const dir of (process.env.PATH || '').split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, command);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function adapterAvailability(stage) {
+  const envVar = stage.route?.commandEnv || null;
+  const configuredCommand = envVar ? (process.env[envVar] || '').trim() : '';
+  if (!configuredCommand) {
+    return {
+      status: 'unconfigured',
+      envVar,
+      configuredCommand: null,
+      resolvedCommand: null,
+    };
+  }
+  const resolvedCommand = findCommand(configuredCommand);
+  return {
+    status: resolvedCommand ? 'available' : 'missing',
+    envVar,
+    configuredCommand,
+    resolvedCommand,
+  };
+}
+
+function makeAdapterAvailabilityReport(outputPath, stage, availability) {
+  writeJson(outputPath, {
+    schema: 'kaminos.route-adapter-availability.v0',
+    route: {
+      id: stage.route?.id || stage.id,
+      tool: stage.route?.tool || null,
+      modelFamily: stage.route?.modelFamily || null,
+      executesModel: false,
+    },
+    availability,
+    execution: {
+      executed: false,
+      reason: 'availability-check-only',
+    },
+    input: {
+      path: inputPath,
+      sha256: fileEvidence(inputPath).sha256,
+    },
+  });
+}
+
 function runStage(stage) {
   phase = `stage:${stage.id}`;
   const outputPath = artifactPathFor(stage.outputArtifact);
@@ -163,8 +280,21 @@ function runStage(stage) {
     realModel: stage.route?.realModel === true,
   };
   let status = stage.statusMode || 'fixture';
-  if (existsSync(outputPath)) {
+  let availability = null;
+  if (stage.statusMode === 'adapter-check') {
+    availability = adapterAvailability(stage);
+    effectiveRoute.availability = availability;
+    effectiveRoute.realModel = false;
+    status = availability.status === 'available' ? 'real' : 'skipped';
+    makeAdapterAvailabilityReport(outputPath, stage, availability);
+  } else if (existsSync(outputPath)) {
     status = 'cached';
+  } else if (stage.statusMode === 'prepared-artifact' && stage.outputArtifact === 'inspection') {
+    status = 'real';
+    makePreparedInspection(outputPath);
+  } else if (stage.statusMode === 'prepared-artifact' && stage.outputArtifact === 'sidecar') {
+    status = 'real';
+    makePreparedSidecar(outputPath);
   } else if (stage.outputArtifact === 'splat') {
     makeFixturePly(outputPath);
   } else if (stage.outputArtifact === 'sidecar') {
