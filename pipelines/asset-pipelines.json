@@ -1,0 +1,56 @@
+{
+  "schema": "kaminos.pipeline-manifest.v0",
+  "version": 0,
+  "description": "Kaminos asset generation pipeline manifest. Routes here are runnable composition contracts; stage receipts must say when work is real, fixture-backed, cached, skipped, or failed.",
+  "pipelines": [
+    {
+      "id": "evil-orb-sharp-fixture-pbr-v0",
+      "label": "Evil Orb SHARP Fixture PBR Chain",
+      "routeId": "fixture.sharp-splat-pbr-sidecar.v0",
+      "description": "Fixture-backed source-image to splat candidate to Kaminos import sidecar chain. This is not real SHARP, MoGE, or SuperMat inference; it fixes the pipeline receipt spine those routes will later inhabit.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "splat": {
+          "role": "splat-candidate",
+          "pathTemplate": "artifacts/evil-orb.fixture.ply"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/evil-orb.fixture.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "fixture-sharp-splat",
+          "label": "Fixture SHARP Image To Splat",
+          "statusMode": "fixture",
+          "route": {
+            "id": "fixture.sharp-image-to-splat.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "modelFamily": "SHARP",
+            "effectiveBackend": "fixture"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "splat"
+        },
+        {
+          "id": "fixture-kaminos-sidecar",
+          "label": "Fixture Kaminos Import Sidecar",
+          "statusMode": "fixture",
+          "route": {
+            "id": "fixture.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "fixture"
+          },
+          "inputArtifact": "splat",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    }
+  ]
+}
