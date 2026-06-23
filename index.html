@@ -697,6 +697,12 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
+  FORGE_HOST_ACTOR_SCHEMA,
+  FORGE_HOST_FIXTURE_SOURCE_ID,
+  buildForgeHostWitnessSummary,
+  createForgeHostFixtureRegistry,
+} from './forge-host-core.js';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -728,6 +734,12 @@ let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
 let receipt = null;
+let forgeHostRegistry = null;
+let forgeHostWitnessSummary = null;
+const FORGE_HOST_EXPECTED_FIXTURE_SOURCE = 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0';
+if (FORGE_HOST_EXPECTED_FIXTURE_SOURCE !== FORGE_HOST_FIXTURE_SOURCE_ID) {
+  throw new Error('Forge Host fixture source identity drifted');
+}
 let currentEnvName = 'studio';
 let showEnvBg = false;
 let currentEnvMap = null;
@@ -4210,6 +4222,31 @@ async function initKaminosVolumeRoute() {
   setInterval(refreshVolumeReadout, 500);
 }
 
+function initForgeHostRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('forge_host_fixture')) {
+    forgeHostRegistry = createForgeHostFixtureRegistry();
+    forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'fixture' });
+    setInfo(`Forge Host fixture loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
+  }
+  window.kaminosForgeHostDebugState = function() {
+    const inactive = {
+      active: false,
+      schema: FORGE_HOST_ACTOR_SCHEMA,
+      sourceIdentity: null,
+      expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
+      actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
+      actors: [],
+    };
+    if (!forgeHostRegistry || !forgeHostWitnessSummary) return inactive;
+    return {
+      active: true,
+      ...forgeHostWitnessSummary,
+      actors: forgeHostRegistry.actors,
+    };
+  };
+}
+
 // --- File Input Handling ---
 async function handleFiles(files, options = {}) {
   loadedFiles = {};
@@ -7035,6 +7072,7 @@ initScene().then(() => {
     }
   });
   initKaminosVolumeRoute();
+  initForgeHostRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
