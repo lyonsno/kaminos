@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -29,12 +30,17 @@ KAMINOS_SPLAT_PRODUCTION_DIR = Path(os.environ.get(
     "KAMINOS_SPLAT_PRODUCTION_DIR",
     str(KAMINOS_ASSETS_DIR / "splats" / "production"),
 )).expanduser()
+KAMINOS_PIPELINE_RUNS_DIR = Path(os.environ.get(
+    "KAMINOS_PIPELINE_RUNS_DIR",
+    str(KAMINOS_ASSETS_DIR / "pipeline-runs"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
+    "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -91,6 +97,8 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
+PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
+PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 
 def runtime_config():
@@ -197,6 +205,122 @@ def build_forge_host_registry_snapshot(
 
 def splat_asset_root_allows_pointer(root_name):
     return any(root.get("id") == root_name and root.get("kind") == "splat" for root in ASSET_ROOTS)
+
+
+def _sha256_file(path):
+    import hashlib
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def pipeline_manifest_payload():
+    document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
+    return {
+        **document,
+        "manifestPath": str(PIPELINE_MANIFEST_PATH),
+        "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
+    }
+
+
+def _declared_read_roots():
+    roots = [ROOT]
+    roots.extend(Path(path).expanduser() for path in BROWSE_ROOTS.values())
+    return [root.resolve() for root in roots if root.exists()]
+
+
+def _resolve_api_read_source(source):
+    parsed = urlparse(source)
+    if parsed.path != "/api/read":
+        raise ValueError("source route must use /api/read")
+    params = parse_qs(parsed.query)
+    root_name = params.get("root", [""])[0]
+    rel_path = params.get("path", [""])[0]
+    root = BROWSE_ROOTS.get(root_name)
+    if not root:
+        raise ValueError(f"Unknown root: {root_name}")
+    lexical_target = Path(root).expanduser() / rel_path
+    target = lexical_target.resolve()
+    if not target.is_relative_to(Path(root).expanduser().resolve()):
+        if splat_asset_root_allows_pointer(root_name) and lexical_target.suffix.lower() in SPLAT_EXTENSIONS:
+            target = lexical_target
+        else:
+            raise PermissionError("Path traversal")
+    if not target.is_file():
+        raise FileNotFoundError(str(target))
+    return target.resolve()
+
+
+def resolve_pipeline_source(payload):
+    source = str(payload.get("source") or "").strip()
+    source_path = str(payload.get("sourcePath") or "").strip()
+    if source.startswith("/api/read"):
+        target = _resolve_api_read_source(source)
+        return {"source": source, "path": str(target)}
+    if source_path:
+        candidate = Path(source_path).expanduser()
+    elif source:
+        candidate = Path(source).expanduser()
+    else:
+        raise ValueError("source or sourcePath required")
+    if not candidate.is_absolute():
+        candidate = ROOT / candidate
+    target = candidate.resolve()
+    if not target.is_file():
+        raise FileNotFoundError(str(target))
+    if not any(target.is_relative_to(root) for root in _declared_read_roots()):
+        raise PermissionError("pipeline source must live under declared Kaminos roots")
+    return {"source": source or source_path, "path": str(target)}
+
+
+def _default_pipeline_out_dir(pipeline_id):
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", pipeline_id or "pipeline").strip("-") or "pipeline"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
+
+
+def run_pipeline_witness(payload):
+    pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
+    if not pipeline_id:
+        raise ValueError("pipelineId required")
+    source = resolve_pipeline_source(payload)
+    out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
+    out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_path = out_dir / "pipeline-witness.json"
+    command = [
+        os.environ.get("KAMINOS_NODE", "node"),
+        str(PIPELINE_WITNESS_PATH),
+        "--manifest", str(PIPELINE_MANIFEST_PATH),
+        "--pipeline-id", pipeline_id,
+        "--input", source["path"],
+        "--out-dir", str(out_dir),
+        "--report", str(report_path),
+    ]
+    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=120)
+    report = json.loads(report_path.read_text()) if report_path.exists() else None
+    bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
+    bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
+    return {
+        "schema": "kaminos.pipeline-run-result.v0",
+        "ok": proc.returncode == 0 and bool(report and report.get("ok")),
+        "pipelineId": pipeline_id,
+        "source": source,
+        "command": command,
+        "exitCode": proc.returncode,
+        "stdoutTail": proc.stdout[-4000:],
+        "stderrTail": proc.stderr[-4000:],
+        "report": {
+            "path": str(report_path),
+            "document": report,
+        },
+        "bundle": {
+            "path": str(bundle_path) if bundle_path else None,
+            "document": bundle,
+        },
+    }
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -602,6 +726,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/pipeline-manifest":
+            self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
@@ -629,6 +755,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/save-scene":
             self.handle_save_scene()
+        elif parsed.path == "/api/run-pipeline":
+            self.handle_run_pipeline()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -641,6 +769,44 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
+
+    def handle_pipeline_manifest(self):
+        try:
+            self.send_json(pipeline_manifest_payload())
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+        except Exception as error:
+            self.send_json({"error": str(error)}, 500)
+
+    def handle_run_pipeline(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            result = run_pipeline_witness(payload)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        except subprocess.TimeoutExpired:
+            self.send_json({"error": "pipeline witness timed out"}, 504)
+            return
+        except Exception as error:
+            self.send_json({"error": str(error)}, 500)
+            return
+        self.send_json(result, 200 if result.get("ok") else 500)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.
