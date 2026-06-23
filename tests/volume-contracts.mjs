@@ -9,7 +9,7 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=tall-fire-source-reaction-cadence-0623/, 'volume prototype import carries a cache key when tall-plume source/reaction cadence semantics change');
+assert.match(index, /volume-core\.js\?v=tall-fire-scale-decoupled-0623/, 'volume prototype import carries a cache key when tall-plume Fire Scale/detail-frequency semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -65,9 +65,10 @@ assert.match(index, /temporalJitter/, 'Volume controls carry temporal ray jitter
 assert.match(index, /id="volume-history-clamp"/, 'Volume tab exposes temporal history clamp control');
 assert.match(index, /volume_history_clamp/, 'URL route can override temporal history clamp strength');
 assert.match(index, /historyClamp/, 'Volume controls carry temporal history clamp strength into the renderer');
-assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes apparent fire/world scale control');
-assert.match(index, /volume_fire_scale/, 'URL route can override apparent fire/world scale');
-assert.match(index, /fireScale/, 'Volume controls carry apparent fire/world scale into the renderer');
+assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
+assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
+assert.match(index, /volume_fire_scale/, 'URL route can override emitter scale');
+assert.match(index, /fireScale/, 'Volume controls carry emitter scale into the renderer');
 assert.match(index, /id="volume-detail-scale"/, 'Volume tab exposes fine-detail scale control');
 assert.match(index, /volume_detail_scale/, 'URL route can override fine-detail scale');
 assert.match(index, /detailScale/, 'Volume controls carry fine-detail scale into the renderer');
@@ -158,6 +159,18 @@ assert.match(index, /CANONICAL_VOLUME_HIDDEN_SECTIONS[\s\S]*volume-ray-budget-se
 assert.match(index, /function syncCanonicalVolumeControlVisibility/, 'canonical plume cockpit visibility is synchronized by a named helper');
 assert.match(index, /closest\('\.slider-row'\)/, 'canonical plume hides whole slider rows instead of disabling only bare inputs');
 assert.match(index, /syncCanonicalVolumeControlVisibility\(c\.volumeScene\)/, 'volume label refresh also refreshes canonical cockpit visibility');
+assert.match(index, /NON_CANONICAL_VOLUME_HIDDEN_CONTROLS/, 'non-canonical scenes have an explicit hidden-control registry for canonical-only controls');
+for (const canonicalOnlyControl of [
+  'volume-canonical-spread',
+  'volume-canonical-centerline',
+  'volume-canonical-body-balance',
+]) {
+  assert.match(
+    index,
+    new RegExp(`NON_CANONICAL_VOLUME_HIDDEN_CONTROLS[\\s\\S]*${canonicalOnlyControl}`),
+    `non-canonical scenes hide canonical-only ${canonicalOnlyControl} from the operator cockpit`,
+  );
+}
 assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
 assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
@@ -436,6 +449,10 @@ assert.match(core, /volumeReconstructionStyle/, 'canvas uses an explicit reconst
 assert.match(core, /resetTemporalHistory\('render-scale-change'\)/, 'temporal history resets when internal render scale changes');
 assert.match(core, /scaledSourceRadius/, 'fluid source scales fire size without relying only on screen zoom');
 assert.match(core, /scaledDetailFrequency/, 'raymarch detail frequency can increase so fire details read smaller');
+assert.match(core, /tallPlumeTransportedDetailFrequency/, 'tall plume decouples transported detail frequency from emitter scale');
+assert.match(core, /tallPlumeRenderDetailFrequency/, 'tall plume decouples raymarch detail frequency from emitter scale');
+assert.match(core, /detailDomain = vec3<f32>\(tallPlumeTransportedDetailFrequency/, 'transport detail domains use Fire Scale-decoupled frequency for tall plume');
+assert.match(core, /scaleDomain = vec3<f32>\(tallPlumeRenderDetailFrequency/, 'render detail domains use Fire Scale-decoupled frequency for tall plume');
 assert.match(core, /plumeRiseScale/, 'fluid sim has an explicit plume height/world-rise scale');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
 assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
@@ -846,6 +863,7 @@ assert.match(witness, /setExternalEmitters/, 'witness can seed synthetic externa
 assert.match(witness, /fireScale/, 'witness records effective apparent fire/world scale');
 assert.match(witness, /detailScale/, 'witness records effective fine-detail scale');
 assert.match(witness, /visibleDetailOverlayGain/, 'witness records whether raymarch fine-detail overlays are active');
+assert.match(witness, /tallPlumeDetailFrequencySource/, 'witness records whether tall-plume detail frequency is decoupled from Fire Scale');
 assert.match(witness, /tallPlumeReactionCadenceDebug/, 'witness records the effective tall-plume source/reaction cadence identity');
 assert.match(witness, /plumeHeight/, 'witness records effective plume height/world-rise scale');
 assert.match(witness, /windStrength/, 'witness records effective explicit wind strength');

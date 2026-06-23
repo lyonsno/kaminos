@@ -1461,6 +1461,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let scaledSourceRadius = max(0.035, inputRadius * fireScale);
   let scaledSmokeSourceRadius = max(0.055, inputRadius * mix(0.92, 1.08, plumeHeight01));
   let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
+  let tallPlumeTransportedDetailFrequency = mix(scaledDetailFrequency, 1.0, tallPlumeScene);
   let plumeRiseScale = mix(0.82, 1.58, plumeHeight01);
   let sourceScaleCompensation = mix(1.22, 0.94, smoothstep(0.35, 1.30, fireScale));
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
@@ -1468,7 +1469,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLickAmount = clamp(u.grid_overlay_debug.w, 0.0, 5.0);
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
-  let detailDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.18, plumeHeight01), scaledDetailFrequency);
+  let detailDomain = vec3<f32>(tallPlumeTransportedDetailFrequency, mix(1.0, 1.18, plumeHeight01), tallPlumeTransportedDetailFrequency);
   let time = u.cameraPos_time.w;
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
@@ -1591,9 +1592,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
   let breakup = clamp(
     0.64
-      + 0.24 * sin(p.x * 19.0 * scaledDetailFrequency + p.z * 7.0 * scaledDetailFrequency + time * 1.7)
-      + 0.20 * cos(p.z * 23.0 * scaledDetailFrequency - p.x * 5.0 * scaledDetailFrequency - time * 1.3)
-      + 0.16 * hash31(vec3<f32>(gid) * 0.061 * scaledDetailFrequency + vec3<f32>(floor(time * 2.0))),
+      + 0.24 * sin(p.x * 19.0 * tallPlumeTransportedDetailFrequency + p.z * 7.0 * tallPlumeTransportedDetailFrequency + time * 1.7)
+      + 0.20 * cos(p.z * 23.0 * tallPlumeTransportedDetailFrequency - p.x * 5.0 * tallPlumeTransportedDetailFrequency - time * 1.3)
+      + 0.16 * hash31(vec3<f32>(gid) * 0.061 * tallPlumeTransportedDetailFrequency + vec3<f32>(floor(time * 2.0))),
     0.16,
     1.22
   );
@@ -2003,7 +2004,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
   let detailForceArtifactGain = 1.0 - detailScaleArtifactQuarantine;
   let rawDetailForce = turbulentDetailForce(p * (0.82 + physicalDetailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
-  let rawMicroForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
+  let rawMicroForce = turbulentDetailForce(p * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
   let symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
   let symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
@@ -2405,7 +2406,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let visibleDetailOverlayGain = mix(1.0, 0.35, detailScaleArtifactQuarantine);
   let physicalDetailScale = mix(detailScale, 1.0, detailScaleArtifactQuarantine);
   let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
-  let scaleDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), scaledDetailFrequency);
+  let tallPlumeRenderDetailFrequency = mix(scaledDetailFrequency, 1.0, tallPlumeRenderScene);
+  let scaleDomain = vec3<f32>(tallPlumeRenderDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), tallPlumeRenderDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
@@ -2913,23 +2915,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
           const plumeHeight01 = Math.max(0, Math.min(1, (plumeHeight - 0.7) / 1.5));
           const scaledDetailFrequency = Math.max(0.55, Math.min(5.4, detailScale / Math.max(fireScale, 0.45)));
+          const seedDetailFrequency = isTallInitialScene ? 1 : scaledDetailFrequency;
           const inputRadius = Math.max(0.08, controlsSnapshot.inputRadius || 0.08) * (0.92 + (1.08 - 0.92) * plumeHeight01);
           const inputFlow = Math.max(0, controlsSnapshot.flowRate ?? 0.3);
           const seedBonfireSourceY = isBonfireInitialScene ? 0.62 : -0.74;
           const seedSourceDistance = isBonfireInitialScene ? fy - seedBonfireSourceY : fy + 0.74;
           const source = Math.exp(-(radial * radial) / Math.max(0.0036, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(seedSourceDistance) * 4.2) * inputFlow;
           const angle = Math.atan2(fz, fx);
-          const azimuthalSeedA = 0.5 + 0.5 * Math.sin(angle * 5 + radial * 19 * scaledDetailFrequency + fy * 6);
-          const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * scaledDetailFrequency + fy * 4);
-          const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * scaledDetailFrequency - fy * 8);
-          const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * scaledDetailFrequency) + (fy * 5)) ** 2;
+          const azimuthalSeedA = 0.5 + 0.5 * Math.sin(angle * 5 + radial * 19 * seedDetailFrequency + fy * 6);
+          const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * seedDetailFrequency + fy * 4);
+          const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * seedDetailFrequency - fy * 8);
+          const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * seedDetailFrequency) + (fy * 5)) ** 2;
           const seedMaterialDetail = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
               ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
               : isTallInitialScene
                 ? 0
-                : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
+                : 0.35 + 0.65 * Math.sin((fx * 18 * seedDetailFrequency) + (fz * 11 * seedDetailFrequency)) ** 2;
           const seedVisibleAboveSource = isBonfireInitialScene ? seedBonfireSourceY - fy : fy + 0.74;
           const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
           const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
@@ -2947,23 +2950,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const seedVisibleFireCarrier = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? (0.28 + 0.32 * Math.cos((radial * 23 * scaledDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
-              : 0.30 + 0.70 * Math.cos((fx * 13 * scaledDetailFrequency) - (fz * 17 * scaledDetailFrequency)) ** 2;
+              ? (0.28 + 0.32 * Math.cos((radial * 23 * seedDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
+              : 0.30 + 0.70 * Math.cos((fx * 13 * seedDetailFrequency) - (fz * 17 * seedDetailFrequency)) ** 2;
           const seedMicroSmoke = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.20 + 0.30 * Math.sin((radial * 31 * scaledDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
-              : 0.22 + 0.78 * Math.sin((fx * 31 * scaledDetailFrequency) - (fz * 19 * scaledDetailFrequency)) ** 2;
+              ? 0.20 + 0.30 * Math.sin((radial * 31 * seedDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
+              : 0.22 + 0.78 * Math.sin((fx * 31 * seedDetailFrequency) - (fz * 19 * seedDetailFrequency)) ** 2;
           const seedInterfaceShred = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.12 + 0.18 * Math.cos((radial * 27 * scaledDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
-              : 0.12 + 0.50 * Math.cos((fx * 23 * scaledDetailFrequency) + (fy * 17) - (fz * 29 * scaledDetailFrequency)) ** 2;
+              ? 0.12 + 0.18 * Math.cos((radial * 27 * seedDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
+              : 0.12 + 0.50 * Math.cos((fx * 23 * seedDetailFrequency) + (fy * 17) - (fz * 29 * seedDetailFrequency)) ** 2;
           const seedFireLick = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * scaledDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
-              : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * scaledDetailFrequency)) ** 2;
+              ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * seedDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
+              : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * seedDetailFrequency)) ** 2;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -fz * source * seedLateralVelocity;
           data[i + 1] = source * 0.22;
@@ -3668,6 +3671,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
+    state.tallPlumeDetailFrequencySource = state.volumeScene === 'tall_plume' ? 'fire-scale-decoupled-v0' : 'scale-controls';
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.reactionFuelScale = uniforms[71];
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
@@ -4807,6 +4811,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+        tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
@@ -5050,6 +5055,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+      tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,

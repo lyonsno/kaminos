@@ -651,6 +651,9 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.detailScaleArtifactQuarantine ?? 0) - expectedDetailScaleArtifactQuarantine) < 0.001, 'detail-scale artifact quarantine state did not match volume scene');
     assert.ok(Math.abs((state.visibleDetailOverlayGain ?? 0) - expectedVisibleDetailOverlayGain) < 0.001, 'visible detail overlay gain did not match detail quarantine policy');
+    if (expectedVolumeScene === 'tall_plume') {
+      assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
+    }
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
     assert.ok(Math.abs((state.controls?.curl ?? 0) - expectedCurl) < 0.001, 'curl route/control did not apply');
@@ -1331,6 +1334,7 @@ async function main() {
       fireScale: sample.fireScale,
       detailScale: sample.detailScale,
       detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
+      tallPlumeDetailFrequencySource: sample.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       reactionFuelScale: sample.reactionFuelScale,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
