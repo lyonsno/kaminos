@@ -203,6 +203,9 @@ assert.match(witness, /hybrid splat overlay did not expose renderer source ident
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
 assert.match(witness, /hybrid splat overlay made scene geometry transparent instead of using editor xray/, 'Hybrid Renderer witness fails if editor sovereignty fades the renderer canvas against scene geometry');
 assert.match(witness, /editorXrayVisible/, 'Hybrid Renderer witness records the editor-xray visibility surface above the renderer overlay');
+assert.match(witness, /editorGizmoAxisCount/, 'Hybrid Renderer witness records projected editor-gizmo axes above the renderer overlay');
+assert.match(witness, /editorGizmoCropEdgeCount/, 'Hybrid Renderer witness records projected crop-box edges above the renderer overlay');
+assert.match(witness, /hybrid splat overlay xray degraded to a text-only target badge/, 'Hybrid Renderer witness fails if editor xray regresses to the text-only target badge');
 assert.match(witness, /editorSovereign/, 'Hybrid Renderer witness records the explicit editor-sovereignty debug state');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
 assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');

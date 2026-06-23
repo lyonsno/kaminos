@@ -92,11 +92,15 @@ canvas { display: block; }
 #hybrid-splat-overlay-host.editor-sovereign canvas { pointer-events: none !important; }
 #hybrid-editor-xray-host { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
 #hybrid-editor-xray-host[hidden] { display: none; }
-.hybrid-editor-xray-target { position: absolute; left: 0; top: 0; width: 76px; height: 76px; margin: -38px 0 0 -38px; border: 1px solid rgba(120, 220, 255, 0.95); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 20px rgba(120,220,255,0.45), inset 0 0 16px rgba(120,220,255,0.18); transform: translate3d(-9999px, -9999px, 0); }
-.hybrid-editor-xray-target::before, .hybrid-editor-xray-target::after { content: ""; position: absolute; background: rgba(120, 220, 255, 0.9); box-shadow: 0 0 8px rgba(120,220,255,0.35); }
-.hybrid-editor-xray-target::before { left: 50%; top: 8px; bottom: 8px; width: 1px; transform: translateX(-50%); }
-.hybrid-editor-xray-target::after { top: 50%; left: 8px; right: 8px; height: 1px; transform: translateY(-50%); }
-.hybrid-editor-xray-label { position: absolute; left: 42px; top: 53px; max-width: 180px; padding: 3px 6px; border: 1px solid rgba(120,220,255,0.45); border-radius: 5px; background: rgba(0,0,0,0.68); color: #aeefff; font: 9px 'SF Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hybrid-editor-gizmo-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.hybrid-editor-gizmo-svg line, .hybrid-editor-gizmo-svg circle { vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 3px rgba(0,0,0,0.75)); }
+.hybrid-editor-gizmo-axis { stroke-width: 4; stroke-linecap: round; opacity: 0.96; }
+.hybrid-editor-gizmo-axis.negative { stroke-width: 2; opacity: 0.42; }
+.hybrid-editor-gizmo-axis.x { stroke: #ff3d2e; }
+.hybrid-editor-gizmo-axis.y { stroke: #65f442; }
+.hybrid-editor-gizmo-axis.z { stroke: #2f64ff; }
+.hybrid-editor-gizmo-origin { fill: rgba(255,255,255,0.15); stroke: rgba(220,245,255,0.95); stroke-width: 2; }
+.hybrid-editor-gizmo-crop-edge { stroke: rgba(142, 223, 255, 0.95); stroke-width: 2; stroke-linecap: round; opacity: 0.92; }
 
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
@@ -720,9 +724,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div id="env-loading">Loading environment...</div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="hybrid-editor-xray-host" hidden aria-hidden="true">
-    <div class="hybrid-editor-xray-target">
-      <div class="hybrid-editor-xray-label">editor target</div>
-    </div>
+    <svg class="hybrid-editor-gizmo-svg" viewBox="0 0 1 1" preserveAspectRatio="none">
+      <defs>
+        <marker id="hybrid-editor-arrow-x" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#ff3d2e"></path></marker>
+        <marker id="hybrid-editor-arrow-y" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#65f442"></path></marker>
+        <marker id="hybrid-editor-arrow-z" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#2f64ff"></path></marker>
+      </defs>
+      <g data-role="crop-box">
+        <line data-role="crop-edge" data-index="0" class="hybrid-editor-gizmo-crop-edge"></line>
+      </g>
+      <g data-role="axes">
+        <line data-role="axis-x" data-index="positive" class="hybrid-editor-gizmo-axis x"></line>
+        <line data-role="axis-y" data-index="positive" class="hybrid-editor-gizmo-axis y"></line>
+        <line data-role="axis-z" data-index="positive" class="hybrid-editor-gizmo-axis z"></line>
+      </g>
+      <circle data-role="origin" class="hybrid-editor-gizmo-origin" r="8"></circle>
+    </svg>
   </div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
@@ -994,12 +1011,10 @@ function hybridSplatOverlayCropAppliedByRenderer() {
   return false;
 }
 
-function hybridEditorXrayProjectTarget(editorTarget) {
+function hybridEditorWorldToViewport(world) {
   const viewport = document.getElementById('viewport');
-  if (!viewport || !editorTarget || !camera || !renderer?.domElement) return null;
+  if (!viewport || !world || !camera || !renderer?.domElement) return null;
   camera.updateMatrixWorld?.();
-  editorTarget.updateWorldMatrix?.(true, false);
-  const world = editorTarget.getWorldPosition(new THREE.Vector3());
   const ndc = world.clone().project(camera);
   if (!Number.isFinite(ndc.x) || !Number.isFinite(ndc.y) || !Number.isFinite(ndc.z)) return null;
   const canvasRect = renderer.domElement.getBoundingClientRect();
@@ -1011,29 +1026,134 @@ function hybridEditorXrayProjectTarget(editorTarget) {
   };
 }
 
-function updateHybridEditorXray(editorActive, editorTarget, reason) {
+function hybridEditorSetSvgLine(line, start, end) {
+  if (!line || !start || !end) {
+    line?.setAttribute('visibility', 'hidden');
+    return false;
+  }
+  line.setAttribute('x1', start.x.toFixed(2));
+  line.setAttribute('y1', start.y.toFixed(2));
+  line.setAttribute('x2', end.x.toFixed(2));
+  line.setAttribute('y2', end.y.toFixed(2));
+  line.setAttribute('visibility', 'visible');
+  return true;
+}
+
+function hybridEditorEnsureSvgLine(parent, role, index, className) {
+  const selector = `line[data-role="${role}"][data-index="${index}"]`;
+  let line = parent?.querySelector(selector);
+  if (!line && parent) {
+    line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.dataset.role = role;
+    line.dataset.index = String(index);
+    line.setAttribute('class', className);
+    parent.appendChild(line);
+  }
+  return line;
+}
+
+function updateHybridEditorGizmoAxes(svg, editorTarget, originProjection) {
+  const group = svg?.querySelector('[data-role="axes"]');
+  if (!group || !editorTarget || !originProjection || !camera) return 0;
+  const originWorld = editorTarget.getWorldPosition(new THREE.Vector3());
+  const distance = camera.getWorldPosition(new THREE.Vector3()).distanceTo(originWorld);
+  const axisLength = Math.max(0.12, Math.min(1.25, distance * 0.18));
+  const localSpace = transformControls?.space === 'local';
+  const worldQuaternion = editorTarget.getWorldQuaternion(new THREE.Quaternion());
+  const axes = [
+    ['x', new THREE.Vector3(1, 0, 0), 'url(#hybrid-editor-arrow-x)'],
+    ['y', new THREE.Vector3(0, 1, 0), 'url(#hybrid-editor-arrow-y)'],
+    ['z', new THREE.Vector3(0, 0, 1), 'url(#hybrid-editor-arrow-z)'],
+  ];
+  let visibleCount = 0;
+  for (const [axis, baseDirection, marker] of axes) {
+    const direction = baseDirection.clone();
+    if (localSpace) direction.applyQuaternion(worldQuaternion);
+    direction.normalize();
+    const positiveWorld = originWorld.clone().addScaledVector(direction, axisLength);
+    const negativeWorld = originWorld.clone().addScaledVector(direction, -axisLength * 0.55);
+    const positive = hybridEditorWorldToViewport(positiveWorld);
+    const negative = hybridEditorWorldToViewport(negativeWorld);
+    const positiveLine = hybridEditorEnsureSvgLine(group, `axis-${axis}`, 'positive', `hybrid-editor-gizmo-axis ${axis}`);
+    const negativeLine = hybridEditorEnsureSvgLine(group, `axis-${axis}`, 'negative', `hybrid-editor-gizmo-axis ${axis} negative`);
+    positiveLine?.setAttribute('marker-end', marker);
+    negativeLine?.removeAttribute('marker-end');
+    if (hybridEditorSetSvgLine(positiveLine, originProjection, positive)) visibleCount += 1;
+    if (hybridEditorSetSvgLine(negativeLine, originProjection, negative)) visibleCount += 1;
+  }
+  return visibleCount;
+}
+
+function updateHybridEditorGizmoCropEdges(svg) {
+  const group = svg?.querySelector('[data-role="crop-box"]');
+  const target = splatCorrectionMode?.cropTarget;
+  if (!group || !target || !target.visible) {
+    group?.querySelectorAll('line[data-role="crop-edge"]').forEach(line => line.setAttribute('visibility', 'hidden'));
+    return 0;
+  }
+  target.updateWorldMatrix?.(true, false);
+  const corners = [
+    [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5],
+    [-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5],
+  ].map(point => new THREE.Vector3(...point).applyMatrix4(target.matrixWorld));
+  const edges = [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ];
+  let visibleCount = 0;
+  edges.forEach(([a, b], index) => {
+    const line = hybridEditorEnsureSvgLine(group, 'crop-edge', index, 'hybrid-editor-gizmo-crop-edge');
+    if (hybridEditorSetSvgLine(line, hybridEditorWorldToViewport(corners[a]), hybridEditorWorldToViewport(corners[b]))) {
+      visibleCount += 1;
+    }
+  });
+  return visibleCount;
+}
+
+function updateHybridEditorGizmoOverlay(editorActive, editorTarget, reason) {
   const host = document.getElementById('hybrid-editor-xray-host');
-  const target = host?.querySelector('.hybrid-editor-xray-target');
-  const label = host?.querySelector('.hybrid-editor-xray-label');
-  const projection = editorActive ? hybridEditorXrayProjectTarget(editorTarget) : null;
-  const visible = !!host && !!target && !!projection;
-  if (host) host.hidden = !visible;
-  if (target && projection) {
-    target.style.transform = `translate3d(${projection.x.toFixed(2)}px, ${projection.y.toFixed(2)}px, 0)`;
-    target.dataset.reason = reason || '';
-    target.dataset.ndcZ = projection.ndcZ.toFixed(4);
+  const svg = host?.querySelector('.hybrid-editor-gizmo-svg');
+  if (!host || !svg || !editorActive || !editorTarget) {
+    if (host) host.hidden = true;
+    return {
+      mode: HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE,
+      visible: false,
+      axisCount: 0,
+      cropEdgeCount: 0,
+      textOnly: false,
+      x: null,
+      y: null,
+      ndcZ: null,
+    };
   }
-  if (label) {
-    label.textContent = reason === 'splat-correction-gizmo-active'
-      ? 'correction target'
-      : 'transform target';
+  editorTarget.updateWorldMatrix?.(true, false);
+  const viewport = document.getElementById('viewport');
+  const originWorld = editorTarget.getWorldPosition(new THREE.Vector3());
+  const originProjection = hybridEditorWorldToViewport(originWorld);
+  const visible = !!originProjection;
+  host.hidden = !visible;
+  host.dataset.reason = reason || '';
+  if (viewport) svg.setAttribute('viewBox', `0 0 ${viewport.clientWidth} ${viewport.clientHeight}`);
+  const origin = svg.querySelector('[data-role="origin"]');
+  if (origin && originProjection) {
+    origin.setAttribute('cx', originProjection.x.toFixed(2));
+    origin.setAttribute('cy', originProjection.y.toFixed(2));
+    origin.setAttribute('visibility', 'visible');
+  } else {
+    origin?.setAttribute('visibility', 'hidden');
   }
+  const axisCount = visible ? updateHybridEditorGizmoAxes(svg, editorTarget, originProjection) : 0;
+  const cropEdgeCount = visible ? updateHybridEditorGizmoCropEdges(svg) : 0;
   return {
     mode: HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE,
     visible,
-    x: projection?.x ?? null,
-    y: projection?.y ?? null,
-    ndcZ: projection?.ndcZ ?? null,
+    axisCount,
+    cropEdgeCount,
+    textOnly: false,
+    x: originProjection?.x ?? null,
+    y: originProjection?.y ?? null,
+    ndcZ: originProjection?.ndcZ ?? null,
   };
 }
 
@@ -1055,7 +1175,7 @@ function hybridSplatOverlayEditorSovereigntyState() {
       canvas.style.pointerEvents = 'none';
     }
   }
-  const xray = updateHybridEditorXray(editorActive, editorTarget, reason);
+  const xray = updateHybridEditorGizmoOverlay(editorActive, editorTarget, reason);
   return {
     active: editorActive,
     opacity: 1,

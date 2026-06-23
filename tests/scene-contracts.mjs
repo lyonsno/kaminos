@@ -149,7 +149,11 @@ assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRen
 assert.match(index, /function hybridSplatOverlayEditorSovereigntyState\(/, 'Hybrid Renderer overlay exposes an editor-sovereignty compositing rule');
 assert.doesNotMatch(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas\s*\{[^}]*opacity/, 'Hybrid Renderer overlay must not use whole-canvas opacity that fades against scene objects and support disk');
 assert.match(index, /id="hybrid-editor-xray-host"/, 'Hybrid Renderer overlay has a top editor-xray layer for gizmo/target affordance above the renderer canvas');
-assert.match(index, /function updateHybridEditorXray\(/, 'Hybrid Renderer editor sovereignty updates a dedicated xray layer instead of fading the renderer canvas');
+assert.match(index, /class="hybrid-editor-gizmo-svg"/, 'Hybrid Renderer editor xray renders projected gizmo geometry instead of only a text target badge');
+assert.match(index, /function updateHybridEditorGizmoOverlay\(/, 'Hybrid Renderer editor sovereignty updates a projected gizmo overlay instead of fading the renderer canvas');
+assert.doesNotMatch(index, />transform target</, 'Hybrid Renderer editor xray must not degrade to a text-only transform target badge');
+assert.match(index, /data-role="axis-x"/, 'Hybrid Renderer editor xray draws the transform X axis above the renderer overlay');
+assert.match(index, /data-role="crop-edge"/, 'Hybrid Renderer editor xray draws crop-box edges above the renderer overlay');
 assert.match(index, /scenePassthrough:\s*false/, 'Hybrid Renderer debug state records that editor sovereignty does not make scene geometry bleed through the overlay');
 assert.match(index, /editorSovereign:\s*editorSovereignty\.active/, 'Hybrid Renderer debug state reports editor-overlay sovereignty instead of leaving it as CSS inference');
 assert.match(index, /id="splat-emissive-extraction-panel"/, 'selected splats expose a visible Emissive Extraction panel instead of a hidden renderer global');

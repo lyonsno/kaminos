@@ -2528,9 +2528,12 @@ async function runHybridSplatOverlayScenario(ws) {
       const overlayHost = document.getElementById('hybrid-splat-overlay-host');
       const overlayHostStyle = overlayHost ? getComputedStyle(overlayHost) : null;
       const editorXrayHost = document.getElementById('hybrid-editor-xray-host');
-      const editorXrayTarget = editorXrayHost?.querySelector('.hybrid-editor-xray-target') || null;
+      const editorGizmoSvg = editorXrayHost?.querySelector('.hybrid-editor-gizmo-svg') || null;
       const editorXrayHostStyle = editorXrayHost ? getComputedStyle(editorXrayHost) : null;
-      const editorXrayTargetStyle = editorXrayTarget ? getComputedStyle(editorXrayTarget) : null;
+      const visibleAxisLines = [...(editorGizmoSvg?.querySelectorAll('[data-role^="axis-"]') || [])]
+        .filter(line => line.getAttribute('visibility') !== 'hidden');
+      const visibleCropEdges = [...(editorGizmoSvg?.querySelectorAll('[data-role="crop-edge"]') || [])]
+        .filter(line => line.getAttribute('visibility') !== 'hidden');
       const correctionMode = window.kaminosSplatCorrectionModeDebugState?.() || null;
       const transformBar = document.getElementById('transform-bar');
       const editorOverlay = {
@@ -2543,10 +2546,12 @@ async function runHybridSplatOverlayScenario(ws) {
         editorSovereign: overlayDebug?.editorSovereign || false,
         scenePassthrough: overlayDebug?.scenePassthrough ?? null,
         editorXrayVisible: !!editorXrayHost && !editorXrayHost.hidden
-          && editorXrayHostStyle?.getPropertyValue('display') !== 'none'
-          && editorXrayTargetStyle?.getPropertyValue('visibility') !== 'hidden',
+          && editorXrayHostStyle?.getPropertyValue('display') !== 'none',
         editorXrayMode: overlayDebug?.editorXray?.mode || null,
-        editorXrayTransform: editorXrayTargetStyle?.getPropertyValue('transform') || null,
+        editorGizmoAxisCount: visibleAxisLines.length,
+        editorGizmoCropEdgeCount: visibleCropEdges.length,
+        editorGizmoText: editorXrayHost?.textContent || '',
+        editorGizmoDebug: overlayDebug?.editorXray || null,
       };
       URL.revokeObjectURL(moduleUrl);
       return {
@@ -2618,8 +2623,13 @@ async function runHybridSplatOverlayScenario(ws) {
       || editorOverlay.overlayHostPointerEvents !== 'none'
       || editorOverlay.scenePassthrough !== false
       || editorOverlay.editorXrayVisible !== true
-      || editorOverlay.editorXrayMode !== 'editor-xray-target') {
+      || editorOverlay.editorXrayMode !== 'editor-xray-target'
+      || !(editorOverlay.editorGizmoAxisCount >= 3)
+      || !(editorOverlay.editorGizmoCropEdgeCount >= 8)) {
     throw new Error(`hybrid splat overlay made scene geometry transparent instead of using editor xray: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (/transform target|correction target/i.test(editorOverlay.editorGizmoText || '')) {
+    throw new Error(`hybrid splat overlay xray degraded to a text-only target badge: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
 }
 
