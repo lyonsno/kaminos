@@ -122,6 +122,10 @@ function volumeSceneMode(value) {
   return 0;
 }
 
+function detailScaleArtifactQuarantine(value) {
+  return normalizeVolumeScene(value) === 'tall_plume' ? 1 : 0;
+}
+
 function bonfireReferenceConfinementDebug(value) {
   const scene = normalizeVolumeScene(value);
   return {
@@ -1446,9 +1450,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
   let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
   let plumeHeight01 = smoothstep(0.70, 2.20, plumeHeight);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  let tallPlumeScene = step(0.5, sceneMode) * (1.0 - step(1.5, sceneMode));
+  let detailScaleArtifactQuarantine = tallPlumeScene;
+  let physicalDetailScale = mix(detailScale, 1.0, detailScaleArtifactQuarantine);
   let scaledSourceRadius = max(0.035, inputRadius * fireScale);
   let scaledSmokeSourceRadius = max(0.055, inputRadius * mix(0.92, 1.08, plumeHeight01));
-  let scaledDetailFrequency = clamp(detailScale / max(fireScale, 0.45), 0.55, 5.40);
+  let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
   let plumeRiseScale = mix(0.82, 1.58, plumeHeight01);
   let sourceScaleCompensation = mix(1.22, 0.94, smoothstep(0.35, 1.30, fireScale));
   let microAmount = clamp(u.grid_overlay_debug.y, 0.0, 2.5);
@@ -1458,7 +1466,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.18, plumeHeight01), scaledDetailFrequency);
   let time = u.cameraPos_time.w;
-  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
@@ -1989,7 +1996,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireDetailLateralDamping = bonfireLocalLateralForceGain;
   let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
-  let rawDetailForce = turbulentDetailForce(p * (0.82 + detailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010);
+  let detailForceArtifactGain = 1.0 - detailScaleArtifactQuarantine;
+  let rawDetailForce = turbulentDetailForce(p * (0.82 + physicalDetailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
   let rawMicroForce = turbulentDetailForce(p * (2.85 * scaledDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
   let symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
@@ -2330,11 +2338,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
   let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
   let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
-  let scaledDetailFrequency = clamp(detailScale / max(fireScale, 0.45), 0.55, 5.40);
-  let scaleDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), scaledDetailFrequency);
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
+  let tallPlumeRenderScene = step(0.5, renderSceneMode) * (1.0 - step(1.5, renderSceneMode));
+  let detailScaleArtifactQuarantine = tallPlumeRenderScene;
+  let visibleDetailOverlayGain = mix(1.0, 0.35, detailScaleArtifactQuarantine);
+  let physicalDetailScale = mix(detailScale, 1.0, detailScaleArtifactQuarantine);
+  let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
+  let scaleDomain = vec3<f32>(scaledDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), scaledDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
@@ -2515,9 +2527,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
     temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
     temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
-    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise;
-    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise;
-    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise;
+    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
+    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
+    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
     let smokeCol = mix(
       vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
@@ -2599,6 +2611,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     historyClamp: 0.70,
     fireScale: 0.86,
     detailScale: 1.75,
+    detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
+    visibleDetailOverlayGain: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene) ? 0.35 : 1,
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -2824,6 +2838,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const initialScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const isBonfireInitialScene = initialScene === 'bonfire_plume';
     const isCanonicalInitialScene = initialScene === 'canonical_plume';
+    const isTallInitialScene = initialScene === 'tall_plume';
     const seedLateralVelocity = isBonfireInitialScene ? 0 : 0.11;
     for (let z = 0; z < nextGridSize; z += 1) {
       for (let y = 0; y < nextGridSize; y += 1) {
@@ -2851,7 +2866,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             ? 0
             : isBonfireInitialScene
               ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
-              : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
+              : isTallInitialScene
+                ? 0
+                : 0.35 + 0.65 * Math.sin((fx * 18 * scaledDetailFrequency) + (fz * 11 * scaledDetailFrequency)) ** 2;
           const seedVisibleAboveSource = isBonfireInitialScene ? seedBonfireSourceY - fy : fy + 0.74;
           const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
           const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
@@ -3589,6 +3606,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.historyClamp = uniforms[46];
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
+    state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
+    state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
@@ -4706,6 +4725,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         historyClamp: state.historyClamp,
         fireScale: state.fireScale,
         detailScale: state.detailScale,
+        detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+        visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -4945,6 +4966,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       historyClamp: state.historyClamp,
       fireScale: state.fireScale,
       detailScale: state.detailScale,
+      detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+      visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
@@ -5042,6 +5065,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
+      state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
+      state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);

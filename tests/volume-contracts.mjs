@@ -9,7 +9,7 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=tall-fire-wind-foothold-0622/, 'volume prototype import carries a cache key when tall-plume fire/wind route controls change');
+assert.match(index, /volume-core\.js\?v=tall-fire-detail-quarantine-0622/, 'volume prototype import carries a cache key when tall-plume fire detail quarantine changes');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -112,6 +112,8 @@ assert.match(index, /canonical_plume/, 'Volume tab exposes a minimal canonical p
 assert.match(index, /tall_plume/, 'Volume tab exposes a tall plume scale-test scene');
 assert.match(index, /TALL_PLUME_OPERATOR_PRESETS/, 'tall plume operator-found regimes have stable named route presets');
 assert.match(index, /operator_fire_0622/, 'tall plume preserves the 2026-06-22 operator-found fire/smoke wind foothold by stable route identity');
+assert.match(index, /operator_fire_0622[\s\S]*temporalAccum:\s*0\.00/, 'operator fire foothold disables temporal accumulation while structured artifacts are under diagnosis');
+assert.match(index, /operator_fire_0622[\s\S]*detailScale:\s*1\.00/, 'operator fire foothold parks detail scale at a neutral value while legacy detail overlay is quarantined');
 assert.match(index, /volume_tall_preset/, 'URL route can select a named tall-plume operator preset');
 assert.match(index, /applyTallPlumeOperatorPreset/, 'tall-plume operator preset application is a named control path before wind route overrides');
 assert.match(index, /canonicalPlumeReadoutActive/, 'volume readout distinguishes canonical labels from ordinary scene truth');
@@ -353,6 +355,9 @@ assert.match(core, /fineScaleBreakup/, 'fluid compute shader applies controllabl
 assert.match(core, /transportedMicrodetailAdvection/, 'fluid compute shader advects a distinct microdetail field');
 assert.match(core, /interfaceShreddingForce/, 'fluid compute shader shreds smoke/fire interfaces from transported gradients');
 assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived fire lick breakup from heat/fire fields');
+assert.match(core, /detailScaleArtifactQuarantine/, 'tall-plume fire foothold names the legacy detail-scale artifact quarantine');
+assert.match(core, /visibleDetailOverlayGain/, 'tall-plume fire foothold exposes a physical-detail overlay gain instead of letting detail scale imply realism');
+assert.doesNotMatch(core, /rawDetailForce = turbulentDetailForce\(p \* \(0\.82 \+ detailScale \* 0\.30\)/, 'legacy detail scale must not directly inject a source/smoke/heat turbulent force into the tall-plume foothold');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
 assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
@@ -402,6 +407,8 @@ assert.match(core, /interfaceHistoryProtect/, 'temporal weighting names the fire
 assert.match(core, /resetTemporalHistory/, 'renderer can reset temporal history on camera/control/grid changes');
 assert.match(core, /copyTextureToTexture/, 'renderer copies the resolved current frame into temporal history');
 assert.match(core, /state\.temporalAccum/, 'debug state exposes effective temporal accumulation strength');
+assert.match(core, /state\.detailScaleArtifactQuarantine/, 'debug state exposes whether the legacy detail-scale artifact quarantine is active');
+assert.match(core, /state\.visibleDetailOverlayGain/, 'debug state exposes whether raymarch fine-detail overlays are active for the current scene');
 assert.match(core, /state\.temporalJitter/, 'debug state exposes effective temporal jitter strength');
 assert.match(core, /state\.historyClamp/, 'debug state exposes effective temporal history clamp strength');
 assert.match(core, /state\.temporalReprojectionConfidence/, 'debug state exposes temporal reprojection confidence evidence');
@@ -790,6 +797,8 @@ assert.match(witness, /expectedWindAngle/, 'witness verifies explicit wind direc
 assert.match(witness, /expectedWindHeight/, 'witness verifies explicit wind height/ramp route/control identity');
 assert.match(witness, /TALL_PLUME_OPERATOR_PRESETS/, 'witness knows named tall-plume operator presets');
 assert.match(witness, /operator_fire_0622/, 'witness recognizes the 2026-06-22 tall-plume fire/smoke wind foothold preset');
+assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
+assert.match(witness, /detailScaleArtifactQuarantine/, 'witness records the effective detail-scale artifact quarantine state');
 assert.match(witness, /expectedTallPlumePreset/, 'witness reports effective tall-plume operator preset identity');
 assert.match(witness, /volume_expected_wind_drift/, 'witness can assert expected wind drift direction for tall-plume wind probes');
 assert.match(witness, /expectedWindDrift/, 'witness reports requested wind drift expectation');
@@ -817,6 +826,7 @@ assert.match(witness, /externalEmitterAgeMs/, 'witness records external emitter 
 assert.match(witness, /setExternalEmitters/, 'witness can seed synthetic external emitter payloads through the public API');
 assert.match(witness, /fireScale/, 'witness records effective apparent fire/world scale');
 assert.match(witness, /detailScale/, 'witness records effective fine-detail scale');
+assert.match(witness, /visibleDetailOverlayGain/, 'witness records whether raymarch fine-detail overlays are active');
 assert.match(witness, /plumeHeight/, 'witness records effective plume height/world-rise scale');
 assert.match(witness, /windStrength/, 'witness records effective explicit wind strength');
 assert.match(witness, /windAngle/, 'witness records effective explicit wind direction');

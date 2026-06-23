@@ -637,7 +637,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-wind-foothold-0622';
+import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-detail-quarantine-0622';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1434,11 +1434,11 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     majorantSkip: 0.00,
     majorantSmooth: 0.10,
     majorantGuard: 0.30,
-    temporalAccum: 0.35,
+    temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
     fireScale: 0.42,
-    detailScale: 1.60,
+    detailScale: 1.00,
     plumeHeight: 0.70,
     windStrength: 0.00,
     windAngle: 180,

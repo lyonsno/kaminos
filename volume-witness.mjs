@@ -82,11 +82,11 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     majorantSkip: 0.00,
     majorantSmooth: 0.10,
     majorantGuard: 0.30,
-    temporalAccum: 0.35,
+    temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
     fireScale: 0.42,
-    detailScale: 1.60,
+    detailScale: 1.00,
     plumeHeight: 0.70,
     windStrength: 0.00,
     windAngle: 180,
@@ -363,6 +363,8 @@ const expectedBonfireInstabilityProbe = expectedBonfireAblationParam('volume_bon
 const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
   ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
   : expectedTemporalAccum;
+const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' ? 1 : 0;
+const expectedVisibleDetailOverlayGain = expectedDetailScaleArtifactQuarantine ? 0.35 : 1;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
 function delay(ms) {
@@ -642,6 +644,8 @@ async function main() {
     assert.ok(Math.abs((state.fireScale ?? 0) - expectedFireScale) < 0.001, 'effective fire scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.detailScale ?? 0) - expectedDetailScale) < 0.001, 'detail scale route/control did not apply');
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
+    assert.ok(Math.abs((state.detailScaleArtifactQuarantine ?? 0) - expectedDetailScaleArtifactQuarantine) < 0.001, 'detail-scale artifact quarantine state did not match volume scene');
+    assert.ok(Math.abs((state.visibleDetailOverlayGain ?? 0) - expectedVisibleDetailOverlayGain) < 0.001, 'visible detail overlay gain did not match detail quarantine policy');
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
     assert.ok(Math.abs((state.controls?.curl ?? 0) - expectedCurl) < 0.001, 'curl route/control did not apply');
@@ -1277,6 +1281,8 @@ async function main() {
       historyClamp: sample.historyClamp,
       fireScale: sample.fireScale,
       detailScale: sample.detailScale,
+      detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
+      visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       plumeHeight: sample.plumeHeight,
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,
@@ -1285,6 +1291,8 @@ async function main() {
       expectedWindDrift,
       expectedFireScale,
       expectedDetailScale,
+      expectedDetailScaleArtifactQuarantine,
+      expectedVisibleDetailOverlayGain,
       expectedPlumeHeight,
       expectedCurl,
       expectedMicrodetail,
