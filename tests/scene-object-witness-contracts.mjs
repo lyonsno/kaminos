@@ -11,6 +11,11 @@ const witness = readFileSync(witnessPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
+assert.match(witness, /forge-host-visible-actors/, 'witness supports a Forge Host visible actor scenario');
+assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host actor witness reads the explicit debug surface');
+assert.match(witness, /forgeHost\.visibleActorCount/, 'Forge Host actor witness requires visible actor meshes');
+assert.match(witness, /forgeHost\.authoredSceneObjectCount !== 0/, 'Forge Host actor witness proves actors do not become authored scene objects');
+assert.match(witness, /kaminosSelectForgeActor/, 'Forge Host actor witness can select an actor through the explicit debug selector');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');

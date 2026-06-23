@@ -18,8 +18,20 @@ assert.equal(core.FORGE_HOST_FIXTURE_SOURCE_ID, 'fixture:kaminos-inhabited-agent
 assert.match(index, /from '\.\/forge-host-core\.js'/, 'workbench imports the forge-host data contract');
 assert.match(index, /forge_host_fixture/, 'URL route can seed the forge-host fixture actor set');
 assert.match(index, /forge_host_registry_url/, 'URL route can ingest an explicit live Diaulos registry URL');
+assert.match(index, /id="forge-host-label-layer"/, 'viewport contains a Forge Host label layer for actor call signs');
+assert.match(index, /id="forge-host-inspector"/, 'viewport contains a Forge Host inspector surface for selected actor metadata');
 assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect forge-host actor state without DOM inference');
+assert.match(index, /window\.kaminosSelectForgeActor/, 'browser witnesses can select Forge Host actors without DOM inference');
 assert.match(index, /fixture:kaminos-inhabited-agent-forge-2026-06-23\/minion-spawnfucker-v0/, 'workbench preserves forge-host fixture identity');
+assert.match(index, /function spawnForgeHostActors\(/, 'forge-host route spawns visible actor world bodies');
+assert.match(index, /function pickForgeHostActorFromViewportPointer\(/, 'viewport selection can hit Forge Host actors separately from authored scene objects');
+assert.match(index, /new THREE\.SphereGeometry\(0\.16, 32, 16\)/, 'first visible actor body uses cheap stable sphere geometry');
+assert.match(index, /forgeHostActorGroup/, 'forge-host actors live in a separate scene group, not the authored scene object registry');
+assert.match(index, /kaminosForgeHostActor/, 'forge-host actor meshes preserve actor metadata on userData');
+assert.match(index, /visibleActorCount/, 'forge-host debug state records visible actor count');
+assert.match(index, /authoredSceneObjectCount:\s*sceneObjects\.length/, 'forge-host debug state proves actor bodies are not authored scene objects');
+assert.match(index, /data-forge-host-actor-label/, 'actor labels carry stable actor ids for browser witnesses');
+assert.match(index, /Forge Host actor selected/, 'selecting an actor reports a visible status without claiming chat bridge implementation');
 
 const registry = core.createForgeHostFixtureRegistry();
 

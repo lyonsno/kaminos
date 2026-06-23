@@ -1491,6 +1491,78 @@ async function runStartupEmptyScenario(ws) {
   }
 }
 
+async function runForgeHostVisibleActorsScenario(ws) {
+  phase = 'scenario-forge-host-visible-actors';
+  lastEvidence.forgeHostVisibleActors = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const forgeHost = typeof window.kaminosForgeHostDebugState === 'function'
+          ? window.kaminosForgeHostDebugState()
+          : null;
+        if (forgeHost?.visibleActorCount > 0) break;
+        await wait(125);
+      }
+      const forgeHost = window.kaminosForgeHostDebugState?.();
+      const labelsBefore = [...document.querySelectorAll('[data-forge-host-actor-label]')].map(label => ({
+        actorId: label.getAttribute('data-forge-host-actor-label'),
+        text: label.textContent.trim(),
+        visible: getComputedStyle(label).display !== 'none',
+        selected: label.classList.contains('selected'),
+      }));
+      const actorId = forgeHost?.actorIds?.[0] || forgeHost?.actorMeshes?.[0]?.actorId || null;
+      const selectedState = actorId && typeof window.kaminosSelectForgeActor === 'function'
+        ? window.kaminosSelectForgeActor(actorId)
+        : null;
+      const labelsAfter = [...document.querySelectorAll('[data-forge-host-actor-label]')].map(label => ({
+        actorId: label.getAttribute('data-forge-host-actor-label'),
+        text: label.textContent.trim(),
+        visible: getComputedStyle(label).display !== 'none',
+        selected: label.classList.contains('selected'),
+      }));
+      return {
+        forgeHost: selectedState || forgeHost,
+        initialForgeHost: forgeHost,
+        actorId,
+        labelsBefore,
+        labelsAfter,
+        rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({ id: row.dataset.sceneObjectId })),
+        info: document.getElementById('info-bar')?.textContent?.trim() || '',
+        inspectorVisible: document.getElementById('forge-host-inspector')?.classList.contains('visible') || false,
+      };
+    })()
+  `);
+  const evidence = lastEvidence.forgeHostVisibleActors;
+  const forgeHost = evidence.forgeHost;
+  if (!forgeHost?.active) {
+    throw new Error(`Forge Host visible actor witness did not find an active Forge Host route: ${JSON.stringify(evidence)}`);
+  }
+  if (forgeHost.visibleActorCount < 1) {
+    throw new Error(`Forge Host visible actor witness did not find visible actor meshes: ${JSON.stringify(evidence)}`);
+  }
+  if (forgeHost.authoredSceneObjectCount !== 0) {
+    throw new Error(`Forge Host visible actors mutated the authored scene object registry: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.rows.length !== 0) {
+    throw new Error(`Forge Host visible actors leaked authored scene rows: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.labelsAfter.length !== forgeHost.visibleActorCount) {
+    throw new Error(`Forge Host actor labels did not match visible actor count: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.labelsAfter.some(label => label.selected)) {
+    throw new Error(`Forge Host actor selection did not mark a label selected: ${JSON.stringify(evidence)}`);
+  }
+  if (!forgeHost.selectedActorId || forgeHost.selectedActorId !== evidence.actorId) {
+    throw new Error(`Forge Host actor selection did not bind the requested actor: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.inspectorVisible || !forgeHost.inspectorVisible) {
+    throw new Error(`Forge Host actor selection did not expose the inspector: ${JSON.stringify(evidence)}`);
+  }
+  if (!/Forge Host actor selected/.test(evidence.info)) {
+    throw new Error(`Forge Host actor selection did not report source-visible status: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -3755,6 +3827,8 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
+  } else if (scenario === 'forge-host-visible-actors') {
+    await runForgeHostVisibleActorsScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

@@ -71,6 +71,16 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 canvas { display: block; }
 #hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#forge-host-label-layer { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+.forge-host-actor-label { position: absolute; max-width: 220px; transform: translate(-50%, -50%); background: rgba(8,10,12,0.76); border: 1px solid rgba(240,182,66,0.38); border-radius: 6px; padding: 4px 6px; color: #e5d0a8; font: 10px 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 6px 18px rgba(0,0,0,0.28); }
+.forge-host-actor-label.selected { color: #fff0c2; border-color: #f0b642; background: rgba(34,25,10,0.82); }
+#forge-host-inspector { position: absolute; top: 86px; right: 16px; width: min(320px, calc(100% - 420px)); max-width: calc(100% - 32px); background: rgba(10,12,14,0.88); border: 1px solid rgba(240,182,66,0.34); border-radius: 8px; padding: 10px 12px; z-index: 5; display: none; box-shadow: 0 12px 34px rgba(0,0,0,0.36); color: #cfc7b8; font: 10px 'SF Mono', 'Fira Code', monospace; }
+#forge-host-inspector.visible { display: block; }
+.forge-host-inspector-title { color: #fff0c2; font-size: 12px; font-weight: 700; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.forge-host-inspector-row { display: flex; gap: 8px; justify-content: space-between; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); }
+.forge-host-inspector-row:first-of-type { border-top: 0; padding-top: 0; }
+.forge-host-inspector-key { color: #8f8a82; }
+.forge-host-inspector-value { color: #d9d1c2; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
@@ -628,6 +638,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
+  <div id="forge-host-label-layer" aria-hidden="true"></div>
+  <div id="forge-host-inspector" aria-live="polite"></div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
     <div class="splat-correction-mode-body" id="splat-correction-mode-status"></div>
@@ -737,6 +749,10 @@ let loadedFiles = {};
 let receipt = null;
 let forgeHostRegistry = null;
 let forgeHostWitnessSummary = null;
+let forgeHostActorGroup = null;
+let forgeHostActorMeshes = [];
+let activeForgeHostActorId = null;
+const FORGE_HOST_ACTOR_BODY_GEOMETRY = new THREE.SphereGeometry(0.16, 32, 16);
 const FORGE_HOST_EXPECTED_FIXTURE_SOURCE = 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0';
 if (FORGE_HOST_EXPECTED_FIXTURE_SOURCE !== FORGE_HOST_FIXTURE_SOURCE_ID) {
   throw new Error('Forge Host fixture source identity drifted');
@@ -2783,6 +2799,232 @@ function sceneObjectRecordForDescendant(object) {
   return null;
 }
 
+function forgeHostActorRecord(actorId) {
+  return forgeHostActorMeshes.find(record => record.actor.actorId === actorId) || null;
+}
+
+function forgeHostActorRecordForDescendant(object) {
+  for (const record of forgeHostActorMeshes) {
+    let cursor = object;
+    while (cursor) {
+      if (cursor === record.mesh) return record;
+      cursor = cursor.parent;
+    }
+  }
+  return null;
+}
+
+function clearForgeHostActors() {
+  if (forgeHostActorGroup) {
+    scene.remove(forgeHostActorGroup);
+    forgeHostActorGroup.traverse(child => {
+      if (child.material?.dispose) child.material.dispose();
+    });
+  }
+  forgeHostActorGroup = null;
+  forgeHostActorMeshes = [];
+  activeForgeHostActorId = null;
+  const labelLayer = document.getElementById('forge-host-label-layer');
+  if (labelLayer) labelLayer.replaceChildren();
+  updateForgeHostInspector();
+}
+
+function spawnForgeHostActors(registry) {
+  clearForgeHostActors();
+  if (!registry?.actors?.length || !scene) return;
+  const labelLayer = document.getElementById('forge-host-label-layer');
+  forgeHostActorGroup = new THREE.Group();
+  forgeHostActorGroup.name = 'forge-host-visible-actors';
+  scene.add(forgeHostActorGroup);
+
+  for (const actor of registry.actors) {
+    const statusColor = new THREE.Color(actor.status?.color || '#f0b642');
+    const material = new THREE.MeshStandardMaterial({
+      color: statusColor,
+      emissive: statusColor.clone().multiplyScalar(0.22),
+      roughness: 0.42,
+      metalness: 0.32,
+    });
+    const mesh = new THREE.Mesh(FORGE_HOST_ACTOR_BODY_GEOMETRY, material);
+    mesh.name = actor.actorId;
+    mesh.userData.kaminosForgeHostActor = { actorId: actor.actorId, diaulosId: actor.diaulosId };
+    const position = actor.spatial?.position || [0, 0.45, 0];
+    const rotation = actor.spatial?.rotation || [0, 0, 0];
+    const scale = actor.spatial?.scale || 1;
+    mesh.position.set(position[0], position[1], position[2]);
+    mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+    mesh.scale.setScalar(scale);
+    forgeHostActorGroup.add(mesh);
+
+    const label = document.createElement('div');
+    label.className = 'forge-host-actor-label';
+    label.setAttribute('data-forge-host-actor-label', actor.actorId);
+    label.textContent = actor.callSign || actor.diaulosId || actor.actorId;
+    labelLayer?.appendChild(label);
+    forgeHostActorMeshes.push({ actor, mesh, label, baseScale: scale });
+  }
+
+  const selected = registry.actors.find(actor => actor.selection?.defaultSelected) || registry.actors[0];
+  if (selected) selectForgeHostActor(selected.actorId, { silent: true });
+  frameForgeHostActors();
+  updateForgeHostLabels();
+  window._kaminosDirty?.();
+}
+
+function frameForgeHostActors() {
+  if (!forgeHostActorGroup || !camera || !controls || !renderer) return;
+  const box = new THREE.Box3().setFromObject(forgeHostActorGroup);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const rect = renderer.domElement.getBoundingClientRect();
+  const aspect = rect.width && rect.height ? rect.width / rect.height : camera.aspect || 1;
+  const verticalFov = THREE.MathUtils.degToRad(camera.fov || 50);
+  const fitHeightDistance = size.y / (2 * Math.tan(verticalFov / 2));
+  const fitWidthDistance = (size.x / aspect) / (2 * Math.tan(verticalFov / 2));
+  const distance = Math.max(fitHeightDistance, fitWidthDistance, size.z * 0.72, 1.9) * 1.35;
+  controls.target.set(center.x, Math.max(0.25, center.y), center.z);
+  camera.position.set(center.x, Math.max(1.05, center.y + size.y * 0.42), center.z + distance);
+  camera.near = 0.05;
+  camera.far = Math.max(camera.far || 1000, distance + size.length() + 20);
+  camera.updateProjectionMatrix();
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+function clearActiveForgeHostActorSelection() {
+  activeForgeHostActorId = null;
+  for (const record of forgeHostActorMeshes) {
+    record.mesh.scale.setScalar(record.baseScale);
+    record.label?.classList.remove('selected');
+  }
+  updateForgeHostInspector();
+  window._kaminosDirty?.();
+}
+
+function selectForgeHostActor(actorId, { silent = false } = {}) {
+  const record = forgeHostActorRecord(actorId);
+  if (!record) {
+    clearActiveForgeHostActorSelection();
+    return null;
+  }
+  activeForgeHostActorId = record.actor.actorId;
+  for (const item of forgeHostActorMeshes) {
+    const selected = item.actor.actorId === activeForgeHostActorId;
+    item.mesh.scale.setScalar(item.baseScale * (selected ? 1.18 : 1));
+    item.label?.classList.toggle('selected', selected);
+  }
+  updateForgeHostInspector();
+  updateForgeHostLabels();
+  if (!silent) setInfo(`Forge Host actor selected: ${record.actor.callSign || record.actor.actorId}`);
+  window._kaminosDirty?.();
+  return forgeHostDebugState();
+}
+
+function updateForgeHostInspector() {
+  const inspector = document.getElementById('forge-host-inspector');
+  if (!inspector) return;
+  const record = activeForgeHostActorId ? forgeHostActorRecord(activeForgeHostActorId) : null;
+  if (!record) {
+    inspector.classList.remove('visible');
+    inspector.replaceChildren();
+    return;
+  }
+  const actor = record.actor;
+  const sourceRecord = actor.provenance?.sourceActorRecord || {};
+  inspector.classList.add('visible');
+  inspector.innerHTML = `
+    <div class="forge-host-inspector-title">${escapeHtml(actor.callSign || actor.actorId)}</div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Station</span><span class="forge-host-inspector-value">${escapeHtml(actor.station?.label || actor.station?.id || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Status</span><span class="forge-host-inspector-value">${escapeHtml(actor.status?.state || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Diaulos</span><span class="forge-host-inspector-value">${escapeHtml(actor.diaulosId || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Source</span><span class="forge-host-inspector-value">${escapeHtml(forgeHostRegistry?.source?.kind || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Registry</span><span class="forge-host-inspector-value">${escapeHtml(sourceRecord.registryId || 'not-bound')}</span></div>
+  `;
+}
+
+function updateForgeHostLabels() {
+  if (!renderer || !camera || !forgeHostActorMeshes.length) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const world = new THREE.Vector3();
+  for (const record of forgeHostActorMeshes) {
+    if (!record.label) continue;
+    record.mesh.getWorldPosition(world);
+    world.y += 0.28 * record.mesh.scale.y;
+    const projected = world.clone().project(camera);
+    const visible = projected.z >= -1 && projected.z <= 1;
+    if (!visible) {
+      record.label.style.display = 'none';
+      continue;
+    }
+    const x = (projected.x * 0.5 + 0.5) * rect.width;
+    const y = (-projected.y * 0.5 + 0.5) * rect.height;
+    record.label.style.display = '';
+    record.label.style.left = `${x}px`;
+    record.label.style.top = `${y}px`;
+  }
+}
+
+function pickForgeHostActorFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !forgeHostActorMeshes.length) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    return null;
+  }
+  scenePointerNdc.set(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+  );
+  sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  const hits = sceneRaycaster.intersectObjects(forgeHostActorMeshes.map(record => record.mesh), true);
+  for (const hit of hits) {
+    const record = forgeHostActorRecordForDescendant(hit.object);
+    if (record) return record;
+  }
+  return null;
+}
+
+function forgeHostDebugState() {
+  const selectedRecord = activeForgeHostActorId ? forgeHostActorRecord(activeForgeHostActorId) : null;
+  const base = {
+    visibleActorCount: forgeHostActorMeshes.length,
+    selectedActorId: activeForgeHostActorId,
+    selectedActor: selectedRecord?.actor || null,
+    authoredSceneObjectCount: sceneObjects.length,
+    actorMeshes: forgeHostActorMeshes.map(record => ({
+      actorId: record.actor.actorId,
+      name: record.mesh.name,
+      visible: record.mesh.visible,
+      selected: record.actor.actorId === activeForgeHostActorId,
+      position: record.mesh.position.toArray(),
+      kaminosForgeHostActor: record.mesh.userData.kaminosForgeHostActor || null,
+    })),
+    labels: forgeHostActorMeshes.map(record => ({
+      actorId: record.actor.actorId,
+      text: record.label?.textContent || '',
+      visible: record.label ? getComputedStyle(record.label).display !== 'none' : false,
+      selected: record.label?.classList.contains('selected') || false,
+    })),
+    inspectorVisible: document.getElementById('forge-host-inspector')?.classList.contains('visible') || false,
+  };
+  const inactive = {
+    active: false,
+    schema: FORGE_HOST_ACTOR_SCHEMA,
+    sourceIdentity: null,
+    expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
+    actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
+    actors: [],
+    ...base,
+  };
+  if (!forgeHostRegistry || !forgeHostWitnessSummary) return inactive;
+  return {
+    active: true,
+    ...forgeHostWitnessSummary,
+    actors: forgeHostRegistry.actors,
+    ...base,
+  };
+}
+
 function pickSceneObjectFromViewportPointer(event) {
   if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
   const rect = renderer.domElement.getBoundingClientRect();
@@ -2804,7 +3046,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar');
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #forge-host-inspector, #info-bar');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -2858,12 +3100,21 @@ function handleViewportSelectionClick(event) {
     return;
   }
 
+  const forgeActor = pickForgeHostActorFromViewportPointer(event);
+  if (forgeActor) {
+    clearActiveSceneObjectSelection();
+    selectForgeHostActor(forgeActor.actor.actorId);
+    return;
+  }
+
   const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
+    clearActiveForgeHostActorSelection();
     setActiveSceneObject(record.id);
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
   } else {
     clearActiveSceneObjectSelection();
+    clearActiveForgeHostActorSelection();
     setInfo('Selection cleared');
   }
   window._kaminosDirty?.();
@@ -3493,6 +3744,7 @@ async function initScene() {
     requestAnimationFrame(animate);
     controls.update();
     updateHybridSplatOverlayFrame();
+    updateForgeHostLabels();
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
     if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
@@ -4235,27 +4487,17 @@ async function initForgeHostRoute() {
       sourceId: registryUrl,
     });
     forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'live' });
+    spawnForgeHostActors(forgeHostRegistry);
     setInfo(`Forge Host live registry loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
   } else if (params.has('forge_host_fixture')) {
     forgeHostRegistry = createForgeHostFixtureRegistry();
     forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'fixture' });
+    spawnForgeHostActors(forgeHostRegistry);
     setInfo(`Forge Host fixture loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
   }
-  window.kaminosForgeHostDebugState = function() {
-    const inactive = {
-      active: false,
-      schema: FORGE_HOST_ACTOR_SCHEMA,
-      sourceIdentity: null,
-      expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
-      actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
-      actors: [],
-    };
-    if (!forgeHostRegistry || !forgeHostWitnessSummary) return inactive;
-    return {
-      active: true,
-      ...forgeHostWitnessSummary,
-      actors: forgeHostRegistry.actors,
-    };
+  window.kaminosForgeHostDebugState = forgeHostDebugState;
+  window.kaminosSelectForgeActor = function(actorId) {
+    return selectForgeHostActor(actorId);
   };
 }
 
