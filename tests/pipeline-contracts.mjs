@@ -52,6 +52,8 @@ try {
   assert.equal(report.effectiveRouteConfig.manifestPath, manifestPath);
   assert.ok(/^[a-f0-9]{64}$/.test(report.effectiveRouteConfig.manifestSha256), 'witness must record manifest content identity');
   assert.equal(report.effectiveRouteConfig.outputRoot, outDir);
+  assert.equal(report.bundleIndex.path, join(outDir, 'pipeline-run.index.json'));
+  assert.equal(report.bundleIndex.status, 'written');
   assert.equal(report.artifacts.input.path, inputPath);
   assert.equal(report.artifacts.splat.status, 'fixture');
   assert.equal(report.artifacts.sidecar.status, 'fixture');
@@ -63,6 +65,23 @@ try {
   assert.deepEqual(new Set(report.stages.map(stage => stage.status)), new Set(['fixture']));
   assert.ok(report.stages.every(stage => stage.requestedRoute && stage.effectiveRoute), 'each stage must record requested and effective route identity');
   assert.ok(report.stages.every(stage => !stage.outputPath || stage.outputPath.startsWith(outDir)), 'stage outputs must not use singleton paths');
+  assert.ok(existsSync(report.bundleIndex.path), 'witness must write a per-run bundle index');
+
+  const bundleIndex = JSON.parse(readFileSync(report.bundleIndex.path, 'utf8'));
+  assert.equal(bundleIndex.schema, 'kaminos.pipeline-run-bundle.v0');
+  assert.equal(bundleIndex.pipeline.id, fixturePipeline.id);
+  assert.equal(bundleIndex.pipeline.routeId, fixturePipeline.routeId);
+  assert.equal(bundleIndex.outputRoot, outDir);
+  assert.equal(bundleIndex.report.path, reportPath);
+  assert.equal(bundleIndex.report.status, 'written');
+  assert.deepEqual(bundleIndex.stageStatuses, report.stages.map(stage => ({
+    id: stage.id,
+    status: stage.status,
+    routeId: stage.requestedRoute,
+  })));
+  assert.ok(bundleIndex.artifacts.some(artifact => artifact.id === 'sidecar' && artifact.role === 'kaminos-import-sidecar'), 'bundle index must list sidecar artifacts by role');
+  assert.ok(bundleIndex.artifacts.every(artifact => artifact.id === 'input' || artifact.path.startsWith(outDir)), 'bundle index must keep generated artifacts caller-rooted');
+  assert.equal(bundleIndex.registryScope, 'run-local', 'bundle index must not claim to be a global sidecar registry');
 
   const sidecar = JSON.parse(readFileSync(report.artifacts.sidecar.path, 'utf8'));
   assert.equal(sidecar.schema, 'kaminos.pipeline-import-sidecar.v0');
@@ -135,6 +154,7 @@ try {
   const preparedReport = JSON.parse(readFileSync(preparedReportPath, 'utf8'));
   assert.equal(preparedReport.ok, true);
   assert.equal(preparedReport.effectiveRouteConfig.routeId, 'prepared.splat-import-sidecar.v0');
+  assert.ok(existsSync(preparedReport.bundleIndex.path), 'prepared route must write a bundle index');
   assert.deepEqual(preparedReport.stages.map(stage => stage.status), ['real', 'real']);
   assert.equal(preparedReport.artifacts.input.status, 'requested');
   assert.equal(preparedReport.artifacts.inspection.status, 'real');
@@ -155,6 +175,9 @@ try {
   assert.equal(preparedSidecar.asset.path, preparedInputPath);
   assert.equal(preparedSidecar.asset.renderCapabilities.realHybridRender, false, 'prepared sidecar must not claim real hybrid rendering');
   assert.equal(preparedSidecar.status.stageMode, 'prepared-artifact');
+  const preparedBundle = JSON.parse(readFileSync(preparedReport.bundleIndex.path, 'utf8'));
+  assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'inspection' && artifact.role === 'prepared-artifact-inspection'), 'prepared bundle must list inspection artifact');
+  assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'sidecar' && artifact.role === 'kaminos-import-sidecar'), 'prepared bundle must list import sidecar');
 
   const adapterOutDir = join(tempRoot, 'adapter-out');
   const adapterReportPath = join(tempRoot, 'reports', 'adapters.json');
@@ -177,6 +200,7 @@ try {
   const adapterReport = JSON.parse(readFileSync(adapterReportPath, 'utf8'));
   assert.equal(adapterReport.ok, true);
   assert.equal(adapterReport.effectiveRouteConfig.routeId, 'adapter.model-chain-availability.v0');
+  assert.ok(existsSync(adapterReport.bundleIndex.path), 'adapter route must write a bundle index');
   assert.deepEqual(adapterReport.stages.map(stage => stage.status), ['skipped', 'skipped', 'skipped']);
   assert.ok(adapterReport.stages.every(stage => stage.effectiveRoute.availability?.status === 'unconfigured'), 'unconfigured live adapters must be explicit');
   assert.ok(adapterReport.stages.every(stage => stage.effectiveRoute.availability?.envVar?.startsWith('KAMINOS_')), 'adapter checks must record env/config identity');

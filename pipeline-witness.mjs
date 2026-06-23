@@ -22,6 +22,7 @@ const requestedPipelineId = args.get('--pipeline-id') || 'evil-orb-sharp-fixture
 const inputPath = args.get('--input') ? resolve(args.get('--input')) : null;
 const outDir = args.get('--out-dir') ? resolve(args.get('--out-dir')) : null;
 const reportPath = args.get('--report') ? resolve(args.get('--report')) : (outDir ? join(outDir, 'pipeline-witness.json') : resolve('/tmp/kaminos-pipeline-witness.json'));
+const bundleIndexPath = outDir ? join(outDir, 'pipeline-run.index.json') : null;
 
 let phase = 'initializing';
 let manifest = null;
@@ -85,6 +86,47 @@ function reportBase(extra = {}) {
 
 function writeReport(extra = {}) {
   writeJson(reportPath, reportBase(extra));
+}
+
+function buildBundleIndex() {
+  return {
+    schema: 'kaminos.pipeline-run-bundle.v0',
+    registryScope: 'run-local',
+    pipeline: {
+      id: pipeline.id,
+      routeId: pipeline.routeId,
+      manifestPath,
+      manifestSha256,
+    },
+    outputRoot: outDir,
+    report: {
+      path: reportPath,
+      status: 'written',
+    },
+    stageStatuses: stages.map(stage => ({
+      id: stage.id,
+      status: stage.status,
+      routeId: stage.requestedRoute,
+    })),
+    artifacts: Object.entries(artifacts).map(([id, artifact]) => ({
+      id,
+      role: artifact.role,
+      status: artifact.status,
+      path: artifact.path,
+      bytes: artifact.bytes,
+      sha256: artifact.sha256,
+    })),
+  };
+}
+
+function writeBundleIndex() {
+  if (!bundleIndexPath) throw new Error('missing --out-dir for bundle index');
+  writeJson(bundleIndexPath, buildBundleIndex());
+  return {
+    path: bundleIndexPath,
+    status: 'written',
+    ...fileEvidence(bundleIndexPath),
+  };
 }
 
 function requireInputs() {
@@ -359,7 +401,8 @@ try {
   }
 
   phase = 'complete';
-  writeReport({ ok: true });
+  const bundleIndex = writeBundleIndex();
+  writeReport({ ok: true, bundleIndex });
 } catch (error) {
   const failingStage = stages.at(-1);
   if (failingStage && failingStage.status !== 'failed') failingStage.status = 'failed';
