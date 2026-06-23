@@ -5,7 +5,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
-import { buildMotionWitnessTimeline } from './motion-core.js';
+import {
+  buildMotionDecisionComparison,
+  buildMotionWitnessTimeline,
+} from './motion-core.js';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -13,6 +16,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_motion_agency=1';
+const isPhraseRoute = url.includes('kaminos_motion_phrase=1');
 const out = resolve(args.get('--out') || '/tmp/kaminos-motion-agency-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const filmstripPath = resolve(args.get('--filmstrip') || out.replace(/\.png$/i, '-filmstrip.png'));
@@ -222,17 +226,35 @@ try {
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
 
   phase = 'rendering-filmstrip';
-  const timeline = buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 });
+  const timeline = isPhraseRoute
+    ? buildMotionDecisionComparison({ duration: 7.2, fps: 12, filmstripFrames: 7 })
+    : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 });
   const filmstrip = drawFilmstrip(timeline, filmstripPath);
-  lastEvidence.timeline = {
-    schema: timeline.schema,
-    route: timeline.route,
-    requestedClipIds: timeline.requestedClipIds,
-    effectiveClipIds: timeline.effectiveClipIds,
-    fallbackCount: timeline.fallbackCount,
-    metrics: timeline.metrics,
-    filmstrip,
-  };
+  if (isPhraseRoute) {
+    lastEvidence.decisionComparison = {
+      schema: timeline.schema,
+      route: timeline.route,
+      naive: {
+        actor: timeline.naive.actor,
+        metrics: timeline.naive.metrics,
+      },
+      phrased: {
+        actor: timeline.phrased.actor,
+        metrics: timeline.phrased.metrics,
+      },
+      filmstrip,
+    };
+  } else {
+    lastEvidence.timeline = {
+      schema: timeline.schema,
+      route: timeline.route,
+      requestedClipIds: timeline.requestedClipIds,
+      effectiveClipIds: timeline.effectiveClipIds,
+      fallbackCount: timeline.fallbackCount,
+      metrics: timeline.metrics,
+      filmstrip,
+    };
+  }
 
   phase = 'launching-chrome';
   mkdirSync(userDataDir, { recursive: true });
@@ -262,14 +284,30 @@ try {
   phase = 'settling-route';
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
-  if (!effectiveUrl.includes('kaminos_motion_agency=1')) throw new Error(`effective URL lost motion route: ${effectiveUrl}`);
-  const debug = await evaluate(ws, 'window.kaminosMotionAgencyDebugState?.()', { timeoutMs: 10000 });
+  const routeParam = isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1';
+  if (!effectiveUrl.includes(routeParam)) throw new Error(`effective URL lost motion route ${routeParam}: ${effectiveUrl}`);
+  const debugExpression = isPhraseRoute
+    ? 'window.kaminosMotionDecisionDebugState?.()'
+    : 'window.kaminosMotionAgencyDebugState?.()';
+  const debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
   lastEvidence.debug = debug;
   if (debug?.route !== 'procedural-orb-motion-grammar-v0') throw new Error(`motion route identity mismatch: ${JSON.stringify(debug)}`);
-  if (!debug?.active || debug.actorCount < 5) throw new Error(`motion route did not spawn actor fixture: ${JSON.stringify(debug)}`);
-  if (debug.fallbackCount !== 0) throw new Error(`default fixture unexpectedly used fallbacks: ${JSON.stringify(debug)}`);
-  if (!debug.requestedClipIds?.includes('stalk_bad_intent')) throw new Error(`motion route lost requestedClipIds: ${JSON.stringify(debug)}`);
-  if (!debug.effectiveClipIds?.includes('orbit_inspect')) throw new Error(`motion route lost effectiveClipIds: ${JSON.stringify(debug)}`);
+  if (isPhraseRoute) {
+    const decisionComparison = debug?.decisionComparison;
+    if (!debug?.active || debug.actorCount < 2) throw new Error(`motion phrase route did not spawn comparison actors: ${JSON.stringify(debug)}`);
+    if (decisionComparison?.schema !== 'kaminos.motion-decision-comparison.v0') throw new Error(`motion phrase route lost comparison schema: ${JSON.stringify(debug)}`);
+    if (!(decisionComparison.phrased.metrics.anticipationDepth > decisionComparison.naive.metrics.anticipationDepth)) {
+      throw new Error(`motion phrase route lost anticipationDepth advantage: ${JSON.stringify(debug)}`);
+    }
+    if (!(decisionComparison.phrased.metrics.overshootDistance > decisionComparison.naive.metrics.overshootDistance)) {
+      throw new Error(`motion phrase route lost overshootDistance advantage: ${JSON.stringify(debug)}`);
+    }
+  } else {
+    if (!debug?.active || debug.actorCount < 5) throw new Error(`motion route did not spawn actor fixture: ${JSON.stringify(debug)}`);
+    if (debug.fallbackCount !== 0) throw new Error(`default fixture unexpectedly used fallbacks: ${JSON.stringify(debug)}`);
+    if (!debug.requestedClipIds?.includes('stalk_bad_intent')) throw new Error(`motion route lost requestedClipIds: ${JSON.stringify(debug)}`);
+    if (!debug.effectiveClipIds?.includes('orbit_inspect')) throw new Error(`motion route lost effectiveClipIds: ${JSON.stringify(debug)}`);
+  }
 
   phase = 'capturing-screenshot';
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -283,9 +321,10 @@ try {
     ok: true,
     screenshot: { path: out, bytes: png.length },
     filmstrip,
-    requestedClipIds: debug.requestedClipIds,
-    effectiveClipIds: debug.effectiveClipIds,
-    fallbackCount: debug.fallbackCount,
+    requestedClipIds: debug.requestedClipIds || [],
+    effectiveClipIds: debug.effectiveClipIds || [],
+    fallbackCount: debug.fallbackCount || 0,
+    decisionComparison: debug.decisionComparison || lastEvidence.decisionComparison || null,
     debug,
     timeline: lastEvidence.timeline,
   });

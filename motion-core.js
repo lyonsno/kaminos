@@ -2,6 +2,7 @@ export const MOTION_CLIP_SCHEMA = 'kaminos.motion-clip.v0';
 export const MOTION_ACTOR_SCHEMA = 'kaminos.motion-actors.v0';
 export const MOTION_SIMULATION_SCHEMA = 'kaminos.motion-simulation.v0';
 export const MOTION_WITNESS_SCHEMA = 'kaminos.motion-witness.v0';
+export const MOTION_PLAN_SCHEMA = 'kaminos.motion-plan.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 
 function clamp(value, min, max) {
@@ -153,6 +154,59 @@ export const DEFAULT_MOTION_ACTORS = [
   { id: 'orb-orbit-inspect', label: 'Orbit Inspect', clipId: 'orbit_inspect', origin: [2.1, 0.0, -0.1], color: '#caa8ff', status: 'inspecting' },
 ];
 
+export const DEFAULT_DECISION_MOTION_PLAN = {
+  schema: MOTION_PLAN_SCHEMA,
+  id: 'orb_decision_bad_intent_v1',
+  label: 'Orb Decision Bad Intent V1',
+  intent: 'notice-prepare-commit-recover',
+  duration: 7.2,
+  source: 'procedural-authored-phrase-grammar-v0',
+  weight: {
+    mass: 1.45,
+    anticipation: 0.28,
+    settle: 0.24,
+    effortScale: 1.18,
+  },
+  phrases: [
+    {
+      phase: 'idle',
+      duration: 1.0,
+      from: { root: [0.00, 0.00, -0.82], facing: [0.08, 0, 1], attention: [0, 0.18, 1.1], scale: 0.98, effort: 0.14 },
+      to: { root: [0.02, 0.02, -0.78], facing: [0.06, 0, 1], attention: [0, 0.18, 1.1], scale: 1.01, effort: 0.18 },
+    },
+    {
+      phase: 'notice',
+      duration: 0.7,
+      from: { root: [0.02, 0.02, -0.78], facing: [0.06, 0, 1], attention: [0, 0.18, 1.1], scale: 1.01, effort: 0.18 },
+      to: { root: [0.10, 0.06, -0.40], facing: [0, 0, 1], attention: [0.08, 0.24, 1.25], scale: 1.08, effort: 0.42 },
+    },
+    {
+      phase: 'anticipate',
+      duration: 0.65,
+      from: { root: [0.10, 0.06, -0.40], facing: [0, 0, 1], attention: [0.08, 0.24, 1.25], scale: 1.08, effort: 0.42 },
+      to: { root: [-0.08, -0.05, -1.02], facing: [0, 0, 1], attention: [0.00, 0.18, 1.25], scale: 0.86, effort: 0.66 },
+    },
+    {
+      phase: 'commit',
+      duration: 1.3,
+      from: { root: [-0.08, -0.05, -1.02], facing: [0, 0, 1], attention: [0.00, 0.18, 1.25], scale: 0.86, effort: 0.66 },
+      to: { root: [0.03, 0.04, 0.94], facing: [0, 0, 1], attention: [0.00, 0.18, 1.45], scale: 1.22, effort: 1.12 },
+    },
+    {
+      phase: 'overshoot',
+      duration: 0.9,
+      from: { root: [0.03, 0.04, 0.94], facing: [0, 0, 1], attention: [0.00, 0.18, 1.45], scale: 1.22, effort: 1.12 },
+      to: { root: [0.00, -0.02, 1.28], facing: [0, 0, 1], attention: [0.00, 0.14, 1.55], scale: 1.12, effort: 0.74 },
+    },
+    {
+      phase: 'recover',
+      duration: 2.65,
+      from: { root: [0.00, -0.02, 1.28], facing: [0, 0, 1], attention: [0.00, 0.14, 1.55], scale: 1.12, effort: 0.74 },
+      to: { root: [0.02, 0.00, 0.58], facing: [0.04, 0, 1], attention: [0.00, 0.16, 1.25], scale: 1.00, effort: 0.20 },
+    },
+  ],
+};
+
 export function normalizeMotionClip(clip) {
   if (!clip || typeof clip !== 'object') throw new Error('Motion clip must be an object');
   const duration = Number(clip.duration);
@@ -277,6 +331,268 @@ export function buildMotionActorFixture({ actors = DEFAULT_MOTION_ACTORS, clips 
     })),
     actors: resolution.effectiveActors,
     routeResolution: resolution,
+  };
+}
+
+function normalizePlanWeight(weight = {}) {
+  return {
+    mass: Math.max(0.1, Number.isFinite(Number(weight.mass)) ? Number(weight.mass) : 1),
+    anticipation: Math.max(0, Number.isFinite(Number(weight.anticipation)) ? Number(weight.anticipation) : 0),
+    settle: Math.max(0, Number.isFinite(Number(weight.settle)) ? Number(weight.settle) : 0),
+    effortScale: Math.max(0.1, Number.isFinite(Number(weight.effortScale)) ? Number(weight.effortScale) : 1),
+  };
+}
+
+function normalizePhrasePose(pose = {}) {
+  return normalizeSample({
+    t: 0,
+    root: pose.root,
+    facing: pose.facing,
+    attention: pose.attention,
+    scale: pose.scale,
+    effort: pose.effort,
+  });
+}
+
+function normalizeMotionPhrase(phrase, index, start) {
+  const phase = String(phrase?.phase || `phrase-${index}`).trim();
+  if (!phase) throw new Error(`Motion phrase ${index} needs a phase`);
+  const duration = Number(phrase?.duration);
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error(`Motion phrase ${phase} must have positive duration`);
+  const from = normalizePhrasePose(phrase.from || phrase.pose || {});
+  const to = normalizePhrasePose(phrase.to || phrase.from || phrase.pose || {});
+  return {
+    phase,
+    duration,
+    start,
+    end: start + duration,
+    easing: phrase.easing || 'smoothstep',
+    from,
+    to,
+  };
+}
+
+export function normalizeMotionPlan(planInput = DEFAULT_DECISION_MOTION_PLAN) {
+  if (!planInput || typeof planInput !== 'object') throw new Error('Motion plan must be an object');
+  const id = String(planInput.id || '').trim();
+  if (!id) throw new Error('Motion plan id is required');
+  const phrasesInput = Array.isArray(planInput.phrases) ? planInput.phrases : [];
+  if (!phrasesInput.length) throw new Error(`Motion plan ${id} needs at least one phrase`);
+  let cursor = 0;
+  const phrases = phrasesInput.map((phrase, index) => {
+    const normalized = normalizeMotionPhrase(phrase, index, cursor);
+    cursor = normalized.end;
+    return normalized;
+  });
+  const requestedDuration = Number(planInput.duration);
+  const duration = Number.isFinite(requestedDuration) && requestedDuration > 0 ? Math.max(requestedDuration, cursor) : cursor;
+  return {
+    schema: planInput.schema || MOTION_PLAN_SCHEMA,
+    id,
+    label: planInput.label || id,
+    intent: planInput.intent || 'unspecified',
+    duration,
+    source: planInput.source || 'unknown',
+    weight: normalizePlanWeight(planInput.weight),
+    phrases,
+  };
+}
+
+function phraseAtTime(plan, t) {
+  const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, plan.duration);
+  const phrase = plan.phrases.find(candidate => time >= candidate.start && time < candidate.end) || plan.phrases.at(-1);
+  const local = clamp((time - phrase.start) / Math.max(1e-6, phrase.duration), 0, 1);
+  return { phrase, time, local };
+}
+
+function massSpacingScale(weight) {
+  return clamp(1.12 / (0.72 + weight.mass * 0.28), 0.62, 1.45);
+}
+
+function weightPlanSample(sample, phrase, local, weight) {
+  const root = [...sample.root];
+  const directionPhases = new Set(['commit', 'overshoot', 'recover']);
+  if (directionPhases.has(phrase.phase) && root[2] > 0) {
+    root[2] *= massSpacingScale(weight);
+  }
+  if (phrase.phase === 'anticipate') {
+    root[2] -= weight.anticipation * smooth01(local) * 0.28;
+  }
+  if (phrase.phase === 'recover') {
+    const settleEase = smooth01(local);
+    root[1] *= 1 - clamp(weight.settle * settleEase, 0, 0.85);
+  }
+  const massEffort = phrase.phase === 'commit' || phrase.phase === 'anticipate'
+    ? 0.8 + weight.mass * 0.18
+    : 0.92 + weight.mass * 0.06;
+  const effort = sample.effort * weight.effortScale * massEffort;
+  const scaleAccent = phrase.phase === 'commit' ? clamp(effort * 0.045, 0, 0.08) : 0;
+  return {
+    ...sample,
+    root,
+    scale: sample.scale + scaleAccent,
+    effort,
+  };
+}
+
+export function sampleMotionPlan(planInput = DEFAULT_DECISION_MOTION_PLAN, t) {
+  const plan = normalizeMotionPlan(planInput);
+  const { phrase, time, local } = phraseAtTime(plan, t);
+  const u = smooth01(local);
+  const sample = {
+    t: time,
+    phase: phrase.phase,
+    localT: local,
+    root: mixVec3(phrase.from.root, phrase.to.root, u),
+    facing: normalizeVec3(mixVec3(phrase.from.facing, phrase.to.facing, u)),
+    attention: mixVec3(phrase.from.attention, phrase.to.attention, u),
+    scale: lerp(phrase.from.scale, phrase.to.scale, u),
+    effort: lerp(phrase.from.effort, phrase.to.effort, u),
+  };
+  const weighted = weightPlanSample(sample, phrase, local, plan.weight);
+  return {
+    ...weighted,
+    scale: Number(weighted.scale.toFixed(5)),
+    effort: Number(weighted.effort.toFixed(5)),
+    root: weighted.root.map(value => Number(value.toFixed(5))),
+    facing: weighted.facing.map(value => Number(value.toFixed(5))),
+    attention: weighted.attention.map(value => Number(value.toFixed(5))),
+  };
+}
+
+function motionPlanMetrics(frames) {
+  let maxEffort = 0;
+  let minRootZ = Infinity;
+  let maxRootZ = -Infinity;
+  let noticeRootZ = null;
+  let finalRootZ = 0;
+  let phaseChanges = 0;
+  let lastPhase = null;
+  for (const frame of frames) {
+    const sample = frame.sample;
+    maxEffort = Math.max(maxEffort, sample.effort);
+    minRootZ = Math.min(minRootZ, sample.root[2]);
+    maxRootZ = Math.max(maxRootZ, sample.root[2]);
+    finalRootZ = sample.root[2];
+    if (sample.phase === 'notice' && noticeRootZ === null) noticeRootZ = sample.root[2];
+    if (lastPhase !== null && sample.phase !== lastPhase) phaseChanges++;
+    lastPhase = sample.phase;
+  }
+  const anticipationReference = noticeRootZ ?? frames[0]?.sample.root[2] ?? 0;
+  return {
+    frameCount: frames.length,
+    maxEffort: Number(maxEffort.toFixed(5)),
+    anticipationDepth: Number(Math.max(0, anticipationReference - minRootZ).toFixed(5)),
+    overshootDistance: Number(Math.max(0, maxRootZ - finalRootZ).toFixed(5)),
+    phaseChanges,
+  };
+}
+
+export function simulateMotionPlan(planInput = DEFAULT_DECISION_MOTION_PLAN, { duration, fps = 12 } = {}) {
+  const plan = normalizeMotionPlan(planInput);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : plan.duration);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const frameCount = Math.floor(simDuration * simFps) + 1;
+  const frames = [];
+  for (let index = 0; index < frameCount; index++) {
+    const t = index / simFps;
+    const sample = sampleMotionPlan(plan, t);
+    frames.push({ frameIndex: index, t: Number(t.toFixed(5)), sample });
+  }
+  return {
+    schema: 'kaminos.motion-plan-simulation.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    planId: plan.id,
+    duration: simDuration,
+    fps: simFps,
+    frames,
+    metrics: motionPlanMetrics(frames),
+  };
+}
+
+function comparisonActorSample(actor, sample, origin) {
+  return {
+    id: actor.id,
+    label: actor.label,
+    intent: actor.intent,
+    status: sample.phase,
+    color: actor.color,
+    root: addVec3(origin, sample.root).map(value => Number(value.toFixed(5))),
+    localRoot: sample.root,
+    facing: sample.facing,
+    attention: addVec3(origin, sample.attention).map(value => Number(value.toFixed(5))),
+    scale: sample.scale,
+    effort: sample.effort,
+    speed: 0,
+    phase: sample.phase,
+  };
+}
+
+function naiveDecisionPlan(duration) {
+  return {
+    schema: MOTION_PLAN_SCHEMA,
+    id: 'naive_loop_bad_intent_v0',
+    label: 'Naive Loop',
+    intent: 'looped-forward-motion',
+    duration,
+    source: 'procedural-naive-comparison-v0',
+    weight: { mass: 1, anticipation: 0, settle: 0, effortScale: 1 },
+    phrases: [
+      {
+        phase: 'loop',
+        duration,
+        from: { root: [0, 0, -0.82], facing: [0, 0, 1], attention: [0, 0.18, 1.15], scale: 1, effort: 0.24 },
+        to: { root: [0, 0, 0.62], facing: [0, 0, 1], attention: [0, 0.18, 1.15], scale: 1.04, effort: 0.52 },
+      },
+    ],
+  };
+}
+
+export function buildMotionDecisionComparison({ duration = 7.2, fps = 12, filmstripFrames = 7 } = {}) {
+  const simDuration = Math.max(0.1, Number(duration) || 7.2);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const naivePlan = normalizeMotionPlan(naiveDecisionPlan(simDuration));
+  const phrasedPlan = normalizeMotionPlan({ ...DEFAULT_DECISION_MOTION_PLAN, duration: simDuration });
+  const naiveSimulation = simulateMotionPlan(naivePlan, { duration: simDuration, fps: simFps });
+  const phrasedSimulation = simulateMotionPlan(phrasedPlan, { duration: simDuration, fps: simFps });
+  const naiveActor = { id: 'naive-loop', label: 'Naive Loop', color: '#8fb6ff', intent: naivePlan.intent };
+  const phrasedActor = { id: 'phrased-decision', label: 'Phrased Decision', color: '#ff7a66', intent: phrasedPlan.intent };
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), phrasedSimulation.frames.length));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (phrasedSimulation.frames.length - 1) / (count - 1))
+  ));
+  const filmstrip = frameIndexes.map(index => {
+    const naiveSample = naiveSimulation.frames[index]?.sample || sampleMotionPlan(naivePlan, index / simFps);
+    const phrasedSample = phrasedSimulation.frames[index]?.sample || sampleMotionPlan(phrasedPlan, index / simFps);
+    return {
+      frameIndex: index,
+      t: Number((index / simFps).toFixed(5)),
+      actors: [
+        comparisonActorSample(naiveActor, naiveSample, [-1.05, 0, 0]),
+        comparisonActorSample(phrasedActor, phrasedSample, [1.05, 0, 0]),
+      ],
+      naive: naiveSample,
+      phrased: phrasedSample,
+    };
+  });
+  return {
+    schema: 'kaminos.motion-decision-comparison.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    duration: simDuration,
+    fps: simFps,
+    naive: {
+      actor: naiveActor,
+      plan: naivePlan,
+      metrics: naiveSimulation.metrics,
+      simulation: naiveSimulation,
+    },
+    phrased: {
+      actor: phrasedActor,
+      plan: phrasedPlan,
+      metrics: phrasedSimulation.metrics,
+      simulation: phrasedSimulation,
+    },
+    filmstrip,
   };
 }
 
