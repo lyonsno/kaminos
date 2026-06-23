@@ -109,12 +109,38 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
-.tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
 .tab { padding: 8px 14px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
 .tab:hover { color: #999; }
 .tab.active { color: #fff; border-bottom-color: #1976d2; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Pipeline Dock */
+.pipeline-dock { display: flex; flex-direction: column; gap: 10px; }
+.pipeline-source-summary { border: 1px solid #2c2c2c; background: #171717; border-radius: 6px; padding: 10px; }
+.pipeline-summary-kicker { color: #888; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+.pipeline-summary-title { color: #e0e0e0; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-summary-path { color: #666; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 4px; }
+.pipeline-action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pipeline-source-input { width: 100%; box-sizing: border-box; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 6px 8px; font: 10px 'SF Mono', monospace; outline: none; }
+.pipeline-source-input:focus { border-color: #1976d2; }
+.pipeline-stage-list { display: flex; flex-direction: column; gap: 6px; }
+.pipeline-stage-row { border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px; background: #181818; }
+.pipeline-stage-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.pipeline-stage-title { color: #ddd; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.pipeline-stage-route { color: #666; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 3px; }
+.pipeline-status-chip { flex: 0 0 auto; border-radius: 4px; padding: 2px 6px; font: 9px 'SF Mono', monospace; text-transform: uppercase; background: #2a2a2a; color: #999; }
+.pipeline-status-chip.real { background: #173420; color: #66bb6a; }
+.pipeline-status-chip.fixture { background: #33281b; color: #f0b85a; }
+.pipeline-status-chip.cached { background: #1b2a3a; color: #42a5f5; }
+.pipeline-status-chip.skipped { background: #252525; color: #777; }
+.pipeline-status-chip.failed { background: #3a1b1b; color: #ef5350; }
+.pipeline-evidence-drawer { border: 1px solid #2a2a2a; background: #151515; border-radius: 6px; padding: 8px; color: #777; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.pipeline-evidence-row { display: grid; grid-template-columns: 72px 1fr; gap: 6px; margin: 4px 0; }
+.pipeline-evidence-key { color: #555; text-transform: uppercase; font-size: 9px; }
+.pipeline-evidence-val { color: #aaa; min-width: 0; }
+.pipeline-note { color: #555; font-size: 10px; line-height: 1.35; }
 
 /* Greenroom browser */
 .gr-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background 0.1s; }
@@ -201,6 +227,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab active" data-tab="assets">Assets</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
+    <div class="tab" data-tab="pipeline">Pipeline</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
   </div>
@@ -586,6 +613,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <h2>Scratch</h2>
       <div style="font-size: 10px; color: #444; margin-bottom: 8px;">Drop files into <code style="color:#666;">scratch/</code> to browse them here. Not checked into git.</div>
       <div id="scratch-list"></div>
+    </div>
+  </div>
+
+  <!-- Pipeline Tab -->
+  <div class="tab-content" id="tab-pipeline">
+    <div class="pipeline-dock">
+      <h2>Pipeline Dock</h2>
+      <div class="pipeline-source-summary" id="pipeline-source-summary">
+        <div class="pipeline-summary-kicker">Source</div>
+        <div class="pipeline-summary-title">No source selected</div>
+        <div class="pipeline-summary-path">Select a scene object or enter an /api/read source.</div>
+      </div>
+      <input class="pipeline-source-input" id="pipeline-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=splat-inbox&path=artifact.ply">
+      <div class="pipeline-action-row">
+        <select class="select-input" id="pipeline-route-select" aria-label="Pipeline route"></select>
+        <button type="button" class="btn" id="pipeline-run-button">Run</button>
+        <button type="button" class="btn" id="pipeline-refresh-button">Refresh</button>
+      </div>
+      <div class="panel">
+        <div class="field"><span class="field-key">Manifest</span><span class="field-val" id="pipeline-manifest-id">unloaded</span></div>
+        <div class="field"><span class="field-key">Registry</span><span class="field-val" id="pipeline-registry-scope">run-local</span></div>
+        <div class="field"><span class="field-key">Run</span><span class="field-val" id="pipeline-run-state">idle</span></div>
+      </div>
+      <h2>Stages</h2>
+      <div class="pipeline-stage-list" id="pipeline-stage-list"></div>
+      <h2>Evidence</h2>
+      <div class="pipeline-evidence-drawer" id="pipeline-evidence-drawer">
+        No run evidence yet.
+      </div>
     </div>
   </div>
 
@@ -2710,6 +2766,7 @@ function clearActiveSceneObjectSelection() {
   currentMesh = null;
   renderSceneObjectList();
   updateTransformInspector();
+  renderPipelineDock();
   if (!transformControls) return;
   transformControls.detach();
   transformControls.visible = false;
@@ -2730,6 +2787,7 @@ function setActiveSceneObject(id) {
   currentMesh = entry.object;
   renderSceneObjectList();
   updateTransformInspector();
+  renderPipelineDock();
   if (!transformControls) return;
   transformControls.detach();
   transformControls.visible = false;
@@ -2752,6 +2810,7 @@ function setActiveSceneGroup(id) {
   currentMesh = null;
   renderSceneObjectList();
   updateTransformInspector();
+  renderPipelineDock();
   if (transformControls) {
     transformControls.detach();
     transformControls.visible = false;
@@ -3966,6 +4025,232 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
 }
 
+let pipelineManifest = null;
+let pipelineDockState = {
+  schema: 'kaminos.pipeline-dock-state.v0',
+  registryScope: 'run-local',
+  selectedPipelineId: 'prepared-splat-import-sidecar-v0',
+  selectedSource: null,
+  lastRun: null,
+  graph: null,
+};
+const pipelineDockNodeKindOrder = [
+  { kind: 'source' },
+  { kind: 'pipeline-stage' },
+  { kind: 'result' },
+];
+
+function selectedPipelineRecord() {
+  if (!pipelineManifest?.pipelines?.length) return null;
+  return pipelineManifest.pipelines.find(route => route.id === pipelineDockState.selectedPipelineId) || pipelineManifest.pipelines[0];
+}
+
+function pipelineSelectedSource() {
+  const manual = document.getElementById('pipeline-source-input')?.value?.trim();
+  if (manual) return { kind: 'manual', label: 'Manual Source', source: manual };
+  const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
+  if (!entry) return null;
+  const source = entry.source || entry.splat?.assetSource || '';
+  return {
+    kind: entry.type || 'scene-object',
+    label: entry.label || entry.fileName || entry.id,
+    source,
+    objectId: entry.id,
+  };
+}
+
+function pipelineStatusClass(status) {
+  return ['real', 'fixture', 'cached', 'skipped', 'failed'].includes(status) ? status : '';
+}
+
+function pipelineEvidenceRows(result) {
+  if (!result) return [{ key: 'status', value: 'No run evidence yet.' }];
+  const report = result.report?.document || {};
+  const bundle = result.bundle?.document || {};
+  return [
+    { key: 'ok', value: String(Boolean(result.ok)) },
+    { key: 'pipeline', value: report.effectivePipelineId || result.pipelineId || 'unknown' },
+    { key: 'route', value: report.effectiveRouteConfig?.routeId || selectedPipelineRecord()?.routeId || 'unknown' },
+    { key: 'report', value: result.report?.path || 'missing' },
+    { key: 'bundle', value: result.bundle?.path || 'missing' },
+    { key: 'scope', value: bundle.registryScope || 'run-local' },
+  ];
+}
+
+function buildPipelineDockGraphState(source, runResult) {
+  const pipeline = selectedPipelineRecord();
+  const reportedStages = runResult?.report?.document?.stages;
+  const manifestStages = pipeline?.stages || [];
+  const stages = (reportedStages?.length ? reportedStages : manifestStages).map((stage, index) => ({
+    id: stage.id || `stage-${index + 1}`,
+    kind: 'pipeline-stage',
+    label: stage.label || stage.id || `Stage ${index + 1}`,
+    status: stage.status || stage.statusMode || 'skipped',
+    requestedRoute: stage.requestedRoute || stage.route?.id || 'unknown',
+    effectiveRoute: stage.effectiveRoute?.id || stage.route?.id || 'unknown',
+    outputPath: stage.outputPath || null,
+  }));
+  return {
+    schema: 'kaminos.pipeline-dock-graph.v0',
+    registryScope: 'run-local',
+    nodeKindOrder: pipelineDockNodeKindOrder,
+    nodes: [
+      {
+        id: 'source',
+        kind: 'source',
+        label: source?.label || 'No source selected',
+        source: source?.source || null,
+      },
+      ...stages,
+      {
+        id: 'result',
+        kind: 'result',
+        label: runResult?.ok ? 'Run evidence written' : 'No authoritative result',
+        reportPath: runResult?.report?.path || null,
+        bundlePath: runResult?.bundle?.path || null,
+      },
+    ],
+    edges: stages.map((stage, index) => ({
+      from: index === 0 ? 'source' : stages[index - 1].id,
+      to: stage.id,
+    })).concat([{ from: stages.at(-1)?.id || 'source', to: 'result' }]),
+  };
+}
+
+function renderPipelineRouteSelect() {
+  const select = document.getElementById('pipeline-route-select');
+  if (!select) return;
+  const pipelines = pipelineManifest?.pipelines || [];
+  select.innerHTML = '';
+  for (const pipeline of pipelines) {
+    const option = document.createElement('option');
+    option.value = pipeline.id;
+    option.textContent = pipeline.label || pipeline.id;
+    select.appendChild(option);
+  }
+  if (pipelines.some(route => route.id === pipelineDockState.selectedPipelineId)) {
+    select.value = pipelineDockState.selectedPipelineId;
+  } else if (pipelines[0]) {
+    pipelineDockState.selectedPipelineId = pipelines[0].id;
+    select.value = pipelines[0].id;
+  }
+}
+
+function renderPipelineDock() {
+  const source = pipelineSelectedSource();
+  pipelineDockState.selectedSource = source;
+  pipelineDockState.graph = buildPipelineDockGraphState(source, pipelineDockState.lastRun);
+  window.kaminosPipelineDockState = pipelineDockState;
+
+  const sourceSummary = document.getElementById('pipeline-source-summary');
+  if (sourceSummary) {
+    sourceSummary.innerHTML = `
+      <div class="pipeline-summary-kicker">${source?.kind || 'Source'}</div>
+      <div class="pipeline-summary-title">${escapeHtml(source?.label || 'No source selected')}</div>
+      <div class="pipeline-summary-path">${escapeHtml(source?.source || 'Select a scene object or enter an /api/read source.')}</div>
+    `;
+  }
+
+  const manifestId = document.getElementById('pipeline-manifest-id');
+  if (manifestId) manifestId.textContent = pipelineManifest?.manifestSha256?.slice(0, 12) || 'unloaded';
+  const registryScope = document.getElementById('pipeline-registry-scope');
+  if (registryScope) registryScope.textContent = pipelineDockState.lastRun?.bundle?.document?.registryScope || 'run-local';
+  const runState = document.getElementById('pipeline-run-state');
+  if (runState) runState.textContent = pipelineDockState.lastRun ? (pipelineDockState.lastRun.ok ? 'written' : 'failed') : 'idle';
+
+  const stageList = document.getElementById('pipeline-stage-list');
+  if (stageList) {
+    const stages = pipelineDockState.graph.nodes.filter(node => node.kind === 'pipeline-stage');
+    stageList.innerHTML = stages.length ? stages.map(stage => `
+      <div class="pipeline-stage-row">
+        <div class="pipeline-stage-head">
+          <div>
+            <div class="pipeline-stage-title">${escapeHtml(stage.label)}</div>
+            <div class="pipeline-stage-route">${escapeHtml(stage.effectiveRoute || stage.requestedRoute)}</div>
+          </div>
+          <span class="pipeline-status-chip ${pipelineStatusClass(stage.status)}">${escapeHtml(stage.status)}</span>
+        </div>
+        ${stage.outputPath ? `<div class="pipeline-stage-route">${escapeHtml(stage.outputPath)}</div>` : ''}
+      </div>
+    `).join('') : '<div class="pipeline-note">Manifest has no stages for this route.</div>';
+  }
+
+  const evidence = document.getElementById('pipeline-evidence-drawer');
+  if (evidence) {
+    evidence.innerHTML = pipelineEvidenceRows(pipelineDockState.lastRun).map(row => `
+      <div class="pipeline-evidence-row">
+        <div class="pipeline-evidence-key">${escapeHtml(row.key)}</div>
+        <div class="pipeline-evidence-val">${escapeHtml(row.value)}</div>
+      </div>
+    `).join('');
+  }
+}
+
+async function loadPipelineManifest() {
+  const response = await fetch('/api/pipeline-manifest');
+  if (!response.ok) throw new Error(`Pipeline manifest load failed: ${response.status}`);
+  pipelineManifest = await response.json();
+  renderPipelineRouteSelect();
+  renderPipelineDock();
+  return pipelineManifest;
+}
+
+async function runSelectedPipeline() {
+  const source = pipelineSelectedSource();
+  if (!source?.source) {
+    setInfo('Pipeline source required');
+    renderPipelineDock();
+    return null;
+  }
+  if (!pipelineManifest) await loadPipelineManifest();
+  const response = await fetch('/api/run-pipeline', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pipelineId: pipelineDockState.selectedPipelineId,
+      source: source.source,
+    }),
+  });
+  const result = await response.json();
+  pipelineDockState.lastRun = result;
+  renderPipelineDock();
+  setInfo(result.ok ? `Pipeline witness written: ${result.pipelineId}` : `Pipeline witness failed: ${result.pipelineId}`);
+  return result;
+}
+
+function initPipelineDock() {
+  const select = document.getElementById('pipeline-route-select');
+  select?.addEventListener('change', () => {
+    pipelineDockState.selectedPipelineId = select.value;
+    pipelineDockState.lastRun = null;
+    renderPipelineDock();
+  });
+  document.getElementById('pipeline-source-input')?.addEventListener('input', () => {
+    pipelineDockState.lastRun = null;
+    renderPipelineDock();
+  });
+  document.getElementById('pipeline-run-button')?.addEventListener('click', () => runSelectedPipeline().catch(err => {
+    setInfo(`Pipeline run failed: ${err.message || err}`);
+    pipelineDockState.lastRun = {
+      schema: 'kaminos.pipeline-run-result.v0',
+      ok: false,
+      pipelineId: pipelineDockState.selectedPipelineId,
+      error: String(err.message || err),
+    };
+    renderPipelineDock();
+  }));
+  document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
+  loadPipelineManifest().catch(err => {
+    setInfo(err.message || String(err));
+    renderPipelineDock();
+  });
+}
+
+window.loadPipelineManifest = loadPipelineManifest;
+window.runSelectedPipeline = runSelectedPipeline;
+window.buildPipelineDockGraphState = buildPipelineDockGraphState;
+window.kaminosPipelineDockDebugState = () => pipelineDockState;
+
 function readVolumeControls() {
   return {
     density: parseFloat(document.getElementById('volume-density').value),
@@ -4692,6 +4977,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     setActiveTab(tab.dataset.tab);
   });
 });
+
+initPipelineDock();
 
 // --- Image Search (Pixabay) ---
 document.getElementById('search-input').addEventListener('keydown', async e => {
