@@ -147,10 +147,17 @@ assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybr
 assert.match(index, /function hybridSplatOverlayCropAppliedByRenderer\(/, 'Hybrid Renderer overlay reads live renderer crop application instead of hardcoding crop=false');
 assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRenderer\(\)/, 'Hybrid Renderer handoff reports renderer-side crop application from the active overlay handle');
 assert.match(index, /function hybridSplatOverlayEditorSovereigntyState\(/, 'Hybrid Renderer overlay exposes an editor-sovereignty compositing rule');
-assert.match(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas/, 'Hybrid Renderer overlay dims its external canvas when editor gizmos are active');
+assert.doesNotMatch(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas\s*\{[^}]*opacity/, 'Hybrid Renderer overlay must not use whole-canvas opacity that fades against scene objects and support disk');
+assert.match(index, /id="hybrid-editor-xray-host"/, 'Hybrid Renderer overlay has a top editor-xray layer for gizmo/target affordance above the renderer canvas');
+assert.match(index, /function updateHybridEditorXray\(/, 'Hybrid Renderer editor sovereignty updates a dedicated xray layer instead of fading the renderer canvas');
+assert.match(index, /scenePassthrough:\s*false/, 'Hybrid Renderer debug state records that editor sovereignty does not make scene geometry bleed through the overlay');
 assert.match(index, /editorSovereign:\s*editorSovereignty\.active/, 'Hybrid Renderer debug state reports editor-overlay sovereignty instead of leaving it as CSS inference');
 assert.match(index, /id="splat-emissive-extraction-panel"/, 'selected splats expose a visible Emissive Extraction panel instead of a hidden renderer global');
 assert.match(index, /id="splat-emissive-albedo-select"/, 'Emissive Extraction UI chooses an indexed albedo PLY asset');
+assert.match(index, /function emissiveDefaultAlbedoSourceForEntry\(/, 'Emissive Extraction chooses a default albedo source relative to the selected splat');
+assert.match(index, /function emissiveAlbedoMatchesSelectedSplat\(/, 'Emissive Extraction can detect the zero-signal selected-source-as-albedo pairing');
+assert.match(index, /option\.disabled = emissiveAlbedoMatchesSelectedSplat/, 'Emissive Extraction disables the selected splat as its own albedo candidate');
+assert.match(index, /Choose an albedo PLY different from the selected splat/, 'Emissive Extraction fails loudly instead of solving original-minus-original as zero splats');
 assert.match(index, /data-splat-emissive-field="hueGateLo"/, 'Emissive Extraction UI exposes the hue gate lower threshold');
 assert.match(index, /data-splat-emissive-field="hueGateHi"/, 'Emissive Extraction UI exposes the hue gate upper threshold');
 assert.match(index, /data-splat-emissive-field="minDeltaMag"/, 'Emissive Extraction UI exposes the minimum delta magnitude');

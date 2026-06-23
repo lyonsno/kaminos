@@ -89,7 +89,14 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 canvas { display: block; }
 #hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-#hybrid-splat-overlay-host.editor-sovereign canvas { opacity: 0.58 !important; pointer-events: none !important; }
+#hybrid-splat-overlay-host.editor-sovereign canvas { pointer-events: none !important; }
+#hybrid-editor-xray-host { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+#hybrid-editor-xray-host[hidden] { display: none; }
+.hybrid-editor-xray-target { position: absolute; left: 0; top: 0; width: 76px; height: 76px; margin: -38px 0 0 -38px; border: 1px solid rgba(120, 220, 255, 0.95); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 20px rgba(120,220,255,0.45), inset 0 0 16px rgba(120,220,255,0.18); transform: translate3d(-9999px, -9999px, 0); }
+.hybrid-editor-xray-target::before, .hybrid-editor-xray-target::after { content: ""; position: absolute; background: rgba(120, 220, 255, 0.9); box-shadow: 0 0 8px rgba(120,220,255,0.35); }
+.hybrid-editor-xray-target::before { left: 50%; top: 8px; bottom: 8px; width: 1px; transform: translateX(-50%); }
+.hybrid-editor-xray-target::after { top: 50%; left: 8px; right: 8px; height: 1px; transform: translateY(-50%); }
+.hybrid-editor-xray-label { position: absolute; left: 42px; top: 53px; max-width: 180px; padding: 3px 6px; border: 1px solid rgba(120,220,255,0.45); border-radius: 5px; background: rgba(0,0,0,0.68); color: #aeefff; font: 9px 'SF Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
@@ -712,6 +719,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
+  <div id="hybrid-editor-xray-host" hidden aria-hidden="true">
+    <div class="hybrid-editor-xray-target">
+      <div class="hybrid-editor-xray-label">editor target</div>
+    </div>
+  </div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
     <div class="splat-correction-mode-body" id="splat-correction-mode-status"></div>
@@ -843,7 +855,7 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
-const HYBRID_SPLAT_OVERLAY_EDITOR_OPACITY = 0.58;
+const HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE = 'editor-xray-target';
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
@@ -982,6 +994,49 @@ function hybridSplatOverlayCropAppliedByRenderer() {
   return false;
 }
 
+function hybridEditorXrayProjectTarget(editorTarget) {
+  const viewport = document.getElementById('viewport');
+  if (!viewport || !editorTarget || !camera || !renderer?.domElement) return null;
+  camera.updateMatrixWorld?.();
+  editorTarget.updateWorldMatrix?.(true, false);
+  const world = editorTarget.getWorldPosition(new THREE.Vector3());
+  const ndc = world.clone().project(camera);
+  if (!Number.isFinite(ndc.x) || !Number.isFinite(ndc.y) || !Number.isFinite(ndc.z)) return null;
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const viewportRect = viewport.getBoundingClientRect();
+  return {
+    x: (ndc.x * 0.5 + 0.5) * canvasRect.width + canvasRect.left - viewportRect.left,
+    y: (1 - (ndc.y * 0.5 + 0.5)) * canvasRect.height + canvasRect.top - viewportRect.top,
+    ndcZ: ndc.z,
+  };
+}
+
+function updateHybridEditorXray(editorActive, editorTarget, reason) {
+  const host = document.getElementById('hybrid-editor-xray-host');
+  const target = host?.querySelector('.hybrid-editor-xray-target');
+  const label = host?.querySelector('.hybrid-editor-xray-label');
+  const projection = editorActive ? hybridEditorXrayProjectTarget(editorTarget) : null;
+  const visible = !!host && !!target && !!projection;
+  if (host) host.hidden = !visible;
+  if (target && projection) {
+    target.style.transform = `translate3d(${projection.x.toFixed(2)}px, ${projection.y.toFixed(2)}px, 0)`;
+    target.dataset.reason = reason || '';
+    target.dataset.ndcZ = projection.ndcZ.toFixed(4);
+  }
+  if (label) {
+    label.textContent = reason === 'splat-correction-gizmo-active'
+      ? 'correction target'
+      : 'transform target';
+  }
+  return {
+    mode: HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE,
+    visible,
+    x: projection?.x ?? null,
+    y: projection?.y ?? null,
+    ndcZ: projection?.ndcZ ?? null,
+  };
+}
+
 function hybridSplatOverlayEditorSovereigntyState() {
   const host = document.getElementById('hybrid-splat-overlay-host');
   const editorTarget = transformControls?.object || null;
@@ -989,20 +1044,26 @@ function hybridSplatOverlayEditorSovereigntyState() {
   const editorActive = overlayActive
     && !!editorTarget
     && transformControls?.visible !== false;
+  const reason = editorActive
+    ? (splatCorrectionMode ? 'splat-correction-gizmo-active' : 'transform-gizmo-active')
+    : null;
   if (host) {
     host.classList.toggle('editor-sovereign', editorActive);
     host.style.pointerEvents = 'none';
     for (const canvas of host.querySelectorAll('canvas')) {
+      canvas.style.opacity = '1';
       canvas.style.pointerEvents = 'none';
     }
   }
+  const xray = updateHybridEditorXray(editorActive, editorTarget, reason);
   return {
     active: editorActive,
-    opacity: editorActive ? HYBRID_SPLAT_OVERLAY_EDITOR_OPACITY : 1,
-    reason: editorActive
-      ? (splatCorrectionMode ? 'splat-correction-gizmo-active' : 'transform-gizmo-active')
-      : null,
+    opacity: 1,
+    reason,
     transformTargetName: editorTarget?.name || null,
+    compositeMode: HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE,
+    scenePassthrough: false,
+    xray,
   };
 }
 
@@ -1030,6 +1091,9 @@ function hybridSplatOverlayDebugState() {
     editorSovereignOpacity: editorSovereignty.opacity,
     editorSovereignReason: editorSovereignty.reason,
     editorSovereignTransformTargetName: editorSovereignty.transformTargetName,
+    editorSovereignCompositeMode: editorSovereignty.compositeMode,
+    scenePassthrough: false,
+    editorXray: editorSovereignty.xray,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
@@ -1319,6 +1383,25 @@ function emissiveAssetLooksLikePly(entry = {}) {
   return name.endsWith('.ply');
 }
 
+function emissiveAlbedoMatchesSelectedSplat(entry, source = emissiveExtractionState.selectedAlbedoSource) {
+  return !!entry?.source && !!source && source === entry.source;
+}
+
+function emissiveDefaultAlbedoSourceForEntry(entry, assets = emissiveExtractionState.albedoAssets) {
+  return (assets || []).find(asset => asset.source && asset.source !== entry?.source)?.source || '';
+}
+
+function clearEmissiveExtractionResultIfPairChanged(entry) {
+  if (!emissiveExtractionState.result) return;
+  if (emissiveExtractionState.originalSource !== entry?.source
+      || emissiveExtractionState.albedoSource !== emissiveExtractionState.selectedAlbedoSource) {
+    emissiveExtractionState.result = null;
+    emissiveExtractionState.originalSource = null;
+    emissiveExtractionState.albedoSource = null;
+    emissiveExtractionState.lastSolvedAt = null;
+  }
+}
+
 async function refreshEmissiveAlbedoAssets() {
   if (emissiveExtractionRefreshPromise) return emissiveExtractionRefreshPromise;
   emissiveExtractionState.status = emissiveExtractionState.status === 'idle' ? 'refreshing' : emissiveExtractionState.status;
@@ -1328,8 +1411,10 @@ async function refreshEmissiveAlbedoAssets() {
       if (data.error) throw new Error(data.error);
       const entries = (data.entries || []).filter(emissiveAssetLooksLikePly);
       emissiveExtractionState.albedoAssets = entries;
-      if (!entries.some(entry => entry.source === emissiveExtractionState.selectedAlbedoSource)) {
-        emissiveExtractionState.selectedAlbedoSource = entries[0]?.source || '';
+      const selectedEntry = selectedSplatRecord();
+      if (!entries.some(entry => entry.source === emissiveExtractionState.selectedAlbedoSource)
+          || emissiveAlbedoMatchesSelectedSplat(selectedEntry)) {
+        emissiveExtractionState.selectedAlbedoSource = emissiveDefaultAlbedoSourceForEntry(selectedEntry, entries);
       }
       emissiveExtractionState.error = null;
       if (emissiveExtractionState.status === 'refreshing') emissiveExtractionState.status = 'idle';
@@ -1361,7 +1446,10 @@ function readEmissiveExtractionControls() {
   emissiveExtractionState.hueGateHi = Math.max(emissiveExtractionState.hueGateLo + 0.001, hi);
   emissiveExtractionState.minDeltaMag = Math.max(0, readEmissiveExtractionField('minDeltaMag'));
   const select = document.getElementById('splat-emissive-albedo-select');
-  if (select) emissiveExtractionState.selectedAlbedoSource = select.value || '';
+  if (select && emissiveExtractionState.selectedAlbedoSource !== (select.value || '')) {
+    emissiveExtractionState.selectedAlbedoSource = select.value || '';
+    clearEmissiveExtractionResultIfPairChanged(selectedSplatRecord());
+  }
   return {
     hueGateLo: emissiveExtractionState.hueGateLo,
     hueGateHi: emissiveExtractionState.hueGateHi,
@@ -1394,17 +1482,24 @@ function updateEmissiveExtractionPanel(entry) {
       for (const asset of emissiveExtractionState.albedoAssets) {
         const option = document.createElement('option');
         option.value = asset.source || '';
+        option.disabled = emissiveAlbedoMatchesSelectedSplat(entry, asset.source);
         const subtitle = emissiveAssetSubtitle(asset);
         option.textContent = subtitle ? `${emissiveAssetDisplayLabel(asset)} - ${subtitle}` : emissiveAssetDisplayLabel(asset);
+        if (option.disabled) option.textContent = `${option.textContent} (selected source)`;
         option.title = asset.source || '';
         select.appendChild(option);
       }
     }
-    const nextValue = activeValue && Array.from(select.options).some(option => option.value === activeValue)
+    const validOptions = Array.from(select.options).filter(option => option.value && !option.disabled);
+    const preferredValue = emissiveDefaultAlbedoSourceForEntry(entry);
+    const nextValue = activeValue && validOptions.some(option => option.value === activeValue)
       ? activeValue
-      : (emissiveExtractionState.selectedAlbedoSource || select.options[0]?.value || '');
+      : (preferredValue || validOptions[0]?.value || '');
     select.value = nextValue;
-    emissiveExtractionState.selectedAlbedoSource = select.value || '';
+    if (emissiveExtractionState.selectedAlbedoSource !== (select.value || '')) {
+      emissiveExtractionState.selectedAlbedoSource = select.value || '';
+      clearEmissiveExtractionResultIfPairChanged(entry);
+    }
   }
   for (const name of ['hueGateLo', 'hueGateHi', 'minDeltaMag']) {
     const input = document.querySelector(`[data-splat-emissive-field="${name}"]`);
@@ -1418,7 +1513,10 @@ function updateEmissiveExtractionPanel(entry) {
     const overlayNote = typeof hybridSplatOverlayState.handle?.solveEmissive === 'function'
       ? 'overlay solve available'
       : 'overlay solve unavailable';
-    const sourceNote = emissiveExtractionState.selectedAlbedoSource ? 'albedo selected' : 'select albedo PLY';
+    const sameSource = emissiveAlbedoMatchesSelectedSplat(entry);
+    const sourceNote = sameSource
+      ? 'select different albedo PLY'
+      : (emissiveExtractionState.selectedAlbedoSource ? 'albedo selected' : 'select albedo PLY');
     const resultNote = result ? `emissive splats=${result.emissiveSplats ?? 'unknown'}` : sourceNote;
     const detail = `${emissiveExtractionState.status} · ${overlayNote} · ${resultNote}`;
     statusEl.textContent = emissiveExtractionState.error ? `${detail} · ${emissiveExtractionState.error}` : detail;
@@ -1428,7 +1526,8 @@ function updateEmissiveExtractionPanel(entry) {
   if (solveButton) {
     solveButton.disabled = emissiveExtractionState.status === 'solving'
       || !entry.source
-      || !emissiveExtractionState.selectedAlbedoSource;
+      || !emissiveExtractionState.selectedAlbedoSource
+      || emissiveAlbedoMatchesSelectedSplat(entry);
   }
   if (!emissiveExtractionState.albedoAssets.length && !emissiveExtractionRefreshPromise) {
     refreshEmissiveAlbedoAssets().catch(() => {});
@@ -1463,6 +1562,11 @@ async function solveSelectedSplatEmissive() {
   if (!albedoSource) {
     setEmissiveExtractionStatus('error', 'Select an albedo PLY');
     setInfo('Select an albedo PLY before solving emissive');
+    return null;
+  }
+  if (emissiveAlbedoMatchesSelectedSplat(entry, albedoSource)) {
+    setEmissiveExtractionStatus('error', 'Choose an albedo PLY different from the selected splat');
+    setInfo('Choose an albedo PLY different from the selected splat');
     return null;
   }
   try {
@@ -1514,8 +1618,11 @@ async function solveSelectedSplatEmissive() {
 
 function scheduleSelectedSplatEmissiveSolve() {
   readEmissiveExtractionControls();
-  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
-  if (!emissiveExtractionState.selectedAlbedoSource || !hybridSplatOverlayState.handle) return;
+  const entry = selectedSceneObjectEntry();
+  updateEmissiveExtractionPanel(entry);
+  if (!emissiveExtractionState.selectedAlbedoSource
+      || emissiveAlbedoMatchesSelectedSplat(entry)
+      || !hybridSplatOverlayState.handle) return;
   clearTimeout(emissiveExtractionDebounceTimer);
   emissiveExtractionDebounceTimer = setTimeout(() => {
     solveSelectedSplatEmissive().catch(() => {});
@@ -1603,6 +1710,9 @@ function updateHybridSplatOverlayFrame() {
     editorSovereignOpacity: editorSovereignty.opacity,
     editorSovereignReason: editorSovereignty.reason,
     editorSovereignTransformTargetName: editorSovereignty.transformTargetName,
+    editorSovereignCompositeMode: editorSovereignty.compositeMode,
+    scenePassthrough: false,
+    editorXray: editorSovereignty.xray,
     updatedAt: new Date().toISOString(),
   };
   hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);

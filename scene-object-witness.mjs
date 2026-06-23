@@ -2527,6 +2527,10 @@ async function runHybridSplatOverlayScenario(ws) {
       const overlayCanvasStyle = overlayCanvas ? getComputedStyle(overlayCanvas) : null;
       const overlayHost = document.getElementById('hybrid-splat-overlay-host');
       const overlayHostStyle = overlayHost ? getComputedStyle(overlayHost) : null;
+      const editorXrayHost = document.getElementById('hybrid-editor-xray-host');
+      const editorXrayTarget = editorXrayHost?.querySelector('.hybrid-editor-xray-target') || null;
+      const editorXrayHostStyle = editorXrayHost ? getComputedStyle(editorXrayHost) : null;
+      const editorXrayTargetStyle = editorXrayTarget ? getComputedStyle(editorXrayTarget) : null;
       const correctionMode = window.kaminosSplatCorrectionModeDebugState?.() || null;
       const transformBar = document.getElementById('transform-bar');
       const editorOverlay = {
@@ -2537,6 +2541,12 @@ async function runHybridSplatOverlayScenario(ws) {
         overlayHostPointerEvents: overlayHostStyle?.getPropertyValue('pointer-events') || null,
         overlayHostClassName: overlayHost?.className || '',
         editorSovereign: overlayDebug?.editorSovereign || false,
+        scenePassthrough: overlayDebug?.scenePassthrough ?? null,
+        editorXrayVisible: !!editorXrayHost && !editorXrayHost.hidden
+          && editorXrayHostStyle?.getPropertyValue('display') !== 'none'
+          && editorXrayTargetStyle?.getPropertyValue('visibility') !== 'hidden',
+        editorXrayMode: overlayDebug?.editorXray?.mode || null,
+        editorXrayTransform: editorXrayTargetStyle?.getPropertyValue('transform') || null,
       };
       URL.revokeObjectURL(moduleUrl);
       return {
@@ -2603,10 +2613,13 @@ async function runHybridSplatOverlayScenario(ws) {
     throw new Error(`hybrid splat overlay witness did not enter an editor-gizmo state: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (editorOverlay.editorSovereign !== true
-      || !(editorOverlay.overlayCanvasOpacity > 0 && editorOverlay.overlayCanvasOpacity <= 0.62)
+      || !(editorOverlay.overlayCanvasOpacity >= 0.98 && editorOverlay.overlayCanvasOpacity <= 1)
       || editorOverlay.overlayCanvasPointerEvents !== 'none'
-      || editorOverlay.overlayHostPointerEvents !== 'none') {
-    throw new Error(`hybrid splat overlay obscures editor gizmos instead of yielding composition: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+      || editorOverlay.overlayHostPointerEvents !== 'none'
+      || editorOverlay.scenePassthrough !== false
+      || editorOverlay.editorXrayVisible !== true
+      || editorOverlay.editorXrayMode !== 'editor-xray-target') {
+    throw new Error(`hybrid splat overlay made scene geometry transparent instead of using editor xray: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
 }
 
