@@ -1333,6 +1333,7 @@ async function main() {
       detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       reactionFuelScale: sample.reactionFuelScale,
+      tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       plumeHeight: sample.plumeHeight,
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,

@@ -9,7 +9,7 @@ assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=tall-fire-fuel-reaction-0623/, 'volume prototype import carries a cache key when tall-plume fuel/reaction semantics change');
+assert.match(index, /volume-core\.js\?v=tall-fire-source-reaction-cadence-0623/, 'volume prototype import carries a cache key when tall-plume source/reaction cadence semantics change');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
@@ -496,6 +496,11 @@ assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible ta
 assert.match(core, /tallPlumeFuelHeatReaction/, 'tall-plume fire is born from fuel/heat contact instead of source color alone');
 assert.match(core, /fuelConsumption/, 'tall-plume reaction consumes the fuel lane before writing material state');
 assert.match(core, /fireFuelOverlapRatio/, 'sim readback reports whether visible fire overlaps live fuel');
+assert.match(core, /tallPlumeDirectSmokeBirthGain/, 'tall plume source cadence reduces broad direct source-authored smoke birth');
+assert.match(core, /tallPlumeReactionMemory/, 'tall plume source cadence keeps a small reaction memory to prevent threshold chatter');
+assert.match(core, /tallPlumePilotReaction/, 'tall plume source cadence exposes a pilot reaction floor for small flame continuity');
+assert.match(core, /tallPlumeReactionSmokeBirth/, 'tall plume smoke birth is explicitly led by fuel consumption and cooling');
+assert.match(core, /tallPlumeReactionCadenceDebug/, 'debug state exposes tall-plume source/reaction cadence identity');
 assert.match(core, /fuelMean/, 'sim readback reports mean fuel evidence');
 assert.match(core, /reactionMean/, 'sim readback reports fuel/heat reaction evidence');
 assert.match(core, /fuelConsumptionMean/, 'sim readback reports reaction fuel consumption evidence');
@@ -841,6 +846,7 @@ assert.match(witness, /setExternalEmitters/, 'witness can seed synthetic externa
 assert.match(witness, /fireScale/, 'witness records effective apparent fire/world scale');
 assert.match(witness, /detailScale/, 'witness records effective fine-detail scale');
 assert.match(witness, /visibleDetailOverlayGain/, 'witness records whether raymarch fine-detail overlays are active');
+assert.match(witness, /tallPlumeReactionCadenceDebug/, 'witness records the effective tall-plume source/reaction cadence identity');
 assert.match(witness, /plumeHeight/, 'witness records effective plume height/world-rise scale');
 assert.match(witness, /windStrength/, 'witness records effective explicit wind strength');
 assert.match(witness, /windAngle/, 'witness records effective explicit wind direction');
