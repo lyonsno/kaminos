@@ -637,7 +637,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-detail-quarantine-0622';
+import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-fuel-reaction-0623';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1600,6 +1600,7 @@ let routedCanonicalContentMode = 'smoke';
 let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
 let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
+let routedVolumeReactionFuelScale = 1;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -1827,6 +1828,7 @@ function readVolumeControls() {
     canonicalSourceY: routedCanonicalSourceY,
     canonicalSourceInjection: routedCanonicalInjection,
     canonicalBuoyancy: routedCanonicalBuoyancy,
+    reactionFuelScale: routedVolumeReactionFuelScale,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   };
@@ -1968,6 +1970,10 @@ async function initKaminosVolumeRoute() {
   const routeCanonicalBuoyancy = Number(params.get('volume_canonical_buoyancy'));
   if (params.has('volume_canonical_buoyancy') && Number.isFinite(routeCanonicalBuoyancy)) {
     routedCanonicalBuoyancy = Math.max(0, Math.min(1.5, routeCanonicalBuoyancy));
+  }
+  const routeReactionFuelScale = Number(params.get('volume_reaction_fuel'));
+  if (params.has('volume_reaction_fuel') && Number.isFinite(routeReactionFuelScale)) {
+    routedVolumeReactionFuelScale = Math.max(0, Math.min(1.5, routeReactionFuelScale));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {

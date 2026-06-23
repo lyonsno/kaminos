@@ -97,6 +97,10 @@ function normalizeWindHeight(value) {
   return clampFinite(value, -0.8, 0.8, 0.15);
 }
 
+function normalizeReactionFuelScale(value) {
+  return clampFinite(value, 0, 1.5, 1);
+}
+
 function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
   return clampFinite(value, 0, max, fallback);
 }
@@ -1476,6 +1480,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSourceYControl = clamp(u.canonical_source_controls.x, -0.92, -0.20);
   let canonicalSourceInjection = clamp(u.canonical_source_controls.y, 0.0, 1.5);
   let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
+  let reactionFuelScale = clamp(u.canonical_source_controls.w, 0.0, 1.5);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
@@ -2167,9 +2172,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
   let columnFuelInjection = source * 0.88 * sourceFuelMask;
-  fuel = max(fuel, mix(columnFuelInjection, bonfireInjectedFuel, bonfireScene));
+  let tallPlumeFuelInjection = columnFuelInjection * mix(1.0, reactionFuelScale, tallPlumeScene);
+  fuel = max(fuel, mix(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene));
   fuel = max(fuel, externalInjection.material.z * 0.72);
-  fuel = max(fuel - heat * 0.018, 0.0);
+  let tallPlumeFuelHeatReaction = tallPlumeScene
+    * smoothstep(0.015, 0.16, fuel)
+    * smoothstep(0.055, 0.72, heat)
+    * (0.22 + 0.34 * source + 0.24 * columnFireBirth + 0.18 * flame + 0.10 * emberRing);
+  let fuelConsumption = tallPlumeFuelHeatReaction * (0.020 + inputFlow * 0.016 + fireLickAmount * 0.003);
+  smoke = smoke + fuelConsumption * mix(0.0, 0.68, tallPlumeScene);
+  heat = heat + tallPlumeFuelHeatReaction * mix(0.0, 0.18, tallPlumeScene);
+  fuel = max(fuel - heat * 0.018 - fuelConsumption, 0.0);
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -2202,12 +2215,21 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyPacketTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
   let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
   fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireLobes * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfirePacketLickBirth);
+  let tallPlumeFuelReactionGate = mix(1.0, smoothstep(0.001, 0.055, tallPlumeFuelHeatReaction + fuel * heat * 0.24), tallPlumeScene);
+  fireLick = fireLick * tallPlumeFuelReactionGate + tallPlumeFuelHeatReaction * fireLickOperatorGain * 0.16;
   fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
   emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
   flame = flame * mix(1.0, max(0.08, bonfireFlameStorageSourceRelief), bonfireScene);
   let columnFlameStorageBirth = fireBirth * (1.18 + 0.18 * bonfireTongues * bonfireScene) + heat * fuel * 0.060 + fireLick * 0.48;
+  let tallPlumeReactionBoundFlameStorageBirth = (
+    fireBirth * 0.16
+      + heat * fuel * 0.14
+      + fireLick * 0.36
+      + tallPlumeFuelHeatReaction * (1.36 + fireLickOperatorGain * 0.08)
+  ) * tallPlumeFuelReactionGate;
+  let columnReactionBoundFlameStorageBirth = mix(columnFlameStorageBirth, tallPlumeReactionBoundFlameStorageBirth, tallPlumeScene);
   let bonfireFrontStorageOccupancy = clamp(
     bonfireVisibleFlamePacketGate * 1.08
       + bonfireFlameOccupancy * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.12
@@ -2222,9 +2244,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     + bonfireRadianceBirth * 0.06 * bonfireFlameStorageSourceRelief
     + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.004
     + fireLick * 0.14 * bonfireFlameStorageSourceRelief;
-  flame = max(flame, mix(columnFlameStorageBirth, bonfireFlameStorageBirth, bonfireScene));
+  flame = max(flame, mix(columnReactionBoundFlameStorageBirth, bonfireFlameStorageBirth, bonfireScene));
   flame = max(flame, externalInjection.fire.x);
-  ember = max(ember, mix(fireBirth * 0.78 + flame * 0.22, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
+  let columnEmberBirth = mix(fireBirth * 0.78 + flame * 0.22, tallPlumeFuelHeatReaction * 0.62 + flame * 0.18 + fireLick * 0.08, tallPlumeScene);
+  ember = max(ember, mix(columnEmberBirth, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
   ember = max(ember, externalInjection.fire.y);
   let bonfirePacketVisibleCarrierBirth = bonfireScene * (
     bonfirePacketCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
@@ -2232,6 +2255,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfirePacketCombustion.w * 0.18
   ) * (0.52 + bonfireTongues * 0.34 + fireLickOperatorGain * 0.12);
   let columnFlameDetailBirth = (fireBirth * 1.02 + heatExpansion.y * 4.0) * (0.42 + 0.42 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34;
+  let tallPlumeReactionBoundFlameDetailBirth = (
+    columnFlameDetailBirth * 0.20
+      + tallPlumeFuelHeatReaction * (0.86 + fireLickOperatorGain * 0.06)
+      + fireLick * 0.28
+      + flame * 0.18
+  ) * tallPlumeFuelReactionGate;
+  let columnReactionBoundFlameDetailBirth = mix(columnFlameDetailBirth, tallPlumeReactionBoundFlameDetailBirth, tallPlumeScene);
   flameDetail = flameDetail * mix(1.0, max(0.12, bonfireVisibleSourcePlugRelief), bonfireScene);
   visibleFireCarrier = flameDetail;
   let bonfireVisibleFireFrontGate = clamp(
@@ -2262,11 +2292,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     + bonfireCombustion.z * 0.08
     + lickBirth.z
     + fireLick * 0.18;
-  flameDetail = max(flameDetail, mix(columnFlameDetailBirth, bonfireVisibleFireCarrierBirth, bonfireScene));
+  flameDetail = max(flameDetail, mix(columnReactionBoundFlameDetailBirth, bonfireVisibleFireCarrierBirth, bonfireScene));
   visibleFireCarrier = flameDetail;
   flameDetail = max(flameDetail, externalInjection.fire.z);
   visibleFireCarrier = flameDetail;
   combustionFront = max(combustionFront, combustionFrontBirth);
+  let tallPlumeFireSurvival = mix(1.0, smoothstep(0.001, 0.045, tallPlumeFuelHeatReaction + fuel * heat * 0.16 + fuel * 0.04), tallPlumeScene);
+  flame = flame * tallPlumeFireSurvival;
+  ember = ember * tallPlumeFireSurvival;
+  flameDetail = flameDetail * tallPlumeFireSurvival;
+  visibleFireCarrier = flameDetail;
+  combustionFront = combustionFront * tallPlumeFireSurvival;
+  fireLick = fireLick * tallPlumeFireSurvival;
+  emberFleck = emberFleck * tallPlumeFireSurvival;
   flame = max(flame, canonicalMinimalFireBirth * 1.04);
   ember = max(ember, canonicalMinimalFireBirth * 0.36);
   flameDetail = max(flameDetail, canonicalMinimalFireBirth * 0.42);
@@ -2613,6 +2651,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     detailScale: 1.75,
     detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
     visibleDetailOverlayGain: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene) ? 0.35 : 1,
+    reactionFuelScale: normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale),
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -3585,7 +3624,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[68] = Math.max(-0.92, Math.min(-0.20, controlsSnapshot.canonicalSourceY ?? -0.74));
     uniforms[69] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalSourceInjection ?? 1));
     uniforms[70] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBuoyancy ?? 1));
-    uniforms[71] = 0;
+    uniforms[71] = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
     uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
     uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
@@ -3608,6 +3647,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
+    state.reactionFuelScale = uniforms[71];
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
@@ -3815,6 +3855,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let densitySum = 0;
     let densityMax = 0;
     let heatSum = 0;
+    let fuelSum = 0;
+    let reactionSum = 0;
+    let fuelConsumptionSum = 0;
+    let fireFuelOverlapSum = 0;
     let detailSum = 0;
     let fireLayerSum = 0;
     let emissionDetailSum = 0;
@@ -4071,6 +4115,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const d = Math.max(data[i + 3], data[i + 4] * 0.9, data[i + 5] * 0.72);
       const smokeDensity = data[i + 4];
       const heat = data[i + 5];
+      const fuel = Math.max(0, data[i + 6]);
       const detail = data[i + 7];
       const flame = data[i + 8];
       const ember = data[i + 9];
@@ -4085,11 +4130,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const emberFleck = data[i + 15];
       const radianceGain = controlsSnapshot.radiance ?? 1.65;
       const absorptionGain = controlsSnapshot.absorption ?? 0.85;
-      const rawRadiance = Math.max(0, flame * 1.22 + ember * 0.46 + flameDetail * 0.40 + fireLick * 1.18 + emberFleck * 0.48 + heat * 0.20);
+      const fireOnlyRadiance = Math.max(0, flame * 1.22 + ember * 0.46 + flameDetail * 0.40 + fireLick * 1.18 + emberFleck * 0.48);
       const bonfireRenderedFireEdgeCarrier = fireLick * 1.18 + emberFleck * 0.50 + combustionFront * 0.14 + combustionFrontTopology * 0.08 + interfaceShred * 0.08;
       const bonfireEmissionRadiance = Math.max(0, bonfireRenderedFireEdgeCarrier + visibleFireCarrier * 1.44 + ember * 0.48 + flame * 0.16 + heat * 0.14);
-      const radiance = (isBonfireReadbackScene ? bonfireEmissionRadiance : rawRadiance) * radianceGain;
+      const radiance = (isBonfireReadbackScene ? bonfireEmissionRadiance : fireOnlyRadiance) * radianceGain;
       const extinction = Math.max(0, smokeDensity * 0.74 + microdetail * 0.42 + interfaceShred * 0.34 + detail * 0.12) * (0.34 + absorptionGain * 0.46);
+      const fuelContact = Math.max(0, Math.min(1, fuel / 0.055));
+      const heatContact = Math.max(0, Math.min(1, heat / 0.18));
+      const fireContact = Math.max(0, Math.min(1, (fireLayer + fireLick + visibleFireCarrier) / 0.075));
+      const reaction = fuelContact * heatContact * Math.max(fireContact, Math.min(1, heat * 0.80));
+      const fuelConsumption = reaction * (0.020 + Math.max(0, Math.min(2.5, controlsSnapshot.flowRate ?? 0.3)) * 0.016);
       if (plumeDriftCells.has(cell)) {
         const nx = x / Math.max(1, gridSize - 1) * 2 - 1;
         const ny = y / Math.max(1, gridSize - 1) * 2 - 1;
@@ -4130,6 +4180,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeDetailWeightedX2 += smokeDetailWeight * nx * nx;
         smokeDetailWeightedZ2 += smokeDetailWeight * nz * nz;
         fireWeightSum += fireWeight;
+        fireFuelOverlapSum += fireWeight * fuelContact;
         fireWeightedX += fireWeight * nx;
         fireWeightedY += fireWeight * ny;
         fireWeightedZ += fireWeight * nz;
@@ -4185,6 +4236,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       densitySum += d;
       densityMax = Math.max(densityMax, d);
       heatSum += heat;
+      fuelSum += fuel;
+      reactionSum += reaction;
+      fuelConsumptionSum += fuelConsumption;
       detailSum += detail;
       fireLayerSum += fireLayer;
       emissionDetailSum += flameDetail;
@@ -4471,6 +4525,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       densityMean: densitySum / samples,
       densityMax,
       heatMean: heatSum / samples,
+      fuelMean: fuelSum / samples,
+      reactionMean: reactionSum / samples,
+      fuelConsumptionMean: fuelConsumptionSum / samples,
+      fireFuelOverlapRatio: fireWeightSum > 0 ? fireFuelOverlapSum / fireWeightSum : 0,
       detailMean: detailSum / samples,
       fireLayerMean: fireLayerSum / samples,
       emissionDetailMean: emissionDetailSum / samples,
@@ -4727,6 +4785,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
+        reactionFuelScale: state.reactionFuelScale,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -4968,6 +5027,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
+      reactionFuelScale: state.reactionFuelScale,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
@@ -5067,6 +5127,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
       state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
       state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
+      state.reactionFuelScale = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);

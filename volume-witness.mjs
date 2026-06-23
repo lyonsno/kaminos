@@ -346,6 +346,11 @@ const requestedFlowRate = Number(routeParams.get('volume_flow_rate'));
 const expectedFlowRate = routeParams.has('volume_flow_rate') && Number.isFinite(requestedFlowRate)
   ? Math.max(0, Math.min(2.5, requestedFlowRate))
   : canonicalMacroPreset.flowRate ?? scenePreset.flowRate ?? null;
+const requestedReactionFuelScale = Number(routeParams.get('volume_reaction_fuel'));
+const expectedReactionFuelScale = routeParams.has('volume_reaction_fuel') && Number.isFinite(requestedReactionFuelScale)
+  ? Math.max(0, Math.min(1.5, requestedReactionFuelScale))
+  : 1;
+const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
   return routeParams.has(name) && Number.isFinite(requested)
@@ -652,6 +657,8 @@ async function main() {
     assert.ok(Math.abs((state.controls?.microdetail ?? 0) - expectedMicrodetail) < 0.001, 'microdetail route/control did not apply');
     assert.ok(Math.abs((state.controls?.interfaceShred ?? 0) - expectedInterfaceShred) < 0.001, 'interface shred route/control did not apply');
     assert.ok(Math.abs((state.controls?.fireLicks ?? 0) - expectedFireLicks) < 0.001, 'fire licks route/control did not apply');
+    assert.ok(Math.abs((state.controls?.reactionFuelScale ?? 0) - expectedReactionFuelScale) < 0.001, 'reaction fuel route/control did not apply');
+    assert.ok(Math.abs((state.reactionFuelScale ?? 0) - expectedReactionFuelScale) < 0.001, 'effective reaction fuel scale did not reach debug state');
     assert.ok(Math.abs((state.controls?.windStrength ?? 0) - expectedWindStrength) < 0.001, 'wind strength route/control did not apply');
     assert.ok(Math.abs((state.windStrength ?? 0) - expectedWindStrength) < 0.001, 'effective wind strength state did not match route/control');
     assert.ok(Math.abs((state.controls?.windAngle ?? 0) - expectedWindAngle) < 0.001, 'wind direction route/control did not apply');
@@ -820,11 +827,45 @@ async function main() {
     if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.detailMean) || sample.simReadback.detailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show a transported fire layer: ${JSON.stringify(sample.simReadback)}`);
     }
-    if (!expectsCanonicalPlumeProof && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+    }
+    if (expectedVolumeScene === 'tall_plume') {
+      if (
+        !Number.isFinite(sample.simReadback.fuelMean) ||
+        !Number.isFinite(sample.simReadback.reactionMean) ||
+        !Number.isFinite(sample.simReadback.fuelConsumptionMean) ||
+        !Number.isFinite(sample.simReadback.fireFuelOverlapRatio)
+      ) {
+        throw new Error(`GPU sim readback does not expose tall-plume fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
+      if (expectsFuelStarvedTallPlume) {
+        if (
+          sample.simReadback.fireLayerMean > 0.0007 ||
+          sample.simReadback.radianceMean > 0.0007 ||
+          sample.simReadback.fuelMean > 0.004
+        ) {
+          throw new Error(`fuel-starved tall plume still carried fire/fuel: ${JSON.stringify({
+            fuelMean: sample.simReadback.fuelMean,
+            reactionMean: sample.simReadback.reactionMean,
+            fuelConsumptionMean: sample.simReadback.fuelConsumptionMean,
+            fireFuelOverlapRatio: sample.simReadback.fireFuelOverlapRatio,
+            fireLayerMean: sample.simReadback.fireLayerMean,
+            radianceMean: sample.simReadback.radianceMean,
+            extinctionMean: sample.simReadback.extinctionMean,
+          })}`);
+        }
+      } else if (
+        sample.simReadback.fuelMean <= 0.0005 ||
+        sample.simReadback.reactionMean <= 0.0005 ||
+        sample.simReadback.fuelConsumptionMean <= 0.00001 ||
+        sample.simReadback.fireFuelOverlapRatio <= 0.01
+      ) {
+        throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
+      }
     }
     if (
       expectedVolumeScene === 'bonfire_plume' &&
@@ -858,8 +899,8 @@ async function main() {
     if (expectsMicrodetailEvidence && (!Number.isFinite(sample.simReadback.microdetailMean) || sample.simReadback.microdetailMean <= 0.0005)) {
       throw new Error(`GPU sim readback does not show transported microdetail: ${JSON.stringify(sample.simReadback)}`);
     }
-    const expectsInterfaceShredEvidence = !expectsCanonicalPlumeProof && (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
-    const expectsFireLickEvidence = !expectsCanonicalPlumeProof && (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
+    const expectsInterfaceShredEvidence = !expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (state.controls?.interfaceShred ?? expectedInterfaceShred) > 0.01;
+    const expectsFireLickEvidence = !expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && (state.controls?.fireLicks ?? expectedFireLicks) > 0.01;
     const expectsBonfireVerticalTransport = expectedVolumeScene === 'bonfire_plume';
     if (expectsInterfaceShredEvidence && (!Number.isFinite(sample.simReadback.interfaceShredMean) || sample.simReadback.interfaceShredMean <= 0.00025)) {
       throw new Error(`GPU sim readback does not show interface shredding: ${JSON.stringify(sample.simReadback)}`);
@@ -1169,6 +1210,10 @@ async function main() {
       plumeHeightBins: sample.simReadback?.plumeHeightBins ?? [],
       smokeVisualRiseVelocity: sample.simReadback?.smokeVisualRiseVelocity ?? 0,
       fireVisualRiseVelocity: sample.simReadback?.fireVisualRiseVelocity ?? 0,
+      fuelMean: sample.simReadback?.fuelMean ?? 0,
+      reactionMean: sample.simReadback?.reactionMean ?? 0,
+      fuelConsumptionMean: sample.simReadback?.fuelConsumptionMean ?? 0,
+      fireFuelOverlapRatio: sample.simReadback?.fireFuelOverlapRatio ?? 0,
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
       risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
@@ -1229,6 +1274,10 @@ async function main() {
       ) {
         throw new Error(`blank frame or missing canonical smoke volume: ${JSON.stringify(metrics)}`);
       }
+    } else if (expectsFuelStarvedTallPlume) {
+      if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || visibleFirePixels > 220) {
+        throw new Error(`fuel-starved tall plume did not preserve smoke-only negative evidence: ${JSON.stringify(metrics)}`);
+      }
     } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
@@ -1283,6 +1332,7 @@ async function main() {
       detailScale: sample.detailScale,
       detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
+      reactionFuelScale: sample.reactionFuelScale,
       plumeHeight: sample.plumeHeight,
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,
@@ -1293,6 +1343,7 @@ async function main() {
       expectedDetailScale,
       expectedDetailScaleArtifactQuarantine,
       expectedVisibleDetailOverlayGain,
+      expectedReactionFuelScale,
       expectedPlumeHeight,
       expectedCurl,
       expectedMicrodetail,
@@ -1360,6 +1411,7 @@ async function main() {
       expectsCurlEvidence,
       expectsInterfaceShredEvidence,
       expectsFireLickEvidence,
+      expectsFuelStarvedTallPlume,
       expectsBonfireVerticalTransport,
       expectsBonfireZeroDrift,
       expectsBonfireConvectionProof,
