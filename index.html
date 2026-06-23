@@ -189,6 +189,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
+
+/* Motion agency */
+.motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.motion-readout .field { margin: 0; padding: 0; }
+.motion-clip-list { display: flex; flex-direction: column; gap: 6px; }
+.motion-clip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; background: #202020; border: 1px solid #303030; border-radius: 6px; }
+.motion-clip-title { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.motion-clip-meta { color: #666; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.motion-clip-intent { color: #a9b8d8; font: 9px 'SF Mono', monospace; border: 1px solid #2d3852; border-radius: 4px; padding: 2px 5px; background: #141a28; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -199,6 +208,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
@@ -440,6 +450,29 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="dof-maxblur" min="0" max="0.05" step="0.001" value="0.01">
         <span class="slider-val" id="dof-maxblur-val">0.01</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Motion Tab -->
+  <div class="tab-content" id="tab-motion">
+    <h2>Motion Agency</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_motion_agency=1</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="motion-route-id">procedural-orb-motion-grammar-v0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="motion-enable">Spawn Orbs</button>
+        <button class="btn" id="motion-frame-camera">Frame</button>
+      </div>
+    </div>
+    <div class="panel motion-readout">
+      <div class="field"><span class="field-key">Actors</span><span class="field-val" id="motion-actor-count">0</span></div>
+      <div class="field"><span class="field-key">Fallbacks</span><span class="field-val" id="motion-fallback-count">0</span></div>
+      <div class="field"><span class="field-key">Frame</span><span class="field-val" id="motion-frame-count">0</span></div>
+      <div class="field"><span class="field-key">Max effort</span><span class="field-val" id="motion-max-effort">0.00</span></div>
+    </div>
+    <h2>Procedural Clips</h2>
+    <div class="panel">
+      <div class="motion-clip-list" id="motion-clip-list"></div>
     </div>
   </div>
 
@@ -697,6 +730,13 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
+  DEFAULT_MOTION_CLIPS,
+  MOTION_ROUTE_IDENTITY,
+  buildMotionActorFixture,
+  motionClipById,
+  sampleMotionClip,
+} from './motion-core.js';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -738,6 +778,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let motionAgencyState = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3137,6 +3178,211 @@ window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
+function renderMotionClipList() {
+  const list = document.getElementById('motion-clip-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const clip of DEFAULT_MOTION_CLIPS) {
+    const row = document.createElement('div');
+    row.className = 'motion-clip-row';
+    row.innerHTML = `
+      <div>
+        <div class="motion-clip-title">${escapeHtml(clip.label || clip.id)}</div>
+        <div class="motion-clip-meta">${escapeHtml(clip.id)} · ${Number(clip.duration).toFixed(1)}s · ${clip.source || 'procedural'}</div>
+      </div>
+      <div class="motion-clip-intent">${escapeHtml(clip.intent || 'unspecified')}</div>
+    `;
+    list.appendChild(row);
+  }
+}
+
+function disposeMotionAgencyScene() {
+  if (!motionAgencyState?.root) return;
+  scene.remove(motionAgencyState.root);
+  motionAgencyState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
+      else object.material.dispose?.();
+    }
+  });
+}
+
+function frameMotionAgencyCamera() {
+  if (!camera || !controls) return;
+  camera.position.set(0.25, 2.1, 5.3);
+  controls.target.set(0.05, 0.15, 0.15);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+function updateMotionAgencyReadout() {
+  const debug = window.kaminosMotionAgencyDebugState?.();
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  };
+  setText('motion-actor-count', debug?.actorCount ?? 0);
+  setText('motion-fallback-count', debug?.fallbackCount ?? 0);
+  setText('motion-frame-count', debug?.frameCount ?? 0);
+  setText('motion-max-effort', Number(debug?.maxEffort || 0).toFixed(2));
+}
+
+function createMotionAgencyFixtureScene({ force = false } = {}) {
+  if (motionAgencyState?.active && !force) return motionAgencyState;
+  disposeMotionAgencyScene();
+  const fixture = buildMotionActorFixture();
+  const root = new THREE.Group();
+  root.name = 'motion-agency-root';
+  root.userData.kaminosMotionAgency = {
+    route: MOTION_ROUTE_IDENTITY,
+    fixtureSource: fixture.fixtureSource,
+  };
+
+  const targetMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf0d28a,
+    emissive: 0x2d1f08,
+    roughness: 0.35,
+    metalness: 0.2,
+  });
+  const target = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), targetMaterial);
+  target.name = 'motion-agency-attention-target';
+  target.position.set(0, 0.2, 0.6);
+  root.add(target);
+
+  const orbitRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.05, 0.006, 8, 96),
+    new THREE.MeshBasicMaterial({ color: 0x5a4d2b, transparent: true, opacity: 0.55 })
+  );
+  orbitRing.name = 'motion-agency-orbit-ring';
+  orbitRing.rotation.x = Math.PI / 2;
+  root.add(orbitRing);
+
+  const actorVisuals = fixture.actors.map(actor => {
+    const color = new THREE.Color(actor.color || '#d8c38e');
+    const group = new THREE.Group();
+    group.name = actor.id;
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color.clone().multiplyScalar(0.18),
+      roughness: 0.32,
+      metalness: 0.18,
+    });
+    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 32, 18), bodyMaterial);
+    body.name = `${actor.id}-body`;
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 8), eyeMaterial);
+    eye.name = `${actor.id}-attention-dot`;
+    group.add(body);
+    group.add(eye);
+    root.add(group);
+    return {
+      actor,
+      clip: motionClipById(actor.effectiveClipId),
+      group,
+      body,
+      eye,
+      baseColor: color,
+    };
+  });
+
+  scene.add(root);
+  motionAgencyState = {
+    schema: 'kaminos.motion-agency-route.v0',
+    active: true,
+    route: MOTION_ROUTE_IDENTITY,
+    fixture,
+    root,
+    actorVisuals,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+    maxEffort: 0,
+    lastActors: [],
+  };
+  renderMotionClipList();
+  updateMotionAgencyFrame(performance.now() / 1000);
+  updateMotionAgencyReadout();
+  frameMotionAgencyCamera();
+  setInfo('Motion agency fixture spawned');
+  return motionAgencyState;
+}
+
+function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
+  if (!motionAgencyState?.active) return false;
+  const localTime = nowSeconds - motionAgencyState.startedAt;
+  motionAgencyState.frameCount += 1;
+  const nextActors = [];
+  for (const visual of motionAgencyState.actorVisuals) {
+    const sample = sampleMotionClip(visual.clip, localTime);
+    const rootPosition = new THREE.Vector3(
+      visual.actor.origin[0] + sample.root[0],
+      visual.actor.origin[1] + sample.root[1] + 0.16,
+      visual.actor.origin[2] + sample.root[2],
+    );
+    const attention = new THREE.Vector3(
+      visual.actor.origin[0] + sample.attention[0],
+      visual.actor.origin[1] + sample.attention[1] + 0.16,
+      visual.actor.origin[2] + sample.attention[2],
+    );
+    const facing = new THREE.Vector3(...sample.facing).normalize();
+    visual.group.position.copy(rootPosition);
+    visual.group.lookAt(attention);
+    const effortScale = 0.9 + sample.effort * 0.34;
+    visual.body.scale.set(0.92 + sample.effort * 0.12, effortScale, 0.92 + sample.effort * 0.24);
+    visual.eye.position.copy(facing.multiplyScalar(0.18));
+    visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + sample.effort * 0.32);
+    motionAgencyState.maxEffort = Math.max(motionAgencyState.maxEffort, sample.effort);
+    nextActors.push({
+      id: visual.actor.id,
+      label: visual.actor.label,
+      requestedClipId: visual.actor.requestedClipId,
+      effectiveClipId: visual.actor.effectiveClipId,
+      fallbackUsed: visual.actor.fallbackUsed,
+      fallbackReason: visual.actor.fallbackReason,
+      intent: visual.actor.effectiveClipIntent,
+      root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
+      facing: sample.facing.map(value => Number(value.toFixed(5))),
+      attention: attention.toArray().map(value => Number(value.toFixed(5))),
+      effort: Number(sample.effort.toFixed(5)),
+      scale: Number(sample.scale.toFixed(5)),
+      color: visual.actor.color,
+    });
+  }
+  motionAgencyState.lastActors = nextActors;
+  updateMotionAgencyReadout();
+  return true;
+}
+
+function initKaminosMotionAgencyRoute() {
+  renderMotionClipList();
+  document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
+  document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('kaminos_motion_agency')) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
+    createMotionAgencyFixtureScene();
+  }
+}
+
+window.kaminosMotionAgencyDebugState = function() {
+  const state = motionAgencyState;
+  const resolution = state?.fixture?.routeResolution || null;
+  return {
+    schema: 'kaminos.motion-agency-debug.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    active: !!state?.active,
+    actorCount: state?.actorVisuals?.length || 0,
+    clipSource: state?.fixture?.fixtureSource || null,
+    requestedClipIds: resolution?.requestedClipIds || [],
+    effectiveClipIds: resolution?.effectiveClipIds || [],
+    fallbackCount: resolution?.fallbackCount || 0,
+    frameCount: state?.frameCount || 0,
+    maxEffort: Number(state?.maxEffort || 0),
+    actors: state?.lastActors || [],
+  };
+};
+
 window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
@@ -3480,9 +3726,10 @@ async function initScene() {
     requestAnimationFrame(animate);
     controls.update();
     updateHybridSplatOverlayFrame();
+    const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -3497,7 +3744,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -7035,6 +7282,7 @@ initScene().then(() => {
     }
   });
   initKaminosVolumeRoute();
+  initKaminosMotionAgencyRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
