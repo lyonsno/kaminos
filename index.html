@@ -462,12 +462,57 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="volume-actions">
         <button class="btn" id="motion-enable">Spawn Orbs</button>
         <button class="btn" id="motion-phrase-enable">Decision</button>
+        <button class="btn" id="motion-controls-enable">Controls</button>
         <button class="btn" id="motion-frame-camera">Frame</button>
       </div>
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Phrase Route</span><span class="route-chip">kaminos_motion_phrase=1</span></div>
       <div class="field"><span class="field-key">Target</span><span class="field-val">notice-prepare-commit-recover</span></div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
+      <div class="volume-actions" id="motion-control-presets"></div>
+      <div class="slider-row">
+        <span class="slider-label">Mass</span>
+        <input type="range" id="motion-control-mass" min="0.2" max="4" step="0.01" value="1.45">
+        <span class="slider-val" id="motion-control-mass-val">1.45</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Commit</span>
+        <input type="range" id="motion-control-commitment" min="0" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-commitment-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Anticipate</span>
+        <input type="range" id="motion-control-anticipation" min="0" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-anticipation-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Hold</span>
+        <input type="range" id="motion-control-hold" min="0.2" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-hold-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Effort</span>
+        <input type="range" id="motion-control-effort" min="0" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-effort-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Overshoot</span>
+        <input type="range" id="motion-control-overshoot" min="0" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-overshoot-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Recover</span>
+        <input type="range" id="motion-control-recovery" min="0.2" max="2.5" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-recovery-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Tempo</span>
+        <input type="range" id="motion-control-tempo" min="0.25" max="3" step="0.01" value="1">
+        <span class="slider-val" id="motion-control-tempo-val">1.00</span>
+      </div>
     </div>
     <div class="panel motion-readout">
       <div class="field"><span class="field-key">Actors</span><span class="field-val" id="motion-actor-count">0</span></div>
@@ -736,11 +781,16 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
+  DEFAULT_MOTION_PHRASE_CONTROLS,
+  DEFAULT_MOTION_PHRASE_CONTROL_PRESETS,
   DEFAULT_MOTION_CLIPS,
   MOTION_ROUTE_IDENTITY,
+  applyMotionPhraseControls,
   buildMotionActorFixture,
   buildMotionDecisionComparison,
+  buildMotionPhraseControlHarness,
   motionClipById,
+  normalizeMotionPhraseControls,
   sampleMotionClip,
   sampleMotionPlan,
 } from './motion-core.js';
@@ -788,6 +838,7 @@ let volumePrototype = null;
 let volumeBridge = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
+let motionPhraseControlState = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3231,6 +3282,19 @@ function disposeMotionDecisionScene() {
   motionDecisionState.active = false;
 }
 
+function disposeMotionPhraseControlScene() {
+  if (!motionPhraseControlState?.root) return;
+  scene.remove(motionPhraseControlState.root);
+  motionPhraseControlState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
+      else object.material.dispose?.();
+    }
+  });
+  motionPhraseControlState.active = false;
+}
+
 function frameMotionAgencyCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
@@ -3240,8 +3304,11 @@ function frameMotionAgencyCamera() {
 }
 
 function updateMotionAgencyReadout() {
+  const phraseControlDebug = window.kaminosMotionPhraseControlDebugState?.();
   const decisionDebug = window.kaminosMotionDecisionDebugState?.();
-  const debug = decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.();
+  const debug = phraseControlDebug?.active
+    ? phraseControlDebug
+    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.());
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
@@ -3254,6 +3321,7 @@ function updateMotionAgencyReadout() {
 
 function createMotionAgencyFixtureScene({ force = false } = {}) {
   if (motionAgencyState?.active && !force) return motionAgencyState;
+  disposeMotionPhraseControlScene();
   disposeMotionDecisionScene();
   disposeMotionAgencyScene();
   const fixture = buildMotionActorFixture();
@@ -3372,6 +3440,7 @@ function makeMotionDecisionVisual({ id, label, color, origin, plan }) {
 function createMotionDecisionComparisonScene({ force = false } = {}) {
   if (motionDecisionState?.active && !force) return motionDecisionState;
   disposeMotionAgencyScene();
+  disposeMotionPhraseControlScene();
   disposeMotionDecisionScene();
   const comparison = buildMotionDecisionComparison({ duration: DEFAULT_DECISION_MOTION_PLAN.duration, fps: 12 });
   const root = new THREE.Group();
@@ -3431,6 +3500,138 @@ function createMotionDecisionComparisonScene({ force = false } = {}) {
   frameMotionAgencyCamera();
   setInfo('Motion phrase decision comparison spawned');
   return motionDecisionState;
+}
+
+const MOTION_PHRASE_CONTROL_KEYS = ['mass', 'commitment', 'anticipation', 'hold', 'effort', 'overshoot', 'recovery', 'tempo'];
+
+function motionPhraseControlsFromInputs(source = 'ui') {
+  const controls = { source };
+  for (const key of MOTION_PHRASE_CONTROL_KEYS) {
+    const input = document.getElementById(`motion-control-${key}`);
+    controls[key] = Number(input?.value ?? DEFAULT_MOTION_PHRASE_CONTROLS[key]);
+  }
+  return normalizeMotionPhraseControls(controls);
+}
+
+function setMotionPhraseControlInputs(controls) {
+  const effective = normalizeMotionPhraseControls(controls);
+  for (const key of MOTION_PHRASE_CONTROL_KEYS) {
+    const input = document.getElementById(`motion-control-${key}`);
+    const val = document.getElementById(`motion-control-${key}-val`);
+    if (input) input.value = String(effective[key]);
+    if (val) val.textContent = Number(effective[key]).toFixed(2);
+  }
+  return effective;
+}
+
+function updateMotionPhraseControlLabels() {
+  for (const key of MOTION_PHRASE_CONTROL_KEYS) {
+    const input = document.getElementById(`motion-control-${key}`);
+    const val = document.getElementById(`motion-control-${key}-val`);
+    if (input && val) val.textContent = Number(input.value).toFixed(2);
+  }
+}
+
+function renderMotionPhraseControlPresets() {
+  const host = document.getElementById('motion-control-presets');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const preset of DEFAULT_MOTION_PHRASE_CONTROL_PRESETS) {
+    const button = document.createElement('button');
+    button.className = 'btn';
+    button.textContent = preset.label;
+    button.addEventListener('click', () => {
+      setMotionPhraseControlInputs(preset.controls);
+      refreshMotionPhraseControlledPlan(preset.controls);
+      createMotionPhraseControlHarnessScene({ force: true });
+    });
+    host.appendChild(button);
+  }
+}
+
+function currentMotionPhraseControlledPlan(controls = motionPhraseControlsFromInputs()) {
+  return applyMotionPhraseControls(DEFAULT_DECISION_MOTION_PLAN, controls);
+}
+
+function refreshMotionPhraseControlledPlan(controls = motionPhraseControlsFromInputs()) {
+  if (!motionPhraseControlState) return null;
+  const controlled = currentMotionPhraseControlledPlan(controls);
+  const simulation = buildMotionPhraseControlHarness({
+    presets: [{
+      id: 'live_controlled',
+      label: 'Live Controlled',
+      color: '#ff7a66',
+      controls: controlled.effectiveControls,
+    }],
+    duration: controlled.plan.duration,
+    fps: 12,
+  }).variants[0].simulation;
+  motionPhraseControlState.controlled = controlled;
+  motionPhraseControlState.metrics = simulation.metrics;
+  motionPhraseControlState.visual.plan = controlled.plan;
+  motionPhraseControlState.duration = controlled.plan.duration;
+  motionPhraseControlState.harness = buildMotionPhraseControlHarness({ duration: 7.2, fps: 12 });
+  updateMotionAgencyReadout();
+  return controlled;
+}
+
+function createMotionPhraseControlHarnessScene({ force = false } = {}) {
+  if (motionPhraseControlState?.active && !force) return motionPhraseControlState;
+  disposeMotionAgencyScene();
+  disposeMotionDecisionScene();
+  disposeMotionPhraseControlScene();
+  const effectiveControls = setMotionPhraseControlInputs(motionPhraseControlsFromInputs());
+  const controlled = currentMotionPhraseControlledPlan(effectiveControls);
+  const harness = buildMotionPhraseControlHarness({ duration: 7.2, fps: 12 });
+  const root = new THREE.Group();
+  root.name = 'motion-phrase-control-harness-root';
+  root.userData.kaminosMotionPhraseControl = {
+    route: MOTION_ROUTE_IDENTITY,
+    planId: DEFAULT_DECISION_MOTION_PLAN.id,
+    controlsSchema: effectiveControls.schema,
+  };
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.6, 3.0, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x18140d, transparent: true, opacity: 0.26, side: THREE.DoubleSide })
+  );
+  floor.name = 'motion-phrase-control-floor';
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.012, 0.25);
+  root.add(floor);
+
+  const visual = makeMotionDecisionVisual({
+    id: 'live-phrase-control',
+    label: 'Live Phrase Control',
+    color: '#ff7a66',
+    origin: [0, 0, 0],
+    plan: controlled.plan,
+  });
+  root.add(visual.group);
+  root.add(visual.target);
+
+  scene.add(root);
+  motionPhraseControlState = {
+    schema: 'kaminos.motion-phrase-control-route.v0',
+    active: true,
+    route: MOTION_ROUTE_IDENTITY,
+    root,
+    visual,
+    controlled,
+    harness,
+    metrics: harness.variants.find(variant => variant.id === 'sharp_aggressive')?.metrics || null,
+    duration: controlled.plan.duration,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+    maxEffort: 0,
+    lastActors: [],
+  };
+  refreshMotionPhraseControlledPlan(effectiveControls);
+  updateMotionPhraseControlFrame(performance.now() / 1000);
+  updateMotionAgencyReadout();
+  frameMotionAgencyCamera();
+  setInfo('Motion phrase control harness spawned');
+  return motionPhraseControlState;
 }
 
 function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
@@ -3539,16 +3740,85 @@ function updateMotionDecisionFrame(nowSeconds = performance.now() / 1000) {
   return true;
 }
 
+function updateMotionPhraseControlFrame(nowSeconds = performance.now() / 1000) {
+  if (!motionPhraseControlState?.active) return false;
+  const state = motionPhraseControlState;
+  const visual = state.visual;
+  const duration = Math.max(0.1, state.duration || state.controlled.plan.duration);
+  const localTime = (nowSeconds - state.startedAt) % duration;
+  state.frameCount += 1;
+  const sample = sampleMotionPlan(visual.plan, localTime);
+  const rootPosition = new THREE.Vector3(
+    visual.origin[0] + sample.root[0],
+    visual.origin[1] + sample.root[1] + 0.2,
+    visual.origin[2] + sample.root[2],
+  );
+  const attention = new THREE.Vector3(
+    visual.origin[0] + sample.attention[0],
+    visual.origin[1] + sample.attention[1] + 0.18,
+    visual.origin[2] + sample.attention[2],
+  );
+  const facing = new THREE.Vector3(...sample.facing).normalize();
+  visual.group.position.copy(rootPosition);
+  visual.group.lookAt(attention);
+  const effort = sample.effort;
+  visual.body.scale.set(
+    sample.phase === 'anticipate' ? 1.1 : 0.94 + effort * 0.08,
+    sample.phase === 'commit' ? 1.04 + effort * 0.28 : 0.92 + effort * 0.12,
+    0.92 + effort * 0.2,
+  );
+  visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
+  visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
+  visual.target.scale.setScalar(sample.phase === 'notice' || sample.phase === 'anticipate' ? 1.35 : 1);
+  for (let i = 0; i < visual.trail.length; i++) {
+    const trailTime = Math.max(0, localTime - (i + 1) * 0.12);
+    const trailSample = sampleMotionPlan(visual.plan, trailTime);
+    const dot = visual.trail[i];
+    dot.visible = true;
+    dot.position.set(
+      trailSample.root[0] - sample.root[0],
+      trailSample.root[1] - sample.root[1],
+      trailSample.root[2] - sample.root[2],
+    );
+    dot.material.opacity = Math.max(0.04, 0.26 - i * 0.026);
+  }
+  state.maxEffort = Math.max(state.maxEffort, effort);
+  state.lastActors = [{
+    id: visual.id,
+    label: visual.label,
+    planId: visual.plan.id,
+    intent: visual.plan.intent,
+    phase: sample.phase,
+    root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
+    facing: sample.facing.map(value => Number(value.toFixed(5))),
+    attention: attention.toArray().map(value => Number(value.toFixed(5))),
+    effort: Number(effort.toFixed(5)),
+    scale: Number(sample.scale.toFixed(5)),
+    color: visual.color,
+  }];
+  updateMotionAgencyReadout();
+  return true;
+}
+
 function initKaminosMotionAgencyRoute() {
   renderMotionClipList();
+  renderMotionPhraseControlPresets();
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
+  document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
+  for (const key of MOTION_PHRASE_CONTROL_KEYS) {
+    document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
+      updateMotionPhraseControlLabels();
+      if (motionPhraseControlState?.active) refreshMotionPhraseControlledPlan(motionPhraseControlsFromInputs('ui'));
+    });
+  }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase')) {
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_motion_phrase')) createMotionDecisionComparisonScene();
+    if (params.has('kaminos_motion_phrase_controls')) createMotionPhraseControlHarnessScene();
+    else if (params.has('kaminos_motion_phrase')) createMotionDecisionComparisonScene();
     else createMotionAgencyFixtureScene();
   }
 }
@@ -3595,6 +3865,39 @@ window.kaminosMotionDecisionDebugState = function() {
         metrics: comparison.phrased.metrics,
       },
       filmstripFrames: comparison.filmstrip.length,
+    },
+    actors: state?.lastActors || [],
+  };
+};
+
+window.kaminosMotionPhraseControlDebugState = function() {
+  const state = motionPhraseControlState;
+  const harness = state?.harness || buildMotionPhraseControlHarness({ duration: 7.2, fps: 12 });
+  const controlled = state?.controlled || currentMotionPhraseControlledPlan(DEFAULT_MOTION_PHRASE_CONTROLS);
+  return {
+    schema: 'kaminos.motion-phrase-control-debug.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    active: !!state?.active,
+    actorCount: state?.active ? 1 : 0,
+    fallbackCount: 0,
+    frameCount: state?.frameCount || 0,
+    maxEffort: Number(state?.maxEffort || 0),
+    planId: controlled.plan.id,
+    basePlanId: controlled.basePlanId,
+    effectiveControls: controlled.effectiveControls,
+    phaseTimes: controlled.phaseTimes,
+    metrics: state?.metrics || null,
+    phraseControlHarness: {
+      schema: harness.schema,
+      route: harness.route,
+      basePlanId: harness.basePlanId,
+      variants: harness.variants.map(variant => ({
+        id: variant.id,
+        label: variant.label,
+        effectiveControls: variant.effectiveControls,
+        metrics: variant.metrics,
+      })),
+      filmstripFrames: harness.filmstrip.length,
     },
     actors: state?.lastActors || [],
   };
@@ -3945,9 +4248,10 @@ async function initScene() {
     updateHybridSplatOverlayFrame();
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
+    const motionPhraseControlActive = updateMotionPhraseControlFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -3962,7 +4266,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }

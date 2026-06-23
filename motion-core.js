@@ -3,6 +3,7 @@ export const MOTION_ACTOR_SCHEMA = 'kaminos.motion-actors.v0';
 export const MOTION_SIMULATION_SCHEMA = 'kaminos.motion-simulation.v0';
 export const MOTION_WITNESS_SCHEMA = 'kaminos.motion-witness.v0';
 export const MOTION_PLAN_SCHEMA = 'kaminos.motion-plan.v0';
+export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 
 function clamp(value, min, max) {
@@ -207,6 +208,70 @@ export const DEFAULT_DECISION_MOTION_PLAN = {
   ],
 };
 
+export const DEFAULT_MOTION_PHRASE_CONTROLS = {
+  schema: MOTION_PHRASE_CONTROL_SCHEMA,
+  source: 'default',
+  mass: 1.45,
+  commitment: 1,
+  anticipation: 1,
+  hold: 1,
+  effort: 1,
+  overshoot: 1,
+  recovery: 1,
+  tempo: 1,
+};
+
+export const DEFAULT_MOTION_PHRASE_CONTROL_PRESETS = [
+  {
+    id: 'hesitant_curious',
+    label: 'Hesitant Curious',
+    color: '#9fe6bd',
+    controls: {
+      source: 'preset:hesitant_curious',
+      mass: 0.85,
+      commitment: 0.62,
+      anticipation: 1.65,
+      hold: 1.42,
+      effort: 0.74,
+      overshoot: 0.5,
+      recovery: 1.28,
+      tempo: 0.76,
+    },
+  },
+  {
+    id: 'heavy_deliberate',
+    label: 'Heavy Deliberate',
+    color: '#ffd166',
+    controls: {
+      source: 'preset:heavy_deliberate',
+      mass: 2.6,
+      commitment: 0.98,
+      anticipation: 1.08,
+      hold: 1.08,
+      effort: 1.42,
+      overshoot: 0.72,
+      recovery: 1.7,
+      tempo: 0.72,
+    },
+  },
+  {
+    id: 'sharp_aggressive',
+    label: 'Sharp Aggressive',
+    color: '#ff7a66',
+    controls: {
+      source: 'preset:sharp_aggressive',
+      mass: 0.72,
+      commitment: 1.68,
+      anticipation: 0.82,
+      hold: 0.68,
+      effort: 1.58,
+      overshoot: 1.6,
+      recovery: 0.64,
+      tempo: 1.45,
+    },
+  },
+];
+
 export function normalizeMotionClip(clip) {
   if (!clip || typeof clip !== 'object') throw new Error('Motion clip must be an object');
   const duration = Number(clip.duration);
@@ -331,6 +396,134 @@ export function buildMotionActorFixture({ actors = DEFAULT_MOTION_ACTORS, clips 
     })),
     actors: resolution.effectiveActors,
     routeResolution: resolution,
+  };
+}
+
+function controlNumber(controls, key, fallback, min, max) {
+  const value = Number(controls?.[key]);
+  return Number(clamp(Number.isFinite(value) ? value : fallback, min, max).toFixed(5));
+}
+
+export function normalizeMotionPhraseControls(controls = DEFAULT_MOTION_PHRASE_CONTROLS) {
+  return {
+    schema: controls.schema || MOTION_PHRASE_CONTROL_SCHEMA,
+    source: controls.source || 'custom',
+    mass: controlNumber(controls, 'mass', DEFAULT_MOTION_PHRASE_CONTROLS.mass, 0.2, 4),
+    commitment: controlNumber(controls, 'commitment', DEFAULT_MOTION_PHRASE_CONTROLS.commitment, 0, 2.5),
+    anticipation: controlNumber(controls, 'anticipation', DEFAULT_MOTION_PHRASE_CONTROLS.anticipation, 0, 2.5),
+    hold: controlNumber(controls, 'hold', DEFAULT_MOTION_PHRASE_CONTROLS.hold, 0.2, 2.5),
+    effort: controlNumber(controls, 'effort', DEFAULT_MOTION_PHRASE_CONTROLS.effort, 0, 2.5),
+    overshoot: controlNumber(controls, 'overshoot', DEFAULT_MOTION_PHRASE_CONTROLS.overshoot, 0, 2.5),
+    recovery: controlNumber(controls, 'recovery', DEFAULT_MOTION_PHRASE_CONTROLS.recovery, 0.2, 2.5),
+    tempo: controlNumber(controls, 'tempo', DEFAULT_MOTION_PHRASE_CONTROLS.tempo, 0.25, 3),
+  };
+}
+
+function poseToPlain(pose) {
+  return {
+    root: [...pose.root],
+    facing: [...pose.facing],
+    attention: [...pose.attention],
+    scale: pose.scale,
+    effort: pose.effort,
+  };
+}
+
+function scalePhraseDuration(phrase, controls) {
+  let phaseScale = 1;
+  if (phrase.phase === 'notice') phaseScale *= controls.hold;
+  if (phrase.phase === 'anticipate') phaseScale *= controls.hold * (0.85 + controls.anticipation * 0.12);
+  if (phrase.phase === 'commit') phaseScale *= clamp(1.18 - controls.commitment * 0.22, 0.68, 1.25);
+  if (phrase.phase === 'overshoot') phaseScale *= clamp(0.9 + controls.overshoot * 0.12, 0.78, 1.25);
+  if (phrase.phase === 'recover') phaseScale *= controls.recovery;
+  return Math.max(0.08, phrase.duration * phaseScale / controls.tempo);
+}
+
+function controlledPhrasePose(phrase, endpoint, controls) {
+  const pose = poseToPlain(endpoint);
+  const commitmentScale = 0.78 + controls.commitment * 0.34;
+  if (phrase.phase === 'anticipate' && endpoint === phrase.to) {
+    const reference = -0.4;
+    const depth = Math.max(0, reference - pose.root[2]);
+    pose.root[2] = reference - depth * controls.anticipation;
+    pose.root[1] *= 0.85 + controls.anticipation * 0.08;
+    pose.scale = Math.max(0.72, pose.scale - controls.anticipation * 0.035);
+    pose.effort *= 0.75 + controls.anticipation * 0.22;
+  }
+  if (phrase.phase === 'commit') {
+    if (endpoint === phrase.to) pose.root[2] *= commitmentScale;
+    pose.effort *= controls.effort * (0.82 + controls.commitment * 0.22);
+    pose.scale *= 0.95 + controls.effort * 0.07;
+  }
+  if (phrase.phase === 'overshoot') {
+    const commitTarget = 0.94 * commitmentScale;
+    if (endpoint === phrase.from) pose.root[2] = commitTarget;
+    if (endpoint === phrase.to) pose.root[2] = commitTarget + (1.28 - 0.94) * controls.overshoot;
+    pose.effort *= controls.effort * (0.78 + controls.overshoot * 0.14);
+  }
+  if (phrase.phase === 'recover') {
+    const commitTarget = 0.94 * commitmentScale;
+    if (endpoint === phrase.from) pose.root[2] = commitTarget + (1.28 - 0.94) * controls.overshoot;
+    if (endpoint === phrase.to) pose.root[2] = 0.58 + (controls.recovery - 1) * 0.08;
+    pose.effort *= controls.effort * (0.8 + controls.recovery * 0.08);
+  }
+  if (phrase.phase === 'notice') {
+    pose.effort *= 0.85 + controls.hold * 0.08;
+  }
+  return {
+    root: pose.root.map(value => Number(value.toFixed(5))),
+    facing: pose.facing.map(value => Number(value.toFixed(5))),
+    attention: pose.attention.map(value => Number(value.toFixed(5))),
+    scale: Number(pose.scale.toFixed(5)),
+    effort: Number(pose.effort.toFixed(5)),
+  };
+}
+
+function phaseTimesFromPlan(plan) {
+  return Object.fromEntries(plan.phrases.map(phrase => [
+    phrase.phase,
+    {
+      start: Number(phrase.start.toFixed(5)),
+      end: Number(phrase.end.toFixed(5)),
+      mid: Number(((phrase.start + phrase.end) * 0.5).toFixed(5)),
+      duration: Number(phrase.duration.toFixed(5)),
+    },
+  ]));
+}
+
+export function applyMotionPhraseControls(planInput = DEFAULT_DECISION_MOTION_PLAN, controlsInput = DEFAULT_MOTION_PHRASE_CONTROLS) {
+  const basePlan = normalizeMotionPlan(planInput);
+  const effectiveControls = normalizeMotionPhraseControls(controlsInput);
+  const phrases = basePlan.phrases.map(phrase => ({
+    phase: phrase.phase,
+    duration: scalePhraseDuration(phrase, effectiveControls),
+    easing: phrase.easing,
+    from: controlledPhrasePose(phrase, phrase.from, effectiveControls),
+    to: controlledPhrasePose(phrase, phrase.to, effectiveControls),
+  }));
+  const controlledDuration = phrases.reduce((sum, phrase) => sum + phrase.duration, 0);
+  const controlledPlan = normalizeMotionPlan({
+    schema: MOTION_PLAN_SCHEMA,
+    id: `${basePlan.id}__${String(effectiveControls.source).replace(/[^a-z0-9_:-]+/gi, '_')}`,
+    label: `${basePlan.label} / ${effectiveControls.source}`,
+    intent: basePlan.intent,
+    duration: controlledDuration,
+    source: 'procedural-phrase-controls-v0',
+    weight: {
+      mass: effectiveControls.mass,
+      anticipation: basePlan.weight.anticipation * effectiveControls.anticipation,
+      settle: basePlan.weight.settle * effectiveControls.recovery,
+      effortScale: basePlan.weight.effortScale * effectiveControls.effort,
+    },
+    phrases,
+  });
+  return {
+    schema: 'kaminos.motion-controlled-plan.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    basePlanId: basePlan.id,
+    effectiveControls,
+    plan: controlledPlan,
+    phaseTimes: phaseTimesFromPlan(controlledPlan),
   };
 }
 
@@ -592,6 +785,62 @@ export function buildMotionDecisionComparison({ duration = 7.2, fps = 12, filmst
       metrics: phrasedSimulation.metrics,
       simulation: phrasedSimulation,
     },
+    filmstrip,
+  };
+}
+
+export function buildMotionPhraseControlHarness({
+  basePlan = DEFAULT_DECISION_MOTION_PLAN,
+  presets = DEFAULT_MOTION_PHRASE_CONTROL_PRESETS,
+  duration,
+  fps = 12,
+  filmstripFrames = 7,
+} = {}) {
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const variants = presets.map((preset, index) => {
+    const controlled = applyMotionPhraseControls(basePlan, preset.controls);
+    const simDuration = Number.isFinite(Number(duration)) && Number(duration) > 0
+      ? Number(duration)
+      : controlled.plan.duration;
+    const simulation = simulateMotionPlan(controlled.plan, { duration: simDuration, fps: simFps });
+    return {
+      id: preset.id || `motion-control-variant-${index}`,
+      label: preset.label || preset.id || `Motion Variant ${index + 1}`,
+      color: preset.color || '#d8c38e',
+      controls: preset.controls,
+      effectiveControls: controlled.effectiveControls,
+      plan: controlled.plan,
+      phaseTimes: controlled.phaseTimes,
+      metrics: simulation.metrics,
+      simulation,
+    };
+  });
+  const maxFrames = Math.max(...variants.map(variant => variant.simulation.frames.length));
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), maxFrames));
+  const origins = variants.map((_, index) => [(index - (variants.length - 1) * 0.5) * 1.35, 0, 0]);
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (maxFrames - 1) / (count - 1))
+  ));
+  const filmstrip = frameIndexes.map(index => ({
+    frameIndex: index,
+    t: Number((index / simFps).toFixed(5)),
+    actors: variants.map((variant, variantIndex) => {
+      const sample = variant.simulation.frames[Math.min(index, variant.simulation.frames.length - 1)]?.sample
+        || sampleMotionPlan(variant.plan, index / simFps);
+      return comparisonActorSample({
+        id: variant.id,
+        label: variant.label,
+        intent: variant.plan.intent,
+        color: variant.color,
+      }, sample, origins[variantIndex]);
+    }),
+  }));
+  return {
+    schema: 'kaminos.motion-phrase-control-harness.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    basePlanId: normalizeMotionPlan(basePlan).id,
+    fps: simFps,
+    variants,
     filmstrip,
   };
 }

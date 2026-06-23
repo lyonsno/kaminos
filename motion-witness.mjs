@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 
 import {
   buildMotionDecisionComparison,
+  buildMotionPhraseControlHarness,
   buildMotionWitnessTimeline,
 } from './motion-core.js';
 
@@ -17,6 +18,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_motion_agency=1';
 const isPhraseRoute = url.includes('kaminos_motion_phrase=1');
+const isPhraseControlRoute = url.includes('kaminos_motion_phrase_controls=1');
 const out = resolve(args.get('--out') || '/tmp/kaminos-motion-agency-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const filmstripPath = resolve(args.get('--filmstrip') || out.replace(/\.png$/i, '-filmstrip.png'));
@@ -226,11 +228,26 @@ try {
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
 
   phase = 'rendering-filmstrip';
-  const timeline = isPhraseRoute
-    ? buildMotionDecisionComparison({ duration: 7.2, fps: 12, filmstripFrames: 7 })
-    : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 });
+  const timeline = isPhraseControlRoute
+    ? buildMotionPhraseControlHarness({ duration: 7.2, fps: 12, filmstripFrames: 7 })
+    : (isPhraseRoute
+      ? buildMotionDecisionComparison({ duration: 7.2, fps: 12, filmstripFrames: 7 })
+      : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 }));
   const filmstrip = drawFilmstrip(timeline, filmstripPath);
-  if (isPhraseRoute) {
+  if (isPhraseControlRoute) {
+    lastEvidence.phraseControlHarness = {
+      schema: timeline.schema,
+      route: timeline.route,
+      basePlanId: timeline.basePlanId,
+      variants: timeline.variants.map(variant => ({
+        id: variant.id,
+        label: variant.label,
+        effectiveControls: variant.effectiveControls,
+        metrics: variant.metrics,
+      })),
+      filmstrip,
+    };
+  } else if (isPhraseRoute) {
     lastEvidence.decisionComparison = {
       schema: timeline.schema,
       route: timeline.route,
@@ -284,15 +301,32 @@ try {
   phase = 'settling-route';
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
-  const routeParam = isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1';
+  const routeParam = isPhraseControlRoute
+    ? 'kaminos_motion_phrase_controls=1'
+    : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1');
   if (!effectiveUrl.includes(routeParam)) throw new Error(`effective URL lost motion route ${routeParam}: ${effectiveUrl}`);
-  const debugExpression = isPhraseRoute
-    ? 'window.kaminosMotionDecisionDebugState?.()'
-    : 'window.kaminosMotionAgencyDebugState?.()';
+  const debugExpression = isPhraseControlRoute
+    ? 'window.kaminosMotionPhraseControlDebugState?.()'
+    : (isPhraseRoute
+      ? 'window.kaminosMotionDecisionDebugState?.()'
+      : 'window.kaminosMotionAgencyDebugState?.()');
   const debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
   lastEvidence.debug = debug;
   if (debug?.route !== 'procedural-orb-motion-grammar-v0') throw new Error(`motion route identity mismatch: ${JSON.stringify(debug)}`);
-  if (isPhraseRoute) {
+  if (isPhraseControlRoute) {
+    const phraseControlHarness = debug?.phraseControlHarness;
+    if (!debug?.active || debug.actorCount < 1) throw new Error(`motion phrase-control route did not spawn controlled actor: ${JSON.stringify(debug)}`);
+    if (phraseControlHarness?.schema !== 'kaminos.motion-phrase-control-harness.v0') throw new Error(`motion phrase-control route lost harness schema: ${JSON.stringify(debug)}`);
+    if (debug.effectiveControls?.schema !== 'kaminos.motion-phrase-controls.v0') throw new Error(`motion phrase-control route lost effectiveControls: ${JSON.stringify(debug)}`);
+    const hesitant = phraseControlHarness.variants?.find(variant => variant.id === 'hesitant_curious');
+    const sharp = phraseControlHarness.variants?.find(variant => variant.id === 'sharp_aggressive');
+    if (!(hesitant?.metrics?.anticipationDepth > sharp?.metrics?.anticipationDepth)) {
+      throw new Error(`motion phrase-control route lost hesitant anticipation advantage: ${JSON.stringify(debug)}`);
+    }
+    if (!(sharp?.metrics?.overshootDistance > hesitant?.metrics?.overshootDistance)) {
+      throw new Error(`motion phrase-control route lost sharp overshoot advantage: ${JSON.stringify(debug)}`);
+    }
+  } else if (isPhraseRoute) {
     const decisionComparison = debug?.decisionComparison;
     if (!debug?.active || debug.actorCount < 2) throw new Error(`motion phrase route did not spawn comparison actors: ${JSON.stringify(debug)}`);
     if (decisionComparison?.schema !== 'kaminos.motion-decision-comparison.v0') throw new Error(`motion phrase route lost comparison schema: ${JSON.stringify(debug)}`);
@@ -325,6 +359,8 @@ try {
     effectiveClipIds: debug.effectiveClipIds || [],
     fallbackCount: debug.fallbackCount || 0,
     decisionComparison: debug.decisionComparison || lastEvidence.decisionComparison || null,
+    phraseControlHarness: debug.phraseControlHarness || lastEvidence.phraseControlHarness || null,
+    effectiveControls: debug.effectiveControls || null,
     debug,
     timeline: lastEvidence.timeline,
   });
