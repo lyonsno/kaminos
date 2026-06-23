@@ -61,6 +61,39 @@ const VOLUME_SCENE_PRESETS = {
     windHeight: 0.15,
   },
 };
+const TALL_PLUME_OPERATOR_PRESETS = {
+  operator_fire_0622: {
+    volumeScene: 'tall_plume',
+    density: 3.05,
+    fire: 0.10,
+    radiance: 2.90,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.30,
+    microdetail: 0.00,
+    interfaceShred: 1.55,
+    fireLicks: 3.25,
+    projection: 0.25,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 0.00,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.35,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.42,
+    detailScale: 1.60,
+    plumeHeight: 0.70,
+    windStrength: 0.00,
+    windAngle: 180,
+    windHeight: -0.80,
+    renderScale: 0.95,
+  },
+};
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
@@ -157,7 +190,12 @@ function canonicalSourceDefaults(mode) {
   if (normalized === 'buoyant_bottom') return { sourceY: -0.82, injection: 0.00, buoyancy: 1.00 };
   return { sourceY: -0.74, injection: 1.00, buoyancy: 1.00 };
 }
-const requestedVolumeScene = routeParams.get('volume_scene') || 'compact_plume';
+const requestedTallPlumePreset = routeParams.get('volume_tall_preset') || '';
+const expectedTallPlumePreset = Object.hasOwn(TALL_PLUME_OPERATOR_PRESETS, requestedTallPlumePreset)
+  ? requestedTallPlumePreset
+  : '';
+const tallPlumePreset = TALL_PLUME_OPERATOR_PRESETS[expectedTallPlumePreset] || {};
+const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.volumeScene || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
   : 'compact_plume';
@@ -167,7 +205,10 @@ const fieldSliceOut = args.has('--field-slice')
   : expectsCanonicalPlumeProof
     ? resolve(out.replace(/\.png$/i, '.field-slice.png'))
     : '';
-const scenePreset = VOLUME_SCENE_PRESETS[expectedVolumeScene] || {};
+const scenePreset = {
+  ...(VOLUME_SCENE_PRESETS[expectedVolumeScene] || {}),
+  ...(tallPlumePreset.volumeScene === expectedVolumeScene ? tallPlumePreset : {}),
+};
 const requestedCanonicalMacroPreset = routeParams.get('volume_canonical_preset') || '';
 const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESETS, requestedCanonicalMacroPreset)
   ? requestedCanonicalMacroPreset
@@ -212,27 +253,27 @@ const presetBudget = RAY_BUDGET_PRESETS[rayBudgetPreset] || null;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
 const expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
   ? Math.max(24, Math.min(160, requestedRaySteps))
-  : presetBudget?.raySteps ?? canonicalMacroPreset.raySteps ?? 96;
+  : presetBudget?.raySteps ?? canonicalMacroPreset.raySteps ?? scenePreset.raySteps ?? 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
 const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
-  : presetBudget?.adaptiveRays ?? canonicalMacroPreset.adaptiveRays ?? 0.65;
+  : presetBudget?.adaptiveRays ?? canonicalMacroPreset.adaptiveRays ?? scenePreset.adaptiveRays ?? 0.65;
 const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
 const expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
-  : canonicalMacroPreset.occupancySkip ?? 0.35;
+  : canonicalMacroPreset.occupancySkip ?? scenePreset.occupancySkip ?? 0.35;
 const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
 const expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
   ? Math.max(0, Math.min(1, requestedMajorantSkip))
-  : canonicalMacroPreset.majorantSkip ?? 0.70;
+  : canonicalMacroPreset.majorantSkip ?? scenePreset.majorantSkip ?? 0.70;
 const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
 const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
   ? Math.max(0, Math.min(1, requestedMajorantSmooth))
-  : canonicalMacroPreset.majorantSmooth ?? 0.85;
+  : canonicalMacroPreset.majorantSmooth ?? scenePreset.majorantSmooth ?? 0.85;
 const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
 const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
   ? Math.max(0, Math.min(1, requestedMajorantGuard))
-  : canonicalMacroPreset.majorantGuard ?? 0.75;
+  : canonicalMacroPreset.majorantGuard ?? scenePreset.majorantGuard ?? 0.75;
 const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_stripe_ratio'));
 const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
   ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
@@ -242,15 +283,15 @@ const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_rat
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
 const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
   ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
-  : canonicalMacroPreset.temporalAccum ?? 0.25;
+  : canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
 const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
 const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
   ? Math.max(0, Math.min(1, requestedTemporalJitter))
-  : canonicalMacroPreset.temporalJitter ?? 0.85;
+  : canonicalMacroPreset.temporalJitter ?? scenePreset.temporalJitter ?? 0.85;
 const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
 const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
   ? Math.max(0, Math.min(1, requestedHistoryClamp))
-  : canonicalMacroPreset.historyClamp ?? 0.70;
+  : canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
 const requestedFireScale = Number(routeParams.get('volume_fire_scale'));
 const expectedFireScale = routeParams.has('volume_fire_scale') && Number.isFinite(requestedFireScale)
   ? Math.max(0.35, Math.min(1.3, requestedFireScale))
@@ -291,18 +332,20 @@ const requestedWindHeight = Number(routeParams.get('volume_wind_height'));
 const expectedWindHeight = routeParams.has('volume_wind_height') && Number.isFinite(requestedWindHeight)
   ? Math.max(-0.8, Math.min(0.8, requestedWindHeight))
   : scenePreset.windHeight ?? 0.15;
+const requestedWindDrift = routeParams.get('volume_expected_wind_drift') || '';
+const expectedWindDrift = ['left', 'right', 'none'].includes(requestedWindDrift) ? requestedWindDrift : '';
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
-  : canonicalMacroPreset.renderScale ?? 0.85;
+  : canonicalMacroPreset.renderScale ?? scenePreset.renderScale ?? 0.85;
 const requestedInputRadius = Number(routeParams.get('volume_input_radius'));
 const expectedInputRadius = routeParams.has('volume_input_radius') && Number.isFinite(requestedInputRadius)
   ? Math.max(0.08, Math.min(0.7, requestedInputRadius))
-  : canonicalMacroPreset.inputRadius ?? null;
+  : canonicalMacroPreset.inputRadius ?? scenePreset.inputRadius ?? null;
 const requestedFlowRate = Number(routeParams.get('volume_flow_rate'));
 const expectedFlowRate = routeParams.has('volume_flow_rate') && Number.isFinite(requestedFlowRate)
   ? Math.max(0, Math.min(2.5, requestedFlowRate))
-  : canonicalMacroPreset.flowRate ?? null;
+  : canonicalMacroPreset.flowRate ?? scenePreset.flowRate ?? null;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
   return routeParams.has(name) && Number.isFinite(requested)
@@ -823,6 +866,28 @@ async function main() {
     if (expectsCurlEvidence && (!Number.isFinite(sample.simReadback.curlMean) || sample.simReadback.curlMax <= 0.0005)) {
       throw new Error(`GPU sim readback does not show curl/vorticity evidence: ${JSON.stringify(sample.simReadback)}`);
     }
+    if (expectedWindDrift) {
+      const lateralX = sample.simReadback.plumeNetLateralVelocityX ?? 0;
+      const screenX = sample.volumeBounds?.screenDriftX ?? 0;
+      const fireScreenX = sample.fireBounds?.screenDriftX ?? 0;
+      const windEvidence = {
+        expectedWindDrift,
+        lateralX,
+        screenX,
+        fireScreenX,
+        windStrength: expectedWindStrength,
+        windAngle: expectedWindAngle,
+      };
+      if (expectedWindDrift === 'left' && !(lateralX < -0.010 || screenX < -0.030 || fireScreenX < -0.030)) {
+        throw new Error(`wind probe did not drift left: ${JSON.stringify(windEvidence)}`);
+      }
+      if (expectedWindDrift === 'right' && !(lateralX > 0.010 || screenX > 0.030 || fireScreenX > 0.030)) {
+        throw new Error(`wind probe did not drift right: ${JSON.stringify(windEvidence)}`);
+      }
+      if (expectedWindDrift === 'none' && (Math.abs(lateralX) > 0.140 || Math.abs(screenX) > 0.360)) {
+        throw new Error(`no-wind probe drifted too far for a control witness: ${JSON.stringify(windEvidence)}`);
+      }
+    }
     if (!Number.isFinite(sample.simReadback.divergenceMean) || !Number.isFinite(sample.simReadback.divergenceMax)) {
       throw new Error(`GPU sim readback does not show divergence/projection evidence: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -1216,6 +1281,8 @@ async function main() {
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,
       windHeight: sample.windHeight,
+      expectedTallPlumePreset,
+      expectedWindDrift,
       expectedFireScale,
       expectedDetailScale,
       expectedPlumeHeight,

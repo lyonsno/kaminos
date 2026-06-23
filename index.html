@@ -637,7 +637,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=honest-smoke-fire-bridge-0622';
+import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-wind-foothold-0622';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1412,6 +1412,41 @@ const VOLUME_SCENE_PRESETS = {
   },
 };
 
+const TALL_PLUME_OPERATOR_PRESETS = {
+  operator_fire_0622: {
+    label: 'operator fire 0622',
+    volumeScene: 'tall_plume',
+    density: 3.05,
+    fire: 0.10,
+    radiance: 2.90,
+    absorption: 2.00,
+    glow: 2.50,
+    smoke: 2.80,
+    curl: 2.30,
+    microdetail: 0.00,
+    interfaceShred: 1.55,
+    fireLicks: 3.25,
+    projection: 0.25,
+    speed: 5.00,
+    raySteps: 160,
+    adaptiveRays: 0.00,
+    occupancySkip: 0.00,
+    majorantSkip: 0.00,
+    majorantSmooth: 0.10,
+    majorantGuard: 0.30,
+    temporalAccum: 0.35,
+    temporalJitter: 0.00,
+    historyClamp: 1.00,
+    fireScale: 0.42,
+    detailScale: 1.60,
+    plumeHeight: 0.70,
+    windStrength: 0.00,
+    windAngle: 180,
+    windHeight: -0.80,
+    renderScale: 0.95,
+  },
+};
+
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     label: 'macro foothold 0621',
@@ -1659,6 +1694,22 @@ function applyVolumeScenePreset(scene, options = {}) {
   return normalizedScene;
 }
 
+function applyTallPlumeOperatorPreset(name, options = {}) {
+  const preset = TALL_PLUME_OPERATOR_PRESETS[name];
+  if (!preset) return false;
+  applyVolumeScenePreset(preset.volumeScene || 'tall_plume', { keepBudgetPreset: true });
+  for (const [key, value] of Object.entries(preset)) {
+    if (key === 'label' || key === 'volumeScene') continue;
+    setVolumeControlValue(volumeSceneControlId(key), formatVolumePresetControlValue(key, value));
+  }
+  if (!options.keepBudgetPreset) {
+    activeVolumeRayBudgetPreset = '';
+    routedVolumeRayBudgetPreset = '';
+  }
+  activeCanonicalVolumeMacroPreset = '';
+  return true;
+}
+
 function applyCanonicalVolumeMacroPreset(name) {
   const preset = CANONICAL_VOLUME_MACRO_PRESETS[name];
   if (!preset) return false;
@@ -1829,12 +1880,21 @@ function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
   const timing = s.timing || {};
+  const canonicalPlumeReadoutActive = s.volumeScene === 'canonical_plume';
+  const sceneContentLabel = (() => {
+    const fireActive = (s.controls?.fire ?? 0) > 0.001 || (s.controls?.radiance ?? 0) > 0.001 || (s.controls?.glow ?? 0) > 0.001;
+    const smokeActive = (s.controls?.smoke ?? 0) > 0.001 || (s.controls?.density ?? 0) > 0.001;
+    if (fireActive && smokeActive) return 'fire_smoke';
+    if (fireActive) return 'fire';
+    if (smokeActive) return 'smoke';
+    return 'empty';
+  })();
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-scene-state').textContent = s.volumeScene || 'compact_plume';
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
-  document.getElementById('volume-canonical-render-mode-state').textContent = s.canonicalPlumeControls?.renderMode || 'default';
-  document.getElementById('volume-canonical-motion-mode-state').textContent = s.canonicalPlumeControls?.motionMode || 'animated';
-  document.getElementById('volume-canonical-content-mode-state').textContent = s.canonicalPlumeControls?.contentMode || 'smoke';
+  document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
+  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : 'live';
+  document.getElementById('volume-canonical-content-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.contentMode || 'smoke') : sceneContentLabel;
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
   document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
@@ -1880,6 +1940,10 @@ async function initKaminosVolumeRoute() {
   const routeVolumeScene = params.get('volume_scene');
   if (routeVolumeScene) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
+  }
+  const routeTallPlumeOperatorPreset = params.get('volume_tall_preset');
+  if (routeTallPlumeOperatorPreset) {
+    applyTallPlumeOperatorPreset(routeTallPlumeOperatorPreset, { keepBudgetPreset: true });
   }
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
   if (routeCanonicalMacroPreset) {
