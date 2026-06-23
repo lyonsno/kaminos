@@ -205,6 +205,8 @@ assert.match(witness, /hybrid splat overlay made scene geometry transparent inst
 assert.match(witness, /editorXrayVisible/, 'Hybrid Renderer witness records the editor-xray visibility surface above the renderer overlay');
 assert.match(witness, /editorGizmoAxisCount/, 'Hybrid Renderer witness records projected editor-gizmo axes above the renderer overlay');
 assert.match(witness, /editorGizmoCropEdgeCount/, 'Hybrid Renderer witness records projected crop-box edges above the renderer overlay');
+assert.match(witness, /nativeGizmoSceneVisible/, 'Hybrid Renderer witness records whether the native Three helper is suppressed to prevent duplicate gizmos');
+assert.match(witness, /hybrid splat overlay left duplicate native editor gizmos visible/, 'Hybrid Renderer witness fails if native and projected editor gizmos are both visible');
 assert.match(witness, /hybrid splat overlay xray degraded to a text-only target badge/, 'Hybrid Renderer witness fails if editor xray regresses to the text-only target badge');
 assert.match(witness, /editorSovereign/, 'Hybrid Renderer witness records the explicit editor-sovereignty debug state');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');

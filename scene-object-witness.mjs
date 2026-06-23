@@ -2534,6 +2534,13 @@ async function runHybridSplatOverlayScenario(ws) {
         .filter(line => line.getAttribute('visibility') !== 'hidden');
       const visibleCropEdges = [...(editorGizmoSvg?.querySelectorAll('[data-role="crop-edge"]') || [])]
         .filter(line => line.getAttribute('visibility') !== 'hidden');
+      const axisLengths = visibleAxisLines.map(line => {
+        const x1 = Number.parseFloat(line.getAttribute('x1') || 'NaN');
+        const y1 = Number.parseFloat(line.getAttribute('y1') || 'NaN');
+        const x2 = Number.parseFloat(line.getAttribute('x2') || 'NaN');
+        const y2 = Number.parseFloat(line.getAttribute('y2') || 'NaN');
+        return Number.isFinite(x1 + y1 + x2 + y2) ? Math.hypot(x2 - x1, y2 - y1) : 0;
+      });
       const correctionMode = window.kaminosSplatCorrectionModeDebugState?.() || null;
       const transformBar = document.getElementById('transform-bar');
       const editorOverlay = {
@@ -2550,6 +2557,9 @@ async function runHybridSplatOverlayScenario(ws) {
         editorXrayMode: overlayDebug?.editorXray?.mode || null,
         editorGizmoAxisCount: visibleAxisLines.length,
         editorGizmoCropEdgeCount: visibleCropEdges.length,
+        editorGizmoMaxAxisLengthPx: axisLengths.length ? Math.max(...axisLengths) : 0,
+        nativeGizmoSceneVisible: overlayDebug?.nativeGizmoSceneVisible ?? null,
+        nativeGizmoMaterialCount: overlayDebug?.nativeGizmoMaterialCount ?? null,
         editorGizmoText: editorXrayHost?.textContent || '',
         editorGizmoDebug: overlayDebug?.editorXray || null,
       };
@@ -2625,8 +2635,12 @@ async function runHybridSplatOverlayScenario(ws) {
       || editorOverlay.editorXrayVisible !== true
       || editorOverlay.editorXrayMode !== 'editor-xray-target'
       || !(editorOverlay.editorGizmoAxisCount >= 3)
-      || !(editorOverlay.editorGizmoCropEdgeCount >= 8)) {
+      || !(editorOverlay.editorGizmoCropEdgeCount >= 8)
+      || !(editorOverlay.editorGizmoMaxAxisLengthPx >= 20 && editorOverlay.editorGizmoMaxAxisLengthPx <= 180)) {
     throw new Error(`hybrid splat overlay made scene geometry transparent instead of using editor xray: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (editorOverlay.nativeGizmoSceneVisible !== false || !(editorOverlay.nativeGizmoMaterialCount > 0)) {
+    throw new Error(`hybrid splat overlay left duplicate native editor gizmos visible: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (/transform target|correction target/i.test(editorOverlay.editorGizmoText || '')) {
     throw new Error(`hybrid splat overlay xray degraded to a text-only target badge: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);

@@ -151,6 +151,9 @@ assert.doesNotMatch(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas\
 assert.match(index, /id="hybrid-editor-xray-host"/, 'Hybrid Renderer overlay has a top editor-xray layer for gizmo/target affordance above the renderer canvas');
 assert.match(index, /class="hybrid-editor-gizmo-svg"/, 'Hybrid Renderer editor xray renders projected gizmo geometry instead of only a text target badge');
 assert.match(index, /function updateHybridEditorGizmoOverlay\(/, 'Hybrid Renderer editor sovereignty updates a projected gizmo overlay instead of fading the renderer canvas');
+assert.match(index, /const HYBRID_EDITOR_GIZMO_AXIS_DISTANCE_SCALE\s*=\s*0\.065/, 'Hybrid Renderer projected editor axes stay close to native TransformControls screen scale');
+assert.match(index, /function setNativeTransformGizmoSceneVisibility\(/, 'Hybrid Renderer editor xray suppresses the native helper render to avoid duplicate gizmos');
+assert.match(index, /nativeGizmoSceneVisible:\s*editorSovereignty\.nativeGizmoSceneVisible/, 'Hybrid Renderer debug state records native helper suppression while projected xray owns visible editor controls');
 assert.doesNotMatch(index, />transform target</, 'Hybrid Renderer editor xray must not degrade to a text-only transform target badge');
 assert.match(index, /data-role="axis-x"/, 'Hybrid Renderer editor xray draws the transform X axis above the renderer overlay');
 assert.match(index, /data-role="crop-edge"/, 'Hybrid Renderer editor xray draws crop-box edges above the renderer overlay');

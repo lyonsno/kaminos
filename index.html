@@ -873,6 +873,9 @@ let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
 const HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE = 'editor-xray-target';
+const HYBRID_EDITOR_GIZMO_AXIS_DISTANCE_SCALE = 0.065;
+const HYBRID_EDITOR_GIZMO_AXIS_MIN_LENGTH = 0.06;
+const HYBRID_EDITOR_GIZMO_AXIS_MAX_LENGTH = 0.5;
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
@@ -1057,7 +1060,10 @@ function updateHybridEditorGizmoAxes(svg, editorTarget, originProjection) {
   if (!group || !editorTarget || !originProjection || !camera) return 0;
   const originWorld = editorTarget.getWorldPosition(new THREE.Vector3());
   const distance = camera.getWorldPosition(new THREE.Vector3()).distanceTo(originWorld);
-  const axisLength = Math.max(0.12, Math.min(1.25, distance * 0.18));
+  const axisLength = Math.max(
+    HYBRID_EDITOR_GIZMO_AXIS_MIN_LENGTH,
+    Math.min(HYBRID_EDITOR_GIZMO_AXIS_MAX_LENGTH, distance * HYBRID_EDITOR_GIZMO_AXIS_DISTANCE_SCALE),
+  );
   const localSpace = transformControls?.space === 'local';
   const worldQuaternion = editorTarget.getWorldQuaternion(new THREE.Quaternion());
   const axes = [
@@ -1071,7 +1077,7 @@ function updateHybridEditorGizmoAxes(svg, editorTarget, originProjection) {
     if (localSpace) direction.applyQuaternion(worldQuaternion);
     direction.normalize();
     const positiveWorld = originWorld.clone().addScaledVector(direction, axisLength);
-    const negativeWorld = originWorld.clone().addScaledVector(direction, -axisLength * 0.55);
+    const negativeWorld = originWorld.clone().addScaledVector(direction, -axisLength * 0.45);
     const positive = hybridEditorWorldToViewport(positiveWorld);
     const negative = hybridEditorWorldToViewport(negativeWorld);
     const positiveLine = hybridEditorEnsureSvgLine(group, `axis-${axis}`, 'positive', `hybrid-editor-gizmo-axis ${axis}`);
@@ -1082,6 +1088,32 @@ function updateHybridEditorGizmoAxes(svg, editorTarget, originProjection) {
     if (hybridEditorSetSvgLine(negativeLine, originProjection, negative)) visibleCount += 1;
   }
   return visibleCount;
+}
+
+function setNativeTransformGizmoSceneVisibility(sceneVisible) {
+  const buckets = [transformControls?._gizmo?.gizmo, transformControls?._gizmo?.helper];
+  let materialCount = 0;
+  for (const bucket of buckets) {
+    if (!bucket) continue;
+    for (const group of Object.values(bucket)) {
+      group?.traverse?.(child => {
+        const materials = Array.isArray(child.material)
+          ? child.material
+          : (child.material ? [child.material] : []);
+        for (const material of materials) {
+          if (!material.userData) material.userData = {};
+          if (material.userData.kaminosNativeGizmoOriginalVisible === undefined) {
+            material.userData.kaminosNativeGizmoOriginalVisible = material.visible !== false;
+          }
+          material.visible = sceneVisible
+            ? material.userData.kaminosNativeGizmoOriginalVisible
+            : false;
+          materialCount += 1;
+        }
+      });
+    }
+  }
+  return { sceneVisible, materialCount };
 }
 
 function updateHybridEditorGizmoCropEdges(svg) {
@@ -1167,6 +1199,7 @@ function hybridSplatOverlayEditorSovereigntyState() {
   const reason = editorActive
     ? (splatCorrectionMode ? 'splat-correction-gizmo-active' : 'transform-gizmo-active')
     : null;
+  const nativeGizmo = setNativeTransformGizmoSceneVisibility(!editorActive);
   if (host) {
     host.classList.toggle('editor-sovereign', editorActive);
     host.style.pointerEvents = 'none';
@@ -1183,6 +1216,8 @@ function hybridSplatOverlayEditorSovereigntyState() {
     transformTargetName: editorTarget?.name || null,
     compositeMode: HYBRID_SPLAT_OVERLAY_EDITOR_COMPOSITE_MODE,
     scenePassthrough: false,
+    nativeGizmoSceneVisible: nativeGizmo.sceneVisible,
+    nativeGizmoMaterialCount: nativeGizmo.materialCount,
     xray,
   };
 }
@@ -1213,6 +1248,8 @@ function hybridSplatOverlayDebugState() {
     editorSovereignTransformTargetName: editorSovereignty.transformTargetName,
     editorSovereignCompositeMode: editorSovereignty.compositeMode,
     scenePassthrough: false,
+    nativeGizmoSceneVisible: editorSovereignty.nativeGizmoSceneVisible,
+    nativeGizmoMaterialCount: editorSovereignty.nativeGizmoMaterialCount,
     editorXray: editorSovereignty.xray,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
