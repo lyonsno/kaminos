@@ -106,6 +106,89 @@ try {
   assert.equal(failedReport.phase, 'selecting-pipeline');
   assert.match(failedReport.error, /missing-pipeline-id/);
   assert.ok(failedReport.lastTrustworthyEvidence.manifestPath.endsWith(basename(manifestPath)), 'failure report must preserve last trustworthy manifest evidence');
+
+  const preparedInputPath = join(tempRoot, 'prepared-existing-splat.ply');
+  const preparedOutDir = join(tempRoot, 'prepared-out');
+  const preparedReportPath = join(tempRoot, 'reports', 'prepared.json');
+  writeFileSync(preparedInputPath, [
+    'ply',
+    'format ascii 1.0',
+    'element vertex 1',
+    'property float x',
+    'property float y',
+    'property float z',
+    'end_header',
+    '0 0 0',
+    '',
+  ].join('\n'));
+
+  const prepared = spawnSync(process.execPath, [
+    witnessPath,
+    '--manifest', manifestPath,
+    '--pipeline-id', 'prepared-splat-import-sidecar-v0',
+    '--input', preparedInputPath,
+    '--out-dir', preparedOutDir,
+    '--report', preparedReportPath,
+  ], { encoding: 'utf8' });
+
+  assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+  const preparedReport = JSON.parse(readFileSync(preparedReportPath, 'utf8'));
+  assert.equal(preparedReport.ok, true);
+  assert.equal(preparedReport.effectiveRouteConfig.routeId, 'prepared.splat-import-sidecar.v0');
+  assert.deepEqual(preparedReport.stages.map(stage => stage.status), ['real', 'real']);
+  assert.equal(preparedReport.artifacts.input.status, 'requested');
+  assert.equal(preparedReport.artifacts.inspection.status, 'real');
+  assert.equal(preparedReport.artifacts.sidecar.status, 'real');
+  assert.ok(preparedReport.artifacts.inspection.path.startsWith(preparedOutDir), 'prepared inspection output must use caller out-dir');
+  assert.ok(preparedReport.artifacts.sidecar.path.startsWith(preparedOutDir), 'prepared sidecar output must use caller out-dir');
+  const inspection = JSON.parse(readFileSync(preparedReport.artifacts.inspection.path, 'utf8'));
+  assert.equal(inspection.schema, 'kaminos.prepared-artifact-inspection.v0');
+  assert.equal(inspection.artifact.path, preparedInputPath);
+  assert.equal(inspection.artifact.kind, 'splat');
+  assert.equal(inspection.artifact.extension, '.ply');
+  const preparedSidecar = JSON.parse(readFileSync(preparedReport.artifacts.sidecar.path, 'utf8'));
+  assert.equal(preparedSidecar.schema, 'kaminos.pipeline-import-sidecar.v0');
+  assert.equal(preparedSidecar.pipeline.id, 'prepared-splat-import-sidecar-v0');
+  assert.equal(preparedSidecar.pipeline.routeId, 'prepared.splat-import-sidecar.v0');
+  assert.equal(preparedSidecar.source.inputPath, preparedInputPath);
+  assert.equal(preparedSidecar.asset.type, 'splat');
+  assert.equal(preparedSidecar.asset.path, preparedInputPath);
+  assert.equal(preparedSidecar.asset.renderCapabilities.realHybridRender, false, 'prepared sidecar must not claim real hybrid rendering');
+  assert.equal(preparedSidecar.status.stageMode, 'prepared-artifact');
+
+  const adapterOutDir = join(tempRoot, 'adapter-out');
+  const adapterReportPath = join(tempRoot, 'reports', 'adapters.json');
+  const adapterEnv = {
+    ...process.env,
+    KAMINOS_SHARP_COMMAND: '',
+    KAMINOS_MOGE_COMMAND: '',
+    KAMINOS_SUPERMAT_COMMAND: '',
+  };
+  const adapters = spawnSync(process.execPath, [
+    witnessPath,
+    '--manifest', manifestPath,
+    '--pipeline-id', 'live-model-route-adapter-check-v0',
+    '--input', inputPath,
+    '--out-dir', adapterOutDir,
+    '--report', adapterReportPath,
+  ], { encoding: 'utf8', env: adapterEnv });
+
+  assert.equal(adapters.status, 0, adapters.stderr || adapters.stdout);
+  const adapterReport = JSON.parse(readFileSync(adapterReportPath, 'utf8'));
+  assert.equal(adapterReport.ok, true);
+  assert.equal(adapterReport.effectiveRouteConfig.routeId, 'adapter.model-chain-availability.v0');
+  assert.deepEqual(adapterReport.stages.map(stage => stage.status), ['skipped', 'skipped', 'skipped']);
+  assert.ok(adapterReport.stages.every(stage => stage.effectiveRoute.availability?.status === 'unconfigured'), 'unconfigured live adapters must be explicit');
+  assert.ok(adapterReport.stages.every(stage => stage.effectiveRoute.availability?.envVar?.startsWith('KAMINOS_')), 'adapter checks must record env/config identity');
+  assert.ok(adapterReport.stages.every(stage => stage.outputPath.startsWith(adapterOutDir)), 'adapter reports must use caller out-dir');
+  const adapterArtifacts = ['sharpAdapter', 'mogeAdapter', 'supermatAdapter'];
+  for (const artifactName of adapterArtifacts) {
+    assert.equal(adapterReport.artifacts[artifactName].status, 'skipped');
+    const adapterArtifact = JSON.parse(readFileSync(adapterReport.artifacts[artifactName].path, 'utf8'));
+    assert.equal(adapterArtifact.schema, 'kaminos.route-adapter-availability.v0');
+    assert.equal(adapterArtifact.availability.status, 'unconfigured');
+    assert.equal(adapterArtifact.execution.executed, false, 'availability checks must not execute live model routes');
+  }
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }
