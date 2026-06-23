@@ -1,5 +1,7 @@
 export const FORGE_HOST_ACTOR_SCHEMA = 'kaminos.forge-host.actors.v0';
 export const FORGE_HOST_FIXTURE_SOURCE_ID = 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0';
+export const FORGE_HOST_DIAULOS_REGISTRY_SCHEMA = 'epistaxis.diaulos-registry.v0';
+export const FORGE_HOST_HERO_SPLAT_SOURCE = '/api/read?root=splat-inbox&path=evil_orb_final_composite.ply';
 
 export const FORGE_HOST_STATUS_COLORS = Object.freeze({
   idle: '#6f7d8f',
@@ -117,6 +119,14 @@ const FILTERED_DIAULOI = Object.freeze([
   { diaulosId: 'archived-volume-smoke-lane', reason: 'not-promoted-current-or-recent' },
 ]);
 
+const DEFAULT_REQUESTED_HANDLES = Object.freeze(FIXTURE_ACTORS.map(actor => actor.diaulosId));
+const DEFAULT_SET_BY_HANDLE = Object.freeze(Object.fromEntries(
+  FIXTURE_ACTORS.map(actor => [actor.diaulosId, actor.sets])
+));
+const DEFAULT_ACTOR_BY_HANDLE = Object.freeze(Object.fromEntries(
+  FIXTURE_ACTORS.map(actor => [actor.diaulosId, actor])
+));
+
 function cloneJson(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -124,6 +134,40 @@ function cloneJson(value) {
 function statusRecord(state) {
   if (!FORGE_HOST_STATUS_COLORS[state]) throw new Error(`Unknown forge-host status state: ${state}`);
   return { state, color: FORGE_HOST_STATUS_COLORS[state], light: STATUS_LIGHT[state] };
+}
+
+function bodyPlan() {
+  return {
+    phenotype: 'lamellar-orb-placeholder',
+    shellOwner: 'lamellar-edgefucker',
+    lightOwner: 'molten-heartfucker',
+    motionOwner: 'mushfinger-clayfucker',
+    avatarContinuity: 'body-is-durable-diaulos-light-is-current-inhabitant',
+    lodPlan: {
+      primary: {
+        kind: 'sphere-placeholder',
+        reason: 'cheap host-owned actor proxy until procedural/splat bodies can scale',
+      },
+      heroSplat: {
+        kind: 'front-biased-splat-impostor',
+        source: FORGE_HOST_HERO_SPLAT_SOURCE,
+        sidecar: '/api/splat-correction?root=splat-inbox&path=evil_orb_final_composite.ply',
+        usefulArcDegrees: 10,
+        degradeArcDegrees: 30,
+        ownership: 'Forge Host owns actor asset slot and LOD choice; renderer lanes own splat truth',
+      },
+      procedural: {
+        kind: 'future-procedural-lamellar-vessel',
+        owner: 'lamellar-edgefucker',
+        conceptRefs: [
+          'assets/evil_orb_SHARP_splat_render.png',
+          'assets/evil_orb_original_generated_source_image.png',
+          'assets/evil_orb_outer_shell_source_image.png',
+          'assets/evil_orb_inner_core_source_image.png',
+        ],
+      },
+    },
+  };
 }
 
 function actorRecord(raw, sourceActorRecord) {
@@ -134,13 +178,8 @@ function actorRecord(raw, sourceActorRecord) {
     callSign: raw.callSign,
     sets: [...raw.sets],
     status: statusRecord(raw.status),
-    body: {
-      phenotype: 'lamellar-orb-placeholder',
-      shellOwner: 'lamellar-edgefucker',
-      lightOwner: 'molten-heartfucker',
-      motionOwner: 'mushfinger-clayfucker',
-      avatarContinuity: 'body-is-durable-diaulos-light-is-current-inhabitant',
-    },
+    registryId: raw.registryId || null,
+    body: bodyPlan(),
     station: { id: raw.stationId, label: raw.stationLabel, custodyScope: raw.custodyScope },
     spatial: {
       anchorId: `station:${raw.stationId}`,
@@ -164,6 +203,112 @@ function actorRecord(raw, sourceActorRecord) {
       continuity: 'replaceable-context-in-durable-diaulos-body',
     },
     provenance: { sourceActorRecord, sourceRefs: [...SOURCE_REFS] },
+  };
+}
+
+function titleFromHandle(handle) {
+  return String(handle || '')
+    .split('-')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || 'Unnamed Diaulos';
+}
+
+function normalizeRegistryRows(data) {
+  if (!data || !Array.isArray(data.diauloi)) throw new Error('Diaulos registry payload must contain a diauloi array');
+  return data.diauloi
+    .filter(row => row && typeof row === 'object' && row.handle)
+    .map(row => ({
+      handle: String(row.handle),
+      id: row.id ? String(row.id) : null,
+      aliases: Array.isArray(row.aliases) ? row.aliases.map(String) : [],
+      sourceTopoi: Array.isArray(row.source_topoi) ? row.source_topoi.map(String) : [],
+      status: row.status ? String(row.status) : 'unknown',
+      updatedAt: row.updated_at || row.created_at || null,
+      raw: row,
+    }));
+}
+
+function registryStatusToForgeStatus(status) {
+  if (status === 'katastatic') return 'complete';
+  if (status === 'active') return 'idle';
+  return 'stale';
+}
+
+function shouldIncludeRegistryRow(row, requestedHandles) {
+  if (requestedHandles.has(row.handle)) return true;
+  if (row.aliases.some(alias => requestedHandles.has(alias))) return true;
+  return row.sourceTopoi.some(path => path.startsWith('projects/kaminos/'));
+}
+
+export function createForgeHostRegistryFromDiaulosRegistry(data, {
+  sourceKind = 'live',
+  sourceId = 'diaulos-registry:unknown',
+  requestedHandles = DEFAULT_REQUESTED_HANDLES,
+} = {}) {
+  const requested = new Set(requestedHandles);
+  const rows = normalizeRegistryRows(data);
+  const consumedHandles = new Set();
+  const actors = [];
+  const filteredDiauloi = [];
+
+  for (const row of rows) {
+    if (!shouldIncludeRegistryRow(row, requested)) {
+      filteredDiauloi.push({ diaulosId: row.handle, registryId: row.id, reason: 'outside-forge-focus-filter' });
+      continue;
+    }
+    consumedHandles.add(row.handle);
+    const fixture = DEFAULT_ACTOR_BY_HANDLE[row.handle];
+    const raw = {
+      diaulosId: row.handle,
+      registryId: row.id,
+      callSign: fixture?.callSign || titleFromHandle(row.handle),
+      sets: [...(DEFAULT_SET_BY_HANDLE[row.handle] || ['registry'])],
+      status: fixture?.status || registryStatusToForgeStatus(row.status),
+      stationId: fixture?.stationId || 'registry-intake',
+      stationLabel: fixture?.stationLabel || 'Registry Intake',
+      custodyScope: fixture?.custodyScope || 'registry-backed Diaulos identity; runtime status not proven',
+      position: fixture?.position || [0, 0.42, 0],
+      rotation: fixture?.rotation || [0, 0, 0],
+      scale: fixture?.scale || 0.78,
+      currentInhabitant: fixture?.currentInhabitant || 'unknown from registry',
+    };
+    actors.push(actorRecord(raw, {
+      registrySchema: FORGE_HOST_DIAULOS_REGISTRY_SCHEMA,
+      registryId: row.id,
+      handle: row.handle,
+      aliases: row.aliases,
+      sourceTopoi: row.sourceTopoi,
+      registryStatus: row.status,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  const missingRequestedDiauloi = [...requested]
+    .filter(handle => !consumedHandles.has(handle))
+    .map(handle => ({ diaulosId: handle, reason: 'missing-from-diaulos-registry' }));
+
+  return {
+    schema: FORGE_HOST_ACTOR_SCHEMA,
+    truthLevel: 'peripheral-hud-not-ground-truth',
+    source: {
+      kind: sourceKind,
+      id: sourceId,
+      claimedLive: sourceKind === 'live',
+      fallback: false,
+      registryAuthority: 'identity-binding-not-runtime-presence',
+    },
+    provenance: {
+      source: 'Epistaxis Diaulos registry ingestion',
+      refs: [
+        'metadosis/diaulos-registry/diauloi.json',
+        'metadosis/diaulos-registry/README.md',
+        ...SOURCE_REFS,
+      ],
+    },
+    actors,
+    filteredDiauloi,
+    missingRequestedDiauloi,
   };
 }
 
@@ -195,11 +340,14 @@ function actorBuckets(registry) {
     current: 0,
     recent: 0,
     filtered: registry.filteredDiauloi?.length || 0,
+    registryBacked: 0,
+    missingRequested: registry.missingRequestedDiauloi?.length || 0,
   };
   for (const actor of registry.actors || []) {
     if (actor.sets?.includes('promoted')) counts.promoted += 1;
     if (actor.sets?.includes('current')) counts.current += 1;
     if (actor.sets?.includes('recent')) counts.recent += 1;
+    if (actor.provenance?.sourceActorRecord?.registryId) counts.registryBacked += 1;
   }
   return counts;
 }
@@ -233,5 +381,6 @@ export function buildForgeHostWitnessSummary(registry, { claimedSourceKind = 'fi
     selectedActor: cloneJson(selectedActor),
     defaultSelection: cloneJson(selectedActor),
     filteredDiauloi: cloneJson(registry.filteredDiauloi || []),
+    missingRequestedDiauloi: cloneJson(registry.missingRequestedDiauloi || []),
   };
 }

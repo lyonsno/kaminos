@@ -701,6 +701,7 @@ import {
   FORGE_HOST_FIXTURE_SOURCE_ID,
   buildForgeHostWitnessSummary,
   createForgeHostFixtureRegistry,
+  createForgeHostRegistryFromDiaulosRegistry,
 } from './forge-host-core.js';
 import {
   SCENE_SCHEMA,
@@ -4222,9 +4223,20 @@ async function initKaminosVolumeRoute() {
   setInterval(refreshVolumeReadout, 500);
 }
 
-function initForgeHostRoute() {
+async function initForgeHostRoute() {
   const params = new URLSearchParams(window.location.search);
-  if (params.has('forge_host_fixture')) {
+  const registryUrl = params.get('forge_host_registry_url');
+  if (registryUrl) {
+    const response = await fetch(registryUrl);
+    if (!response.ok) throw new Error(`Forge Host registry fetch failed: ${response.status}`);
+    const registryPayload = await response.json();
+    forgeHostRegistry = createForgeHostRegistryFromDiaulosRegistry(registryPayload, {
+      sourceKind: 'live',
+      sourceId: registryUrl,
+    });
+    forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'live' });
+    setInfo(`Forge Host live registry loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
+  } else if (params.has('forge_host_fixture')) {
     forgeHostRegistry = createForgeHostFixtureRegistry();
     forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'fixture' });
     setInfo(`Forge Host fixture loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
@@ -7072,7 +7084,10 @@ initScene().then(() => {
     }
   });
   initKaminosVolumeRoute();
-  initForgeHostRoute();
+  initForgeHostRoute().catch(err => {
+    console.error('Forge Host registry route failed:', err);
+    setInfo(`Forge Host registry failed: ${err.message || err}`);
+  });
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts

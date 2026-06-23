@@ -17,6 +17,7 @@ assert.equal(core.FORGE_HOST_ACTOR_SCHEMA, 'kaminos.forge-host.actors.v0', 'forg
 assert.equal(core.FORGE_HOST_FIXTURE_SOURCE_ID, 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0', 'forge-host fixture has a stable source id');
 assert.match(index, /from '\.\/forge-host-core\.js'/, 'workbench imports the forge-host data contract');
 assert.match(index, /forge_host_fixture/, 'URL route can seed the forge-host fixture actor set');
+assert.match(index, /forge_host_registry_url/, 'URL route can ingest an explicit live Diaulos registry URL');
 assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect forge-host actor state without DOM inference');
 assert.match(index, /fixture:kaminos-inhabited-agent-forge-2026-06-23\/minion-spawnfucker-v0/, 'workbench preserves forge-host fixture identity');
 
@@ -50,7 +51,55 @@ for (const actor of actors) {
   assert.equal(actor.selection.bridge.kind, 'chat-terminal-placeholder', 'actor exposes the future chat/terminal bridge placeholder');
   assert.equal(actor.selection.bridge.implemented, false, 'bridge placeholder must not impersonate a live chat bridge');
   assert.ok(actor.provenance.sourceActorRecord, 'actor preserves fixture/source provenance');
+  assert.equal(actor.body.lodPlan.primary.kind, 'sphere-placeholder', 'actor body plan starts with a cheap sphere placeholder');
+  assert.equal(actor.body.lodPlan.heroSplat.source, '/api/read?root=splat-inbox&path=evil_orb_final_composite.ply', 'actor body plan preserves the current hero orb splat source');
+  assert.equal(actor.body.lodPlan.procedural.owner, 'lamellar-edgefucker', 'actor body plan leaves procedural lamellar grammar with Lamellar');
 }
+
+const sampleDiaulosRegistry = {
+  diauloi: [
+    {
+      handle: 'mushfinger-clayfucker',
+      id: 'dia-mushfinger-fixture',
+      aliases: [],
+      source_topoi: ['projects/kaminos/topoi/codex-mushfinger-clayfucker-0615.md'],
+      status: 'active',
+      updated_at: '2026-06-15T18:31:51Z',
+    },
+    {
+      handle: 'pipeline-gutfucker',
+      id: 'dia-pipeline-fixture',
+      aliases: [],
+      source_topoi: ['projects/kaminos/topoi/codex-pipeline-gutfucker-0623.md'],
+      status: 'active',
+      updated_at: '2026-06-23T06:48:04Z',
+    },
+    {
+      handle: 'unrelated-registry-lane',
+      id: 'dia-unrelated-fixture',
+      aliases: [],
+      source_topoi: ['projects/elsewhere/topoi/unrelated.md'],
+      status: 'active',
+      updated_at: '2026-06-01T00:00:00Z',
+    },
+  ],
+};
+const liveRegistry = core.createForgeHostRegistryFromDiaulosRegistry(sampleDiaulosRegistry, {
+  sourceKind: 'live',
+  sourceId: 'file:///tmp/diauloi.json',
+});
+assert.equal(liveRegistry.source.kind, 'live', 'registry ingestion preserves live source kind');
+assert.equal(liveRegistry.source.registryAuthority, 'identity-binding-not-runtime-presence', 'registry ingestion does not impersonate runtime/currentness truth');
+assert.equal(liveRegistry.actors.length, 2, 'live registry ingestion filters to Kaminos/requested actors instead of rendering the whole registry');
+assert.ok(liveRegistry.actors.every(actor => actor.provenance.sourceActorRecord.registryId), 'live registry actors preserve Diaulos registry ids');
+assert.ok(liveRegistry.actors.some(actor => actor.diaulosId === 'mushfinger-clayfucker' && actor.registryId === 'dia-mushfinger-fixture'), 'Mushfinger registry id is attached to the actor');
+assert.ok(liveRegistry.actors.some(actor => actor.diaulosId === 'pipeline-gutfucker' && actor.sets.includes('promoted')), 'Pipeline registry row receives the promoted actor set');
+assert.ok(liveRegistry.filteredDiauloi.some(entry => entry.diaulosId === 'unrelated-registry-lane' && entry.reason === 'outside-forge-focus-filter'), 'unrelated registry rows are recorded as filtered');
+assert.ok(liveRegistry.missingRequestedDiauloi.some(entry => entry.diaulosId === 'minion-spawnfucker' && entry.reason === 'missing-from-diaulos-registry'), 'missing promoted/current rows stay visible instead of being fabricated as live');
+const liveSummary = core.buildForgeHostWitnessSummary(liveRegistry, { claimedSourceKind: 'live' });
+assert.equal(liveSummary.ok, true, 'live registry witness succeeds when claimed as live');
+assert.equal(liveSummary.counts.registryBacked, 2, 'live summary reports registry-backed actor count');
+assert.equal(liveSummary.missingRequestedDiauloi.length, 4, 'live summary preserves missing requested actor rows');
 
 const summary = core.buildForgeHostWitnessSummary(registry, { claimedSourceKind: 'fixture' });
 assert.equal(summary.ok, true, 'fixture witness summary succeeds when claimed as fixture');
@@ -76,6 +125,8 @@ assert.throws(
 );
 
 assert.match(witness, /--claim-source-kind/, 'witness accepts an explicit source claim instead of inferring authority');
+assert.match(witness, /--registry-json/, 'witness can ingest a Diaulos registry JSON file');
+assert.match(witness, /readFileSync\(registryJsonPath/, 'witness reads a registry JSON file directly instead of asking the human to paste it');
 assert.match(witness, /claimed live data but effective source is fixture/, 'witness preserves the fixture-vs-live false-claim failure');
 assert.match(witness, /demo fallback data cannot satisfy a seeded or live forge-host witness/, 'witness rejects demo fallback masquerading as seeded/live data');
 assert.match(witness, /sourceIdentity/, 'witness report records source identity');

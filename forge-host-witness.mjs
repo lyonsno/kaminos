@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import {
   buildForgeHostWitnessSummary,
   createForgeHostFixtureRegistry,
+  createForgeHostRegistryFromDiaulosRegistry,
 } from './forge-host-core.js';
 
 const args = new Map();
@@ -15,6 +16,7 @@ const reportPath = resolve(args.get('--report') || '/tmp/kaminos-forge-host-witn
 const claimSourceKind = args.get('--claim-source-kind') || 'fixture';
 const sourceKind = args.get('--source-kind') || 'fixture';
 const sourceId = args.get('--source-id') || undefined;
+const registryJsonPath = args.get('--registry-json') ? resolve(args.get('--registry-json')) : null;
 const fallback = args.get('--fallback') === '1' || sourceKind === 'demo-fallback';
 const WITNESS_FALSE_CLAIM_PREDICATES = [
   'claimed live data but effective source is fixture',
@@ -26,8 +28,17 @@ function writeReport(report) {
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
 }
 
+function loadRegistry() {
+  if (!registryJsonPath) return createForgeHostFixtureRegistry({ sourceKind, sourceId, fallback });
+  const registryJson = JSON.parse(readFileSync(registryJsonPath, 'utf8'));
+  return createForgeHostRegistryFromDiaulosRegistry(registryJson, {
+    sourceKind: sourceKind === 'fixture' ? 'live' : sourceKind,
+    sourceId: sourceId || registryJsonPath,
+  });
+}
+
 try {
-  const registry = createForgeHostFixtureRegistry({ sourceKind, sourceId, fallback });
+  const registry = loadRegistry();
   const summary = buildForgeHostWitnessSummary(registry, { claimedSourceKind: claimSourceKind });
   writeReport({
     ok: true,
@@ -39,9 +50,15 @@ try {
     selectedActor: summary.selectedActor,
     actorIds: summary.actorIds,
     filteredDiauloi: summary.filteredDiauloi,
+    missingRequestedDiauloi: summary.missingRequestedDiauloi,
   });
 } catch (error) {
-  const registry = createForgeHostFixtureRegistry({ sourceKind, sourceId, fallback });
+  let registry = null;
+  try {
+    registry = loadRegistry();
+  } catch {
+    registry = createForgeHostFixtureRegistry({ sourceKind, sourceId, fallback });
+  }
   writeReport({
     ok: false,
     phase: 'forge-host-witness-summary',
