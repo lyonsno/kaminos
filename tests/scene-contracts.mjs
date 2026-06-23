@@ -149,6 +149,14 @@ assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRen
 assert.match(index, /function hybridSplatOverlayEditorSovereigntyState\(/, 'Hybrid Renderer overlay exposes an editor-sovereignty compositing rule');
 assert.match(index, /#hybrid-splat-overlay-host\.editor-sovereign canvas/, 'Hybrid Renderer overlay dims its external canvas when editor gizmos are active');
 assert.match(index, /editorSovereign:\s*editorSovereignty\.active/, 'Hybrid Renderer debug state reports editor-overlay sovereignty instead of leaving it as CSS inference');
+assert.match(index, /id="splat-emissive-extraction-panel"/, 'selected splats expose a visible Emissive Extraction panel instead of a hidden renderer global');
+assert.match(index, /id="splat-emissive-albedo-select"/, 'Emissive Extraction UI chooses an indexed albedo PLY asset');
+assert.match(index, /data-splat-emissive-field="hueGateLo"/, 'Emissive Extraction UI exposes the hue gate lower threshold');
+assert.match(index, /data-splat-emissive-field="hueGateHi"/, 'Emissive Extraction UI exposes the hue gate upper threshold');
+assert.match(index, /data-splat-emissive-field="minDeltaMag"/, 'Emissive Extraction UI exposes the minimum delta magnitude');
+assert.match(index, /async function solveSelectedSplatEmissive\(/, 'Kaminos owns an explicit selected-splat emissive solve action');
+assert.match(index, /window\.kaminosSolveSelectedSplatEmissive/, 'browser witnesses can run the emissive solve without DOM inference');
+assert.match(index, /window\.kaminosEmissiveExtractionDebugState/, 'browser witnesses can inspect emissive extraction route/source/result state');
 assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witnesses can inspect Hybrid Renderer overlay state without DOM inference');
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');

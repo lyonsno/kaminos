@@ -195,6 +195,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .splat-hybrid-renderer-status.error { border-color: #5a3030; background: #221818; color: #e0a0a0; }
 .splat-hybrid-url { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
 .splat-hybrid-url:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.splat-emissive-select { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #bbb; font-size: 10px; padding: 2px 6px; outline: none; }
+.splat-emissive-select:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.splat-emissive-slider-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 38px; gap: 7px; align-items: center; }
+.splat-emissive-slider-row input[type="range"] { width: 100%; min-width: 0; }
+.splat-emissive-value { color: #888; font: 9px 'SF Mono', monospace; text-align: right; }
 .transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
 .transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
@@ -340,6 +345,36 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
               <button type="button" class="btn" id="splat-hybrid-renderer-start-button" onclick="startSelectedSplatHybridRenderer()">Start Hybrid</button>
               <button type="button" class="btn" id="splat-hybrid-renderer-reload-button" onclick="reloadSelectedSplatHybridRenderer()">Reload</button>
               <button type="button" class="btn" id="splat-hybrid-renderer-stop-button" onclick="stopHybridSplatOverlay()">Stop</button>
+            </div>
+          </div>
+          <div class="splat-hybrid-renderer-panel" id="splat-emissive-extraction-panel" hidden>
+            <div class="transform-inspector-head">
+              <div class="transform-inspector-name">Emissive Extraction</div>
+              <div class="splat-correction-note">Pair the selected baked-lighting splat with an indexed albedo PLY, then live-solve emissive into the Hybrid Renderer overlay.</div>
+            </div>
+            <div class="splat-hybrid-renderer-status" id="splat-emissive-status">Select an albedo PLY</div>
+            <label class="transform-row">
+              <span class="transform-label">Albedo</span>
+              <select class="splat-emissive-select" id="splat-emissive-albedo-select" aria-label="Emissive extraction albedo PLY asset"></select>
+            </label>
+            <label class="splat-emissive-slider-row">
+              <span class="transform-label">Hue Lo</span>
+              <input type="range" min="0" max="0.5" step="0.005" data-splat-emissive-field="hueGateLo">
+              <span class="splat-emissive-value" data-splat-emissive-value="hueGateLo">0.020</span>
+            </label>
+            <label class="splat-emissive-slider-row">
+              <span class="transform-label">Hue Hi</span>
+              <input type="range" min="0.005" max="1" step="0.005" data-splat-emissive-field="hueGateHi">
+              <span class="splat-emissive-value" data-splat-emissive-value="hueGateHi">0.150</span>
+            </label>
+            <label class="splat-emissive-slider-row">
+              <span class="transform-label">Min Delta</span>
+              <input type="range" min="0" max="0.5" step="0.005" data-splat-emissive-field="minDeltaMag">
+              <span class="splat-emissive-value" data-splat-emissive-value="minDeltaMag">0.020</span>
+            </label>
+            <div class="splat-correction-actions">
+              <button type="button" class="btn" id="splat-emissive-solve-button" onclick="solveSelectedSplatEmissive()">Solve Emissive</button>
+              <button type="button" class="btn" id="splat-emissive-refresh-button" onclick="refreshEmissiveAlbedoAssets()">Refresh PLYs</button>
             </div>
           </div>
         </div>
@@ -845,6 +880,37 @@ let hybridSplatOverlayState = {
   frameCount: 0,
 };
 
+let emissiveExtractionState = {
+  status: 'idle',
+  error: null,
+  albedoAssets: [],
+  selectedAlbedoSource: '',
+  hueGateLo: 0.02,
+  hueGateHi: 0.15,
+  minDeltaMag: 0.02,
+  originalSource: null,
+  albedoSource: null,
+  result: null,
+  lastSolvedAt: null,
+};
+let emissiveExtractionRefreshPromise = null;
+let emissiveExtractionDebounceTimer = null;
+
+function emissiveExtractionDebugState() {
+  const handle = hybridSplatOverlayState.handle;
+  return {
+    ...emissiveExtractionState,
+    activeObjectId: activeSceneObjectId,
+    selectedSplatId: selectedSplatRecord()?.id || null,
+    overlayObjectId: hybridSplatOverlayState.objectId,
+    overlayStatus: hybridSplatOverlayState.status,
+    overlayActive: hybridSplatOverlayIsRendering(),
+    overlayHasSolve: typeof handle?.solveEmissive === 'function',
+    overlayHasUpdate: typeof handle?.updateEmissive === 'function',
+    albedoAssetCount: emissiveExtractionState.albedoAssets.length,
+  };
+}
+
 class HybridMeshSplatRoute {
   constructor() {
     this.id = 'hybrid-mesh-splat-route-stub';
@@ -1031,6 +1097,7 @@ function setHybridSplatOverlayStatus(status, error = null) {
   hybridSplatOverlayState.error = error ? String(error.message || error) : null;
   hybridSplatOverlayEditorSovereigntyState();
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
+  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
 }
 
 function hybridSplatOverlayModuleUrl() {
@@ -1046,6 +1113,7 @@ function setHybridSplatOverlayModuleUrl(url, options = {}) {
   }
   if (persist) localStorage.setItem('kaminosHybridSplatOverlayModuleUrl', hybridSplatOverlayState.moduleUrl);
   updateHybridSplatOverlayPanel(selectedSceneObjectEntry());
+  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
   return hybridSplatOverlayState.moduleUrl;
 }
 
@@ -1234,6 +1302,224 @@ function updateHybridSplatOverlayPanel(entry) {
   if (startButton) startButton.disabled = busy || !hasSource;
   if (reloadButton) reloadButton.disabled = busy || !hasSource;
   if (stopButton) stopButton.disabled = !hybridSplatOverlayState.handle;
+}
+
+function emissiveAssetDisplayLabel(entry = {}) {
+  const display = entry.display || {};
+  return display.title || entry.label || entry.name || entry.path || entry.source || 'Albedo PLY';
+}
+
+function emissiveAssetSubtitle(entry = {}) {
+  const display = entry.display || {};
+  return display.subtitle || [entry.stage, entry.root_label || entry.root_id].filter(Boolean).join(' / ');
+}
+
+function emissiveAssetLooksLikePly(entry = {}) {
+  const name = String(entry.name || entry.path || entry.source || '').toLowerCase();
+  return name.endsWith('.ply');
+}
+
+async function refreshEmissiveAlbedoAssets() {
+  if (emissiveExtractionRefreshPromise) return emissiveExtractionRefreshPromise;
+  emissiveExtractionState.status = emissiveExtractionState.status === 'idle' ? 'refreshing' : emissiveExtractionState.status;
+  emissiveExtractionRefreshPromise = (async () => {
+    try {
+      const data = await grFetchApi('assets', { kind: 'splat' });
+      if (data.error) throw new Error(data.error);
+      const entries = (data.entries || []).filter(emissiveAssetLooksLikePly);
+      emissiveExtractionState.albedoAssets = entries;
+      if (!entries.some(entry => entry.source === emissiveExtractionState.selectedAlbedoSource)) {
+        emissiveExtractionState.selectedAlbedoSource = entries[0]?.source || '';
+      }
+      emissiveExtractionState.error = null;
+      if (emissiveExtractionState.status === 'refreshing') emissiveExtractionState.status = 'idle';
+      updateEmissiveExtractionPanel(selectedSceneObjectEntry());
+      return entries;
+    } catch (error) {
+      emissiveExtractionState.status = 'error';
+      emissiveExtractionState.error = String(error.message || error);
+      updateEmissiveExtractionPanel(selectedSceneObjectEntry());
+      throw error;
+    } finally {
+      emissiveExtractionRefreshPromise = null;
+    }
+  })();
+  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
+  return emissiveExtractionRefreshPromise;
+}
+
+function readEmissiveExtractionField(name) {
+  const input = document.querySelector(`[data-splat-emissive-field="${name}"]`);
+  const value = Number(input?.value);
+  return Number.isFinite(value) ? value : emissiveExtractionState[name];
+}
+
+function readEmissiveExtractionControls() {
+  const lo = readEmissiveExtractionField('hueGateLo');
+  const hi = readEmissiveExtractionField('hueGateHi');
+  emissiveExtractionState.hueGateLo = Math.max(0, Math.min(lo, hi));
+  emissiveExtractionState.hueGateHi = Math.max(emissiveExtractionState.hueGateLo + 0.001, hi);
+  emissiveExtractionState.minDeltaMag = Math.max(0, readEmissiveExtractionField('minDeltaMag'));
+  const select = document.getElementById('splat-emissive-albedo-select');
+  if (select) emissiveExtractionState.selectedAlbedoSource = select.value || '';
+  return {
+    hueGateLo: emissiveExtractionState.hueGateLo,
+    hueGateHi: emissiveExtractionState.hueGateHi,
+    minDeltaMag: emissiveExtractionState.minDeltaMag,
+  };
+}
+
+function setEmissiveExtractionStatus(status, error = null) {
+  emissiveExtractionState.status = status;
+  emissiveExtractionState.error = error ? String(error.message || error) : null;
+  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
+}
+
+function updateEmissiveExtractionPanel(entry) {
+  const panel = document.getElementById('splat-emissive-extraction-panel');
+  if (!panel) return;
+  const isSplat = entry?.type === 'splat';
+  panel.hidden = !isSplat;
+  if (!isSplat) return;
+  const select = document.getElementById('splat-emissive-albedo-select');
+  if (select) {
+    const activeValue = document.activeElement === select ? select.value : emissiveExtractionState.selectedAlbedoSource;
+    select.innerHTML = '';
+    if (!emissiveExtractionState.albedoAssets.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = emissiveExtractionRefreshPromise ? 'Loading indexed PLY assets...' : 'No indexed PLY assets';
+      select.appendChild(option);
+    } else {
+      for (const asset of emissiveExtractionState.albedoAssets) {
+        const option = document.createElement('option');
+        option.value = asset.source || '';
+        const subtitle = emissiveAssetSubtitle(asset);
+        option.textContent = subtitle ? `${emissiveAssetDisplayLabel(asset)} - ${subtitle}` : emissiveAssetDisplayLabel(asset);
+        option.title = asset.source || '';
+        select.appendChild(option);
+      }
+    }
+    const nextValue = activeValue && Array.from(select.options).some(option => option.value === activeValue)
+      ? activeValue
+      : (emissiveExtractionState.selectedAlbedoSource || select.options[0]?.value || '');
+    select.value = nextValue;
+    emissiveExtractionState.selectedAlbedoSource = select.value || '';
+  }
+  for (const name of ['hueGateLo', 'hueGateHi', 'minDeltaMag']) {
+    const input = document.querySelector(`[data-splat-emissive-field="${name}"]`);
+    if (input && document.activeElement !== input) input.value = emissiveExtractionState[name];
+    const valueEl = document.querySelector(`[data-splat-emissive-value="${name}"]`);
+    if (valueEl) valueEl.textContent = Number(emissiveExtractionState[name]).toFixed(3);
+  }
+  const statusEl = document.getElementById('splat-emissive-status');
+  if (statusEl) {
+    const result = emissiveExtractionState.result;
+    const overlayNote = typeof hybridSplatOverlayState.handle?.solveEmissive === 'function'
+      ? 'overlay solve available'
+      : 'overlay solve unavailable';
+    const sourceNote = emissiveExtractionState.selectedAlbedoSource ? 'albedo selected' : 'select albedo PLY';
+    const resultNote = result ? `emissive splats=${result.emissiveSplats ?? 'unknown'}` : sourceNote;
+    const detail = `${emissiveExtractionState.status} · ${overlayNote} · ${resultNote}`;
+    statusEl.textContent = emissiveExtractionState.error ? `${detail} · ${emissiveExtractionState.error}` : detail;
+    statusEl.classList.toggle('error', emissiveExtractionState.status === 'error');
+  }
+  const solveButton = document.getElementById('splat-emissive-solve-button');
+  if (solveButton) {
+    solveButton.disabled = emissiveExtractionState.status === 'solving'
+      || !entry.source
+      || !emissiveExtractionState.selectedAlbedoSource;
+  }
+  if (!emissiveExtractionState.albedoAssets.length && !emissiveExtractionRefreshPromise) {
+    refreshEmissiveAlbedoAssets().catch(() => {});
+  }
+}
+
+async function fetchPlyPointCloudColors(source) {
+  if (!source) throw new Error('Missing PLY source');
+  const response = await fetch(source, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`PLY fetch failed ${response.status}`);
+  const pointCloud = parsePlyPointCloud(await response.arrayBuffer());
+  return {
+    source,
+    colors: pointCloud.colors,
+    pointCount: pointCloud.pointCount,
+    colorSource: pointCloud.colorSource,
+  };
+}
+
+async function solveSelectedSplatEmissive() {
+  const entry = selectedSplatRecord();
+  if (!entry) {
+    setInfo('Select a splat first');
+    return null;
+  }
+  if (!entry.source) {
+    setInfo('Selected splat has no reloadable source');
+    return null;
+  }
+  readEmissiveExtractionControls();
+  const albedoSource = emissiveExtractionState.selectedAlbedoSource;
+  if (!albedoSource) {
+    setEmissiveExtractionStatus('error', 'Select an albedo PLY');
+    setInfo('Select an albedo PLY before solving emissive');
+    return null;
+  }
+  try {
+    setEmissiveExtractionStatus('solving');
+    if (!hybridSplatOverlayState.handle || hybridSplatOverlayState.objectId !== entry.id) {
+      await startSelectedSplatHybridRenderer();
+    }
+    const handle = hybridSplatOverlayState.handle;
+    if (typeof handle?.solveEmissive !== 'function') {
+      throw new Error('Hybrid overlay module does not expose solveEmissive');
+    }
+    const [original, albedo] = await Promise.all([
+      fetchPlyPointCloudColors(entry.source),
+      fetchPlyPointCloudColors(albedoSource),
+    ]);
+    if (original.pointCount !== albedo.pointCount) {
+      throw new Error(`PLY point-count mismatch: original=${original.pointCount} albedo=${albedo.pointCount}`);
+    }
+    const result = handle.solveEmissive({
+      originalColors: original.colors,
+      albedoColors: albedo.colors,
+      hueGateLo: emissiveExtractionState.hueGateLo,
+      hueGateHi: emissiveExtractionState.hueGateHi,
+      minDeltaMag: emissiveExtractionState.minDeltaMag,
+    });
+    emissiveExtractionState.status = 'applied';
+    emissiveExtractionState.error = null;
+    emissiveExtractionState.originalSource = entry.source;
+    emissiveExtractionState.albedoSource = albedoSource;
+    emissiveExtractionState.result = {
+      ...result,
+      originalPointCount: original.pointCount,
+      originalColorSource: original.colorSource,
+      albedoPointCount: albedo.pointCount,
+      albedoColorSource: albedo.colorSource,
+    };
+    emissiveExtractionState.lastSolvedAt = new Date().toISOString();
+    updateHybridSplatOverlayFrame();
+    updateEmissiveExtractionPanel(entry);
+    window._kaminosDirty?.();
+    setInfo(`Emissive solve applied: ${result.emissiveSplats ?? 0} splats`);
+    return emissiveExtractionDebugState();
+  } catch (error) {
+    setEmissiveExtractionStatus('error', error);
+    setInfo(`Emissive solve failed: ${error.message}`);
+    throw error;
+  }
+}
+
+function scheduleSelectedSplatEmissiveSolve() {
+  readEmissiveExtractionControls();
+  updateEmissiveExtractionPanel(selectedSceneObjectEntry());
+  if (!emissiveExtractionState.selectedAlbedoSource || !hybridSplatOverlayState.handle) return;
+  clearTimeout(emissiveExtractionDebounceTimer);
+  emissiveExtractionDebounceTimer = setTimeout(() => {
+    solveSelectedSplatEmissive().catch(() => {});
+  }, 160);
 }
 
 function prepareHybridSplatOverlayHost(host) {
@@ -2529,6 +2815,7 @@ function updateSplatCorrectionPanel(entry) {
   const isSplat = entry?.type === 'splat';
   panel.hidden = !isSplat;
   updateHybridSplatOverlayPanel(entry);
+  updateEmissiveExtractionPanel(entry);
   if (!isSplat) return;
   const correction = normalizeSplatCorrection(entry.splat?.correction);
   setSplatCorrectionField('centroidOffset.x', correction.centroidOffset[0]);
@@ -2749,6 +3036,12 @@ function initTransformInspector() {
   });
   const hybridModuleInput = document.getElementById('splat-hybrid-renderer-module-url');
   hybridModuleInput?.addEventListener('change', () => setHybridSplatOverlayModuleUrl(hybridModuleInput.value));
+  const emissiveAlbedoSelect = document.getElementById('splat-emissive-albedo-select');
+  emissiveAlbedoSelect?.addEventListener('change', () => scheduleSelectedSplatEmissiveSolve());
+  document.querySelectorAll('[data-splat-emissive-field]').forEach(input => {
+    input.addEventListener('input', () => scheduleSelectedSplatEmissiveSolve());
+    input.addEventListener('change', () => scheduleSelectedSplatEmissiveSolve());
+  });
   updateTransformInspector();
 }
 
@@ -2762,6 +3055,10 @@ window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
 window.startSelectedSplatHybridRenderer = startSelectedSplatHybridRenderer;
 window.reloadSelectedSplatHybridRenderer = reloadSelectedSplatHybridRenderer;
 window.stopHybridSplatOverlay = stopHybridSplatOverlay;
+window.refreshEmissiveAlbedoAssets = refreshEmissiveAlbedoAssets;
+window.solveSelectedSplatEmissive = solveSelectedSplatEmissive;
+window.kaminosSolveSelectedSplatEmissive = solveSelectedSplatEmissive;
+window.kaminosEmissiveExtractionDebugState = emissiveExtractionDebugState;
 window.kaminosCameraDebugState = function() {
   return {
     position: camera ? camera.position.toArray() : null,
