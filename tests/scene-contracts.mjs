@@ -94,6 +94,15 @@ assert.match(index, /panel\.dataset\.pipelineRunId/, 'Pipeline document panel st
 assert.match(index, /pipelineClearRunDocument\(/, 'Pipeline clears stale sidecar/bundle documents when selected run evidence changes');
 assert.doesNotMatch(index, /function selectPipelineBrowserAsset[\s\S]*?pipelineDockState\.lastRun\s*=\s*null[\s\S]*?function pipelineStatusClass/, 'Selecting a new source asset must not erase prior run evidence');
 assert.match(index, /window\.kaminosPipelineSelectAsset/, 'browser witnesses can select a Pipeline browser asset without DOM inference');
+assert.match(index, /id="pipeline-graph-workbench"/, 'Pipeline browser exposes a graph workbench as the primary composition surface');
+assert.match(index, /id="pipeline-graph-canvas"/, 'Pipeline graph workbench has a selectable node canvas');
+assert.match(index, /id="pipeline-graph-inspector"/, 'Pipeline graph workbench has a node inspector for actions/evidence');
+assert.match(index, /pipelineDockState\.selectedGraphNodeId/, 'Pipeline graph keeps selected node identity separate from selected asset and selected run');
+assert.match(index, /function buildPipelineGraphModel\(/, 'Pipeline graph builds source/route/output/evidence nodes from current source and selected run');
+assert.match(index, /function selectPipelineGraphNode\(/, 'Pipeline graph nodes are selected through an explicit pointer-real selection path');
+assert.match(index, /data-pipeline-graph-node-id/, 'Pipeline graph nodes expose stable DOM ids for pointer smoke witnesses');
+assert.match(index, /pointerdown/, 'Pipeline graph selection must exercise pointer-real input, not only programmatic click handlers');
+assert.match(index, /fixture output; not real model compute/, 'Pipeline graph must label fixture outputs instead of presenting them as real model compute');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
 assert.match(index, /not-splat-like/, 'Pipeline asset cards must fail loud for PLY stubs that are not splat-like');
