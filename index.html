@@ -463,12 +463,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="motion-enable">Spawn Orbs</button>
         <button class="btn" id="motion-phrase-enable">Decision</button>
         <button class="btn" id="motion-controls-enable">Controls</button>
+        <button class="btn" id="motion-tracks-enable">Tracks</button>
         <button class="btn" id="motion-frame-camera">Frame</button>
       </div>
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Phrase Route</span><span class="route-chip">kaminos_motion_phrase=1</span></div>
       <div class="field"><span class="field-key">Target</span><span class="field-val">notice-prepare-commit-recover</span></div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Track Route</span><span class="route-chip">kaminos_motion_tracks=1</span></div>
+      <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
@@ -784,16 +789,19 @@ import {
   DEFAULT_MOTION_PHRASE_CONTROLS,
   DEFAULT_MOTION_PHRASE_CONTROL_PRESETS,
   DEFAULT_MOTION_CLIPS,
+  DEFAULT_MOTION_TRACK_FIXTURE,
   MOTION_ROUTE_IDENTITY,
   applyMotionPhraseControls,
   buildMotionActorFixture,
   buildMotionDecisionComparison,
   buildMotionPhraseControlHarness,
+  buildMotionTrackHarness,
   motionClipById,
   motionPhraseBodyScale,
   normalizeMotionPhraseControls,
   sampleMotionClip,
   sampleMotionPlan,
+  sampleMotionTrack,
 } from './motion-core.js';
 import {
   SCENE_SCHEMA,
@@ -840,6 +848,7 @@ let volumeBridge = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
+let motionTrackState = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3296,6 +3305,19 @@ function disposeMotionPhraseControlScene() {
   motionPhraseControlState.active = false;
 }
 
+function disposeMotionTrackScene() {
+  if (!motionTrackState?.root) return;
+  scene.remove(motionTrackState.root);
+  motionTrackState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
+      else object.material.dispose?.();
+    }
+  });
+  motionTrackState.active = false;
+}
+
 function frameMotionAgencyCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
@@ -3305,11 +3327,14 @@ function frameMotionAgencyCamera() {
 }
 
 function updateMotionAgencyReadout() {
+  const trackDebug = window.kaminosMotionTrackDebugState?.();
   const phraseControlDebug = window.kaminosMotionPhraseControlDebugState?.();
   const decisionDebug = window.kaminosMotionDecisionDebugState?.();
-  const debug = phraseControlDebug?.active
+  const debug = trackDebug?.active
+    ? trackDebug
+    : (phraseControlDebug?.active
     ? phraseControlDebug
-    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.());
+    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.()));
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
@@ -3324,6 +3349,7 @@ function createMotionAgencyFixtureScene({ force = false } = {}) {
   if (motionAgencyState?.active && !force) return motionAgencyState;
   disposeMotionPhraseControlScene();
   disposeMotionDecisionScene();
+  disposeMotionTrackScene();
   disposeMotionAgencyScene();
   const fixture = buildMotionActorFixture();
   const root = new THREE.Group();
@@ -3442,6 +3468,7 @@ function createMotionDecisionComparisonScene({ force = false } = {}) {
   if (motionDecisionState?.active && !force) return motionDecisionState;
   disposeMotionAgencyScene();
   disposeMotionPhraseControlScene();
+  disposeMotionTrackScene();
   disposeMotionDecisionScene();
   const comparison = buildMotionDecisionComparison({ duration: DEFAULT_DECISION_MOTION_PLAN.duration, fps: 12 });
   const root = new THREE.Group();
@@ -3580,6 +3607,7 @@ function createMotionPhraseControlHarnessScene({ force = false } = {}) {
   if (motionPhraseControlState?.active && !force) return motionPhraseControlState;
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
+  disposeMotionTrackScene();
   disposeMotionPhraseControlScene();
   const effectiveControls = setMotionPhraseControlInputs(motionPhraseControlsFromInputs());
   const controlled = currentMotionPhraseControlledPlan(effectiveControls);
@@ -3633,6 +3661,71 @@ function createMotionPhraseControlHarnessScene({ force = false } = {}) {
   frameMotionAgencyCamera();
   setInfo('Motion phrase control harness spawned');
   return motionPhraseControlState;
+}
+
+function createMotionTrackHarnessScene({ force = false } = {}) {
+  if (motionTrackState?.active && !force) return motionTrackState;
+  disposeMotionAgencyScene();
+  disposeMotionDecisionScene();
+  disposeMotionPhraseControlScene();
+  disposeMotionTrackScene();
+  const harness = buildMotionTrackHarness({ duration: DEFAULT_MOTION_TRACK_FIXTURE.duration, fps: 12 });
+  const root = new THREE.Group();
+  root.name = 'motion-track-harness-root';
+  root.userData.kaminosMotionTrack = {
+    route: MOTION_ROUTE_IDENTITY,
+    trackId: harness.track.id,
+    trackSchema: harness.track.schema,
+    sourceKind: harness.track.sourceKind,
+    sourceRoute: harness.track.sourceRoute,
+  };
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.2, 3.2, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x10151b, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
+  );
+  floor.name = 'motion-track-floor';
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.012, 0.24);
+  root.add(floor);
+
+  const variants = harness.variants.map((variant, index) => {
+    const origin = [(index - 1) * 1.55, 0, 0];
+    const visual = makeMotionDecisionVisual({
+      id: variant.id,
+      label: variant.label,
+      color: variant.color,
+      origin,
+      plan: variant.id === 'phrase_baseline' ? variant.simulation.plan : null,
+    });
+    visual.variant = variant;
+    visual.mode = variant.id === 'track_root_only' ? 'root-only' : 'root+head';
+    root.add(visual.group);
+    root.add(visual.target);
+    return visual;
+  });
+
+  scene.add(root);
+  motionTrackState = {
+    schema: 'kaminos.motion-track-route.v0',
+    active: true,
+    route: MOTION_ROUTE_IDENTITY,
+    root,
+    harness,
+    track: harness.track,
+    actorVisuals: variants,
+    duration: harness.duration,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+    maxEffort: 0,
+    lastActors: [],
+  };
+  renderMotionClipList();
+  updateMotionTrackFrame(performance.now() / 1000);
+  updateMotionAgencyReadout();
+  frameMotionAgencyCamera();
+  setInfo('Motion track harness spawned');
+  return motionTrackState;
 }
 
 function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
@@ -3795,12 +3888,79 @@ function updateMotionPhraseControlFrame(nowSeconds = performance.now() / 1000) {
   return true;
 }
 
+function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
+  if (!motionTrackState?.active) return false;
+  const state = motionTrackState;
+  const duration = Math.max(0.1, state.duration || state.track.duration);
+  const localTime = (nowSeconds - state.startedAt) % duration;
+  state.frameCount += 1;
+  const nextActors = [];
+  for (const visual of state.actorVisuals) {
+    const variant = visual.variant;
+    const sample = variant.id === 'phrase_baseline'
+      ? sampleMotionPlan(DEFAULT_DECISION_MOTION_PLAN, localTime)
+      : sampleMotionTrack(state.track, localTime, { mode: visual.mode });
+    const rootPosition = new THREE.Vector3(
+      visual.origin[0] + sample.root[0],
+      visual.origin[1] + sample.root[1] + 0.2,
+      visual.origin[2] + sample.root[2],
+    );
+    const attention = new THREE.Vector3(
+      visual.origin[0] + sample.attention[0],
+      visual.origin[1] + sample.attention[1] + 0.18,
+      visual.origin[2] + sample.attention[2],
+    );
+    const facing = new THREE.Vector3(...sample.facing).normalize();
+    visual.group.position.copy(rootPosition);
+    visual.group.lookAt(attention);
+    const effort = sample.effort;
+    visual.body.scale.fromArray(motionPhraseBodyScale(sample));
+    visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
+    visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
+    visual.target.position.copy(attention);
+    visual.target.scale.setScalar(variant.id === 'track_root_head' ? 1.22 : 0.9);
+    for (let i = 0; i < visual.trail.length; i++) {
+      const trailTime = Math.max(0, localTime - (i + 1) * 0.12);
+      const trailSample = variant.id === 'phrase_baseline'
+        ? sampleMotionPlan(DEFAULT_DECISION_MOTION_PLAN, trailTime)
+        : sampleMotionTrack(state.track, trailTime, { mode: visual.mode });
+      const dot = visual.trail[i];
+      dot.visible = true;
+      dot.position.set(
+        trailSample.root[0] - sample.root[0],
+        trailSample.root[1] - sample.root[1],
+        trailSample.root[2] - sample.root[2],
+      );
+      dot.material.opacity = Math.max(0.04, 0.26 - i * 0.026);
+    }
+    state.maxEffort = Math.max(state.maxEffort, effort);
+    nextActors.push({
+      id: visual.id,
+      label: visual.label,
+      variantId: variant.id,
+      intent: variant.id === 'phrase_baseline' ? DEFAULT_DECISION_MOTION_PLAN.intent : state.track.intent,
+      phase: sample.phase,
+      root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
+      facing: sample.facing.map(value => Number(value.toFixed(5))),
+      attention: attention.toArray().map(value => Number(value.toFixed(5))),
+      effort: Number(effort.toFixed(5)),
+      scale: Number(sample.scale.toFixed(5)),
+      headRootSeparation: Number(sample.headRootSeparation || 0),
+      color: visual.color,
+    });
+  }
+  state.lastActors = nextActors;
+  updateMotionAgencyReadout();
+  return true;
+}
+
 function initKaminosMotionAgencyRoute() {
   renderMotionClipList();
   renderMotionPhraseControlPresets();
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
   document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
+  document.getElementById('motion-tracks-enable')?.addEventListener('click', () => createMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
     document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
@@ -3809,10 +3969,11 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls')) {
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_motion_phrase_controls')) createMotionPhraseControlHarnessScene();
+    if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
+    else if (params.has('kaminos_motion_phrase_controls')) createMotionPhraseControlHarnessScene();
     else if (params.has('kaminos_motion_phrase')) createMotionDecisionComparisonScene();
     else createMotionAgencyFixtureScene();
   }
@@ -3891,6 +4052,49 @@ window.kaminosMotionPhraseControlDebugState = function() {
         label: variant.label,
         effectiveControls: variant.effectiveControls,
         metrics: variant.metrics,
+      })),
+      filmstripFrames: harness.filmstrip.length,
+    },
+    actors: state?.lastActors || [],
+  };
+};
+
+window.kaminosMotionTrackDebugState = function() {
+  const state = motionTrackState;
+  const harness = state?.harness || buildMotionTrackHarness({ duration: DEFAULT_MOTION_TRACK_FIXTURE.duration, fps: 12 });
+  return {
+    schema: 'kaminos.motion-track-debug.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    active: !!state?.active,
+    actorCount: state?.actorVisuals?.length || 0,
+    fallbackCount: 0,
+    frameCount: state?.frameCount || 0,
+    maxEffort: Number(state?.maxEffort || 0),
+    trackId: harness.track.id,
+    sourceKind: harness.track.sourceKind,
+    sourceRoute: harness.track.sourceRoute,
+    fps: harness.fps,
+    units: harness.track.units,
+    upAxis: harness.track.upAxis,
+    forwardAxis: harness.track.forwardAxis,
+    motionTrackHarness: {
+      schema: harness.schema,
+      route: harness.route,
+      track: {
+        schema: harness.track.schema,
+        id: harness.track.id,
+        sourceKind: harness.track.sourceKind,
+        sourceRoute: harness.track.sourceRoute,
+        fps: harness.track.fps,
+        units: harness.track.units,
+      },
+      variants: harness.variants.map(variant => ({
+        id: variant.id,
+        label: variant.label,
+        kind: variant.kind,
+        metrics: variant.metrics,
+        attentionLeadDistance: variant.metrics.attentionLeadDistance,
+        maxHeadRootSeparation: variant.metrics.maxHeadRootSeparation,
       })),
       filmstripFrames: harness.filmstrip.length,
     },
@@ -4244,9 +4448,10 @@ async function initScene() {
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
     const motionPhraseControlActive = updateMotionPhraseControlFrame(performance.now() / 1000);
+    const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -4261,7 +4466,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }

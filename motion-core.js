@@ -4,6 +4,7 @@ export const MOTION_SIMULATION_SCHEMA = 'kaminos.motion-simulation.v0';
 export const MOTION_WITNESS_SCHEMA = 'kaminos.motion-witness.v0';
 export const MOTION_PLAN_SCHEMA = 'kaminos.motion-plan.v0';
 export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
+export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 
 function clamp(value, min, max) {
@@ -276,6 +277,58 @@ export const DEFAULT_MOTION_PHRASE_CONTROL_PRESETS = [
     },
   },
 ];
+
+export const DEFAULT_MOTION_TRACK_FIXTURE = {
+  schema: MOTION_TRACK_SCHEMA,
+  id: 'fixture_cog_head_decision_v0',
+  label: 'Fixture CoG + Head Decision V0',
+  intent: 'mass-commits-after-attention-leads',
+  sourceKind: 'fixture',
+  sourceRoute: 'synthetic-cog-head-fixture-v0',
+  fps: 30,
+  duration: 5.4,
+  units: 'meters',
+  upAxis: [0, 1, 0],
+  forwardAxis: [0, 0, 1],
+  tracks: {
+    root: [
+      { t: 0.0, value: [0.00, 0.00, -0.74] },
+      { t: 0.8, value: [0.02, 0.01, -0.70] },
+      { t: 1.45, value: [0.04, 0.03, -0.62] },
+      { t: 2.2, value: [-0.12, -0.04, -1.02] },
+      { t: 3.1, value: [0.02, 0.05, 0.46] },
+      { t: 4.0, value: [0.10, 0.02, 0.92] },
+      { t: 5.4, value: [0.00, 0.00, -0.74] },
+    ],
+    head: [
+      { t: 0.0, value: [0.05, 0.40, -0.14] },
+      { t: 0.8, value: [0.10, 0.43, 0.18] },
+      { t: 1.45, value: [0.28, 0.52, 0.76] },
+      { t: 2.2, value: [0.06, 0.38, 0.26] },
+      { t: 3.1, value: [0.10, 0.48, 1.22] },
+      { t: 4.0, value: [-0.14, 0.43, 1.36] },
+      { t: 5.4, value: [0.05, 0.40, -0.14] },
+    ],
+    effort: [
+      { t: 0.0, value: 0.18 },
+      { t: 0.8, value: 0.28 },
+      { t: 1.45, value: 0.42 },
+      { t: 2.2, value: 0.72 },
+      { t: 3.1, value: 1.08 },
+      { t: 4.0, value: 0.58 },
+      { t: 5.4, value: 0.18 },
+    ],
+    phase: [
+      { t: 0.0, value: 'idle' },
+      { t: 0.8, value: 'notice' },
+      { t: 1.45, value: 'orient' },
+      { t: 2.2, value: 'anticipate' },
+      { t: 3.1, value: 'commit' },
+      { t: 4.0, value: 'recover' },
+      { t: 5.4, value: 'idle' },
+    ],
+  },
+};
 
 export function normalizeMotionClip(clip) {
   if (!clip || typeof clip !== 'object') throw new Error('Motion clip must be an object');
@@ -911,6 +964,288 @@ export function buildMotionPhraseControlHarness({
     route: MOTION_ROUTE_IDENTITY,
     basePlanId: normalizeMotionPlan(basePlan).id,
     fps: simFps,
+    variants,
+    filmstrip,
+  };
+}
+
+function normalizeTimedVecTrack(samples, fallback = [0, 0, 0]) {
+  const source = Array.isArray(samples) ? samples : [];
+  return source
+    .map((point, index) => ({
+      t: Number.isFinite(Number(point?.t)) ? Number(point.t) : index,
+      value: vec3(point?.value, fallback),
+    }))
+    .filter(point => Number.isFinite(point.t))
+    .sort((a, b) => a.t - b.t);
+}
+
+function normalizeTimedScalarTrack(samples, fallback = 0) {
+  const source = Array.isArray(samples) ? samples : [];
+  return source
+    .map((point, index) => ({
+      t: Number.isFinite(Number(point?.t)) ? Number(point.t) : index,
+      value: Number.isFinite(Number(point?.value)) ? Number(point.value) : fallback,
+    }))
+    .filter(point => Number.isFinite(point.t))
+    .sort((a, b) => a.t - b.t);
+}
+
+function normalizeTimedLabelTrack(samples, fallback = 'idle') {
+  const source = Array.isArray(samples) ? samples : [];
+  return source
+    .map((point, index) => ({
+      t: Number.isFinite(Number(point?.t)) ? Number(point.t) : index,
+      value: String(point?.value || fallback),
+    }))
+    .filter(point => Number.isFinite(point.t))
+    .sort((a, b) => a.t - b.t);
+}
+
+function clampTrackTimes(samples, duration) {
+  return samples.map(point => ({ ...point, t: clamp(point.t, 0, duration) }));
+}
+
+export function normalizeMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE) {
+  const id = String(trackInput?.id || '').trim();
+  if (!id) throw new Error('Motion track id is required');
+  const duration = Number(trackInput?.duration);
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error(`Motion track ${id} must have positive duration`);
+  const fps = Math.max(1, Math.round(Number(trackInput?.fps) || 30));
+  const tracksInput = trackInput?.tracks || {};
+  const root = clampTrackTimes(normalizeTimedVecTrack(tracksInput.root, [0, 0, 0]), duration);
+  const head = clampTrackTimes(normalizeTimedVecTrack(tracksInput.head, [0, 0.4, 0.6]), duration);
+  const effort = clampTrackTimes(normalizeTimedScalarTrack(tracksInput.effort, 0.18), duration);
+  const phase = clampTrackTimes(normalizeTimedLabelTrack(tracksInput.phase, 'idle'), duration);
+  if (root.length < 2) throw new Error(`Motion track ${id} needs at least two root samples`);
+  if (head.length < 2) throw new Error(`Motion track ${id} needs at least two head samples`);
+  return {
+    schema: MOTION_TRACK_SCHEMA,
+    id,
+    label: trackInput.label || id,
+    intent: trackInput.intent || 'unspecified',
+    sourceKind: trackInput.sourceKind || 'unknown',
+    sourceRoute: trackInput.sourceRoute || 'unknown',
+    fps,
+    duration,
+    units: trackInput.units || 'meters',
+    upAxis: normalizeVec3(vec3(trackInput.upAxis, [0, 1, 0]), [0, 1, 0]),
+    forwardAxis: normalizeVec3(vec3(trackInput.forwardAxis, [0, 0, 1]), [0, 0, 1]),
+    tracks: { root, head, effort, phase },
+  };
+}
+
+function sampleTimedVec(samples, t) {
+  if (t <= samples[0].t) return [...samples[0].value];
+  const last = samples.at(-1);
+  if (t >= last.t) return [...last.value];
+  const afterIndex = samples.findIndex(point => point.t >= t);
+  const before = samples[Math.max(0, afterIndex - 1)];
+  const after = samples[afterIndex];
+  const u = smooth01((t - before.t) / Math.max(1e-6, after.t - before.t));
+  return mixVec3(before.value, after.value, u);
+}
+
+function sampleTimedScalar(samples, t) {
+  if (!samples.length) return 0;
+  if (t <= samples[0].t) return samples[0].value;
+  const last = samples.at(-1);
+  if (t >= last.t) return last.value;
+  const afterIndex = samples.findIndex(point => point.t >= t);
+  const before = samples[Math.max(0, afterIndex - 1)];
+  const after = samples[afterIndex];
+  const u = smooth01((t - before.t) / Math.max(1e-6, after.t - before.t));
+  return lerp(before.value, after.value, u);
+}
+
+function sampleTimedLabel(samples, t) {
+  if (!samples.length) return 'idle';
+  let current = samples[0].value;
+  for (const point of samples) {
+    if (point.t > t) break;
+    current = point.value;
+  }
+  return current;
+}
+
+function fallbackHeadFromRoot(root) {
+  return [root[0], root[1] + 0.36, root[2] + 0.34];
+}
+
+export function sampleMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, t = 0, { mode = 'root+head' } = {}) {
+  const track = normalizeMotionTrack(trackInput);
+  const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, track.duration);
+  const root = sampleTimedVec(track.tracks.root, time);
+  const trackedHead = sampleTimedVec(track.tracks.head, time);
+  const head = mode === 'root-only' ? fallbackHeadFromRoot(root) : trackedHead;
+  const facing = normalizeVec3(subVec3(head, root), track.forwardAxis);
+  const effort = sampleTimedScalar(track.tracks.effort, time);
+  const phase = sampleTimedLabel(track.tracks.phase, time);
+  const headRootSeparation = lengthVec3(subVec3(head, root));
+  return {
+    schema: 'kaminos.motion-track-sample.v0',
+    trackId: track.id,
+    sourceKind: track.sourceKind,
+    mode,
+    t: Number(time.toFixed(5)),
+    phase,
+    root: root.map(value => Number(value.toFixed(5))),
+    head: head.map(value => Number(value.toFixed(5))),
+    attention: head.map(value => Number(value.toFixed(5))),
+    facing: facing.map(value => Number(value.toFixed(5))),
+    effort: Number(effort.toFixed(5)),
+    scale: Number((0.94 + clamp(effort * 0.08, 0, 0.18)).toFixed(5)),
+    headRootSeparation: Number(headRootSeparation.toFixed(5)),
+  };
+}
+
+function motionTrackMetrics(frames) {
+  let rootTravel = 0;
+  let maxEffort = 0;
+  let attentionLeadDistance = 0;
+  let maxHeadRootSeparation = 0;
+  let phaseChanges = 0;
+  let lastPhase = null;
+  let lastRoot = null;
+  for (const frame of frames) {
+    const sample = frame.sample;
+    if (lastRoot) rootTravel += lengthVec3(subVec3(sample.root, lastRoot));
+    lastRoot = sample.root;
+    maxEffort = Math.max(maxEffort, sample.effort);
+    attentionLeadDistance += Math.max(0, sample.attention[2] - sample.root[2]);
+    maxHeadRootSeparation = Math.max(maxHeadRootSeparation, sample.headRootSeparation);
+    if (lastPhase !== null && sample.phase !== lastPhase) phaseChanges++;
+    lastPhase = sample.phase;
+  }
+  return {
+    frameCount: frames.length,
+    rootTravel: Number(rootTravel.toFixed(5)),
+    maxEffort: Number(maxEffort.toFixed(5)),
+    attentionLeadDistance: Number((attentionLeadDistance / Math.max(1, frames.length)).toFixed(5)),
+    maxHeadRootSeparation: Number(maxHeadRootSeparation.toFixed(5)),
+    phaseChanges,
+  };
+}
+
+export function simulateMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, { duration, fps = 12, mode = 'root+head' } = {}) {
+  const track = normalizeMotionTrack(trackInput);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const frameCount = Math.floor(simDuration * simFps) + 1;
+  const frames = [];
+  for (let index = 0; index < frameCount; index++) {
+    const t = Math.min(track.duration, index / simFps);
+    const sample = sampleMotionTrack(track, t, { mode });
+    frames.push({ frameIndex: index, t: Number(t.toFixed(5)), sample });
+  }
+  return {
+    schema: 'kaminos.motion-track-simulation.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    trackId: track.id,
+    sourceKind: track.sourceKind,
+    sourceRoute: track.sourceRoute,
+    mode,
+    duration: simDuration,
+    fps: simFps,
+    frames,
+    metrics: motionTrackMetrics(frames),
+  };
+}
+
+function motionTrackActorSample(actor, sample, origin) {
+  return {
+    id: actor.id,
+    label: actor.label,
+    intent: actor.intent,
+    status: sample.phase,
+    color: actor.color,
+    root: addVec3(origin, sample.root).map(value => Number(value.toFixed(5))),
+    localRoot: sample.root,
+    facing: sample.facing,
+    attention: addVec3(origin, sample.attention).map(value => Number(value.toFixed(5))),
+    scale: sample.scale,
+    effort: sample.effort,
+    speed: 0,
+    phase: sample.phase,
+    sourceKind: sample.sourceKind,
+    mode: sample.mode,
+    headRootSeparation: sample.headRootSeparation,
+  };
+}
+
+export function buildMotionTrackHarness({
+  trackInput = DEFAULT_MOTION_TRACK_FIXTURE,
+  duration,
+  fps = 12,
+  filmstripFrames = 7,
+} = {}) {
+  const track = normalizeMotionTrack(trackInput);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const phrasePlan = normalizeMotionPlan({ ...DEFAULT_DECISION_MOTION_PLAN, duration: simDuration });
+  const phraseSimulation = simulateMotionPlan(phrasePlan, { duration: simDuration, fps: simFps });
+  const rootOnlySimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'root-only' });
+  const rootHeadSimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'root+head' });
+  const variants = [
+    {
+      id: 'phrase_baseline',
+      label: 'Phrase Baseline',
+      color: '#8fb6ff',
+      kind: 'procedural-phrase',
+      metrics: {
+        ...phraseSimulation.metrics,
+        attentionLeadDistance: 0,
+        maxHeadRootSeparation: 0,
+      },
+      simulation: phraseSimulation,
+    },
+    {
+      id: 'track_root_only',
+      label: 'Root Only Track',
+      color: '#ffd166',
+      kind: 'motion-track-root-only',
+      metrics: rootOnlySimulation.metrics,
+      simulation: rootOnlySimulation,
+    },
+    {
+      id: 'track_root_head',
+      label: 'Root + Head Track',
+      color: '#ff7a66',
+      kind: 'motion-track-root-head',
+      metrics: rootHeadSimulation.metrics,
+      simulation: rootHeadSimulation,
+    },
+  ];
+  const maxFrames = Math.max(...variants.map(variant => variant.simulation.frames.length));
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), maxFrames));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (maxFrames - 1) / (count - 1))
+  ));
+  const origins = [[-1.55, 0, 0], [0, 0, 0], [1.55, 0, 0]];
+  const actors = [
+    { id: 'phrase-baseline', label: 'Phrase Baseline', color: '#8fb6ff', intent: phrasePlan.intent },
+    { id: 'track-root-only', label: 'Root Only Track', color: '#ffd166', intent: track.intent },
+    { id: 'track-root-head', label: 'Root + Head Track', color: '#ff7a66', intent: track.intent },
+  ];
+  const filmstrip = frameIndexes.map(index => ({
+    frameIndex: index,
+    t: Number((index / simFps).toFixed(5)),
+    actors: variants.map((variant, variantIndex) => {
+      const frame = variant.simulation.frames[Math.min(index, variant.simulation.frames.length - 1)];
+      const sample = frame?.sample || (variantIndex === 0
+        ? sampleMotionPlan(phrasePlan, index / simFps)
+        : sampleMotionTrack(track, index / simFps, { mode: variantIndex === 1 ? 'root-only' : 'root+head' }));
+      return variantIndex === 0
+        ? comparisonActorSample(actors[variantIndex], sample, origins[variantIndex])
+        : motionTrackActorSample(actors[variantIndex], sample, origins[variantIndex]);
+    }),
+  }));
+  return {
+    schema: 'kaminos.motion-track-harness.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    track,
+    fps: simFps,
+    duration: simDuration,
     variants,
     filmstrip,
   };
