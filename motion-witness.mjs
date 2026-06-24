@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 
 import {
   buildMotionDecisionComparison,
+  buildGeneratedMotionTrackHarness,
   buildMotionPhraseControlHarness,
   buildMotionTrackHarness,
   buildMotionWitnessTimeline,
@@ -21,6 +22,7 @@ const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_motion_agency=1
 const isPhraseRoute = url.includes('kaminos_motion_phrase=1');
 const isPhraseControlRoute = url.includes('kaminos_motion_phrase_controls=1');
 const isTrackRoute = url.includes('kaminos_motion_tracks=1');
+const isGeneratedTrackRoute = url.includes('kaminos_generated_motion_track=1');
 const out = resolve(args.get('--out') || '/tmp/kaminos-motion-agency-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const filmstripPath = resolve(args.get('--filmstrip') || out.replace(/\.png$/i, '-filmstrip.png'));
@@ -230,15 +232,49 @@ try {
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
 
   phase = 'rendering-filmstrip';
-  const timeline = isTrackRoute
+  const timeline = isGeneratedTrackRoute
+    ? buildGeneratedMotionTrackHarness({ fps: 12, filmstripFrames: 7 })
+    : (isTrackRoute
     ? buildMotionTrackHarness({ duration: 5.4, fps: 12, filmstripFrames: 7 })
     : (isPhraseControlRoute
     ? buildMotionPhraseControlHarness({ duration: 7.2, fps: 12, filmstripFrames: 7 })
     : (isPhraseRoute
       ? buildMotionDecisionComparison({ duration: 7.2, fps: 12, filmstripFrames: 7 })
-      : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 })));
+      : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 }))));
   const filmstrip = drawFilmstrip(timeline, filmstripPath);
-  if (isTrackRoute) {
+  if (isGeneratedTrackRoute) {
+    lastEvidence.generatedMotionTrackHarness = {
+      schema: timeline.schema,
+      route: timeline.route,
+      sourceStatus: timeline.sourceStatus,
+      sourceKind: timeline.sourceKind,
+      sourceModel: timeline.sourceModel,
+      sourceRoute: timeline.sourceRoute,
+      prompt: timeline.prompt,
+      track: {
+        schema: timeline.track.schema,
+        id: timeline.track.id,
+        sourceKind: timeline.track.sourceKind,
+        sourceStatus: timeline.track.sourceStatus,
+        sourceModel: timeline.track.sourceModel,
+        sourceRoute: timeline.track.sourceRoute,
+        prompt: timeline.track.prompt,
+        rawFrameCount: timeline.track.rawFrameCount,
+        fps: timeline.track.fps,
+        units: timeline.track.units,
+        jointMapping: timeline.track.jointMapping,
+        extractionAssumptions: timeline.track.extractionAssumptions,
+      },
+      variants: timeline.variants.map(variant => ({
+        id: variant.id,
+        label: variant.label,
+        kind: variant.kind,
+        attentionMode: variant.attentionMode,
+        metrics: variant.metrics,
+      })),
+      filmstrip,
+    };
+  } else if (isTrackRoute) {
     lastEvidence.motionTrackHarness = {
       schema: timeline.schema,
       route: timeline.route,
@@ -325,23 +361,38 @@ try {
   phase = 'settling-route';
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
-  const routeParam = isPhraseControlRoute
+  const routeParam = isGeneratedTrackRoute
+    ? 'kaminos_generated_motion_track=1'
+    : (isPhraseControlRoute
     ? 'kaminos_motion_phrase_controls=1'
     : (isTrackRoute
       ? 'kaminos_motion_tracks=1'
-      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1'));
+      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1')));
   if (!effectiveUrl.includes(routeParam)) throw new Error(`effective URL lost motion route ${routeParam}: ${effectiveUrl}`);
-  const debugExpression = isPhraseControlRoute
+  const debugExpression = isGeneratedTrackRoute
+    ? 'window.kaminosGeneratedMotionTrackDebugState?.()'
+    : (isPhraseControlRoute
     ? 'window.kaminosMotionPhraseControlDebugState?.()'
     : (isTrackRoute
       ? 'window.kaminosMotionTrackDebugState?.()'
       : (isPhraseRoute
       ? 'window.kaminosMotionDecisionDebugState?.()'
-      : 'window.kaminosMotionAgencyDebugState?.()'));
+      : 'window.kaminosMotionAgencyDebugState?.()')));
   const debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
   lastEvidence.debug = debug;
   if (debug?.route !== 'procedural-orb-motion-grammar-v0') throw new Error(`motion route identity mismatch: ${JSON.stringify(debug)}`);
-  if (isTrackRoute) {
+  if (isGeneratedTrackRoute) {
+    const generatedMotionTrackHarness = debug?.generatedMotionTrackHarness;
+    if (!debug?.active || debug.actorCount < 2) throw new Error(`generated motion track route did not spawn comparison actors: ${JSON.stringify(debug)}`);
+    if (generatedMotionTrackHarness?.schema !== 'kaminos.generated-motion-track-harness.v0') throw new Error(`generated motion track route lost harness schema: ${JSON.stringify(debug)}`);
+    if (generatedMotionTrackHarness.track?.schema !== 'kaminos.motion-track.v0') throw new Error(`generated motion track route lost track schema: ${JSON.stringify(debug)}`);
+    if (generatedMotionTrackHarness.sourceStatus !== 'fixture') throw new Error(`generated motion track route lost fixture source status: ${JSON.stringify(debug)}`);
+    if (!String(generatedMotionTrackHarness.sourceRoute || '').includes('motion-diffusion-model/save')) throw new Error(`generated motion track route lost model route identity: ${JSON.stringify(debug)}`);
+    const generated = generatedMotionTrackHarness.variants?.find(variant => variant.id === 'generated_dip_wave');
+    if (!generated) throw new Error(`generated motion track route lost generated variant: ${JSON.stringify(debug)}`);
+    if (!(generated.metrics?.rootTravel > 4.5)) throw new Error(`generated motion track route lost root travel: ${JSON.stringify(debug)}`);
+    if (!(generated.metrics?.maxEffort > 0.45)) throw new Error(`generated motion track route lost effort envelope: ${JSON.stringify(debug)}`);
+  } else if (isTrackRoute) {
     const motionTrackHarness = debug?.motionTrackHarness;
     if (!debug?.active || debug.actorCount < 3) throw new Error(`motion track route did not spawn comparison actors: ${JSON.stringify(debug)}`);
     if (motionTrackHarness?.schema !== 'kaminos.motion-track-harness.v0') throw new Error(`motion track route lost harness schema: ${JSON.stringify(debug)}`);
@@ -408,6 +459,7 @@ try {
     decisionComparison: debug.decisionComparison || lastEvidence.decisionComparison || null,
     phraseControlHarness: debug.phraseControlHarness || lastEvidence.phraseControlHarness || null,
     motionTrackHarness: debug.motionTrackHarness || lastEvidence.motionTrackHarness || null,
+    generatedMotionTrackHarness: debug.generatedMotionTrackHarness || lastEvidence.generatedMotionTrackHarness || null,
     effectiveControls: debug.effectiveControls || null,
     debug,
     timeline: lastEvidence.timeline,

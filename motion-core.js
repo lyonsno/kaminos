@@ -330,6 +330,51 @@ export const DEFAULT_MOTION_TRACK_FIXTURE = {
   },
 };
 
+export const DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE = {
+  schema: 'kaminos.generated-joint-motion-fixture.v0',
+  id: 'dip_wave_generated_fixture_v0',
+  label: 'DiP Wave Generated Fixture V0',
+  intent: 'reporting-greeting-enter-wave',
+  sourceKind: 'generated-fixture',
+  sourceStatus: 'fixture',
+  sourceModel: 'DiP',
+  sourceRoute: '/Users/noahlyons/dev/motion-diffusion-model/save/DiP_no-target_10steps_context20_predict40/samples_DiP_no-target_10steps_context20_predict40_000600343_seed10_A_person_walks_forward_and_waves_their_hand/results.npy',
+  previewRoute: '/Users/noahlyons/dev/motion-diffusion-model/save/DiP_no-target_10steps_context20_predict40/samples_DiP_no-target_10steps_context20_predict40_000600343_seed10_A_person_walks_forward_and_waves_their_hand/samples_00_to_00.mp4',
+  prompt: 'A person walks forward and waves their hand.',
+  modelRun: {
+    dataset: 'humanml',
+    seed: 10,
+    checkpointStep: 600343,
+    sampler: 'DiP_no-target_10steps_context20_predict40',
+  },
+  fps: 20,
+  rawFrameCount: 120,
+  jointMapping: {
+    root: 0,
+    head: 15,
+    leftWrist: 20,
+    rightWrist: 21,
+  },
+  extractionAssumptions: [
+    'input is generated HumanML/T2M absolute xyz joints shaped joints x xyz x frames',
+    'pelvis joint 0 drives root/CoG',
+    'head joint 15 drives attention/head',
+    'wrist height delta drives wave-effort envelope',
+    'phase labels are heuristic and must not claim source-authored semantics',
+  ],
+  samples: [
+    { frame: 0, root: [0.0, 0.95273, 0.0], head: [0.01894, 1.51656, 0.10357], leftWrist: [0.3702, 1.20727, -0.51516], rightWrist: [-0.25789, 1.64283, 0.49596] },
+    { frame: 15, root: [-0.60097, 0.93297, 0.41602], head: [-0.6355, 1.53403, 0.50111], leftWrist: [-0.59204, 1.2814, 0.86871], rightWrist: [-0.92538, 1.07961, 0.65751] },
+    { frame: 30, root: [-0.60896, 0.93226, 1.05676], head: [-0.60233, 1.53231, 1.14267], leftWrist: [-0.29286, 0.8427, 0.95207], rightWrist: [-0.90081, 0.8558, 0.95677] },
+    { frame: 45, root: [-0.59379, 0.93849, 1.73516], head: [-0.62331, 1.54672, 1.78872], leftWrist: [-0.44775, 1.46683, 1.86717], rightWrist: [-0.86584, 0.85536, 1.91721] },
+    { frame: 60, root: [-0.45876, 0.91683, 2.45032], head: [-0.50194, 1.5252, 2.50708], leftWrist: [-0.36521, 1.46847, 2.61479], rightWrist: [-0.71617, 0.80492, 2.38342] },
+    { frame: 75, root: [-0.41255, 0.93229, 3.1646], head: [-0.42303, 1.5409, 3.19574], leftWrist: [-0.23869, 1.48398, 3.28555], rightWrist: [-0.67507, 0.88593, 3.36423] },
+    { frame: 90, root: [-0.35414, 0.9347, 3.86775], head: [-0.41215, 1.53874, 3.92472], leftWrist: [-0.28127, 1.44039, 3.99351], rightWrist: [-0.60071, 0.80135, 3.97426] },
+    { frame: 105, root: [-0.2057, 0.93799, 4.53534], head: [-0.21165, 1.54286, 4.58301], leftWrist: [-0.0852, 1.43452, 4.75072], rightWrist: [-0.45245, 0.84739, 4.6188] },
+    { frame: 119, root: [-0.20796, 0.94681, 5.03718], head: [-0.2488, 1.55966, 5.0987], leftWrist: [0.02935, 0.87729, 4.98949], rightWrist: [-0.45374, 0.82118, 5.11583] },
+  ],
+};
+
 export function normalizeMotionClip(clip) {
   if (!clip || typeof clip !== 'object') throw new Error('Motion clip must be an object');
   const duration = Number(clip.duration);
@@ -1025,7 +1070,15 @@ export function normalizeMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE) 
     label: trackInput.label || id,
     intent: trackInput.intent || 'unspecified',
     sourceKind: trackInput.sourceKind || 'unknown',
+    sourceStatus: trackInput.sourceStatus || trackInput.sourceKind || 'unknown',
+    sourceModel: trackInput.sourceModel || 'unknown',
     sourceRoute: trackInput.sourceRoute || 'unknown',
+    previewRoute: trackInput.previewRoute || null,
+    prompt: trackInput.prompt || null,
+    rawFrameCount: Number.isFinite(Number(trackInput.rawFrameCount)) ? Number(trackInput.rawFrameCount) : null,
+    jointMapping: trackInput.jointMapping || null,
+    extractionAssumptions: Array.isArray(trackInput.extractionAssumptions) ? [...trackInput.extractionAssumptions] : [],
+    modelRun: trackInput.modelRun || null,
     fps,
     duration,
     units: trackInput.units || 'meters',
@@ -1033,6 +1086,75 @@ export function normalizeMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE) 
     forwardAxis: normalizeVec3(vec3(trackInput.forwardAxis, [0, 0, 1]), [0, 0, 1]),
     tracks: { root, head, effort, phase },
   };
+}
+
+function generatedPhaseForProgress(progress) {
+  if (progress < 0.16) return 'entering';
+  if (progress < 0.58) return 'wave';
+  if (progress < 0.86) return 'reporting';
+  return 'settle';
+}
+
+export function adaptGeneratedJointMotionToTrack(generatedInput = DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE) {
+  const id = String(generatedInput?.id || '').trim();
+  if (!id) throw new Error('Generated motion id is required');
+  const fps = Math.max(1, Math.round(Number(generatedInput?.fps) || 20));
+  const rawFrameCount = Math.max(2, Math.round(Number(generatedInput?.rawFrameCount) || 2));
+  const duration = Number(((rawFrameCount - 1) / fps).toFixed(5));
+  const samples = Array.isArray(generatedInput?.samples) ? generatedInput.samples : [];
+  if (samples.length < 2) throw new Error(`Generated motion ${id} needs at least two distilled samples`);
+  const firstRoot = vec3(samples[0]?.root);
+  const wristHeights = samples.map(sample => {
+    const root = vec3(sample.root);
+    const leftWrist = vec3(sample.leftWrist, root);
+    const rightWrist = vec3(sample.rightWrist, root);
+    return Math.max(Math.abs(leftWrist[1] - root[1]), Math.abs(rightWrist[1] - root[1]));
+  });
+  const entryWristHeight = wristHeights[0];
+  const wristHeightDeltas = wristHeights.map(height => Math.abs(height - entryWristHeight));
+  const maxWristDelta = Math.max(...wristHeightDeltas);
+  const normalizeWorld = value => {
+    const source = vec3(value);
+    return [
+      Number((source[0] - firstRoot[0]).toFixed(5)),
+      Number((source[1] - firstRoot[1]).toFixed(5)),
+      Number((source[2] - firstRoot[2]).toFixed(5)),
+    ];
+  };
+  const timeForFrame = sample => Number((clamp(Number(sample.frame) || 0, 0, rawFrameCount - 1) / fps).toFixed(5));
+  return normalizeMotionTrack({
+    schema: MOTION_TRACK_SCHEMA,
+    id,
+    label: generatedInput.label || id,
+    intent: generatedInput.intent || 'generated-motion',
+    sourceKind: generatedInput.sourceKind || 'generated-fixture',
+    sourceStatus: generatedInput.sourceStatus || 'fixture',
+    sourceModel: generatedInput.sourceModel || 'unknown',
+    sourceRoute: generatedInput.sourceRoute || 'unknown',
+    previewRoute: generatedInput.previewRoute || null,
+    prompt: generatedInput.prompt || null,
+    modelRun: generatedInput.modelRun || null,
+    rawFrameCount,
+    jointMapping: generatedInput.jointMapping || null,
+    extractionAssumptions: generatedInput.extractionAssumptions || [],
+    fps,
+    duration,
+    units: 'meters',
+    upAxis: [0, 1, 0],
+    forwardAxis: [0, 0, 1],
+    tracks: {
+      root: samples.map(sample => ({ t: timeForFrame(sample), value: normalizeWorld(sample.root) })),
+      head: samples.map(sample => ({ t: timeForFrame(sample), value: normalizeWorld(sample.head) })),
+      effort: samples.map((sample, index) => {
+        const wristEffort = wristHeightDeltas[index] / Math.max(1e-6, maxWristDelta);
+        return { t: timeForFrame(sample), value: Number((0.2 + wristEffort * 0.72).toFixed(5)) };
+      }),
+      phase: samples.map(sample => ({
+        t: timeForFrame(sample),
+        value: generatedPhaseForProgress((Number(sample.frame) || 0) / Math.max(1, rawFrameCount - 1)),
+      })),
+    },
+  });
 }
 
 function sampleTimedVec(samples, t) {
@@ -1179,6 +1301,7 @@ function motionTrackActorSample(actor, sample, origin) {
     sourceKind: sample.sourceKind,
     mode: sample.mode,
     headRootSeparation: sample.headRootSeparation,
+    attentionMassContrast: sample.attentionMassContrast,
   };
 }
 
@@ -1256,6 +1379,76 @@ export function buildMotionTrackHarness({
     schema: 'kaminos.motion-track-harness.v0',
     route: MOTION_ROUTE_IDENTITY,
     track,
+    fps: simFps,
+    duration: simDuration,
+    variants,
+    filmstrip,
+  };
+}
+
+export function buildGeneratedMotionTrackHarness({
+  generatedInput = DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
+  duration,
+  fps = 12,
+  filmstripFrames = 7,
+} = {}) {
+  const authoredTrack = normalizeMotionTrack(DEFAULT_MOTION_TRACK_FIXTURE);
+  const generatedTrack = adaptGeneratedJointMotionToTrack(generatedInput);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : generatedTrack.duration);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const authoredSimulation = simulateMotionTrack(authoredTrack, { duration: Math.min(simDuration, authoredTrack.duration), fps: simFps, mode: 'mass-attention' });
+  const generatedSimulation = simulateMotionTrack(generatedTrack, { duration: simDuration, fps: simFps, mode: 'mass-attention' });
+  const variants = [
+    {
+      id: 'authored_mass_attention',
+      label: 'Authored Mass + Attention',
+      color: '#ff7a66',
+      kind: 'motion-track-authored-mass-attention',
+      attentionMode: 'mass-attention',
+      track: authoredTrack,
+      metrics: authoredSimulation.metrics,
+      simulation: authoredSimulation,
+    },
+    {
+      id: 'generated_dip_wave',
+      label: 'Generated DiP Wave',
+      color: '#9fe6bd',
+      kind: 'motion-track-generated-dip-wave',
+      attentionMode: 'mass-attention',
+      track: generatedTrack,
+      metrics: generatedSimulation.metrics,
+      simulation: generatedSimulation,
+    },
+  ];
+  const maxFrames = Math.max(...variants.map(variant => variant.simulation.frames.length));
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), maxFrames));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (maxFrames - 1) / (count - 1))
+  ));
+  const origins = [[-1.2, 0, 0], [1.2, 0, -1.2]];
+  const actors = [
+    { id: 'authored-mass-attention', label: 'Authored Mass + Attention', color: '#ff7a66', intent: authoredTrack.intent },
+    { id: 'generated-dip-wave', label: 'Generated DiP Wave', color: '#9fe6bd', intent: generatedTrack.intent },
+  ];
+  const filmstrip = frameIndexes.map(index => ({
+    frameIndex: index,
+    t: Number((index / simFps).toFixed(5)),
+    actors: variants.map((variant, variantIndex) => {
+      const frame = variant.simulation.frames[Math.min(index, variant.simulation.frames.length - 1)];
+      const sample = frame?.sample || sampleMotionTrack(variant.track, index / simFps, { mode: 'mass-attention' });
+      return motionTrackActorSample(actors[variantIndex], sample, origins[variantIndex]);
+    }),
+  }));
+  return {
+    schema: 'kaminos.generated-motion-track-harness.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    sourceStatus: generatedTrack.sourceStatus,
+    sourceKind: generatedTrack.sourceKind,
+    sourceModel: generatedTrack.sourceModel,
+    sourceRoute: generatedTrack.sourceRoute,
+    prompt: generatedTrack.prompt,
+    track: generatedTrack,
+    authoredTrack,
     fps: simFps,
     duration: simDuration,
     variants,
