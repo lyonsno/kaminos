@@ -3086,6 +3086,7 @@ function registerSceneObject(object, metadata = {}) {
     groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
     splat: metadata.splat ?? null,
+    image: metadata.image ?? null,
     renderRoute: metadata.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
@@ -3100,6 +3101,7 @@ function registerSceneObject(object, metadata = {}) {
     groupId: record.groupId,
     createdAt: record.createdAt,
     splat: record.splat,
+    image: record.image,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
@@ -3155,6 +3157,7 @@ window.kaminosSceneObjectDebugState = function() {
     transform: sceneObjectTransformState(record.object),
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
+    image: record.image || null,
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
@@ -3854,6 +3857,57 @@ function loadTextureLinear(file) {
       resolve(tex);
     });
   });
+}
+
+async function showImagePlane(source, options = {}) {
+  if (!source) {
+    setInfo('Image source required');
+    return null;
+  }
+  if (shouldClearSceneForImport(options)) clearScene();
+  const loadToken = sceneMutationToken;
+  const metadata = options.metadata || {};
+  const texture = await loadTexture(source);
+  const image = texture.image || {};
+  const width = Number(image.naturalWidth || image.width || 1) || 1;
+  const height = Number(image.naturalHeight || image.height || 1) || 1;
+  const aspect = Math.max(0.05, width / Math.max(1, height));
+  const planeHeight = 1.25;
+  const planeWidth = planeHeight * aspect;
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeHeight), material);
+  mesh.name = metadata.label || metadata.fileName || 'Image Plane';
+  if (loadToken !== sceneMutationToken || greenroomPreviewIsActive()) {
+    disposeObjectTree(mesh);
+    console.warn('stale async image plane load ignored');
+    return null;
+  }
+  scene.add(mesh);
+  const fileName = metadata.fileName || String(source).split('/').pop() || 'image.png';
+  const imageMetadata = {
+    schema: 'kaminos.image-plane.v0',
+    assetSource: source,
+    fileName,
+    width,
+    height,
+    ...(metadata.image || {}),
+  };
+  const record = registerSceneObject(mesh, {
+    ...metadata,
+    source: metadata.source ?? source,
+    type: 'image',
+    fileName,
+    label: metadata.label ?? fileName,
+    image: imageMetadata,
+  });
+  currentMesh = mesh;
+  document.getElementById('transform-bar').classList.add('visible');
+  setInfo(`Imported image to scene: ${record.label || fileName}`);
+  return mesh;
 }
 
 // --- PBR Material Preview ---
@@ -5044,6 +5098,11 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'route' && selectedRun) rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
   if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
   if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
+  if (node.kind === 'image') {
+    rows.push({ key: 'source', value: node.source || 'missing' });
+    rows.push({ key: 'scope', value: 'graph working input' });
+    rows.push({ key: 'stage', value: node.stage || 'working' });
+  }
   if (node.kind === 'evidence') {
     rows.push({ key: 'sidecar', value: node.sidecar?.path || 'none' });
     rows.push({ key: 'bundle', value: node.bundlePath || 'none' });
@@ -5058,6 +5117,9 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
   if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
     actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source).catch(() => {}) });
+  }
+  if (node?.kind === 'image' && node.source) {
+    actions.push({ label: 'Import Image to Scene', action: () => pipelineImportGraphImageNodeToScene(node).catch(() => {}) });
   }
   if (node?.kind === 'output' && selectedRun && node.artifact?.path) {
     actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact).catch(() => {}) });
@@ -5399,6 +5461,43 @@ async function pipelineLoadRunSource(result) {
   return pipelineLoadSourceRecord(result?.source || pipelineSelectedSource());
 }
 
+async function pipelineImportGraphImageNodeToScene(node) {
+  if (!node?.source) {
+    pipelineSetActionStatus('Image node source required before scene import');
+    return null;
+  }
+  const fileName = node.path || node.detail || node.title || 'pipeline-image.png';
+  pipelineSetActionStatus('Importing graph image node into scene...');
+  try {
+    const mesh = await showImagePlane(node.source, {
+      clear: false,
+      metadata: {
+        source: node.source,
+        type: 'image',
+        fileName,
+        label: node.title || fileName,
+        image: {
+          schema: 'kaminos.image-plane.v0',
+          assetSource: node.source,
+          fileName,
+          root_id: node.rootId || null,
+          path: node.path || null,
+          sourceStage: node.stage || 'working',
+          importedFrom: 'pipeline-graph-node',
+          graphNodeId: node.id,
+        },
+      },
+    });
+    const record = sceneObjects.find(entry => entry.object === mesh) || selectedSceneObjectEntry();
+    setActiveTab('assets');
+    pipelineSetActionStatus(`Imported image node to scene: ${record?.label || fileName}`);
+    return record;
+  } catch (err) {
+    pipelineSetActionStatus(`Image node scene import failed: ${err.message || err}`);
+    throw err;
+  }
+}
+
 function renderPipelineRunShelf() {
   const shelf = document.getElementById('pipeline-run-shelf');
   const list = document.getElementById('pipeline-run-list');
@@ -5696,6 +5795,8 @@ window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
+window.showImagePlane = showImagePlane;
+window.kaminosPipelineImportGraphImageNodeToScene = pipelineImportGraphImageNodeToScene;
 window.pipelineOpenRunDocument = pipelineOpenRunDocument;
 window.buildPipelineDockGraphState = buildPipelineDockGraphState;
 window.buildPipelineGraphModel = buildPipelineGraphModel;
@@ -8316,6 +8417,7 @@ function serializeSceneObject(entry) {
     sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
     materials: getMaterialStateForObject(object),
     splat: metadata.splat ?? entry.splat ?? null,
+    image: metadata.image ?? entry.image ?? null,
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
@@ -8339,6 +8441,12 @@ async function addSceneObjectFromSource(record) {
     });
   }
   if (isReloadableSceneObjectRecord(record)) {
+    if (record.type === 'image') {
+      return showImagePlane(record.source, {
+        clear: false,
+        metadata: record,
+      });
+    }
     if (record.type === 'splat') {
       return greenroomImportSplat(record.source, record.fileName || 'splat.ply', {
         title: record.label || record.fileName || 'Splat',
