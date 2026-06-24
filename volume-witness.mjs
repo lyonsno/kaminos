@@ -668,6 +668,7 @@ async function main() {
     if (expectedVolumeScene === 'tall_plume') {
       assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
       assert.equal(state.tallPlumeFlameCutoffContract, 'tall-plume-speed-cutoff-decoupled-v0', 'tall-plume flame cutoff/speed contract was not active');
+      assert.equal(state.tallPlumeFlowShelfContract, 'tall-plume-flow-shelf-mitigated-v0', 'tall-plume flow-rate shelf mitigation contract was not active');
     }
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
@@ -1381,6 +1382,7 @@ async function main() {
       reactionFuelScale: sample.reactionFuelScale,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
+      tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
       plumeHeight: sample.plumeHeight,
       speed: state.controls?.speed,
       windStrength: sample.windStrength,
