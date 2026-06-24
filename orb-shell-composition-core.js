@@ -49,6 +49,36 @@ function band(id, parent, role, offset, width, layerIntervals, startType, endTyp
   };
 }
 
+function territoryBody(id, role, territory, childBands, options = {}) {
+  const primaryWidth = Math.max(...childBands.map(child => child.widthProfile.mid));
+  const midWidth = Math.max(primaryWidth * 1.72, territory.lonWidth * (options.widthFactor || 0.22));
+  return {
+    schema: 'MacroTerritoryBody',
+    id: `${id}-territory-body`,
+    parentAssemblage: id,
+    role,
+    proceduralFamily: 'offset-impulse-line-envelope',
+    boundaryHypotheses: [
+      'swept-voronoi-territory',
+      'pressure-field-boundary',
+      'spherical-section-panel',
+    ],
+    widthProfile: {
+      root: midWidth * 0.68,
+      mid: midWidth,
+      tip: midWidth * 0.72,
+    },
+    thicknessProfile: {
+      root: 0.022,
+      mid: 0.034,
+      tip: 0.022,
+    },
+    occupancyMode: 'area-bearing-spherical-ribbon',
+    closureAnchorIds: options.closureAnchorIds || ['crown-closure-anchor', 'lower-socket-anchor'],
+    uShapedCageFailurePressure: 'body-occupancy-must-close-sphere-not-only-draw-open-arcs',
+  };
+}
+
 function macro(id, role, dominance, phase, handedness, territory, childBands, options = {}) {
   return {
     schema: 'MacroAssemblage',
@@ -75,6 +105,7 @@ function macro(id, role, dominance, phase, handedness, territory, childBands, op
     entryZone: options.entryZone || 'upper-crown-offset',
     exitZone: options.exitZone || 'lower-crown-opposite',
     childBandPlan: childBands,
+    territoryBodyOccupancy: territoryBody(id, role, territory, childBands, options),
     layerItinerary: {
       schema: 'LayerDepthSchedule',
       proceduralFamily: 'local-layer-event-schedule',
@@ -104,6 +135,37 @@ function macro(id, role, dominance, phase, handedness, territory, childBands, op
 }
 
 export function createTargetOrbShellCompositionFixture() {
+  const sphericalClosureAnchors = [
+    {
+      id: 'crown-closure-anchor',
+      role: 'crown-closure-anchor',
+      proceduralFamily: 'low-order-harmonic-field-crown-closure',
+      position: [0, 1.04, 0.14],
+      generatedBy: ['sphere-closure', 'termination-socket-demand'],
+    },
+    {
+      id: 'lower-socket-anchor',
+      role: 'lower-socket-anchor',
+      proceduralFamily: 'opposed-crown-socket-closure',
+      position: [0, -1.04, 0.16],
+      generatedBy: ['sphere-closure', 'lower-rim-absorption'],
+    },
+    {
+      id: 'left-side-rim-pressure-anchor',
+      role: 'side-rim-pressure-anchor',
+      proceduralFamily: 'pressure-field-boundary',
+      position: [-0.86, -0.02, 0.54],
+      generatedBy: ['side-gill-pressure', 'macro-territory-boundary'],
+    },
+    {
+      id: 'right-side-rim-pressure-anchor',
+      role: 'side-rim-pressure-anchor',
+      proceduralFamily: 'pressure-field-boundary',
+      position: [0.86, 0.02, 0.54],
+      generatedBy: ['side-gill-pressure', 'macro-territory-boundary'],
+    },
+  ];
+
   const northWest = [
     band('nw-body', 'north-west-dominant-thrust', 'body', -0.03, 0.16, [
       { t0: 0, t1: 1, layer: 'outer', trigger: 'dominant-thrust' },
@@ -154,6 +216,7 @@ export function createTargetOrbShellCompositionFixture() {
       lonWidth: 0.82,
     }, northWest, {
       control: { startLat: 1.1, endLat: -1.08, twist: 1.52, bow: -0.22 },
+      closureAnchorIds: ['crown-closure-anchor', 'lower-socket-anchor', 'left-side-rim-pressure-anchor'],
       neighborRelations: [
         { target: 'north-east-counter-thrust', relation: 'passes-over-at-front-crown' },
         { target: 'equatorial-cupping-whorl', relation: 'frames-primary-aperture-left-edge' },
@@ -165,6 +228,7 @@ export function createTargetOrbShellCompositionFixture() {
     }, northEast, {
       spineFamily: 'coupled-great-circle-lopsided-loxodrome',
       control: { startLat: 1.18, endLat: -0.98, twist: 1.28, bow: 0.28 },
+      closureAnchorIds: ['crown-closure-anchor', 'lower-socket-anchor', 'right-side-rim-pressure-anchor'],
       neighborRelations: [
         { target: 'north-west-dominant-thrust', relation: 'tucks-under-front-crossing' },
         { target: 'polar-crown-lock', relation: 'terminates-into-upper-crown' },
@@ -178,6 +242,8 @@ export function createTargetOrbShellCompositionFixture() {
       control: { startLat: -0.78, endLat: 0.38, twist: 1.08, bow: 0.42 },
       entryZone: 'left-lower-rim',
       exitZone: 'right-side-gill-rim',
+      closureAnchorIds: ['lower-socket-anchor', 'left-side-rim-pressure-anchor', 'right-side-rim-pressure-anchor'],
+      widthFactor: 0.28,
       intervals: [
         { t0: 0, t1: 0.32, layer: 'outer', trigger: 'silhouette-budget' },
         { t0: 0.32, t1: 0.58, layer: 'inner-support', trigger: 'primary-aperture-pressure' },
@@ -196,6 +262,8 @@ export function createTargetOrbShellCompositionFixture() {
       control: { startLat: 1.26, endLat: 0.72, twist: 0.72, bow: -0.08 },
       entryZone: 'upper-back-crown',
       exitZone: 'upper-front-crown',
+      closureAnchorIds: ['crown-closure-anchor', 'left-side-rim-pressure-anchor', 'right-side-rim-pressure-anchor'],
+      widthFactor: 0.24,
       intervals: [
         { t0: 0, t1: 1, layer: 'outer', trigger: 'termination-socket-demand' },
       ],
@@ -227,6 +295,7 @@ export function createTargetOrbShellCompositionFixture() {
       'compatible termination choice',
     ],
     macroAssemblages,
+    sphericalClosureAnchors,
     AperturePressure: {
       schema: 'AperturePressure',
       proceduralFamily: 'aperture-pressure-field-from-macro-thrusts',
@@ -289,6 +358,72 @@ function makeBandTube(THREE, assemblage, bandMember) {
   return new THREE.TubeGeometry(curve, 96, Math.max(0.012, width * 0.14), 10, false);
 }
 
+function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
+  const body = assemblage.territoryBodyOccupancy;
+  const rowCount = 64;
+  const columnCount = 9;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+
+  const centerline = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    centerline.push(sampleSpine(THREE, assemblage, {
+      siblingOffset: 0,
+      layerIntervals: assemblage.layerItinerary.intervals,
+    }, t, 1.025));
+  }
+
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    const center = centerline[row];
+    const prev = centerline[Math.max(0, row - 1)];
+    const next = centerline[Math.min(rowCount - 1, row + 1)];
+    const normal = center.clone().normalize();
+    const tangent = next.clone().sub(prev).normalize();
+    let side = new THREE.Vector3().crossVectors(normal, tangent);
+    if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
+    side.normalize();
+    const profile = Math.pow(Math.sin(Math.PI * t), 0.42);
+    const terminalScale = 0.42 + 0.58 * profile;
+    const halfWidth = body.widthProfile.mid * terminalScale;
+    const lift = body.thicknessProfile.mid * (0.45 + 0.55 * profile);
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = u * 2 - 1;
+      const crown = 1 - Math.pow(Math.abs(q), 1.8) * 0.16;
+      const pos = center.clone()
+        .addScaledVector(side, q * halfWidth)
+        .addScaledVector(normal, lift * crown);
+      vertices.push(pos.x, pos.y, pos.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(u, t);
+    }
+  }
+
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.MacroTerritoryBody = body;
+  return geometry;
+}
+
 function makeAperturePressureRing(THREE, voidRecord) {
   const [cx, cy, cz] = voidRecord.center;
   const [rx, ry] = voidRecord.radius;
@@ -315,11 +450,18 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
 
   const sharedMaterials = new Set();
   const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x252c30, roughness: 0.24, metalness: 0.92, envMapIntensity: 2.4 });
+  const territoryMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1b2225,
+    roughness: 0.3,
+    metalness: 0.88,
+    envMapIntensity: 1.9,
+    side: THREE.DoubleSide,
+  });
   const railMaterial = new THREE.MeshStandardMaterial({ color: 0x6b777b, roughness: 0.2, metalness: 0.9, envMapIntensity: 2.8 });
   const hopMaterial = new THREE.MeshStandardMaterial({ color: 0x42302a, roughness: 0.28, metalness: 0.86, envMapIntensity: 2.2 });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.72 });
-  for (const material of [bodyMaterial, railMaterial, hopMaterial, apertureMaterial, terminationMaterial]) sharedMaterials.add(material);
+  for (const material of [bodyMaterial, territoryMaterial, railMaterial, hopMaterial, apertureMaterial, terminationMaterial]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
     if (bandMember.role === 'body') return bodyMaterial;
@@ -353,6 +495,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       const macroGroup = new THREE.Group();
       macroGroup.name = assemblage.id;
       macroGroup.userData.MacroAssemblage = assemblage;
+      const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
+      territoryMesh.name = `${assemblage.id}-macro-territory-body`;
+      territoryMesh.userData.MacroTerritoryBody = assemblage.territoryBodyOccupancy;
+      macroGroup.add(territoryMesh);
       for (const bandMember of assemblage.childBandPlan) {
         const mesh = new THREE.Mesh(makeBandTube(THREE, assemblage, bandMember), materialForBand(bandMember));
         mesh.name = bandMember.id;
@@ -381,6 +527,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       phase: 'built',
       identity: ORB_SHELL_COMPOSITION_IDENTITY,
       macroAssemblageCount: composition.macroAssemblages.length,
+      territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
+      closureAnchorCount: composition.sphericalClosureAnchors.length,
     });
     onDirty?.();
   }
@@ -409,6 +557,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
         macroAssemblageCount: composition.macroAssemblages.length,
         bandMemberCount: composition.macroAssemblages.reduce((sum, item) => sum + item.childBandPlan.length, 0),
+        territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
+        closureAnchorCount: composition.sphericalClosureAnchors.length,
+        MacroTerritoryBody: composition.macroAssemblages.map(item => item.territoryBodyOccupancy),
+        sphericalClosureAnchors: composition.sphericalClosureAnchors,
         OrbShellComposition: composition,
         inverseProceduralHypotheses: composition.inverseProceduralHypotheses,
         forbiddenFailureClasses: composition.AperturePressure.forbiddenFailureClasses,
