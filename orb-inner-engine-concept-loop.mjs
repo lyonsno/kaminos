@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ORB_INNER_ENGINE_IDENTITY, createOrbInnerEngineCore } from './orb-inner-engine-core.js';
 
@@ -38,6 +40,14 @@ function round(value, places = 3) {
 
 function jsonWrite(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function jsonRead(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function sha256Text(text) {
+  return createHash('sha256').update(text).digest('hex');
 }
 
 function makeRoutes() {
@@ -430,12 +440,201 @@ export function writeOrbInnerEngineConceptBundle({
   };
 }
 
-function parseArgs(argv) {
-  const args = new Map();
-  for (let i = 2; i < argv.length; i += 2) {
-    args.set(argv[i], argv[i + 1]);
+function replaceArgTokens(value, context) {
+  return String(value)
+    .replaceAll('{prompt}', context.prompt)
+    .replaceAll('{negative}', context.negative)
+    .replaceAll('{seed}', context.seed)
+    .replaceAll('{output}', context.outputImagePath)
+    .replaceAll('{conceptId}', context.conceptId)
+    .replaceAll('{route}', context.route);
+}
+
+function imageOutputComplete(path) {
+  return existsSync(path) && statSync(path).size > 0;
+}
+
+function makeUnconfiguredImageRecords({ bundleRoot, promptQueue, route, recordsPath }) {
+  return {
+    ok: false,
+    identity: 'orb-inner-engine-image-route-records-v0',
+    parentIdentity: promptQueue.parentIdentity,
+    route,
+    bundleRoot,
+    status: 'unconfigured',
+    effectiveCommand: null,
+    recordsPath,
+    records: promptQueue.items.map(item => ({
+      conceptId: item.id,
+      route,
+      status: 'unconfigured',
+      failurePhase: 'configuration',
+      failureReason: 'No image command supplied for this route.',
+      liveGeneratorInvoked: false,
+      seed: item.seed,
+      promptSha256: sha256Text(JSON.stringify({
+        positive: item.positive,
+        negative: item.negative,
+        framing: item.framing,
+      })),
+      outputImagePath: null,
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      argv: [],
+    })),
+  };
+}
+
+export function runOrbInnerEngineImageRoute({
+  bundleRoot,
+  route = 'local-image.ideogram4',
+  command = null,
+  args = [],
+  cwd = null,
+  env = {},
+  timeoutMs = 120000,
+} = {}) {
+  if (!bundleRoot) {
+    throw new Error('runOrbInnerEngineImageRoute requires bundleRoot');
   }
-  return args;
+  const resolvedBundleRoot = resolve(bundleRoot);
+  const promptQueuePath = join(resolvedBundleRoot, 'prompt-queue.json');
+  const recordsPath = join(resolvedBundleRoot, 'image-route-records.json');
+  const imageRoot = join(resolvedBundleRoot, 'images', route);
+  const promptQueue = jsonRead(promptQueuePath);
+  mkdirSync(imageRoot, { recursive: true });
+
+  if (!command) {
+    const unconfigured = makeUnconfiguredImageRecords({
+      bundleRoot: resolvedBundleRoot,
+      promptQueue,
+      route,
+      recordsPath,
+    });
+    jsonWrite(recordsPath, unconfigured);
+    return {
+      ok: false,
+      status: 'unconfigured',
+      route,
+      bundleRoot: resolvedBundleRoot,
+      imageRouteRecordsPath: recordsPath,
+    };
+  }
+
+  const effectiveCommand = {
+    command,
+    args,
+    cwd: cwd ? resolve(cwd) : resolvedBundleRoot,
+    timeoutMs,
+    shell: false,
+  };
+  const records = [];
+
+  for (const item of promptQueue.items) {
+    const outputImagePath = join(imageRoot, `${item.id}.png`);
+    const promptPayload = {
+      positive: item.positive,
+      negative: item.negative,
+      framing: item.framing,
+    };
+    const context = {
+      prompt: item.positive,
+      negative: item.negative,
+      seed: item.seed,
+      outputImagePath,
+      conceptId: item.id,
+      route,
+    };
+    const argv = args.map(arg => replaceArgTokens(arg, context));
+    const spawned = spawnSync(command, argv, {
+      cwd: effectiveCommand.cwd,
+      env: { ...process.env, ...env },
+      encoding: 'utf8',
+      shell: false,
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024 * 8,
+    });
+
+    let status = 'complete';
+    let failurePhase = null;
+    let failureReason = null;
+    if (spawned.error) {
+      status = 'failed';
+      failurePhase = spawned.error.code === 'ETIMEDOUT' ? 'timeout' : 'spawn';
+      failureReason = spawned.error.message;
+    } else if (spawned.status !== 0) {
+      status = 'failed';
+      failurePhase = 'command-exit';
+      failureReason = `Command exited with status ${spawned.status}`;
+    } else if (!imageOutputComplete(outputImagePath)) {
+      status = 'failed';
+      failurePhase = 'missing-output';
+      failureReason = 'Command completed without writing a non-empty output image.';
+    }
+
+    records.push({
+      conceptId: item.id,
+      route,
+      status,
+      failurePhase,
+      failureReason,
+      liveGeneratorInvoked: true,
+      seed: item.seed,
+      promptSha256: sha256Text(JSON.stringify(promptPayload)),
+      outputImagePath,
+      stdout: spawned.stdout || '',
+      stderr: spawned.stderr || '',
+      exitCode: spawned.status ?? null,
+      signal: spawned.signal ?? null,
+      argv,
+    });
+  }
+
+  const complete = records.every(record => record.status === 'complete');
+  const imageRouteRecords = {
+    ok: complete,
+    identity: 'orb-inner-engine-image-route-records-v0',
+    parentIdentity: promptQueue.parentIdentity,
+    route,
+    bundleRoot: resolvedBundleRoot,
+    status: complete ? 'complete' : 'failed',
+    effectiveCommand,
+    recordsPath,
+    records,
+  };
+  jsonWrite(recordsPath, imageRouteRecords);
+
+  return {
+    ok: complete,
+    status: imageRouteRecords.status,
+    route,
+    bundleRoot: resolvedBundleRoot,
+    imageRouteRecordsPath: recordsPath,
+  };
+}
+
+function parseArgs(argv) {
+  const values = new Map();
+  for (let i = 2; i < argv.length; i++) {
+    const key = argv[i];
+    if (!key.startsWith('--')) continue;
+    const consumesDashedValue = key === '--image-arg';
+    const hasValue = argv[i + 1] !== undefined && (consumesDashedValue || !argv[i + 1].startsWith('--'));
+    const value = hasValue ? argv[++i] : 'true';
+    const existing = values.get(key) || [];
+    existing.push(value);
+    values.set(key, existing);
+  }
+  return {
+    get(key) {
+      const found = values.get(key);
+      return found ? found[found.length - 1] : undefined;
+    },
+    all(key) {
+      return values.get(key) || [];
+    },
+  };
 }
 
 const invokedAsScript = process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href;
@@ -451,5 +650,16 @@ if (invokedAsScript) {
     socketRadius: Number(args.get('--socket-radius') || 1),
     animationPhase: Number(args.get('--phase') || 0.375),
   });
+  const imageCommand = args.get('--image-command');
+  if (imageCommand) {
+    result.imageRoute = runOrbInnerEngineImageRoute({
+      bundleRoot: result.bundleRoot,
+      route: args.get('--image-route') || 'local-image.ideogram4',
+      command: imageCommand,
+      args: args.all('--image-arg'),
+      cwd: args.get('--image-cwd') || null,
+      timeoutMs: Number(args.get('--image-timeout-ms') || 120000),
+    });
+  }
   console.log(JSON.stringify(result, null, 2));
 }

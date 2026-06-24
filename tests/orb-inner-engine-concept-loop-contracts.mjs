@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -13,6 +13,7 @@ const source = readFileSync(loopPath, 'utf8');
 assert.match(source, /orb-inner-engine-concept-loop-v0/, 'concept loop names its stable identity');
 assert.match(source, /createOrbInnerEngineConceptManifest/, 'concept loop exports deterministic manifest construction');
 assert.match(source, /writeOrbInnerEngineConceptBundle/, 'concept loop exports caller-rooted bundle writing');
+assert.match(source, /runOrbInnerEngineImageRoute/, 'concept loop exports image route execution');
 assert.match(source, /sharp\.splat/, 'concept loop names the SHARP splat route');
 assert.match(source, /starcraft-view-bank/, 'concept loop names the 2.5D view-bank fakery affordance');
 assert.match(source, /beaming\.volume-accent/, 'concept loop preserves Beaming volumetric accent as optional, not core');
@@ -22,6 +23,7 @@ assert.doesNotMatch(source, /\/tmp\/kaminos-orb-inner-engine-concept-loop/, 'con
 const {
   ORB_INNER_ENGINE_CONCEPT_LOOP_IDENTITY,
   createOrbInnerEngineConceptManifest,
+  runOrbInnerEngineImageRoute,
   writeOrbInnerEngineConceptBundle,
 } = await import(`${loopPath}?contract=${Date.now()}`);
 
@@ -107,6 +109,73 @@ try {
   assert.ok(routeRecords.records.some(record => record.route === 'sharp.splat'));
   assert.ok(routeRecords.records.every(record => ['planned', 'unconfigured'].includes(record.status)));
 
+  const skippedImageRun = runOrbInnerEngineImageRoute({
+    bundleRoot: result.bundleRoot,
+  });
+  assert.equal(skippedImageRun.ok, false);
+  assert.equal(skippedImageRun.status, 'unconfigured');
+  assert.ok(existsSync(skippedImageRun.imageRouteRecordsPath), 'unconfigured image route still writes route records');
+  const skippedRecords = JSON.parse(readFileSync(skippedImageRun.imageRouteRecordsPath, 'utf8'));
+  assert.equal(skippedRecords.identity, 'orb-inner-engine-image-route-records-v0');
+  assert.equal(skippedRecords.route, 'local-image.ideogram4');
+  assert.equal(skippedRecords.records.length, 2);
+  assert.ok(skippedRecords.records.every(record => record.status === 'unconfigured'));
+  assert.ok(skippedRecords.records.every(record => record.failurePhase === 'configuration'));
+  assert.ok(skippedRecords.records.every(record => record.liveGeneratorInvoked === false));
+
+  const fixtureCommand = join(outDir, 'fixture-image-generator.mjs');
+  writeFileSync(fixtureCommand, [
+    "import { writeFileSync } from 'node:fs';",
+    "const args = new Map();",
+    "for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);",
+    "writeFileSync(args.get('--out'), Buffer.from('89504e470d0a1a0a66616b652d706e67', 'hex'));",
+    "console.log(JSON.stringify({ ok: true, seed: args.get('--seed'), out: args.get('--out') }));",
+    '',
+  ].join('\n'));
+
+  const imageRun = runOrbInnerEngineImageRoute({
+    bundleRoot: result.bundleRoot,
+    command: process.execPath,
+    args: [
+      fixtureCommand,
+      '--prompt', '{prompt}',
+      '--negative', '{negative}',
+      '--seed', '{seed}',
+      '--out', '{output}',
+    ],
+  });
+
+  assert.equal(imageRun.ok, true);
+  assert.equal(imageRun.status, 'complete');
+  assert.ok(existsSync(imageRun.imageRouteRecordsPath), 'image route writes execution records');
+  const imageRecords = JSON.parse(readFileSync(imageRun.imageRouteRecordsPath, 'utf8'));
+  assert.equal(imageRecords.identity, 'orb-inner-engine-image-route-records-v0');
+  assert.equal(imageRecords.route, 'local-image.ideogram4');
+  assert.equal(imageRecords.effectiveCommand.command, process.execPath);
+  assert.equal(imageRecords.records.length, 2);
+  for (const record of imageRecords.records) {
+    assert.equal(record.status, 'complete');
+    assert.equal(record.failurePhase, null);
+    assert.equal(record.liveGeneratorInvoked, true);
+    assert.match(record.promptSha256, /^[0-9a-f]{64}$/);
+    assert.match(record.outputImagePath, /orb-inner-engine-concept-[0-9]{2}\.png$/);
+    assert.ok(existsSync(record.outputImagePath), 'successful image route produces an output image');
+    assert.equal(readFileSync(record.outputImagePath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    assert.ok(Array.isArray(record.argv));
+    assert.ok(record.argv.includes(record.outputImagePath));
+  }
+
+  const failingRun = runOrbInnerEngineImageRoute({
+    bundleRoot: result.bundleRoot,
+    command: process.execPath,
+    args: ['-e', 'process.exit(7)'],
+  });
+  assert.equal(failingRun.ok, false);
+  assert.equal(failingRun.status, 'failed');
+  const failureRecords = JSON.parse(readFileSync(failingRun.imageRouteRecordsPath, 'utf8'));
+  assert.ok(failureRecords.records.some(record => record.status === 'failed'));
+  assert.ok(failureRecords.records.some(record => record.failurePhase === 'command-exit'));
+
   execFileSync('node', [
     loopPath,
     '--out-dir', outDir,
@@ -123,6 +192,24 @@ try {
   assert.equal(receipt.outputs.manifestPath, join(outDir, 'orb-inner-engine-concept-loop-v0', 'manifest.json'));
   assert.equal(receipt.honesty.liveGeneratorsInvoked, false);
   assert.equal(receipt.honesty.status, 'manifest-only-no-live-generation');
+
+  execFileSync('node', [
+    loopPath,
+    '--out-dir', outDir,
+    '--core-seed', 'molten-heartfucker-core-contract',
+    '--concept-seed', 'view-bank-contract-cli-image',
+    '--concept-count', '1',
+    '--image-command', process.execPath,
+    '--image-arg', fixtureCommand,
+    '--image-arg', '--seed',
+    '--image-arg', '{seed}',
+    '--image-arg', '--out',
+    '--image-arg', '{output}',
+  ], { cwd: root, stdio: 'pipe' });
+  const cliImageRecordsPath = join(outDir, 'orb-inner-engine-concept-loop-v0', 'image-route-records.json');
+  const cliImageRecords = JSON.parse(readFileSync(cliImageRecordsPath, 'utf8'));
+  assert.equal(cliImageRecords.records.length, 1);
+  assert.equal(cliImageRecords.records[0].status, 'complete');
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }
