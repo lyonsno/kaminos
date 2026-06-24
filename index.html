@@ -3864,11 +3864,14 @@ function updateMotionDecisionFrame(nowSeconds = performance.now() / 1000) {
       visual.origin[2] + sample.attention[2],
     );
     const facing = new THREE.Vector3(...sample.facing).normalize();
+    const displayedFacing = attention.clone().sub(rootPosition).normalize();
     visual.group.position.copy(rootPosition);
     visual.group.lookAt(attention);
     const effort = sample.effort;
     visual.body.scale.fromArray(motionPhraseBodyScale(sample));
-    visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
+    visual.group.updateMatrixWorld(true);
+    const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar(0.21 + effort * 0.025));
+    visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
     visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
     visual.target.scale.setScalar(sample.phase === 'notice' || sample.phase === 'anticipate' ? 1.35 : 1);
     for (let i = 0; i < visual.trail.length; i++) {
@@ -3892,6 +3895,7 @@ function updateMotionDecisionFrame(nowSeconds = performance.now() / 1000) {
       phase: sample.phase,
       root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
       facing: sample.facing.map(value => Number(value.toFixed(5))),
+      displayFacing: attention.clone().sub(rootPosition).normalize().toArray().map(value => Number(value.toFixed(5))),
       attention: attention.toArray().map(value => Number(value.toFixed(5))),
       effort: Number(effort.toFixed(5)),
       scale: Number(sample.scale.toFixed(5)),
@@ -3989,11 +3993,14 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
       visual.origin[2] + sample.attention[2],
     );
     const facing = new THREE.Vector3(...sample.facing).normalize();
+    const displayedFacing = attention.clone().sub(rootPosition).normalize();
     visual.group.position.copy(rootPosition);
     visual.group.lookAt(attention);
     const effort = sample.effort;
     visual.body.scale.fromArray(motionPhraseBodyScale(sample));
-    visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
+    visual.group.updateMatrixWorld(true);
+    const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar(0.21 + effort * 0.025));
+    visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
     visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
     visual.target.position.copy(attention);
     const emphasizedTarget = variant.id === 'track_mass_attention' || variant.id === 'generated_dip_wave';
@@ -4022,6 +4029,7 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
       phase: sample.phase,
       root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
       facing: sample.facing.map(value => Number(value.toFixed(5))),
+      displayFacing: attention.clone().sub(rootPosition).normalize().toArray().map(value => Number(value.toFixed(5))),
       attention: attention.toArray().map(value => Number(value.toFixed(5))),
       effort: Number(effort.toFixed(5)),
       scale: Number(sample.scale.toFixed(5)),

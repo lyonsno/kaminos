@@ -21,6 +21,7 @@ assert.match(index, /window\.kaminosGeneratedMotionTrackDebugState/, 'browser ex
 assert.match(index, /attentionLeadDistance/, 'browser debug state records root/head attention separation metrics');
 assert.match(index, /sourceStatus/, 'browser debug state records fixture/live source status');
 assert.match(index, /verticalDisplayScale/, 'browser debug state records visual-only vertical display scale');
+assert.match(index, /faceCueWorld/, 'browser places the face cue from display-space facing instead of raw local-space facing');
 assert.match(index, /motionTrackActive/, 'render loop keeps rendering while motion tracks are active');
 
 assert.match(witness, /kaminos_motion_tracks=1/, 'motion witness can target the motion-track route');
