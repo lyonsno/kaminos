@@ -6,10 +6,11 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
-from serve import BROWSE_ROOTS
+from serve import ASSET_ROOTS, BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
+from serve import list_asset_entries
 
 
 def test_http_status_404_log_does_not_crash():
@@ -422,6 +423,37 @@ def test_pipeline_manifest_endpoint_payload_is_route_identified():
     assert any(pipeline["routeId"] == "adapter.model-chain-availability.v0" for pipeline in payload["pipelines"])
 
 
+def test_image_asset_index_declares_local_image_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp) / "images"
+        root.mkdir()
+        image = root / "prompt-card.png"
+        image.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n")
+
+        previous_roots = list(ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        ASSET_ROOTS[:] = [{
+            "id": "image-test",
+            "label": "Test Images",
+            "kind": "image",
+            "stage": "working",
+            "path": root,
+        }]
+        BROWSE_ROOTS["image-test"] = root
+        try:
+            entries = list_asset_entries(kind="image")
+        finally:
+            ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert len(entries) == 1
+        assert entries[0]["kind"] == "image"
+        assert entries[0]["root_id"] == "image-test"
+        assert entries[0]["source"] == "/api/read?root=image-test&path=prompt-card.png"
+        assert entries[0]["display"]["load_label"] == "Use Image"
+
+
 def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -483,5 +515,6 @@ if __name__ == "__main__":
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()
     test_pipeline_manifest_endpoint_payload_is_route_identified()
+    test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
     test_pipeline_run_rejects_sources_outside_declared_roots()

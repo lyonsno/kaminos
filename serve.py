@@ -34,12 +34,17 @@ KAMINOS_PIPELINE_RUNS_DIR = Path(os.environ.get(
     "KAMINOS_PIPELINE_RUNS_DIR",
     str(KAMINOS_ASSETS_DIR / "pipeline-runs"),
 )).expanduser()
+KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
+    "KAMINOS_IMAGE_INBOX_DIR",
+    str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
+    "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
@@ -52,6 +57,7 @@ BROWSE_ROOTS = {
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
@@ -69,6 +75,13 @@ ASSET_ROOTS = [
         "kind": "splat",
         "stage": "production",
         "path": KAMINOS_SPLAT_PRODUCTION_DIR,
+    },
+    {
+        "id": "image-inbox",
+        "label": "Local Image Inbox",
+        "kind": "image",
+        "stage": "working",
+        "path": KAMINOS_IMAGE_INBOX_DIR,
     },
 ]
 for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_ASSET_ROOTS", "").split(os.pathsep)), 1):
@@ -414,7 +427,12 @@ def list_asset_entries(kind="splat"):
         root_path = Path(root["path"]).expanduser()
         if not root_path.is_dir():
             continue
-        suffixes = SPLAT_EXTENSIONS if root.get("kind") == "splat" else MESH_EXTENSIONS
+        if root.get("kind") == "splat":
+            suffixes = SPLAT_EXTENSIONS
+        elif root.get("kind") == "image":
+            suffixes = IMAGE_EXTENSIONS
+        else:
+            suffixes = MESH_EXTENSIONS
         for path in sorted(root_path.rglob("*")):
             if any(part.startswith(".") for part in path.relative_to(root_path).parts):
                 continue
@@ -433,10 +451,19 @@ def build_asset_entry(root, path):
     except ValueError:
         rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
-    correction_document = load_splat_asset_correction(root_id, rel_path)
+    kind = root.get("kind")
+    correction_document = load_splat_asset_correction(root_id, rel_path) if kind == "splat" else None
+    display = build_asset_display_metadata(
+        path,
+        root_label=root.get("label") or root_id,
+        stage=root.get("stage", "experimental"),
+        size=size,
+    )
+    if kind == "image":
+        display["load_label"] = "Use Image"
     return {
         "id": f"{root_id}:{rel_path}",
-        "kind": root.get("kind"),
+        "kind": kind,
         "stage": root.get("stage", "experimental"),
         "root_id": root_id,
         "root_label": root.get("label") or root_id,
@@ -446,13 +473,13 @@ def build_asset_entry(root, path):
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
         "correction": correction_document.get("correction") if correction_document else None,
-        "display": build_asset_display_metadata(
-            path,
-            root_label=root.get("label") or root_id,
-            stage=root.get("stage", "experimental"),
-            size=size,
-        ),
-        "renderability": inspect_splat_renderability(path),
+        "display": display,
+        "renderability": inspect_splat_renderability(path) if kind == "splat" else {
+            "schema": "kaminos.image-preview.v0",
+            "status": "image",
+            "previewState": "direct-read",
+            "reason": "Local image asset served through /api/read for graph input.",
+        },
     }
 
 
@@ -996,9 +1023,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         })
 
     def handle_assets(self, params):
-        """List declared asset roots. v0 supports splat assets."""
+        """List declared asset roots."""
         kind = params.get("kind", ["splat"])[0]
-        if kind not in {"splat", "all"}:
+        if kind not in {"splat", "image", "all"}:
             self.send_json({"error": f"Unsupported asset kind: {kind}"}, 400)
             return
         roots = [

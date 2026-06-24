@@ -79,7 +79,8 @@ assert.match(index, /registryScope:\s*'run-local'/, 'Pipeline Dock treats bundle
 assert.match(index, /id="pipeline-main-browser"/, 'Pipeline tab opens a main-window asset browser instead of requiring typed filenames');
 assert.match(index, /id="pipeline-asset-grid"/, 'Pipeline browser renders selectable assets in the main viewport');
 assert.match(index, /async function loadPipelineAssetBrowser\(/, 'Pipeline browser loads declared assets through an explicit function');
-assert.match(index, /fetch\('\/api\/assets\?kind=splat'\)/, 'Pipeline browser consumes the declared splat asset index directly');
+assert.match(index, /activeAssetPalette:\s*'splat'/, 'Pipeline browser defaults to the Splats source palette');
+assert.match(index, /\/api\/assets\?kind=\$\{encodeURIComponent\(pipelineDockState\.activeAssetPalette\)\}/, 'Pipeline browser consumes the declared asset index for the active palette kind');
 assert.match(index, /function selectPipelineBrowserAsset\(/, 'Pipeline browser has an explicit asset selection path into the dock source');
 assert.match(index, /pipelineDockState\.browserAssets/, 'Pipeline Dock debug state records browser assets for witness inspection');
 assert.match(index, /pipelineDockState\.browserSelectedAssetId/, 'Pipeline Dock debug state records selected browser asset identity');
@@ -127,6 +128,18 @@ assert.match(index, /Delete|Backspace/, 'Pipeline graph supports keyboard deleti
 assert.doesNotMatch(index, /graphEdges\?\.length \? pipelineDockState\.graphEdges : pipelineGraphDefaultEdges/, 'Empty graph edge sets must not silently repopulate default hooks');
 assert.match(index, /fixture output; not real model compute/, 'Pipeline graph must label fixture outputs instead of presenting them as real model compute');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
+assert.match(index, /data-pipeline-asset-palette="splat"/, 'Pipeline browser exposes a Splats source palette inside the graph workbench area');
+assert.match(index, /data-pipeline-asset-palette="image"/, 'Pipeline browser exposes an Images source palette inside the graph workbench area');
+assert.match(index, /pipelineDockState\.activeAssetPalette/, 'Pipeline browser tracks the active contextual asset palette');
+assert.match(index, /\/api\/assets\?kind=\$\{encodeURIComponent\(pipelineDockState\.activeAssetPalette\)\}/, 'Pipeline browser loads assets by active palette kind instead of hardcoding splats only');
+assert.match(index, /draggable\s*=\s*true/, 'Pipeline asset cards can be dragged into the graph');
+assert.match(index, /data-pipeline-graph-image-node-id/, 'Pipeline graph renders image nodes with stable DOM ids');
+assert.match(index, /function createPipelineGraphImageNode\(/, 'Pipeline graph can create an image node from a palette asset');
+assert.match(index, /function updateSelectedPipelineGraphImageNodeAsset\(/, 'Pipeline graph can swap the asset carried by a selected image node');
+assert.match(index, /pipelineGraphImageNodeRecord\(selectedId,\s*asset\)/, 'Image node swapping preserves the selected node instance id');
+assert.match(index, /function selectPipelineAssetPalette\(/, 'Selecting graph nodes can switch the contextual asset palette');
+assert.match(index, /pipelineDockState\.graphImageNodes/, 'Pipeline graph persists image node payloads separately from fixed route/output/evidence nodes');
+assert.match(index, /graphImageNodes:\s*pipelineDockState\.graphImageNodes/, 'Pipeline local storage includes image node payloads');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
 assert.match(index, /not-splat-like/, 'Pipeline asset cards must fail loud for PLY stubs that are not splat-like');
 assert.match(index, /splat-header-like/, 'Pipeline asset cards distinguish header-like fixtures from verified splat render proof');
