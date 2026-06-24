@@ -151,6 +151,11 @@ assert.match(index, /data-pipeline-graph-image-node-id/, 'Pipeline graph renders
 assert.match(index, /function createPipelineGraphImageNode\(/, 'Pipeline graph can create an image node from a palette asset');
 assert.match(index, /function updateSelectedPipelineGraphImageNodeAsset\(/, 'Pipeline graph can swap the asset carried by a selected image node');
 assert.match(index, /pipelineGraphImageNodeRecord\(selectedId,\s*asset\)/, 'Image node swapping preserves the selected node instance id');
+assert.match(index, /function showImagePlane\(/, 'Kaminos can import a reloadable image source as an authored scene image plane');
+assert.match(index, /function pipelineImportGraphImageNodeToScene\(/, 'Pipeline graph image nodes expose a scene import contract');
+assert.match(index, /Import Image to Scene/, 'Pipeline image-node inspector exposes an explicit scene import action');
+assert.match(index, /schema:\s*'kaminos\.image-plane\.v0'/, 'Imported image planes carry explicit image-plane metadata');
+assert.match(index, /importedFrom:\s*'pipeline-graph-node'/, 'Graph-imported image scene objects preserve graph-node provenance');
 assert.match(index, /function selectPipelineAssetPalette\(/, 'Selecting graph nodes can switch the contextual asset palette');
 assert.match(index, /pipelineDockState\.graphImageNodes/, 'Pipeline graph persists image node payloads separately from fixed route/output/evidence nodes');
 assert.match(index, /graphImageNodes:\s*pipelineDockState\.graphImageNodes/, 'Pipeline local storage includes image node payloads');
@@ -327,7 +332,8 @@ assert.match(persistence, /Array\.isArray\(data\?\.objects\)/, 'scene load accep
 assert.match(persistence, /function normalizeSceneGroupRecord/, 'scene persistence normalizes group records through a shared parser');
 assert.match(persistence, /splat:\s*cloneJson\(record\.splat/, 'scene persistence preserves splat sidecar metadata instead of stripping it during normalization');
 assert.match(persistence, /renderHandoffSchema:\s*record\.renderHandoffSchema/, 'scene persistence preserves render handoff schema identity');
-assert.match(persistence, /\['glb', 'pbr', 'splat'\]\.includes\(type\)/, 'scene persistence treats API-backed splat placeholders as reloadable scene objects');
+assert.match(persistence, /\['glb', 'pbr', 'splat', 'image'\]\.includes\(type\)/, 'scene persistence treats API-backed splat and image placeholders as reloadable scene objects');
+assert.match(persistence, /type === 'image'[\s\S]*source\.startsWith\('\/api\/'\)/, 'scene persistence treats API-backed image planes as reloadable');
 assert.match(persistence, /export function getSceneGroupRecords/, 'scene persistence exposes group records for restore planning and tests');
 assert.match(index, /await loadSceneObjects\(objectRecords,\s*restorePlan\.activeObjectId,\s*restorePlan\.groups,\s*restorePlan\.activeGroupId\)/, 'scene load restores the object collection and groups before applying active selection');
 assert.match(index, /restorePlan\.groups/, 'scene load restores authored group membership from the restore plan');

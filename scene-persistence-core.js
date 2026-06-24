@@ -25,6 +25,7 @@ function normalizeSceneObjectRecord(record) {
     }),
     materials: cloneJson(record.materials ?? null),
     splat: cloneJson(record.splat ?? null),
+    image: cloneJson(record.image ?? null),
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
@@ -102,9 +103,10 @@ export function sceneDocumentIsLoadable(data) {
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
-  if (!['glb', 'pbr', 'splat'].includes(type) || typeof source !== 'string') return false;
+  if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
+  if (type === 'image') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
 }
 

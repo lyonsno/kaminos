@@ -70,9 +70,38 @@ const objectB = {
   },
 };
 
+const imageObject = {
+  id: 'image-orb-source',
+  source: '/api/read?root=image-inbox&path=evil_orb_original_generated_source_image.png',
+  type: 'image',
+  fileName: 'evil_orb_original_generated_source_image.png',
+  label: 'Evil Orb Source Image',
+  createdAt: '2026-06-13T22:01:30.000Z',
+  transform: {
+    position: [0.25, 0.75, -0.4],
+    rotation: [0, 0.1, 0],
+    scale: [1.6, 1, 1],
+  },
+  materials: {
+    side: 2,
+    transparent: true,
+    opacity: 1,
+  },
+  image: {
+    schema: 'kaminos.image-plane.v0',
+    assetSource: '/api/read?root=image-inbox&path=evil_orb_original_generated_source_image.png',
+    fileName: 'evil_orb_original_generated_source_image.png',
+    root_id: 'image-inbox',
+    path: 'evil_orb_original_generated_source_image.png',
+    sourceStage: 'working',
+    importedFrom: 'pipeline-graph-node',
+    graphNodeId: 'image-node-1',
+  },
+};
+
 const document = buildSceneDocument({
   timestamp: '2026-06-13T22:02:00.000Z',
-  objects: [objectA, objectB],
+  objects: [objectA, objectB, imageObject],
   groups: [
     {
       id: 'group-demo',
@@ -111,7 +140,9 @@ const restorePlan = planSceneRestore(saved);
 
 assert.equal(saved.schema, SCENE_SCHEMA, 'round-trip scene document uses the v1 multi-object schema');
 assert.equal(saved.version, 4, 'round-trip scene document keeps the current scene version');
-assert.equal(saved.objects.length, 2, 'round-trip scene document saves both authored objects');
+assert.equal(saved.objects.length, 3, 'round-trip scene document saves all authored objects');
+assert.equal(saved.objects[2].type, 'image', 'round-trip scene document preserves image scene object type');
+assert.deepEqual(saved.objects[2].image, imageObject.image, 'round-trip scene document preserves image import provenance');
 assert.deepEqual(saved.groups, [
   {
     id: 'group-demo',
@@ -125,7 +156,8 @@ assert.equal(saved.activeObjectId, 'object-b', 'round-trip scene document preser
 assert.equal(saved.model.source, objectB.source, 'legacy model field mirrors the active object source');
 assert.equal(saved.model.fileName, objectB.fileName, 'legacy model field mirrors the active object filename');
 assert.deepEqual(saved.volumePrimitives, volumePrimitives, 'round-trip scene document preserves volume primitive state');
-assert.deepEqual(getSceneObjectRecords(saved).map(obj => obj.id), ['object-a', 'object-b'], 'scene loader sees both object records in order');
+assert.deepEqual(getSceneObjectRecords(saved).map(obj => obj.id), ['object-a', 'object-b', 'image-orb-source'], 'scene loader sees all object records in order');
+assert.deepEqual(getSceneObjectRecords(saved)[2].image, imageObject.image, 'scene loader keeps image metadata for graph-imported image planes');
 assert.deepEqual(getSceneGroupRecords(saved).map(group => [group.id, group.label, group.objectIds]), [
   ['group-demo', 'Demo Pair', ['object-a', 'object-b']],
 ], 'scene loader sees group records with stable object membership');
@@ -135,10 +167,11 @@ assert.deepEqual(restorePlan.groups.map(group => [group.id, group.label, group.o
   ['group-demo', 'Demo Pair', ['object-a', 'object-b']],
 ], 'restore plan carries scene group membership');
 assert.deepEqual(restorePlan.volumePrimitives, volumePrimitives, 'restore plan carries volume primitive state');
-assert.deepEqual(restorePlan.objects.map(obj => obj.transform.position), [[-1.25, 0.1, 0.5], [1.5, 0.4, -0.25]], 'restore plan keeps independent object transforms');
-assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1], 'restore plan keeps independent material state');
+assert.deepEqual(restorePlan.objects.map(obj => obj.transform.position), [[-1.25, 0.1, 0.5], [1.5, 0.4, -0.25], [0.25, 0.75, -0.4]], 'restore plan keeps independent object transforms');
+assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1, 1], 'restore plan keeps independent material state');
 assert.equal(isReloadableSceneObjectRecord(objectA), true, 'demo GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(objectB), true, 'API GLB object is reloadable');
+assert.equal(isReloadableSceneObjectRecord(imageObject), true, 'API image object is reloadable');
 assert.equal(isReloadableSceneObjectRecord({
   id: 'pbr-demo',
   source: 'demos/supermat-ring/',
@@ -152,6 +185,7 @@ assert.equal(isReloadableSceneObjectRecord({
   fileName: 'pbr-material-preview',
 }), false, 'local PBR material preview without demo source is not silently reloadable');
 assert.equal(isReloadableSceneObjectRecord({ ...objectA, source: 'local-drop.glb' }), false, 'local dropped source is not silently reloadable');
+assert.equal(isReloadableSceneObjectRecord({ ...imageObject, source: 'local-drop.png' }), false, 'local dropped image source is not silently reloadable');
 
 const legacy = {
   version: 2,
@@ -200,4 +234,4 @@ const staleActivePlan = planSceneRestore({
   ...saved,
   activeObjectId: 'deleted-object',
 });
-assert.equal(staleActivePlan.activeObjectId, 'object-b', 'stale active object ids fall back to the last restored object');
+assert.equal(staleActivePlan.activeObjectId, 'image-orb-source', 'stale active object ids fall back to the last restored object');
