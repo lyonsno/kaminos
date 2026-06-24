@@ -83,6 +83,16 @@ assert.match(index, /fetch\('\/api\/assets\?kind=splat'\)/, 'Pipeline browser co
 assert.match(index, /function selectPipelineBrowserAsset\(/, 'Pipeline browser has an explicit asset selection path into the dock source');
 assert.match(index, /pipelineDockState\.browserAssets/, 'Pipeline Dock debug state records browser assets for witness inspection');
 assert.match(index, /pipelineDockState\.browserSelectedAssetId/, 'Pipeline Dock debug state records selected browser asset identity');
+assert.match(index, /pipelineDockState\.runHistory/, 'Pipeline Dock keeps durable run records instead of a single transient last-run panel');
+assert.match(index, /pipelineDockState\.selectedRunId/, 'Pipeline Dock keeps selected run identity separate from selected asset identity');
+assert.match(index, /id="pipeline-run-shelf"/, 'Pipeline browser exposes a persistent run shelf so run evidence does not disappear after asset reselection');
+assert.match(index, /function pipelineRememberRun\(/, 'Pipeline runs are appended to a selectable run history record');
+assert.match(index, /async function pipelineLoadRunSource\(/, 'Load Source actions for prior runs must use the run-captured source, not the currently selected browser asset');
+assert.match(index, /loadBtn\.onclick\s*=\s*\(\)\s*=>\s*pipelineLoadRunSource\(result\)/, 'Pipeline result Load Source button is bound to the selected run record');
+assert.match(index, /pipelineShowRunDocument\(title,\s*documentText,\s*runId\)/, 'Pipeline document panel must bind displayed evidence to a run id');
+assert.match(index, /panel\.dataset\.pipelineRunId/, 'Pipeline document panel stores the run id that produced the displayed document');
+assert.match(index, /pipelineClearRunDocument\(/, 'Pipeline clears stale sidecar/bundle documents when selected run evidence changes');
+assert.doesNotMatch(index, /function selectPipelineBrowserAsset[\s\S]*?pipelineDockState\.lastRun\s*=\s*null[\s\S]*?function pipelineStatusClass/, 'Selecting a new source asset must not erase prior run evidence');
 assert.match(index, /window\.kaminosPipelineSelectAsset/, 'browser witnesses can select a Pipeline browser asset without DOM inference');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
