@@ -2402,17 +2402,96 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * smoothstep(0.018, 0.48, heat)
     * smoothstep(0.0005, 0.020, fuel + tallPlumeFuelHeatReaction * 0.75 + fuelConsumption * 2.0)
     * (0.018 + inputFlow * 0.018);
-  flame = max(flame, tallPlumeBurnoutTail * 0.34);
-  ember = max(ember, tallPlumeBurnoutTail * 0.20);
-  flameDetail = max(flameDetail, tallPlumeBurnoutTail * 0.24);
+  flame = max(flame, tallPlumeBurnoutTail * 0.18);
+  ember = max(ember, tallPlumeBurnoutTail * 0.16);
+  flameDetail = max(flameDetail, tallPlumeBurnoutTail * 0.11);
   visibleFireCarrier = flameDetail;
   let tallPlumeFireSurvivalSignal = tallPlumeFuelHeatReaction
     + tallPlumePilotReaction * 0.90
-    + tallPlumeBurnoutTail
+    + tallPlumeBurnoutTail * 0.35
     + fuelConsumption * 1.6
     + fuel * heat * 0.14
     + fuel * 0.035;
-  let tallPlumeFireSurvival = mix(1.0, smoothstep(0.0005, 0.070, tallPlumeFireSurvivalSignal), tallPlumeScene);
+  let tallPlumeNormalizedFlameHeight = clamp((p.y + 0.84) / 1.58, 0.0, 1.0);
+  let tallPlumeHeightCurve = tallPlumeNormalizedFlameHeight * tallPlumeNormalizedFlameHeight * (0.65 + tallPlumeNormalizedFlameHeight * 0.55);
+  let tallPlumeFlowHeightDemand = 1.0 + smoothstep(0.28, 0.62, inputFlow) * tallPlumeNormalizedFlameHeight * 1.35;
+  let tallPlumeFlameHeightDemand = mix(0.012, 0.315, tallPlumeHeightCurve) * tallPlumeFlowHeightDemand;
+  let tallPlumeFuelSurvival = smoothstep(
+    0.001,
+    0.092,
+    fuel + tallPlumeFuelHeatReaction * 1.65 + fuelConsumption * 4.8 + tallPlumeBurnoutTail * 0.85
+  );
+  let tallPlumeReactionSurvival = smoothstep(
+    tallPlumeFlameHeightDemand * 0.42,
+    tallPlumeFlameHeightDemand,
+    tallPlumeFireSurvivalSignal + tallPlumeReactionMemory * 0.018 + tallPlumeBurnoutTail * 0.55
+  );
+  let tallPlumeFlameContourSurvival = clamp(
+    mix(
+      1.0,
+      mix(0.60, 1.0, tallPlumeRadialContour) * clamp(tallPlumeFireContourBreakup, 0.50, 1.0),
+      tallPlumeScene * tallPlumeAboveSource
+    ),
+    0.32,
+    1.0
+  );
+  let tallPlumeRadialRatio = sourceRadial / max(scaledSourceRadius, 0.001);
+  let tallPlumeUpperFrontWidth = max(
+    0.16,
+    mix(1.72, 0.52, tallPlumeNormalizedFlameHeight)
+      * mix(1.0, 0.58, smoothstep(0.32, 0.66, inputFlow))
+  );
+  let tallPlumeFrontWidthTaper = clamp(
+    1.0 - smoothstep(tallPlumeUpperFrontWidth, tallPlumeUpperFrontWidth + 0.46, tallPlumeRadialRatio),
+    0.10,
+    1.0
+  );
+  let tallPlumeFlameTipTaper = clamp(
+    1.0
+      - smoothstep(0.42, 0.86, tallPlumeNormalizedFlameHeight)
+        * smoothstep(0.34, 0.66, inputFlow)
+        * (1.0 - tallPlumeReactionContour * 0.55),
+    0.12,
+    1.0
+  );
+  let tallPlumeHighFlowShelfExtinction = tallPlumeScene
+    * tallPlumeAboveSource
+    * smoothstep(0.30, 0.58, inputFlow)
+    * (1.0 - smoothstep(0.016, 0.145, tallPlumeFuelHeatReaction + fuelConsumption * 3.2 + tallPlumePilotReaction * 2.0 + tallPlumeBurnoutTail * 3.2));
+  let tallPlumeUpperFlowExtinction = tallPlumeScene
+    * tallPlumeAboveSource
+    * smoothstep(0.30, 0.58, inputFlow)
+    * smoothstep(0.16, 0.62, tallPlumeNormalizedFlameHeight)
+    * (1.0 - smoothstep(0.030, 0.165, tallPlumeFuelHeatReaction + fuelConsumption * 3.9 + tallPlumePilotReaction * 2.2 + tallPlumeBurnoutTail * 0.65));
+  let tallPlumeUpperSlabExtinction = tallPlumeScene
+    * tallPlumeAboveSource
+    * smoothstep(0.32, 0.60, inputFlow)
+    * smoothstep(0.20, 0.72, tallPlumeNormalizedFlameHeight)
+    * smoothstep(0.22, 0.72, 1.0 - tallPlumeFrontWidthTaper)
+    * (1.0 - smoothstep(0.024, 0.155, tallPlumeFuelHeatReaction + fuelConsumption * 3.4 + tallPlumePilotReaction * 2.0));
+  let tallPlumeHighFlowHeightGate = smoothstep(0.28, 0.58, inputFlow) * smoothstep(0.20, 0.72, tallPlumeNormalizedFlameHeight);
+  let tallPlumeUntaperedLiveFlameSurvival = tallPlumeReactionSurvival * tallPlumeFuelSurvival * tallPlumeFlameContourSurvival;
+  let tallPlumeLiveFlameTaperedSurvival = tallPlumeUntaperedLiveFlameSurvival
+    * mix(
+      1.0,
+      tallPlumeFrontWidthTaper * tallPlumeFlameTipTaper,
+      tallPlumeScene * tallPlumeAboveSource * smoothstep(0.28, 0.58, inputFlow)
+    );
+  let tallPlumeLiveFlameSurvival = tallPlumeLiveFlameTaperedSurvival * (1.0 - tallPlumeUpperSlabExtinction * 0.78);
+  let tallPlumeMinimalFireBirthSurvival = mix(
+    1.0,
+    clamp(tallPlumeLiveFlameSurvival, 0.0, 1.0),
+    tallPlumeScene
+  );
+  let tallPlumeTailOnlySurvival = tallPlumeBurnoutTail * 2.0 * (1.0 - tallPlumeHighFlowHeightGate * 0.88);
+  let tallPlumeFlameHeightSurvival = clamp(
+    max(tallPlumeLiveFlameSurvival, tallPlumeTailOnlySurvival)
+      * (1.0 - tallPlumeHighFlowShelfExtinction * 0.90)
+      * (1.0 - tallPlumeUpperFlowExtinction * 0.88),
+    0.0,
+    1.0
+  );
+  let tallPlumeFireSurvival = mix(1.0, tallPlumeFlameHeightSurvival, tallPlumeScene);
   flame = flame * tallPlumeFireSurvival;
   ember = ember * tallPlumeFireSurvival;
   flameDetail = flameDetail * tallPlumeFireSurvival;
@@ -2420,9 +2499,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * tallPlumeFireSurvival;
   fireLick = fireLick * tallPlumeFireSurvival;
   emberFleck = emberFleck * tallPlumeFireSurvival;
-  flame = max(flame, canonicalMinimalFireBirth * 1.04);
-  ember = max(ember, canonicalMinimalFireBirth * 0.36);
-  flameDetail = max(flameDetail, canonicalMinimalFireBirth * 0.42);
+  let canonicalSurvivingMinimalFireBirth = canonicalMinimalFireBirth * tallPlumeMinimalFireBirthSurvival;
+  flame = max(flame, canonicalSurvivingMinimalFireBirth * 1.04);
+  ember = max(ember, canonicalSurvivingMinimalFireBirth * 0.36);
+  flameDetail = max(flameDetail, canonicalSurvivingMinimalFireBirth * 0.42);
 
   let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.68, bonfireSourceY - 0.08, p.y), bonfireScene);
   flame = flame * bonfireFireCeiling;
@@ -2775,6 +2855,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
+    tallPlumeFlameHeightLawContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive',
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -3793,6 +3874,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
     state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
+    state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
@@ -5019,6 +5101,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
         tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
+        tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -5275,6 +5358,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
+      tallPlumeFlameHeightLawContract: state.tallPlumeFlameHeightLawContract,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
@@ -5388,6 +5472,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
       state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
+      state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);

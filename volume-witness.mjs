@@ -302,6 +302,18 @@ const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
 const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
   ? Math.max(0, Math.min(1, requestedHistoryClamp))
   : canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
+const requestedDensity = Number(routeParams.get('volume_density'));
+const expectedDensity = routeParams.has('volume_density') && Number.isFinite(requestedDensity)
+  ? Math.max(0.35, Math.min(6, requestedDensity))
+  : canonicalMacroPreset.density ?? scenePreset.density ?? 4.2;
+const requestedFire = Number(routeParams.get('volume_fire'));
+const expectedFire = routeParams.has('volume_fire') && Number.isFinite(requestedFire)
+  ? Math.max(0, Math.min(3.5, requestedFire))
+  : canonicalMacroPreset.fire ?? scenePreset.fire ?? 1.4;
+const requestedSmoke = Number(routeParams.get('volume_smoke'));
+const expectedSmoke = routeParams.has('volume_smoke') && Number.isFinite(requestedSmoke)
+  ? Math.max(0.1, Math.min(2.8, requestedSmoke))
+  : canonicalMacroPreset.smoke ?? scenePreset.smoke ?? 2.8;
 const requestedFireScale = Number(routeParams.get('volume_fire_scale'));
 const expectedFireScale = routeParams.has('volume_fire_scale') && Number.isFinite(requestedFireScale)
   ? Math.max(0.35, Math.min(1.3, requestedFireScale))
@@ -659,6 +671,9 @@ async function main() {
     assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
     assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
     assert.ok(Math.abs((state.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'effective temporal history clamp state did not match route/control');
+    assert.ok(Math.abs((state.controls?.density ?? 0) - expectedDensity) < 0.001, 'density route/control did not apply');
+    assert.ok(Math.abs((state.controls?.fire ?? 0) - expectedFire) < 0.001, 'fire route/control did not apply');
+    assert.ok(Math.abs((state.controls?.smoke ?? 0) - expectedSmoke) < 0.001, 'smoke route/control did not apply');
     assert.ok(Math.abs((state.controls?.fireScale ?? 0) - expectedFireScale) < 0.001, 'fire scale route/control did not apply');
     assert.ok(Math.abs((state.fireScale ?? 0) - expectedFireScale) < 0.001, 'effective fire scale state did not match route/control');
     assert.ok(Math.abs((state.controls?.detailScale ?? 0) - expectedDetailScale) < 0.001, 'detail scale route/control did not apply');
@@ -669,6 +684,7 @@ async function main() {
       assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
       assert.equal(state.tallPlumeFlameCutoffContract, 'tall-plume-speed-cutoff-decoupled-v0', 'tall-plume flame cutoff/speed contract was not active');
       assert.equal(state.tallPlumeFlowShelfContract, 'tall-plume-flow-shelf-mitigated-v0', 'tall-plume flow-rate shelf mitigation contract was not active');
+      assert.equal(state.tallPlumeFlameHeightLawContract, 'tall-plume-flame-height-law-v2', 'tall-plume reaction/fuel flame-height law contract was not active');
     }
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
@@ -1383,6 +1399,7 @@ async function main() {
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
+      tallPlumeFlameHeightLawContract: sample.tallPlumeFlameHeightLawContract,
       plumeHeight: sample.plumeHeight,
       speed: state.controls?.speed,
       windStrength: sample.windStrength,

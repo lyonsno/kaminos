@@ -2021,6 +2021,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_rate') && Number.isFinite(routeFlowRate)) {
     document.getElementById('volume-flow-rate').value = String(Math.max(0, Math.min(2.5, routeFlowRate)));
   }
+  const routeDensity = Number(params.get('volume_density'));
+  if (params.has('volume_density') && Number.isFinite(routeDensity)) {
+    document.getElementById('volume-density').value = String(Math.max(0.35, Math.min(6, routeDensity)));
+  }
+  const routeFire = Number(params.get('volume_fire'));
+  if (params.has('volume_fire') && Number.isFinite(routeFire)) {
+    document.getElementById('volume-fire').value = String(Math.max(0, Math.min(3.5, routeFire)));
+  }
+  const routeSmoke = Number(params.get('volume_smoke'));
+  if (params.has('volume_smoke') && Number.isFinite(routeSmoke)) {
+    document.getElementById('volume-smoke').value = String(Math.max(0.1, Math.min(2.8, routeSmoke)));
+  }
   const routeProjection = Number(params.get('volume_projection'));
   if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
     document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));

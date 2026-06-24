@@ -181,6 +181,9 @@ for (const canonicalOnlyControl of [
 }
 assert.match(index, /volume_input_radius/, 'URL route can override the fluid input radius');
 assert.match(index, /volume_flow_rate/, 'URL route can override the fluid input flow rate');
+assert.match(index, /volume_density/, 'URL route can override plume density for visual torture witnesses');
+assert.match(index, /volume_fire'\)/, 'URL route can override fire visibility instead of silently keeping the named preset value');
+assert.match(index, /volume_smoke/, 'URL route can override smoke visibility for fire/smoke separation witnesses');
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
 assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic overlay');
 assert.match(index, /volume_canonical_spread/, 'URL route can override canonical plume scalar-spread cockpit gain');
@@ -530,8 +533,23 @@ assert.match(core, /tallPlumeFlameCutoffContract/, 'debug state exposes tall-plu
 assert.match(core, /tall-plume-speed-cutoff-decoupled-v0/, 'tall-plume flame cutoff contract has a stable identity');
 assert.match(core, /tallPlumeFlowShelfContract/, 'debug state exposes tall-plume flow-rate shelf mitigation identity');
 assert.match(core, /tall-plume-flow-shelf-mitigated-v0/, 'tall-plume flow-rate shelf mitigation has a stable identity');
+assert.match(core, /tallPlumeFlameHeightLawContract/, 'debug state exposes tall-plume reaction/fuel flame-height law identity');
+assert.match(core, /tall-plume-flame-height-law-v2/, 'tall-plume reaction/fuel flame-height law has a stable identity');
 assert.match(core, /tallPlumeBurnoutTail/, 'tall plume fire survival keeps a fuel-bound hot burnout tail for high-flow regimes');
 assert.match(core, /tallPlumeFireSurvivalSignal/, 'tall plume fire survival uses a widened survival signal instead of a hard live-reaction threshold');
+assert.match(core, /tallPlumeFlowHeightDemand/, 'tall plume high-flow fire raises survival demand with height instead of only changing render speed');
+assert.match(core, /tallPlumeFlameHeightDemand/, 'tall plume fire survival raises its reaction demand continuously with flame height');
+assert.match(core, /tallPlumeFlameHeightSurvival/, 'tall plume visible fire survival is shaped by a named flame-height law');
+assert.match(core, /tallPlumeFrontWidthTaper/, 'tall plume upper live fire is tapered by front width instead of filling the source column');
+assert.match(core, /tallPlumeFlameTipTaper/, 'tall plume upper live fire has a named tip taper to prevent square-ended flame shelves');
+assert.match(core, /tallPlumeUpperSlabExtinction/, 'tall plume upper live fire has a named slab extinction term for high-flow filled bodies');
+assert.match(core, /tallPlumeLiveFlameTaperedSurvival/, 'tall plume live flame survival must pass through the topology/tip taper before it can render');
+assert.match(core, /tallPlumeMinimalFireBirthSurvival/, 'tall plume minimal fire continuity bridge must be gated by the same live survival law');
+assert.match(core, /tallPlumeHighFlowHeightGate/, 'tall plume high-flow fallback tail is explicitly gated by flame height');
+assert.match(core, /tallPlumeLiveFlameSurvival/, 'tall plume flame survival distinguishes live reaction/fuel survival from stale tail fallback');
+assert.match(core, /tallPlumeTailOnlySurvival/, 'tall plume stale burnout tail has a named bounded survival fallback');
+assert.match(core, /tallPlumeHighFlowShelfExtinction/, 'tall plume high-flow visible fire has an explicit source-shelf extinction term');
+assert.match(core, /tallPlumeUpperFlowExtinction/, 'tall plume upper high-flow fire requires fresh reaction/fuel rather than stale tail survival');
 assert.match(core, /tallPlumeReactionContour/, 'tall plume visible fire is contoured by reaction topology instead of raw source shape');
 assert.match(core, /tallPlumeRawSourceFireRelief/, 'tall plume raw source fire has a named relief gate before visible fire transfer');
 assert.match(core, /tallPlumeSourceSlabRelief/, 'tall plume high-flow source slab has a named relief gate before visible fire transfer');
@@ -539,10 +557,15 @@ assert.match(core, /tallPlumeEmitterBand/, 'tall plume has a named compact emitt
 assert.match(core, /tallPlumeCombustionSource/, 'tall plume combustion source is separated from the broad smoke source column');
 assert.match(core, /tallPlumeEmitterFireBirth/, 'tall plume fire birth is separated from the broad column fire source');
 assert.match(core, /tallPlumeLiveReactionCarrier/, 'tall plume reaction is driven by compact combustion carrier rather than broad smoke source');
+assert.doesNotMatch(core, /let tallPlumeLiveFlameSurvival = tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival;/, 'tall plume live flame survival must not bypass front topology and tip taper');
 assert.match(core, /fireBirth \* 0\.024 \* tallPlumeRawSourceFireRelief/, 'tall plume flame storage must downweight raw source birth at high flow');
 assert.match(core, /columnFlameDetailBirth \* 0\.018 \* tallPlumeSourceSlabRelief/, 'tall plume visible fire detail must not expose the raw column flame-detail slab at high flow');
 assert.doesNotMatch(core, /columnFlameDetailBirth \* 0\.20\s*\+\s*tallPlumeFuelHeatReaction/, 'tall plume visible fire detail must not retain the high-flow raw source-slab transfer');
 assert.doesNotMatch(core, /0\.18 \+ 0\.22 \* source \+ 0\.18 \* columnFireBirth \+ 0\.18 \* flame/, 'tall plume live reaction must not be coupled directly to the broad source and column fire birth');
+assert.doesNotMatch(core, /max\(\s*tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival,\s*tallPlumeBurnoutTail \* 2\.2\s*\)/, 'tall plume stale burnout tail must not bypass the high-flow height survival law');
+assert.doesNotMatch(core, /let tallPlumeFireSurvival = mix\(1\.0, smoothstep\(0\.0005, 0\.070, tallPlumeFireSurvivalSignal\), tallPlumeScene\);/, 'tall-plume fire survival must not be a single global reaction threshold that high flow can fill into a shelf');
+assert.doesNotMatch(core, /flame = max\(flame, canonicalMinimalFireBirth \* 1\.04\);/, 'canonical minimal fire birth must not bypass tall-plume reaction/fuel survival after the flame-height law runs');
+assert.doesNotMatch(core, /flameDetail = max\(flameDetail, canonicalMinimalFireBirth \* 0\.42\);/, 'canonical minimal flame detail must not bypass tall-plume reaction/fuel survival after the flame-height law runs');
 assert.doesNotMatch(core, /let tallPlumeFireSurvival = mix\(1\.0, smoothstep\(0\.001, 0\.040, tallPlumeFuelHeatReaction \+ tallPlumePilotReaction \* 0\.90 \+ fuel \* heat \* 0\.14 \+ fuel \* 0\.035\), tallPlumeScene\);/, 'tall-plume fire survival must not use the narrow live-reaction threshold that creates high-flow shelves');
 assert.match(core, /tallPlumeFireTopFade/, 'tall-plume fire uses a named fire top fade instead of inheriting the old low heat ceiling');
 assert.match(core, /tallPlumeHeatTopFade/, 'tall-plume heat uses a named heat top fade separate from fire survival');
@@ -914,6 +937,7 @@ assert.match(witness, /tallPlumeDetailFrequencySource/, 'witness records whether
 assert.match(witness, /tallPlumeReactionCadenceDebug/, 'witness records the effective tall-plume source/reaction cadence identity');
 assert.match(witness, /tallPlumeFlameCutoffContract/, 'witness records the effective tall-plume flame cutoff/speed identity');
 assert.match(witness, /tallPlumeFlowShelfContract/, 'witness records the effective tall-plume flow-rate shelf mitigation identity');
+assert.match(witness, /tallPlumeFlameHeightLawContract/, 'witness records the effective tall-plume reaction/fuel flame-height law identity');
 assert.match(witness, /expectedSpeed/, 'witness records the route-applied speed for repeatable flame cutoff probes');
 assert.match(witness, /plumeHeight/, 'witness records effective plume height/world-rise scale');
 assert.match(witness, /windStrength/, 'witness records effective explicit wind strength');
