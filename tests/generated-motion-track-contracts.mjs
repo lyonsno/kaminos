@@ -45,6 +45,8 @@ assert.ok(report.phase === 'reporting' || report.phase === 'wave', 'generated ph
 
 const simulation = simulateMotionTrack(track, { duration: track.duration, fps: 20, mode: 'mass-attention' });
 assert.ok(simulation.metrics.rootTravel > 4.5, 'generated simulation preserves root travel');
+assert.ok(simulation.metrics.rootVerticalRange > 0.025, 'generated simulation preserves small imported vertical root motion');
+assert.ok(simulation.metrics.rootVerticalRange < 0.08, 'generated simulation does not falsify raw vertical root motion');
 assert.ok(simulation.metrics.maxEffort > 0.45, 'generated simulation preserves wave effort');
 assert.ok(simulation.metrics.phaseChanges >= 3, 'generated simulation preserves heuristic phase changes');
 assert.ok(simulation.metrics.maxHeadRootSeparation > 0.5, 'generated simulation preserves head/root separation');
@@ -59,5 +61,7 @@ assert.deepEqual(
   ['authored_mass_attention', 'generated_dip_wave'],
 );
 assert.equal(harness.variants.find(variant => variant.id === 'generated_dip_wave').attentionMode, 'mass-attention');
+assert.ok(harness.variants.find(variant => variant.id === 'generated_dip_wave').verticalDisplayScale > 1, 'generated fixture exposes visual-only vertical amplification');
+assert.equal(harness.variants.find(variant => variant.id === 'authored_mass_attention').verticalDisplayScale, 1);
 assert.ok(harness.variants.find(variant => variant.id === 'generated_dip_wave').metrics.rootTravel > harness.variants.find(variant => variant.id === 'authored_mass_attention').metrics.rootTravel, 'generated fixture keeps its larger stage entrance travel');
 assert.ok(harness.filmstrip.length >= 7, 'generated harness exposes filmstrip-ready frames');

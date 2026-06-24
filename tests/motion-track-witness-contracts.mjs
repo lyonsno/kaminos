@@ -20,6 +20,7 @@ assert.match(index, /window\.kaminosMotionTrackDebugState/, 'browser exposes mot
 assert.match(index, /window\.kaminosGeneratedMotionTrackDebugState/, 'browser exposes generated motion-track debug state');
 assert.match(index, /attentionLeadDistance/, 'browser debug state records root/head attention separation metrics');
 assert.match(index, /sourceStatus/, 'browser debug state records fixture/live source status');
+assert.match(index, /verticalDisplayScale/, 'browser debug state records visual-only vertical display scale');
 assert.match(index, /motionTrackActive/, 'render loop keeps rendering while motion tracks are active');
 
 assert.match(witness, /kaminos_motion_tracks=1/, 'motion witness can target the motion-track route');
@@ -30,6 +31,7 @@ assert.match(witness, /window\.kaminosMotionTrackDebugState/, 'motion witness re
 assert.match(witness, /window\.kaminosGeneratedMotionTrackDebugState/, 'motion witness reads generated motion-track browser state');
 assert.match(witness, /motionTrackHarness/, 'motion witness reports motion-track harness evidence');
 assert.match(witness, /generatedMotionTrackHarness/, 'motion witness reports generated motion-track harness evidence');
+assert.match(witness, /rootVerticalRange/, 'motion witness preserves raw vertical range evidence');
 assert.match(witness, /track_mass_only/, 'motion witness preserves mass-only variant identity');
 assert.match(witness, /track_mass_attention/, 'motion witness preserves mass+attention variant identity');
 assert.match(witness, /generated_dip_wave/, 'motion witness preserves generated DiP wave variant identity');

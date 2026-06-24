@@ -1236,10 +1236,14 @@ function motionTrackMetrics(frames) {
   let phaseChanges = 0;
   let lastPhase = null;
   let lastRoot = null;
+  let minRootY = Infinity;
+  let maxRootY = -Infinity;
   for (const frame of frames) {
     const sample = frame.sample;
     if (lastRoot) rootTravel += lengthVec3(subVec3(sample.root, lastRoot));
     lastRoot = sample.root;
+    minRootY = Math.min(minRootY, sample.root[1]);
+    maxRootY = Math.max(maxRootY, sample.root[1]);
     maxEffort = Math.max(maxEffort, sample.effort);
     attentionLeadDistance += Math.max(0, sample.attention[2] - sample.root[2]);
     maxHeadRootSeparation = Math.max(maxHeadRootSeparation, sample.headRootSeparation);
@@ -1250,6 +1254,7 @@ function motionTrackMetrics(frames) {
   return {
     frameCount: frames.length,
     rootTravel: Number(rootTravel.toFixed(5)),
+    rootVerticalRange: Number((maxRootY - minRootY).toFixed(5)),
     maxEffort: Number(maxEffort.toFixed(5)),
     attentionLeadDistance: Number((attentionLeadDistance / Math.max(1, frames.length)).toFixed(5)),
     maxHeadRootSeparation: Number(maxHeadRootSeparation.toFixed(5)),
@@ -1405,6 +1410,7 @@ export function buildGeneratedMotionTrackHarness({
       color: '#ff7a66',
       kind: 'motion-track-authored-mass-attention',
       attentionMode: 'mass-attention',
+      verticalDisplayScale: 1,
       track: authoredTrack,
       metrics: authoredSimulation.metrics,
       simulation: authoredSimulation,
@@ -1415,6 +1421,7 @@ export function buildGeneratedMotionTrackHarness({
       color: '#9fe6bd',
       kind: 'motion-track-generated-dip-wave',
       attentionMode: 'mass-attention',
+      verticalDisplayScale: 6,
       track: generatedTrack,
       metrics: generatedSimulation.metrics,
       simulation: generatedSimulation,

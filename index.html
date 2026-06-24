@@ -3969,17 +3969,23 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
   for (const visual of state.actorVisuals) {
     const variant = visual.variant;
     const track = variant.track || state.track;
+    const verticalDisplayScale = Number(variant.verticalDisplayScale || 1);
     const sample = variant.id === 'phrase_baseline'
       ? sampleMotionPlan(DEFAULT_DECISION_MOTION_PLAN, localTime)
       : sampleMotionTrack(track, localTime, { mode: visual.mode });
+    const displayedRootY = visual.origin[1] + sample.root[1] * verticalDisplayScale + 0.2;
+    const displayedAttentionY = visual.origin[1]
+      + sample.root[1] * verticalDisplayScale
+      + (sample.attention[1] - sample.root[1])
+      + 0.18;
     const rootPosition = new THREE.Vector3(
       visual.origin[0] + sample.root[0],
-      visual.origin[1] + sample.root[1] + 0.2,
+      displayedRootY,
       visual.origin[2] + sample.root[2],
     );
     const attention = new THREE.Vector3(
       visual.origin[0] + sample.attention[0],
-      visual.origin[1] + sample.attention[1] + 0.18,
+      displayedAttentionY,
       visual.origin[2] + sample.attention[2],
     );
     const facing = new THREE.Vector3(...sample.facing).normalize();
@@ -4002,7 +4008,7 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
       dot.visible = true;
       dot.position.set(
         trailSample.root[0] - sample.root[0],
-        trailSample.root[1] - sample.root[1],
+        (trailSample.root[1] - sample.root[1]) * verticalDisplayScale,
         trailSample.root[2] - sample.root[2],
       );
       dot.material.opacity = Math.max(0.04, 0.26 - i * 0.026);
@@ -4019,6 +4025,9 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
       attention: attention.toArray().map(value => Number(value.toFixed(5))),
       effort: Number(effort.toFixed(5)),
       scale: Number(sample.scale.toFixed(5)),
+      verticalDisplayScale,
+      rawRoot: sample.root,
+      rawAttention: sample.attention,
       headRootSeparation: Number(sample.headRootSeparation || 0),
       attentionMassContrast: Number(sample.attentionMassContrast || 0),
       color: visual.color,
@@ -4170,8 +4179,10 @@ window.kaminosMotionTrackDebugState = function() {
         label: variant.label,
         kind: variant.kind,
         attentionMode: variant.attentionMode || variant.id,
+        verticalDisplayScale: Number(variant.verticalDisplayScale || 1),
         metrics: variant.metrics,
         attentionLeadDistance: variant.metrics.attentionLeadDistance,
+        rootVerticalRange: variant.metrics.rootVerticalRange,
         maxHeadRootSeparation: variant.metrics.maxHeadRootSeparation,
         attentionMassContrast: variant.metrics.attentionMassContrast,
       })),
@@ -4230,8 +4241,10 @@ window.kaminosGeneratedMotionTrackDebugState = function() {
         label: variant.label,
         kind: variant.kind,
         attentionMode: variant.attentionMode || variant.id,
+        verticalDisplayScale: Number(variant.verticalDisplayScale || 1),
         metrics: variant.metrics,
         attentionLeadDistance: variant.metrics.attentionLeadDistance,
+        rootVerticalRange: variant.metrics.rootVerticalRange,
         maxHeadRootSeparation: variant.metrics.maxHeadRootSeparation,
         attentionMassContrast: variant.metrics.attentionMassContrast,
       })),

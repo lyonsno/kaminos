@@ -270,6 +270,7 @@ try {
         label: variant.label,
         kind: variant.kind,
         attentionMode: variant.attentionMode,
+        verticalDisplayScale: Number(variant.verticalDisplayScale || 1),
         metrics: variant.metrics,
       })),
       filmstrip,
@@ -391,6 +392,7 @@ try {
     const generated = generatedMotionTrackHarness.variants?.find(variant => variant.id === 'generated_dip_wave');
     if (!generated) throw new Error(`generated motion track route lost generated variant: ${JSON.stringify(debug)}`);
     if (!(generated.metrics?.rootTravel > 4.5)) throw new Error(`generated motion track route lost root travel: ${JSON.stringify(debug)}`);
+    if (!(generated.metrics?.rootVerticalRange > 0.025)) throw new Error(`generated motion track route lost raw vertical root motion: ${JSON.stringify(debug)}`);
     if (!(generated.metrics?.maxEffort > 0.45)) throw new Error(`generated motion track route lost effort envelope: ${JSON.stringify(debug)}`);
   } else if (isTrackRoute) {
     const motionTrackHarness = debug?.motionTrackHarness;
