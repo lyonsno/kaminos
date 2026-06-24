@@ -125,6 +125,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pipeline-source-input { width: 100%; box-sizing: border-box; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 6px 8px; font: 10px 'SF Mono', monospace; outline: none; }
 .pipeline-source-input:focus { border-color: #1976d2; }
+.pipeline-debug-source { border: 1px solid #292929; border-radius: 6px; padding: 7px 8px; background: #171717; }
+.pipeline-debug-source summary { cursor: pointer; color: #777; font: 10px 'SF Mono', monospace; list-style-position: inside; }
+.pipeline-debug-source .pipeline-source-input { margin-top: 8px; }
 .pipeline-stage-list { display: flex; flex-direction: column; gap: 6px; }
 .pipeline-stage-row { border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px; background: #181818; }
 .pipeline-stage-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
@@ -141,6 +144,25 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-evidence-key { color: #555; text-transform: uppercase; font-size: 9px; }
 .pipeline-evidence-val { color: #aaa; min-width: 0; }
 .pipeline-note { color: #555; font-size: 10px; line-height: 1.35; }
+#pipeline-main-browser { position: absolute; inset: 0; z-index: 4; background: #111; color: #ddd; overflow: auto; padding: 28px; }
+#pipeline-main-browser[hidden] { display: none; }
+.pipeline-browser-shell { max-width: 1180px; margin: 0 auto; }
+.pipeline-browser-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.pipeline-browser-title { color: #f1f1f1; font-size: 18px; font-weight: 750; }
+.pipeline-browser-subtitle { color: #777; font: 11px 'SF Mono', monospace; margin-top: 4px; }
+.pipeline-browser-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pipeline-browser-selected { color: #999; font: 10px 'SF Mono', monospace; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.pipeline-asset-card { border: 1px solid #292929; background: #191919; border-radius: 8px; min-height: 176px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 9px; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.pipeline-asset-card:hover { border-color: #444; background: #202020; transform: translateY(-1px); }
+.pipeline-asset-card.selected { border-color: #1976d2; background: #1b2430; }
+.pipeline-asset-thumb { aspect-ratio: 1.35; border-radius: 6px; border: 1px solid #2d2d2d; background: linear-gradient(145deg, #242424, #111); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.pipeline-asset-thumb::before { content: ""; position: absolute; inset: 18%; border: 1px solid rgba(255,255,255,0.12); transform: rotate(28deg); }
+.pipeline-asset-ext { color: #888; font: 700 18px 'SF Mono', monospace; letter-spacing: 0.8px; z-index: 1; }
+.pipeline-asset-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pipeline-asset-title { color: #eee; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-asset-path { color: #777; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-asset-empty { border: 1px solid #292929; border-radius: 8px; padding: 18px; color: #666; font-size: 12px; }
 
 /* Greenroom browser */
 .gr-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background 0.1s; }
@@ -625,7 +647,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="pipeline-summary-title">No source selected</div>
         <div class="pipeline-summary-path">Select a scene object or enter an /api/read source.</div>
       </div>
-      <input class="pipeline-source-input" id="pipeline-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=splat-inbox&path=artifact.ply">
+      <details class="pipeline-debug-source">
+        <summary>Debug source path</summary>
+        <input class="pipeline-source-input" id="pipeline-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=splat-inbox&path=artifact.ply">
+      </details>
       <div class="pipeline-action-row">
         <select class="select-input" id="pipeline-route-select" aria-label="Pipeline route"></select>
         <button type="button" class="btn" id="pipeline-run-button">Run</button>
@@ -683,6 +708,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
+  <div id="pipeline-main-browser" hidden>
+    <div class="pipeline-browser-shell">
+      <div class="pipeline-browser-head">
+        <div>
+          <div class="pipeline-browser-title">Pipeline Assets</div>
+          <div class="pipeline-browser-subtitle" id="pipeline-browser-count">0 assets</div>
+        </div>
+        <div class="pipeline-browser-actions">
+          <div class="pipeline-browser-selected" id="pipeline-browser-selected">No asset selected</div>
+          <button type="button" class="btn" id="pipeline-browser-refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="pipeline-asset-grid" id="pipeline-asset-grid"></div>
+    </div>
+  </div>
   <div id="hybrid-splat-overlay-host" aria-hidden="true"></div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
@@ -4023,6 +4063,9 @@ function setInfo(msg) {
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+  const pipelineBrowser = document.getElementById('pipeline-main-browser');
+  if (pipelineBrowser) pipelineBrowser.hidden = tabName !== 'pipeline';
+  if (tabName === 'pipeline') loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
 }
 
 let pipelineManifest = null;
@@ -4033,6 +4076,9 @@ let pipelineDockState = {
   selectedSource: null,
   lastRun: null,
   graph: null,
+  browserAssets: [],
+  browserSelectedAssetId: null,
+  browserStatus: 'idle',
 };
 const pipelineDockNodeKindOrder = [
   { kind: 'source' },
@@ -4045,9 +4091,32 @@ function selectedPipelineRecord() {
   return pipelineManifest.pipelines.find(route => route.id === pipelineDockState.selectedPipelineId) || pipelineManifest.pipelines[0];
 }
 
+function pipelineBrowserAssetLabel(entry) {
+  return entry?.display?.title || entry?.name || entry?.path || entry?.id || 'Splat asset';
+}
+
+function pipelineBrowserAssetSource(entry) {
+  if (!entry) return null;
+  return {
+    kind: 'splat-asset',
+    label: pipelineBrowserAssetLabel(entry),
+    source: entry.source || '',
+    assetId: entry.id || null,
+    stage: entry.stage || null,
+    rootId: entry.root_id || null,
+    path: entry.path || null,
+  };
+}
+
+function selectedPipelineBrowserAsset() {
+  return pipelineDockState.browserAssets.find(entry => entry.id === pipelineDockState.browserSelectedAssetId) || null;
+}
+
 function pipelineSelectedSource() {
   const manual = document.getElementById('pipeline-source-input')?.value?.trim();
   if (manual) return { kind: 'manual', label: 'Manual Source', source: manual };
+  const browserAsset = selectedPipelineBrowserAsset();
+  if (browserAsset) return pipelineBrowserAssetSource(browserAsset);
   const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if (!entry) return null;
   const source = entry.source || entry.splat?.assetSource || '';
@@ -4057,6 +4126,98 @@ function pipelineSelectedSource() {
     source,
     objectId: entry.id,
   };
+}
+
+function renderPipelineAssetCard(entry) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = `pipeline-asset-card${entry.id === pipelineDockState.browserSelectedAssetId ? ' selected' : ''}`;
+  card.dataset.pipelineAssetId = entry.id || '';
+  card.onclick = () => selectPipelineBrowserAsset(entry.id);
+
+  const thumb = document.createElement('div');
+  thumb.className = 'pipeline-asset-thumb';
+  const ext = document.createElement('div');
+  ext.className = 'pipeline-asset-ext';
+  ext.textContent = (entry.name || entry.path || 'ply').split('.').pop()?.toUpperCase() || 'PLY';
+  thumb.appendChild(ext);
+  card.appendChild(thumb);
+
+  const meta = document.createElement('div');
+  meta.className = 'pipeline-asset-meta';
+  const title = document.createElement('div');
+  title.className = 'pipeline-asset-title';
+  title.textContent = pipelineBrowserAssetLabel(entry);
+  meta.appendChild(title);
+  const stage = document.createElement('span');
+  stage.className = `gr-stage ${entry.stage === 'production' ? 'production' : 'experimental'}`;
+  stage.textContent = entry.stage === 'production' ? 'production' : 'experimental';
+  meta.appendChild(stage);
+  card.appendChild(meta);
+
+  const path = document.createElement('div');
+  path.className = 'pipeline-asset-path';
+  path.textContent = entry.display?.subtitle || `${entry.root_label || entry.root_id || 'asset'} / ${entry.path || entry.name || ''}`;
+  card.appendChild(path);
+
+  const raw = document.createElement('div');
+  raw.className = 'pipeline-asset-path';
+  raw.textContent = entry.path || entry.source || entry.id || '';
+  card.appendChild(raw);
+  return card;
+}
+
+function renderPipelineAssetBrowser() {
+  const grid = document.getElementById('pipeline-asset-grid');
+  if (!grid) return;
+  const count = document.getElementById('pipeline-browser-count');
+  const selected = document.getElementById('pipeline-browser-selected');
+  const assets = pipelineDockState.browserAssets || [];
+  if (count) count.textContent = `${assets.length} asset${assets.length === 1 ? '' : 's'}`;
+  const selectedAsset = selectedPipelineBrowserAsset();
+  if (selected) selected.textContent = selectedAsset ? pipelineBrowserAssetLabel(selectedAsset) : 'No asset selected';
+  grid.innerHTML = '';
+  if (!assets.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pipeline-asset-empty';
+    empty.textContent = pipelineDockState.browserStatus === 'loading' ? 'Loading assets...' : 'No splat assets indexed';
+    grid.appendChild(empty);
+    return;
+  }
+  for (const entry of assets) grid.appendChild(renderPipelineAssetCard(entry));
+}
+
+async function loadPipelineAssetBrowser() {
+  pipelineDockState.browserStatus = 'loading';
+  renderPipelineAssetBrowser();
+  const response = await fetch('/api/assets?kind=splat');
+  if (!response.ok) throw new Error(`Pipeline assets load failed: ${response.status}`);
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+  pipelineDockState.browserAssets = data.entries || [];
+  if (
+    pipelineDockState.browserSelectedAssetId &&
+    !pipelineDockState.browserAssets.some(entry => entry.id === pipelineDockState.browserSelectedAssetId)
+  ) {
+    pipelineDockState.browserSelectedAssetId = null;
+  }
+  pipelineDockState.browserStatus = 'loaded';
+  renderPipelineAssetBrowser();
+  renderPipelineDock();
+  return pipelineDockState.browserAssets;
+}
+
+function selectPipelineBrowserAsset(assetId) {
+  const entry = pipelineDockState.browserAssets.find(item => item.id === assetId);
+  if (!entry) return null;
+  pipelineDockState.browserSelectedAssetId = entry.id;
+  pipelineDockState.lastRun = null;
+  const manualInput = document.getElementById('pipeline-source-input');
+  if (manualInput) manualInput.value = '';
+  renderPipelineAssetBrowser();
+  renderPipelineDock();
+  setInfo(`Pipeline source selected: ${pipelineBrowserAssetLabel(entry)}`);
+  return pipelineBrowserAssetSource(entry);
 }
 
 function pipelineStatusClass(status) {
@@ -4240,15 +4401,19 @@ function initPipelineDock() {
     renderPipelineDock();
   }));
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
+  document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   loadPipelineManifest().catch(err => {
     setInfo(err.message || String(err));
     renderPipelineDock();
   });
+  renderPipelineAssetBrowser();
 }
 
 window.loadPipelineManifest = loadPipelineManifest;
+window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
 window.buildPipelineDockGraphState = buildPipelineDockGraphState;
+window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;
 
 function readVolumeControls() {

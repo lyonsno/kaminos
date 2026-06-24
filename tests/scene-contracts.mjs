@@ -76,6 +76,14 @@ assert.match(index, /function buildPipelineDockGraphState\(/, 'Pipeline Dock bui
 assert.match(index, /kind:\s*'source'[\s\S]*kind:\s*'pipeline-stage'[\s\S]*kind:\s*'result'/, 'Pipeline Dock graph state preserves source/stage/result node kinds');
 assert.match(index, /window\.kaminosPipelineDockDebugState/, 'browser witnesses can inspect Pipeline Dock state without DOM inference');
 assert.match(index, /registryScope:\s*'run-local'/, 'Pipeline Dock treats bundles as run-local evidence, not global registry truth');
+assert.match(index, /id="pipeline-main-browser"/, 'Pipeline tab opens a main-window asset browser instead of requiring typed filenames');
+assert.match(index, /id="pipeline-asset-grid"/, 'Pipeline browser renders selectable assets in the main viewport');
+assert.match(index, /async function loadPipelineAssetBrowser\(/, 'Pipeline browser loads declared assets through an explicit function');
+assert.match(index, /fetch\('\/api\/assets\?kind=splat'\)/, 'Pipeline browser consumes the declared splat asset index directly');
+assert.match(index, /function selectPipelineBrowserAsset\(/, 'Pipeline browser has an explicit asset selection path into the dock source');
+assert.match(index, /pipelineDockState\.browserAssets/, 'Pipeline Dock debug state records browser assets for witness inspection');
+assert.match(index, /pipelineDockState\.browserSelectedAssetId/, 'Pipeline Dock debug state records selected browser asset identity');
+assert.match(index, /window\.kaminosPipelineSelectAsset/, 'browser witnesses can select a Pipeline browser asset without DOM inference');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
 assert.match(index, /async function ingestDroppedSplatFile\(/, 'loose PLY/SPZ drops ingest into the experimental splat inbox before import');
