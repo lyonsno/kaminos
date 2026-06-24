@@ -189,6 +189,28 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-renderability-chip.splat-header-like { background: #1b2a3a; color: #42a5f5; }
 .pipeline-renderability-chip.not-splat-like { background: #3a1b1b; color: #ef5350; }
 .pipeline-renderability-chip.unknown { background: #33281b; color: #f0b85a; }
+.pipeline-graph-workbench { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; margin-bottom: 12px; }
+.pipeline-graph-canvas { position: relative; min-height: 270px; border: 1px solid #2b2b2b; border-radius: 8px; background: #141414; overflow: hidden; }
+.pipeline-graph-canvas::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(#202020 1px, transparent 1px), linear-gradient(90deg, #202020 1px, transparent 1px); background-size: 32px 32px; opacity: 0.35; pointer-events: none; }
+.pipeline-graph-edge-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pipeline-graph-edge { stroke: #3c5664; stroke-width: 2; fill: none; marker-end: url(#pipeline-graph-arrow); }
+.pipeline-graph-node { position: absolute; width: 136px; min-height: 78px; padding: 10px; border: 1px solid #333; border-radius: 7px; background: #1c1c1c; color: #ddd; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 12px 26px rgba(0,0,0,0.2); }
+.pipeline-graph-node:hover { border-color: #555; background: #222; }
+.pipeline-graph-node.selected { border-color: #2f67c7; background: #172235; color: #fff; }
+.pipeline-graph-node-kicker { font: 9px 'SF Mono', monospace; color: #777; text-transform: uppercase; letter-spacing: 0.7px; }
+.pipeline-graph-node-title { font-size: 12px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-node-detail { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-node.source { left: 18px; top: 92px; }
+.pipeline-graph-node.route { left: 180px; top: 92px; }
+.pipeline-graph-node.output { left: 342px; top: 44px; }
+.pipeline-graph-node.evidence { left: 342px; top: 150px; }
+.pipeline-graph-inspector { border: 1px solid #2b2b2b; border-radius: 8px; background: #171717; padding: 12px; min-height: 270px; }
+.pipeline-graph-inspector-title { color: #f1f1f1; font-size: 13px; font-weight: 750; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-inspector-body { color: #888; font-size: 11px; line-height: 1.4; margin-bottom: 10px; }
+.pipeline-graph-inspector-grid { display: grid; grid-template-columns: 76px 1fr; gap: 5px 8px; font: 10px 'SF Mono', monospace; margin-bottom: 10px; }
+.pipeline-graph-inspector-key { color: #555; text-transform: uppercase; }
+.pipeline-graph-inspector-val { color: #aaa; overflow-wrap: anywhere; min-width: 0; }
+.pipeline-graph-inspector-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .pipeline-run-result-panel { border: 1px solid #2d2d2d; background: #171717; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
 .pipeline-run-result-panel[hidden] { display: none; }
 .pipeline-run-result-title { color: #f1f1f1; font-size: 13px; font-weight: 750; margin-bottom: 4px; }
@@ -1478,6 +1500,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="pipeline-browser-selected" id="pipeline-browser-selected">No asset selected</div>
           <button type="button" class="btn" id="pipeline-browser-refresh">Refresh</button>
         </div>
+      </div>
+      <div class="pipeline-graph-workbench" id="pipeline-graph-workbench">
+        <div class="pipeline-graph-canvas" id="pipeline-graph-canvas"></div>
+        <div class="pipeline-graph-inspector" id="pipeline-graph-inspector"></div>
       </div>
       <div class="pipeline-run-shelf" id="pipeline-run-shelf" hidden>
         <div class="pipeline-run-shelf-head">
@@ -10106,6 +10132,7 @@ let pipelineDockState = {
 	  selectedSource: null,
 	  runHistory: [],
 	  selectedRunId: null,
+	  selectedGraphNodeId: 'source',
 	  renderedRunId: null,
 	  lastRun: null,
 	  graph: null,
@@ -10325,6 +10352,188 @@ function pipelineRememberRun(result, source, pipeline) {
 
 function pipelineRunArtifact(result, id) {
   return result?.bundle?.document?.artifacts?.find(artifact => artifact.id === id) || null;
+}
+
+function pipelineGraphNodeForId(graph, nodeId) {
+  return graph?.nodes?.find(node => node.id === nodeId) || null;
+}
+
+function pipelineRunUsesFixture(result) {
+  return Boolean(result?.report?.document?.stages?.some(stage => stage.status === 'fixture'));
+}
+
+function buildPipelineGraphModel(source, selectedRun) {
+  const pipeline = selectedPipelineRecord();
+  const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
+  const splat = pipelineRunArtifact(selectedRun, 'splat');
+  const runId = selectedRun ? pipelineRunDisplayId(selectedRun) : null;
+  const fixtureBacked = pipelineRunUsesFixture(selectedRun);
+  const sourceLabel = selectedRun?.source?.label || source?.label || 'No source selected';
+  const sourcePath = selectedRun?.source?.source || source?.source || null;
+  const routeLabel = selectedRun?.pipelineLabel || pipeline?.label || 'No route selected';
+  const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : ''}Splat output` : sidecar?.path ? 'No new splat' : 'No output yet';
+  const evidenceLabel = selectedRun?.ok ? 'Run evidence written' : selectedRun ? 'Run failed' : 'No run evidence';
+  const nodes = [
+    {
+      id: 'source',
+      kind: 'source',
+      title: sourceLabel,
+      detail: sourcePath || 'Select an asset',
+      runId,
+      source: selectedRun?.source || source || null,
+    },
+    {
+      id: 'route',
+      kind: 'route',
+      title: routeLabel,
+      detail: `${selectedRun?.pipelineId || pipeline?.id || 'unrouted'}${fixtureBacked ? ' / fixture-backed' : ''}`,
+      runId,
+      pipeline,
+      fixtureBacked,
+    },
+    {
+      id: 'output',
+      kind: 'output',
+      title: outputLabel,
+      detail: splat?.path || 'fixture/sidecar-only or not run',
+      runId,
+      artifact: splat,
+      fixtureBacked,
+    },
+    {
+      id: 'evidence',
+      kind: 'evidence',
+      title: evidenceLabel,
+      detail: selectedRun?.bundle?.path || selectedRun?.report?.path || 'no bundle yet',
+      runId,
+      sidecar,
+      bundlePath: selectedRun?.bundle?.path || null,
+      reportPath: selectedRun?.report?.path || null,
+    },
+  ];
+  return {
+    schema: 'kaminos.pipeline-graph-model.v0',
+    selectedRunId: runId,
+    nodes,
+    edges: [
+      { from: 'source', to: 'route' },
+      { from: 'route', to: 'output' },
+      { from: 'route', to: 'evidence' },
+    ],
+  };
+}
+
+function selectPipelineGraphNode(nodeId) {
+  const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  if (!pipelineGraphNodeForId(graph, nodeId)) return null;
+  pipelineDockState.selectedGraphNodeId = nodeId;
+  renderPipelineGraphWorkbench();
+  return pipelineGraphNodeForId(pipelineDockState.pipelineGraph, nodeId);
+}
+
+function pipelineGraphInspectorRows(node, selectedRun) {
+  if (!node) return [{ key: 'status', value: 'No graph node selected' }];
+  const rows = [
+    { key: 'kind', value: node.kind },
+    { key: 'title', value: node.title },
+    { key: 'detail', value: node.detail || 'none' },
+  ];
+  if (selectedRun) rows.push({ key: 'run', value: pipelineRunDisplayId(selectedRun) });
+  if (node.kind === 'route' && selectedRun) rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
+  if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
+  if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
+  if (node.kind === 'evidence') {
+    rows.push({ key: 'sidecar', value: node.sidecar?.path || 'none' });
+    rows.push({ key: 'bundle', value: node.bundlePath || 'none' });
+  }
+  return rows;
+}
+
+function renderPipelineGraphInspector(node, selectedRun) {
+  const inspector = document.getElementById('pipeline-graph-inspector');
+  if (!inspector) return;
+  const actions = [];
+  if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
+    actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source).catch(() => {}) });
+  }
+  if (node?.kind === 'output' && selectedRun && node.artifact?.path) {
+    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact).catch(() => {}) });
+  }
+  if (node?.kind === 'evidence' && selectedRun) {
+    const sidecarUrl = pipelineRunReadUrlForPath(selectedRun, node.sidecar?.path);
+    const bundleUrl = pipelineRunReadUrlForPath(selectedRun, selectedRun.bundle?.path);
+    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun).catch(() => {}) });
+    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun).catch(() => {}) });
+  }
+  inspector.innerHTML = `
+    <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || 'Select a graph node')}</div>
+    <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
+    <div class="pipeline-graph-inspector-actions" id="pipeline-graph-inspector-actions"></div>
+    <div class="pipeline-graph-inspector-grid">
+      ${pipelineGraphInspectorRows(node, selectedRun).map(row => `
+        <div class="pipeline-graph-inspector-key">${escapeHtml(row.key)}</div>
+        <div class="pipeline-graph-inspector-val">${escapeHtml(row.value)}</div>
+      `).join('')}
+    </div>
+  `;
+  const actionHost = document.getElementById('pipeline-graph-inspector-actions');
+  if (!actionHost) return;
+  for (const item of actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn';
+    button.textContent = item.label;
+    button.disabled = Boolean(item.disabled);
+    button.addEventListener('pointerdown', event => event.stopPropagation());
+    button.addEventListener('click', item.action);
+    actionHost.appendChild(button);
+  }
+}
+
+function renderPipelineGraphWorkbench() {
+  const canvas = document.getElementById('pipeline-graph-canvas');
+  if (!canvas) return;
+  const source = pipelineDockState.selectedSource || pipelineSelectedSource();
+  const selectedRun = selectedPipelineRun();
+  const graph = buildPipelineGraphModel(source, selectedRun);
+  pipelineDockState.pipelineGraph = graph;
+  if (!pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId)) pipelineDockState.selectedGraphNodeId = 'source';
+  const nodeMarkup = graph.nodes.map(node => `
+    <button
+      type="button"
+      class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}"
+      data-pipeline-graph-node-id="${escapeHtml(node.id)}"
+      aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
+    >
+      <span class="pipeline-graph-node-kicker">${escapeHtml(node.kind)}</span>
+      <span class="pipeline-graph-node-title">${escapeHtml(node.title)}</span>
+      <span class="pipeline-graph-node-detail">${escapeHtml(node.detail || '')}</span>
+    </button>
+  `).join('');
+  canvas.innerHTML = `
+    <svg class="pipeline-graph-edge-layer" viewBox="0 0 720 270" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <marker id="pipeline-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#3c5664"></path>
+        </marker>
+      </defs>
+      <path class="pipeline-graph-edge" d="M154 132 C166 132 168 132 180 132"></path>
+      <path class="pipeline-graph-edge" d="M316 132 C328 132 330 84 342 84"></path>
+      <path class="pipeline-graph-edge" d="M316 132 C328 132 330 190 342 190"></path>
+    </svg>
+    ${nodeMarkup}
+  `;
+  canvas.querySelectorAll('[data-pipeline-graph-node-id]').forEach(nodeEl => {
+    const nodeId = nodeEl.dataset.pipelineGraphNodeId;
+    const select = event => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectPipelineGraphNode(nodeId);
+    };
+    nodeEl.addEventListener('pointerdown', select);
+    nodeEl.addEventListener('click', select);
+  });
+  renderPipelineGraphInspector(pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId), selectedRun);
 }
 
 function pipelineRunReadUrlForPath(result, artifactPath) {
@@ -10690,8 +10899,9 @@ function renderPipelineDock() {
         <div class="pipeline-evidence-key">${escapeHtml(row.key)}</div>
         <div class="pipeline-evidence-val">${escapeHtml(row.value)}</div>
       </div>
-    `).join('');
+	    `).join('');
 	  }
+	  renderPipelineGraphWorkbench();
 	  renderPipelineRunShelf();
 	  renderPipelineRunResultPanel();
 }
@@ -10769,6 +10979,8 @@ window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
 window.pipelineOpenRunDocument = pipelineOpenRunDocument;
 window.buildPipelineDockGraphState = buildPipelineDockGraphState;
+window.buildPipelineGraphModel = buildPipelineGraphModel;
+window.selectPipelineGraphNode = selectPipelineGraphNode;
 window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;
 
