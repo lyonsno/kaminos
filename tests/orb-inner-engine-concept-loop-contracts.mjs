@@ -51,6 +51,9 @@ assert.ok(manifest.failureTaxonomy.includes('volume-dependency-too-high'), 'volu
 
 const routes = new Map(manifest.routes.map(route => [route.id, route]));
 assert.equal(routes.get('local-image.ideogram4').status, 'unconfigured');
+assert.equal(routes.get('local-video.cosmos3-mlx.t2v').status, 'planned');
+assert.equal(routes.get('local-video.cosmos3-mlx.i2v').status, 'planned');
+assert.equal(routes.get('local-image.diffusion-fallback').status, 'unconfigured');
 assert.equal(routes.get('sharp.splat').status, 'planned');
 assert.equal(routes.get('trellis2mlx.mesh-pbr').status, 'planned');
 assert.equal(routes.get('pixal3d.mesh-pbr').status, 'planned');

@@ -62,6 +62,36 @@ function makeRoutes() {
       notes: 'Local image route is described here but not executed by this manifest-only loop.',
     },
     {
+      id: 'local-video.cosmos3-mlx.t2v',
+      status: 'planned',
+      role: 'text-to-video-view-sequence-candidate',
+      consumes: ['structured prompt', 'seed', 'route-specific video settings'],
+      produces: ['short video or frame sequence candidate', 'multi-view conditioning candidate'],
+      liveGeneratorInvoked: false,
+      requiredForBaseRead: false,
+      notes: 'Cosmos3 MLX can be tried as a world/video route; arbitrary Evil Orb quality is unproven until visual smoke.',
+    },
+    {
+      id: 'local-video.cosmos3-mlx.i2v',
+      status: 'planned',
+      role: 'image-to-video-source-view-motion-candidate',
+      consumes: ['source concept image', 'structured prompt', 'seed', 'route-specific video settings'],
+      produces: ['short image-conditioned video candidate', 'multi-view conditioning candidate'],
+      liveGeneratorInvoked: false,
+      requiredForBaseRead: false,
+      notes: 'Cosmos3 image-to-video may turn a source core image into adjacent view/motion frames for Trellis2/Pixal3D/SHARP experiments.',
+    },
+    {
+      id: 'local-image.diffusion-fallback',
+      status: 'unconfigured',
+      role: 'opportunistic-local-diffusion-fallback',
+      consumes: ['structured prompt', 'seed'],
+      produces: ['source concept image if a stable local diffusion CLI is bound'],
+      liveGeneratorInvoked: false,
+      requiredForBaseRead: false,
+      notes: 'Diffusion fallback slot is present for mflux/stable-diffusion-style local routes, but no concrete CLI is bound by default.',
+    },
+    {
       id: 'sharp.splat',
       status: 'planned',
       role: 'hero-splat-from-concept-image',
@@ -358,6 +388,8 @@ export function createOrbInnerEngineConceptManifest({
       'mesh-pbr-ugly-specificity',
       'stale-baked-lighting-before-relight',
       'generator-unconfigured',
+      'provider-unconfigured',
+      'video-route-off-distribution',
       'volume-dependency-too-high',
     ],
     viewBankPolicy: {
@@ -454,19 +486,31 @@ function imageOutputComplete(path) {
   return existsSync(path) && statSync(path).size > 0;
 }
 
-function makeUnconfiguredImageRecords({ bundleRoot, promptQueue, route, recordsPath }) {
+function makeUnconfiguredImageRecords({
+  bundleRoot,
+  promptQueue,
+  route,
+  recordsPath,
+  recordIdentity = 'orb-inner-engine-image-route-records-v0',
+  mediaKind = 'image',
+  outputExtension = 'png',
+}) {
   return {
     ok: false,
-    identity: 'orb-inner-engine-image-route-records-v0',
+    identity: recordIdentity,
     parentIdentity: promptQueue.parentIdentity,
     route,
     bundleRoot,
     status: 'unconfigured',
+    mediaKind,
+    outputExtension,
     effectiveCommand: null,
     recordsPath,
     records: promptQueue.items.map(item => ({
       conceptId: item.id,
       route,
+      mediaKind,
+      outputExtension,
       status: 'unconfigured',
       failurePhase: 'configuration',
       failureReason: 'No image command supplied for this route.',
@@ -494,14 +538,18 @@ export function runOrbInnerEngineImageRoute({
   cwd = null,
   env = {},
   timeoutMs = 120000,
+  outputExtension = 'png',
+  recordsFileName = 'image-route-records.json',
+  recordIdentity = 'orb-inner-engine-image-route-records-v0',
+  mediaKind = 'image',
 } = {}) {
   if (!bundleRoot) {
     throw new Error('runOrbInnerEngineImageRoute requires bundleRoot');
   }
   const resolvedBundleRoot = resolve(bundleRoot);
   const promptQueuePath = join(resolvedBundleRoot, 'prompt-queue.json');
-  const recordsPath = join(resolvedBundleRoot, 'image-route-records.json');
-  const imageRoot = join(resolvedBundleRoot, 'images', route);
+  const recordsPath = join(resolvedBundleRoot, recordsFileName);
+  const imageRoot = join(resolvedBundleRoot, mediaKind === 'image' ? 'images' : `${mediaKind}s`, route);
   const promptQueue = jsonRead(promptQueuePath);
   mkdirSync(imageRoot, { recursive: true });
 
@@ -511,6 +559,9 @@ export function runOrbInnerEngineImageRoute({
       promptQueue,
       route,
       recordsPath,
+      recordIdentity,
+      mediaKind,
+      outputExtension,
     });
     jsonWrite(recordsPath, unconfigured);
     return {
@@ -532,7 +583,7 @@ export function runOrbInnerEngineImageRoute({
   const records = [];
 
   for (const item of promptQueue.items) {
-    const outputImagePath = join(imageRoot, `${item.id}.png`);
+    const outputImagePath = join(imageRoot, `${item.id}.${outputExtension}`);
     const promptPayload = {
       positive: item.positive,
       negative: item.negative,
@@ -594,11 +645,13 @@ export function runOrbInnerEngineImageRoute({
   const complete = records.every(record => record.status === 'complete');
   const imageRouteRecords = {
     ok: complete,
-    identity: 'orb-inner-engine-image-route-records-v0',
+    identity: recordIdentity,
     parentIdentity: promptQueue.parentIdentity,
     route,
     bundleRoot: resolvedBundleRoot,
     status: complete ? 'complete' : 'failed',
+    mediaKind,
+    outputExtension,
     effectiveCommand,
     recordsPath,
     records,
