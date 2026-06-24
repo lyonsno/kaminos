@@ -193,6 +193,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-run-result-panel[hidden] { display: none; }
 .pipeline-run-result-title { color: #f1f1f1; font-size: 13px; font-weight: 750; margin-bottom: 4px; }
 .pipeline-run-result-body { color: #888; font-size: 11px; line-height: 1.4; margin-bottom: 10px; max-width: 760px; }
+.pipeline-run-shelf { border: 1px solid #292929; background: #151515; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+.pipeline-run-shelf[hidden] { display: none; }
+.pipeline-run-shelf-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 8px; }
+.pipeline-run-shelf-title { color: #ddd; font-size: 12px; font-weight: 750; }
+.pipeline-run-shelf-subtitle { color: #666; font: 10px 'SF Mono', monospace; }
+.pipeline-run-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.pipeline-run-card { min-width: 0; border: 1px solid #2d2d2d; background: #1b1b1b; border-radius: 7px; padding: 9px; color: #bbb; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.pipeline-run-card:hover { background: #212121; border-color: #444; }
+.pipeline-run-card.selected { background: #172235; border-color: #2f67c7; color: #fff; }
+.pipeline-run-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.pipeline-run-card-title { font-size: 11px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-run-card-meta { color: #777; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-run-card-flow { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-run-result-grid { display: grid; grid-template-columns: 90px 1fr; gap: 5px 8px; margin-bottom: 10px; font: 10px 'SF Mono', monospace; }
 .pipeline-run-result-key { color: #555; text-transform: uppercase; }
 .pipeline-run-result-val { color: #aaa; overflow-wrap: anywhere; }
@@ -1465,6 +1478,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="pipeline-browser-selected" id="pipeline-browser-selected">No asset selected</div>
           <button type="button" class="btn" id="pipeline-browser-refresh">Refresh</button>
         </div>
+      </div>
+      <div class="pipeline-run-shelf" id="pipeline-run-shelf" hidden>
+        <div class="pipeline-run-shelf-head">
+          <div>
+            <div class="pipeline-run-shelf-title">Pipeline Runs</div>
+            <div class="pipeline-run-shelf-subtitle">Persistent run records for this browser session</div>
+          </div>
+          <div class="pipeline-run-shelf-subtitle" id="pipeline-run-shelf-count">0 runs</div>
+        </div>
+        <div class="pipeline-run-list" id="pipeline-run-list"></div>
       </div>
       <div class="pipeline-run-result-panel" id="pipeline-run-result-panel" hidden>
         <div class="pipeline-run-result-title" id="pipeline-run-result-title"></div>
@@ -10078,11 +10101,14 @@ function applyRayBudgetPreset(name, options = {}) {
 let pipelineManifest = null;
 let pipelineDockState = {
   schema: 'kaminos.pipeline-dock-state.v0',
-  registryScope: 'run-local',
-  selectedPipelineId: 'prepared-splat-import-sidecar-v0',
-  selectedSource: null,
-  lastRun: null,
-  graph: null,
+	  registryScope: 'run-local',
+	  selectedPipelineId: 'prepared-splat-import-sidecar-v0',
+	  selectedSource: null,
+	  runHistory: [],
+	  selectedRunId: null,
+	  renderedRunId: null,
+	  lastRun: null,
+	  graph: null,
   browserAssets: [],
   browserSelectedAssetId: null,
   browserStatus: 'idle',
@@ -10234,7 +10260,6 @@ function selectPipelineBrowserAsset(assetId) {
   const entry = pipelineDockState.browserAssets.find(item => item.id === assetId);
   if (!entry) return null;
   pipelineDockState.browserSelectedAssetId = entry.id;
-  pipelineDockState.lastRun = null;
   const manualInput = document.getElementById('pipeline-source-input');
   if (manualInput) manualInput.value = '';
   renderPipelineAssetBrowser();
@@ -10259,6 +10284,43 @@ function pipelineEvidenceRows(result) {
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'scope', value: bundle.registryScope || 'run-local' },
   ];
+}
+
+function selectedPipelineRun() {
+  if (!pipelineDockState.runHistory?.length) return null;
+  return pipelineDockState.runHistory.find(run => run.runId === pipelineDockState.selectedRunId) || pipelineDockState.runHistory[0] || null;
+}
+
+function pipelineRunDisplayId(result) {
+  return result?.runId || result?.bundle?.document?.runId || result?.report?.document?.runId || result?.pipelineId || 'pipeline-run';
+}
+
+function pipelineRememberRun(result, source, pipeline) {
+  const stamp = new Date().toISOString();
+  const runId = [
+    'pipeline-run',
+    stamp.replace(/[-:.TZ]/g, '').slice(0, 14),
+    Math.random().toString(36).slice(2, 7),
+  ].join('-');
+  const sourceRecord = {
+    ...(source || {}),
+    ...(result?.source || {}),
+    label: source?.label || result?.source?.label || source?.path || result?.source?.path || 'Pipeline source',
+    source: source?.source || result?.source?.source || result?.source?.path || '',
+  };
+  const remembered = {
+    ...(result || {}),
+    runId,
+    createdAt: stamp,
+    pipelineId: result?.pipelineId || pipeline?.id || pipelineDockState.selectedPipelineId,
+    pipelineLabel: pipeline?.label || result?.pipelineId || pipelineDockState.selectedPipelineId,
+    pipelineDescription: pipeline?.description || '',
+    source: sourceRecord,
+  };
+  pipelineDockState.runHistory = [remembered, ...(pipelineDockState.runHistory || [])];
+  pipelineDockState.selectedRunId = runId;
+  pipelineDockState.lastRun = remembered;
+  return remembered;
 }
 
 function pipelineRunArtifact(result, id) {
@@ -10293,17 +10355,29 @@ function pipelineSetActionStatus(message) {
   if (message) setInfo(message);
 }
 
-function pipelineShowRunDocument(title, documentText) {
+function pipelineClearRunDocument() {
+  const panel = document.getElementById('pipeline-result-document-panel');
+  const titleEl = document.getElementById('pipeline-result-document-title');
+  const body = document.getElementById('pipeline-result-document-body');
+  if (!panel || !titleEl || !body) return;
+  titleEl.textContent = '';
+  body.textContent = '';
+  panel.dataset.pipelineRunId = '';
+  panel.hidden = true;
+}
+
+function pipelineShowRunDocument(title, documentText, runId) {
   const panel = document.getElementById('pipeline-result-document-panel');
   const titleEl = document.getElementById('pipeline-result-document-title');
   const body = document.getElementById('pipeline-result-document-body');
   if (!panel || !titleEl || !body) return;
   titleEl.textContent = title;
   body.textContent = documentText;
+  panel.dataset.pipelineRunId = runId || '';
   panel.hidden = false;
 }
 
-async function pipelineOpenRunDocument(label, url) {
+async function pipelineOpenRunDocument(label, url, result = null) {
   if (!url) {
     pipelineSetActionStatus(`${label} is not available for this run`);
     return null;
@@ -10314,11 +10388,11 @@ async function pipelineOpenRunDocument(label, url) {
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const text = await response.text();
     let body = text;
-    try {
-      body = JSON.stringify(JSON.parse(text), null, 2);
-    } catch {}
-    pipelineShowRunDocument(label, body);
-    pipelineSetActionStatus(`${label} opened below`);
+	    try {
+	      body = JSON.stringify(JSON.parse(text), null, 2);
+	    } catch {}
+	    pipelineShowRunDocument(label, body, pipelineRunDisplayId(result));
+	    pipelineSetActionStatus(`${label} opened below`);
     return body;
   } catch (err) {
     pipelineSetActionStatus(`${label} open failed: ${err.message || err}`);
@@ -10363,24 +10437,103 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
   }
 }
 
+async function pipelineLoadSourceRecord(source) {
+  if (!source?.source) {
+    pipelineSetActionStatus('Pipeline source required');
+    return null;
+  }
+  const fileName = source.path || source.source.split('path=').pop() || source.label || 'pipeline-source.ply';
+  pipelineSetActionStatus('Loading run source into the scene...');
+  try {
+    const record = await greenroomImportSplat(source.source, decodeURIComponent(fileName).split('/').pop(), {
+      title: source.label || 'Pipeline Source',
+      subtitle: source.renderability?.reason || 'Selected pipeline source',
+      raw_name: source.path || source.source,
+    }, {
+      clear: false,
+      metadata: {
+        source: source.source,
+        fileName: decodeURIComponent(fileName).split('/').pop(),
+        label: source.label || 'Pipeline Source',
+        splat: {
+          schema: 'kaminos.splat-asset.v0',
+          assetSource: source.source,
+          fileName: decodeURIComponent(fileName).split('/').pop(),
+          format: decodeURIComponent(fileName).split('.').pop()?.toLowerCase() || 'ply',
+          root_id: source.rootId || null,
+          path: source.path || null,
+          renderability: source.renderability || null,
+        },
+      },
+    });
+    setActiveTab('assets');
+    pipelineSetActionStatus(`Loaded source: ${source.label || source.source}`);
+    return record;
+  } catch (err) {
+    pipelineSetActionStatus(`Pipeline source load failed: ${err.message || err}`);
+    throw err;
+  }
+}
+
+async function pipelineLoadRunSource(result) {
+  return pipelineLoadSourceRecord(result?.source || pipelineSelectedSource());
+}
+
+function renderPipelineRunShelf() {
+  const shelf = document.getElementById('pipeline-run-shelf');
+  const list = document.getElementById('pipeline-run-list');
+  const count = document.getElementById('pipeline-run-shelf-count');
+  if (!shelf || !list) return;
+  const runs = pipelineDockState.runHistory || [];
+  shelf.hidden = !runs.length;
+  if (count) count.textContent = `${runs.length} run${runs.length === 1 ? '' : 's'}`;
+  list.innerHTML = '';
+  for (const run of runs) {
+    const sidecar = pipelineRunArtifact(run, 'sidecar');
+    const splat = pipelineRunArtifact(run, 'splat');
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `pipeline-run-card${run.runId === pipelineDockState.selectedRunId ? ' selected' : ''}`;
+    card.dataset.pipelineRunId = run.runId || '';
+    card.onclick = () => {
+      pipelineDockState.selectedRunId = run.runId;
+      renderPipelineDock();
+    };
+    card.innerHTML = `
+      <div class="pipeline-run-card-head">
+        <div class="pipeline-run-card-title">${escapeHtml(run.pipelineLabel || run.pipelineId || 'Pipeline run')}</div>
+        <span class="pipeline-status-chip ${run.ok ? 'real' : 'failed'}">${run.ok ? 'written' : 'failed'}</span>
+      </div>
+      <div class="pipeline-run-card-meta">${escapeHtml(pipelineRunDisplayId(run))}</div>
+      <div class="pipeline-run-card-flow">${escapeHtml(run.source?.label || run.source?.source || 'source')} -> ${escapeHtml(splat?.path ? 'splat output' : sidecar?.path ? 'sidecar' : 'no artifact')}</div>
+    `;
+    list.appendChild(card);
+  }
+}
+
 function renderPipelineRunResultPanel() {
   const panel = document.getElementById('pipeline-run-result-panel');
   if (!panel) return;
-  const result = pipelineDockState.lastRun;
+  const result = selectedPipelineRun();
   panel.hidden = !result;
   if (!result) return;
-  const pipeline = selectedPipelineRecord();
+  const runId = pipelineRunDisplayId(result);
+  if (pipelineDockState.renderedRunId !== runId) {
+    pipelineClearRunDocument();
+    pipelineSetActionStatus('');
+    pipelineDockState.renderedRunId = runId;
+  }
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const splat = pipelineRunArtifact(result, 'splat');
   const title = document.getElementById('pipeline-run-result-title');
   const body = document.getElementById('pipeline-run-result-body');
   const grid = document.getElementById('pipeline-run-result-grid');
   const actions = document.getElementById('pipeline-result-actions');
-  if (title) title.textContent = result.ok ? 'Sidecar run completed' : 'Pipeline run failed';
+  if (title) title.textContent = result.ok ? `${result.pipelineLabel || result.pipelineId || 'Pipeline'} completed` : 'Pipeline run failed';
   if (body) {
     body.textContent = result.ok
-      ? 'This route wrote metadata for the selected existing splat. It does not generate a new splat; use Load Source to view the selected asset.'
-      : (pipeline?.description || 'This run failed before producing trustworthy output.');
+      ? (splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
+      : (result.pipelineDescription || 'This run failed before producing trustworthy output.');
   }
   if (grid) {
     grid.innerHTML = pipelineRunResultRows(result).map(row => `
@@ -10402,7 +10555,7 @@ function renderPipelineRunResultPanel() {
       loadBtn.type = 'button';
       loadBtn.className = 'btn';
       loadBtn.textContent = 'Load Source';
-      loadBtn.onclick = () => pipelineLoadSelectedSource().catch(() => {});
+      loadBtn.onclick = () => pipelineLoadRunSource(result).catch(() => {});
       actions.appendChild(loadBtn);
     }
 
@@ -10412,7 +10565,7 @@ function renderPipelineRunResultPanel() {
     sidecarBtn.className = 'btn';
     sidecarBtn.textContent = 'Open Sidecar';
     sidecarBtn.disabled = !sidecarUrl;
-    sidecarBtn.onclick = () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl).catch(() => {});
+    sidecarBtn.onclick = () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, result).catch(() => {});
     actions.appendChild(sidecarBtn);
 
     const bundleUrl = pipelineRunReadUrlForPath(result, result.bundle?.path);
@@ -10421,7 +10574,7 @@ function renderPipelineRunResultPanel() {
     bundleBtn.className = 'btn';
     bundleBtn.textContent = 'Open Bundle';
     bundleBtn.disabled = !bundleUrl;
-    bundleBtn.onclick = () => pipelineOpenRunDocument('Open Bundle', bundleUrl).catch(() => {});
+    bundleBtn.onclick = () => pipelineOpenRunDocument('Open Bundle', bundleUrl, result).catch(() => {});
     actions.appendChild(bundleBtn);
   }
 }
@@ -10486,9 +10639,10 @@ function renderPipelineRouteSelect() {
 }
 
 function renderPipelineDock() {
-  const source = pipelineSelectedSource();
-  pipelineDockState.selectedSource = source;
-  pipelineDockState.graph = buildPipelineDockGraphState(source, pipelineDockState.lastRun);
+	  const source = pipelineSelectedSource();
+	  pipelineDockState.selectedSource = source;
+	  const selectedRun = selectedPipelineRun();
+	  pipelineDockState.graph = buildPipelineDockGraphState(source, selectedRun);
   window.kaminosPipelineDockState = pipelineDockState;
 
   const sourceSummary = document.getElementById('pipeline-source-summary');
@@ -10502,10 +10656,10 @@ function renderPipelineDock() {
 
   const manifestId = document.getElementById('pipeline-manifest-id');
   if (manifestId) manifestId.textContent = pipelineManifest?.manifestSha256?.slice(0, 12) || 'unloaded';
-  const registryScope = document.getElementById('pipeline-registry-scope');
-  if (registryScope) registryScope.textContent = pipelineDockState.lastRun?.bundle?.document?.registryScope || 'run-local';
-  const runState = document.getElementById('pipeline-run-state');
-  if (runState) runState.textContent = pipelineDockState.lastRun ? (pipelineDockState.lastRun.ok ? 'written' : 'failed') : 'idle';
+	  const registryScope = document.getElementById('pipeline-registry-scope');
+	  if (registryScope) registryScope.textContent = selectedRun?.bundle?.document?.registryScope || 'run-local';
+	  const runState = document.getElementById('pipeline-run-state');
+	  if (runState) runState.textContent = selectedRun ? (selectedRun.ok ? 'written' : 'failed') : 'idle';
   const routeDescription = document.getElementById('pipeline-route-description');
   if (routeDescription) {
     const pipeline = selectedPipelineRecord();
@@ -10529,16 +10683,17 @@ function renderPipelineDock() {
     `).join('') : '<div class="pipeline-note">Manifest has no stages for this route.</div>';
   }
 
-  const evidence = document.getElementById('pipeline-evidence-drawer');
-  if (evidence) {
-    evidence.innerHTML = pipelineEvidenceRows(pipelineDockState.lastRun).map(row => `
-      <div class="pipeline-evidence-row">
+	  const evidence = document.getElementById('pipeline-evidence-drawer');
+	  if (evidence) {
+	    evidence.innerHTML = pipelineEvidenceRows(selectedRun).map(row => `
+	      <div class="pipeline-evidence-row">
         <div class="pipeline-evidence-key">${escapeHtml(row.key)}</div>
         <div class="pipeline-evidence-val">${escapeHtml(row.value)}</div>
       </div>
     `).join('');
-  }
-  renderPipelineRunResultPanel();
+	  }
+	  renderPipelineRunShelf();
+	  renderPipelineRunResultPanel();
 }
 
 async function loadPipelineManifest() {
@@ -10551,42 +10706,7 @@ async function loadPipelineManifest() {
 }
 
 async function pipelineLoadSelectedSource() {
-  const source = pipelineSelectedSource();
-  if (!source?.source) {
-    pipelineSetActionStatus('Pipeline source required');
-    return null;
-  }
-  const fileName = source.path || source.source.split('path=').pop() || source.label || 'pipeline-source.ply';
-  pipelineSetActionStatus('Loading selected source into the scene...');
-  try {
-    const record = await greenroomImportSplat(source.source, decodeURIComponent(fileName).split('/').pop(), {
-      title: source.label || 'Pipeline Source',
-      subtitle: source.renderability?.reason || 'Selected pipeline source',
-      raw_name: source.path || source.source,
-    }, {
-      clear: false,
-      metadata: {
-        source: source.source,
-        fileName: decodeURIComponent(fileName).split('/').pop(),
-        label: source.label || 'Pipeline Source',
-        splat: {
-          schema: 'kaminos.splat-asset.v0',
-          assetSource: source.source,
-          fileName: decodeURIComponent(fileName).split('/').pop(),
-          format: decodeURIComponent(fileName).split('.').pop()?.toLowerCase() || 'ply',
-          root_id: source.rootId || null,
-          path: source.path || null,
-          renderability: source.renderability || null,
-        },
-      },
-    });
-    setActiveTab('assets');
-    pipelineSetActionStatus(`Loaded source: ${source.label || source.source}`);
-    return record;
-  } catch (err) {
-    pipelineSetActionStatus(`Pipeline source load failed: ${err.message || err}`);
-    throw err;
-  }
+  return pipelineLoadSourceRecord(pipelineSelectedSource());
 }
 
 async function runSelectedPipeline() {
@@ -10606,31 +10726,31 @@ async function runSelectedPipeline() {
     }),
   });
   const result = await response.json();
-  pipelineDockState.lastRun = result;
+  const remembered = pipelineRememberRun(result, source, selectedPipelineRecord());
   renderPipelineDock();
-  setInfo(result.ok ? `Pipeline witness written: ${result.pipelineId}` : `Pipeline witness failed: ${result.pipelineId}`);
-  return result;
+  setInfo(remembered.ok ? `Pipeline witness written: ${remembered.pipelineId}` : `Pipeline witness failed: ${remembered.pipelineId}`);
+  return remembered;
 }
 
 function initPipelineDock() {
   const select = document.getElementById('pipeline-route-select');
   select?.addEventListener('change', () => {
     pipelineDockState.selectedPipelineId = select.value;
-    pipelineDockState.lastRun = null;
     renderPipelineDock();
   });
   document.getElementById('pipeline-source-input')?.addEventListener('input', () => {
-    pipelineDockState.lastRun = null;
     renderPipelineDock();
   });
   document.getElementById('pipeline-run-button')?.addEventListener('click', () => runSelectedPipeline().catch(err => {
     setInfo(`Pipeline run failed: ${err.message || err}`);
-    pipelineDockState.lastRun = {
+    const source = pipelineSelectedSource();
+    pipelineRememberRun({
       schema: 'kaminos.pipeline-run-result.v0',
       ok: false,
       pipelineId: pipelineDockState.selectedPipelineId,
+      source,
       error: String(err.message || err),
-    };
+    }, source, selectedPipelineRecord());
     renderPipelineDock();
   }));
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
