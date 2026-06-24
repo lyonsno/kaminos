@@ -186,6 +186,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-asset-empty { border: 1px solid #292929; border-radius: 8px; padding: 18px; color: #666; font-size: 12px; }
 .pipeline-renderability-chip { border-radius: 4px; padding: 2px 6px; font: 9px 'SF Mono', monospace; text-transform: uppercase; background: #2a2a2a; color: #999; }
 .pipeline-renderability-chip.likely-splat { background: #173420; color: #66bb6a; }
+.pipeline-renderability-chip.splat-header-like { background: #1b2a3a; color: #42a5f5; }
 .pipeline-renderability-chip.not-splat-like { background: #3a1b1b; color: #ef5350; }
 .pipeline-renderability-chip.unknown { background: #33281b; color: #f0b85a; }
 .pipeline-run-result-panel { border: 1px solid #2d2d2d; background: #171717; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
@@ -196,6 +197,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-run-result-key { color: #555; text-transform: uppercase; }
 .pipeline-run-result-val { color: #aaa; overflow-wrap: anywhere; }
 .pipeline-run-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pipeline-result-action-status { color: #777; font: 10px 'SF Mono', monospace; margin: 8px 0; min-height: 14px; }
+.pipeline-result-document-panel { border: 1px solid #292929; background: #111; border-radius: 6px; padding: 9px; margin-top: 10px; }
+.pipeline-result-document-panel[hidden] { display: none; }
+.pipeline-result-document-title { color: #ddd; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+.pipeline-result-document-body { color: #aaa; font: 10px 'SF Mono', monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
 
 /* Greenroom browser */
 .gr-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background 0.1s; }
@@ -1464,7 +1470,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="pipeline-run-result-title" id="pipeline-run-result-title"></div>
         <div class="pipeline-run-result-body" id="pipeline-run-result-body"></div>
         <div class="pipeline-run-actions" id="pipeline-result-actions"></div>
+        <div class="pipeline-result-action-status" id="pipeline-result-action-status"></div>
         <div class="pipeline-run-result-grid" id="pipeline-run-result-grid"></div>
+        <div class="pipeline-result-document-panel" id="pipeline-result-document-panel" hidden>
+          <div class="pipeline-result-document-title" id="pipeline-result-document-title"></div>
+          <pre class="pipeline-result-document-body" id="pipeline-result-document-body"></pre>
+        </div>
       </div>
       <div class="pipeline-asset-grid" id="pipeline-asset-grid"></div>
     </div>
@@ -10112,6 +10123,7 @@ function selectedPipelineBrowserAsset() {
 function pipelineRenderabilityLabel(renderability) {
   const status = renderability?.status || 'unknown';
   if (status === 'likely-splat') return 'likely splat';
+  if (status === 'splat-header-like') return 'header-like';
   if (status === 'not-splat-like') return 'not splat-like';
   return status;
 }
@@ -10264,13 +10276,91 @@ function pipelineRunReadUrlForPath(result, artifactPath) {
 function pipelineRunResultRows(result) {
   if (!result) return [];
   const sidecar = pipelineRunArtifact(result, 'sidecar');
+  const splat = pipelineRunArtifact(result, 'splat');
   return [
-    { key: 'effect', value: 'Sidecar metadata written; no new splat generated.' },
+    { key: 'effect', value: splat ? 'Splat output artifact written; preview still must be loaded explicitly.' : 'Sidecar metadata written; no new splat generated.' },
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
+    { key: 'splat', value: splat?.path || 'not generated' },
     { key: 'sidecar', value: sidecar?.path || 'not written' },
     { key: 'source', value: result.source?.source || result.source?.path || 'unknown' },
   ];
+}
+
+function pipelineSetActionStatus(message) {
+  const status = document.getElementById('pipeline-result-action-status');
+  if (status) status.textContent = message || '';
+  if (message) setInfo(message);
+}
+
+function pipelineShowRunDocument(title, documentText) {
+  const panel = document.getElementById('pipeline-result-document-panel');
+  const titleEl = document.getElementById('pipeline-result-document-title');
+  const body = document.getElementById('pipeline-result-document-body');
+  if (!panel || !titleEl || !body) return;
+  titleEl.textContent = title;
+  body.textContent = documentText;
+  panel.hidden = false;
+}
+
+async function pipelineOpenRunDocument(label, url) {
+  if (!url) {
+    pipelineSetActionStatus(`${label} is not available for this run`);
+    return null;
+  }
+  pipelineSetActionStatus(`Opening ${label}...`);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const text = await response.text();
+    let body = text;
+    try {
+      body = JSON.stringify(JSON.parse(text), null, 2);
+    } catch {}
+    pipelineShowRunDocument(label, body);
+    pipelineSetActionStatus(`${label} opened below`);
+    return body;
+  } catch (err) {
+    pipelineSetActionStatus(`${label} open failed: ${err.message || err}`);
+    throw err;
+  }
+}
+
+async function pipelineLoadRunSplatArtifact(result, artifact) {
+  const url = pipelineRunReadUrlForPath(result, artifact?.path);
+  if (!url) {
+    pipelineSetActionStatus('No generated splat output is available for this run');
+    return null;
+  }
+  pipelineSetActionStatus('Loading generated splat output...');
+  try {
+    const fileName = artifact.path.split('/').pop() || 'pipeline-output.ply';
+    const record = await greenroomImportSplat(url, fileName, {
+      title: 'Pipeline Output',
+      subtitle: artifact.role || 'Generated pipeline artifact',
+      raw_name: artifact.path,
+    }, {
+      clear: false,
+      metadata: {
+        source: url,
+        fileName,
+        label: 'Pipeline Output',
+        splat: {
+          schema: 'kaminos.splat-asset.v0',
+          assetSource: url,
+          fileName,
+          format: fileName.split('.').pop()?.toLowerCase() || 'ply',
+          pipelineArtifact: artifact,
+        },
+      },
+    });
+    setActiveTab('assets');
+    pipelineSetActionStatus(`Loaded generated output: ${fileName}`);
+    return record;
+  } catch (err) {
+    pipelineSetActionStatus(`Generated output load failed: ${err.message || err}`);
+    throw err;
+  }
 }
 
 function renderPipelineRunResultPanel() {
@@ -10281,6 +10371,7 @@ function renderPipelineRunResultPanel() {
   if (!result) return;
   const pipeline = selectedPipelineRecord();
   const sidecar = pipelineRunArtifact(result, 'sidecar');
+  const splat = pipelineRunArtifact(result, 'splat');
   const title = document.getElementById('pipeline-run-result-title');
   const body = document.getElementById('pipeline-run-result-body');
   const grid = document.getElementById('pipeline-run-result-grid');
@@ -10299,12 +10390,21 @@ function renderPipelineRunResultPanel() {
   }
   if (actions) {
     actions.innerHTML = '';
-    const loadBtn = document.createElement('button');
-    loadBtn.type = 'button';
-    loadBtn.className = 'btn';
-    loadBtn.textContent = 'Load Source';
-    loadBtn.onclick = () => pipelineLoadSelectedSource();
-    actions.appendChild(loadBtn);
+    if (splat?.path) {
+      const loadOutputBtn = document.createElement('button');
+      loadOutputBtn.type = 'button';
+      loadOutputBtn.className = 'btn';
+      loadOutputBtn.textContent = 'Load Output';
+      loadOutputBtn.onclick = () => pipelineLoadRunSplatArtifact(result, splat).catch(() => {});
+      actions.appendChild(loadOutputBtn);
+    } else {
+      const loadBtn = document.createElement('button');
+      loadBtn.type = 'button';
+      loadBtn.className = 'btn';
+      loadBtn.textContent = 'Load Source';
+      loadBtn.onclick = () => pipelineLoadSelectedSource().catch(() => {});
+      actions.appendChild(loadBtn);
+    }
 
     const sidecarUrl = pipelineRunReadUrlForPath(result, sidecar?.path);
     const sidecarBtn = document.createElement('button');
@@ -10312,7 +10412,7 @@ function renderPipelineRunResultPanel() {
     sidecarBtn.className = 'btn';
     sidecarBtn.textContent = 'Open Sidecar';
     sidecarBtn.disabled = !sidecarUrl;
-    sidecarBtn.onclick = () => sidecarUrl && window.open(sidecarUrl, '_blank');
+    sidecarBtn.onclick = () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl).catch(() => {});
     actions.appendChild(sidecarBtn);
 
     const bundleUrl = pipelineRunReadUrlForPath(result, result.bundle?.path);
@@ -10321,7 +10421,7 @@ function renderPipelineRunResultPanel() {
     bundleBtn.className = 'btn';
     bundleBtn.textContent = 'Open Bundle';
     bundleBtn.disabled = !bundleUrl;
-    bundleBtn.onclick = () => bundleUrl && window.open(bundleUrl, '_blank');
+    bundleBtn.onclick = () => pipelineOpenRunDocument('Open Bundle', bundleUrl).catch(() => {});
     actions.appendChild(bundleBtn);
   }
 }
@@ -10453,10 +10553,11 @@ async function loadPipelineManifest() {
 async function pipelineLoadSelectedSource() {
   const source = pipelineSelectedSource();
   if (!source?.source) {
-    setInfo('Pipeline source required');
+    pipelineSetActionStatus('Pipeline source required');
     return null;
   }
   const fileName = source.path || source.source.split('path=').pop() || source.label || 'pipeline-source.ply';
+  pipelineSetActionStatus('Loading selected source into the scene...');
   try {
     const record = await greenroomImportSplat(source.source, decodeURIComponent(fileName).split('/').pop(), {
       title: source.label || 'Pipeline Source',
@@ -10479,10 +10580,11 @@ async function pipelineLoadSelectedSource() {
         },
       },
     });
-    setInfo(`Loaded pipeline source: ${source.label || source.source}`);
+    setActiveTab('assets');
+    pipelineSetActionStatus(`Loaded source: ${source.label || source.source}`);
     return record;
   } catch (err) {
-    setInfo(`Pipeline source load failed: ${err.message || err}`);
+    pipelineSetActionStatus(`Pipeline source load failed: ${err.message || err}`);
     throw err;
   }
 }
@@ -10544,6 +10646,8 @@ window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
+window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
+window.pipelineOpenRunDocument = pipelineOpenRunDocument;
 window.buildPipelineDockGraphState = buildPipelineDockGraphState;
 window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;

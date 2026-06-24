@@ -101,10 +101,17 @@ assert.match(index, /window\.kaminosPipelineSelectAsset/, 'browser witnesses can
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
 assert.match(index, /not-splat-like/, 'Pipeline asset cards must fail loud for PLY stubs that are not splat-like');
+assert.match(index, /splat-header-like/, 'Pipeline asset cards distinguish header-like fixtures from verified splat render proof');
 assert.match(index, /id="pipeline-run-result-panel"/, 'Pipeline run results are visible in the main browser, not only a lower-left toast');
+assert.match(index, /id="pipeline-result-action-status"/, 'Pipeline result actions report visible in-app status instead of only using toasts');
+assert.match(index, /id="pipeline-result-document-panel"/, 'Pipeline result actions can display sidecar and bundle documents in-app');
 assert.match(index, /function pipelineRunResultRows\(/, 'Pipeline run result panel exposes report, bundle, sidecar, and source actions');
 assert.match(index, /Load Source/, 'Pipeline result panel offers the action that matches sidecar-only routes');
+assert.match(index, /Load Output/, 'Pipeline result panel offers loading generated splat artifacts when a route writes one');
 assert.match(index, /Open Sidecar/, 'Pipeline result panel exposes the written sidecar instead of burying it in an evidence path');
+assert.match(index, /async function pipelineOpenRunDocument\(/, 'Open Sidecar/Open Bundle fetch documents into an in-app result panel');
+assert.match(index, /async function pipelineLoadRunSplatArtifact\(/, 'Generated splat outputs load through an explicit result action');
+assert.match(index, /setActiveTab\('assets'\)/, 'Load result actions must switch away from the Pipeline overlay after loading a scene source');
 assert.match(index, /does not generate a new splat/, 'Pipeline UI tells the operator when a route only writes metadata/sidecars');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
