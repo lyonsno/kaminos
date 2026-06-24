@@ -121,10 +121,14 @@ try {
   const skippedRecords = JSON.parse(readFileSync(skippedImageRun.imageRouteRecordsPath, 'utf8'));
   assert.equal(skippedRecords.identity, 'orb-inner-engine-image-route-records-v0');
   assert.equal(skippedRecords.route, 'local-image.ideogram4');
+  assert.match(skippedRecords.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(skippedRecords.endedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(skippedRecords.durationMs >= 0, 'unconfigured image route records envelope duration');
   assert.equal(skippedRecords.records.length, 2);
   assert.ok(skippedRecords.records.every(record => record.status === 'unconfigured'));
   assert.ok(skippedRecords.records.every(record => record.failurePhase === 'configuration'));
   assert.ok(skippedRecords.records.every(record => record.liveGeneratorInvoked === false));
+  assert.ok(skippedRecords.records.every(record => record.durationMs >= 0));
 
   const fixtureCommand = join(outDir, 'fixture-image-generator.mjs');
   writeFileSync(fixtureCommand, [
@@ -155,11 +159,17 @@ try {
   assert.equal(imageRecords.identity, 'orb-inner-engine-image-route-records-v0');
   assert.equal(imageRecords.route, 'local-image.ideogram4');
   assert.equal(imageRecords.effectiveCommand.command, process.execPath);
+  assert.match(imageRecords.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(imageRecords.endedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(imageRecords.durationMs >= 0, 'image route records envelope duration');
   assert.equal(imageRecords.records.length, 2);
   for (const record of imageRecords.records) {
     assert.equal(record.status, 'complete');
     assert.equal(record.failurePhase, null);
     assert.equal(record.liveGeneratorInvoked, true);
+    assert.match(record.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.match(record.endedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.ok(record.durationMs >= 0, 'image route item records duration');
     assert.match(record.promptSha256, /^[0-9a-f]{64}$/);
     assert.match(record.outputImagePath, /orb-inner-engine-concept-[0-9]{2}\.png$/);
     assert.ok(existsSync(record.outputImagePath), 'successful image route produces an output image');
@@ -178,6 +188,7 @@ try {
   const failureRecords = JSON.parse(readFileSync(failingRun.imageRouteRecordsPath, 'utf8'));
   assert.ok(failureRecords.records.some(record => record.status === 'failed'));
   assert.ok(failureRecords.records.some(record => record.failurePhase === 'command-exit'));
+  assert.ok(failureRecords.records.every(record => record.durationMs >= 0), 'failed route items record duration');
 
   execFileSync('node', [
     loopPath,
@@ -213,6 +224,8 @@ try {
   const cliImageRecords = JSON.parse(readFileSync(cliImageRecordsPath, 'utf8'));
   assert.equal(cliImageRecords.records.length, 1);
   assert.equal(cliImageRecords.records[0].status, 'complete');
+  assert.ok(cliImageRecords.durationMs >= 0, 'CLI image route records envelope duration');
+  assert.ok(cliImageRecords.records[0].durationMs >= 0, 'CLI image route item records duration');
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }

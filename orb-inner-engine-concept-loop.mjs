@@ -486,6 +486,13 @@ function imageOutputComplete(path) {
   return existsSync(path) && statSync(path).size > 0;
 }
 
+function nowTiming() {
+  return {
+    ms: Date.now(),
+    iso: new Date().toISOString(),
+  };
+}
+
 function makeUnconfiguredImageRecords({
   bundleRoot,
   promptQueue,
@@ -495,6 +502,8 @@ function makeUnconfiguredImageRecords({
   mediaKind = 'image',
   outputExtension = 'png',
 }) {
+  const started = nowTiming();
+  const ended = nowTiming();
   return {
     ok: false,
     identity: recordIdentity,
@@ -504,6 +513,9 @@ function makeUnconfiguredImageRecords({
     status: 'unconfigured',
     mediaKind,
     outputExtension,
+    startedAt: started.iso,
+    endedAt: ended.iso,
+    durationMs: ended.ms - started.ms,
     effectiveCommand: null,
     recordsPath,
     records: promptQueue.items.map(item => ({
@@ -511,6 +523,9 @@ function makeUnconfiguredImageRecords({
       route,
       mediaKind,
       outputExtension,
+      startedAt: started.iso,
+      endedAt: ended.iso,
+      durationMs: ended.ms - started.ms,
       status: 'unconfigured',
       failurePhase: 'configuration',
       failureReason: 'No image command supplied for this route.',
@@ -552,6 +567,7 @@ export function runOrbInnerEngineImageRoute({
   const imageRoot = join(resolvedBundleRoot, mediaKind === 'image' ? 'images' : `${mediaKind}s`, route);
   const promptQueue = jsonRead(promptQueuePath);
   mkdirSync(imageRoot, { recursive: true });
+  const routeStarted = nowTiming();
 
   if (!command) {
     const unconfigured = makeUnconfiguredImageRecords({
@@ -583,6 +599,7 @@ export function runOrbInnerEngineImageRoute({
   const records = [];
 
   for (const item of promptQueue.items) {
+    const itemStarted = nowTiming();
     const outputImagePath = join(imageRoot, `${item.id}.${outputExtension}`);
     const promptPayload = {
       positive: item.positive,
@@ -623,10 +640,14 @@ export function runOrbInnerEngineImageRoute({
       failurePhase = 'missing-output';
       failureReason = 'Command completed without writing a non-empty output image.';
     }
+    const itemEnded = nowTiming();
 
     records.push({
       conceptId: item.id,
       route,
+      startedAt: itemStarted.iso,
+      endedAt: itemEnded.iso,
+      durationMs: itemEnded.ms - itemStarted.ms,
       status,
       failurePhase,
       failureReason,
@@ -643,6 +664,7 @@ export function runOrbInnerEngineImageRoute({
   }
 
   const complete = records.every(record => record.status === 'complete');
+  const routeEnded = nowTiming();
   const imageRouteRecords = {
     ok: complete,
     identity: recordIdentity,
@@ -652,6 +674,9 @@ export function runOrbInnerEngineImageRoute({
     status: complete ? 'complete' : 'failed',
     mediaKind,
     outputExtension,
+    startedAt: routeStarted.iso,
+    endedAt: routeEnded.iso,
+    durationMs: routeEnded.ms - routeStarted.ms,
     effectiveCommand,
     recordsPath,
     records,

@@ -118,8 +118,14 @@ try {
   assert.equal(ideogramRecords.identity, 'orb-inner-engine-provider-route-records-v0');
   assert.equal(ideogramRecords.providerId, 'local-image.ideogram4');
   assert.equal(ideogramRecords.mediaKind, 'image');
+  assert.match(ideogramRecords.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(ideogramRecords.endedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(ideogramRecords.durationMs >= 0, 'provider route envelope records duration');
   assert.equal(ideogramRecords.records.length, 1);
   assert.equal(ideogramRecords.records[0].status, 'complete');
+  assert.match(ideogramRecords.records[0].startedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(ideogramRecords.records[0].endedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.ok(ideogramRecords.records[0].durationMs >= 0, 'provider route item records duration');
   assert.match(ideogramRecords.records[0].outputImagePath, /\.png$/);
   assert.ok(existsSync(ideogramRecords.records[0].providerReceiptPath), 'provider adapter writes native receipt path');
   assert.equal(readFileSync(ideogramRecords.records[0].outputImagePath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
@@ -136,6 +142,8 @@ try {
   const cosmosRecords = JSON.parse(readFileSync(cosmosRun.recordsPath, 'utf8'));
   assert.equal(cosmosRecords.providerId, 'local-video.cosmos3-mlx.t2v');
   assert.equal(cosmosRecords.mediaKind, 'video');
+  assert.ok(cosmosRecords.durationMs >= 0, 'Cosmos provider envelope records duration');
+  assert.ok(cosmosRecords.records[0].durationMs >= 0, 'Cosmos provider item records duration');
   assert.match(cosmosRecords.records[0].outputImagePath, /\.mp4$/);
   assert.ok(cosmosRecords.records[0].argv.includes('--frames'));
   assert.ok(cosmosRecords.records[0].argv.includes('8'));
@@ -151,7 +159,9 @@ try {
   assert.equal(missingRun.status, 'unconfigured');
   const missingRecords = JSON.parse(readFileSync(missingRun.recordsPath, 'utf8'));
   assert.equal(missingRecords.providerId, 'local-image.diffusion-fallback');
+  assert.ok(missingRecords.durationMs >= 0, 'unconfigured provider envelope records duration');
   assert.ok(missingRecords.records.every(record => record.failurePhase === 'configuration'));
+  assert.ok(missingRecords.records.every(record => record.durationMs >= 0));
 
   const blockedSource = join(outDir, 'blocked-card.png');
   const width = 256;
