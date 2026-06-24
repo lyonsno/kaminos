@@ -123,6 +123,14 @@ assert.match(index, /data-pipeline-graph-edge-id/, 'Pipeline graph edges expose 
 assert.match(index, /pipelineDockState\.graphEdges/, 'Pipeline graph keeps editable edge state instead of hardcoded-only connections');
 assert.match(index, /function pipelineStartGraphConnection\(/, 'Pipeline graph exposes an explicit connection gesture for hooking nodes together');
 assert.match(index, /function pipelineCompleteGraphConnection\(/, 'Pipeline graph can complete a connection gesture into editable edge state');
+assert.match(index, /data-pipeline-graph-port/, 'Pipeline graph nodes expose visible connection ports for direct hook dragging');
+assert.match(index, /function beginPipelineGraphPortDrag\(/, 'Pipeline graph starts hook creation by dragging from a node port');
+assert.match(index, /function updatePipelineGraphPortDrag\(/, 'Pipeline graph updates a live provisional hook while dragging');
+assert.match(index, /function endPipelineGraphPortDrag\(/, 'Pipeline graph completes or cancels hook creation on pointer release');
+assert.match(index, /pipelineDockState\.graphConnectionPreview/, 'Pipeline graph stores a live connection preview during port drag');
+assert.match(index, /pipeline-graph-connection-preview/, 'Pipeline graph renders a provisional edge while dragging a hook');
+assert.doesNotMatch(index, /Start Hook/, 'Pipeline graph should not expose inspector-mediated Start Hook as the primary hook gesture');
+assert.doesNotMatch(index, /Hook Here/, 'Pipeline graph should not expose inspector-mediated Hook Here as the primary hook gesture');
 assert.match(index, /fixture output; not real model compute/, 'Pipeline graph must label fixture outputs instead of presenting them as real model compute');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
