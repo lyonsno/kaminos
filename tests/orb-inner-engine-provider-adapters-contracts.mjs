@@ -4,6 +4,7 @@ import { mkdir, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { writeOrbInnerEngineConceptBundle } from '../orb-inner-engine-concept-loop.mjs';
+import { writeRgbaPng } from '../orb-inner-engine-core.js';
 
 const root = new URL('..', import.meta.url).pathname;
 const providerPath = join(root, 'orb-inner-engine-provider-adapters.mjs');
@@ -24,6 +25,7 @@ assert.doesNotMatch(source, /shell:\s*true/, 'provider adapters must not require
 const {
   ORB_INNER_ENGINE_PROVIDER_ADAPTERS_IDENTITY,
   createOrbInnerEngineProviderRegistry,
+  detectProviderBlockedImage,
   resolveOrbInnerEngineProviderCommand,
   runOrbInnerEngineProviderRoute,
 } = await import(`${providerPath}?contract=${Date.now()}`);
@@ -149,6 +151,64 @@ try {
   const missingRecords = JSON.parse(readFileSync(missingRun.recordsPath, 'utf8'));
   assert.equal(missingRecords.providerId, 'local-image.diffusion-fallback');
   assert.ok(missingRecords.records.every(record => record.failurePhase === 'configuration'));
+
+  const blockedSource = join(outDir, 'blocked-card.png');
+  const width = 256;
+  const height = 256;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < rgba.length; i += 4) {
+    rgba[i] = 0;
+    rgba[i + 1] = 0;
+    rgba[i + 2] = 0;
+    rgba[i + 3] = 255;
+  }
+  for (let y = 112; y < 144; y++) {
+    for (let x = 38; x < 218; x++) {
+      if ((x + y) % 5 !== 0) {
+        const i = (y * width + x) * 4;
+        rgba[i] = 238;
+        rgba[i + 1] = 238;
+        rgba[i + 2] = 238;
+      }
+    }
+  }
+  writeRgbaPng(blockedSource, { width, height, rgba });
+  const blockProbe = detectProviderBlockedImage(blockedSource);
+  assert.equal(blockProbe.blocked, true, 'blocked-card heuristic catches black safety-card style output');
+
+  const blockedRoot = join(outDir, 'blocked-ideogram');
+  mkdirSync(blockedRoot, { recursive: true });
+  writeExecutable(join(blockedRoot, 'generate.py'), [
+    "const fs = require('node:fs');",
+    "const args = new Map();",
+    "for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);",
+    `fs.copyFileSync(${JSON.stringify(blockedSource)}, args.get('--output'));`,
+    "fs.writeFileSync(args.get('--receipt'), JSON.stringify({ ok: true, seed: args.get('--seed'), prompt: args.get('--prompt') }, null, 2));",
+    "console.log(JSON.stringify({ ok: true, blockedFixture: true }));",
+    '',
+  ].join('\n'));
+  const blockedRegistry = createOrbInnerEngineProviderRegistry({
+    ideogramRoot: blockedRoot,
+    cosmosRoot,
+    pythonCommand: process.execPath,
+    diffusionRoots: [],
+  });
+  const blockedBundle = writeOrbInnerEngineConceptBundle({
+    outDir: join(outDir, 'blocked-bundle'),
+    coreSeed: 'molten-heartfucker-core-contract',
+    conceptSeed: 'provider-blocked-contract',
+    conceptCount: 1,
+  });
+  const blockedRun = runOrbInnerEngineProviderRoute({
+    bundleRoot: blockedBundle.bundleRoot,
+    registry: blockedRegistry,
+    providerId: 'local-image.ideogram4',
+  });
+  assert.equal(blockedRun.ok, false);
+  assert.equal(blockedRun.status, 'failed');
+  const blockedRecords = JSON.parse(readFileSync(blockedRun.recordsPath, 'utf8'));
+  assert.equal(blockedRecords.records[0].failurePhase, 'provider-blocked-output');
+  assert.equal(blockedRecords.records[0].providerBlockDetection.blocked, true);
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }

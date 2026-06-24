@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateSync } from 'node:zlib';
 import { runOrbInnerEngineImageRoute } from './orb-inner-engine-concept-loop.mjs';
 
 export const ORB_INNER_ENGINE_PROVIDER_ADAPTERS_IDENTITY = 'orb-inner-engine-provider-adapters-v0';
@@ -264,7 +265,7 @@ export function runOrbInnerEngineProviderRoute({
       mediaKind: provider.mediaKind || 'image',
       outputExtension: provider.outputExtension || 'png',
     });
-    rewriteProviderRecordEnvelope(run.imageRouteRecordsPath, {
+    const rewritten = rewriteProviderRecordEnvelope(run.imageRouteRecordsPath, {
       providerId,
       provider,
       mediaKind: provider.mediaKind || 'image',
@@ -272,7 +273,7 @@ export function runOrbInnerEngineProviderRoute({
     });
     return {
       ok: false,
-      status: 'unconfigured',
+      status: rewritten.status,
       providerId,
       recordsPath: run.imageRouteRecordsPath,
       failurePhase: resolved.failurePhase,
@@ -290,15 +291,15 @@ export function runOrbInnerEngineProviderRoute({
     mediaKind: resolved.mediaKind,
     outputExtension: resolved.outputExtension,
   });
-  rewriteProviderRecordEnvelope(run.imageRouteRecordsPath, {
+  const rewritten = rewriteProviderRecordEnvelope(run.imageRouteRecordsPath, {
     providerId,
     provider,
     mediaKind: resolved.mediaKind,
     outputExtension: resolved.outputExtension,
   });
   return {
-    ok: run.ok,
-    status: run.status,
+    ok: rewritten.ok,
+    status: rewritten.status,
     providerId,
     recordsPath: run.imageRouteRecordsPath,
   };
@@ -315,15 +316,162 @@ function rewriteProviderRecordEnvelope(recordsPath, { providerId, provider, medi
     const providerReceiptPath = record.outputImagePath
       ? `${record.outputImagePath}.provider-receipt.json`
       : null;
+    const blocked = mediaKind === 'image' && record.status === 'complete'
+      ? detectProviderBlockedImage(record.outputImagePath)
+      : { blocked: false };
+    const failedRecord = blocked.blocked
+      ? {
+          status: 'failed',
+          failurePhase: 'provider-blocked-output',
+          failureReason: blocked.reason,
+          providerBlockDetection: blocked,
+        }
+      : {};
     return {
       ...record,
+      ...failedRecord,
       providerId,
       mediaKind,
       outputExtension,
       providerReceiptPath: providerReceiptPath && existsSync(providerReceiptPath) ? providerReceiptPath : providerReceiptPath,
     };
   });
+  const complete = data.records.every(record => record.status === 'complete');
+  const unconfigured = data.records.every(record => record.status === 'unconfigured');
+  data.ok = complete;
+  data.status = complete ? 'complete' : (unconfigured ? 'unconfigured' : 'failed');
   writeFileSync(recordsPath, `${JSON.stringify(data, null, 2)}\n`);
+  return data;
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+}
+
+function decodePngRgba(path) {
+  const png = readFileSync(path);
+  if (png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    throw new Error('not a PNG');
+  }
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = 0;
+  const idat = [];
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      const bitDepth = data[8];
+      colorType = data[9];
+      if (bitDepth !== 8 || ![2, 6].includes(colorType)) {
+        throw new Error(`unsupported PNG format bitDepth=${bitDepth} colorType=${colorType}`);
+      }
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const raw = inflateSync(Buffer.concat(idat));
+  const out = new Uint8ClampedArray(width * height * 4);
+  const prev = Buffer.alloc(stride);
+  const row = Buffer.alloc(stride);
+  for (let y = 0; y < height; y++) {
+    const sourceStart = y * (stride + 1);
+    const filter = raw[sourceStart];
+    raw.copy(row, 0, sourceStart + 1, sourceStart + 1 + stride);
+    for (let x = 0; x < stride; x++) {
+      const left = x >= channels ? row[x - channels] : 0;
+      const up = prev[x] || 0;
+      const upLeft = x >= channels ? prev[x - channels] : 0;
+      if (filter === 1) row[x] = (row[x] + left) & 255;
+      else if (filter === 2) row[x] = (row[x] + up) & 255;
+      else if (filter === 3) row[x] = (row[x] + Math.floor((left + up) / 2)) & 255;
+      else if (filter === 4) row[x] = (row[x] + paethPredictor(left, up, upLeft)) & 255;
+      else if (filter !== 0) throw new Error(`unsupported PNG filter ${filter}`);
+    }
+    for (let x = 0; x < width; x++) {
+      const src = x * channels;
+      const dst = (y * width + x) * 4;
+      out[dst] = row[src];
+      out[dst + 1] = row[src + 1];
+      out[dst + 2] = row[src + 2];
+      out[dst + 3] = channels === 4 ? row[src + 3] : 255;
+    }
+    row.copy(prev);
+  }
+  return { width, height, rgba: out };
+}
+
+export function detectProviderBlockedImage(path) {
+  try {
+    const image = decodePngRgba(path);
+    let black = 0;
+    let white = 0;
+    let centerWhite = 0;
+    let saturatedNonWhiteColor = 0;
+    const total = image.width * image.height;
+    const y0 = image.height * 0.32;
+    const y1 = image.height * 0.68;
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const i = (y * image.width + x) * 4;
+        const r = image.rgba[i];
+        const g = image.rgba[i + 1];
+        const b = image.rgba[i + 2];
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        if (max < 18) black++;
+        if (min > 215) {
+          white++;
+          if (y >= y0 && y <= y1) centerWhite++;
+        } else if (max > 80 && max - min > 35) {
+          saturatedNonWhiteColor++;
+        }
+      }
+    }
+    const blackRatio = black / total;
+    const whiteRatio = white / total;
+    const centerWhiteRatio = centerWhite / Math.max(1, white);
+    const colorRatio = saturatedNonWhiteColor / total;
+    const blocked = blackRatio > 0.82
+      && whiteRatio > 0.002
+      && whiteRatio < 0.16
+      && centerWhiteRatio > 0.68
+      && colorRatio < 0.08;
+    return {
+      blocked,
+      reason: blocked ? 'provider output resembles a black safety-filter/block card, not usable generated art' : null,
+      metrics: {
+        width: image.width,
+        height: image.height,
+        blackRatio,
+        whiteRatio,
+        centerWhiteRatio,
+        colorRatio,
+      },
+    };
+  } catch (error) {
+    return {
+      blocked: false,
+      reason: null,
+      metrics: null,
+      probeError: error.message,
+    };
+  }
 }
 
 function combinedPrompt(prompt, negative) {
