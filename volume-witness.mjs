@@ -318,6 +318,10 @@ const requestedCurl = Number(routeParams.get('volume_curl'));
 const expectedCurl = routeParams.has('volume_curl') && Number.isFinite(requestedCurl)
   ? Math.max(0, Math.min(5, requestedCurl))
   : canonicalMacroPreset.curl ?? scenePreset.curl ?? 2.65;
+const requestedSpeed = Number(routeParams.get('volume_speed'));
+const expectedSpeed = routeParams.has('volume_speed') && Number.isFinite(requestedSpeed)
+  ? Math.max(0.1, Math.min(5, requestedSpeed))
+  : canonicalMacroPreset.speed ?? scenePreset.speed ?? 5.00;
 const requestedMicrodetail = Number(routeParams.get('volume_microdetail'));
 const expectedMicrodetail = routeParams.has('volume_microdetail') && Number.isFinite(requestedMicrodetail)
   ? Math.max(0, Math.min(2.5, requestedMicrodetail))
@@ -663,10 +667,12 @@ async function main() {
     assert.ok(Math.abs((state.visibleDetailOverlayGain ?? 0) - expectedVisibleDetailOverlayGain) < 0.001, 'visible detail overlay gain did not match detail quarantine policy');
     if (expectedVolumeScene === 'tall_plume') {
       assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
+      assert.equal(state.tallPlumeFlameCutoffContract, 'tall-plume-speed-cutoff-decoupled-v0', 'tall-plume flame cutoff/speed contract was not active');
     }
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
     assert.ok(Math.abs((state.controls?.curl ?? 0) - expectedCurl) < 0.001, 'curl route/control did not apply');
+    assert.ok(Math.abs((state.controls?.speed ?? 0) - expectedSpeed) < 0.001, 'speed route/control did not apply');
     assert.ok(Math.abs((state.controls?.microdetail ?? 0) - expectedMicrodetail) < 0.001, 'microdetail route/control did not apply');
     assert.ok(Math.abs((state.controls?.interfaceShred ?? 0) - expectedInterfaceShred) < 0.001, 'interface shred route/control did not apply');
     assert.ok(Math.abs((state.controls?.fireLicks ?? 0) - expectedFireLicks) < 0.001, 'fire licks route/control did not apply');
@@ -1374,7 +1380,9 @@ async function main() {
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       reactionFuelScale: sample.reactionFuelScale,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
+      tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       plumeHeight: sample.plumeHeight,
+      speed: state.controls?.speed,
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,
       windHeight: sample.windHeight,
@@ -1387,6 +1395,7 @@ async function main() {
       expectedReactionFuelScale,
       expectedPlumeHeight,
       expectedCurl,
+      expectedSpeed,
       expectedMicrodetail,
       expectedInterfaceShred,
       expectedFireLicks,

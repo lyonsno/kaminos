@@ -2366,19 +2366,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
   let smokeTopFade = 1.0 - smoothstep(mix(0.66, 0.84, plumeHeight01), 0.995, p.y);
-  let heatTopFade = 1.0 - smoothstep(mix(0.42, 0.62, plumeHeight01), 0.960, p.y);
+  let legacyHeatTopFade = 1.0 - smoothstep(mix(0.42, 0.62, plumeHeight01), 0.960, p.y);
+  let tallPlumeHeatTopFade = 1.0 - smoothstep(mix(0.62, 0.84, plumeHeight01), 0.990, p.y);
+  let tallPlumeFireTopFade = 1.0 - smoothstep(mix(0.72, 0.90, plumeHeight01), 0.995, p.y);
+  let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
+  let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
   smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade);
   heat = heat * mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade);
   fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade);
   materialDetail = materialDetail * mix(0.22, 1.0, wallFade);
-  flame = flame * mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
+  flame = flame * mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
   ember = ember * mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade);
   flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
-  combustionFront = combustionFront * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
-  combustionFrontTopology = combustionFrontTopology * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, heatTopFade);
+  combustionFront = combustionFront * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
+  combustionFrontTopology = combustionFrontTopology * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
   microSmoke = microSmoke * mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade);
   interfaceShred = interfaceShred * mix(0.18, 1.0, wallFade);
-  fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, heatTopFade);
+  fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade);
   emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
   let canonicalProofCarrierMask = 1.0 - canonicalPlumeScene;
   fuel = fuel * canonicalProofCarrierMask;
@@ -2701,6 +2705,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     visibleDetailOverlayGain: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene) ? 0.35 : 1,
     reactionFuelScale: normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale),
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
+    tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     plumeHeight: 1.45,
     windStrength: normalizeWindStrength(controlsSnapshot.windStrength),
     windAngle: normalizeWindAngle(controlsSnapshot.windAngle),
@@ -3717,6 +3722,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.reactionFuelScale = uniforms[71];
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
+    state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
@@ -4941,6 +4947,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
+        tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         plumeHeight: state.plumeHeight,
         bonfireAblation: { ...state.bonfireAblation },
         externalEmitterMode: state.externalEmitterMode,
@@ -5195,6 +5202,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
+      tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       plumeHeight: state.plumeHeight,
       windStrength: state.windStrength,
       windAngle: state.windAngle,
@@ -5306,6 +5314,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
       state.reactionFuelScale = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
+      state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
