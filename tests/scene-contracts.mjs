@@ -117,6 +117,14 @@ assert.match(index, /pipelineDockState\.graphConnectionPreview/, 'Pipeline graph
 assert.match(index, /pipeline-graph-connection-preview/, 'Pipeline graph renders a provisional edge while dragging a hook');
 assert.doesNotMatch(index, /Start Hook/, 'Pipeline graph should not expose inspector-mediated Start Hook as the primary hook gesture');
 assert.doesNotMatch(index, /Hook Here/, 'Pipeline graph should not expose inspector-mediated Hook Here as the primary hook gesture');
+assert.match(index, /pipelineGraphStorageKey/, 'Pipeline graph local persistence must use an explicit storage key');
+assert.match(index, /function loadPipelineGraphLocalState\(/, 'Pipeline graph loads browser-local graph state on startup');
+assert.match(index, /function savePipelineGraphLocalState\(/, 'Pipeline graph persists node positions and edges locally after edits');
+assert.match(index, /localStorage\.setItem\(pipelineGraphStorageKey/, 'Pipeline graph persistence writes to browser localStorage, not remote asset truth');
+assert.match(index, /data-pipeline-graph-edge-remove-id/, 'Pipeline graph exposes an in-canvas remove control for selected hooks');
+assert.match(index, /function pipelineRemoveGraphEdge\(/, 'Pipeline graph has a single removal path for hook deletion');
+assert.match(index, /Delete|Backspace/, 'Pipeline graph supports keyboard deletion for selected hooks');
+assert.doesNotMatch(index, /graphEdges\?\.length \? pipelineDockState\.graphEdges : pipelineGraphDefaultEdges/, 'Empty graph edge sets must not silently repopulate default hooks');
 assert.match(index, /fixture output; not real model compute/, 'Pipeline graph must label fixture outputs instead of presenting them as real model compute');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');

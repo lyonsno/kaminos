@@ -177,6 +177,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-connection-preview { stroke: #f0b85a; stroke-width: 2; stroke-dasharray: 6 5; fill: none; pointer-events: none; }
 .pipeline-graph-edge-handle { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #141414; background: #3c5664; cursor: pointer; padding: 0; z-index: 2; }
 .pipeline-graph-edge-handle.selected { background: #2f67c7; }
+.pipeline-graph-edge-remove { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 1px solid #4a2b2b; background: #2c1818; color: #ff9b9b; cursor: pointer; padding: 0; z-index: 3; font-size: 15px; line-height: 18px; font-weight: 700; }
+.pipeline-graph-edge-remove:hover { border-color: #8a3b3b; background: #3a1b1b; color: #ffd1d1; }
 .pipeline-graph-node { position: absolute; width: 136px; min-height: 78px; padding: 10px; border: 1px solid #333; border-radius: 7px; background: #1c1c1c; color: #ddd; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node:hover { border-color: #555; background: #222; }
 .pipeline-graph-node.selected { border-color: #2f67c7; background: #172235; color: #fff; }
@@ -4423,6 +4425,72 @@ const pipelineGraphDefaultEdges = [
   { id: 'route-to-output', from: 'route', to: 'output' },
   { id: 'route-to-evidence', from: 'route', to: 'evidence' },
 ];
+const pipelineGraphStorageKey = 'kaminos.pipeline.graph.local.v0';
+
+function pipelineGraphDefaultEdgeState() {
+  return pipelineGraphDefaultEdges.map(edge => ({ ...edge }));
+}
+
+function normalizePipelineGraphPosition(value) {
+  if (!value || typeof value !== 'object') return null;
+  const x = Number(value.x);
+  const y = Number(value.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
+function normalizePipelineGraphEdge(value) {
+  if (!value || typeof value !== 'object') return null;
+  const from = String(value.from || '').trim();
+  const to = String(value.to || '').trim();
+  if (!from || !to || from === to) return null;
+  return { id: String(value.id || `${from}-to-${to}`), from, to };
+}
+
+function loadPipelineGraphLocalState() {
+  try {
+    const raw = localStorage.getItem(pipelineGraphStorageKey);
+    if (!raw) return null;
+    const document = JSON.parse(raw);
+    if (document?.schema !== 'kaminos.pipeline-graph-local.v0') return null;
+    const nextPositions = {};
+    for (const [nodeId, value] of Object.entries(document.graphNodePositions || {})) {
+      const position = normalizePipelineGraphPosition(value);
+      if (position) nextPositions[nodeId] = position;
+    }
+    const nextEdges = Array.isArray(document.graphEdges)
+      ? document.graphEdges.map(normalizePipelineGraphEdge).filter(Boolean)
+      : null;
+    if (Object.keys(nextPositions).length) {
+      pipelineDockState.graphNodePositions = {
+        ...pipelineDockState.graphNodePositions,
+        ...nextPositions,
+      };
+    }
+    if (nextEdges) pipelineDockState.graphEdges = nextEdges;
+    return document;
+  } catch (error) {
+    console.warn('Pipeline graph local state ignored:', error);
+    return null;
+  }
+}
+
+function savePipelineGraphLocalState() {
+  try {
+    const document = {
+      schema: 'kaminos.pipeline-graph-local.v0',
+      scope: 'browser-local',
+      updatedAt: new Date().toISOString(),
+      graphNodePositions: pipelineDockState.graphNodePositions || {},
+      graphEdges: pipelineGraphEdges(),
+    };
+    localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
+    return document;
+  } catch (error) {
+    console.warn('Pipeline graph local state not saved:', error);
+    return null;
+  }
+}
 
 function pipelineGraphNodePosition(nodeId) {
   pipelineDockState.graphNodePositions ||= {};
@@ -4442,7 +4510,8 @@ function pipelineClampGraphNodePosition(position, canvas) {
 }
 
 function pipelineGraphEdges() {
-  pipelineDockState.graphEdges = (pipelineDockState.graphEdges?.length ? pipelineDockState.graphEdges : pipelineGraphDefaultEdges)
+  if (!Array.isArray(pipelineDockState.graphEdges)) pipelineDockState.graphEdges = pipelineGraphDefaultEdgeState();
+  pipelineDockState.graphEdges = pipelineDockState.graphEdges
     .map(edge => ({ id: edge.id || `${edge.from}-to-${edge.to}`, from: edge.from, to: edge.to }))
     .filter(edge => edge.from && edge.to && edge.from !== edge.to);
   return pipelineDockState.graphEdges;
@@ -4581,8 +4650,19 @@ function pipelineCreateGraphEdge(fromNodeId, toNodeId) {
   pipelineDockState.graphConnectionPreview = null;
   pipelineDockState.selectedGraphEdgeId = id;
   pipelineDockState.selectedGraphNodeId = null;
+  savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   return pipelineGraphEdgeForId(id);
+}
+
+function pipelineRemoveGraphEdge(edgeId) {
+  const edge = pipelineGraphEdgeForId(edgeId);
+  if (!edge) return null;
+  pipelineDockState.graphEdges = pipelineGraphEdges().filter(candidate => candidate.id !== edge.id);
+  if (pipelineDockState.selectedGraphEdgeId === edge.id) pipelineDockState.selectedGraphEdgeId = null;
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  return edge;
 }
 
 function pipelineCompleteGraphConnection(nodeId) {
@@ -4706,6 +4786,7 @@ function endPipelineGraphNodeDrag(event) {
   document.removeEventListener('pointermove', updatePipelineGraphNodeDrag);
   document.removeEventListener('pointerup', endPipelineGraphNodeDrag);
   document.removeEventListener('pointercancel', endPipelineGraphNodeDrag);
+  savePipelineGraphLocalState();
 }
 
 function pipelineGraphInspectorRows(node, selectedRun) {
@@ -4753,11 +4834,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
 	    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun).catch(() => {}) });
 	  }
   if (selectedEdge) {
-    actions.push({ label: 'Remove Hook', action: () => {
-      pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => edge.id !== selectedEdge.id);
-      pipelineDockState.selectedGraphEdgeId = null;
-      renderPipelineGraphWorkbench();
-    } });
+    actions.push({ label: 'Remove Hook', action: () => pipelineRemoveGraphEdge(selectedEdge.id) });
   }
   inspector.innerHTML = `
     <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
@@ -4782,6 +4859,15 @@ function renderPipelineGraphInspector(node, selectedRun) {
     button.addEventListener('click', item.action);
     actionHost.appendChild(button);
   }
+}
+
+function handlePipelineGraphKeydown(event) {
+  if (!['Delete', 'Backspace'].includes(event.key)) return;
+  if (!pipelineDockState.selectedGraphEdgeId) return;
+  if (document.getElementById('pipeline-main-browser')?.hidden) return;
+  if (event.target?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+  event.preventDefault();
+  pipelineRemoveGraphEdge(pipelineDockState.selectedGraphEdgeId);
 }
 
 function renderPipelineGraphWorkbench() {
@@ -4843,6 +4929,16 @@ function renderPipelineGraphWorkbench() {
   ` : '';
   const edgeHandleMarkup = graph.edges.map(edge => {
     const midpoint = pipelineGraphEdgeMidpoint(edge);
+    const removeMarkup = edge.id === pipelineDockState.selectedGraphEdgeId ? `
+      <button
+        type="button"
+        class="pipeline-graph-edge-remove"
+        data-pipeline-graph-edge-remove-id="${escapeHtml(edge.id)}"
+        title="Remove hook"
+        aria-label="Remove ${escapeHtml(edge.from)} to ${escapeHtml(edge.to)} hook"
+        style="left: ${midpoint.x + 8}px; top: ${midpoint.y - 20}px;"
+      >x</button>
+    ` : '';
     return `
       <button
         type="button"
@@ -4851,6 +4947,7 @@ function renderPipelineGraphWorkbench() {
         title="${escapeHtml(edge.from)} -> ${escapeHtml(edge.to)}"
         style="left: ${midpoint.x - 8}px; top: ${midpoint.y - 8}px;"
       ></button>
+      ${removeMarkup}
     `;
   }).join('');
   canvas.innerHTML = `
@@ -4872,6 +4969,14 @@ function renderPipelineGraphWorkbench() {
       event.preventDefault();
       event.stopPropagation();
       selectPipelineGraphEdge(edgeId);
+    });
+  });
+  canvas.querySelectorAll('[data-pipeline-graph-edge-remove-id]').forEach(removeEl => {
+    const edgeId = removeEl.dataset.pipelineGraphEdgeRemoveId;
+    removeEl.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      pipelineRemoveGraphEdge(edgeId);
     });
   });
   canvas.querySelectorAll('[data-pipeline-graph-port]').forEach(portEl => {
@@ -5296,6 +5401,11 @@ async function runSelectedPipeline() {
 }
 
 function initPipelineDock() {
+  loadPipelineGraphLocalState();
+  if (!window.kaminosPipelineGraphKeyHandlerInstalled) {
+    document.addEventListener('keydown', handlePipelineGraphKeydown);
+    window.kaminosPipelineGraphKeyHandlerInstalled = true;
+  }
   const select = document.getElementById('pipeline-route-select');
   select?.addEventListener('change', () => {
     pipelineDockState.selectedPipelineId = select.value;
