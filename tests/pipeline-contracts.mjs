@@ -24,6 +24,13 @@ assert.ok(fixturePipeline.artifacts?.input?.role === 'source-image', 'manifest m
 assert.ok(fixturePipeline.artifacts?.splat?.role === 'splat-candidate', 'manifest must name splat candidate output role');
 assert.ok(fixturePipeline.artifacts?.sidecar?.role === 'kaminos-import-sidecar', 'manifest must name Kaminos import sidecar output role');
 
+const preparedPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'prepared-splat-import-sidecar-v0');
+assert.ok(preparedPipeline, 'manifest must include a route for existing splat import sidecar authoring');
+assert.match(preparedPipeline.label, /Existing Splat/i, 'prepared route label must say it works on an existing splat');
+assert.match(preparedPipeline.label, /Write.*Sidecar|Sidecar.*Write/i, 'prepared route label must say it writes a sidecar');
+assert.match(preparedPipeline.description, /does not generate a new splat/i, 'prepared route description must not imply a new visual asset is produced');
+assert.match(preparedPipeline.description, /Load Source/i, 'prepared route description must point the operator at loading the source asset after the run');
+
 const tempRoot = mkdtempSync(join(tmpdir(), 'kaminos-pipeline-contract-'));
 try {
   const inputPath = join(tempRoot, 'evil-orb-source.fixture');

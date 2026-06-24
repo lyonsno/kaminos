@@ -54,9 +54,9 @@
     },
     {
       "id": "prepared-splat-import-sidecar-v0",
-      "label": "Prepared Splat Import Sidecar",
+      "label": "Inspect Existing Splat + Write Import Sidecar",
       "routeId": "prepared.splat-import-sidecar.v0",
-      "description": "Consumes an existing prepared splat artifact and emits local inspection evidence plus a Kaminos import sidecar. This route does not copy the prepared artifact into a global store and does not claim renderer truth.",
+      "description": "Inspects an existing splat artifact and writes a Kaminos import sidecar for it. This route does not generate a new splat, does not copy the prepared artifact into a global store, and does not claim renderer truth; use Load Source to view the original selected splat.",
       "artifacts": {
         "input": {
           "role": "prepared-splat",
@@ -74,7 +74,7 @@
       "stages": [
         {
           "id": "inspect-prepared-splat",
-          "label": "Inspect Prepared Splat",
+          "label": "Inspect Existing Splat File",
           "statusMode": "prepared-artifact",
           "route": {
             "id": "local.prepared-artifact-inspect.v0",
@@ -87,7 +87,7 @@
         },
         {
           "id": "write-prepared-splat-sidecar",
-          "label": "Write Prepared Splat Import Sidecar",
+          "label": "Write Kaminos Import Sidecar",
           "statusMode": "prepared-artifact",
           "route": {
             "id": "local.kaminos-import-sidecar.v0",

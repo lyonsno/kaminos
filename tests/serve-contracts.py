@@ -191,6 +191,63 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
 
 
+def test_splat_asset_index_marks_stub_ply_as_not_splat_like():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        experimental.mkdir(parents=True)
+        (experimental / "mesh-not-a-splat.ply").write_text("\n".join([
+            "ply",
+            "format ascii 1.0",
+            "element vertex 1",
+            "property float x",
+            "property float y",
+            "property float z",
+            "end_header",
+            "0 0 0",
+            "",
+        ]))
+        (experimental / "probable-gaussian-splat.ply").write_text("\n".join([
+            "ply",
+            "format ascii 1.0",
+            "element vertex 1",
+            "property float x",
+            "property float y",
+            "property float z",
+            "property float opacity",
+            "property float scale_0",
+            "property float scale_1",
+            "property float scale_2",
+            "property float rot_0",
+            "property float f_dc_0",
+            "end_header",
+            "0 0 0 1 1 1 1 1 1",
+            "",
+        ]))
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [{
+            "id": "splat-inbox",
+            "label": "Experimental Splat Inbox",
+            "kind": "splat",
+            "stage": "experimental",
+            "path": experimental,
+        }]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        try:
+            entries = {entry["name"]: entry for entry in serve.list_asset_entries(kind="splat")}
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert entries["mesh-not-a-splat.ply"]["renderability"]["status"] == "not-splat-like"
+        assert "gaussian splat properties" in entries["mesh-not-a-splat.ply"]["renderability"]["reason"]
+        assert entries["probable-gaussian-splat.ply"]["renderability"]["status"] == "likely-splat"
+        assert entries["probable-gaussian-splat.ply"]["renderability"]["previewState"] == "not-rendered"
+
+
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)
@@ -419,6 +476,7 @@ if __name__ == "__main__":
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
+    test_splat_asset_index_marks_stub_ply_as_not_splat_like()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()

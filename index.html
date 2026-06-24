@@ -163,6 +163,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-asset-title { color: #eee; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-asset-path { color: #777; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-asset-empty { border: 1px solid #292929; border-radius: 8px; padding: 18px; color: #666; font-size: 12px; }
+.pipeline-renderability-chip { border-radius: 4px; padding: 2px 6px; font: 9px 'SF Mono', monospace; text-transform: uppercase; background: #2a2a2a; color: #999; }
+.pipeline-renderability-chip.likely-splat { background: #173420; color: #66bb6a; }
+.pipeline-renderability-chip.not-splat-like { background: #3a1b1b; color: #ef5350; }
+.pipeline-renderability-chip.unknown { background: #33281b; color: #f0b85a; }
+.pipeline-run-result-panel { border: 1px solid #2d2d2d; background: #171717; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+.pipeline-run-result-panel[hidden] { display: none; }
+.pipeline-run-result-title { color: #f1f1f1; font-size: 13px; font-weight: 750; margin-bottom: 4px; }
+.pipeline-run-result-body { color: #888; font-size: 11px; line-height: 1.4; margin-bottom: 10px; max-width: 760px; }
+.pipeline-run-result-grid { display: grid; grid-template-columns: 90px 1fr; gap: 5px 8px; margin-bottom: 10px; font: 10px 'SF Mono', monospace; }
+.pipeline-run-result-key { color: #555; text-transform: uppercase; }
+.pipeline-run-result-val { color: #aaa; overflow-wrap: anywhere; }
+.pipeline-run-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* Greenroom browser */
 .gr-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background 0.1s; }
@@ -656,6 +668,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button type="button" class="btn" id="pipeline-run-button">Run</button>
         <button type="button" class="btn" id="pipeline-refresh-button">Refresh</button>
       </div>
+      <div class="pipeline-note" id="pipeline-route-description">Select a route. Sidecar-only routes write metadata; they do not generate a new splat.</div>
       <div class="panel">
         <div class="field"><span class="field-key">Manifest</span><span class="field-val" id="pipeline-manifest-id">unloaded</span></div>
         <div class="field"><span class="field-key">Registry</span><span class="field-val" id="pipeline-registry-scope">run-local</span></div>
@@ -712,13 +725,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="pipeline-browser-shell">
       <div class="pipeline-browser-head">
         <div>
-          <div class="pipeline-browser-title">Pipeline Assets</div>
-          <div class="pipeline-browser-subtitle" id="pipeline-browser-count">0 assets</div>
+          <div class="pipeline-browser-title">Splat Assets</div>
+          <div class="pipeline-browser-subtitle" id="pipeline-browser-count">Declared splat asset roots / 0 assets</div>
         </div>
         <div class="pipeline-browser-actions">
           <div class="pipeline-browser-selected" id="pipeline-browser-selected">No asset selected</div>
           <button type="button" class="btn" id="pipeline-browser-refresh">Refresh</button>
         </div>
+      </div>
+      <div class="pipeline-run-result-panel" id="pipeline-run-result-panel" hidden>
+        <div class="pipeline-run-result-title" id="pipeline-run-result-title"></div>
+        <div class="pipeline-run-result-body" id="pipeline-run-result-body"></div>
+        <div class="pipeline-run-actions" id="pipeline-result-actions"></div>
+        <div class="pipeline-run-result-grid" id="pipeline-run-result-grid"></div>
       </div>
       <div class="pipeline-asset-grid" id="pipeline-asset-grid"></div>
     </div>
@@ -4105,11 +4124,19 @@ function pipelineBrowserAssetSource(entry) {
     stage: entry.stage || null,
     rootId: entry.root_id || null,
     path: entry.path || null,
+    renderability: entry.renderability || null,
   };
 }
 
 function selectedPipelineBrowserAsset() {
   return pipelineDockState.browserAssets.find(entry => entry.id === pipelineDockState.browserSelectedAssetId) || null;
+}
+
+function pipelineRenderabilityLabel(renderability) {
+  const status = renderability?.status || 'unknown';
+  if (status === 'likely-splat') return 'likely splat';
+  if (status === 'not-splat-like') return 'not splat-like';
+  return status;
 }
 
 function pipelineSelectedSource() {
@@ -4154,6 +4181,13 @@ function renderPipelineAssetCard(entry) {
   stage.textContent = entry.stage === 'production' ? 'production' : 'experimental';
   meta.appendChild(stage);
   card.appendChild(meta);
+
+  const renderability = entry.renderability || {};
+  const renderabilityChip = document.createElement('div');
+  renderabilityChip.className = `pipeline-renderability-chip ${renderability.status || 'unknown'}`;
+  renderabilityChip.textContent = pipelineRenderabilityLabel(renderability);
+  renderabilityChip.title = renderability.reason || 'Renderability has not been verified';
+  card.appendChild(renderabilityChip);
 
   const path = document.createElement('div');
   path.className = 'pipeline-asset-path';
@@ -4238,6 +4272,83 @@ function pipelineEvidenceRows(result) {
   ];
 }
 
+function pipelineRunArtifact(result, id) {
+  return result?.bundle?.document?.artifacts?.find(artifact => artifact.id === id) || null;
+}
+
+function pipelineRunReadUrlForPath(result, artifactPath) {
+  const outputRoot = result?.bundle?.document?.outputRoot;
+  if (!outputRoot || !artifactPath || !artifactPath.startsWith(outputRoot)) return null;
+  const runDir = outputRoot.split('/').filter(Boolean).at(-1);
+  const rel = artifactPath.slice(outputRoot.length).replace(/^\/+/, '');
+  return `/api/read?root=pipeline-runs&path=${encodeURIComponent([runDir, rel].filter(Boolean).join('/'))}`;
+}
+
+function pipelineRunResultRows(result) {
+  if (!result) return [];
+  const sidecar = pipelineRunArtifact(result, 'sidecar');
+  return [
+    { key: 'effect', value: 'Sidecar metadata written; no new splat generated.' },
+    { key: 'report', value: result.report?.path || 'missing' },
+    { key: 'bundle', value: result.bundle?.path || 'missing' },
+    { key: 'sidecar', value: sidecar?.path || 'not written' },
+    { key: 'source', value: result.source?.source || result.source?.path || 'unknown' },
+  ];
+}
+
+function renderPipelineRunResultPanel() {
+  const panel = document.getElementById('pipeline-run-result-panel');
+  if (!panel) return;
+  const result = pipelineDockState.lastRun;
+  panel.hidden = !result;
+  if (!result) return;
+  const pipeline = selectedPipelineRecord();
+  const sidecar = pipelineRunArtifact(result, 'sidecar');
+  const title = document.getElementById('pipeline-run-result-title');
+  const body = document.getElementById('pipeline-run-result-body');
+  const grid = document.getElementById('pipeline-run-result-grid');
+  const actions = document.getElementById('pipeline-result-actions');
+  if (title) title.textContent = result.ok ? 'Sidecar run completed' : 'Pipeline run failed';
+  if (body) {
+    body.textContent = result.ok
+      ? 'This route wrote metadata for the selected existing splat. It does not generate a new splat; use Load Source to view the selected asset.'
+      : (pipeline?.description || 'This run failed before producing trustworthy output.');
+  }
+  if (grid) {
+    grid.innerHTML = pipelineRunResultRows(result).map(row => `
+      <div class="pipeline-run-result-key">${escapeHtml(row.key)}</div>
+      <div class="pipeline-run-result-val">${escapeHtml(row.value)}</div>
+    `).join('');
+  }
+  if (actions) {
+    actions.innerHTML = '';
+    const loadBtn = document.createElement('button');
+    loadBtn.type = 'button';
+    loadBtn.className = 'btn';
+    loadBtn.textContent = 'Load Source';
+    loadBtn.onclick = () => pipelineLoadSelectedSource();
+    actions.appendChild(loadBtn);
+
+    const sidecarUrl = pipelineRunReadUrlForPath(result, sidecar?.path);
+    const sidecarBtn = document.createElement('button');
+    sidecarBtn.type = 'button';
+    sidecarBtn.className = 'btn';
+    sidecarBtn.textContent = 'Open Sidecar';
+    sidecarBtn.disabled = !sidecarUrl;
+    sidecarBtn.onclick = () => sidecarUrl && window.open(sidecarUrl, '_blank');
+    actions.appendChild(sidecarBtn);
+
+    const bundleUrl = pipelineRunReadUrlForPath(result, result.bundle?.path);
+    const bundleBtn = document.createElement('button');
+    bundleBtn.type = 'button';
+    bundleBtn.className = 'btn';
+    bundleBtn.textContent = 'Open Bundle';
+    bundleBtn.disabled = !bundleUrl;
+    bundleBtn.onclick = () => bundleUrl && window.open(bundleUrl, '_blank');
+    actions.appendChild(bundleBtn);
+  }
+}
+
 function buildPipelineDockGraphState(source, runResult) {
   const pipeline = selectedPipelineRecord();
   const reportedStages = runResult?.report?.document?.stages;
@@ -4318,6 +4429,11 @@ function renderPipelineDock() {
   if (registryScope) registryScope.textContent = pipelineDockState.lastRun?.bundle?.document?.registryScope || 'run-local';
   const runState = document.getElementById('pipeline-run-state');
   if (runState) runState.textContent = pipelineDockState.lastRun ? (pipelineDockState.lastRun.ok ? 'written' : 'failed') : 'idle';
+  const routeDescription = document.getElementById('pipeline-route-description');
+  if (routeDescription) {
+    const pipeline = selectedPipelineRecord();
+    routeDescription.textContent = pipeline?.description || 'Select a route. Sidecar-only routes write metadata; they do not generate a new splat.';
+  }
 
   const stageList = document.getElementById('pipeline-stage-list');
   if (stageList) {
@@ -4345,6 +4461,7 @@ function renderPipelineDock() {
       </div>
     `).join('');
   }
+  renderPipelineRunResultPanel();
 }
 
 async function loadPipelineManifest() {
@@ -4354,6 +4471,43 @@ async function loadPipelineManifest() {
   renderPipelineRouteSelect();
   renderPipelineDock();
   return pipelineManifest;
+}
+
+async function pipelineLoadSelectedSource() {
+  const source = pipelineSelectedSource();
+  if (!source?.source) {
+    setInfo('Pipeline source required');
+    return null;
+  }
+  const fileName = source.path || source.source.split('path=').pop() || source.label || 'pipeline-source.ply';
+  try {
+    const record = await greenroomImportSplat(source.source, decodeURIComponent(fileName).split('/').pop(), {
+      title: source.label || 'Pipeline Source',
+      subtitle: source.renderability?.reason || 'Selected pipeline source',
+      raw_name: source.path || source.source,
+    }, {
+      clear: false,
+      metadata: {
+        source: source.source,
+        fileName: decodeURIComponent(fileName).split('/').pop(),
+        label: source.label || 'Pipeline Source',
+        splat: {
+          schema: 'kaminos.splat-asset.v0',
+          assetSource: source.source,
+          fileName: decodeURIComponent(fileName).split('/').pop(),
+          format: decodeURIComponent(fileName).split('.').pop()?.toLowerCase() || 'ply',
+          root_id: source.rootId || null,
+          path: source.path || null,
+          renderability: source.renderability || null,
+        },
+      },
+    });
+    setInfo(`Loaded pipeline source: ${source.label || source.source}`);
+    return record;
+  } catch (err) {
+    setInfo(`Pipeline source load failed: ${err.message || err}`);
+    throw err;
+  }
 }
 
 async function runSelectedPipeline() {
@@ -4412,6 +4566,7 @@ function initPipelineDock() {
 window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
+window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.buildPipelineDockGraphState = buildPipelineDockGraphState;
 window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;

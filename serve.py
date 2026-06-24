@@ -350,6 +350,48 @@ def build_asset_display_metadata(path, *, root_label, stage, size=None):
     }
 
 
+def inspect_splat_renderability(path):
+    suffix = Path(path).suffix.lower()
+    if suffix == ".spz":
+        return {
+            "schema": "kaminos.splat-renderability.v0",
+            "status": "likely-splat",
+            "previewState": "not-rendered",
+            "reason": "SPZ files are treated as splat assets; no thumbnail preview has been rendered.",
+        }
+    if suffix != ".ply":
+        return {
+            "schema": "kaminos.splat-renderability.v0",
+            "status": "unknown",
+            "previewState": "not-rendered",
+            "reason": f"{suffix or 'unknown'} files are indexed but not inspected as PLY splats.",
+        }
+    try:
+        header = Path(path).read_bytes()[:32768].decode("utf-8", errors="ignore").lower()
+    except OSError as error:
+        return {
+            "schema": "kaminos.splat-renderability.v0",
+            "status": "unknown",
+            "previewState": "not-rendered",
+            "reason": f"Could not inspect PLY header: {error}",
+        }
+    gaussian_markers = ("property float opacity", "property float scale_0", "property float rot_0")
+    color_markers = ("property float f_dc_0", "property uchar red")
+    if all(marker in header for marker in gaussian_markers) and any(marker in header for marker in color_markers):
+        return {
+            "schema": "kaminos.splat-renderability.v0",
+            "status": "likely-splat",
+            "previewState": "not-rendered",
+            "reason": "PLY header contains common gaussian splat properties; no thumbnail preview has been rendered.",
+        }
+    return {
+        "schema": "kaminos.splat-renderability.v0",
+        "status": "not-splat-like",
+        "previewState": "not-rendered",
+        "reason": "PLY header does not contain common gaussian splat properties; it may be a mesh stub or non-renderable fixture.",
+    }
+
+
 def _format_size(size):
     try:
         size = int(size)
@@ -410,6 +452,7 @@ def build_asset_entry(root, path):
             stage=root.get("stage", "experimental"),
             size=size,
         ),
+        "renderability": inspect_splat_renderability(path),
     }
 
 
