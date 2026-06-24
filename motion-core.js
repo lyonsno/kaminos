@@ -1072,21 +1072,26 @@ function fallbackHeadFromRoot(root) {
   return [root[0], root[1] + 0.36, root[2] + 0.34];
 }
 
-export function sampleMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, t = 0, { mode = 'root+head' } = {}) {
+export function sampleMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, t = 0, { mode = 'mass-attention' } = {}) {
   const track = normalizeMotionTrack(trackInput);
+  const attentionMode = mode === 'root-only'
+    ? 'mass-only'
+    : (mode === 'root+head' ? 'mass-attention' : mode);
   const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, track.duration);
   const root = sampleTimedVec(track.tracks.root, time);
   const trackedHead = sampleTimedVec(track.tracks.head, time);
-  const head = mode === 'root-only' ? fallbackHeadFromRoot(root) : trackedHead;
+  const head = attentionMode === 'mass-only' ? fallbackHeadFromRoot(root) : trackedHead;
   const facing = normalizeVec3(subVec3(head, root), track.forwardAxis);
   const effort = sampleTimedScalar(track.tracks.effort, time);
   const phase = sampleTimedLabel(track.tracks.phase, time);
   const headRootSeparation = lengthVec3(subVec3(head, root));
+  const attentionMassContrast = Math.max(0, headRootSeparation - 0.49518);
   return {
     schema: 'kaminos.motion-track-sample.v0',
     trackId: track.id,
     sourceKind: track.sourceKind,
-    mode,
+    mode: attentionMode,
+    attentionMode,
     t: Number(time.toFixed(5)),
     phase,
     root: root.map(value => Number(value.toFixed(5))),
@@ -1096,6 +1101,7 @@ export function sampleMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, t =
     effort: Number(effort.toFixed(5)),
     scale: Number((0.94 + clamp(effort * 0.08, 0, 0.18)).toFixed(5)),
     headRootSeparation: Number(headRootSeparation.toFixed(5)),
+    attentionMassContrast: Number(attentionMassContrast.toFixed(5)),
   };
 }
 
@@ -1104,6 +1110,7 @@ function motionTrackMetrics(frames) {
   let maxEffort = 0;
   let attentionLeadDistance = 0;
   let maxHeadRootSeparation = 0;
+  let attentionMassContrast = 0;
   let phaseChanges = 0;
   let lastPhase = null;
   let lastRoot = null;
@@ -1114,6 +1121,7 @@ function motionTrackMetrics(frames) {
     maxEffort = Math.max(maxEffort, sample.effort);
     attentionLeadDistance += Math.max(0, sample.attention[2] - sample.root[2]);
     maxHeadRootSeparation = Math.max(maxHeadRootSeparation, sample.headRootSeparation);
+    attentionMassContrast += sample.attentionMassContrast || 0;
     if (lastPhase !== null && sample.phase !== lastPhase) phaseChanges++;
     lastPhase = sample.phase;
   }
@@ -1123,11 +1131,12 @@ function motionTrackMetrics(frames) {
     maxEffort: Number(maxEffort.toFixed(5)),
     attentionLeadDistance: Number((attentionLeadDistance / Math.max(1, frames.length)).toFixed(5)),
     maxHeadRootSeparation: Number(maxHeadRootSeparation.toFixed(5)),
+    attentionMassContrast: Number((attentionMassContrast / Math.max(1, frames.length)).toFixed(5)),
     phaseChanges,
   };
 }
 
-export function simulateMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, { duration, fps = 12, mode = 'root+head' } = {}) {
+export function simulateMotionTrack(trackInput = DEFAULT_MOTION_TRACK_FIXTURE, { duration, fps = 12, mode = 'mass-attention' } = {}) {
   const track = normalizeMotionTrack(trackInput);
   const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
   const simFps = Math.max(1, Math.round(Number(fps) || 12));
@@ -1184,8 +1193,8 @@ export function buildMotionTrackHarness({
   const simFps = Math.max(1, Math.round(Number(fps) || 12));
   const phrasePlan = normalizeMotionPlan({ ...DEFAULT_DECISION_MOTION_PLAN, duration: simDuration });
   const phraseSimulation = simulateMotionPlan(phrasePlan, { duration: simDuration, fps: simFps });
-  const rootOnlySimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'root-only' });
-  const rootHeadSimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'root+head' });
+  const massOnlySimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'mass-only' });
+  const massAttentionSimulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'mass-attention' });
   const variants = [
     {
       id: 'phrase_baseline',
@@ -1196,24 +1205,27 @@ export function buildMotionTrackHarness({
         ...phraseSimulation.metrics,
         attentionLeadDistance: 0,
         maxHeadRootSeparation: 0,
+        attentionMassContrast: 0,
       },
       simulation: phraseSimulation,
     },
     {
-      id: 'track_root_only',
-      label: 'Root Only Track',
+      id: 'track_mass_only',
+      label: 'Mass Only Track',
       color: '#ffd166',
-      kind: 'motion-track-root-only',
-      metrics: rootOnlySimulation.metrics,
-      simulation: rootOnlySimulation,
+      kind: 'motion-track-mass-only',
+      attentionMode: 'mass-only',
+      metrics: massOnlySimulation.metrics,
+      simulation: massOnlySimulation,
     },
     {
-      id: 'track_root_head',
-      label: 'Root + Head Track',
+      id: 'track_mass_attention',
+      label: 'Mass + Attention Track',
       color: '#ff7a66',
-      kind: 'motion-track-root-head',
-      metrics: rootHeadSimulation.metrics,
-      simulation: rootHeadSimulation,
+      kind: 'motion-track-mass-attention',
+      attentionMode: 'mass-attention',
+      metrics: massAttentionSimulation.metrics,
+      simulation: massAttentionSimulation,
     },
   ];
   const maxFrames = Math.max(...variants.map(variant => variant.simulation.frames.length));
@@ -1224,8 +1236,8 @@ export function buildMotionTrackHarness({
   const origins = [[-1.55, 0, 0], [0, 0, 0], [1.55, 0, 0]];
   const actors = [
     { id: 'phrase-baseline', label: 'Phrase Baseline', color: '#8fb6ff', intent: phrasePlan.intent },
-    { id: 'track-root-only', label: 'Root Only Track', color: '#ffd166', intent: track.intent },
-    { id: 'track-root-head', label: 'Root + Head Track', color: '#ff7a66', intent: track.intent },
+    { id: 'track-mass-only', label: 'Mass Only Track', color: '#ffd166', intent: track.intent },
+    { id: 'track-mass-attention', label: 'Mass + Attention Track', color: '#ff7a66', intent: track.intent },
   ];
   const filmstrip = frameIndexes.map(index => ({
     frameIndex: index,
@@ -1234,7 +1246,7 @@ export function buildMotionTrackHarness({
       const frame = variant.simulation.frames[Math.min(index, variant.simulation.frames.length - 1)];
       const sample = frame?.sample || (variantIndex === 0
         ? sampleMotionPlan(phrasePlan, index / simFps)
-        : sampleMotionTrack(track, index / simFps, { mode: variantIndex === 1 ? 'root-only' : 'root+head' }));
+        : sampleMotionTrack(track, index / simFps, { mode: variantIndex === 1 ? 'mass-only' : 'mass-attention' }));
       return variantIndex === 0
         ? comparisonActorSample(actors[variantIndex], sample, origins[variantIndex])
         : motionTrackActorSample(actors[variantIndex], sample, origins[variantIndex]);

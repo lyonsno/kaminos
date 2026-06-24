@@ -35,15 +35,16 @@ assert.ok(commit.root[2] > notice.root[2] + 0.5, 'root/CoG can commit after atte
 assert.ok(commit.effort > early.effort, 'track effort can accent commitment');
 assert.ok(Math.abs(Math.hypot(...commit.facing) - 1) < 0.001, 'derived facing is normalized');
 
-const rootOnly = simulateMotionTrack(track, { duration: track.duration, fps: 12, mode: 'root-only' });
-const full = simulateMotionTrack(track, { duration: track.duration, fps: 12, mode: 'root+head' });
+const rootOnly = simulateMotionTrack(track, { duration: track.duration, fps: 12, mode: 'mass-only' });
+const full = simulateMotionTrack(track, { duration: track.duration, fps: 12, mode: 'mass-attention' });
 assert.equal(full.schema, 'kaminos.motion-track-simulation.v0');
-assert.equal(full.mode, 'root+head');
+assert.equal(full.mode, 'mass-attention');
 assert.equal(full.frames.length, Math.floor(track.duration * 12) + 1);
 assert.ok(full.metrics.rootTravel > 1.2, 'track simulation measures root travel');
 assert.ok(full.metrics.phaseChanges >= 4, 'track simulation preserves phase changes');
-assert.ok(full.metrics.attentionLeadDistance > rootOnly.metrics.attentionLeadDistance + 0.2, 'head track adds attention lead beyond root-only playback');
+assert.ok(full.metrics.attentionLeadDistance > rootOnly.metrics.attentionLeadDistance + 0.2, 'mass-attention track adds attention lead beyond mass-only playback');
 assert.ok(full.metrics.maxHeadRootSeparation > rootOnly.metrics.maxHeadRootSeparation + 0.2, 'head track adds readable separation from CoG');
+assert.ok(full.metrics.attentionMassContrast > rootOnly.metrics.attentionMassContrast + 0.2, 'mass-attention track records stronger mind/body contrast than mass-only control');
 
 const harness = buildMotionTrackHarness({ duration: track.duration, fps: 12 });
 assert.equal(harness.schema, 'kaminos.motion-track-harness.v0');
@@ -51,8 +52,11 @@ assert.equal(harness.route, 'procedural-orb-motion-grammar-v0');
 assert.equal(harness.track.schema, MOTION_TRACK_SCHEMA);
 assert.deepEqual(
   harness.variants.map(variant => variant.id),
-  ['phrase_baseline', 'track_root_only', 'track_root_head'],
-  'track harness compares phrase baseline, root-only track, and root+head track',
+  ['phrase_baseline', 'track_mass_only', 'track_mass_attention'],
+  'track harness compares phrase baseline, mass-only track, and mass+attention track',
 );
-assert.ok(harness.variants.find(variant => variant.id === 'track_root_head').metrics.attentionLeadDistance > harness.variants.find(variant => variant.id === 'track_root_only').metrics.attentionLeadDistance, 'harness records root+head attention advantage');
+assert.equal(harness.variants.find(variant => variant.id === 'track_mass_only').attentionMode, 'mass-only');
+assert.equal(harness.variants.find(variant => variant.id === 'track_mass_attention').attentionMode, 'mass-attention');
+assert.ok(harness.variants.find(variant => variant.id === 'track_mass_attention').metrics.attentionLeadDistance > harness.variants.find(variant => variant.id === 'track_mass_only').metrics.attentionLeadDistance, 'harness records mass+attention attention advantage');
+assert.ok(harness.variants.find(variant => variant.id === 'track_mass_attention').metrics.attentionMassContrast > harness.variants.find(variant => variant.id === 'track_mass_only').metrics.attentionMassContrast, 'harness records mass+attention contrast advantage');
 assert.ok(harness.filmstrip.length >= 7, 'track harness exposes filmstrip-ready frames');

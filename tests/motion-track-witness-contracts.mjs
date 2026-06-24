@@ -20,4 +20,6 @@ assert.match(witness, /kaminos_motion_tracks=1/, 'motion witness can target the 
 assert.match(witness, /buildMotionTrackHarness/, 'motion witness builds deterministic motion-track filmstrip');
 assert.match(witness, /window\.kaminosMotionTrackDebugState/, 'motion witness reads motion-track browser state');
 assert.match(witness, /motionTrackHarness/, 'motion witness reports motion-track harness evidence');
-assert.match(witness, /track_root_head/, 'motion witness preserves root+head variant identity');
+assert.match(witness, /track_mass_only/, 'motion witness preserves mass-only variant identity');
+assert.match(witness, /track_mass_attention/, 'motion witness preserves mass+attention variant identity');
+assert.match(witness, /attentionMassContrast/, 'motion witness preserves mass/attention contrast evidence');

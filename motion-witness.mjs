@@ -346,13 +346,19 @@ try {
     if (!debug?.active || debug.actorCount < 3) throw new Error(`motion track route did not spawn comparison actors: ${JSON.stringify(debug)}`);
     if (motionTrackHarness?.schema !== 'kaminos.motion-track-harness.v0') throw new Error(`motion track route lost harness schema: ${JSON.stringify(debug)}`);
     if (motionTrackHarness.track?.schema !== 'kaminos.motion-track.v0') throw new Error(`motion track route lost track schema: ${JSON.stringify(debug)}`);
-    const rootOnly = motionTrackHarness.variants?.find(variant => variant.id === 'track_root_only');
-    const rootHead = motionTrackHarness.variants?.find(variant => variant.id === 'track_root_head');
-    if (!(rootHead?.attentionLeadDistance > rootOnly?.attentionLeadDistance)) {
-      throw new Error(`motion track route lost root+head attention advantage: ${JSON.stringify(debug)}`);
+    const massOnly = motionTrackHarness.variants?.find(variant => variant.id === 'track_mass_only');
+    const massAttention = motionTrackHarness.variants?.find(variant => variant.id === 'track_mass_attention');
+    if (massOnly?.attentionMode !== 'mass-only' || massAttention?.attentionMode !== 'mass-attention') {
+      throw new Error(`motion track route lost attention-mode contrast identity: ${JSON.stringify(debug)}`);
     }
-    if (!(rootHead?.maxHeadRootSeparation > rootOnly?.maxHeadRootSeparation)) {
-      throw new Error(`motion track route lost root+head separation advantage: ${JSON.stringify(debug)}`);
+    if (!(massAttention?.metrics?.attentionLeadDistance > massOnly?.metrics?.attentionLeadDistance)) {
+      throw new Error(`motion track route lost mass+attention lead advantage: ${JSON.stringify(debug)}`);
+    }
+    if (!(massAttention?.metrics?.maxHeadRootSeparation > massOnly?.metrics?.maxHeadRootSeparation)) {
+      throw new Error(`motion track route lost mass+attention separation advantage: ${JSON.stringify(debug)}`);
+    }
+    if (!(massAttention?.metrics?.attentionMassContrast > massOnly?.metrics?.attentionMassContrast)) {
+      throw new Error(`motion track route lost mass/attention contrast advantage: ${JSON.stringify(debug)}`);
     }
   } else if (isPhraseControlRoute) {
     const phraseControlHarness = debug?.phraseControlHarness;
