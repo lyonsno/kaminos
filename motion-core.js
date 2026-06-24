@@ -5,6 +5,7 @@ export const MOTION_WITNESS_SCHEMA = 'kaminos.motion-witness.v0';
 export const MOTION_PLAN_SCHEMA = 'kaminos.motion-plan.v0';
 export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
+export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 
 function clamp(value, min, max) {
@@ -373,6 +374,67 @@ export const DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE = {
     { frame: 105, root: [-0.2057, 0.93799, 4.53534], head: [-0.21165, 1.54286, 4.58301], leftWrist: [-0.0852, 1.43452, 4.75072], rightWrist: [-0.45245, 0.84739, 4.6188] },
     { frame: 119, root: [-0.20796, 0.94681, 5.03718], head: [-0.2488, 1.55966, 5.0987], leftWrist: [0.02935, 0.87729, 4.98949], rightWrist: [-0.45374, 0.82118, 5.11583] },
   ],
+};
+
+export const DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE = {
+  schema: GENERATED_POSE_OUTPUT_MAP_SCHEMA,
+  ok: true,
+  route: 'generated-pose-feature-output-map-v0',
+  source: {
+    schema: 'kaminos.generated-pose-features.v0',
+    effectivePath: '/tmp/kaminos-generated-pose-features-kimodo-bow-0624.json',
+    featureReportSha256: 'fixture-bow-feature-report-sha256-not-runtime-file-read',
+    generatedMotionInput: '/tmp/kaminos-kimodo-bow-motion.npz',
+    generatedMotionInputSha256: 'fixture-bow-motion-input-sha256-not-runtime-file-read',
+    sourceFormat: 'kimodo-soma77-explicit-joints',
+  },
+  inputSockets: [
+    { id: 'rootMetrics.travelXZ', label: 'Root travel XZ', valueType: 'number', units: 'meters' },
+    { id: 'torsoFrame.chestRootHorizontalLean.range', label: 'Torso lean range', valueType: 'number', units: 'meters' },
+    { id: 'torsoFrame.headRootDistance.range', label: 'Head/root separation range', valueType: 'number', units: 'meters' },
+    { id: 'limbEnvelope.handSpan.range', label: 'Hand span range', valueType: 'number', units: 'meters' },
+    { id: 'limbEnvelope.maxHandSpeed', label: 'Maximum hand speed', valueType: 'number', units: 'metersPerSecond' },
+    { id: 'stanceContact.stanceWidth.range', label: 'Stance width range', valueType: 'number', units: 'meters' },
+    { id: 'stanceContact.contactBalance', label: 'Foot contact balance', valueType: 'derived-number', units: 'ratio' },
+    { id: 'expansionCompression.bboxVolume.range', label: 'Pose volume range', valueType: 'number', units: 'cubicMeters' },
+    { id: 'eventSpikes.0.speed', label: 'Primary event spike speed', valueType: 'number', units: 'metersPerSecond' },
+  ],
+  outputSockets: [
+    { id: 'orb.rootOffset', label: 'Orb root offset', valueType: 'number', domain: 'motion-root' },
+    { id: 'orb.faceCueLead', label: 'Face cue lead', valueType: 'number', domain: 'attention' },
+    { id: 'body.lean', label: 'Body lean', valueType: 'number', domain: 'body-shape' },
+    { id: 'body.scalePulse', label: 'Body scale pulse', valueType: 'number', domain: 'body-shape' },
+    { id: 'aura.radius', label: 'Aura radius', valueType: 'number', domain: 'expressive-envelope' },
+    { id: 'trail.accent', label: 'Trail/accent emission', valueType: 'event', domain: 'accent' },
+    { id: 'footfall.pulse', label: 'Footfall pulse', valueType: 'number', domain: 'grounding' },
+  ],
+  mappingEdges: [
+    { id: 'root-travel-to-orb-offset', from: 'rootMetrics.travelXZ', to: 'orb.rootOffset', rule: { type: 'linear-normalized', gain: 1 } },
+    { id: 'head-root-to-face-cue', from: 'torsoFrame.headRootDistance.range', to: 'orb.faceCueLead', rule: { type: 'linear-normalized', gain: 1.1 } },
+    { id: 'torso-lean-to-body-lean', from: 'torsoFrame.chestRootHorizontalLean.range', to: 'body.lean', rule: { type: 'linear-normalized', gain: 1 } },
+    { id: 'volume-range-to-scale-pulse', from: 'expansionCompression.bboxVolume.range', to: 'body.scalePulse', rule: { type: 'linear-normalized', gain: 1 } },
+    { id: 'hand-span-to-aura-radius', from: 'limbEnvelope.handSpan.range', to: 'aura.radius', rule: { type: 'linear-normalized', gain: 1 } },
+    { id: 'event-spike-to-trail-accent', from: 'eventSpikes.0.speed', to: 'trail.accent', rule: { type: 'event-normalized', gain: 1 } },
+    { id: 'stance-and-contact-to-footfall', from: 'stanceContact.stanceWidth.range', to: 'footfall.pulse', rule: { type: 'weighted-average', gain: 1, with: ['stanceContact.contactBalance'] } },
+  ],
+  normalizedOutputs: {
+    'orb.rootOffset': { value: 0.11155, source: 'rootMetrics.travelXZ' },
+    'orb.faceCueLead': { value: 0.36544, source: 'torsoFrame.headRootDistance.range' },
+    'body.lean': { value: 0.69605, source: 'torsoFrame.chestRootHorizontalLean.range' },
+    'body.scalePulse': { value: 0.97807, source: 'expansionCompression.bboxVolume.range' },
+    'aura.radius': { value: 0.91799, source: 'limbEnvelope.handSpan.range' },
+    'trail.accent': {
+      value: 0.70382,
+      source: 'eventSpikes.0.speed',
+      event: { channel: 'leftHand', time: 3.5, speed: 1.75955 },
+    },
+    'footfall.pulse': { value: 0.58852, source: 'stanceContact.stanceWidth.range + stanceContact.contactBalance' },
+  },
+  summary: {
+    strongestOutput: 'body.scalePulse',
+    outputCount: 7,
+    edgeCount: 7,
+  },
 };
 
 export function normalizeMotionClip(clip) {
@@ -1460,6 +1522,169 @@ export function buildGeneratedMotionTrackHarness({
     duration: simDuration,
     variants,
     filmstrip,
+  };
+}
+
+function outputValue(outputs, key, fallback = 0) {
+  const value = Number(outputs?.[key]?.value);
+  return Number.isFinite(value) ? clamp(value, 0, 1) : fallback;
+}
+
+function normalizeGeneratedPoseOutputMap(outputMap = DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE) {
+  if (outputMap?.schema !== GENERATED_POSE_OUTPUT_MAP_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_POSE_OUTPUT_MAP_SCHEMA}, got ${outputMap?.schema || 'missing schema'}`);
+  }
+  if (outputMap.ok !== true) throw new Error(`Generated pose output map is not ok: ${outputMap?.error || 'unknown mapping failure'}`);
+  const normalizedOutputs = outputMap.normalizedOutputs || {};
+  const entries = Object.entries(normalizedOutputs)
+    .filter(([, record]) => Number.isFinite(Number(record?.value)))
+    .sort((a, b) => Number(b[1].value) - Number(a[1].value));
+  return {
+    ...outputMap,
+    inputSockets: Array.isArray(outputMap.inputSockets) ? outputMap.inputSockets : [],
+    outputSockets: Array.isArray(outputMap.outputSockets) ? outputMap.outputSockets : [],
+    mappingEdges: Array.isArray(outputMap.mappingEdges) ? outputMap.mappingEdges : [],
+    normalizedOutputs,
+    summary: {
+      ...(outputMap.summary || {}),
+      strongestOutput: outputMap.summary?.strongestOutput || entries[0]?.[0] || null,
+      outputCount: Array.isArray(outputMap.outputSockets) ? outputMap.outputSockets.length : 0,
+      edgeCount: Array.isArray(outputMap.mappingEdges) ? outputMap.mappingEdges.length : 0,
+    },
+  };
+}
+
+function eventPulseAt(t, eventTime, width = 0.72) {
+  const distance = Math.abs(t - eventTime);
+  if (distance >= width) return 0;
+  return pulse01(1 - distance / width);
+}
+
+function generatedPoseOutputActorSample(outputMap, t, duration) {
+  const outputs = outputMap.normalizedOutputs;
+  const rootOffset = outputValue(outputs, 'orb.rootOffset');
+  const faceCueLead = outputValue(outputs, 'orb.faceCueLead');
+  const bodyLean = outputValue(outputs, 'body.lean');
+  const bodyScalePulse = outputValue(outputs, 'body.scalePulse');
+  const auraRadius = outputValue(outputs, 'aura.radius');
+  const trailAccent = outputValue(outputs, 'trail.accent');
+  const footfallPulse = outputValue(outputs, 'footfall.pulse');
+  const event = outputs?.['trail.accent']?.event || {};
+  const eventTime = Number.isFinite(Number(event.time)) ? clamp(Number(event.time), 0, duration) : duration * 0.55;
+  const eventPulse = eventPulseAt(t, eventTime);
+  const travelPhase = Math.sin((t / Math.max(0.1, duration)) * Math.PI * 2);
+  const footPulse = 0.35 + footfallPulse * (0.45 + 0.2 * Math.max(0, Math.sin(t * Math.PI * 3.2)));
+  const scaleKick = bodyScalePulse * (0.22 + eventPulse * 0.18);
+  const leanRadians = (bodyLean - 0.5) * 0.82 + eventPulse * 0.18;
+  const root = [
+    Number((rootOffset * 0.82 * travelPhase).toFixed(5)),
+    Number((0.18 + footPulse * 0.07 + eventPulse * 0.04).toFixed(5)),
+    Number((rootOffset * 1.35 * Math.cos(t * 1.18)).toFixed(5)),
+  ];
+  const facing = normalizeVec3([
+    Number((0.2 + faceCueLead * 0.55 + bodyLean * 0.16).toFixed(5)),
+    Number((0.05 + eventPulse * 0.08).toFixed(5)),
+    1,
+  ]);
+  const attention = addVec3(root, scaleVec3(facing, 0.65 + faceCueLead * 0.52));
+  const bodyScale = [
+    Number((1 + scaleKick * 0.28 + eventPulse * 0.08).toFixed(5)),
+    Number((1 + scaleKick * 0.64 + bodyLean * 0.12).toFixed(5)),
+    Number((1 + scaleKick * 0.18 + auraRadius * 0.08).toFixed(5)),
+  ];
+  return {
+    id: 'generated-output-map-orb',
+    label: 'Mapped Output Orb',
+    intent: 'socket-mapped-generated-motion-affordance',
+    status: eventPulse > 0.45 ? 'accent-spike' : 'mapped-breath',
+    color: '#f0b184',
+    t: Number(t.toFixed(5)),
+    root,
+    localRoot: root,
+    facing: facing.map(value => Number(value.toFixed(5))),
+    attention: attention.map(value => Number(value.toFixed(5))),
+    scale: Number(((bodyScale[0] + bodyScale[1] + bodyScale[2]) / 3).toFixed(5)),
+    bodyScale,
+    effort: Number(Math.max(bodyScalePulse, trailAccent * eventPulse, auraRadius * 0.8).toFixed(5)),
+    bodyLean: Number(leanRadians.toFixed(5)),
+    auraRadius: Number((0.48 + auraRadius * 0.94 + eventPulse * 0.08).toFixed(5)),
+    trailAccent: Number((trailAccent * (0.32 + eventPulse * 0.68)).toFixed(5)),
+    footfallPulse: Number(footPulse.toFixed(5)),
+    faceCueLead,
+    eventPulse: Number(eventPulse.toFixed(5)),
+    event,
+  };
+}
+
+function generatedPoseOutputMetrics(frames) {
+  let maxAuraRadius = 0;
+  let maxBodyScale = 0;
+  let maxTrailAccent = 0;
+  let maxFootfallPulse = 0;
+  let maxEventPulse = 0;
+  for (const frame of frames) {
+    const actor = frame.actors[0];
+    maxAuraRadius = Math.max(maxAuraRadius, actor.auraRadius);
+    maxBodyScale = Math.max(maxBodyScale, ...actor.bodyScale);
+    maxTrailAccent = Math.max(maxTrailAccent, actor.trailAccent);
+    maxFootfallPulse = Math.max(maxFootfallPulse, actor.footfallPulse);
+    maxEventPulse = Math.max(maxEventPulse, actor.eventPulse);
+  }
+  return {
+    actorCount: 1,
+    frameCount: frames.length,
+    maxAuraRadius: Number(maxAuraRadius.toFixed(5)),
+    maxBodyScale: Number(maxBodyScale.toFixed(5)),
+    maxTrailAccent: Number(maxTrailAccent.toFixed(5)),
+    maxFootfallPulse: Number(maxFootfallPulse.toFixed(5)),
+    maxEventPulse: Number(maxEventPulse.toFixed(5)),
+  };
+}
+
+export function buildGeneratedPoseOutputMapHarness({
+  outputMap = DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
+  duration = 5.4,
+  fps = 12,
+  filmstripFrames = 7,
+} = {}) {
+  const normalizedMap = normalizeGeneratedPoseOutputMap(outputMap);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : 5.4);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const frameCount = Math.floor(simDuration * simFps) + 1;
+  const frames = [];
+  for (let index = 0; index < frameCount; index++) {
+    const t = Math.min(simDuration, index / simFps);
+    frames.push({
+      frameIndex: index,
+      t: Number(t.toFixed(5)),
+      actors: [generatedPoseOutputActorSample(normalizedMap, t, simDuration)],
+    });
+  }
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), frames.length));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (frames.length - 1) / (count - 1))
+  ));
+  const entries = Object.entries(normalizedMap.normalizedOutputs)
+    .filter(([, record]) => Number.isFinite(Number(record?.value)))
+    .sort((a, b) => Number(b[1].value) - Number(a[1].value));
+  return {
+    schema: 'kaminos.generated-pose-output-map-harness.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    sourceStatus: 'fixture',
+    sourceKind: 'generated-pose-output-map',
+    sourceRoute: normalizedMap.route || 'generated-pose-feature-output-map-v0',
+    outputMap: normalizedMap,
+    normalizedOutputs: normalizedMap.normalizedOutputs,
+    inputSocketCount: normalizedMap.inputSockets.length,
+    outputSocketCount: normalizedMap.outputSockets.length,
+    edgeCount: normalizedMap.mappingEdges.length,
+    strongestOutput: normalizedMap.summary.strongestOutput || entries[0]?.[0] || null,
+    maxOutputValue: Number((entries[0]?.[1]?.value || 0).toFixed(5)),
+    fps: simFps,
+    duration: simDuration,
+    frames,
+    metrics: generatedPoseOutputMetrics(frames),
+    filmstrip: frameIndexes.map(index => frames[index]),
   };
 }
 

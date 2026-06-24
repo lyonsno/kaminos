@@ -465,6 +465,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="motion-controls-enable">Controls</button>
         <button class="btn" id="motion-tracks-enable">Tracks</button>
         <button class="btn" id="motion-generated-enable">Generated</button>
+        <button class="btn" id="motion-output-map-enable">Mapped</button>
         <button class="btn" id="motion-frame-camera">Frame</button>
       </div>
     </div>
@@ -475,6 +476,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div class="field"><span class="field-key">Track Route</span><span class="route-chip">kaminos_motion_tracks=1</span></div>
       <div class="field"><span class="field-key">Generated Route</span><span class="route-chip">kaminos_generated_motion_track=1</span></div>
+      <div class="field"><span class="field-key">Mapped Route</span><span class="route-chip">kaminos_motion_output_map=1</span></div>
       <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
     </div>
     <div class="panel">
@@ -793,6 +795,7 @@ import {
   DEFAULT_MOTION_CLIPS,
   DEFAULT_MOTION_TRACK_FIXTURE,
   DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
+  DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
   MOTION_ROUTE_IDENTITY,
   applyMotionPhraseControls,
   buildMotionActorFixture,
@@ -800,6 +803,7 @@ import {
   buildMotionPhraseControlHarness,
   buildMotionTrackHarness,
   buildGeneratedMotionTrackHarness,
+  buildGeneratedPoseOutputMapHarness,
   motionClipById,
   motionPhraseBodyScale,
   normalizeMotionPhraseControls,
@@ -853,6 +857,7 @@ let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
 let motionTrackState = null;
+let motionOutputMapState = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3322,6 +3327,19 @@ function disposeMotionTrackScene() {
   motionTrackState.active = false;
 }
 
+function disposeMotionOutputMapScene() {
+  if (!motionOutputMapState?.root) return;
+  scene.remove(motionOutputMapState.root);
+  motionOutputMapState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
+      else object.material.dispose?.();
+    }
+  });
+  motionOutputMapState.active = false;
+}
+
 function frameMotionAgencyCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
@@ -3331,14 +3349,17 @@ function frameMotionAgencyCamera() {
 }
 
 function updateMotionAgencyReadout() {
+  const outputMapDebug = window.kaminosGeneratedPoseOutputMapDebugState?.();
   const trackDebug = window.kaminosMotionTrackDebugState?.();
   const phraseControlDebug = window.kaminosMotionPhraseControlDebugState?.();
   const decisionDebug = window.kaminosMotionDecisionDebugState?.();
-  const debug = trackDebug?.active
+  const debug = outputMapDebug?.active
+    ? outputMapDebug
+    : (trackDebug?.active
     ? trackDebug
     : (phraseControlDebug?.active
     ? phraseControlDebug
-    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.()));
+    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.())));
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
@@ -3346,11 +3367,12 @@ function updateMotionAgencyReadout() {
   setText('motion-actor-count', debug?.actorCount ?? 0);
   setText('motion-fallback-count', debug?.fallbackCount ?? 0);
   setText('motion-frame-count', debug?.frameCount ?? 0);
-  setText('motion-max-effort', Number(debug?.maxEffort || 0).toFixed(2));
+  setText('motion-max-effort', Number(debug?.maxEffort ?? debug?.maxOutputValue ?? 0).toFixed(2));
 }
 
 function createMotionAgencyFixtureScene({ force = false } = {}) {
   if (motionAgencyState?.active && !force) return motionAgencyState;
+  disposeMotionOutputMapScene();
   disposeMotionPhraseControlScene();
   disposeMotionDecisionScene();
   disposeMotionTrackScene();
@@ -3470,6 +3492,7 @@ function makeMotionDecisionVisual({ id, label, color, origin, plan }) {
 
 function createMotionDecisionComparisonScene({ force = false } = {}) {
   if (motionDecisionState?.active && !force) return motionDecisionState;
+  disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionPhraseControlScene();
   disposeMotionTrackScene();
@@ -3609,6 +3632,7 @@ function refreshMotionPhraseControlledPlan(controls = motionPhraseControlsFromIn
 
 function createMotionPhraseControlHarnessScene({ force = false } = {}) {
   if (motionPhraseControlState?.active && !force) return motionPhraseControlState;
+  disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
   disposeMotionTrackScene();
@@ -3669,6 +3693,7 @@ function createMotionPhraseControlHarnessScene({ force = false } = {}) {
 
 function createMotionTrackHarnessScene({ force = false } = {}) {
   if (motionTrackState?.active && !force) return motionTrackState;
+  disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
   disposeMotionPhraseControlScene();
@@ -3734,6 +3759,7 @@ function createMotionTrackHarnessScene({ force = false } = {}) {
 
 function createGeneratedMotionTrackHarnessScene({ force = false } = {}) {
   if (motionTrackState?.active && motionTrackState.generated && !force) return motionTrackState;
+  disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
   disposeMotionPhraseControlScene();
@@ -3797,6 +3823,129 @@ function createGeneratedMotionTrackHarnessScene({ force = false } = {}) {
   frameMotionAgencyCamera();
   setInfo('Generated motion track harness spawned');
   return motionTrackState;
+}
+
+function makeGeneratedPoseOutputMapVisual(harness) {
+  const root = new THREE.Group();
+  root.name = 'generated-pose-output-map-visual-root';
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(1.8, 96),
+    new THREE.MeshBasicMaterial({ color: 0x11161c, transparent: true, opacity: 0.42, side: THREE.DoubleSide })
+  );
+  floor.name = 'generated-pose-output-map-floor';
+  floor.rotation.x = -Math.PI / 2;
+  root.add(floor);
+
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf0b184,
+    emissive: 0x361409,
+    roughness: 0.31,
+    metalness: 0.1,
+  });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.24, 48, 24), bodyMaterial);
+  body.name = 'generated-pose-output-map-body';
+
+  const eye = new THREE.Mesh(
+    new THREE.SphereGeometry(0.045, 18, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  eye.name = 'generated-pose-output-map-face-cue';
+
+  const aura = new THREE.Mesh(
+    new THREE.SphereGeometry(0.58, 40, 20),
+    new THREE.MeshBasicMaterial({ color: 0xf4cf92, transparent: true, opacity: 0.16, wireframe: true })
+  );
+  aura.name = 'generated-pose-output-map-aura';
+
+  const footfall = new THREE.Mesh(
+    new THREE.TorusGeometry(0.22, 0.008, 8, 72),
+    new THREE.MeshBasicMaterial({ color: 0x9fe6bd, transparent: true, opacity: 0.48 })
+  );
+  footfall.name = 'generated-pose-output-map-footfall';
+  footfall.rotation.x = -Math.PI / 2;
+  footfall.position.y = -0.19;
+
+  const target = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.08, 1),
+    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.9 })
+  );
+  target.name = 'generated-pose-output-map-attention-target';
+
+  const trail = [];
+  for (let i = 0; i < 10; i++) {
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff7a66, transparent: true, opacity: 0.18 })
+    );
+    dot.name = `generated-pose-output-map-trail-${i}`;
+    trail.push(dot);
+    root.add(dot);
+  }
+
+  const group = new THREE.Group();
+  group.name = 'generated-pose-output-map-orb';
+  group.add(aura);
+  group.add(body);
+  group.add(eye);
+  group.add(footfall);
+  root.add(group);
+  root.add(target);
+
+  return {
+    root,
+    group,
+    body,
+    eye,
+    aura,
+    footfall,
+    target,
+    trail,
+    baseColor: new THREE.Color(0xf0b184),
+    harness,
+  };
+}
+
+function createGeneratedPoseOutputMapScene({ force = false } = {}) {
+  if (motionOutputMapState?.active && !force) return motionOutputMapState;
+  disposeMotionAgencyScene();
+  disposeMotionDecisionScene();
+  disposeMotionPhraseControlScene();
+  disposeMotionTrackScene();
+  disposeMotionOutputMapScene();
+  const harness = buildGeneratedPoseOutputMapHarness({
+    outputMap: DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
+    fps: 12,
+    filmstripFrames: 7,
+  });
+  const visual = makeGeneratedPoseOutputMapVisual(harness);
+  visual.root.userData.kaminosGeneratedPoseOutputMap = {
+    route: MOTION_ROUTE_IDENTITY,
+    harnessSchema: harness.schema,
+    outputMapSchema: harness.outputMap.schema,
+    sourceStatus: harness.sourceStatus,
+    sourceRoute: harness.sourceRoute,
+    strongestOutput: harness.strongestOutput,
+  };
+  scene.add(visual.root);
+  motionOutputMapState = {
+    schema: 'kaminos.generated-pose-output-map-route.v0',
+    active: true,
+    route: MOTION_ROUTE_IDENTITY,
+    root: visual.root,
+    visual,
+    harness,
+    duration: harness.duration,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+    maxOutputValue: harness.maxOutputValue,
+    lastActors: [],
+  };
+  updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
+  updateMotionAgencyReadout();
+  frameMotionAgencyCamera();
+  setInfo('Generated pose output map harness spawned');
+  return motionOutputMapState;
 }
 
 function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
@@ -3963,6 +4112,67 @@ function updateMotionPhraseControlFrame(nowSeconds = performance.now() / 1000) {
   return true;
 }
 
+function updateGeneratedPoseOutputMapFrame(nowSeconds = performance.now() / 1000) {
+  if (!motionOutputMapState?.active) return false;
+  const state = motionOutputMapState;
+  const visual = state.visual;
+  const localTime = (nowSeconds - state.startedAt) % state.duration;
+  const frameIndex = Math.min(
+    state.harness.frames.length - 1,
+    Math.max(0, Math.round(localTime * state.harness.fps)),
+  );
+  const actor = state.harness.frames[frameIndex].actors[0];
+  const rootPosition = new THREE.Vector3(actor.root[0], actor.root[1], actor.root[2]);
+  const attention = new THREE.Vector3(actor.attention[0], actor.attention[1], actor.attention[2]);
+  const facing = new THREE.Vector3(...actor.facing).normalize();
+  visual.group.position.copy(rootPosition);
+  visual.group.lookAt(attention);
+  visual.group.rotation.z += actor.bodyLean;
+  visual.body.scale.set(actor.bodyScale[0], actor.bodyScale[1], actor.bodyScale[2]);
+  visual.group.updateMatrixWorld(true);
+  const faceCueWorld = rootPosition.clone().add(facing.multiplyScalar(0.25 + actor.faceCueLead * 0.12));
+  visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
+  visual.aura.scale.setScalar(actor.auraRadius);
+  visual.aura.material.opacity = Math.min(0.36, 0.1 + actor.auraRadius * 0.08 + actor.eventPulse * 0.08);
+  visual.footfall.scale.setScalar(0.75 + actor.footfallPulse * 1.15);
+  visual.footfall.material.opacity = Math.min(0.86, 0.24 + actor.footfallPulse * 0.48);
+  visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + actor.trailAccent * 0.28);
+  visual.target.position.copy(attention);
+  visual.target.scale.setScalar(0.8 + actor.faceCueLead * 0.72 + actor.eventPulse * 0.32);
+  visual.target.material.opacity = Math.min(0.95, 0.34 + actor.faceCueLead * 0.6);
+  for (let i = 0; i < visual.trail.length; i++) {
+    const trailIndex = Math.max(0, frameIndex - (i + 1) * 3);
+    const trailActor = state.harness.frames[trailIndex].actors[0];
+    const dot = visual.trail[i];
+    dot.visible = true;
+    dot.position.set(trailActor.root[0], trailActor.root[1], trailActor.root[2]);
+    dot.scale.setScalar(0.72 + actor.trailAccent * 1.5);
+    dot.material.opacity = Math.max(0.035, actor.trailAccent * (0.42 - i * 0.032));
+  }
+  state.frameCount += 1;
+  state.lastActors = [{
+    id: actor.id,
+    label: actor.label,
+    intent: actor.intent,
+    status: actor.status,
+    root: actor.root,
+    facing: actor.facing,
+    attention: actor.attention,
+    scale: actor.scale,
+    bodyScale: actor.bodyScale,
+    bodyLean: actor.bodyLean,
+    auraRadius: actor.auraRadius,
+    trailAccent: actor.trailAccent,
+    footfallPulse: actor.footfallPulse,
+    faceCueLead: actor.faceCueLead,
+    eventPulse: actor.eventPulse,
+    event: actor.event,
+    color: actor.color,
+  }];
+  updateMotionAgencyReadout();
+  return true;
+}
+
 function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
   if (!motionTrackState?.active) return false;
   const state = motionTrackState;
@@ -4054,6 +4264,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
   document.getElementById('motion-tracks-enable')?.addEventListener('click', () => createMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-generated-enable')?.addEventListener('click', () => createGeneratedMotionTrackHarnessScene({ force: true }));
+  document.getElementById('motion-output-map-enable')?.addEventListener('click', () => createGeneratedPoseOutputMapScene({ force: true }));
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
     document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
@@ -4062,10 +4273,11 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track')) {
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
+    if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
+    else if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_phrase_controls')) createMotionPhraseControlHarnessScene();
     else if (params.has('kaminos_motion_phrase')) createMotionDecisionComparisonScene();
@@ -4256,6 +4468,55 @@ window.kaminosGeneratedMotionTrackDebugState = function() {
         maxHeadRootSeparation: variant.metrics.maxHeadRootSeparation,
         attentionMassContrast: variant.metrics.attentionMassContrast,
       })),
+      filmstripFrames: harness.filmstrip.length,
+    },
+    actors: state?.lastActors || [],
+  };
+};
+
+window.kaminosGeneratedPoseOutputMapDebugState = function() {
+  const state = motionOutputMapState;
+  const harness = state?.harness || buildGeneratedPoseOutputMapHarness({
+    outputMap: DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
+    fps: 12,
+  });
+  return {
+    schema: 'kaminos.generated-pose-output-map-debug.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    active: !!state?.active,
+    actorCount: state?.active ? 1 : 0,
+    fallbackCount: 0,
+    frameCount: state?.frameCount || 0,
+    maxEffort: Number(harness.maxOutputValue || 0),
+    maxOutputValue: Number(harness.maxOutputValue || 0),
+    strongestOutput: harness.strongestOutput,
+    inputSocketCount: harness.inputSocketCount,
+    outputSocketCount: harness.outputSocketCount,
+    edgeCount: harness.edgeCount,
+    sourceStatus: harness.sourceStatus,
+    sourceKind: harness.sourceKind,
+    sourceRoute: harness.sourceRoute,
+    normalizedOutputs: harness.normalizedOutputs,
+    generatedPoseOutputMapHarness: {
+      schema: harness.schema,
+      route: harness.route,
+      sourceStatus: harness.sourceStatus,
+      sourceKind: harness.sourceKind,
+      sourceRoute: harness.sourceRoute,
+      outputMap: {
+        schema: harness.outputMap.schema,
+        ok: harness.outputMap.ok,
+        route: harness.outputMap.route,
+        source: harness.outputMap.source,
+        summary: harness.outputMap.summary,
+      },
+      inputSocketCount: harness.inputSocketCount,
+      outputSocketCount: harness.outputSocketCount,
+      edgeCount: harness.edgeCount,
+      strongestOutput: harness.strongestOutput,
+      maxOutputValue: harness.maxOutputValue,
+      normalizedOutputs: harness.normalizedOutputs,
+      metrics: harness.metrics,
       filmstripFrames: harness.filmstrip.length,
     },
     actors: state?.lastActors || [],
@@ -4609,9 +4870,10 @@ async function initScene() {
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
     const motionPhraseControlActive = updateMotionPhraseControlFrame(performance.now() / 1000);
     const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
+    const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
