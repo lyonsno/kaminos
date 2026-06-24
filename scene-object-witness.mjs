@@ -1540,6 +1540,18 @@ async function runForgeHostVisibleActorsScenario(ws) {
   if (forgeHost.visibleActorCount < 1) {
     throw new Error(`Forge Host visible actor witness did not find visible actor meshes: ${JSON.stringify(evidence)}`);
   }
+  if (forgeHost.layoutAuthority !== 'static-host-owned-station-anchors') {
+    throw new Error(`Forge Host actor witness did not preserve static layout authority: ${JSON.stringify(evidence)}`);
+  }
+  if (!forgeHost.layoutSourceIdentity) {
+    throw new Error(`Forge Host actor witness did not record layout source identity: ${JSON.stringify(evidence)}`);
+  }
+  if (forgeHost.layoutSourceIdentity === forgeHost.sourceIdentity) {
+    throw new Error(`layout source did not remain separate from actor source: ${JSON.stringify(evidence)}`);
+  }
+  if (forgeHost.layoutMotionAuthority || forgeHost.layoutDynamicsAuthority) {
+    throw new Error(`Forge Host static layout claimed motion or dynamics authority: ${JSON.stringify(evidence)}`);
+  }
   if (forgeHost.authoredSceneObjectCount !== 0) {
     throw new Error(`Forge Host visible actors mutated the authored scene object registry: ${JSON.stringify(evidence)}`);
   }

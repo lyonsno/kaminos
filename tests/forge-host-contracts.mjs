@@ -14,26 +14,35 @@ const core = await import(corePath);
 const witness = readFileSync(witnessPath, 'utf8');
 
 assert.equal(core.FORGE_HOST_ACTOR_SCHEMA, 'kaminos.forge-host.actors.v0', 'forge-host actor contract has a stable schema id');
+assert.equal(core.FORGE_HOST_LAYOUT_SCHEMA, 'kaminos.forge-host.layout.v0', 'forge-host layout contract has a stable schema id');
 assert.equal(core.FORGE_HOST_FIXTURE_SOURCE_ID, 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0', 'forge-host fixture has a stable source id');
 assert.match(index, /from '\.\/forge-host-core\.js'/, 'workbench imports the forge-host data contract');
 assert.match(index, /forge_host_fixture/, 'URL route can seed the forge-host fixture actor set');
 assert.match(index, /forge_host_registry_url/, 'URL route can ingest an explicit live Diaulos registry URL');
+assert.match(index, /forge_host_layout_url/, 'URL route can ingest an explicit persisted Forge Host layout document');
 assert.match(index, /id="forge-host-label-layer"/, 'viewport contains a Forge Host label layer for actor call signs');
 assert.match(index, /id="forge-host-inspector"/, 'viewport contains a Forge Host inspector surface for selected actor metadata');
 assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect forge-host actor state without DOM inference');
 assert.match(index, /window\.kaminosSelectForgeActor/, 'browser witnesses can select Forge Host actors without DOM inference');
 assert.match(index, /fixture:kaminos-inhabited-agent-forge-2026-06-23\/minion-spawnfucker-v0/, 'workbench preserves forge-host fixture identity');
 assert.match(index, /function spawnForgeHostActors\(/, 'forge-host route spawns visible actor world bodies');
+assert.match(index, /function applyForgeHostLayout\(/, 'forge-host route applies static station-anchor layout before spawning actors');
 assert.match(index, /function pickForgeHostActorFromViewportPointer\(/, 'viewport selection can hit Forge Host actors separately from authored scene objects');
 assert.match(index, /new THREE\.SphereGeometry\(0\.16, 32, 16\)/, 'first visible actor body uses cheap stable sphere geometry');
 assert.match(index, /forgeHostActorGroup/, 'forge-host actors live in a separate scene group, not the authored scene object registry');
 assert.match(index, /kaminosForgeHostActor/, 'forge-host actor meshes preserve actor metadata on userData');
 assert.match(index, /visibleActorCount/, 'forge-host debug state records visible actor count');
+assert.match(index, /layoutAuthority/, 'forge-host debug state records static layout authority');
+assert.match(index, /layoutSourceIdentity/, 'forge-host debug state records effective layout source identity');
 assert.match(index, /authoredSceneObjectCount:\s*sceneObjects\.length/, 'forge-host debug state proves actor bodies are not authored scene objects');
 assert.match(index, /data-forge-host-actor-label/, 'actor labels carry stable actor ids for browser witnesses');
 assert.match(index, /Forge Host actor selected/, 'selecting an actor reports a visible status without claiming chat bridge implementation');
 
 const registry = core.createForgeHostFixtureRegistry();
+const layout = core.createForgeHostStaticLayoutFromRegistry(registry, {
+  sourceKind: 'persisted-fixture',
+  sourceId: 'fixtures/forge-host-static-layout.v0.json',
+});
 
 assert.equal(registry.schema, core.FORGE_HOST_ACTOR_SCHEMA, 'fixture registry carries the actor schema');
 assert.equal(registry.source.kind, 'fixture', 'default forge-host source is explicitly fixture data');
@@ -50,6 +59,39 @@ assert.ok(actors.some(actor => actor.diaulosId === 'mushfinger-clayfucker' && ac
 assert.ok(actors.some(actor => actor.diaulosId === 'pipeline-gutfucker' && actor.sets.includes('promoted')), 'fixture includes Pipeline Gutfucker as promoted pipeline actor');
 assert.ok(actors.some(actor => actor.sets.includes('recent')), 'fixture includes recent actors without promoting every diaulos');
 assert.ok(registry.filteredDiauloi.some(entry => entry.reason === 'not-promoted-current-or-recent'), 'fixture records filtered diauloi instead of rendering every historical lane');
+assert.equal(layout.schema, core.FORGE_HOST_LAYOUT_SCHEMA, 'static layout carries the layout schema');
+assert.equal(layout.authority.kind, 'static-host-owned-station-anchors', 'static layout names host-owned station-anchor authority');
+assert.equal(layout.authority.dynamicsAuthority, false, 'static layout does not claim Mushfinger dynamics authority');
+assert.equal(layout.authority.motionAuthority, false, 'static layout does not claim motion grammar authority');
+assert.equal(layout.source.kind, 'persisted-fixture', 'layout preserves explicit persisted source kind');
+assert.equal(layout.source.id, 'fixtures/forge-host-static-layout.v0.json', 'layout preserves explicit persisted source identity');
+assert.equal(layout.anchors.length, registry.actors.length, 'layout has one static anchor per actor');
+assert.ok(layout.anchors.every(anchor => anchor.authority === 'static-host-owned-station-anchor'), 'every anchor names static host-owned authority');
+assert.ok(layout.anchors.every(anchor => anchor.dynamic === false), 'every anchor rejects dynamic-anchor authority');
+assert.ok(layout.anchors.every(anchor => anchor.motionState === null), 'layout anchors do not smuggle motion state');
+assert.ok(layout.anchors.some(anchor => anchor.actorId === 'forge-actor:mushfinger-clayfucker' && anchor.stationId === 'worldbody-dynamics'), 'layout preserves Mushfinger station identity without taking motion custody');
+const layoutSummary = core.buildForgeHostLayoutWitnessSummary(layout, { claimedAuthority: 'static-host-owned-station-anchors' });
+assert.equal(layoutSummary.ok, true, 'layout witness summary accepts static host-owned anchors');
+assert.equal(layoutSummary.anchorCount, registry.actors.length, 'layout witness summary records anchor count');
+assert.equal(layoutSummary.motionAuthority, false, 'layout witness summary records lack of motion authority');
+const roundTrippedLayout = core.validateForgeHostStaticLayout(JSON.parse(JSON.stringify(layout)), { claimedAuthority: 'static-host-owned-station-anchors' });
+assert.deepEqual(roundTrippedLayout.anchors.map(anchor => anchor.position), layout.anchors.map(anchor => anchor.position), 'static layout round-trips anchor positions without loss');
+assert.throws(
+  () => core.validateForgeHostStaticLayout({
+    ...layout,
+    authority: { ...layout.authority, dynamicsAuthority: true },
+  }, { claimedAuthority: 'static-host-owned-station-anchors' }),
+  /Forge Host static layout cannot claim dynamics authority/,
+  'layout validation fails loud if a document claims Mushfinger dynamics authority',
+);
+assert.throws(
+  () => core.validateForgeHostStaticLayout({
+    ...layout,
+    source: { ...layout.source, kind: 'route-local-default', persisted: false },
+  }, { claimedAuthority: 'persisted-static-layout' }),
+  /route-local default layout cannot satisfy a persisted layout claim/,
+  'route-local default layouts cannot masquerade as persisted layout data',
+);
 
 for (const actor of actors) {
   assert.match(actor.actorId, /^forge-actor:/, 'actor ids are stable forge actor ids');
@@ -138,10 +180,14 @@ assert.throws(
 
 assert.match(witness, /--claim-source-kind/, 'witness accepts an explicit source claim instead of inferring authority');
 assert.match(witness, /--registry-json/, 'witness can ingest a Diaulos registry JSON file');
+assert.match(witness, /--layout-json/, 'witness can ingest a persisted Forge Host layout JSON file');
 assert.match(witness, /readFileSync\(registryJsonPath/, 'witness reads a registry JSON file directly instead of asking the human to paste it');
+assert.match(witness, /readFileSync\(layoutJsonPath/, 'witness reads a layout JSON file directly instead of asking the human to paste it');
 assert.match(witness, /claimed live data but effective source is fixture/, 'witness preserves the fixture-vs-live false-claim failure');
+assert.match(witness, /Forge Host static layout cannot claim dynamics authority/, 'witness preserves static-layout false-authority failures');
 assert.match(witness, /demo fallback data cannot satisfy a seeded or live forge-host witness/, 'witness rejects demo fallback masquerading as seeded/live data');
 assert.match(witness, /sourceIdentity/, 'witness report records source identity');
+assert.match(witness, /layoutSourceIdentity/, 'witness report records static layout source identity');
 assert.match(witness, /registry\?\.source\?\.id/, 'witness failure reports preserve the effective source identity');
 assert.match(witness, /actorBuckets/, 'witness report records promoted/current/recent/filtered buckets');
 assert.match(witness, /selectedActor/, 'witness report records default selected actor metadata');

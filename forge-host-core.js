@@ -1,7 +1,10 @@
 export const FORGE_HOST_ACTOR_SCHEMA = 'kaminos.forge-host.actors.v0';
+export const FORGE_HOST_LAYOUT_SCHEMA = 'kaminos.forge-host.layout.v0';
 export const FORGE_HOST_FIXTURE_SOURCE_ID = 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0';
 export const FORGE_HOST_DIAULOS_REGISTRY_SCHEMA = 'epistaxis.diaulos-registry.v0';
 export const FORGE_HOST_HERO_SPLAT_SOURCE = '/api/read?root=splat-inbox&path=evil_orb_final_composite.ply';
+export const FORGE_HOST_STATIC_LAYOUT_AUTHORITY = 'static-host-owned-station-anchors';
+export const FORGE_HOST_STATIC_ANCHOR_AUTHORITY = 'static-host-owned-station-anchor';
 
 export const FORGE_HOST_STATUS_COLORS = Object.freeze({
   idle: '#6f7d8f',
@@ -31,6 +34,11 @@ const SOURCE_REFS = Object.freeze([
   'metadosis/kaminos-inhabited-agent-forge-lane-allocation_2026-06-23.md',
   'projects/kaminos/topoi/codex-minion-spawnfucker-0623.md',
   'docs/kaminos-as-inhabited-agent-forge.md',
+]);
+
+const STATIC_LAYOUT_SOURCE_REFS = Object.freeze([
+  ...SOURCE_REFS,
+  'metadosis/upstream-directives/mushfinger-answers-minion-motion-adapter-boundary_2026-06-23T233535Z.md',
 ]);
 
 const FIXTURE_ACTORS = Object.freeze([
@@ -204,6 +212,156 @@ function actorRecord(raw, sourceActorRecord) {
     },
     provenance: { sourceActorRecord, sourceRefs: [...SOURCE_REFS] },
   };
+}
+
+function staticAnchorFromActor(actor) {
+  return {
+    actorId: actor.actorId,
+    diaulosId: actor.diaulosId,
+    stationId: actor.station?.id || null,
+    anchorId: actor.spatial?.anchorId || `station:${actor.station?.id || actor.diaulosId}`,
+    authority: FORGE_HOST_STATIC_ANCHOR_AUTHORITY,
+    dynamic: false,
+    motionState: null,
+    position: [...(actor.spatial?.position || [0, 0.42, 0])],
+    rotation: [...(actor.spatial?.rotation || [0, 0, 0])],
+    scale: actor.spatial?.scale ?? 1,
+    provenance: {
+      actorSource: actor.provenance?.sourceActorRecord || null,
+      sourceRefs: [...STATIC_LAYOUT_SOURCE_REFS],
+    },
+  };
+}
+
+export function createForgeHostStaticLayoutFromRegistry(registry, {
+  sourceKind = 'route-local-default',
+  sourceId = 'route:forge-host-derived-static-layout',
+  persisted = sourceKind !== 'route-local-default',
+  layoutId = 'forge-host-static-layout',
+} = {}) {
+  if (!registry || registry.schema !== FORGE_HOST_ACTOR_SCHEMA) {
+    throw new Error('Forge Host static layout requires a kaminos.forge-host.actors.v0 registry');
+  }
+  return {
+    schema: FORGE_HOST_LAYOUT_SCHEMA,
+    layoutId,
+    truthLevel: 'static-placement-not-motion-truth',
+    source: {
+      kind: sourceKind,
+      id: sourceId,
+      persisted: !!persisted,
+      fallback: false,
+    },
+    authority: {
+      kind: FORGE_HOST_STATIC_LAYOUT_AUTHORITY,
+      ownerDiaulos: 'minion-spawnfucker',
+      static: true,
+      dynamicsAuthority: false,
+      motionAuthority: false,
+      custodyBoundary: 'Mushfinger owns worldbody dynamics; this layout owns only static station anchors',
+    },
+    provenance: {
+      source: 'Mushfinger static-anchor direction consumed by Forge Host',
+      refs: [...STATIC_LAYOUT_SOURCE_REFS],
+    },
+    anchors: (registry.actors || []).map(staticAnchorFromActor),
+  };
+}
+
+export function validateForgeHostStaticLayout(layout, { claimedAuthority = FORGE_HOST_STATIC_LAYOUT_AUTHORITY } = {}) {
+  if (!layout || layout.schema !== FORGE_HOST_LAYOUT_SCHEMA) {
+    throw new Error('Forge Host static layout requires kaminos.forge-host.layout.v0');
+  }
+  if (claimedAuthority === 'persisted-static-layout'
+    && (layout.source?.kind === 'route-local-default' || layout.source?.persisted === false)) {
+    throw new Error('route-local default layout cannot satisfy a persisted layout claim');
+  }
+  if (layout.authority?.kind !== FORGE_HOST_STATIC_LAYOUT_AUTHORITY) {
+    throw new Error(`Forge Host static layout requires ${FORGE_HOST_STATIC_LAYOUT_AUTHORITY} authority`);
+  }
+  if (layout.authority?.dynamicsAuthority === true) {
+    throw new Error('Forge Host static layout cannot claim dynamics authority');
+  }
+  if (layout.authority?.motionAuthority === true) {
+    throw new Error('Forge Host static layout cannot claim motion authority');
+  }
+  if (!Array.isArray(layout.anchors)) throw new Error('Forge Host static layout requires an anchors array');
+  const actorIds = new Set();
+  for (const anchor of layout.anchors) {
+    if (!anchor?.actorId) throw new Error('Forge Host static layout anchor missing actorId');
+    if (actorIds.has(anchor.actorId)) throw new Error(`Forge Host static layout duplicates anchor for ${anchor.actorId}`);
+    actorIds.add(anchor.actorId);
+    if (anchor.authority !== FORGE_HOST_STATIC_ANCHOR_AUTHORITY) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} must use ${FORGE_HOST_STATIC_ANCHOR_AUTHORITY}`);
+    }
+    if (anchor.dynamic === true || anchor.dynamicsAuthority === true) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} cannot claim dynamics authority`);
+    }
+    if (anchor.motionState !== null && anchor.motionState !== undefined) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} cannot embed motion state`);
+    }
+    if (!Array.isArray(anchor.position) || anchor.position.length !== 3 || !anchor.position.every(Number.isFinite)) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} requires finite [x,y,z] position`);
+    }
+    if (!Array.isArray(anchor.rotation) || anchor.rotation.length !== 3 || !anchor.rotation.every(Number.isFinite)) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} requires finite [x,y,z] rotation`);
+    }
+    if (!Number.isFinite(anchor.scale) || anchor.scale <= 0) {
+      throw new Error(`Forge Host static anchor ${anchor.actorId} requires positive finite scale`);
+    }
+  }
+  return cloneJson(layout);
+}
+
+export function buildForgeHostLayoutWitnessSummary(layout, { claimedAuthority = FORGE_HOST_STATIC_LAYOUT_AUTHORITY } = {}) {
+  const validated = validateForgeHostStaticLayout(layout, { claimedAuthority });
+  return {
+    ok: true,
+    schema: validated.schema,
+    truthLevel: validated.truthLevel,
+    claimedAuthority,
+    layoutAuthority: validated.authority?.kind,
+    source: cloneJson(validated.source),
+    layoutSourceIdentity: validated.source?.id || null,
+    anchorCount: validated.anchors.length,
+    anchorIds: validated.anchors.map(anchor => anchor.anchorId),
+    actorIds: validated.anchors.map(anchor => anchor.actorId),
+    dynamicsAuthority: validated.authority?.dynamicsAuthority === true,
+    motionAuthority: validated.authority?.motionAuthority === true,
+    static: validated.authority?.static === true,
+  };
+}
+
+export function applyForgeHostLayoutToRegistry(registry, layout) {
+  if (!registry || registry.schema !== FORGE_HOST_ACTOR_SCHEMA) {
+    throw new Error('Forge Host layout application requires a kaminos.forge-host.actors.v0 registry');
+  }
+  const validated = validateForgeHostStaticLayout(layout);
+  const anchors = new Map(validated.anchors.map(anchor => [anchor.actorId, anchor]));
+  const next = cloneJson(registry);
+  next.layout = {
+    schema: validated.schema,
+    layoutId: validated.layoutId,
+    source: cloneJson(validated.source),
+    authority: cloneJson(validated.authority),
+  };
+  next.actors = next.actors.map(actor => {
+    const anchor = anchors.get(actor.actorId);
+    if (!anchor) return actor;
+    return {
+      ...actor,
+      spatial: {
+        ...actor.spatial,
+        anchorId: anchor.anchorId,
+        position: [...anchor.position],
+        rotation: [...anchor.rotation],
+        scale: anchor.scale,
+        layoutAuthority: anchor.authority,
+        layoutSourceIdentity: validated.source?.id || null,
+      },
+    };
+  });
+  return next;
 }
 
 function titleFromHandle(handle) {

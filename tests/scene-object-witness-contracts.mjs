@@ -14,7 +14,10 @@ assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenar
 assert.match(witness, /forge-host-visible-actors/, 'witness supports a Forge Host visible actor scenario');
 assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host actor witness reads the explicit debug surface');
 assert.match(witness, /forgeHost\.visibleActorCount/, 'Forge Host actor witness requires visible actor meshes');
+assert.match(witness, /forgeHost\.layoutAuthority/, 'Forge Host actor witness requires static layout authority evidence');
+assert.match(witness, /forgeHost\.layoutSourceIdentity/, 'Forge Host actor witness records effective layout source identity');
 assert.match(witness, /forgeHost\.authoredSceneObjectCount !== 0/, 'Forge Host actor witness proves actors do not become authored scene objects');
+assert.match(witness, /layout source did not remain separate from actor source/, 'Forge Host actor witness rejects layout/actor source conflation');
 assert.match(witness, /kaminosSelectForgeActor/, 'Forge Host actor witness can select an actor through the explicit debug selector');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');

@@ -1,0 +1,100 @@
+{
+  "schema": "kaminos.forge-host.layout.v0",
+  "layoutId": "forge-host-static-layout-fixture-2026-06-23",
+  "truthLevel": "static-placement-not-motion-truth",
+  "source": {
+    "kind": "persisted-fixture",
+    "id": "fixtures/forge-host-static-layout.v0.json",
+    "persisted": true,
+    "fallback": false
+  },
+  "authority": {
+    "kind": "static-host-owned-station-anchors",
+    "ownerDiaulos": "minion-spawnfucker",
+    "static": true,
+    "dynamicsAuthority": false,
+    "motionAuthority": false,
+    "custodyBoundary": "Mushfinger owns worldbody dynamics; this layout owns only static station anchors"
+  },
+  "provenance": {
+    "source": "Mushfinger static-anchor direction consumed by Forge Host",
+    "refs": [
+      "metadosis/upstream-directives/mushfinger-answers-minion-motion-adapter-boundary_2026-06-23T233535Z.md",
+      "projects/kaminos/topoi/codex-minion-spawnfucker-0623.md"
+    ]
+  },
+  "anchors": [
+    {
+      "actorId": "forge-actor:minion-spawnfucker",
+      "diaulosId": "minion-spawnfucker",
+      "stationId": "forge-host",
+      "anchorId": "station:forge-host",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [0, 0.6, -1.4],
+      "rotation": [0, 0.2, 0],
+      "scale": 1.08
+    },
+    {
+      "actorId": "forge-actor:mushfinger-clayfucker",
+      "diaulosId": "mushfinger-clayfucker",
+      "stationId": "worldbody-dynamics",
+      "anchorId": "station:worldbody-dynamics",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [-1.8, 0.52, -0.35],
+      "rotation": [0, 0.65, 0],
+      "scale": 0.96
+    },
+    {
+      "actorId": "forge-actor:lamellar-edgefucker",
+      "diaulosId": "lamellar-edgefucker",
+      "stationId": "avatar-phenotype",
+      "anchorId": "station:avatar-phenotype",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [1.7, 0.5, -0.6],
+      "rotation": [0, -0.75, 0],
+      "scale": 0.94
+    },
+    {
+      "actorId": "forge-actor:molten-heartfucker",
+      "diaulosId": "molten-heartfucker",
+      "stationId": "inhabitant-light",
+      "anchorId": "station:inhabitant-light",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [1.05, 0.48, 1.05],
+      "rotation": [0, -1.35, 0],
+      "scale": 0.9
+    },
+    {
+      "actorId": "forge-actor:pipeline-gutfucker",
+      "diaulosId": "pipeline-gutfucker",
+      "stationId": "model-pipeline-composition",
+      "anchorId": "station:model-pipeline-composition",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [-0.9, 0.46, 1.45],
+      "rotation": [0, 1.1, 0],
+      "scale": 0.9
+    },
+    {
+      "actorId": "forge-actor:gutterglass-pornographers",
+      "diaulosId": "gutterglass-pornographers",
+      "stationId": "renderer-asset-handoff",
+      "anchorId": "station:renderer-asset-handoff",
+      "authority": "static-host-owned-station-anchor",
+      "dynamic": false,
+      "motionState": null,
+      "position": [-2.5, 0.42, 1.25],
+      "rotation": [0, 0.45, 0],
+      "scale": 0.82
+    }
+  ]
+}

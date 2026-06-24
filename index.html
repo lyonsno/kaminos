@@ -711,9 +711,13 @@ import { createKaminosVolumePrototype } from './volume-core.js';
 import {
   FORGE_HOST_ACTOR_SCHEMA,
   FORGE_HOST_FIXTURE_SOURCE_ID,
+  applyForgeHostLayoutToRegistry,
+  buildForgeHostLayoutWitnessSummary,
   buildForgeHostWitnessSummary,
   createForgeHostFixtureRegistry,
   createForgeHostRegistryFromDiaulosRegistry,
+  createForgeHostStaticLayoutFromRegistry,
+  validateForgeHostStaticLayout,
 } from './forge-host-core.js';
 import {
   SCENE_SCHEMA,
@@ -749,6 +753,8 @@ let loadedFiles = {};
 let receipt = null;
 let forgeHostRegistry = null;
 let forgeHostWitnessSummary = null;
+let forgeHostLayout = null;
+let forgeHostLayoutSummary = null;
 let forgeHostActorGroup = null;
 let forgeHostActorMeshes = [];
 let activeForgeHostActorId = null;
@@ -2871,6 +2877,30 @@ function spawnForgeHostActors(registry) {
   window._kaminosDirty?.();
 }
 
+async function applyForgeHostLayout(registry, layoutUrl) {
+  if (!registry?.actors?.length) {
+    forgeHostLayout = null;
+    forgeHostLayoutSummary = null;
+    return registry;
+  }
+  if (layoutUrl) {
+    const response = await fetch(layoutUrl);
+    if (!response.ok) throw new Error(`Forge Host layout fetch failed: ${response.status}`);
+    const layoutPayload = await response.json();
+    forgeHostLayout = validateForgeHostStaticLayout(layoutPayload, { claimedAuthority: 'persisted-static-layout' });
+  } else {
+    forgeHostLayout = createForgeHostStaticLayoutFromRegistry(registry, {
+      sourceKind: 'route-local-default',
+      sourceId: 'route:forge-host-derived-static-layout',
+      persisted: false,
+    });
+  }
+  forgeHostLayoutSummary = buildForgeHostLayoutWitnessSummary(forgeHostLayout, {
+    claimedAuthority: layoutUrl ? 'persisted-static-layout' : 'static-host-owned-station-anchors',
+  });
+  return applyForgeHostLayoutToRegistry(registry, forgeHostLayout);
+}
+
 function frameForgeHostActors() {
   if (!forgeHostActorGroup || !camera || !controls || !renderer) return;
   const box = new THREE.Box3().setFromObject(forgeHostActorGroup);
@@ -2990,6 +3020,12 @@ function forgeHostDebugState() {
     visibleActorCount: forgeHostActorMeshes.length,
     selectedActorId: activeForgeHostActorId,
     selectedActor: selectedRecord?.actor || null,
+    layoutAuthority: forgeHostLayoutSummary?.layoutAuthority || null,
+    layoutSourceIdentity: forgeHostLayoutSummary?.layoutSourceIdentity || null,
+    layoutSource: forgeHostLayoutSummary?.source || null,
+    layoutAnchorCount: forgeHostLayoutSummary?.anchorCount || 0,
+    layoutMotionAuthority: forgeHostLayoutSummary?.motionAuthority === true,
+    layoutDynamicsAuthority: forgeHostLayoutSummary?.dynamicsAuthority === true,
     authoredSceneObjectCount: sceneObjects.length,
     actorMeshes: forgeHostActorMeshes.map(record => ({
       actorId: record.actor.actorId,
@@ -3011,9 +3047,9 @@ function forgeHostDebugState() {
     active: false,
     schema: FORGE_HOST_ACTOR_SCHEMA,
     sourceIdentity: null,
-    expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
-    actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
-    actors: [],
+      expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
+      actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
+      actors: [],
     ...base,
   };
   if (!forgeHostRegistry || !forgeHostWitnessSummary) return inactive;
@@ -4478,6 +4514,7 @@ async function initKaminosVolumeRoute() {
 async function initForgeHostRoute() {
   const params = new URLSearchParams(window.location.search);
   const registryUrl = params.get('forge_host_registry_url');
+  const layoutUrl = params.get('forge_host_layout_url');
   if (registryUrl) {
     const response = await fetch(registryUrl);
     if (!response.ok) throw new Error(`Forge Host registry fetch failed: ${response.status}`);
@@ -4486,11 +4523,13 @@ async function initForgeHostRoute() {
       sourceKind: 'live',
       sourceId: registryUrl,
     });
+    forgeHostRegistry = await applyForgeHostLayout(forgeHostRegistry, layoutUrl);
     forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'live' });
     spawnForgeHostActors(forgeHostRegistry);
     setInfo(`Forge Host live registry loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
   } else if (params.has('forge_host_fixture')) {
     forgeHostRegistry = createForgeHostFixtureRegistry();
+    forgeHostRegistry = await applyForgeHostLayout(forgeHostRegistry, layoutUrl);
     forgeHostWitnessSummary = buildForgeHostWitnessSummary(forgeHostRegistry, { claimedSourceKind: 'fixture' });
     spawnForgeHostActors(forgeHostRegistry);
     setInfo(`Forge Host fixture loaded: ${forgeHostWitnessSummary.actorIds.length} actors`);
