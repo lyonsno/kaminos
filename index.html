@@ -603,6 +603,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Core</span><span class="field-val" id="orb-shell-core-socket">placeholder</span></div>
       <div class="field"><span class="field-key">Forbidden</span><span class="field-val" id="orb-shell-forbidden">none</span></div>
     </div>
+    <h2>Macro Grounding</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_orb_shell_grounding=1</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="orb-shell-composition-identity">orb-shell-macro-grammar-grounding-v0</span></div>
+      <div class="field"><span class="field-key">Baseline</span><span class="field-val" id="orb-shell-composition-baseline">coherent-but-wrong-model-baseline</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="orb-shell-composition-toggle">Enable</button>
+        <button class="btn" id="orb-shell-composition-frame">Frame</button>
+      </div>
+    </div>
+    <div class="panel volume-readout">
+      <div class="field"><span class="field-key">Macros</span><span class="field-val" id="orb-shell-composition-macros">0</span></div>
+      <div class="field"><span class="field-key">Bands</span><span class="field-val" id="orb-shell-composition-bands">0</span></div>
+      <div class="field"><span class="field-key">Families</span><span class="field-val" id="orb-shell-composition-families">none</span></div>
+      <div class="field"><span class="field-key">Failures</span><span class="field-val" id="orb-shell-composition-failures">none</span></div>
+    </div>
   </div>
 
   <!-- Greenroom Tab -->
@@ -743,6 +759,10 @@ import {
   createKaminosOrbShellWitness,
 } from './orb-shell-core.js';
 import {
+  ORB_SHELL_COMPOSITION_IDENTITY,
+  createKaminosOrbShellCompositionWitness,
+} from './orb-shell-composition-core.js';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -785,6 +805,7 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let orbShellWitness = null;
+let orbShellCompositionWitness = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -4341,6 +4362,56 @@ function initOrbShellRoute() {
   updateOrbShellReadout();
 }
 
+function updateOrbShellCompositionReadout() {
+  document.getElementById('orb-shell-composition-identity').textContent = ORB_SHELL_COMPOSITION_IDENTITY;
+  const state = orbShellCompositionWitness?.debugState?.();
+  document.getElementById('orb-shell-composition-baseline').textContent = state?.baselineDisposition || 'coherent-but-wrong-model-baseline';
+  document.getElementById('orb-shell-composition-macros').textContent = String(state?.macroAssemblageCount ?? 0);
+  document.getElementById('orb-shell-composition-bands').textContent = String(state?.bandMemberCount ?? 0);
+  document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
+  document.getElementById('orb-shell-composition-failures').textContent = state?.forbiddenFailureClasses?.slice(0, 3).join(',') || 'none';
+  document.getElementById('orb-shell-composition-toggle').textContent = state?.active ? 'Disable' : 'Enable';
+  document.getElementById('orb-shell-composition-toggle').classList.toggle('active', !!state?.active);
+}
+
+function frameOrbShellCompositionCamera() {
+  orbShellCompositionWitness?.frameCamera?.();
+}
+
+function initOrbShellCompositionRoute() {
+  const params = new URLSearchParams(window.location.search);
+  orbShellCompositionWitness = createKaminosOrbShellCompositionWitness({
+    THREE,
+    scene,
+    camera,
+    controls,
+    onStatus: status => {
+      if (status.phase === 'built') setInfo(`Orb Shell Macro Grounding — ${status.macroAssemblageCount} macro thrusts`);
+    },
+    onDirty: () => window._kaminosDirty?.(),
+  });
+  window.__kaminosOrbShellCompositionWitness = orbShellCompositionWitness;
+
+  document.getElementById('orb-shell-composition-toggle').addEventListener('click', () => {
+    const active = !orbShellCompositionWitness.debugState().active;
+    orbShellCompositionWitness.setActive(active);
+    if (active) frameOrbShellCompositionCamera();
+    updateOrbShellCompositionReadout();
+    setInfo(active ? 'Orb Shell Macro Grounding — semantic composition fixture' : 'Orb Shell Macro Grounding disabled');
+  });
+  document.getElementById('orb-shell-composition-frame').addEventListener('click', frameOrbShellCompositionCamera);
+
+  if (params.get('kaminos_orb_shell_grounding') === '1') {
+    document.getElementById('env-loading').style.display = 'none';
+    setActiveTab('orb-shell');
+    orbShellWitness?.setActive(false);
+    orbShellCompositionWitness.setActive(true);
+    frameOrbShellCompositionCamera();
+    setInfo('Orb Shell Macro Grounding — semantic composition fixture');
+  }
+  updateOrbShellCompositionReadout();
+}
+
 // --- File Input Handling ---
 async function handleFiles(files, options = {}) {
   loadedFiles = {};
@@ -7167,6 +7238,7 @@ initScene().then(() => {
   });
   initKaminosVolumeRoute();
   initOrbShellRoute();
+  initOrbShellCompositionRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
