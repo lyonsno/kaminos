@@ -643,12 +643,9 @@ function massSpacingScale(weight) {
 
 function weightPlanSample(sample, phrase, local, weight) {
   const root = [...sample.root];
-  const directionPhases = new Set(['commit', 'overshoot', 'recover']);
+  const directionPhases = new Set(['commit', 'overshoot', 'recover', 'return']);
   if (directionPhases.has(phrase.phase) && root[2] > 0) {
     root[2] *= massSpacingScale(weight);
-  }
-  if (phrase.phase === 'anticipate') {
-    root[2] -= weight.anticipation * smooth01(local) * 0.28;
   }
   if (phrase.phase === 'recover') {
     const settleEase = smooth01(local);

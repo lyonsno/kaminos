@@ -93,6 +93,7 @@ for (const controlled of [hesitant, heavy, sharp]) {
     assert.ok(Math.abs(outgoing.to.effort - incoming.from.effort) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} effort boundary should be continuous`);
     const before = sampleMotionPlan(controlled.plan, Math.max(0, outgoing.end - 1e-6));
     const after = sampleMotionPlan(controlled.plan, outgoing.end);
+    assert.ok(distance(before.root, after.root) < 0.015, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} sampled root should not pop`);
     assert.ok(Math.abs(before.scale - after.scale) < 0.015, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} sampled scale should not pop`);
     assert.ok(Math.abs(before.effort - after.effort) < 0.035, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} sampled effort should not pop`);
     assert.ok(maxComponentDelta(motionPhraseBodyScale(before), motionPhraseBodyScale(after)) < 0.04, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} rendered body scale should not pop`);
