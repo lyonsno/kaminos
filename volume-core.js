@@ -173,6 +173,9 @@ function pressureBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
+const SIM_COST_LEDGER_EVIDENCE_SOURCE = 'cpu-structural-pass-ledger-plus-raf-queue-proxy';
+
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -181,6 +184,28 @@ function clampFinite(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function normalizeMajorantBuildCadence(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(8, requested));
+}
+
+function defaultPressureIterationsForScene(value) {
+  return normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4;
+}
+
+function normalizePressureIterationCount(value, scene) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return defaultPressureIterationsForScene(scene);
+  return Math.max(0, Math.min(12, requested));
+}
+
+function normalizeSimProfileFlag(value) {
+  if (value === true || value === 1) return true;
+  const text = String(value ?? '').toLowerCase();
+  return text === '1' || text === 'true' || text === 'yes' || text === 'on';
 }
 
 function externalEmitterNowMs() {
@@ -2685,6 +2710,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     minimalPlumeProof: minimalPlumeProofDebug(controlsSnapshot.volumeScene),
     pressureProjectionEnabled: false,
     pressureProjectionIterations: 0,
+    pressureIterationDefault: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
+    pressureIterationRequested: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
     externalEmitterMode: 'off',
     externalEmitterCoordinateSpace: 'none',
     externalEmitterCount: 0,
@@ -2707,6 +2734,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
+    majorantCadence: normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence),
+    majorantBuiltThisFrame: false,
+    majorantLastBuiltFrame: -1,
+    majorantSkippedFrameCount: 0,
+    simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
+    simCostLedger: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -3338,9 +3371,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantGrid = majorantGridSize;
     state.majorantBuilt = false;
     state.majorantFrameCount = 0;
+    state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
+    state.majorantBuiltThisFrame = false;
+    state.majorantLastBuiltFrame = -1;
+    state.majorantSkippedFrameCount = 0;
+    state.pressureProjectionEnabled = false;
+    state.pressureProjectionIterations = 0;
+    state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
+    state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
     resetTemporalHistory(reason);
+    updateSimCostLedger();
     emitStatus({ phase: reason });
   }
 
@@ -3735,6 +3777,69 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalHistoryValid = historyValid;
   }
 
+  function updateSimCostLedger(options = {}) {
+    const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
+    const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
+    const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
+    const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
+    const simPassesPerFrame = 1;
+    const pressureDivergencePasses = pressureEnabled ? 1 : 0;
+    const pressureJacobiPasses = pressureEnabled ? pressureIterations : 0;
+    const pressureProjectionPasses = pressureEnabled ? 1 : 0;
+    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiPasses + pressureProjectionPasses;
+    const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
+    const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
+    const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
+    const fullGridCells = gridCellCount(gridSize);
+    const majorantCells = majorantGridSize * majorantGridSize * majorantGridSize;
+    const fluidBytes = fluidBufferBytes(gridSize);
+    const frontBytes = frontFieldBufferBytes(gridSize);
+    const pressureBytes = pressureBufferBytes(gridSize);
+    const majorantBytes = majorantBufferBytes(majorantGridSize);
+    state.majorantCadence = majorantBuildCadence;
+    state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
+    state.pressureIterationRequested = pressureIterationRequested;
+    state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
+    state.simCostLedger = {
+      identity: SIM_COST_LEDGER_IDENTITY,
+      evidenceSource: SIM_COST_LEDGER_EVIDENCE_SOURCE,
+      routeIdentity: ROUTE_IDENTITY,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      volumeScene: scene,
+      grid: gridSize,
+      majorantGrid: majorantGridSize,
+      workgroupSize: '4x4x4',
+      fullGridWorkgroupsPerPass,
+      majorantWorkgroupsPerPass,
+      simPassesPerFrame,
+      pressureDivergencePasses,
+      pressureJacobiPasses,
+      pressureProjectionPasses,
+      fullGridPassesPerFrame,
+      fullGridCellVisitsPerFrame: fullGridCells * fullGridPassesPerFrame,
+      majorantBuildCadence,
+      majorantBuiltThisFrame,
+      majorantCellVisitsThisFrame: majorantBuiltThisFrame ? majorantCells : 0,
+      majorantEstimatedCellVisitsPerFrame: majorantCells / majorantBuildCadence,
+      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
+      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
+      pressureProjectionEnabled: pressureEnabled,
+      pressureIterationDefault: state.pressureIterationDefault,
+      pressureIterationRequested,
+      simProfile: state.simProfile,
+      fluidBufferBytes: fluidBytes,
+      frontFieldBufferBytes: frontBytes,
+      pressureBufferBytes: pressureBytes,
+      majorantBufferBytes: majorantBytes,
+      externalEmitterBufferBytes: externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + externalEmitterBufferBytes(),
+      timing: { ...state.timing },
+    };
+    return state.simCostLedger;
+  }
+
   function encodeSim(encoder) {
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
     pass.setPipeline(computePipeline);
@@ -3749,17 +3854,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldProjectionPassthrough = false;
     encodePressureProjection(encoder);
     state.simStepCount += 1;
+    updateSimCostLedger();
   }
 
   function encodePressureProjection(encoder) {
-    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) return;
+    const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) {
+      state.pressureProjectionEnabled = false;
+      state.pressureProjectionIterations = 0;
+      updateSimCostLedger();
+      return;
+    }
     const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
       ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
       : 1;
     const projection = Math.max(0, Math.min(1.5, controlsSnapshot.projection ?? 0.65)) * bonfireProjectionAblation;
-    if (projection <= 0.001) {
+    if (projection <= 0.001 || pressureIterationCount <= 0) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
+      updateSimCostLedger();
       return;
     }
     const workgroups = Math.ceil(gridSize / 4);
@@ -3772,7 +3885,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pass.end();
     }
     let pressureReadIndex = 0;
-    const pressureIterationCount = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume' ? 8 : 4;
     for (let i = 0; i < pressureIterationCount; i += 1) {
       const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi pass ${i + 1}` });
       pass.setPipeline(pressureJacobiPipeline);
@@ -3796,9 +3908,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = true;
+    updateSimCostLedger();
   }
 
-  function encodeMajorant(encoder) {
+  function encodeMajorant(encoder, options = {}) {
+    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
+    state.majorantCadence = majorantBuildCadence;
+    const force = options.force === true;
+    const shouldBuild = force || !state.majorantBuilt || majorantBuildCadence <= 1 || state.frameCount % majorantBuildCadence === 0;
+    if (!shouldBuild) {
+      state.majorantBuiltThisFrame = false;
+      state.majorantSkippedFrameCount += 1;
+      updateSimCostLedger({ majorantBuiltThisFrame: false });
+      return;
+    }
     const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
     pass.setPipeline(majorantComputePipeline);
     pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
@@ -3807,7 +3930,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
     state.majorantBuilt = true;
+    state.majorantBuiltThisFrame = true;
+    state.majorantLastBuiltFrame = state.frameCount;
     state.majorantFrameCount += 1;
+    updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
@@ -4772,7 +4898,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
     encodeSim(encoder);
-    encodeMajorant(encoder);
+    encodeMajorant(encoder, { force: true });
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
@@ -4834,8 +4960,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalHistoryResetCount: state.temporalHistoryResetCount,
         temporalHistoryResetReason: state.temporalHistoryResetReason,
         temporalHistoryValid: state.temporalHistoryValid,
+        pressureProjectionEnabled: state.pressureProjectionEnabled,
+        pressureProjectionIterations: state.pressureProjectionIterations,
+        pressureIterationDefault: state.pressureIterationDefault,
+        pressureIterationRequested: state.pressureIterationRequested,
         majorantGrid: state.majorantGrid,
         majorantBuilt: state.majorantBuilt,
+        majorantCadence: state.majorantCadence,
+        majorantBuiltThisFrame: state.majorantBuiltThisFrame,
+        majorantLastBuiltFrame: state.majorantLastBuiltFrame,
+        majorantSkippedFrameCount: state.majorantSkippedFrameCount,
+        simProfile: state.simProfile,
+        simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
@@ -5091,8 +5227,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalHistoryResetCount: state.temporalHistoryResetCount,
       temporalHistoryResetReason: state.temporalHistoryResetReason,
       temporalHistoryValid: state.temporalHistoryValid,
+      pressureProjectionEnabled: state.pressureProjectionEnabled,
+      pressureProjectionIterations: state.pressureProjectionIterations,
+      pressureIterationDefault: state.pressureIterationDefault,
+      pressureIterationRequested: state.pressureIterationRequested,
       majorantGrid: state.majorantGrid,
       majorantBuilt: state.majorantBuilt,
+      majorantCadence: state.majorantCadence,
+      majorantBuiltThisFrame: state.majorantBuiltThisFrame,
+      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
+      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
+      simProfile: state.simProfile,
+      simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
       simReadback,
       majorantReadback,
@@ -5168,6 +5314,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
       state.majorantGrid = majorantGridSize;
+      state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
+      state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
+      state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+      state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
+      updateSimCostLedger();
     },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);

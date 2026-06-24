@@ -637,7 +637,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=tall-fire-scale-decoupled-0623';
+import { createKaminosVolumePrototype } from './volume-core.js?v=tall-sim-cost-ledger-0624';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1607,6 +1607,9 @@ let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
 let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
+let routedVolumeMajorantCadence = 1;
+let routedVolumePressureIterations = undefined;
+let routedVolumeSimProfile = false;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
   bonfireLateralDamping: 1,
@@ -1839,6 +1842,9 @@ function readVolumeControls() {
     canonicalSourceInjection: routedCanonicalInjection,
     canonicalBuoyancy: routedCanonicalBuoyancy,
     reactionFuelScale: routedVolumeReactionFuelScale,
+    majorantCadence: routedVolumeMajorantCadence,
+    pressureIterations: routedVolumePressureIterations,
+    simProfile: routedVolumeSimProfile,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   };
@@ -1993,6 +1999,16 @@ async function initKaminosVolumeRoute() {
   if ([24, 32, 48].includes(routeMajorantGrid)) {
     document.getElementById('volume-majorant-grid').value = String(routeMajorantGrid);
   }
+  const routeMajorantCadence = Number(params.get('volume_majorant_cadence'));
+  if (params.has('volume_majorant_cadence') && Number.isFinite(routeMajorantCadence)) {
+    routedVolumeMajorantCadence = Math.max(1, Math.min(8, Math.round(routeMajorantCadence)));
+  }
+  const routePressureIterations = Number(params.get('volume_pressure_iterations'));
+  if (params.has('volume_pressure_iterations') && Number.isFinite(routePressureIterations)) {
+    routedVolumePressureIterations = Math.max(0, Math.min(12, Math.round(routePressureIterations)));
+  }
+  const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
+  routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
   const routeGrid = Number(params.get('volume_grid'));
   if (Number.isFinite(routeGrid)) {
     document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));

@@ -238,6 +238,16 @@ const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? requestedGrid : canonicalMacroPreset.resolution ?? 96;
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
 const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : canonicalMacroPreset.majorantGrid ?? 48;
+const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
+const expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
+  ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
+  : 1;
+const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
+const expectedPressureIterations = routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
+  ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
+  : (expectedVolumeScene === 'bonfire_plume' ? 8 : 4);
+const requestedSimProfile = (routeParams.get('volume_sim_profile') || '').toLowerCase();
+const expectedSimProfile = requestedSimProfile === '1' || requestedSimProfile === 'true' || requestedSimProfile === 'yes' || requestedSimProfile === 'on';
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
@@ -747,7 +757,23 @@ async function main() {
     }
     assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
+    assert.equal(state.controls?.majorantCadence, expectedMajorantCadence, 'majorant cadence route/control did not apply');
+    assert.equal(state.majorantCadence, expectedMajorantCadence, 'effective majorant cadence did not reach debug state');
+    assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
+    assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
+    assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
+    assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
+    const stateLedger = state.simCostLedger || {};
+    assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
+    assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
+    assert.equal(stateLedger.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', 'sim cost ledger route identity is missing or stale');
+    assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
+    assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
+    assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
+    assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
+    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
+    assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
     assert.equal(stateTiming.timingEvidenceSource, 'raf-and-queue-proxy', 'timing evidence source label did not reach debug state');
@@ -766,6 +792,16 @@ async function main() {
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
+    }
+    const sampleLedger = sample.simCostLedger || stateLedger;
+    if (
+      sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
+      sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
+      sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
+      !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
+      typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
+    ) {
+      throw new Error(`GPU readback returned stale or incomplete sim cost ledger: ${JSON.stringify(sampleLedger)}`);
     }
     if (sample.preview?.rgba && Number.isFinite(sample.preview.width) && Number.isFinite(sample.preview.height)) {
       writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
@@ -1395,6 +1431,19 @@ async function main() {
       temporalHistoryValid: sample.temporalHistoryValid,
       majorantGrid: sample.majorantGrid,
       majorantBuilt: sample.majorantBuilt,
+      majorantCadence: sample.majorantCadence,
+      majorantBuiltThisFrame: sample.majorantBuiltThisFrame,
+      majorantLastBuiltFrame: sample.majorantLastBuiltFrame,
+      majorantSkippedFrameCount: sample.majorantSkippedFrameCount,
+      pressureProjectionEnabled: sample.pressureProjectionEnabled,
+      pressureProjectionIterations: sample.pressureProjectionIterations,
+      pressureIterationDefault: sample.pressureIterationDefault,
+      pressureIterationRequested: sample.pressureIterationRequested,
+      simProfile: sample.simProfile,
+      simCostLedger: sample.simCostLedger || state.simCostLedger || null,
+      expectedMajorantCadence,
+      expectedPressureIterations,
+      expectedSimProfile,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       expectedCanonicalMacroPreset,
       expectedCanonicalSourceMode,
