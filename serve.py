@@ -380,9 +380,9 @@ def inspect_splat_renderability(path):
     if all(marker in header for marker in gaussian_markers) and any(marker in header for marker in color_markers):
         return {
             "schema": "kaminos.splat-renderability.v0",
-            "status": "likely-splat",
+            "status": "splat-header-like",
             "previewState": "not-rendered",
-            "reason": "PLY header contains common gaussian splat properties; no thumbnail preview has been rendered.",
+            "reason": "PLY header contains common gaussian splat properties; this is not a verified render and no thumbnail preview has been rendered.",
         }
     return {
         "schema": "kaminos.splat-renderability.v0",

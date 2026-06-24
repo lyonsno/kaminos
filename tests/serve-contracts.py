@@ -244,8 +244,9 @@ def test_splat_asset_index_marks_stub_ply_as_not_splat_like():
 
         assert entries["mesh-not-a-splat.ply"]["renderability"]["status"] == "not-splat-like"
         assert "gaussian splat properties" in entries["mesh-not-a-splat.ply"]["renderability"]["reason"]
-        assert entries["probable-gaussian-splat.ply"]["renderability"]["status"] == "likely-splat"
+        assert entries["probable-gaussian-splat.ply"]["renderability"]["status"] == "splat-header-like"
         assert entries["probable-gaussian-splat.ply"]["renderability"]["previewState"] == "not-rendered"
+        assert "not a verified render" in entries["probable-gaussian-splat.ply"]["renderability"]["reason"]
 
 
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():
