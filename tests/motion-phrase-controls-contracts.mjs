@@ -67,6 +67,20 @@ const hesitantSim = simulateMotionPlan(hesitant.plan, { duration: hesitant.plan.
 const sharpSim = simulateMotionPlan(sharp.plan, { duration: sharp.plan.duration, fps: 12 });
 assert.ok(hesitantSim.metrics.anticipationDepth > sharpSim.metrics.anticipationDepth, 'hesitant read gets deeper anticipation');
 assert.ok(sharpSim.metrics.overshootDistance > hesitantSim.metrics.overshootDistance, 'sharp read gets more overshoot');
+assert.ok(sharpSim.metrics.overshootDistance < 2.0, 'loop return should not inflate overshoot metrics as if it were motion intent');
+
+function distance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+for (const controlled of [hesitant, heavy, sharp]) {
+  const start = sampleMotionPlan(controlled.plan, 0);
+  const nearEnd = sampleMotionPlan(controlled.plan, controlled.plan.duration - 1 / 60);
+  const end = sampleMotionPlan(controlled.plan, controlled.plan.duration);
+  assert.ok(distance(start.root, end.root) < 0.035, `${controlled.effectiveControls.source} loop endpoint should close without teleport`);
+  assert.ok(distance(nearEnd.root, end.root) < 0.08, `${controlled.effectiveControls.source} just-before-wrap segment should remain continuous`);
+  assert.equal(end.phase, 'return', `${controlled.effectiveControls.source} loop closure should end in an explicit return phase`);
+}
 
 const harness = buildMotionPhraseControlHarness({ duration: 7.2, fps: 12 });
 assert.equal(harness.schema, 'kaminos.motion-phrase-control-harness.v0');

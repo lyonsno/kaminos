@@ -439,6 +439,12 @@ function scalePhraseDuration(phrase, controls) {
   return Math.max(0.08, phrase.duration * phaseScale / controls.tempo);
 }
 
+function returnPhraseDuration(basePlan, controls) {
+  const recover = basePlan.phrases.find(phrase => phrase.phase === 'recover');
+  const recoverDuration = recover?.duration || 1;
+  return Math.max(0.28, recoverDuration * clamp(0.42 + controls.recovery * 0.18 + controls.hold * 0.08, 0.35, 1.05) / controls.tempo);
+}
+
 function controlledPhrasePose(phrase, endpoint, controls) {
   const pose = poseToPlain(endpoint);
   const commitmentScale = 0.78 + controls.commitment * 0.34;
@@ -501,6 +507,15 @@ export function applyMotionPhraseControls(planInput = DEFAULT_DECISION_MOTION_PL
     from: controlledPhrasePose(phrase, phrase.from, effectiveControls),
     to: controlledPhrasePose(phrase, phrase.to, effectiveControls),
   }));
+  const firstPhrase = phrases[0];
+  const lastPhrase = phrases.at(-1);
+  phrases.push({
+    phase: 'return',
+    duration: returnPhraseDuration(basePlan, effectiveControls),
+    easing: 'smoothstep',
+    from: { ...lastPhrase.to },
+    to: { ...firstPhrase.from },
+  });
   const controlledDuration = phrases.reduce((sum, phrase) => sum + phrase.duration, 0);
   const controlledPlan = normalizeMotionPlan({
     schema: MOTION_PLAN_SCHEMA,
@@ -657,8 +672,9 @@ function motionPlanMetrics(frames) {
   let maxEffort = 0;
   let minRootZ = Infinity;
   let maxRootZ = -Infinity;
+  let maxIntentRootZ = -Infinity;
   let noticeRootZ = null;
-  let finalRootZ = 0;
+  let finalIntentRootZ = null;
   let phaseChanges = 0;
   let lastPhase = null;
   for (const frame of frames) {
@@ -666,17 +682,22 @@ function motionPlanMetrics(frames) {
     maxEffort = Math.max(maxEffort, sample.effort);
     minRootZ = Math.min(minRootZ, sample.root[2]);
     maxRootZ = Math.max(maxRootZ, sample.root[2]);
-    finalRootZ = sample.root[2];
+    if (sample.phase !== 'return') {
+      maxIntentRootZ = Math.max(maxIntentRootZ, sample.root[2]);
+      finalIntentRootZ = sample.root[2];
+    }
     if (sample.phase === 'notice' && noticeRootZ === null) noticeRootZ = sample.root[2];
     if (lastPhase !== null && sample.phase !== lastPhase) phaseChanges++;
     lastPhase = sample.phase;
   }
   const anticipationReference = noticeRootZ ?? frames[0]?.sample.root[2] ?? 0;
+  const settleReference = finalIntentRootZ ?? frames.at(-1)?.sample.root[2] ?? 0;
+  const overshootReference = Number.isFinite(maxIntentRootZ) ? maxIntentRootZ : maxRootZ;
   return {
     frameCount: frames.length,
     maxEffort: Number(maxEffort.toFixed(5)),
     anticipationDepth: Number(Math.max(0, anticipationReference - minRootZ).toFixed(5)),
-    overshootDistance: Number(Math.max(0, maxRootZ - finalRootZ).toFixed(5)),
+    overshootDistance: Number(Math.max(0, overshootReference - settleReference).toFixed(5)),
     phaseChanges,
   };
 }
