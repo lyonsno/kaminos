@@ -497,6 +497,24 @@ function phaseTimesFromPlan(plan) {
   ]));
 }
 
+function clonePhrasePose(pose) {
+  return {
+    root: [...pose.root],
+    facing: [...pose.facing],
+    attention: [...pose.attention],
+    scale: pose.scale,
+    effort: pose.effort,
+  };
+}
+
+function closeControlledPhraseBoundaries(phrases) {
+  return phrases.map((phrase, index) => (
+    index === 0
+      ? phrase
+      : { ...phrase, from: clonePhrasePose(phrases[index - 1].to) }
+  ));
+}
+
 export function applyMotionPhraseControls(planInput = DEFAULT_DECISION_MOTION_PLAN, controlsInput = DEFAULT_MOTION_PHRASE_CONTROLS) {
   const basePlan = normalizeMotionPlan(planInput);
   const effectiveControls = normalizeMotionPhraseControls(controlsInput);
@@ -516,7 +534,8 @@ export function applyMotionPhraseControls(planInput = DEFAULT_DECISION_MOTION_PL
     from: { ...lastPhrase.to },
     to: { ...firstPhrase.from },
   });
-  const controlledDuration = phrases.reduce((sum, phrase) => sum + phrase.duration, 0);
+  const closedPhrases = closeControlledPhraseBoundaries(phrases);
+  const controlledDuration = closedPhrases.reduce((sum, phrase) => sum + phrase.duration, 0);
   const controlledPlan = normalizeMotionPlan({
     schema: MOTION_PLAN_SCHEMA,
     id: `${basePlan.id}__${String(effectiveControls.source).replace(/[^a-z0-9_:-]+/gi, '_')}`,
@@ -530,7 +549,7 @@ export function applyMotionPhraseControls(planInput = DEFAULT_DECISION_MOTION_PL
       settle: basePlan.weight.settle * effectiveControls.recovery,
       effortScale: basePlan.weight.effortScale * effectiveControls.effort,
     },
-    phrases,
+    phrases: closedPhrases,
   });
   return {
     schema: 'kaminos.motion-controlled-plan.v0',

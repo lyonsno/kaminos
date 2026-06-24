@@ -80,6 +80,13 @@ for (const controlled of [hesitant, heavy, sharp]) {
   assert.ok(distance(start.root, end.root) < 0.035, `${controlled.effectiveControls.source} loop endpoint should close without teleport`);
   assert.ok(distance(nearEnd.root, end.root) < 0.08, `${controlled.effectiveControls.source} just-before-wrap segment should remain continuous`);
   assert.equal(end.phase, 'return', `${controlled.effectiveControls.source} loop closure should end in an explicit return phase`);
+  for (let i = 0; i < controlled.plan.phrases.length - 1; i++) {
+    const outgoing = controlled.plan.phrases[i];
+    const incoming = controlled.plan.phrases[i + 1];
+    assert.ok(distance(outgoing.to.root, incoming.from.root) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} root boundary should be continuous`);
+    assert.ok(Math.abs(outgoing.to.scale - incoming.from.scale) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} scale boundary should be continuous`);
+    assert.ok(Math.abs(outgoing.to.effort - incoming.from.effort) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} effort boundary should be continuous`);
+  }
 }
 
 const harness = buildMotionPhraseControlHarness({ duration: 7.2, fps: 12 });
