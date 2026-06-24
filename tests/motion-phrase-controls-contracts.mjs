@@ -7,6 +7,7 @@ import {
   MOTION_PHRASE_CONTROL_SCHEMA,
   applyMotionPhraseControls,
   buildMotionPhraseControlHarness,
+  motionPhraseBodyScale,
   normalizeMotionPhraseControls,
   sampleMotionPlan,
   simulateMotionPlan,
@@ -73,6 +74,10 @@ function distance(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
+function maxComponentDelta(a, b) {
+  return Math.max(...a.map((value, index) => Math.abs(value - b[index])));
+}
+
 for (const controlled of [hesitant, heavy, sharp]) {
   const start = sampleMotionPlan(controlled.plan, 0);
   const nearEnd = sampleMotionPlan(controlled.plan, controlled.plan.duration - 1 / 60);
@@ -86,6 +91,11 @@ for (const controlled of [hesitant, heavy, sharp]) {
     assert.ok(distance(outgoing.to.root, incoming.from.root) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} root boundary should be continuous`);
     assert.ok(Math.abs(outgoing.to.scale - incoming.from.scale) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} scale boundary should be continuous`);
     assert.ok(Math.abs(outgoing.to.effort - incoming.from.effort) < 0.001, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} effort boundary should be continuous`);
+    const before = sampleMotionPlan(controlled.plan, Math.max(0, outgoing.end - 1e-6));
+    const after = sampleMotionPlan(controlled.plan, outgoing.end);
+    assert.ok(Math.abs(before.scale - after.scale) < 0.015, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} sampled scale should not pop`);
+    assert.ok(Math.abs(before.effort - after.effort) < 0.035, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} sampled effort should not pop`);
+    assert.ok(maxComponentDelta(motionPhraseBodyScale(before), motionPhraseBodyScale(after)) < 0.04, `${controlled.effectiveControls.source} ${outgoing.phase}->${incoming.phase} rendered body scale should not pop`);
   }
 }
 

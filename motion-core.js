@@ -50,6 +50,11 @@ function smooth01(t) {
   return x * x * (3 - 2 * x);
 }
 
+function pulse01(t) {
+  const x = smooth01(t);
+  return clamp(4 * x * (1 - x), 0, 1);
+}
+
 function normalizeSample(sample, fallbackTime = 0) {
   return {
     t: Number.isFinite(Number(sample?.t)) ? Number(sample.t) : fallbackTime,
@@ -649,17 +654,46 @@ function weightPlanSample(sample, phrase, local, weight) {
     const settleEase = smooth01(local);
     root[1] *= 1 - clamp(weight.settle * settleEase, 0, 0.85);
   }
-  const massEffort = phrase.phase === 'commit' || phrase.phase === 'anticipate'
-    ? 0.8 + weight.mass * 0.18
-    : 0.92 + weight.mass * 0.06;
-  const effort = sample.effort * weight.effortScale * massEffort;
-  const scaleAccent = phrase.phase === 'commit' ? clamp(effort * 0.045, 0, 0.08) : 0;
+  const phasePulse = pulse01(local);
+  const massEffort = 0.92 + weight.mass * 0.06;
+  let effortAccent = 1;
+  if (phrase.phase === 'anticipate') {
+    effortAccent += phasePulse * (0.04 + weight.anticipation * 0.07);
+  }
+  if (phrase.phase === 'commit') {
+    effortAccent += phasePulse * (0.12 + weight.mass * 0.035 + weight.effortScale * 0.035);
+  }
+  if (phrase.phase === 'overshoot') {
+    effortAccent += phasePulse * (0.03 + weight.effortScale * 0.025);
+  }
+  const effort = sample.effort * weight.effortScale * massEffort * effortAccent;
+  const scaleAccent = phrase.phase === 'commit' ? phasePulse * clamp(effort * 0.045, 0, 0.08) : 0;
   return {
     ...sample,
     root,
     scale: sample.scale + scaleAccent,
     effort,
   };
+}
+
+export function motionPhraseBodyScale(sampleInput = {}) {
+  const sample = {
+    scale: Number.isFinite(Number(sampleInput.scale)) ? Number(sampleInput.scale) : 1,
+    effort: Number.isFinite(Number(sampleInput.effort)) ? Number(sampleInput.effort) : 0,
+    phase: String(sampleInput.phase || ''),
+    localT: Number.isFinite(Number(sampleInput.localT)) ? Number(sampleInput.localT) : 0,
+  };
+  const phasePulse = pulse01(sample.localT);
+  const anticipatePulse = sample.phase === 'anticipate' ? phasePulse : 0;
+  const commitPulse = sample.phase === 'commit' ? phasePulse : 0;
+  const overshootPulse = sample.phase === 'overshoot' ? phasePulse : 0;
+  const baseScale = Math.max(0.1, sample.scale);
+  const effort = Math.max(0, sample.effort);
+  return [
+    Number((baseScale * (0.94 + effort * 0.06 + anticipatePulse * 0.08 - commitPulse * 0.025)).toFixed(5)),
+    Number((baseScale * (0.92 + effort * 0.11 + commitPulse * 0.16 - anticipatePulse * 0.035)).toFixed(5)),
+    Number((baseScale * (0.92 + effort * 0.16 + commitPulse * 0.06 + overshootPulse * 0.035)).toFixed(5)),
+  ];
 }
 
 export function sampleMotionPlan(planInput = DEFAULT_DECISION_MOTION_PLAN, t) {

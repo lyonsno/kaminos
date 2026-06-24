@@ -790,6 +790,7 @@ import {
   buildMotionDecisionComparison,
   buildMotionPhraseControlHarness,
   motionClipById,
+  motionPhraseBodyScale,
   normalizeMotionPhraseControls,
   sampleMotionClip,
   sampleMotionPlan,
@@ -3702,9 +3703,7 @@ function updateMotionDecisionFrame(nowSeconds = performance.now() / 1000) {
     visual.group.position.copy(rootPosition);
     visual.group.lookAt(attention);
     const effort = sample.effort;
-    const lateralSquash = sample.phase === 'anticipate' ? 1.1 : 0.94 + effort * 0.08;
-    const verticalDrive = sample.phase === 'commit' ? 1.04 + effort * 0.28 : 0.92 + effort * 0.12;
-    visual.body.scale.set(lateralSquash, verticalDrive, 0.92 + effort * 0.2);
+    visual.body.scale.fromArray(motionPhraseBodyScale(sample));
     visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
     visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
     visual.target.scale.setScalar(sample.phase === 'notice' || sample.phase === 'anticipate' ? 1.35 : 1);
@@ -3762,11 +3761,7 @@ function updateMotionPhraseControlFrame(nowSeconds = performance.now() / 1000) {
   visual.group.position.copy(rootPosition);
   visual.group.lookAt(attention);
   const effort = sample.effort;
-  visual.body.scale.set(
-    sample.phase === 'anticipate' ? 1.1 : 0.94 + effort * 0.08,
-    sample.phase === 'commit' ? 1.04 + effort * 0.28 : 0.92 + effort * 0.12,
-    0.92 + effort * 0.2,
-  );
+  visual.body.scale.fromArray(motionPhraseBodyScale(sample));
   visual.eye.position.copy(facing.multiplyScalar(0.21 + effort * 0.025));
   visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + effort * 0.34);
   visual.target.scale.setScalar(sample.phase === 'notice' || sample.phase === 'anticipate' ? 1.35 : 1);
