@@ -200,6 +200,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
     <div class="tab" data-tab="volume">Volume</div>
+    <div class="tab" data-tab="orb-shell">Orb Shell</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -564,6 +565,46 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Orb Shell Tab -->
+  <div class="tab-content" id="tab-orb-shell">
+    <h2>Orb Shell Witness</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_orb_shell_witness=1</span></div>
+      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="orb-shell-identity">orb-shell-single-layer-witness-v0</span></div>
+      <div class="field"><span class="field-key">Support</span><span class="field-val" id="orb-shell-support">orb-shell-support-manifold-v0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="orb-shell-toggle">Enable</button>
+        <button class="btn" id="orb-shell-frame">Frame</button>
+      </div>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Seed</span>
+      <input type="number" class="gen-input" id="orb-shell-seed" min="0" max="99999" step="1" value="17" style="margin-bottom:0">
+      <span class="slider-val" id="orb-shell-seed-val">17</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Leaves</span>
+      <input type="range" id="orb-shell-leaf-count" min="8" max="14" step="1" value="10">
+      <span class="slider-val" id="orb-shell-leaf-count-val">10</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Apertures</span>
+      <input type="range" id="orb-shell-aperture-count" min="3" max="6" step="1" value="3">
+      <span class="slider-val" id="orb-shell-aperture-count-val">3</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Layers</span>
+      <input type="range" id="orb-shell-layer-count" min="1" max="1" step="1" value="1" disabled>
+      <span class="slider-val" id="orb-shell-layer-count-val">1 outer</span>
+    </div>
+    <div class="panel volume-readout">
+      <div class="field"><span class="field-key">Leaves</span><span class="field-val" id="orb-shell-leaves">0</span></div>
+      <div class="field"><span class="field-key">Apertures</span><span class="field-val" id="orb-shell-apertures">0</span></div>
+      <div class="field"><span class="field-key">Core</span><span class="field-val" id="orb-shell-core-socket">placeholder</span></div>
+      <div class="field"><span class="field-key">Forbidden</span><span class="field-val" id="orb-shell-forbidden">none</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -697,6 +738,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
+  ORB_SHELL_SUPPORT_MANIFOLD,
+  ORB_SHELL_WITNESS_IDENTITY,
+  createKaminosOrbShellWitness,
+} from './orb-shell-core.js';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -738,6 +784,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let orbShellWitness = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -4210,6 +4257,90 @@ async function initKaminosVolumeRoute() {
   setInterval(refreshVolumeReadout, 500);
 }
 
+function readOrbShellControls() {
+  return {
+    seed: parseInt(document.getElementById('orb-shell-seed').value, 10),
+    leafCount: parseInt(document.getElementById('orb-shell-leaf-count').value, 10),
+    apertureCount: parseInt(document.getElementById('orb-shell-aperture-count').value, 10),
+  };
+}
+
+function updateOrbShellReadout() {
+  const c = readOrbShellControls();
+  document.getElementById('orb-shell-seed-val').textContent = String(Number.isFinite(c.seed) ? c.seed : 17);
+  document.getElementById('orb-shell-leaf-count-val').textContent = String(c.leafCount);
+  document.getElementById('orb-shell-aperture-count-val').textContent = String(c.apertureCount);
+  document.getElementById('orb-shell-identity').textContent = ORB_SHELL_WITNESS_IDENTITY;
+  document.getElementById('orb-shell-support').textContent = ORB_SHELL_SUPPORT_MANIFOLD;
+  const state = orbShellWitness?.debugState?.();
+  document.getElementById('orb-shell-leaves').textContent = String(state?.shellSkeleton?.leafCount ?? 0);
+  document.getElementById('orb-shell-apertures').textContent = String(state?.apertureGraph?.apertures?.length ?? 0);
+  document.getElementById('orb-shell-core-socket').textContent = state?.coreSocket?.mode || 'placeholder';
+  document.getElementById('orb-shell-forbidden').textContent = state?.forbiddenFirstSliceScope?.join(',') || 'none';
+  document.getElementById('orb-shell-toggle').textContent = state?.active ? 'Disable' : 'Enable';
+  document.getElementById('orb-shell-toggle').classList.toggle('active', !!state?.active);
+}
+
+function frameOrbShellCamera() {
+  orbShellWitness?.frameCamera?.();
+}
+
+function initOrbShellRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const seed = Number(params.get('orb_shell_seed'));
+  if (params.has('orb_shell_seed') && Number.isFinite(seed)) {
+    document.getElementById('orb-shell-seed').value = String(Math.max(0, Math.min(99999, Math.round(seed))));
+  }
+  const leafCount = Number(params.get('orb_shell_leaf_count'));
+  if (params.has('orb_shell_leaf_count') && Number.isFinite(leafCount)) {
+    document.getElementById('orb-shell-leaf-count').value = String(Math.max(8, Math.min(14, Math.round(leafCount))));
+  }
+  const apertureCount = Number(params.get('orb_shell_aperture_count'));
+  if (params.has('orb_shell_aperture_count') && Number.isFinite(apertureCount)) {
+    document.getElementById('orb-shell-aperture-count').value = String(Math.max(3, Math.min(6, Math.round(apertureCount))));
+  }
+  orbShellWitness = createKaminosOrbShellWitness({
+    THREE,
+    scene,
+    camera,
+    controls,
+    onStatus: status => {
+      if (status.phase === 'built') setInfo(`Orb Shell — ${status.leafCount} leaves, single exterior layer`);
+    },
+    onDirty: () => window._kaminosDirty?.(),
+  });
+  window.__kaminosOrbShellWitness = orbShellWitness;
+
+  const syncControls = () => {
+    updateOrbShellReadout();
+    orbShellWitness.setControls(readOrbShellControls());
+    updateOrbShellReadout();
+  };
+  for (const id of ['orb-shell-seed', 'orb-shell-leaf-count', 'orb-shell-aperture-count']) {
+    document.getElementById(id).addEventListener('input', syncControls);
+    document.getElementById(id).addEventListener('change', syncControls);
+  }
+  document.getElementById('orb-shell-toggle').addEventListener('click', () => {
+    const active = !orbShellWitness.debugState().active;
+    orbShellWitness.setControls(readOrbShellControls());
+    orbShellWitness.setActive(active);
+    if (active) frameOrbShellCamera();
+    updateOrbShellReadout();
+    setInfo(active ? 'Orb Shell — single-layer exterior carapace witness' : 'Orb Shell disabled');
+  });
+  document.getElementById('orb-shell-frame').addEventListener('click', frameOrbShellCamera);
+
+  if (params.get('kaminos_orb_shell_witness') === '1') {
+    document.getElementById('env-loading').style.display = 'none';
+    setActiveTab('orb-shell');
+    orbShellWitness.setControls(readOrbShellControls());
+    orbShellWitness.setActive(true);
+    frameOrbShellCamera();
+    setInfo('Orb Shell — single-layer exterior carapace witness');
+  }
+  updateOrbShellReadout();
+}
+
 // --- File Input Handling ---
 async function handleFiles(files, options = {}) {
   loadedFiles = {};
@@ -7035,6 +7166,7 @@ initScene().then(() => {
     }
   });
   initKaminosVolumeRoute();
+  initOrbShellRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
