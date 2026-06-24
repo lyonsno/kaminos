@@ -192,11 +192,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-workbench { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; margin-bottom: 12px; }
 .pipeline-graph-canvas { position: relative; min-height: 270px; border: 1px solid #2b2b2b; border-radius: 8px; background: #141414; overflow: hidden; }
 .pipeline-graph-canvas::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(#202020 1px, transparent 1px), linear-gradient(90deg, #202020 1px, transparent 1px); background-size: 32px 32px; opacity: 0.35; pointer-events: none; }
-.pipeline-graph-edge-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.pipeline-graph-edge { stroke: #3c5664; stroke-width: 2; fill: none; marker-end: url(#pipeline-graph-arrow); }
+.pipeline-graph-edge-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: auto; }
+.pipeline-graph-edge { stroke: #3c5664; stroke-width: 2; fill: none; marker-end: url(#pipeline-graph-arrow); pointer-events: stroke; cursor: pointer; }
+.pipeline-graph-edge.selected { stroke: #2f67c7; stroke-width: 3; }
+.pipeline-graph-edge-handle { position: absolute; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #141414; background: #3c5664; cursor: pointer; padding: 0; z-index: 2; }
+.pipeline-graph-edge-handle.selected { background: #2f67c7; }
 .pipeline-graph-node { position: absolute; width: 136px; min-height: 78px; padding: 10px; border: 1px solid #333; border-radius: 7px; background: #1c1c1c; color: #ddd; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node:hover { border-color: #555; background: #222; }
 .pipeline-graph-node.selected { border-color: #2f67c7; background: #172235; color: #fff; }
+.pipeline-graph-node.connecting { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node-kicker { font: 9px 'SF Mono', monospace; color: #777; text-transform: uppercase; letter-spacing: 0.7px; }
 .pipeline-graph-node-title { font-size: 12px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-graph-node-detail { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10133,6 +10137,20 @@ let pipelineDockState = {
 	  runHistory: [],
 	  selectedRunId: null,
 	  selectedGraphNodeId: 'source',
+	  selectedGraphEdgeId: null,
+	  graphConnectionStartId: null,
+	  graphNodePositions: {
+	    source: { x: 18, y: 92 },
+	    route: { x: 180, y: 92 },
+	    output: { x: 342, y: 44 },
+	    evidence: { x: 342, y: 150 },
+	  },
+	  graphEdges: [
+	    { id: 'source-to-route', from: 'source', to: 'route' },
+	    { id: 'route-to-output', from: 'route', to: 'output' },
+	    { id: 'route-to-evidence', from: 'route', to: 'evidence' },
+	  ],
+	  graphDrag: null,
 	  renderedRunId: null,
 	  lastRun: null,
 	  graph: null,
@@ -10362,6 +10380,67 @@ function pipelineRunUsesFixture(result) {
   return Boolean(result?.report?.document?.stages?.some(stage => stage.status === 'fixture'));
 }
 
+const pipelineGraphNodeSize = { width: 136, height: 78 };
+const pipelineGraphDefaultPositions = {
+  source: { x: 18, y: 92 },
+  route: { x: 180, y: 92 },
+  output: { x: 342, y: 44 },
+  evidence: { x: 342, y: 150 },
+};
+const pipelineGraphDefaultEdges = [
+  { id: 'source-to-route', from: 'source', to: 'route' },
+  { id: 'route-to-output', from: 'route', to: 'output' },
+  { id: 'route-to-evidence', from: 'route', to: 'evidence' },
+];
+
+function pipelineGraphNodePosition(nodeId) {
+  pipelineDockState.graphNodePositions ||= {};
+  const current = pipelineDockState.graphNodePositions[nodeId] || pipelineGraphDefaultPositions[nodeId] || { x: 24, y: 24 };
+  pipelineDockState.graphNodePositions[nodeId] = { x: Number(current.x) || 0, y: Number(current.y) || 0 };
+  return pipelineDockState.graphNodePositions[nodeId];
+}
+
+function pipelineClampGraphNodePosition(position, canvas) {
+  const rect = canvas?.getBoundingClientRect?.();
+  const maxX = Math.max(0, (rect?.width || 720) - pipelineGraphNodeSize.width - 8);
+  const maxY = Math.max(0, (rect?.height || 270) - pipelineGraphNodeSize.height - 8);
+  return {
+    x: Math.min(maxX, Math.max(8, Math.round(position.x))),
+    y: Math.min(maxY, Math.max(8, Math.round(position.y))),
+  };
+}
+
+function pipelineGraphEdges() {
+  pipelineDockState.graphEdges = (pipelineDockState.graphEdges?.length ? pipelineDockState.graphEdges : pipelineGraphDefaultEdges)
+    .map(edge => ({ id: edge.id || `${edge.from}-to-${edge.to}`, from: edge.from, to: edge.to }))
+    .filter(edge => edge.from && edge.to && edge.from !== edge.to);
+  return pipelineDockState.graphEdges;
+}
+
+function pipelineGraphEdgeForId(edgeId) {
+  return pipelineGraphEdges().find(edge => edge.id === edgeId) || null;
+}
+
+function pipelineGraphEdgePath(edge) {
+  const from = pipelineGraphNodePosition(edge.from);
+  const to = pipelineGraphNodePosition(edge.to);
+  const startX = from.x + pipelineGraphNodeSize.width;
+  const startY = from.y + pipelineGraphNodeSize.height / 2;
+  const endX = to.x;
+  const endY = to.y + pipelineGraphNodeSize.height / 2;
+  const delta = Math.max(32, Math.abs(endX - startX) / 2);
+  return `M${startX} ${startY} C${startX + delta} ${startY} ${endX - delta} ${endY} ${endX} ${endY}`;
+}
+
+function pipelineGraphEdgeMidpoint(edge) {
+  const from = pipelineGraphNodePosition(edge.from);
+  const to = pipelineGraphNodePosition(edge.to);
+  return {
+    x: Math.round((from.x + pipelineGraphNodeSize.width + to.x) / 2),
+    y: Math.round((from.y + to.y) / 2 + pipelineGraphNodeSize.height / 2),
+  };
+}
+
 function buildPipelineGraphModel(source, selectedRun) {
   const pipeline = selectedPipelineRecord();
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
@@ -10412,26 +10491,114 @@ function buildPipelineGraphModel(source, selectedRun) {
     },
   ];
   return {
-    schema: 'kaminos.pipeline-graph-model.v0',
-    selectedRunId: runId,
-    nodes,
-    edges: [
-      { from: 'source', to: 'route' },
-      { from: 'route', to: 'output' },
-      { from: 'route', to: 'evidence' },
-    ],
-  };
+	    schema: 'kaminos.pipeline-graph-model.v0',
+	    selectedRunId: runId,
+	    nodes,
+	    edges: pipelineGraphEdges(),
+	  };
 }
 
 function selectPipelineGraphNode(nodeId) {
   const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
   if (!pipelineGraphNodeForId(graph, nodeId)) return null;
   pipelineDockState.selectedGraphNodeId = nodeId;
+  pipelineDockState.selectedGraphEdgeId = null;
   renderPipelineGraphWorkbench();
   return pipelineGraphNodeForId(pipelineDockState.pipelineGraph, nodeId);
 }
 
+function selectPipelineGraphEdge(edgeId) {
+  const edge = pipelineGraphEdgeForId(edgeId);
+  if (!edge) return null;
+  pipelineDockState.selectedGraphEdgeId = edge.id;
+  pipelineDockState.selectedGraphNodeId = null;
+  renderPipelineGraphWorkbench();
+  return edge;
+}
+
+function pipelineStartGraphConnection(nodeId) {
+  const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  if (!pipelineGraphNodeForId(graph, nodeId)) return null;
+  pipelineDockState.graphConnectionStartId = nodeId;
+  pipelineDockState.selectedGraphNodeId = nodeId;
+  pipelineDockState.selectedGraphEdgeId = null;
+  renderPipelineGraphWorkbench();
+  return nodeId;
+}
+
+function pipelineCompleteGraphConnection(nodeId) {
+  const startId = pipelineDockState.graphConnectionStartId;
+  const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  if (!startId || !pipelineGraphNodeForId(graph, startId) || !pipelineGraphNodeForId(graph, nodeId) || startId === nodeId) return null;
+  const id = `${startId}-to-${nodeId}`;
+  pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => edge.id !== id);
+  pipelineDockState.graphEdges.push({ id, from: startId, to: nodeId });
+  pipelineDockState.graphConnectionStartId = null;
+  pipelineDockState.selectedGraphEdgeId = id;
+  pipelineDockState.selectedGraphNodeId = null;
+  renderPipelineGraphWorkbench();
+  return pipelineGraphEdgeForId(id);
+}
+
+function pipelineCancelGraphConnection() {
+  pipelineDockState.graphConnectionStartId = null;
+  renderPipelineGraphWorkbench();
+}
+
+function beginPipelineGraphNodeDrag(event, nodeId) {
+  const canvas = document.getElementById('pipeline-graph-canvas');
+  if (!canvas || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  selectPipelineGraphNode(nodeId);
+  const start = pipelineGraphNodePosition(nodeId);
+  pipelineDockState.graphDrag = {
+    nodeId,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    x: start.x,
+    y: start.y,
+    moved: false,
+  };
+  document.addEventListener('pointermove', updatePipelineGraphNodeDrag);
+  document.addEventListener('pointerup', endPipelineGraphNodeDrag);
+  document.addEventListener('pointercancel', endPipelineGraphNodeDrag);
+}
+
+function updatePipelineGraphNodeDrag(event) {
+  const drag = pipelineDockState.graphDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const canvas = document.getElementById('pipeline-graph-canvas');
+  const next = pipelineClampGraphNodePosition({
+    x: drag.x + event.clientX - drag.startX,
+    y: drag.y + event.clientY - drag.startY,
+  }, canvas);
+  if (Math.abs(next.x - drag.x) > 2 || Math.abs(next.y - drag.y) > 2) drag.moved = true;
+  pipelineDockState.graphNodePositions[drag.nodeId] = next;
+  renderPipelineGraphWorkbench();
+}
+
+function endPipelineGraphNodeDrag(event) {
+  const drag = pipelineDockState.graphDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  pipelineDockState.graphDrag = null;
+  document.removeEventListener('pointermove', updatePipelineGraphNodeDrag);
+  document.removeEventListener('pointerup', endPipelineGraphNodeDrag);
+  document.removeEventListener('pointercancel', endPipelineGraphNodeDrag);
+}
+
 function pipelineGraphInspectorRows(node, selectedRun) {
+  const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
+  if (!node && selectedEdge) {
+    return [
+      { key: 'kind', value: 'edge' },
+      { key: 'from', value: selectedEdge.from },
+      { key: 'to', value: selectedEdge.to },
+      { key: 'id', value: selectedEdge.id },
+    ];
+  }
   if (!node) return [{ key: 'status', value: 'No graph node selected' }];
   const rows = [
     { key: 'kind', value: node.kind },
@@ -10453,6 +10620,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const inspector = document.getElementById('pipeline-graph-inspector');
   if (!inspector) return;
   const actions = [];
+  const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
   if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
     actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source).catch(() => {}) });
   }
@@ -10462,12 +10630,28 @@ function renderPipelineGraphInspector(node, selectedRun) {
   if (node?.kind === 'evidence' && selectedRun) {
     const sidecarUrl = pipelineRunReadUrlForPath(selectedRun, node.sidecar?.path);
     const bundleUrl = pipelineRunReadUrlForPath(selectedRun, selectedRun.bundle?.path);
-    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun).catch(() => {}) });
-    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun).catch(() => {}) });
+	    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun).catch(() => {}) });
+	    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun).catch(() => {}) });
+	  }
+  if (node) {
+    if (pipelineDockState.graphConnectionStartId && pipelineDockState.graphConnectionStartId !== node.id) {
+      actions.push({ label: 'Hook Here', action: () => pipelineCompleteGraphConnection(node.id) });
+    } else if (pipelineDockState.graphConnectionStartId === node.id) {
+      actions.push({ label: 'Cancel Hook', action: pipelineCancelGraphConnection });
+    } else {
+      actions.push({ label: 'Start Hook', action: () => pipelineStartGraphConnection(node.id) });
+    }
+  }
+  if (selectedEdge) {
+    actions.push({ label: 'Remove Hook', action: () => {
+      pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => edge.id !== selectedEdge.id);
+      pipelineDockState.selectedGraphEdgeId = null;
+      renderPipelineGraphWorkbench();
+    } });
   }
   inspector.innerHTML = `
-    <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || 'Select a graph node')}</div>
-    <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
+    <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
+    <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record. Drag nodes directly; use Start Hook / Hook Here to edit composition links.' : selectedEdge ? 'Selected hook is session-local composition structure.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
     <div class="pipeline-graph-inspector-actions" id="pipeline-graph-inspector-actions"></div>
     <div class="pipeline-graph-inspector-grid">
       ${pipelineGraphInspectorRows(node, selectedRun).map(row => `
@@ -10497,43 +10681,71 @@ function renderPipelineGraphWorkbench() {
   const selectedRun = selectedPipelineRun();
   const graph = buildPipelineGraphModel(source, selectedRun);
   pipelineDockState.pipelineGraph = graph;
-  if (!pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId)) pipelineDockState.selectedGraphNodeId = 'source';
-  const nodeMarkup = graph.nodes.map(node => `
+  if (!pipelineDockState.selectedGraphEdgeId && !pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId)) pipelineDockState.selectedGraphNodeId = 'source';
+  const nodeMarkup = graph.nodes.map(node => {
+    const position = pipelineGraphNodePosition(node.id);
+    return `
     <button
       type="button"
-      class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}"
+      class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}${node.id === pipelineDockState.graphConnectionStartId ? ' connecting' : ''}"
       data-pipeline-graph-node-id="${escapeHtml(node.id)}"
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
+      style="left: ${position.x}px; top: ${position.y}px;"
     >
       <span class="pipeline-graph-node-kicker">${escapeHtml(node.kind)}</span>
       <span class="pipeline-graph-node-title">${escapeHtml(node.title)}</span>
       <span class="pipeline-graph-node-detail">${escapeHtml(node.detail || '')}</span>
     </button>
+  `;
+  }).join('');
+  const canvasWidth = Math.max(480, Math.round(canvas.getBoundingClientRect?.().width || 720));
+  const canvasHeight = Math.max(270, Math.round(canvas.getBoundingClientRect?.().height || 270));
+  const edgeMarkup = graph.edges.map(edge => `
+      <path
+        class="pipeline-graph-edge${edge.id === pipelineDockState.selectedGraphEdgeId ? ' selected' : ''}"
+        d="${escapeHtml(pipelineGraphEdgePath(edge))}"
+      ></path>
   `).join('');
+  const edgeHandleMarkup = graph.edges.map(edge => {
+    const midpoint = pipelineGraphEdgeMidpoint(edge);
+    return `
+      <button
+        type="button"
+        class="pipeline-graph-edge-handle${edge.id === pipelineDockState.selectedGraphEdgeId ? ' selected' : ''}"
+        data-pipeline-graph-edge-id="${escapeHtml(edge.id)}"
+        title="${escapeHtml(edge.from)} -> ${escapeHtml(edge.to)}"
+        style="left: ${midpoint.x - 8}px; top: ${midpoint.y - 8}px;"
+      ></button>
+    `;
+  }).join('');
   canvas.innerHTML = `
-    <svg class="pipeline-graph-edge-layer" viewBox="0 0 720 270" preserveAspectRatio="none" aria-hidden="true">
+    <svg class="pipeline-graph-edge-layer" viewBox="0 0 ${canvasWidth} ${canvasHeight}" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <marker id="pipeline-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
           <path d="M0,0 L8,4 L0,8 z" fill="#3c5664"></path>
         </marker>
       </defs>
-      <path class="pipeline-graph-edge" d="M154 132 C166 132 168 132 180 132"></path>
-      <path class="pipeline-graph-edge" d="M316 132 C328 132 330 84 342 84"></path>
-      <path class="pipeline-graph-edge" d="M316 132 C328 132 330 190 342 190"></path>
+      ${edgeMarkup}
     </svg>
     ${nodeMarkup}
+    ${edgeHandleMarkup}
   `;
-  canvas.querySelectorAll('[data-pipeline-graph-node-id]').forEach(nodeEl => {
-    const nodeId = nodeEl.dataset.pipelineGraphNodeId;
-    const select = event => {
+  canvas.querySelectorAll('[data-pipeline-graph-edge-id]').forEach(edgeEl => {
+    const edgeId = edgeEl.dataset.pipelineGraphEdgeId;
+    edgeEl.addEventListener('pointerdown', event => {
       event.preventDefault();
       event.stopPropagation();
-      selectPipelineGraphNode(nodeId);
-    };
-    nodeEl.addEventListener('pointerdown', select);
-    nodeEl.addEventListener('click', select);
+      selectPipelineGraphEdge(edgeId);
+    });
   });
-  renderPipelineGraphInspector(pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId), selectedRun);
+  canvas.querySelectorAll('[data-pipeline-graph-node-id]').forEach(nodeEl => {
+    const nodeId = nodeEl.dataset.pipelineGraphNodeId;
+    nodeEl.addEventListener('pointerdown', event => beginPipelineGraphNodeDrag(event, nodeId));
+    nodeEl.addEventListener('pointermove', updatePipelineGraphNodeDrag);
+    nodeEl.addEventListener('pointerup', endPipelineGraphNodeDrag);
+    nodeEl.addEventListener('pointercancel', endPipelineGraphNodeDrag);
+  });
+  renderPipelineGraphInspector(pipelineDockState.selectedGraphEdgeId ? null : pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId), selectedRun);
 }
 
 function pipelineRunReadUrlForPath(result, artifactPath) {
