@@ -142,6 +142,8 @@ assert.match(index, /function pipelineImportGraphImageNodeToScene\(/, 'Pipeline 
 assert.match(index, /Import Image to Scene/, 'Pipeline image-node inspector exposes an explicit scene import action');
 assert.match(index, /schema:\s*'kaminos\.image-plane\.v0'/, 'Imported image planes carry explicit image-plane metadata');
 assert.match(index, /importedFrom:\s*'pipeline-graph-node'/, 'Graph-imported image scene objects preserve graph-node provenance');
+assert.match(index, /Texture load failed/, 'Image scene import must fail loud when the texture source cannot load');
+assert.match(index, /scrollTo\(\{\s*top:\s*0/, 'Graph image scene import must bring the authored scene object list into view after switching to Assets');
 assert.match(index, /function selectPipelineAssetPalette\(/, 'Selecting graph nodes can switch the contextual asset palette');
 assert.match(index, /pipelineDockState\.graphImageNodes/, 'Pipeline graph persists image node payloads separately from fixed route/output/evidence nodes');
 assert.match(index, /graphImageNodes:\s*pipelineDockState\.graphImageNodes/, 'Pipeline local storage includes image node payloads');

@@ -3836,25 +3836,31 @@ function clearScene() {
 }
 
 function loadTexture(file) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const url = typeof file === 'string' ? file : URL.createObjectURL(file);
     const isBlob = typeof file !== 'string';
     new THREE.TextureLoader().load(url, tex => {
       if (isBlob) URL.revokeObjectURL(url);
       tex.colorSpace = THREE.SRGBColorSpace;
       resolve(tex);
+    }, undefined, error => {
+      if (isBlob) URL.revokeObjectURL(url);
+      reject(new Error(`Texture load failed: ${typeof file === 'string' ? file : file?.name || 'blob image'}`, { cause: error }));
     });
   });
 }
 
 function loadTextureLinear(file) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const url = typeof file === 'string' ? file : URL.createObjectURL(file);
     const isBlob = typeof file !== 'string';
     new THREE.TextureLoader().load(url, tex => {
       if (isBlob) URL.revokeObjectURL(url);
       tex.colorSpace = THREE.LinearSRGBColorSpace;
       resolve(tex);
+    }, undefined, error => {
+      if (isBlob) URL.revokeObjectURL(url);
+      reject(new Error(`Texture load failed: ${typeof file === 'string' ? file : file?.name || 'blob image'}`, { cause: error }));
     });
   });
 }
@@ -5490,6 +5496,8 @@ async function pipelineImportGraphImageNodeToScene(node) {
     });
     const record = sceneObjects.find(entry => entry.object === mesh) || selectedSceneObjectEntry();
     setActiveTab('assets');
+    document.getElementById('sidebar')?.scrollTo({ top: 0, behavior: 'instant' });
+    document.querySelector(`[data-scene-object-id="${CSS.escape(record?.id || '')}"]`)?.scrollIntoView({ block: 'nearest' });
     pipelineSetActionStatus(`Imported image node to scene: ${record?.label || fileName}`);
     return record;
   } catch (err) {
