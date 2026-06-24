@@ -121,6 +121,9 @@ export function createOrbInnerEngineProviderRegistry({
         adapter: 'ideogram4',
         pythonCommand,
         capability: ['text-to-image', 'square-core-concept-source'],
+        defaultArgs: {
+          timeoutMs: 900000,
+        },
         notes: 'Uses local mlx-ideogram4 generate.py through the stable Kaminos adapter contract.',
       }),
       providerRecord({
@@ -139,6 +142,7 @@ export function createOrbInnerEngineProviderRegistry({
           steps: 4,
           size: '256x256',
           quantize: 8,
+          timeoutMs: 900000,
         },
         notes: 'Cosmos3 is on-distribution for physical/world video; arbitrary creative quality remains unproven until visual smoke.',
       }),
@@ -158,6 +162,7 @@ export function createOrbInnerEngineProviderRegistry({
           steps: 4,
           size: '256x256',
           quantize: 8,
+          timeoutMs: 900000,
         },
         notes: 'Can later turn a generated core source image into a short view/motion sequence if quality is coherent.',
       }),
@@ -236,6 +241,7 @@ export function resolveOrbInnerEngineProviderCommand({
     command: process.execPath,
     args,
     cwd: provider.root,
+    timeoutMs: provider.defaultArgs?.timeoutMs || 120000,
     shell: false,
   };
 }
@@ -248,6 +254,7 @@ export function runOrbInnerEngineProviderRoute({
   bundleRoot,
   registry = createOrbInnerEngineProviderRegistry(),
   providerId = 'local-image.ideogram4',
+  timeoutMs = null,
 } = {}) {
   const resolved = resolveOrbInnerEngineProviderCommand({ registry, providerId });
   const provider = resolved.provider || providerById(registry, providerId) || {
@@ -286,6 +293,7 @@ export function runOrbInnerEngineProviderRoute({
     command: resolved.command,
     args: resolved.args,
     cwd: resolved.cwd,
+    timeoutMs: timeoutMs || resolved.timeoutMs || 120000,
     recordsFileName,
     recordIdentity: 'orb-inner-engine-provider-route-records-v0',
     mediaKind: resolved.mediaKind,

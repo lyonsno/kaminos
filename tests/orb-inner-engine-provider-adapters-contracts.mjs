@@ -88,6 +88,7 @@ try {
   assert.equal(ideogramCommand.mediaKind, 'image');
   assert.equal(ideogramCommand.outputExtension, 'png');
   assert.equal(ideogramCommand.command, process.execPath);
+  assert.ok(ideogramCommand.timeoutMs >= 900000, 'Ideogram route must not inherit the short generic timeout');
   assert.ok(ideogramCommand.args.includes('--adapter'));
   assert.ok(ideogramCommand.args.includes('ideogram4'));
   assert.ok(ideogramCommand.args.includes('--prompt'));
