@@ -173,12 +173,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-browser-subtitle { color: #777; font: 11px 'SF Mono', monospace; margin-top: 4px; }
 .pipeline-browser-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pipeline-browser-selected { color: #999; font: 10px 'SF Mono', monospace; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-asset-palette-tabs { display: flex; gap: 6px; align-items: center; margin: 12px 0; border-bottom: 1px solid #262626; padding-bottom: 8px; }
+.pipeline-asset-palette-tab { border: 1px solid #303030; background: #1b1b1b; color: #888; border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer; }
+.pipeline-asset-palette-tab.active { border-color: #1976d2; background: #172235; color: #fff; }
 .pipeline-asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .pipeline-asset-card { border: 1px solid #292929; background: #191919; border-radius: 8px; min-height: 176px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 9px; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
 .pipeline-asset-card:hover { border-color: #444; background: #202020; transform: translateY(-1px); }
 .pipeline-asset-card.selected { border-color: #1976d2; background: #1b2430; }
+.pipeline-asset-card.dragging { border-color: #f0b85a; background: #292313; }
 .pipeline-asset-thumb { aspect-ratio: 1.35; border-radius: 6px; border: 1px solid #2d2d2d; background: linear-gradient(145deg, #242424, #111); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .pipeline-asset-thumb::before { content: ""; position: absolute; inset: 18%; border: 1px solid rgba(255,255,255,0.12); transform: rotate(28deg); }
+.pipeline-asset-thumb.image::before { content: none; }
+.pipeline-asset-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pipeline-asset-ext { color: #888; font: 700 18px 'SF Mono', monospace; letter-spacing: 0.8px; z-index: 1; }
 .pipeline-asset-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .pipeline-asset-title { color: #eee; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -203,6 +209,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node { position: absolute; width: 136px; min-height: 78px; padding: 10px; border: 1px solid #333; border-radius: 7px; background: #1c1c1c; color: #ddd; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node:hover { border-color: #555; background: #222; }
 .pipeline-graph-node.selected { border-color: #2f67c7; background: #172235; color: #fff; }
+.pipeline-graph-node.image { border-color: #3a4c2a; background: #1b2218; }
+.pipeline-graph-node.image.selected { border-color: #77a651; background: #1f3219; }
 .pipeline-graph-node.connecting { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node.port-target { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #141414; background: #555; padding: 0; z-index: 3; cursor: crosshair; }
@@ -1517,6 +1525,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="pipeline-graph-workbench" id="pipeline-graph-workbench">
         <div class="pipeline-graph-canvas" id="pipeline-graph-canvas"></div>
         <div class="pipeline-graph-inspector" id="pipeline-graph-inspector"></div>
+      </div>
+      <div class="pipeline-asset-palette-tabs" id="pipeline-asset-palette-tabs">
+        <button type="button" class="pipeline-asset-palette-tab active" data-pipeline-asset-palette="splat">Splats</button>
+        <button type="button" class="pipeline-asset-palette-tab" data-pipeline-asset-palette="image">Images</button>
       </div>
       <div class="pipeline-run-shelf" id="pipeline-run-shelf" hidden>
         <div class="pipeline-run-shelf-head">
@@ -10160,12 +10172,17 @@ let pipelineDockState = {
 	    { id: 'route-to-output', from: 'route', to: 'output' },
 	    { id: 'route-to-evidence', from: 'route', to: 'evidence' },
 	  ],
+	  graphImageNodes: [],
 	  graphDrag: null,
+	  assetCardDrag: null,
 	  renderedRunId: null,
 	  lastRun: null,
 	  graph: null,
+  activeAssetPalette: 'splat',
   browserAssets: [],
+  browserAssetsByKind: {},
   browserSelectedAssetId: null,
+  browserSelectedAssetIds: {},
   browserStatus: 'idle',
 };
 const pipelineDockNodeKindOrder = [
@@ -10180,13 +10197,13 @@ function selectedPipelineRecord() {
 }
 
 function pipelineBrowserAssetLabel(entry) {
-  return entry?.display?.title || entry?.name || entry?.path || entry?.id || 'Splat asset';
+  return entry?.display?.title || entry?.name || entry?.path || entry?.id || 'Asset';
 }
 
 function pipelineBrowserAssetSource(entry) {
   if (!entry) return null;
   return {
-    kind: 'splat-asset',
+    kind: `${entry.kind || pipelineDockState.activeAssetPalette || 'asset'}-asset`,
     label: pipelineBrowserAssetLabel(entry),
     source: entry.source || '',
     assetId: entry.id || null,
@@ -10198,7 +10215,33 @@ function pipelineBrowserAssetSource(entry) {
 }
 
 function selectedPipelineBrowserAsset() {
-  return pipelineDockState.browserAssets.find(entry => entry.id === pipelineDockState.browserSelectedAssetId) || null;
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.[pipelineDockState.activeAssetPalette] || pipelineDockState.browserSelectedAssetId;
+  return (pipelineDockState.browserAssets || []).find(entry => entry.id === selectedId) || null;
+}
+
+function pipelinePaletteLabel(kind = pipelineDockState.activeAssetPalette) {
+  if (kind === 'image') return 'Image';
+  return 'Splat';
+}
+
+function pipelinePaletteAssetNoun(kind = pipelineDockState.activeAssetPalette) {
+  if (kind === 'image') return 'image';
+  return 'splat';
+}
+
+function selectPipelineAssetPalette(kind) {
+  const nextKind = kind === 'image' ? 'image' : 'splat';
+  pipelineDockState.activeAssetPalette = nextKind;
+  renderPipelineAssetPaletteTabs();
+  return loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
+}
+
+function renderPipelineAssetPaletteTabs() {
+  document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
+    button.classList.toggle('active', button.dataset.pipelineAssetPalette === pipelineDockState.activeAssetPalette);
+  });
+  const title = document.querySelector('.pipeline-browser-title');
+  if (title) title.textContent = `${pipelinePaletteLabel()} Assets`;
 }
 
 function pipelineRenderabilityLabel(renderability) {
@@ -10228,16 +10271,38 @@ function pipelineSelectedSource() {
 function renderPipelineAssetCard(entry) {
   const card = document.createElement('button');
   card.type = 'button';
-  card.className = `pipeline-asset-card${entry.id === pipelineDockState.browserSelectedAssetId ? ' selected' : ''}`;
+  const selectedId = pipelineDockState.browserSelectedAssetIds?.[entry.kind] || pipelineDockState.browserSelectedAssetId;
+  card.className = `pipeline-asset-card${entry.id === selectedId ? ' selected' : ''}`;
   card.dataset.pipelineAssetId = entry.id || '';
-  card.onclick = () => selectPipelineBrowserAsset(entry.id);
+  card.dataset.pipelineAssetKind = entry.kind || pipelineDockState.activeAssetPalette || '';
+  card.draggable = true;
+  card.onclick = () => {
+    if (window.kaminosPipelineSuppressAssetClick) return;
+    selectPipelineBrowserAsset(entry.id);
+  };
+  card.addEventListener('pointerdown', event => beginPipelineAssetCardDrag(event, entry));
+  card.addEventListener('dragstart', event => {
+    card.classList.add('dragging');
+    event.dataTransfer?.setData('application/x-kaminos-asset-id', entry.id || '');
+    event.dataTransfer?.setData('application/x-kaminos-asset-kind', entry.kind || '');
+    event.dataTransfer?.setData('text/plain', entry.id || '');
+    window.kaminosPipelineDraggedAsset = entry;
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
 
   const thumb = document.createElement('div');
-  thumb.className = 'pipeline-asset-thumb';
-  const ext = document.createElement('div');
-  ext.className = 'pipeline-asset-ext';
-  ext.textContent = (entry.name || entry.path || 'ply').split('.').pop()?.toUpperCase() || 'PLY';
-  thumb.appendChild(ext);
+  thumb.className = `pipeline-asset-thumb${entry.kind === 'image' ? ' image' : ''}`;
+  if (entry.kind === 'image' && entry.source) {
+    const img = document.createElement('img');
+    img.src = entry.source;
+    img.alt = pipelineBrowserAssetLabel(entry);
+    thumb.appendChild(img);
+  } else {
+    const ext = document.createElement('div');
+    ext.className = 'pipeline-asset-ext';
+    ext.textContent = (entry.name || entry.path || 'ply').split('.').pop()?.toUpperCase() || 'PLY';
+    thumb.appendChild(ext);
+  }
   card.appendChild(thumb);
 
   const meta = document.createElement('div');
@@ -10274,17 +10339,19 @@ function renderPipelineAssetCard(entry) {
 function renderPipelineAssetBrowser() {
   const grid = document.getElementById('pipeline-asset-grid');
   if (!grid) return;
+  renderPipelineAssetPaletteTabs();
   const count = document.getElementById('pipeline-browser-count');
   const selected = document.getElementById('pipeline-browser-selected');
   const assets = pipelineDockState.browserAssets || [];
-  if (count) count.textContent = `${assets.length} asset${assets.length === 1 ? '' : 's'}`;
+  const noun = pipelinePaletteAssetNoun();
+  if (count) count.textContent = `${assets.length} ${noun} asset${assets.length === 1 ? '' : 's'}`;
   const selectedAsset = selectedPipelineBrowserAsset();
   if (selected) selected.textContent = selectedAsset ? pipelineBrowserAssetLabel(selectedAsset) : 'No asset selected';
   grid.innerHTML = '';
   if (!assets.length) {
     const empty = document.createElement('div');
     empty.className = 'pipeline-asset-empty';
-    empty.textContent = pipelineDockState.browserStatus === 'loading' ? 'Loading assets...' : 'No splat assets indexed';
+    empty.textContent = pipelineDockState.browserStatus === 'loading' ? 'Loading assets...' : `No ${noun} assets indexed`;
     grid.appendChild(empty);
     return;
   }
@@ -10294,16 +10361,17 @@ function renderPipelineAssetBrowser() {
 async function loadPipelineAssetBrowser() {
   pipelineDockState.browserStatus = 'loading';
   renderPipelineAssetBrowser();
-  const response = await fetch('/api/assets?kind=splat');
+  const response = await fetch(`/api/assets?kind=${encodeURIComponent(pipelineDockState.activeAssetPalette)}`);
   if (!response.ok) throw new Error(`Pipeline assets load failed: ${response.status}`);
   const data = await response.json();
   if (data.error) throw new Error(data.error);
   pipelineDockState.browserAssets = data.entries || [];
+  pipelineDockState.browserAssetsByKind[pipelineDockState.activeAssetPalette] = pipelineDockState.browserAssets;
   if (
-    pipelineDockState.browserSelectedAssetId &&
-    !pipelineDockState.browserAssets.some(entry => entry.id === pipelineDockState.browserSelectedAssetId)
+    pipelineDockState.browserSelectedAssetIds?.[pipelineDockState.activeAssetPalette] &&
+    !pipelineDockState.browserAssets.some(entry => entry.id === pipelineDockState.browserSelectedAssetIds[pipelineDockState.activeAssetPalette])
   ) {
-    pipelineDockState.browserSelectedAssetId = null;
+    pipelineDockState.browserSelectedAssetIds[pipelineDockState.activeAssetPalette] = null;
   }
   pipelineDockState.browserStatus = 'loaded';
   renderPipelineAssetBrowser();
@@ -10315,6 +10383,8 @@ function selectPipelineBrowserAsset(assetId) {
   const entry = pipelineDockState.browserAssets.find(item => item.id === assetId);
   if (!entry) return null;
   pipelineDockState.browserSelectedAssetId = entry.id;
+  pipelineDockState.browserSelectedAssetIds[entry.kind || pipelineDockState.activeAssetPalette] = entry.id;
+  if (entry.kind === 'image') updateSelectedPipelineGraphImageNodeAsset(entry);
   const manualInput = document.getElementById('pipeline-source-input');
   if (manualInput) manualInput.value = '';
   renderPipelineAssetBrowser();
@@ -10424,6 +10494,25 @@ function normalizePipelineGraphEdge(value) {
   return { id: String(value.id || `${from}-to-${to}`), from, to };
 }
 
+function normalizePipelineGraphImageNode(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = String(value.id || '').trim();
+  const assetId = String(value.assetId || '').trim();
+  const source = String(value.source || '').trim();
+  if (!id || !assetId || !source) return null;
+  return {
+    id,
+    kind: 'image',
+    title: String(value.title || value.label || 'Image'),
+    detail: String(value.detail || value.path || source),
+    assetId,
+    source,
+    rootId: value.rootId || null,
+    path: value.path || null,
+    stage: value.stage || null,
+  };
+}
+
 function loadPipelineGraphLocalState() {
   try {
     const raw = localStorage.getItem(pipelineGraphStorageKey);
@@ -10438,6 +10527,9 @@ function loadPipelineGraphLocalState() {
     const nextEdges = Array.isArray(document.graphEdges)
       ? document.graphEdges.map(normalizePipelineGraphEdge).filter(Boolean)
       : null;
+    const nextImageNodes = Array.isArray(document.graphImageNodes)
+      ? document.graphImageNodes.map(normalizePipelineGraphImageNode).filter(Boolean)
+      : null;
     if (Object.keys(nextPositions).length) {
       pipelineDockState.graphNodePositions = {
         ...pipelineDockState.graphNodePositions,
@@ -10445,6 +10537,7 @@ function loadPipelineGraphLocalState() {
       };
     }
     if (nextEdges) pipelineDockState.graphEdges = nextEdges;
+    if (nextImageNodes) pipelineDockState.graphImageNodes = nextImageNodes;
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state ignored:', error);
@@ -10460,6 +10553,7 @@ function savePipelineGraphLocalState() {
       updatedAt: new Date().toISOString(),
       graphNodePositions: pipelineDockState.graphNodePositions || {},
       graphEdges: pipelineGraphEdges(),
+      graphImageNodes: pipelineDockState.graphImageNodes || [],
     };
     localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
     return document;
@@ -10528,6 +10622,69 @@ function pipelineGraphEdgeMidpoint(edge) {
   };
 }
 
+function pipelineGraphImageNodes() {
+  pipelineDockState.graphImageNodes = (pipelineDockState.graphImageNodes || [])
+    .map(normalizePipelineGraphImageNode)
+    .filter(Boolean);
+  return pipelineDockState.graphImageNodes;
+}
+
+function pipelineAssetById(assetId) {
+  return [
+    ...(pipelineDockState.browserAssets || []),
+    ...Object.values(pipelineDockState.browserAssetsByKind || {}).flat(),
+  ].find(entry => entry?.id === assetId) || null;
+}
+
+function pipelineGraphImageNodeRecord(id, asset) {
+  if (!id || !asset || asset.kind !== 'image' || !asset.source) return null;
+  return {
+    id,
+    kind: 'image',
+    title: pipelineBrowserAssetLabel(asset),
+    detail: asset.path || asset.source,
+    assetId: asset.id,
+    source: asset.source,
+    rootId: asset.root_id || null,
+    path: asset.path || null,
+    stage: asset.stage || null,
+  };
+}
+
+function updateSelectedPipelineGraphImageNodeAsset(asset) {
+  const selectedId = pipelineDockState.selectedGraphNodeId;
+  if (!selectedId || asset?.kind !== 'image') return null;
+  const current = (pipelineDockState.graphImageNodes || []).find(node => node.id === selectedId);
+  if (!current) return null;
+  const next = pipelineGraphImageNodeRecord(selectedId, asset);
+  if (!next) return null;
+  pipelineDockState.graphImageNodes = (pipelineDockState.graphImageNodes || []).map(node => node.id === selectedId ? next : node);
+  pipelineDockState.browserSelectedAssetIds.image = asset.id;
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  setInfo(`Image node updated: ${pipelineBrowserAssetLabel(asset)}`);
+  return next;
+}
+
+function createPipelineGraphImageNode(asset, position = null) {
+  if (!asset || asset.kind !== 'image' || !asset.source) return null;
+  pipelineDockState.graphImageNodes ||= [];
+  const id = `image-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const node = pipelineGraphImageNodeRecord(id, asset);
+  if (!node) return null;
+  pipelineDockState.graphImageNodes.push(node);
+  if (position) pipelineDockState.graphNodePositions[id] = position;
+  else pipelineGraphNodePosition(id);
+  pipelineDockState.selectedGraphNodeId = id;
+  pipelineDockState.selectedGraphEdgeId = null;
+  pipelineDockState.activeAssetPalette = 'image';
+  pipelineDockState.browserSelectedAssetIds.image = asset.id;
+  savePipelineGraphLocalState();
+  renderPipelineAssetBrowser();
+  renderPipelineGraphWorkbench();
+  return node;
+}
+
 function buildPipelineGraphModel(source, selectedRun) {
   const pipeline = selectedPipelineRecord();
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
@@ -10576,6 +10733,7 @@ function buildPipelineGraphModel(source, selectedRun) {
       bundlePath: selectedRun?.bundle?.path || null,
       reportPath: selectedRun?.report?.path || null,
     },
+    ...pipelineGraphImageNodes(),
   ];
   return {
 	    schema: 'kaminos.pipeline-graph-model.v0',
@@ -10587,9 +10745,18 @@ function buildPipelineGraphModel(source, selectedRun) {
 
 function selectPipelineGraphNode(nodeId) {
   const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
-  if (!pipelineGraphNodeForId(graph, nodeId)) return null;
+  const node = pipelineGraphNodeForId(graph, nodeId);
+  if (!node) return null;
   pipelineDockState.selectedGraphNodeId = nodeId;
   pipelineDockState.selectedGraphEdgeId = null;
+  if (node.kind === 'image') {
+    pipelineDockState.activeAssetPalette = 'image';
+    if (node.assetId) pipelineDockState.browserSelectedAssetIds.image = node.assetId;
+    loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
+  } else if (node.kind === 'source') {
+    pipelineDockState.activeAssetPalette = 'splat';
+    loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
+  }
   renderPipelineGraphWorkbench();
   return pipelineGraphNodeForId(pipelineDockState.pipelineGraph, nodeId);
 }
@@ -10661,6 +10828,74 @@ function pipelineGraphCanvasPoint(event) {
     x: Math.round(event.clientX - (rect?.left || 0)),
     y: Math.round(event.clientY - (rect?.top || 0)),
   };
+}
+
+function pipelineGraphDropPosition(event) {
+  const point = pipelineGraphCanvasPoint(event);
+  return pipelineClampGraphNodePosition({
+    x: point.x - pipelineGraphNodeSize.width / 2,
+    y: point.y - pipelineGraphNodeSize.height / 2,
+  }, document.getElementById('pipeline-graph-canvas'));
+}
+
+function beginPipelineAssetCardDrag(event, asset) {
+  if (event.button !== 0 || asset?.kind !== 'image') return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  if (event.currentTarget) event.currentTarget.draggable = false;
+  pipelineDockState.assetCardDrag = {
+    pointerId: event.pointerId,
+    assetId: asset.id,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    element: event.currentTarget,
+  };
+  window.kaminosPipelineDraggedAsset = asset;
+  document.addEventListener('pointermove', updatePipelineAssetCardDrag);
+  document.addEventListener('pointerup', endPipelineAssetCardDrag);
+  document.addEventListener('pointercancel', endPipelineAssetCardDrag);
+}
+
+function updatePipelineAssetCardDrag(event) {
+  const drag = pipelineDockState.assetCardDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (Math.abs(event.clientX - drag.startX) > 6 || Math.abs(event.clientY - drag.startY) > 6) {
+    event.preventDefault();
+    event.stopPropagation();
+    drag.moved = true;
+    drag.element?.classList?.add('dragging');
+  }
+}
+
+function endPipelineAssetCardDrag(event) {
+  const drag = pipelineDockState.assetCardDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  pipelineDockState.assetCardDrag = null;
+  document.removeEventListener('pointermove', updatePipelineAssetCardDrag);
+  document.removeEventListener('pointerup', endPipelineAssetCardDrag);
+  document.removeEventListener('pointercancel', endPipelineAssetCardDrag);
+  drag.element?.classList?.remove('dragging');
+  if (drag.element) drag.element.draggable = true;
+  if (!drag.moved) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const canvasFromPoint = document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.closest?.('#pipeline-graph-canvas');
+  const canvas = canvasFromPoint || document.getElementById('pipeline-graph-canvas');
+  const rect = canvas?.getBoundingClientRect?.();
+  const isOverCanvas = rect &&
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom;
+  if (!isOverCanvas) return;
+  const asset = pipelineAssetById(drag.assetId) || window.kaminosPipelineDraggedAsset;
+  createPipelineGraphImageNode(asset, pipelineGraphDropPosition(event));
+  window.kaminosPipelineSuppressAssetClick = true;
+  setTimeout(() => { window.kaminosPipelineSuppressAssetClick = false; }, 0);
 }
 
 function pipelineGraphPortTargetFromPoint(event, fromNodeId) {
@@ -10847,6 +11082,16 @@ function handlePipelineGraphKeydown(event) {
   pipelineRemoveGraphEdge(pipelineDockState.selectedGraphEdgeId);
 }
 
+function handlePipelineGraphAssetDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const assetId = event.dataTransfer?.getData('application/x-kaminos-asset-id') || window.kaminosPipelineDraggedAsset?.id || '';
+  const kind = event.dataTransfer?.getData('application/x-kaminos-asset-kind') || window.kaminosPipelineDraggedAsset?.kind || '';
+  if (kind !== 'image') return;
+  const asset = pipelineAssetById(assetId) || window.kaminosPipelineDraggedAsset;
+  createPipelineGraphImageNode(asset, pipelineGraphDropPosition(event));
+}
+
 function renderPipelineGraphWorkbench() {
   const canvas = document.getElementById('pipeline-graph-canvas');
   if (!canvas) return;
@@ -10865,6 +11110,7 @@ function renderPipelineGraphWorkbench() {
       tabindex="0"
       class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}${node.id === pipelineDockState.graphConnectionStartId ? ' connecting' : ''}${isTarget ? ' port-target' : ''}"
       data-pipeline-graph-node-id="${escapeHtml(node.id)}"
+      ${node.kind === 'image' ? `data-pipeline-graph-image-node-id="${escapeHtml(node.id)}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
@@ -10940,6 +11186,13 @@ function renderPipelineGraphWorkbench() {
     ${nodeMarkup}
     ${edgeHandleMarkup}
   `;
+  if (!canvas.dataset.pipelineAssetDropInstalled) {
+    canvas.addEventListener('dragover', event => {
+      if ((event.dataTransfer?.types || []).includes('application/x-kaminos-asset-id')) event.preventDefault();
+    });
+    canvas.addEventListener('drop', handlePipelineGraphAssetDrop);
+    canvas.dataset.pipelineAssetDropInstalled = 'true';
+  }
   canvas.querySelectorAll('[data-pipeline-graph-edge-id]').forEach(edgeEl => {
     const edgeId = edgeEl.dataset.pipelineGraphEdgeId;
     edgeEl.addEventListener('pointerdown', event => {
@@ -11405,6 +11658,9 @@ function initPipelineDock() {
   }));
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
+  document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
+    button.addEventListener('click', () => selectPipelineAssetPalette(button.dataset.pipelineAssetPalette));
+  });
   loadPipelineManifest().catch(err => {
     setInfo(err.message || String(err));
     renderPipelineDock();
