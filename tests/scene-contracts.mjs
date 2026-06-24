@@ -102,6 +102,13 @@ assert.match(index, /function buildPipelineGraphModel\(/, 'Pipeline graph builds
 assert.match(index, /function selectPipelineGraphNode\(/, 'Pipeline graph nodes are selected through an explicit pointer-real selection path');
 assert.match(index, /data-pipeline-graph-node-id/, 'Pipeline graph nodes expose stable DOM ids for pointer smoke witnesses');
 assert.match(index, /pointerdown/, 'Pipeline graph selection must exercise pointer-real input, not only programmatic click handlers');
+assert.match(index, /pipelineDockState\.graphNodePositions/, 'Pipeline graph stores session-local node positions for draggable composition');
+assert.match(index, /function beginPipelineGraphNodeDrag\(/, 'Pipeline graph nodes can be moved through a pointer drag path');
+assert.match(index, /setPointerCapture/, 'Pipeline graph dragging captures the pointer so movement is operator-real');
+assert.match(index, /data-pipeline-graph-edge-id/, 'Pipeline graph edges expose stable ids for selection and hook smoke witnesses');
+assert.match(index, /pipelineDockState\.graphEdges/, 'Pipeline graph keeps editable edge state instead of hardcoded-only connections');
+assert.match(index, /function pipelineStartGraphConnection\(/, 'Pipeline graph exposes an explicit connection gesture for hooking nodes together');
+assert.match(index, /function pipelineCompleteGraphConnection\(/, 'Pipeline graph can complete a connection gesture into editable edge state');
 assert.match(index, /fixture output; not real model compute/, 'Pipeline graph must label fixture outputs instead of presenting them as real model compute');
 assert.match(index, /Splat Assets/, 'Pipeline browser labels the substrate being browsed');
 assert.match(index, /renderability/i, 'Pipeline asset cards expose whether a listed file is likely renderable as a splat');
