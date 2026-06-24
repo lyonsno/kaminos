@@ -1524,6 +1524,8 @@ async function runForgeHostVisibleActorsScenario(ws) {
         forgeHost: selectedState || forgeHost,
         initialForgeHost: forgeHost,
         actorId,
+        selectedSourceMarker: (selectedState || forgeHost)?.selectedActor?.legibility?.sourceMarker || null,
+        selectedStationGroup: (selectedState || forgeHost)?.selectedActor?.legibility?.stationGroup || null,
         labelsBefore,
         labelsAfter,
         rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({ id: row.dataset.sceneObjectId })),
@@ -1552,6 +1554,14 @@ async function runForgeHostVisibleActorsScenario(ws) {
   if (forgeHost.layoutMotionAuthority || forgeHost.layoutDynamicsAuthority) {
     throw new Error(`Forge Host static layout claimed motion or dynamics authority: ${JSON.stringify(evidence)}`);
   }
+  if (!forgeHost.stationGroupSummary?.groups?.length) {
+    throw new Error(`Forge Host actor witness did not expose station group summary: ${JSON.stringify(evidence)}`);
+  }
+  if (forgeHost.stationGroupMotionAuthority || forgeHost.stationGroupDynamicsAuthority
+    || forgeHost.stationGroupSummary?.authority?.motionAuthority
+    || forgeHost.stationGroupSummary?.authority?.dynamicsAuthority) {
+    throw new Error(`station group summary claimed motion or dynamics authority: ${JSON.stringify(evidence)}`);
+  }
   if (forgeHost.authoredSceneObjectCount !== 0) {
     throw new Error(`Forge Host visible actors mutated the authored scene object registry: ${JSON.stringify(evidence)}`);
   }
@@ -1569,6 +1579,12 @@ async function runForgeHostVisibleActorsScenario(ws) {
   }
   if (!evidence.inspectorVisible || !forgeHost.inspectorVisible) {
     throw new Error(`Forge Host actor selection did not expose the inspector: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.selectedSourceMarker?.kind) {
+    throw new Error(`selected actor did not expose source marker: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.selectedStationGroup?.groupId) {
+    throw new Error(`selected actor did not expose station group: ${JSON.stringify(evidence)}`);
   }
   if (!/Forge Host actor selected/.test(evidence.info)) {
     throw new Error(`Forge Host actor selection did not report source-visible status: ${JSON.stringify(evidence)}`);

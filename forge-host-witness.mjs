@@ -72,6 +72,7 @@ try {
     layout: layoutSummary,
     claimedSourceKind: summary.claimedSourceKind,
     actorBuckets: summary.actorBuckets,
+    stationGroupSummary: summary.stationGroupSummary,
     selectedActor: summary.selectedActor,
     actorIds: summary.actorIds,
     filteredDiauloi: summary.filteredDiauloi,
@@ -100,6 +101,7 @@ try {
     } : null,
     claimedSourceKind: claimSourceKind,
     actorBuckets: null,
+    stationGroupSummary: registry?.stationGroups || null,
     selectedActor: null,
   });
   throw error;

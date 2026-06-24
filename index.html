@@ -2865,7 +2865,7 @@ function spawnForgeHostActors(registry) {
     const label = document.createElement('div');
     label.className = 'forge-host-actor-label';
     label.setAttribute('data-forge-host-actor-label', actor.actorId);
-    label.textContent = actor.callSign || actor.diaulosId || actor.actorId;
+    label.textContent = `${actor.callSign || actor.diaulosId || actor.actorId} · ${actor.legibility?.sourceMarker?.label || 'source?'}`;
     labelLayer?.appendChild(label);
     forgeHostActorMeshes.push({ actor, mesh, label, baseScale: scale });
   }
@@ -2962,11 +2962,15 @@ function updateForgeHostInspector() {
   }
   const actor = record.actor;
   const sourceRecord = actor.provenance?.sourceActorRecord || {};
+  const stationGroup = actor.legibility?.stationGroup || {};
+  const sourceMarker = actor.legibility?.sourceMarker || {};
   inspector.classList.add('visible');
   inspector.innerHTML = `
     <div class="forge-host-inspector-title">${escapeHtml(actor.callSign || actor.actorId)}</div>
     <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Station</span><span class="forge-host-inspector-value">${escapeHtml(actor.station?.label || actor.station?.id || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Group</span><span class="forge-host-inspector-value">${escapeHtml(stationGroup.label || stationGroup.groupId || 'unknown')}</span></div>
     <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Status</span><span class="forge-host-inspector-value">${escapeHtml(actor.status?.state || 'unknown')}</span></div>
+    <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Marker</span><span class="forge-host-inspector-value">${escapeHtml(sourceMarker.kind || 'unknown')}</span></div>
     <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Diaulos</span><span class="forge-host-inspector-value">${escapeHtml(actor.diaulosId || 'unknown')}</span></div>
     <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Source</span><span class="forge-host-inspector-value">${escapeHtml(forgeHostRegistry?.source?.kind || 'unknown')}</span></div>
     <div class="forge-host-inspector-row"><span class="forge-host-inspector-key">Registry</span><span class="forge-host-inspector-value">${escapeHtml(sourceRecord.registryId || 'not-bound')}</span></div>
@@ -2977,6 +2981,7 @@ function updateForgeHostLabels() {
   if (!renderer || !camera || !forgeHostActorMeshes.length) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const world = new THREE.Vector3();
+  const placements = [];
   for (const record of forgeHostActorMeshes) {
     if (!record.label) continue;
     record.mesh.getWorldPosition(world);
@@ -2987,11 +2992,48 @@ function updateForgeHostLabels() {
       record.label.style.display = 'none';
       continue;
     }
+    record.label.style.display = '';
+    const width = Math.min(record.label.offsetWidth || 180, 220);
+    const height = record.label.offsetHeight || 22;
     const x = (projected.x * 0.5 + 0.5) * rect.width;
     const y = (-projected.y * 0.5 + 0.5) * rect.height;
-    record.label.style.display = '';
-    record.label.style.left = `${x}px`;
-    record.label.style.top = `${y}px`;
+    placements.push({
+      label: record.label,
+      width,
+      height,
+      x: THREE.MathUtils.clamp(x, width / 2 + 8, rect.width - width / 2 - 8),
+      y: THREE.MathUtils.clamp(y, height / 2 + 8, rect.height - height / 2 - 8),
+    });
+  }
+  placements.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  const boxes = [];
+  for (const placement of placements) {
+    let x = placement.x;
+    let y = placement.y;
+    let box = {
+      left: x - placement.width / 2,
+      right: x + placement.width / 2,
+      top: y - placement.height / 2,
+      bottom: y + placement.height / 2,
+    };
+    for (let i = 0; i < boxes.length; i += 1) {
+      const other = boxes[i];
+      const overlaps = !(box.right + 4 < other.left
+        || box.left - 4 > other.right
+        || box.bottom + 4 < other.top
+        || box.top - 4 > other.bottom);
+      if (!overlaps) continue;
+      y = Math.min(rect.height - placement.height / 2 - 8, other.bottom + placement.height / 2 + 6);
+      box = {
+        left: x - placement.width / 2,
+        right: x + placement.width / 2,
+        top: y - placement.height / 2,
+        bottom: y + placement.height / 2,
+      };
+    }
+    placement.label.style.left = `${x}px`;
+    placement.label.style.top = `${y}px`;
+    boxes.push(box);
   }
 }
 
@@ -3026,6 +3068,11 @@ function forgeHostDebugState() {
     layoutAnchorCount: forgeHostLayoutSummary?.anchorCount || 0,
     layoutMotionAuthority: forgeHostLayoutSummary?.motionAuthority === true,
     layoutDynamicsAuthority: forgeHostLayoutSummary?.dynamicsAuthority === true,
+    stationGroupSummary: forgeHostWitnessSummary?.stationGroupSummary || forgeHostRegistry?.stationGroups || null,
+    stationGroupMotionAuthority: (forgeHostWitnessSummary?.stationGroupSummary?.authority?.motionAuthority
+      || forgeHostRegistry?.stationGroups?.authority?.motionAuthority) === true,
+    stationGroupDynamicsAuthority: (forgeHostWitnessSummary?.stationGroupSummary?.authority?.dynamicsAuthority
+      || forgeHostRegistry?.stationGroups?.authority?.dynamicsAuthority) === true,
     authoredSceneObjectCount: sceneObjects.length,
     actorMeshes: forgeHostActorMeshes.map(record => ({
       actorId: record.actor.actorId,
@@ -3049,6 +3096,7 @@ function forgeHostDebugState() {
     sourceIdentity: null,
       expectedFixtureSource: FORGE_HOST_FIXTURE_SOURCE_ID,
       actorBuckets: { promoted: 0, current: 0, recent: 0, filtered: 0 },
+      stationGroupSummary: null,
       actors: [],
     ...base,
   };

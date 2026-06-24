@@ -1,10 +1,12 @@
 export const FORGE_HOST_ACTOR_SCHEMA = 'kaminos.forge-host.actors.v0';
 export const FORGE_HOST_LAYOUT_SCHEMA = 'kaminos.forge-host.layout.v0';
+export const FORGE_HOST_STATION_GROUP_SCHEMA = 'kaminos.forge-host.station-groups.v0';
 export const FORGE_HOST_FIXTURE_SOURCE_ID = 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0';
 export const FORGE_HOST_DIAULOS_REGISTRY_SCHEMA = 'epistaxis.diaulos-registry.v0';
 export const FORGE_HOST_HERO_SPLAT_SOURCE = '/api/read?root=splat-inbox&path=evil_orb_final_composite.ply';
 export const FORGE_HOST_STATIC_LAYOUT_AUTHORITY = 'static-host-owned-station-anchors';
 export const FORGE_HOST_STATIC_ANCHOR_AUTHORITY = 'static-host-owned-station-anchor';
+export const FORGE_HOST_STATION_GROUP_AUTHORITY = 'static-host-owned-station-groups';
 
 export const FORGE_HOST_STATUS_COLORS = Object.freeze({
   idle: '#6f7d8f',
@@ -127,6 +129,39 @@ const FILTERED_DIAULOI = Object.freeze([
   { diaulosId: 'archived-volume-smoke-lane', reason: 'not-promoted-current-or-recent' },
 ]);
 
+const STATION_GROUP_DEFS = Object.freeze([
+  {
+    groupId: 'active-current',
+    label: 'Active Current',
+    order: 10,
+    role: 'operator-primary-current-diauloi',
+  },
+  {
+    groupId: 'promoted-core',
+    label: 'Promoted Core',
+    order: 20,
+    role: 'promoted-lanes-without-current-claim',
+  },
+  {
+    groupId: 'recent-periphery',
+    label: 'Recent Periphery',
+    order: 30,
+    role: 'recent-or-stale-lanes-kept-legible',
+  },
+  {
+    groupId: 'registry-intake',
+    label: 'Registry Intake',
+    order: 40,
+    role: 'registry-backed-diauloi-outside-seeded-stations',
+  },
+  {
+    groupId: 'missing-requested',
+    label: 'Missing Requested',
+    order: 90,
+    role: 'requested-diauloi-absent-from-effective-source',
+  },
+]);
+
 const DEFAULT_REQUESTED_HANDLES = Object.freeze(FIXTURE_ACTORS.map(actor => actor.diaulosId));
 const DEFAULT_SET_BY_HANDLE = Object.freeze(Object.fromEntries(
   FIXTURE_ACTORS.map(actor => [actor.diaulosId, actor.sets])
@@ -142,6 +177,42 @@ function cloneJson(value) {
 function statusRecord(state) {
   if (!FORGE_HOST_STATUS_COLORS[state]) throw new Error(`Unknown forge-host status state: ${state}`);
   return { state, color: FORGE_HOST_STATUS_COLORS[state], light: STATUS_LIGHT[state] };
+}
+
+function stationGroupForRawActor(raw) {
+  const sets = new Set(raw.sets || []);
+  if (sets.has('current')) return STATION_GROUP_DEFS[0];
+  if (sets.has('promoted')) return STATION_GROUP_DEFS[1];
+  if (sets.has('recent') || raw.status === 'stale') return STATION_GROUP_DEFS[2];
+  return STATION_GROUP_DEFS[3];
+}
+
+function sourceMarkerForRawActor(raw, sourceActorRecord) {
+  if (sourceActorRecord?.registryId) {
+    return {
+      kind: 'live-registry-backed',
+      label: 'registry-backed',
+      stale: false,
+      sourceIdentity: sourceActorRecord.registryId,
+      evidence: 'diaulos-registry-identity-binding-not-runtime-presence',
+    };
+  }
+  if (raw.status === 'stale') {
+    return {
+      kind: 'stale-source',
+      label: 'stale fixture',
+      stale: true,
+      sourceIdentity: sourceActorRecord?.fixtureSourceId || null,
+      evidence: 'fixture-shaped-status-marker-not-live-runtime-evidence',
+    };
+  }
+  return {
+    kind: 'fixture-shaped',
+    label: 'fixture',
+    stale: false,
+    sourceIdentity: sourceActorRecord?.fixtureSourceId || null,
+    evidence: 'seeded-fixture-shape-not-live-runtime-evidence',
+  };
 }
 
 function bodyPlan() {
@@ -180,6 +251,7 @@ function bodyPlan() {
 
 function actorRecord(raw, sourceActorRecord) {
   const actorId = `forge-actor:${raw.diaulosId}`;
+  const stationGroup = stationGroupForRawActor(raw);
   return {
     actorId,
     diaulosId: raw.diaulosId,
@@ -194,6 +266,19 @@ function actorRecord(raw, sourceActorRecord) {
       position: [...raw.position],
       rotation: [...raw.rotation],
       scale: raw.scale,
+    },
+    legibility: {
+      schema: FORGE_HOST_STATION_GROUP_SCHEMA,
+      stationGroup: {
+        groupId: stationGroup.groupId,
+        label: stationGroup.label,
+        order: stationGroup.order,
+        role: stationGroup.role,
+      },
+      sourceMarker: sourceMarkerForRawActor(raw, sourceActorRecord),
+      motionAuthority: false,
+      dynamicsAuthority: false,
+      agencyAuthority: false,
     },
     selection: {
       selectable: true,
@@ -211,6 +296,65 @@ function actorRecord(raw, sourceActorRecord) {
       continuity: 'replaceable-context-in-durable-diaulos-body',
     },
     provenance: { sourceActorRecord, sourceRefs: [...SOURCE_REFS] },
+  };
+}
+
+function buildForgeHostStationGroups(actors, {
+  missingRequestedDiauloi = [],
+  filteredDiauloi = [],
+  sourceId = null,
+} = {}) {
+  const byGroup = new Map(STATION_GROUP_DEFS.map(group => [group.groupId, {
+    ...group,
+    actorIds: [],
+    diaulosIds: [],
+    count: 0,
+  }]));
+
+  for (const actor of actors || []) {
+    const groupId = actor.legibility?.stationGroup?.groupId || 'registry-intake';
+    const group = byGroup.get(groupId) || byGroup.get('registry-intake');
+    group.actorIds.push(actor.actorId);
+    group.diaulosIds.push(actor.diaulosId);
+    group.count += 1;
+  }
+
+  if (missingRequestedDiauloi.length) {
+    const group = byGroup.get('missing-requested');
+    group.diaulosIds.push(...missingRequestedDiauloi.map(entry => entry.diaulosId));
+    group.count = missingRequestedDiauloi.length;
+  }
+
+  return {
+    schema: FORGE_HOST_STATION_GROUP_SCHEMA,
+    truthLevel: 'operator-legibility-not-motion-or-agency-truth',
+    source: {
+      id: sourceId,
+      derivedFrom: 'forge-host-actor-registry-and-requested-diaulos-set',
+    },
+    authority: {
+      kind: FORGE_HOST_STATION_GROUP_AUTHORITY,
+      ownerDiaulos: 'minion-spawnfucker',
+      static: true,
+      visibilityAuthority: true,
+      motionAuthority: false,
+      dynamicsAuthority: false,
+      custodyBoundary: 'station groups organize visibility only; Mushfinger owns motion semantics and dynamics',
+    },
+    groups: [...byGroup.values()]
+      .filter(group => group.count > 0)
+      .sort((a, b) => a.order - b.order)
+      .map(group => ({
+        groupId: group.groupId,
+        label: group.label,
+        order: group.order,
+        role: group.role,
+        count: group.count,
+        actorIds: [...group.actorIds],
+        diaulosIds: [...group.diaulosIds],
+      })),
+    missingRequested: cloneJson(missingRequestedDiauloi),
+    filteredDiauloi: cloneJson(filteredDiauloi),
   };
 }
 
@@ -467,6 +611,11 @@ export function createForgeHostRegistryFromDiaulosRegistry(data, {
     actors,
     filteredDiauloi,
     missingRequestedDiauloi,
+    stationGroups: buildForgeHostStationGroups(actors, {
+      missingRequestedDiauloi,
+      filteredDiauloi,
+      sourceId,
+    }),
   };
 }
 
@@ -475,6 +624,11 @@ export function createForgeHostFixtureRegistry({
   sourceId = FORGE_HOST_FIXTURE_SOURCE_ID,
   fallback = false,
 } = {}) {
+  const actors = FIXTURE_ACTORS.map(raw => actorRecord(raw, {
+    fixtureSourceId: sourceId,
+    diaulosId: raw.diaulosId,
+    sets: [...raw.sets],
+  }));
   return {
     schema: FORGE_HOST_ACTOR_SCHEMA,
     truthLevel: 'peripheral-hud-not-ground-truth',
@@ -483,12 +637,12 @@ export function createForgeHostFixtureRegistry({
       source: 'operator lane allocation and Minion Spawnfucker launch topos',
       refs: [...SOURCE_REFS],
     },
-    actors: FIXTURE_ACTORS.map(raw => actorRecord(raw, {
-      fixtureSourceId: sourceId,
-      diaulosId: raw.diaulosId,
-      sets: [...raw.sets],
-    })),
+    actors,
     filteredDiauloi: cloneJson(FILTERED_DIAULOI),
+    stationGroups: buildForgeHostStationGroups(actors, {
+      filteredDiauloi: FILTERED_DIAULOI,
+      sourceId,
+    }),
   };
 }
 
@@ -535,6 +689,11 @@ export function buildForgeHostWitnessSummary(registry, { claimedSourceKind = 'fi
     sourceIdentity: registry.source?.id || null,
     actorBuckets: actorBuckets(registry),
     counts: actorBuckets(registry),
+    stationGroupSummary: cloneJson(registry.stationGroups || buildForgeHostStationGroups(registry.actors || [], {
+      missingRequestedDiauloi: registry.missingRequestedDiauloi || [],
+      filteredDiauloi: registry.filteredDiauloi || [],
+      sourceId: registry.source?.id || null,
+    })),
     actorIds: registry.actors.map(actor => actor.actorId),
     selectedActor: cloneJson(selectedActor),
     defaultSelection: cloneJson(selectedActor),

@@ -15,6 +15,7 @@ const witness = readFileSync(witnessPath, 'utf8');
 
 assert.equal(core.FORGE_HOST_ACTOR_SCHEMA, 'kaminos.forge-host.actors.v0', 'forge-host actor contract has a stable schema id');
 assert.equal(core.FORGE_HOST_LAYOUT_SCHEMA, 'kaminos.forge-host.layout.v0', 'forge-host layout contract has a stable schema id');
+assert.equal(core.FORGE_HOST_STATION_GROUP_SCHEMA, 'kaminos.forge-host.station-groups.v0', 'forge-host station-group contract has a stable schema id');
 assert.equal(core.FORGE_HOST_FIXTURE_SOURCE_ID, 'fixture:kaminos-inhabited-agent-forge-2026-06-23/minion-spawnfucker-v0', 'forge-host fixture has a stable source id');
 assert.match(index, /from '\.\/forge-host-core\.js'/, 'workbench imports the forge-host data contract');
 assert.match(index, /forge_host_fixture/, 'URL route can seed the forge-host fixture actor set');
@@ -32,6 +33,9 @@ assert.match(index, /new THREE\.SphereGeometry\(0\.16, 32, 16\)/, 'first visible
 assert.match(index, /forgeHostActorGroup/, 'forge-host actors live in a separate scene group, not the authored scene object registry');
 assert.match(index, /kaminosForgeHostActor/, 'forge-host actor meshes preserve actor metadata on userData');
 assert.match(index, /visibleActorCount/, 'forge-host debug state records visible actor count');
+assert.match(index, /stationGroupSummary/, 'forge-host debug state records station-group legibility summary');
+assert.match(index, /Group<\/span>/, 'selected actor inspector exposes station-group legibility');
+assert.match(index, /Marker<\/span>/, 'selected actor inspector exposes fixture/live/stale source markers');
 assert.match(index, /layoutAuthority/, 'forge-host debug state records static layout authority');
 assert.match(index, /layoutSourceIdentity/, 'forge-host debug state records effective layout source identity');
 assert.match(index, /authoredSceneObjectCount:\s*sceneObjects\.length/, 'forge-host debug state proves actor bodies are not authored scene objects');
@@ -59,6 +63,12 @@ assert.ok(actors.some(actor => actor.diaulosId === 'mushfinger-clayfucker' && ac
 assert.ok(actors.some(actor => actor.diaulosId === 'pipeline-gutfucker' && actor.sets.includes('promoted')), 'fixture includes Pipeline Gutfucker as promoted pipeline actor');
 assert.ok(actors.some(actor => actor.sets.includes('recent')), 'fixture includes recent actors without promoting every diaulos');
 assert.ok(registry.filteredDiauloi.some(entry => entry.reason === 'not-promoted-current-or-recent'), 'fixture records filtered diauloi instead of rendering every historical lane');
+assert.equal(registry.stationGroups.schema, core.FORGE_HOST_STATION_GROUP_SCHEMA, 'fixture registry includes a station-group legibility contract');
+assert.equal(registry.stationGroups.authority.kind, 'static-host-owned-station-groups', 'station groups are host-owned visibility metadata');
+assert.equal(registry.stationGroups.authority.motionAuthority, false, 'station groups do not claim motion authority');
+assert.equal(registry.stationGroups.authority.dynamicsAuthority, false, 'station groups do not claim dynamics authority');
+assert.ok(registry.stationGroups.groups.some(group => group.groupId === 'active-current' && group.actorIds.includes('forge-actor:minion-spawnfucker')), 'current actors cluster into an active station group');
+assert.ok(registry.stationGroups.groups.some(group => group.groupId === 'recent-periphery' && group.actorIds.includes('forge-actor:gutterglass-pornographers')), 'recent-only actors stay visible in a peripheral station group');
 assert.equal(layout.schema, core.FORGE_HOST_LAYOUT_SCHEMA, 'static layout carries the layout schema');
 assert.equal(layout.authority.kind, 'static-host-owned-station-anchors', 'static layout names host-owned station-anchor authority');
 assert.equal(layout.authority.dynamicsAuthority, false, 'static layout does not claim Mushfinger dynamics authority');
@@ -101,6 +111,10 @@ for (const actor of actors) {
   assert.match(actor.status.color, /^#[0-9a-f]{6}$/i, 'actor status carries a concrete status color');
   assert.ok(Array.isArray(actor.spatial.position) && actor.spatial.position.length === 3, 'actor has a 3D spatial anchor');
   assert.ok(actor.station.id && actor.station.custodyScope, 'actor has a station and custody scope');
+  assert.ok(actor.legibility?.stationGroup?.groupId, 'actor carries a station-group legibility assignment');
+  assert.ok(['fixture-shaped', 'live-registry-backed', 'missing-requested', 'stale-source'].includes(actor.legibility?.sourceMarker?.kind), 'actor carries a source/stale legibility marker');
+  assert.equal(actor.legibility.motionAuthority, false, 'actor legibility metadata must not claim motion authority');
+  assert.equal(actor.legibility.dynamicsAuthority, false, 'actor legibility metadata must not claim dynamics authority');
   assert.equal(actor.selection.selectable, true, 'actor selection affordance is explicit');
   assert.equal(actor.selection.bridge.kind, 'chat-terminal-placeholder', 'actor exposes the future chat/terminal bridge placeholder');
   assert.equal(actor.selection.bridge.implemented, false, 'bridge placeholder must not impersonate a live chat bridge');
@@ -150,16 +164,23 @@ assert.ok(liveRegistry.actors.some(actor => actor.diaulosId === 'mushfinger-clay
 assert.ok(liveRegistry.actors.some(actor => actor.diaulosId === 'pipeline-gutfucker' && actor.sets.includes('promoted')), 'Pipeline registry row receives the promoted actor set');
 assert.ok(liveRegistry.filteredDiauloi.some(entry => entry.diaulosId === 'unrelated-registry-lane' && entry.reason === 'outside-forge-focus-filter'), 'unrelated registry rows are recorded as filtered');
 assert.ok(liveRegistry.missingRequestedDiauloi.some(entry => entry.diaulosId === 'minion-spawnfucker' && entry.reason === 'missing-from-diaulos-registry'), 'missing promoted/current rows stay visible instead of being fabricated as live');
+assert.equal(liveRegistry.stationGroups.missingRequested.length, 4, 'live station groups carry missing requested rows as visibility metadata');
+assert.ok(liveRegistry.stationGroups.groups.some(group => group.groupId === 'missing-requested' && group.count === 4), 'missing requested diauloi get their own station group instead of fake actors');
+assert.ok(liveRegistry.actors.every(actor => actor.legibility.sourceMarker.kind === 'live-registry-backed'), 'live registry actors expose live-registry-backed markers');
 const liveSummary = core.buildForgeHostWitnessSummary(liveRegistry, { claimedSourceKind: 'live' });
 assert.equal(liveSummary.ok, true, 'live registry witness succeeds when claimed as live');
 assert.equal(liveSummary.counts.registryBacked, 2, 'live summary reports registry-backed actor count');
 assert.equal(liveSummary.missingRequestedDiauloi.length, 4, 'live summary preserves missing requested actor rows');
+assert.equal(liveSummary.stationGroupSummary.authority.motionAuthority, false, 'station group summary preserves the no-motion-authority boundary');
+assert.ok(liveSummary.stationGroupSummary.groups.some(group => group.groupId === 'missing-requested'), 'station group summary exposes missing requested group');
 
 const summary = core.buildForgeHostWitnessSummary(registry, { claimedSourceKind: 'fixture' });
 assert.equal(summary.ok, true, 'fixture witness summary succeeds when claimed as fixture');
 assert.equal(summary.source.id, core.FORGE_HOST_FIXTURE_SOURCE_ID, 'witness summary records source identity');
 assert.equal(summary.counts.promoted >= 3, true, 'witness summary reports promoted actor count');
 assert.equal(summary.defaultSelection.actorId, 'forge-actor:minion-spawnfucker', 'default selection targets the forge-host owner');
+assert.ok(summary.stationGroupSummary.groups.some(group => group.groupId === 'active-current'), 'witness summary records active/current station grouping');
+assert.ok(summary.stationGroupSummary.groups.some(group => group.groupId === 'recent-periphery'), 'witness summary records recent station grouping');
 
 assert.throws(
   () => core.buildForgeHostWitnessSummary(registry, { claimedSourceKind: 'live' }),
@@ -190,5 +211,6 @@ assert.match(witness, /sourceIdentity/, 'witness report records source identity'
 assert.match(witness, /layoutSourceIdentity/, 'witness report records static layout source identity');
 assert.match(witness, /registry\?\.source\?\.id/, 'witness failure reports preserve the effective source identity');
 assert.match(witness, /actorBuckets/, 'witness report records promoted/current/recent/filtered buckets');
+assert.match(witness, /stationGroupSummary/, 'witness report records station-group legibility buckets');
 assert.match(witness, /selectedActor/, 'witness report records default selected actor metadata');
 assert.match(witness, /writeFileSync\(reportPath/, 'witness writes a durable JSON report');

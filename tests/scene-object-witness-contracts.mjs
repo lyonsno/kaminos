@@ -16,6 +16,9 @@ assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host actor witness re
 assert.match(witness, /forgeHost\.visibleActorCount/, 'Forge Host actor witness requires visible actor meshes');
 assert.match(witness, /forgeHost\.layoutAuthority/, 'Forge Host actor witness requires static layout authority evidence');
 assert.match(witness, /forgeHost\.layoutSourceIdentity/, 'Forge Host actor witness records effective layout source identity');
+assert.match(witness, /forgeHost\.stationGroupSummary/, 'Forge Host actor witness requires station-group legibility evidence');
+assert.match(witness, /station group summary claimed motion or dynamics authority/, 'Forge Host actor witness rejects station-group motion/dynamics authority');
+assert.match(witness, /selected actor did not expose source marker/, 'Forge Host actor witness requires selected source/stale marker visibility');
 assert.match(witness, /forgeHost\.authoredSceneObjectCount !== 0/, 'Forge Host actor witness proves actors do not become authored scene objects');
 assert.match(witness, /layout source did not remain separate from actor source/, 'Forge Host actor witness rejects layout/actor source conflation');
 assert.match(witness, /kaminosSelectForgeActor/, 'Forge Host actor witness can select an actor through the explicit debug selector');
