@@ -126,6 +126,10 @@ async function main() {
     assert.equal(state?.baselineDisposition, 'coherent-but-wrong-model-baseline', 'v0 baseline disposition missing');
     assert.ok(state?.macroAssemblageCount >= 3 && state.macroAssemblageCount <= 5, 'composition must expose 3-5 macro assemblages');
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
+    assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
+    assert.ok(state?.closureAnchorCount >= 4, 'composition must expose spherical closure anchors');
+    assert.ok(state?.MacroTerritoryBody?.every(body => body?.schema === 'MacroTerritoryBody'), 'MacroTerritoryBody descriptors missing from debug state');
+    assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
 
@@ -146,7 +150,11 @@ async function main() {
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
       bandMemberCount: state.bandMemberCount,
+      territoryBodyCount: state.territoryBodyCount,
+      closureAnchorCount: state.closureAnchorCount,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
+      MacroTerritoryBody: state.MacroTerritoryBody,
+      sphericalClosureAnchors: state.sphericalClosureAnchors,
       OrbShellComposition: state.OrbShellComposition,
       browserEvents,
       stderrTail: stderr.slice(-2000),
