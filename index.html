@@ -4595,8 +4595,54 @@ function pipelineGraphNodeForId(graph, nodeId) {
   return graph?.nodes?.find(node => node.id === nodeId) || null;
 }
 
+function pipelineGraphImageNodeSource(node, routeNodeId = 'route') {
+  if (!node?.source) return null;
+  return {
+    kind: 'image-graph-node',
+    label: node.title || node.path || node.source,
+    source: node.source,
+    assetId: node.assetId || null,
+    graphNodeId: node.id || null,
+    routeNodeId,
+    stage: node.stage || null,
+    rootId: node.rootId || null,
+    path: node.path || null,
+  };
+}
+
+function pipelineGraphRouteInputSource(routeNodeId = 'route') {
+  const incoming = pipelineGraphEdges().filter(edge => edge.to === routeNodeId);
+  const imageEdge = incoming.find(edge => pipelineGraphImageNodes().some(node => node.id === edge.from));
+  if (imageEdge) {
+    const imageNode = pipelineGraphImageNodes().find(node => node.id === imageEdge.from);
+    const source = pipelineGraphImageNodeSource(imageNode, routeNodeId);
+    if (source?.source) return source;
+  }
+  if (incoming.some(edge => edge.from === 'source')) {
+    const source = pipelineSelectedSource();
+    return source ? { ...source, graphNodeId: 'source', routeNodeId } : null;
+  }
+  const source = pipelineSelectedSource();
+  return source ? { ...source, routeNodeId, fallback: 'ambient-selected-source' } : null;
+}
+
 function pipelineRunUsesFixture(result) {
   return Boolean(result?.report?.document?.stages?.some(stage => stage.status === 'fixture'));
+}
+
+function pipelineRouteUsesFixture(routeOrNode = null) {
+  if (routeOrNode?.fixtureBacked) return true;
+  const pipeline = routeOrNode?.pipeline || routeOrNode || selectedPipelineRecord();
+  const generator = routeOrNode?.generator || selectedPipelineGeneratorRecord();
+  const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
+  const modes = pipelineRouteStageModes(pipeline);
+  const routeText = `${pipeline?.id || ''} ${pipeline?.routeId || ''} ${modes.join(' ')} ${generatorRecord?.chips?.join(' ') || ''}`.toLowerCase();
+  return routeText.includes('fixture') || modes.includes('fixture') || Boolean(generatorRecord?.fixture);
+}
+
+function pipelineFixtureInputBoundaryText(routeOrNode = null) {
+  if (!pipelineRouteUsesFixture(routeOrNode)) return '';
+  return 'input provenance only; output fixed fixture';
 }
 
 const pipelineGraphNodeSize = { width: 136, height: 78 };
@@ -4831,12 +4877,12 @@ function buildPipelineGraphModel(source, selectedRun) {
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
   const splat = pipelineRunArtifact(selectedRun, 'splat');
   const runId = selectedRun ? pipelineRunDisplayId(selectedRun) : null;
-  const fixtureBacked = pipelineRunUsesFixture(selectedRun);
+  const fixtureBacked = pipelineRunUsesFixture(selectedRun) || pipelineRouteUsesFixture(pipeline);
   const sourceLabel = selectedRun?.source?.label || source?.label || 'No source selected';
   const sourcePath = selectedRun?.source?.source || source?.source || null;
   const routeLabel = generatorRecord?.operationTitle || 'No generator selected';
   const backendPipelineId = selectedRun?.pipelineId || generatorRecord?.backendPipelineId || pipeline?.id || null;
-  const routeDetail = `${generatorRecord?.backendLabel || 'Backend route'}: ${backendPipelineId || 'unrouted'}${fixtureBacked ? ' / fixture-backed' : ''}`;
+  const routeDetail = `${generatorRecord?.backendLabel || 'Backend route'}: ${backendPipelineId || 'unrouted'}${fixtureBacked ? ' / input provenance only; output fixed fixture' : ''}`;
   const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : ''}Splat output` : sidecar?.path ? 'No new splat' : 'No output yet';
   const evidenceLabel = selectedRun?.ok ? 'Run evidence written' : selectedRun ? 'Run failed' : 'No run evidence';
   const nodes = [
@@ -5218,8 +5264,11 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   ];
   if (selectedRun) rows.push({ key: 'run', value: pipelineRunDisplayId(selectedRun) });
   if (node.kind === 'route') {
+    const inputSource = pipelineGraphRouteInputSource(node.id);
     rows.push({ key: 'generator', value: node.generator?.title || node.title || 'unknown' });
     rows.push({ key: 'backend', value: node.backendPipelineId || node.pipeline?.id || 'unrouted' });
+    rows.push({ key: 'input', value: inputSource?.label || inputSource?.source || 'not connected' });
+    if (pipelineRouteUsesFixture(node)) rows.push({ key: 'truth', value: pipelineFixtureInputBoundaryText(node) });
     if (selectedRun) {
       rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
       rows.push({ key: 'execution', value: selectedRun.graphExecution?.nodeId ? `graph node ${selectedRun.graphExecution.nodeId}` : 'sidebar or prior run' });
@@ -5227,6 +5276,7 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   }
   if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
   if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
+  if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'input', value: pipelineFixtureInputBoundaryText(node) });
   if (node.kind === 'image') {
     rows.push({ key: 'source', value: node.source || 'missing' });
     rows.push({ key: 'scope', value: 'graph working input' });
@@ -5244,6 +5294,15 @@ function renderPipelineGraphInspector(node, selectedRun) {
   if (!inspector) return;
   const actions = [];
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
+  const bodyText = node?.kind === 'image'
+    ? 'Select another image card below to replace this node, or import this image into the scene.'
+    : node?.kind === 'route' && pipelineRouteUsesFixture(node)
+      ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
+      : node
+        ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.'
+        : selectedEdge
+          ? 'Selected hook is session-local composition structure.'
+          : 'Select source, route, output, or evidence to inspect the composition.';
   if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
     actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source) });
   }
@@ -5256,6 +5315,12 @@ function renderPipelineGraphInspector(node, selectedRun) {
     });
   }
   if (node?.kind === 'image' && node.source) {
+    actions.push({
+      label: 'Change Image',
+      runningMessage: 'Opening Images palette for this graph node...',
+      successMessage: () => 'Select another image card below to replace this node',
+      action: () => pipelineFocusImagePaletteForSelectedNode(node),
+    });
     actions.push({
       label: 'Import Image to Scene',
       runningMessage: 'Importing image node into the left Scene Assets tab...',
@@ -5278,7 +5343,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const statusRecord = pipelineGraphInspectorStatusRecord();
   inspector.innerHTML = `
     <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
-    <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.' : selectedEdge ? 'Selected hook is session-local composition structure.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
+    <div class="pipeline-graph-inspector-body">${escapeHtml(bodyText)}</div>
     <div class="pipeline-graph-inspector-actions" id="pipeline-graph-inspector-actions"></div>
     <div class="pipeline-graph-inspector-status ${escapeHtml(statusRecord.kind)}" id="pipeline-graph-inspector-status" role="status" aria-live="polite">
       <div class="pipeline-graph-inspector-status-kicker">Action Status</div>
@@ -5332,7 +5397,7 @@ async function pipelineActivateGraphInspectorAction(item, button, source = 'clic
 async function pipelineExecuteGraphRouteNode(node) {
   const pipeline = node?.pipeline || selectedPipelineRecord();
   const requestedPipelineId = pipeline?.id || pipelineDockState.selectedPipelineId;
-  const source = pipelineSelectedSource();
+  const source = pipelineGraphRouteInputSource(node?.id || 'route');
   if (!source?.source) {
     pipelineSetGraphInspectorStatus('Pipeline source required before graph execution', 'error');
     throw new Error('Pipeline source required before graph execution');
@@ -5343,14 +5408,18 @@ async function pipelineExecuteGraphRouteNode(node) {
   }
   pipelineDockState.selectedPipelineId = requestedPipelineId;
   renderPipelineGeneratorLibrary();
-  pipelineSetGraphInspectorStatus(`Executing ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'}...`, 'running');
+  pipelineSetGraphInspectorStatus(`Executing ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'} with ${source.label || source.source}...`, 'running');
   const run = await runSelectedPipeline({
+    sourceOverride: source,
     graphExecution: {
       schema: 'kaminos.pipeline-graph-execution.v0',
       nodeId: node?.id || 'route',
       nodeKind: node?.kind || 'route',
       requestedPipelineId,
       source: source.source,
+      sourceLabel: source.label || null,
+      sourceKind: source.kind || null,
+      sourceGraphNodeId: source.graphNodeId || null,
       at: new Date().toISOString(),
     },
   });
@@ -5626,10 +5695,12 @@ function pipelineRunResultRows(result) {
   if (!result) return [];
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const splat = pipelineRunArtifact(result, 'splat');
+  const fixtureBacked = pipelineRunUsesFixture(result);
   return [
     { key: 'generator', value: result.generatorLabel || 'unknown' },
     { key: 'backend', value: result.backendPipelineId || result.pipelineId || 'unknown' },
     { key: 'effect', value: splat ? 'Splat output artifact written; preview still must be loaded explicitly.' : 'Sidecar metadata written; no new splat generated.' },
+    ...(fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'splat', value: splat?.path || 'not generated' },
@@ -5828,6 +5899,23 @@ async function pipelineImportGraphImageNodeToScene(node) {
   }
 }
 
+async function pipelineFocusImagePaletteForSelectedNode(node) {
+  if (!node?.id || node.kind !== 'image') {
+    pipelineSetGraphInspectorStatus('Select an image node before changing its image', 'error');
+    throw new Error('Select an image node before changing its image');
+  }
+  pipelineDockState.selectedGraphNodeId = node.id;
+  pipelineDockState.selectedGraphEdgeId = null;
+  pipelineDockState.activeAssetPalette = 'image';
+  if (node.assetId) pipelineDockState.browserSelectedAssetIds.image = node.assetId;
+  await loadPipelineAssetBrowser();
+  document.getElementById('pipeline-main-browser')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const message = 'Select another image card below to replace this node';
+  pipelineSetActionStatus(message);
+  pipelineSetGraphInspectorStatus(message, 'success');
+  return node;
+}
+
 function renderPipelineRunShelf() {
   const shelf = document.getElementById('pipeline-run-shelf');
   const list = document.getElementById('pipeline-run-list');
@@ -5880,8 +5968,9 @@ function renderPipelineRunResultPanel() {
   const actions = document.getElementById('pipeline-result-actions');
   if (title) title.textContent = result.ok ? `${pipelineRunTitle(result)} completed` : 'Pipeline run failed';
   if (body) {
+    const fixtureBacked = pipelineRunUsesFixture(result);
     body.textContent = result.ok
-      ? (splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
+      ? (fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live SHARP is configured.' : splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
       : (result.pipelineDescription || 'This run failed before producing trustworthy output.');
   }
   if (grid) {
@@ -6230,7 +6319,7 @@ async function pipelineLoadSelectedSource() {
 }
 
 async function runSelectedPipeline(options = {}) {
-  const source = pipelineSelectedSource();
+  const source = options.sourceOverride || pipelineSelectedSource();
   if (!source?.source) {
     setInfo('Pipeline source required');
     renderPipelineDock();

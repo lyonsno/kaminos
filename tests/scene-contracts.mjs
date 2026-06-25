@@ -160,6 +160,8 @@ assert.match(index, /data-pipeline-graph-image-node-id/, 'Pipeline graph renders
 assert.match(index, /function createPipelineGraphImageNode\(/, 'Pipeline graph can create an image node from a palette asset');
 assert.match(index, /function updateSelectedPipelineGraphImageNodeAsset\(/, 'Pipeline graph can swap the asset carried by a selected image node');
 assert.match(index, /pipelineGraphImageNodeRecord\(selectedId,\s*asset\)/, 'Image node swapping preserves the selected node instance id');
+assert.match(index, /Change Image/, 'Image node inspector must expose an explicit change-image affordance before relying on palette clicks');
+assert.match(index, /Select another image card below to replace this node/, 'Image node inspector must tell the operator how swapping works');
 assert.match(index, /function showImagePlane\(/, 'Kaminos can import a reloadable image source as an authored scene image plane');
 assert.match(index, /function pipelineImportGraphImageNodeToScene\(/, 'Pipeline graph image nodes expose a scene import contract');
 assert.match(index, /Import Image to Scene/, 'Pipeline image-node inspector exposes an explicit scene import action');
@@ -175,6 +177,9 @@ assert.match(index, /Execute/, 'Pipeline route-node inspector exposes an explici
 assert.match(index, /pipelineSetGraphInspectorStatus\(`Executing \$\{/, 'Graph execution must visibly report which route node is running');
 assert.match(index, /pipelineDockState\.selectedGraphNodeId = 'output'/, 'Graph execution should move selection to the output node after a route produces a loadable artifact');
 assert.match(index, /graphExecution/, 'Pipeline run records must preserve graph execution provenance');
+assert.match(index, /function pipelineGraphRouteInputSource\(/, 'Graph execution must resolve route input from graph-connected upstream nodes, not ambient selected browser state');
+assert.match(index, /sourceOverride/, 'Graph route execution must pass the graph-connected source into the pipeline runner');
+assert.match(index, /input provenance only; output fixed fixture/, 'Fixture-backed SHARP must label connected images as provenance-only, not live compute input');
 assert.match(index, /pipeline-graph-inspector-status-kicker/, 'Pipeline graph inspector status must have a visible label, not an empty low-contrast line');
 assert.match(index, /Action Status/, 'Pipeline graph inspector status must name itself as action status');
 assert.match(index, /role="status"/, 'Pipeline graph inspector status must expose live status semantics');
