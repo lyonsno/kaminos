@@ -118,16 +118,32 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
 /* Pipeline Dock */
 .pipeline-dock { display: flex; flex-direction: column; gap: 10px; }
-.pipeline-source-summary { border: 1px solid #2c2c2c; background: #171717; border-radius: 6px; padding: 10px; }
-.pipeline-summary-kicker { color: #888; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
-.pipeline-summary-title { color: #e0e0e0; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pipeline-summary-path { color: #666; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 4px; }
+.pipeline-generator-library { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pipeline-generator-card { min-height: 112px; width: 100%; border: 1px solid #2f2f2f; border-radius: 8px; background: #181818; color: #ddd; padding: 10px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.pipeline-generator-card:hover { border-color: #4a4a4a; background: #202020; transform: translateY(-1px); }
+.pipeline-generator-card.selected { border-color: #1976d2; background: #172235; }
+.pipeline-generator-card.future { border-style: dashed; color: #777; cursor: default; opacity: 0.72; }
+.pipeline-generator-card.future:hover { border-color: #343434; background: #181818; transform: none; }
+.pipeline-generator-kicker { color: #8ab9d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.pipeline-generator-title { color: #eee; font-size: 12px; font-weight: 750; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pipeline-generator-detail { color: #888; font: 10px 'SF Mono', monospace; line-height: 1.25; overflow-wrap: anywhere; }
+.pipeline-generator-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; }
+.pipeline-generator-chip { border-radius: 4px; background: #252525; color: #999; font: 8px 'SF Mono', monospace; text-transform: uppercase; padding: 2px 5px; }
+.pipeline-generator-chip.real { background: #173420; color: #66bb6a; }
+.pipeline-generator-chip.fixture { background: #33281b; color: #f0b85a; }
+.pipeline-generator-chip.future { background: #242424; color: #666; }
+.pipeline-generator-card.selected .pipeline-generator-chip { background: #26384b; color: #a9d6f1; }
+.pipeline-generator-card.selected .pipeline-generator-chip.fixture { background: #3a2f1d; color: #f0b85a; }
+.pipeline-generator-inspector { border: 1px solid #2b2b2b; background: #161616; border-radius: 6px; padding: 9px; }
+.pipeline-generator-inspector-title { color: #eee; font-size: 12px; font-weight: 750; margin-bottom: 4px; }
+.pipeline-generator-inspector-body { color: #777; font-size: 10px; line-height: 1.35; }
 .pipeline-action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pipeline-source-input { width: 100%; box-sizing: border-box; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 6px 8px; font: 10px 'SF Mono', monospace; outline: none; }
 .pipeline-source-input:focus { border-color: #1976d2; }
 .pipeline-debug-source { border: 1px solid #292929; border-radius: 6px; padding: 7px 8px; background: #171717; }
 .pipeline-debug-source summary { cursor: pointer; color: #777; font: 10px 'SF Mono', monospace; list-style-position: inside; }
 .pipeline-debug-source .pipeline-source-input { margin-top: 8px; }
+.pipeline-compact-diagnostics { border: 1px solid #292929; background: #171717; border-radius: 6px; padding: 8px; }
 .pipeline-stage-list { display: flex; flex-direction: column; gap: 6px; }
 .pipeline-stage-row { border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px; background: #181818; }
 .pipeline-stage-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
@@ -733,32 +749,23 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <!-- Pipeline Tab -->
   <div class="tab-content" id="tab-pipeline">
     <div class="pipeline-dock">
-      <h2>Pipeline Dock</h2>
-      <div class="pipeline-source-summary" id="pipeline-source-summary">
-        <div class="pipeline-summary-kicker">Source</div>
-        <div class="pipeline-summary-title">No source selected</div>
-        <div class="pipeline-summary-path">Select a scene object or enter an /api/read source.</div>
+      <h2>Generator Library</h2>
+      <div class="pipeline-generator-library" id="pipeline-generator-library" role="listbox" aria-label="Pipeline generator library"></div>
+      <div class="pipeline-generator-inspector" id="pipeline-generator-inspector">
+        <div class="pipeline-generator-inspector-title">No generator selected</div>
+        <div class="pipeline-generator-inspector-body">Manifest routes will appear here as functions you can select for the graph.</div>
       </div>
       <details class="pipeline-debug-source">
-        <summary>Debug source path</summary>
+        <summary>Source input</summary>
         <input class="pipeline-source-input" id="pipeline-source-input" spellcheck="false" autocomplete="off" placeholder="/api/read?root=splat-inbox&path=artifact.ply">
       </details>
       <div class="pipeline-action-row">
-        <select class="select-input" id="pipeline-route-select" aria-label="Pipeline route"></select>
-        <button type="button" class="btn" id="pipeline-run-button">Run</button>
         <button type="button" class="btn" id="pipeline-refresh-button">Refresh</button>
       </div>
-      <div class="pipeline-note" id="pipeline-route-description">Select a route. Sidecar-only routes write metadata; they do not generate a new splat.</div>
-      <div class="panel">
+      <div class="pipeline-compact-diagnostics" id="pipeline-diagnostics">
         <div class="field"><span class="field-key">Manifest</span><span class="field-val" id="pipeline-manifest-id">unloaded</span></div>
         <div class="field"><span class="field-key">Registry</span><span class="field-val" id="pipeline-registry-scope">run-local</span></div>
         <div class="field"><span class="field-key">Run</span><span class="field-val" id="pipeline-run-state">idle</span></div>
-      </div>
-      <h2>Stages</h2>
-      <div class="pipeline-stage-list" id="pipeline-stage-list"></div>
-      <h2>Evidence</h2>
-      <div class="pipeline-evidence-drawer" id="pipeline-evidence-drawer">
-        No run evidence yet.
       </div>
     </div>
   </div>
@@ -5257,8 +5264,7 @@ async function pipelineExecuteGraphRouteNode(node) {
     throw new Error('Pipeline route required before graph execution');
   }
   pipelineDockState.selectedPipelineId = requestedPipelineId;
-  const select = document.getElementById('pipeline-route-select');
-  if (select) select.value = requestedPipelineId;
+  renderPipelineGeneratorLibrary();
   pipelineSetGraphInspectorStatus(`Executing ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'}...`, 'running');
   const run = await runSelectedPipeline({
     graphExecution: {
@@ -5849,23 +5855,124 @@ function buildPipelineDockGraphState(source, runResult) {
   };
 }
 
-function renderPipelineRouteSelect() {
-  const select = document.getElementById('pipeline-route-select');
-  if (!select) return;
+const pipelineFutureGenerators = [
+  {
+    id: 'ideogram-4-future',
+    title: 'Ideogram 4',
+    kicker: 'Image Generator',
+    detail: 'Awaiting manifest route',
+    chips: ['future', 'image'],
+  },
+  {
+    id: 'trellis-future',
+    title: 'Trellis',
+    kicker: '3D Generator',
+    detail: 'Awaiting manifest route',
+    chips: ['future', 'mesh'],
+  },
+  {
+    id: 'kimodo-motion-future',
+    title: 'Kimodo Motion',
+    kicker: 'Motion Generator',
+    detail: 'Awaiting socket route',
+    chips: ['future', 'motion'],
+  },
+];
+
+function pipelineRouteStageModes(pipeline) {
+  return [...new Set((pipeline?.stages || []).map(stage => stage.statusMode || stage.status || stage.route?.effectiveBackend).filter(Boolean))];
+}
+
+function pipelineGeneratorCardRecord(pipeline) {
+  const modes = pipelineRouteStageModes(pipeline);
+  const stageFamilies = (pipeline?.stages || []).map(stage => stage.route?.modelFamily || stage.route?.id || stage.id || '').join(' ').toLowerCase();
+  const routeText = `${pipeline?.id || ''} ${pipeline?.routeId || ''} ${stageFamilies}`.toLowerCase();
+  const fixture = modes.includes('fixture') || routeText.includes('fixture');
+  const real = (pipeline?.stages || []).some(stage => stage.route?.realModel === true);
+  const kind = routeText.includes('sharp') ? 'SHARP' : routeText.includes('adapter') ? 'Adapter' : routeText.includes('prepared') ? 'Utility' : 'Pipeline';
+  const output = pipeline?.artifacts?.splat ? 'visible splat' : pipeline?.artifacts?.sidecar ? 'sidecar' : 'report';
+  return {
+    id: pipeline?.id || 'unknown-pipeline',
+    title: pipeline?.label || pipeline?.id || 'Pipeline route',
+    kicker: `${kind} Function`,
+    detail: pipeline?.routeId || pipeline?.id || 'manifest route',
+    description: pipeline?.description || 'Manifest-backed pipeline route.',
+    chips: [
+      real ? 'real' : fixture ? 'fixture' : modes[0] || 'local',
+      output,
+    ],
+    real,
+    fixture,
+    pipeline,
+  };
+}
+
+function renderPipelineGeneratorLibrary() {
+  const host = document.getElementById('pipeline-generator-library');
+  if (!host) return;
   const pipelines = pipelineManifest?.pipelines || [];
-  select.innerHTML = '';
-  for (const pipeline of pipelines) {
-    const option = document.createElement('option');
-    option.value = pipeline.id;
-    option.textContent = pipeline.label || pipeline.id;
-    select.appendChild(option);
-  }
-  if (pipelines.some(route => route.id === pipelineDockState.selectedPipelineId)) {
-    select.value = pipelineDockState.selectedPipelineId;
-  } else if (pipelines[0]) {
+  if (pipelines.length && !pipelines.some(route => route.id === pipelineDockState.selectedPipelineId)) {
     pipelineDockState.selectedPipelineId = pipelines[0].id;
-    select.value = pipelines[0].id;
   }
+  host.innerHTML = '';
+  for (const pipeline of pipelines) {
+    const record = pipelineGeneratorCardRecord(pipeline);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `pipeline-generator-card${record.id === pipelineDockState.selectedPipelineId ? ' selected' : ''}`;
+    card.setAttribute('role', 'option');
+    card.setAttribute('aria-selected', record.id === pipelineDockState.selectedPipelineId ? 'true' : 'false');
+    card.setAttribute('data-pipeline-generator-id', record.id);
+    card.setAttribute('data-pipeline-generator-pipeline-id', record.id);
+    card.innerHTML = `
+      <span class="pipeline-generator-kicker">${escapeHtml(record.kicker)}</span>
+      <span class="pipeline-generator-title">${escapeHtml(record.title)}</span>
+      <span class="pipeline-generator-detail">${escapeHtml(record.detail)}</span>
+      <span class="pipeline-generator-chips">
+        ${record.chips.map(chip => `<span class="pipeline-generator-chip ${escapeHtml(record.real ? 'real' : record.fixture ? 'fixture' : '')}">${escapeHtml(chip)}</span>`).join('')}
+      </span>
+    `;
+    card.addEventListener('click', () => selectPipelineGenerator(record.id));
+    host.appendChild(card);
+  }
+  for (const future of pipelineFutureGenerators) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'pipeline-generator-card future';
+    card.disabled = true;
+    card.setAttribute('role', 'option');
+    card.setAttribute('aria-disabled', 'true');
+    card.setAttribute('data-pipeline-generator-id', future.id);
+    card.innerHTML = `
+      <span class="pipeline-generator-kicker">${escapeHtml(future.kicker)}</span>
+      <span class="pipeline-generator-title">${escapeHtml(future.title)}</span>
+      <span class="pipeline-generator-detail">${escapeHtml(future.detail)}</span>
+      <span class="pipeline-generator-chips">
+        ${future.chips.map(chip => `<span class="pipeline-generator-chip future">${escapeHtml(chip)}</span>`).join('')}
+      </span>
+    `;
+    host.appendChild(card);
+  }
+  const inspector = document.getElementById('pipeline-generator-inspector');
+  if (inspector) {
+    const selected = selectedPipelineRecord();
+    inspector.innerHTML = `
+      <div class="pipeline-generator-inspector-title">${escapeHtml(selected?.label || 'No generator selected')}</div>
+      <div class="pipeline-generator-inspector-body">${escapeHtml(selected?.description || 'Select a manifest route from the generator library.')}</div>
+    `;
+  }
+}
+
+function renderPipelineRouteSelect() {
+  renderPipelineGeneratorLibrary();
+}
+
+function selectPipelineGenerator(pipelineId) {
+  const pipelines = pipelineManifest?.pipelines || [];
+  if (!pipelines.some(route => route.id === pipelineId)) return null;
+  pipelineDockState.selectedPipelineId = pipelineId;
+  renderPipelineDock();
+  return selectedPipelineRecord();
 }
 
 function renderPipelineDock() {
@@ -5874,6 +5981,7 @@ function renderPipelineDock() {
 	  const selectedRun = selectedPipelineRun();
 	  pipelineDockState.graph = buildPipelineDockGraphState(source, selectedRun);
   window.kaminosPipelineDockState = pipelineDockState;
+  renderPipelineGeneratorLibrary();
 
   const sourceSummary = document.getElementById('pipeline-source-summary');
   if (sourceSummary) {
@@ -5972,26 +6080,9 @@ function initPipelineDock() {
     document.addEventListener('keydown', handlePipelineGraphKeydown);
     window.kaminosPipelineGraphKeyHandlerInstalled = true;
   }
-  const select = document.getElementById('pipeline-route-select');
-  select?.addEventListener('change', () => {
-    pipelineDockState.selectedPipelineId = select.value;
-    renderPipelineDock();
-  });
   document.getElementById('pipeline-source-input')?.addEventListener('input', () => {
     renderPipelineDock();
   });
-  document.getElementById('pipeline-run-button')?.addEventListener('click', () => runSelectedPipeline().catch(err => {
-    setInfo(`Pipeline run failed: ${err.message || err}`);
-    const source = pipelineSelectedSource();
-    pipelineRememberRun({
-      schema: 'kaminos.pipeline-run-result.v0',
-      ok: false,
-      pipelineId: pipelineDockState.selectedPipelineId,
-      source,
-      error: String(err.message || err),
-    }, source, selectedPipelineRecord());
-    renderPipelineDock();
-  }));
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
@@ -6007,6 +6098,7 @@ function initPipelineDock() {
 window.loadPipelineManifest = loadPipelineManifest;
 window.loadPipelineAssetBrowser = loadPipelineAssetBrowser;
 window.runSelectedPipeline = runSelectedPipeline;
+window.selectPipelineGenerator = selectPipelineGenerator;
 window.pipelineLoadSelectedSource = pipelineLoadSelectedSource;
 window.pipelineLoadRunSplatArtifact = pipelineLoadRunSplatArtifact;
 window.showImagePlane = showImagePlane;

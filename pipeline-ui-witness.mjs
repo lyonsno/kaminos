@@ -213,13 +213,17 @@ try {
   await wait(1000);
 
   if (scenario === 'graph-execute-sharp') {
-    await evalJson(cdp, `(() => {
-      const select = document.querySelector('#pipeline-route-select');
-      if (!select) throw new Error('Pipeline route select missing');
-      select.value = ${JSON.stringify(pipelineId)};
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
+    const generatorCard = await evalJson(cdp, `(() => {
+      const element = [...document.querySelectorAll('[data-pipeline-generator-pipeline-id]')]
+        .find(item => item.dataset.pipelineGeneratorPipelineId === ${JSON.stringify(pipelineId)});
+      const rect = element?.getBoundingClientRect();
+      if (!rect) throw new Error('Pipeline generator card missing');
+      return {
+        cardText: element.innerText,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
     })()`);
+    await click(cdp, generatorCard.point);
     const imageCard = await evalJson(cdp, `(() => {
       const cards = [...document.querySelectorAll('.pipeline-asset-card')];
       const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
