@@ -658,7 +658,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureJacobiPasses', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -666,6 +666,36 @@ function validateWitness(run, witness, effective) {
         ledger,
       });
     }
+  }
+  if (!['jacobi-inline-divergence-v0', 'disabled'].includes(ledger.pressureSourceStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown pressure source strategy', {
+      scenarioId: run.id,
+      pressureSourceStrategy: ledger.pressureSourceStrategy,
+      ledger,
+    });
+  }
+  if (Number(ledger.pressureDivergencePasses) !== 0) {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation cost ledger still reports a standalone pressure divergence pass', {
+      scenarioId: run.id,
+      pressureDivergencePasses: ledger.pressureDivergencePasses,
+      ledger,
+    });
+  }
+  if (Number(ledger.pressureJacobiInlineDivergencePasses) !== Number(ledger.pressureJacobiPasses)) {
+    throwSweepFailure('partial-primary-output', 'validation', 'simulation cost ledger inline-divergence Jacobi count does not match Jacobi pressure cost', {
+      scenarioId: run.id,
+      pressureJacobiPasses: ledger.pressureJacobiPasses,
+      pressureJacobiInlineDivergencePasses: ledger.pressureJacobiInlineDivergencePasses,
+      ledger,
+    });
+  }
+  if (!ledger.fullGridPassBreakdown || Number(ledger.fullGridPassBreakdown.total) !== Number(ledger.fullGridPassesPerFrame)) {
+    throwSweepFailure('partial-primary-output', 'validation', 'simulation cost ledger pass breakdown does not match full-grid pass count', {
+      scenarioId: run.id,
+      fullGridPassBreakdown: ledger.fullGridPassBreakdown,
+      fullGridPassesPerFrame: ledger.fullGridPassesPerFrame,
+      ledger,
+    });
   }
   checks.push({ name: 'simCostLedger', effective: ledger.identity });
 
@@ -795,7 +825,11 @@ for (let i = 0; i < runs.length; i += 1) {
       fullGridPassesPerFrame: simCostLedger?.fullGridPassesPerFrame,
       fullGridCellVisitsPerFrame: simCostLedger?.fullGridCellVisitsPerFrame,
       fluidBufferBytes: simCostLedger?.fluidBufferBytes,
+      pressureSourceStrategy: simCostLedger?.pressureSourceStrategy,
+      pressureDivergencePasses: simCostLedger?.pressureDivergencePasses,
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
+      pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
+      fullGridPassBreakdown: simCostLedger?.fullGridPassBreakdown,
       majorantBuildCadence: simCostLedger?.majorantBuildCadence,
       backend: witness.backend,
       effectiveRoute: witness.effectiveRoute,

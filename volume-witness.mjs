@@ -794,6 +794,7 @@ async function main() {
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
+    const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -801,7 +802,11 @@ async function main() {
     assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
     assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
     assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
+    assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
+    assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
+    assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
+    assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
     assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
@@ -823,11 +828,16 @@ async function main() {
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
+    const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
       sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
+      sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
+      Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
+      sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
+      sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
       !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
       typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
     ) {
