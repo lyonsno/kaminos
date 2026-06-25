@@ -10535,6 +10535,7 @@ function pipelineRememberRun(result, source, pipeline) {
     pipelineLabel: pipeline?.label || result?.pipelineId || pipelineDockState.selectedPipelineId,
     pipelineDescription: pipeline?.description || '',
     source: sourceRecord,
+    graphExecution: result?.graphExecution || null,
   };
   pipelineDockState.runHistory = [remembered, ...(pipelineDockState.runHistory || [])];
   pipelineDockState.selectedRunId = runId;
@@ -11112,7 +11113,10 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     { key: 'detail', value: node.detail || 'none' },
   ];
   if (selectedRun) rows.push({ key: 'run', value: pipelineRunDisplayId(selectedRun) });
-  if (node.kind === 'route' && selectedRun) rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
+  if (node.kind === 'route' && selectedRun) {
+    rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
+    rows.push({ key: 'execution', value: selectedRun.graphExecution?.nodeId ? `graph node ${selectedRun.graphExecution.nodeId}` : 'sidebar or prior run' });
+  }
   if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
   if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
   if (node.kind === 'image') {
@@ -11134,6 +11138,14 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
   if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
     actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source) });
+  }
+  if (node?.kind === 'route') {
+    actions.push({
+      label: 'Execute',
+      runningMessage: `Executing ${node.title || 'pipeline route'}...`,
+      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelineRunArtifact(result, 'splat')?.path ? 'output node selected' : 'evidence node selected'}`,
+      action: () => pipelineExecuteGraphRouteNode(node),
+    });
   }
   if (node?.kind === 'image' && node.source) {
     actions.push({
@@ -11207,6 +11219,45 @@ async function pipelineActivateGraphInspectorAction(item, button, source = 'clic
   }
   if (source === 'pointer' && button) button.dataset.graphInspectorPointerActivated = 'true';
   return pipelineRunGraphInspectorAction(item, button);
+}
+
+async function pipelineExecuteGraphRouteNode(node) {
+  const pipeline = node?.pipeline || selectedPipelineRecord();
+  const requestedPipelineId = pipeline?.id || pipelineDockState.selectedPipelineId;
+  const source = pipelineSelectedSource();
+  if (!source?.source) {
+    pipelineSetGraphInspectorStatus('Pipeline source required before graph execution', 'error');
+    throw new Error('Pipeline source required before graph execution');
+  }
+  if (!requestedPipelineId) {
+    pipelineSetGraphInspectorStatus('Pipeline route required before graph execution', 'error');
+    throw new Error('Pipeline route required before graph execution');
+  }
+  pipelineDockState.selectedPipelineId = requestedPipelineId;
+  const select = document.getElementById('pipeline-route-select');
+  if (select) select.value = requestedPipelineId;
+  pipelineSetGraphInspectorStatus(`Executing ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'}...`, 'running');
+  const run = await runSelectedPipeline({
+    graphExecution: {
+      schema: 'kaminos.pipeline-graph-execution.v0',
+      nodeId: node?.id || 'route',
+      nodeKind: node?.kind || 'route',
+      requestedPipelineId,
+      source: source.source,
+      at: new Date().toISOString(),
+    },
+  });
+  if (!run?.ok) {
+    throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
+  }
+  pipelineDockState.selectedGraphEdgeId = null;
+  if (pipelineRunArtifact(run, 'splat')?.path) {
+    pipelineDockState.selectedGraphNodeId = 'output';
+  } else {
+    pipelineDockState.selectedGraphNodeId = 'evidence';
+  }
+  renderPipelineDock();
+  return run;
 }
 
 function pipelineGraphInspectorSubjectId() {
@@ -11866,7 +11917,7 @@ async function pipelineLoadSelectedSource() {
   return pipelineLoadSourceRecord(pipelineSelectedSource());
 }
 
-async function runSelectedPipeline() {
+async function runSelectedPipeline(options = {}) {
   const source = pipelineSelectedSource();
   if (!source?.source) {
     setInfo('Pipeline source required');
@@ -11883,7 +11934,10 @@ async function runSelectedPipeline() {
     }),
   });
   const result = await response.json();
-  const remembered = pipelineRememberRun(result, source, selectedPipelineRecord());
+  const remembered = pipelineRememberRun({
+    ...result,
+    graphExecution: options.graphExecution || result.graphExecution || null,
+  }, source, selectedPipelineRecord());
   renderPipelineDock();
   setInfo(remembered.ok ? `Pipeline witness written: ${remembered.pipelineId}` : `Pipeline witness failed: ${remembered.pipelineId}`);
   return remembered;

@@ -16,6 +16,8 @@ const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Application
 const appUrl = args.get('url') || `http://localhost:60105/?pipeline_ui_witness=${Date.now()}`;
 const port = Number(args.get('port') || process.env.KAMINOS_UI_WITNESS_CDP_PORT || 63112);
 const assetNeedle = args.get('asset') || 'evil_orb_outer_shell_source_image';
+const scenario = args.get('scenario') || 'image-import';
+const pipelineId = args.get('pipeline-id') || 'evil-orb-sharp-fixture-pbr-v0';
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
 const userDataDir = await mkdtemp(join(tmpdir(), 'kaminos-pipeline-ui-witness-'));
@@ -147,6 +149,21 @@ async function capture(cdp, path) {
   await writeFile(path, Buffer.from(shot.data, 'base64'));
 }
 
+async function waitFor(cdp, expression, label, timeoutMs = 90000) {
+  const started = Date.now();
+  let last = null;
+  while (Date.now() - started < timeoutMs) {
+    try {
+      last = await evalJson(cdp, expression);
+      if (last?.ok) return last;
+    } catch (error) {
+      last = { error: error.message };
+    }
+    await wait(500);
+  }
+  throw new Error(`${label} timed out: ${JSON.stringify(last)}`);
+}
+
 const chromeProcess = spawn(chrome, [
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${userDataDir}`,
@@ -195,6 +212,107 @@ try {
   await click(cdp, imagePaletteTab);
   await wait(1000);
 
+  if (scenario === 'graph-execute-sharp') {
+    await evalJson(cdp, `(() => {
+      const select = document.querySelector('#pipeline-route-select');
+      if (!select) throw new Error('Pipeline route select missing');
+      select.value = ${JSON.stringify(pipelineId)};
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`);
+    const imageCard = await evalJson(cdp, `(() => {
+      const cards = [...document.querySelectorAll('.pipeline-asset-card')];
+      const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
+      if (!card) throw new Error('Requested visible image asset card missing');
+      const rect = card.getBoundingClientRect();
+      return {
+        cardText: card.innerText,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    await click(cdp, imageCard.point);
+
+    const routeNode = await evalJson(cdp, `(() => {
+      const element = document.querySelector('[data-pipeline-graph-node-id="route"]');
+      const rect = element?.getBoundingClientRect();
+      if (!rect) throw new Error('Route graph node missing');
+      return {
+        nodeText: element.innerText,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    await click(cdp, routeNode.point);
+
+    const executeButton = await evalJson(cdp, `(() => {
+      const button = [...document.querySelectorAll('#pipeline-graph-inspector-actions button')]
+        .find(item => item.textContent.trim() === 'Execute');
+      const rect = button?.getBoundingClientRect();
+      if (!rect) throw new Error('Execute button missing');
+      return {
+        text: button.textContent,
+        disabled: button.disabled,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    assertWitness(!executeButton.disabled, 'Execute button was disabled', executeButton);
+    await click(cdp, executeButton.point);
+    const executed = await waitFor(cdp, `(() => {
+      const state = window.kaminosPipelineDockDebugState?.();
+      const run = state?.lastRun;
+      return {
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && state?.selectedGraphNodeId === 'output' && run?.report?.document?.artifacts?.splat?.fixtureSource),
+        selectedGraphNodeId: state?.selectedGraphNodeId || null,
+        runId: run?.runId || null,
+        pipelineId: run?.pipelineId || null,
+        graphExecution: run?.graphExecution || null,
+        statusText: document.querySelector('#pipeline-graph-inspector-status')?.innerText || '',
+        splat: run?.report?.document?.artifacts?.splat || null,
+      };
+    })()`, 'Graph Execute SHARP route');
+    await capture(cdp, beforePath);
+
+    const loadOutputButton = await evalJson(cdp, `(() => {
+      const button = [...document.querySelectorAll('#pipeline-graph-inspector-actions button')]
+        .find(item => item.textContent.trim() === 'Load Output');
+      const rect = button?.getBoundingClientRect();
+      if (!rect) throw new Error('Load Output button missing');
+      return {
+        text: button.textContent,
+        disabled: button.disabled,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    assertWitness(!loadOutputButton.disabled, 'Load Output button was disabled', loadOutputButton);
+    await click(cdp, loadOutputButton.point);
+    const after = await waitFor(cdp, `(() => {
+      const scene = window.kaminosSceneObjectDebugState?.() || [];
+      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.fixtureSource);
+      return {
+        ok: document.querySelector('.tab.active')?.dataset.tab === 'assets' && Boolean(loaded?.splat?.pointCount),
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        objectRows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.innerText),
+        pointCount: loaded?.splat?.pointCount || 0,
+        source: loaded?.source || null,
+        statusText: document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '',
+      };
+    })()`, 'Graph Execute Load Output');
+    await capture(cdp, afterPath);
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      imageCard,
+      routeNode,
+      executeButton,
+      executed,
+      loadOutputButton,
+      after,
+    }, null, 2));
+  } else {
   const dragPoints = await evalJson(cdp, `(() => {
     const cards = [...document.querySelectorAll('.pipeline-asset-card')];
     const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
@@ -268,6 +386,7 @@ try {
     before,
     after,
   }, null, 2));
+  }
 } catch (error) {
   console.error(JSON.stringify({
     ok: false,
