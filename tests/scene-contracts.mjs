@@ -82,7 +82,8 @@ assert.match(index, /Generator Library/, 'Pipeline left rail is framed as a gene
 assert.match(index, /id="pipeline-generator-library"/, 'Pipeline left rail exposes generator cards instead of a route dropdown');
 assert.match(index, /const pipelineGeneratorDefinitions/, 'Pipeline generator palette is driven by explicit generator primitives, not raw manifest routes');
 assert.match(index, /id:\s*'sharp'[\s\S]*title:\s*'SHARP'/, 'Pipeline generator palette exposes SHARP as the draggable primitive');
-assert.match(index, /defaultPipelineId:\s*'evil-orb-sharp-fixture-pbr-v0'/, 'SHARP generator preserves its current fixture route as backend binding');
+assert.match(index, /defaultPipelineId:\s*'sharp-image-to-splat-live-v0'/, 'SHARP generator must default to the live per-image route, not the evil-orb fixture route');
+assert.match(index, /id:\s*'sharp-fixture'[\s\S]*defaultPipelineId:\s*'evil-orb-sharp-fixture-pbr-v0'/, 'Pipeline generator library may keep the fixture route as an explicit fixture card, not the primary SHARP primitive');
 assert.match(index, /data-pipeline-generator-id/, 'Pipeline generator cards carry stable generator ids for witness selection');
 assert.match(index, /data-pipeline-generator-pipeline-id/, 'Pipeline generator cards expose backend route ids without making them the card identity');
 assert.match(index, /function renderPipelineGeneratorLibrary\(/, 'Pipeline left rail renders generator/function cards');

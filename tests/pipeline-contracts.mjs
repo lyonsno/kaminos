@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -23,6 +23,14 @@ assert.ok(fixturePipeline.stages.some(stage => stage.statusMode === 'fixture'), 
 assert.ok(fixturePipeline.artifacts?.input?.role === 'source-image', 'manifest must name source image input artifact role');
 assert.ok(fixturePipeline.artifacts?.splat?.role === 'splat-candidate', 'manifest must name splat candidate output role');
 assert.ok(fixturePipeline.artifacts?.sidecar?.role === 'kaminos-import-sidecar', 'manifest must name Kaminos import sidecar output role');
+
+const liveSharpPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'sharp-image-to-splat-live-v0');
+assert.ok(liveSharpPipeline, 'manifest must include a live SHARP image-to-splat route distinct from the fixture route');
+assert.equal(liveSharpPipeline.routeId, 'adapter.sharp-image-to-splat-live.v0');
+assert.match(liveSharpPipeline.description, /KAMINOS_SHARP_COMMAND/, 'live SHARP route must name its explicit command configuration');
+assert.ok(liveSharpPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_SHARP_COMMAND' && stage.route?.executesModel === true), 'live SHARP route must execute an explicit model adapter command');
+assert.ok(liveSharpPipeline.artifacts?.splat?.pathTemplate && !liveSharpPipeline.artifacts.splat.pathTemplate.startsWith('/'), 'live SHARP splat output must be caller-rooted');
+assert.ok(liveSharpPipeline.artifacts?.sidecar?.pathTemplate && !liveSharpPipeline.artifacts.sidecar.pathTemplate.startsWith('/'), 'live SHARP sidecar output must be caller-rooted');
 
 const preparedPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'prepared-splat-import-sidecar-v0');
 assert.ok(preparedPipeline, 'manifest must include a route for existing splat import sidecar authoring');
@@ -213,6 +221,117 @@ try {
   const preparedBundle = JSON.parse(readFileSync(preparedReport.bundleIndex.path, 'utf8'));
   assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'inspection' && artifact.role === 'prepared-artifact-inspection'), 'prepared bundle must list inspection artifact');
   assert.ok(preparedBundle.artifacts.some(artifact => artifact.id === 'sidecar' && artifact.role === 'kaminos-import-sidecar'), 'prepared bundle must list import sidecar');
+
+  const liveMissingOutDir = join(tempRoot, 'live-missing-out');
+  const liveMissingReportPath = join(tempRoot, 'reports', 'live-missing.json');
+  const liveMissing = spawnSync(process.execPath, [
+    witnessPath,
+    '--manifest', manifestPath,
+    '--pipeline-id', 'sharp-image-to-splat-live-v0',
+    '--input', inputPath,
+    '--out-dir', liveMissingOutDir,
+    '--report', liveMissingReportPath,
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SHARP_COMMAND: '',
+    },
+  });
+
+  assert.notEqual(liveMissing.status, 0, 'live SHARP route must fail when KAMINOS_SHARP_COMMAND is unconfigured');
+  assert.ok(existsSync(liveMissingReportPath), 'unavailable live SHARP must still write a failure report');
+  const liveMissingReport = JSON.parse(readFileSync(liveMissingReportPath, 'utf8'));
+  assert.equal(liveMissingReport.ok, false);
+  assert.equal(liveMissingReport.requestedPipelineId, 'sharp-image-to-splat-live-v0');
+  assert.equal(liveMissingReport.effectiveRouteConfig.routeId, 'adapter.sharp-image-to-splat-live.v0');
+  assert.match(liveMissingReport.error, /KAMINOS_SHARP_COMMAND/, 'live SHARP failure must name the missing command env');
+  assert.equal(liveMissingReport.stages[0].status, 'failed');
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.realModel, true, 'failed live SHARP stage must still record the requested real backend identity');
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.availability.status, 'unconfigured');
+
+  const mockSharpCommand = join(tempRoot, 'mock-sharp-command.mjs');
+  writeFileSync(mockSharpCommand, `#!/usr/bin/env node
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
+const input = args.get('--input');
+const output = args.get('--output');
+const report = args.get('--report');
+if (!input || !output || !report) throw new Error('mock SHARP expected --input --output --report');
+const bytes = readFileSync(input);
+const hash = createHash('sha256').update(bytes).digest('hex');
+mkdirSync(dirname(output), { recursive: true });
+writeFileSync(output, [
+  'ply',
+  'format ascii 1.0',
+  'comment mock live SHARP output',
+  'comment source_sha256 ' + hash,
+  'element vertex 321',
+  'property float x',
+  'property float y',
+  'property float z',
+  'property float f_dc_0',
+  'property float opacity',
+  'end_header',
+  '0 0 0 1 1',
+  ''
+].join('\\n'));
+const stat = statSync(output);
+mkdirSync(dirname(report), { recursive: true });
+writeFileSync(report, JSON.stringify({
+  schema: 'mock.sharp-adapter-report.v0',
+  ok: true,
+  input,
+  output,
+  inputSha256: hash,
+  outputBytes: stat.size
+}, null, 2) + '\\n');
+`);
+  chmodSync(mockSharpCommand, 0o755);
+  const liveOutDir = join(tempRoot, 'live-out');
+  const liveReportPath = join(tempRoot, 'reports', 'live.json');
+  const live = spawnSync(process.execPath, [
+    witnessPath,
+    '--manifest', manifestPath,
+    '--pipeline-id', 'sharp-image-to-splat-live-v0',
+    '--input', inputPath,
+    '--out-dir', liveOutDir,
+    '--report', liveReportPath,
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SHARP_COMMAND: mockSharpCommand,
+    },
+  });
+
+  assert.equal(live.status, 0, live.stderr || live.stdout);
+  const liveReport = JSON.parse(readFileSync(liveReportPath, 'utf8'));
+  assert.equal(liveReport.ok, true);
+  assert.equal(liveReport.effectiveRouteConfig.routeId, 'adapter.sharp-image-to-splat-live.v0');
+  assert.deepEqual(liveReport.stages.map(stage => stage.status), ['real', 'real']);
+  assert.equal(liveReport.stages[0].effectiveRoute.realModel, true);
+  assert.equal(liveReport.stages[0].effectiveRoute.availability.status, 'available');
+  assert.equal(liveReport.stages[0].effectiveRoute.commandEnv, 'KAMINOS_SHARP_COMMAND');
+  assert.equal(liveReport.stages[0].effectiveRoute.executedCommand[0], mockSharpCommand);
+  assert.ok(liveReport.artifacts.splat.path.startsWith(liveOutDir), 'live SHARP splat output must use caller out-dir');
+  assert.ok(liveReport.artifacts.sidecar.path.startsWith(liveOutDir), 'live SHARP sidecar output must use caller out-dir');
+  assert.equal(liveReport.artifacts.splat.status, 'real');
+  assert.equal(liveReport.artifacts.sidecar.status, 'real');
+  assert.ok(!liveReport.artifacts.splat.fixtureSource, 'live SHARP output must not carry fixture source provenance');
+  const liveSplat = readFileSync(liveReport.artifacts.splat.path, 'utf8');
+  assert.match(liveSplat, /element vertex 321/, 'configured live SHARP route must use adapter output, not fixture output');
+  assert.match(liveSplat, /mock live SHARP output/, 'configured live SHARP route must preserve adapter output bytes');
+  const liveSidecar = JSON.parse(readFileSync(liveReport.artifacts.sidecar.path, 'utf8'));
+  assert.equal(liveSidecar.pipeline.id, 'sharp-image-to-splat-live-v0');
+  assert.equal(liveSidecar.asset.type, 'splat');
+  assert.equal(liveSidecar.asset.path, liveReport.artifacts.splat.path);
+  assert.equal(liveSidecar.status.stageMode, 'real');
+  assert.match(liveSidecar.status.truthBoundary, /live SHARP adapter output/);
+  assert.equal(liveSidecar.asset.renderCapabilities.realHybridRender, false);
 
   const adapterOutDir = join(tempRoot, 'adapter-out');
   const adapterReportPath = join(tempRoot, 'reports', 'adapters.json');
