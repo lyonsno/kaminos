@@ -328,6 +328,73 @@ function makePrimaryApertureFrame() {
   };
 }
 
+function createMacroPromotedBodyDescriptor(assemblage) {
+  const closureContracts = (assemblage.territoryBodyOccupancy?.closureAnchorIds || []).map(anchorId => ({
+    kind: anchorId === 'lower-socket-anchor'
+      ? 'lower-socket-join'
+      : anchorId === 'crown-closure-anchor'
+        ? 'crown-socket-overlap'
+        : 'side-rim-overlap',
+    anchorId,
+    endpointBeadReplacement: 'socket-overlap-hint-not-orange-bead',
+  }));
+  const descriptor = {
+    schema: 'MacroPromotedBody',
+    id: `${assemblage.id}-promoted-body`,
+    parentAssemblage: assemblage.id,
+    objecthood: 'macro-assemblage-body-not-final-band',
+    promotedFromVisibleBandIds: assemblage.childBandPlan.map(member => member.id),
+    primarySpineFamily: assemblage.spine.proceduralFamily,
+    promotedBodyScale: assemblage.role === 'crown-lock' ? 1.22 : assemblage.role === 'supporting-whorl' ? 1.34 : 1.28,
+    subordinateAnatomy: [
+      'internal-rail-ridge',
+      'edge-lip-channel',
+      'slit-gap-within-macro-body',
+      'child-band-as-anatomy-not-object',
+    ],
+    closureContracts,
+    failurePressure: 'visible-bands-must-not-remain-final-objects',
+  };
+  if (assemblage.id === 'equatorial-cupping-whorl') {
+    descriptor.lowerCupClosure = {
+      schema: 'LowerCupClosure',
+      mode: 'lower-cup-socket-contiguous',
+      bottomGapPolicy: 'forbid-accidental-triangle-bottom-gap',
+      joins: ['lower-socket-anchor', 'north-west-dominant-thrust', 'north-east-counter-thrust'],
+      visualIntent: 'lower-cupping-owner-becomes-contiguous-with-bottom-socket',
+    };
+  }
+  if (assemblage.id === 'north-east-counter-thrust') {
+    descriptor.crossingTuckIntegration = {
+      schema: 'CrossingTuckIntegration',
+      mode: 'crossing-tuck-macro-body',
+      ownerRole: 'crossing-tuck-owner',
+      railRole: 'subordinate-ridge-not-lone-wand',
+      visibleRailId: 'primary-front-aperture-crossing-tuck-owner',
+      broaderBodyRole: 'front-crossing-tuck-body',
+    };
+  }
+  return descriptor;
+}
+
+function createMacroBodyPromotionPlan(composition) {
+  const promotedBodies = composition.macroAssemblages.map(createMacroPromotedBodyDescriptor);
+  return {
+    schema: 'MacroBodyPromotionPlan',
+    mode: 'macro-body-promotion-closure-v0',
+    promotedBodies,
+    lowerCupClosure: promotedBodies.find(body => body.lowerCupClosure)?.lowerCupClosure,
+    crossingTuckIntegration: promotedBodies.find(body => body.crossingTuckIntegration)?.crossingTuckIntegration,
+    closurePolicy: [
+      'macro-bodies-own-visible-objecthood',
+      'subordinate-bands-become-ridges-slots-and-lips',
+      'lower-cup-socket-contiguous',
+      'crossing-tuck-macro-body',
+      'forbid-accidental-triangle-bottom-gap',
+    ],
+  };
+}
+
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
@@ -366,6 +433,16 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
       if (aperturePressure) aperturePressure.strength = clamp(aperturePressure.strength + params.apertureBiteDelta, 0.18, 0.48);
       body.boundaryCutProfile = makeBoundaryCutProfile(body.boundaryPressureField);
     }
+  }
+  next.macroBodyPromotion = createMacroBodyPromotionPlan(next);
+  for (const assemblage of next.macroAssemblages) {
+    assemblage.macroPromotedBody = next.macroBodyPromotion.promotedBodies.find(body => body.parentAssemblage === assemblage.id);
+  }
+  if (next.macroBodyPromotion.lowerCupClosure) {
+    next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
+  }
+  if (next.macroBodyPromotion.crossingTuckIntegration) {
+    next.frontApertureOwnership.crossingTuckIntegration = next.macroBodyPromotion.crossingTuckIntegration;
   }
   const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
   next.frontApertureOwnership.effectiveVariation = frontParameters;
@@ -688,6 +765,81 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
   return geometry;
 }
 
+function makeMacroPromotedBodyGeometry(THREE, assemblage) {
+  const body = assemblage.territoryBodyOccupancy;
+  const promoted = assemblage.macroPromotedBody;
+  const rowCount = 72;
+  const columnCount = 13;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  const cutProfile = body.boundaryCutProfile || [];
+  const centerline = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    centerline.push(sampleSpine(THREE, assemblage, {
+      siblingOffset: 0,
+      layerIntervals: assemblage.layerItinerary.intervals,
+    }, t, 1.045));
+  }
+
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    const center = centerline[row];
+    const prev = centerline[Math.max(0, row - 1)];
+    const next = centerline[Math.min(rowCount - 1, row + 1)];
+    const normal = center.clone().normalize();
+    const tangent = next.clone().sub(prev).normalize();
+    let side = new THREE.Vector3().crossVectors(normal, tangent);
+    if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
+    side.normalize();
+    const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
+    const terminalScale = 0.52 + 0.48 * profile;
+    const nearestCut = cutProfile.reduce((best, item) => (
+      Math.abs(item.t - t) < Math.abs(best.t - t) ? item : best
+    ), cutProfile[0] || { leftScale: 1, rightScale: 1, t: 0 });
+    const scale = promoted?.promotedBodyScale || 1.22;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = u * 2 - 1;
+      const sideWidth = q < 0 ? leftWidth : rightWidth;
+      const ridgeChannel = 1 - Math.exp(-Math.pow(Math.abs(q) - 0.62, 2) / 0.012) * 0.08;
+      const centerRelief = 1 - Math.exp(-Math.pow(q, 2) / 0.028) * 0.06;
+      const crown = (1 - Math.pow(Math.abs(q), 2.2) * 0.2) * ridgeChannel * centerRelief;
+      const pos = center.clone()
+        .addScaledVector(side, q * sideWidth)
+        .addScaledVector(normal, lift * crown);
+      vertices.push(pos.x, pos.y, pos.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(u, t);
+    }
+  }
+
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.MacroPromotedBody = promoted;
+  return geometry;
+}
+
 function makeAperturePressureRing(THREE, voidRecord) {
   const [cx, cy, cz] = voidRecord.center;
   const [rx, ry] = voidRecord.radius;
@@ -702,9 +854,99 @@ function makeAperturePressureRing(THREE, voidRecord) {
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 120, 0.006, 8, true);
 }
 
+function makeLowerCupClosureGeometry(THREE, lowerCupDepth = 1) {
+  const rowCount = 22;
+  const columnCount = 13;
+  const vertices = [];
+  const normals = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    const y = -0.99 + t * 0.5;
+    const centerX = -0.01 + Math.sin(t * Math.PI) * 0.035;
+    const halfWidth = (0.17 + t * 0.2) * (0.95 + lowerCupDepth * 0.1);
+    const zBase = 0.54 + t * 0.34 + Math.sin(t * Math.PI) * 0.07 * lowerCupDepth;
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = u * 2 - 1;
+      const x = centerX + q * halfWidth * (0.72 + 0.28 * Math.sin(t * Math.PI));
+      const z = zBase - Math.abs(q) * 0.04 + Math.sin(Math.PI * t) * (1 - Math.abs(q)) * 0.035;
+      const point = new THREE.Vector3(x, y, z).normalize().multiplyScalar(1.078);
+      vertices.push(point.x, point.y, point.z);
+      normals.push(point.x, point.y, point.z);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 function makeFrontOwnerCurveGeometry(THREE, points, radius) {
   const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
   return new THREE.TubeGeometry(curve, 72, radius, 10, false);
+}
+
+function makeCrossingTuckBodyGeometry(THREE, points, ownerDominance = 1) {
+  const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
+  const rowCount = 48;
+  const columnCount = 7;
+  const vertices = [];
+  const normals = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    const center = curve.getPoint(t);
+    const prev = curve.getPoint(Math.max(0, t - 0.02));
+    const next = curve.getPoint(Math.min(1, t + 0.02));
+    const normal = center.clone().normalize();
+    const tangent = next.clone().sub(prev).normalize();
+    let side = new THREE.Vector3().crossVectors(normal, tangent);
+    if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
+    side.normalize();
+    const width = (0.042 + Math.sin(Math.PI * t) * 0.024) * ownerDominance;
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = u * 2 - 1;
+      const crown = 1 - Math.pow(Math.abs(q), 1.9) * 0.18;
+      const pos = center.clone()
+        .addScaledVector(side, q * width)
+        .addScaledVector(normal, 0.016 * crown)
+        .normalize()
+        .multiplyScalar(1.066);
+      const posNormal = pos.clone().normalize();
+      vertices.push(pos.x, pos.y, pos.z);
+      normals.push(posNormal.x, posNormal.y, posNormal.z);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
 }
 
 function makeLowerFrontCupGeometry(THREE, lowerCupDepth = 1) {
@@ -749,21 +991,35 @@ function makeLowerFrontCupGeometry(THREE, lowerCupDepth = 1) {
 function addPrimaryApertureFrameGeometry(THREE, group, composition, materials) {
   const frame = composition.frontApertureOwnership;
   const variation = frame.effectiveVariation || {};
+  const closure = new THREE.Mesh(makeLowerCupClosureGeometry(THREE, variation.lowerCupDepth || 1), materials.ownerBody);
+  closure.name = 'primary-front-aperture-lower-cup-socket-contiguous';
+  closure.userData.lowerCupClosure = frame.lowerCupClosure;
+  closure.userData.MacroPromotedBody = composition.macroBodyPromotion?.promotedBodies?.find(body => body.parentAssemblage === 'equatorial-cupping-whorl');
+  group.add(closure);
+
   const cup = new THREE.Mesh(makeLowerFrontCupGeometry(THREE, variation.lowerCupDepth || 1), materials.ownerBody);
   cup.name = 'primary-front-aperture-lower-cupping-owner';
   cup.userData.PrimaryApertureFrame = frame;
   cup.userData.frontApertureOwnerRole = 'lower-cupping-owner';
   group.add(cup);
 
-  const crossing = new THREE.Mesh(makeFrontOwnerCurveGeometry(THREE, [
+  const crossingPoints = [
     [-0.38, 0.38, 0.86],
     [-0.16 + (variation.crossingTuckPhase || 0) * 0.18, 0.12, 1.03],
     [0.1 + (variation.crossingTuckPhase || 0) * 0.24, -0.08, 1.08],
     [0.34, -0.33 + (variation.crossingTuckPhase || 0) * 0.12, 0.88],
-  ], 0.026 * (variation.ownerDominance || 1)), materials.ownerRail);
+  ];
+  const crossingBody = new THREE.Mesh(makeCrossingTuckBodyGeometry(THREE, crossingPoints, variation.ownerDominance || 1), materials.crossingBody);
+  crossingBody.name = 'primary-front-aperture-crossing-tuck-macro-body';
+  crossingBody.userData.crossingTuckIntegration = frame.crossingTuckIntegration;
+  crossingBody.userData.MacroPromotedBody = composition.macroBodyPromotion?.promotedBodies?.find(body => body.parentAssemblage === 'north-east-counter-thrust');
+  group.add(crossingBody);
+
+  const crossing = new THREE.Mesh(makeFrontOwnerCurveGeometry(THREE, crossingPoints, 0.016 * (variation.ownerDominance || 1)), materials.ownerRail);
   crossing.name = 'primary-front-aperture-crossing-tuck-owner';
   crossing.userData.PrimaryApertureFrame = frame;
   crossing.userData.frontApertureOwnerRole = 'crossing-tuck-owner';
+  crossing.userData.railRole = 'subordinate-ridge-not-lone-wand';
   group.add(crossing);
 }
 
@@ -790,9 +1046,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const railMaterial = new THREE.MeshStandardMaterial({ color: 0x6b777b, roughness: 0.2, metalness: 0.9, envMapIntensity: 2.8 });
   const hopMaterial = new THREE.MeshStandardMaterial({ color: 0x42302a, roughness: 0.28, metalness: 0.86, envMapIntensity: 2.2 });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
-  const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.72 });
+  const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.42 });
   const apertureOwnerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x20272a, roughness: 0.25, metalness: 0.9, envMapIntensity: 2.2, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = new THREE.MeshStandardMaterial({ color: 0x71828a, roughness: 0.18, metalness: 0.92, envMapIntensity: 3 });
+  const promotedBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.24, metalness: 0.93, envMapIntensity: 2.5, side: THREE.DoubleSide });
+  const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -802,6 +1060,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     terminationMaterial,
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
+    promotedBodyMaterial,
+    crossingTuckBodyMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -836,6 +1096,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       const macroGroup = new THREE.Group();
       macroGroup.name = assemblage.id;
       macroGroup.userData.MacroAssemblage = assemblage;
+      const promotedMesh = new THREE.Mesh(makeMacroPromotedBodyGeometry(THREE, assemblage), promotedBodyMaterial);
+      promotedMesh.name = `${assemblage.id}-macro-promoted-body`;
+      promotedMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+      macroGroup.add(promotedMesh);
       const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
       territoryMesh.name = `${assemblage.id}-macro-territory-body`;
       territoryMesh.userData.MacroTerritoryBody = assemblage.territoryBodyOccupancy;
@@ -865,6 +1129,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     addPrimaryApertureFrameGeometry(THREE, group, composition, {
       ownerBody: apertureOwnerBodyMaterial,
       ownerRail: apertureOwnerRailMaterial,
+      crossingBody: crossingTuckBodyMaterial,
     });
 
     scene.add(group);
@@ -874,6 +1139,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variantId: composition.effectiveVariation.variantId,
       variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
+      promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
       territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
@@ -917,6 +1183,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
+        promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
         bandMemberCount: composition.macroAssemblages.reduce((sum, item) => sum + item.childBandPlan.length, 0),
         territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
@@ -924,6 +1191,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
         PrimaryApertureFrame: composition.frontApertureOwnership,
         frontApertureOwnership: composition.frontApertureOwnership,
+        MacroBodyPromotionPlan: composition.macroBodyPromotion,
+        macroBodyPromotion: composition.macroBodyPromotion,
+        MacroPromotedBody: composition.macroBodyPromotion?.promotedBodies || [],
+        lowerCupClosure: composition.macroBodyPromotion?.lowerCupClosure,
+        crossingTuckIntegration: composition.macroBodyPromotion?.crossingTuckIntegration,
         MacroTerritoryBody: composition.macroAssemblages.map(item => item.territoryBodyOccupancy),
         BoundaryPressureField: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
         boundaryPressureFields: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),

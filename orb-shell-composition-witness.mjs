@@ -137,6 +137,11 @@ async function main() {
     assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
     assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
     assert.ok(state?.variantId, 'variantId missing from debug state');
+    assert.equal(state?.MacroBodyPromotionPlan?.schema, 'MacroBodyPromotionPlan', 'MacroBodyPromotionPlan missing from debug state');
+    assert.equal(state?.promotedBodyCount, state.macroAssemblageCount, 'composition must expose one MacroPromotedBody per macro assemblage');
+    assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
+    assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
+    assert.equal(state?.crossingTuckIntegration?.mode, 'crossing-tuck-macro-body', 'crossing tuck integration descriptor missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
@@ -157,6 +162,7 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      promotedBodyCount: state.promotedBodyCount,
       bandMemberCount: state.bandMemberCount,
       territoryBodyCount: state.territoryBodyCount,
       closureAnchorCount: state.closureAnchorCount,
@@ -166,6 +172,11 @@ async function main() {
       variationSeed: state.variationSeed,
       controlledVariation: state.controlledVariation,
       effectiveVariation: state.effectiveVariation,
+      MacroBodyPromotionPlan: state.MacroBodyPromotionPlan,
+      macroBodyPromotion: state.macroBodyPromotion,
+      MacroPromotedBody: state.MacroPromotedBody,
+      lowerCupClosure: state.lowerCupClosure,
+      crossingTuckIntegration: state.crossingTuckIntegration,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
       PrimaryApertureFrame: state.PrimaryApertureFrame,
       frontApertureOwnership: state.frontApertureOwnership,
