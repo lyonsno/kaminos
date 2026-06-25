@@ -1785,6 +1785,7 @@ export function sampleGeneratedPoseTemporalMotion(trackOrInput = DEFAULT_KIMODO_
 function generatedTemporalBehaviorLabel(track, sample, temporalSample) {
   const phase = String(sample?.phase || temporalSample?.phaseLabel || 'carry');
   const intent = String(track?.intent || track?.label || '').toLowerCase();
+  if (intent.includes('cautious') || intent.includes('sneak')) return phase === 'enter' || phase === 'notice' || phase === 'anticipate' ? 'hesitating' : 'approaching';
   if (intent.includes('startled') || intent.includes('fright') || intent.includes('jumpback')) return 'avoiding-collision';
   if (phase === 'enter') return intent.includes('curious') || intent.includes('look') ? 'noticed-target' : 'approaching';
   if (phase === 'notice' || phase === 'anticipate') return 'hesitating';

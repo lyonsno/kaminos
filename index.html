@@ -3365,6 +3365,8 @@ function disposeMotionTemporalScene() {
   motionTemporalState.root.traverse(object => {
     if (object.geometry) object.geometry.dispose?.();
     if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.map?.dispose?.());
+      else object.material.map?.dispose?.();
       if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
       else object.material.dispose?.();
     }
@@ -4002,6 +4004,109 @@ async function loadGeneratedPoseTemporalRegistry(url = DEFAULT_GENERATED_POSE_TE
   return generatedPoseTemporalRegistryPromise;
 }
 
+function createWorldSpaceBehaviorReadout({ color = '#f0d28a' } = {}) {
+  const group = new THREE.Group();
+  group.name = 'generated-pose-temporal-behavior-readout';
+  group.userData.kaminosBehaviorReadout = {
+    style: 'partial-ground-ring',
+    orientation: 'floor-facing-world-space',
+  };
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.46, 0.012, 8, 96, Math.PI * 1.55),
+    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.68, depthWrite: false })
+  );
+  ring.name = 'generated-pose-temporal-behavior-ground-ring';
+  ring.rotation.set(Math.PI / 2, 0, -Math.PI * 0.78);
+  ring.renderOrder = 8;
+  group.add(ring);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  const label = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.14, 0.285, 1, 1),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.92, depthWrite: false, side: THREE.DoubleSide })
+  );
+  label.name = 'generated-pose-temporal-behavior-ground-label';
+  label.position.set(0, 0.006, 0.61);
+  label.rotation.x = -Math.PI / 2;
+  label.renderOrder = 9;
+  group.add(label);
+
+  return {
+    group,
+    ring,
+    label,
+    canvas,
+    context,
+    texture,
+    color,
+    style: 'partial-ground-ring',
+    orientation: 'floor-facing-world-space',
+    lastText: null,
+    debug: null,
+  };
+}
+
+function updateBehaviorReadoutTexture(readout, text, phase) {
+  const label = String(text || 'observing').replace(/-/g, ' ').toUpperCase();
+  const sublabel = String(phase || '').replace(/-/g, ' ').toUpperCase();
+  const nextText = `${label}|${sublabel}`;
+  if (readout.lastText === nextText) return;
+  const ctx = readout.context;
+  ctx.clearRect(0, 0, readout.canvas.width, readout.canvas.height);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+  ctx.fillRect(18, 20, 476, 88);
+  ctx.strokeStyle = 'rgba(240, 210, 138, 0.54)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(20, 22, 472, 84);
+  ctx.font = '700 34px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255, 239, 196, 0.96)';
+  ctx.fillText(label, 256, 54);
+  ctx.font = '600 18px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = 'rgba(240, 210, 138, 0.82)';
+  ctx.fillText(sublabel, 256, 84);
+  readout.texture.needsUpdate = true;
+  readout.lastText = nextText;
+}
+
+function updateWorldSpaceBehaviorReadout(readout, behaviorState, rootPosition, displayedFacing, effort = 0) {
+  if (!readout || !behaviorState || !rootPosition) return null;
+  const stateLabel = behaviorState.state || 'observing';
+  updateBehaviorReadoutTexture(readout, stateLabel, behaviorState.phase);
+  readout.group.visible = true;
+  readout.group.position.set(rootPosition.x, 0.012, rootPosition.z);
+  const yaw = Math.atan2(displayedFacing?.x || 0, displayedFacing?.z || 1);
+  readout.group.rotation.set(0, yaw, 0);
+  const pulse = 1 + Math.max(0, Math.min(1, Number(effort) || 0)) * 0.08;
+  readout.ring.scale.setScalar(pulse);
+  readout.ring.material.opacity = 0.48 + Math.max(0, Math.min(1, Number(effort) || 0)) * 0.28;
+  readout.label.material.opacity = 0.82 + Math.max(0, Math.min(1, Number(effort) || 0)) * 0.12;
+  readout.debug = {
+    schema: 'kaminos.generated-motion-world-readout.v0',
+    visible: true,
+    style: readout.style,
+    orientation: readout.orientation,
+    label: stateLabel,
+    phase: behaviorState.phase || null,
+    text: String(stateLabel).replace(/-/g, ' '),
+    worldPosition: readout.group.position.toArray().map(value => Number(value.toFixed(5))),
+    yaw: Number(yaw.toFixed(5)),
+    ringObjectName: readout.ring.name,
+    labelObjectName: readout.label.name,
+  };
+  return readout.debug;
+}
+
 async function createGeneratedPoseTemporalScene({ force = false, clipId = null, registryUrl = null } = {}) {
   if (motionTemporalState?.active && !force) return motionTemporalState;
   disposeMotionAgencyScene();
@@ -4058,8 +4163,10 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   visual.group.add(compressionRing);
   visual.compressionRing = compressionRing;
   visual.track = harness.track;
+  visual.behaviorReadout = createWorldSpaceBehaviorReadout({ color: '#f0d28a' });
   root.add(visual.group);
   root.add(visual.target);
+  root.add(visual.behaviorReadout.group);
 
   scene.add(root);
   motionTemporalState = {
@@ -4086,6 +4193,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     lastActors: [],
     lastTemporalSample: null,
     lastBehaviorState: null,
+    lastBehaviorReadout: null,
   };
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
@@ -4368,11 +4476,20 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     anchor: state.anchorContext,
   });
   state.lastBehaviorState = behaviorState;
+  const behaviorReadout = updateWorldSpaceBehaviorReadout(
+    visual.behaviorReadout,
+    behaviorState,
+    rootPosition,
+    displayedFacing,
+    sample.effort,
+  );
+  state.lastBehaviorReadout = behaviorReadout;
   state.lastActors = [{
     id: visual.id,
     label: visual.label,
     intent: state.track.intent,
     behaviorState,
+    behaviorReadout,
     behaviorStateLabel: behaviorState.state,
     phase: sample.phase,
     root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
@@ -4782,6 +4899,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     phaseLabels: harness.metrics.phaseLabels,
     lastTemporalSample: state?.lastTemporalSample || null,
     behaviorState: state?.lastBehaviorState || null,
+    behaviorReadout: state?.lastBehaviorReadout || null,
     behaviorVisibility: state?.behaviorVisibility || 'inspectable-not-canvas-label',
     generatedPoseTemporalHarness: {
       schema: harness.schema,

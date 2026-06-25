@@ -499,6 +499,7 @@ try {
     const sourceBracket = actor?.sourceBracket;
     const sampler = String(actor?.sampler || '');
     const behaviorState = actor?.behaviorState || debug?.behaviorState || null;
+    const behaviorReadout = actor?.behaviorReadout || debug?.behaviorReadout || null;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose temporal route did not spawn temporal actor: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.track?.id !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost requested clip identity ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
@@ -520,6 +521,12 @@ try {
     if (!behaviorState.target?.id || !behaviorState.anchor?.id) throw new Error(`generated pose temporal route lost behaviorState target/anchor context: ${JSON.stringify(debug)}`);
     if (behaviorState.visibility !== 'inspectable-not-canvas-label') throw new Error(`generated pose temporal route promoted behavior labels into the primary canvas contract: ${JSON.stringify(debug)}`);
     if (!String(behaviorState.reason || '').includes(String(behaviorState.phase || ''))) throw new Error(`generated pose temporal route lost compact behaviorState reason evidence: ${JSON.stringify(debug)}`);
+    if (behaviorReadout?.schema !== 'kaminos.generated-motion-world-readout.v0') throw new Error(`generated pose temporal route lost behaviorReadout schema: ${JSON.stringify(debug)}`);
+    if (behaviorReadout.visible !== true) throw new Error(`generated pose temporal route lost visible behaviorReadout: ${JSON.stringify(debug)}`);
+    if (behaviorReadout.orientation !== 'floor-facing-world-space') throw new Error(`generated pose temporal route lost floor-facing behaviorReadout orientation: ${JSON.stringify(debug)}`);
+    if (behaviorReadout.style !== 'partial-ground-ring') throw new Error(`generated pose temporal route lost partial-ground-ring behaviorReadout style: ${JSON.stringify(debug)}`);
+    if (behaviorReadout.label !== behaviorState.state) throw new Error(`generated pose temporal route behaviorReadout label diverged from behaviorState: ${JSON.stringify(debug)}`);
+    if (!String(behaviorReadout.ringObjectName || '').includes('ground-ring') || !String(behaviorReadout.labelObjectName || '').includes('ground-label')) throw new Error(`generated pose temporal route lost named world readout meshes: ${JSON.stringify(debug)}`);
   } else if (isOutputMapRoute) {
     const generatedPoseOutputMapHarness = debug?.generatedPoseOutputMapHarness;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose output-map route did not spawn mapped actor: ${JSON.stringify(debug)}`);
