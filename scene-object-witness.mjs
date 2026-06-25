@@ -2517,6 +2517,38 @@ async function runHybridSplatOverlayScenario(ws) {
         '  };',
         '}',
       ].join('\\n');
+      const missingTelemetryModuleSource = [
+        'export async function createSplatOverlay(container, options = {}) {',
+        '  const canvas = document.createElement("canvas");',
+        '  canvas.dataset.hybridSplatOverlayWitness = "missing-scene-context-telemetry";',
+        '  canvas.width = 32;',
+        '  canvas.height = 32;',
+        '  container.appendChild(canvas);',
+        '  const capabilities = Object.freeze({ canvasMode: "dual-canvas-overlay", meshDepthOcclusion: false, sharedCanvasComposite: false, sharedCommandEncoder: false, cropAppliedByRenderer: true });',
+        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], sceneContexts: [], sceneContextTelemetry: null, started: false, stopped: false, destroyed: false, options, sourceIdentity: null, correctionApplication: null, capabilities };',
+        '  function publish() { window.__hybridSplatOverlayWitness = { ...state, canvasConnected: canvas.isConnected }; }',
+        '  publish();',
+        '  return {',
+        '    canvas,',
+        '    get scene() { return state.sources.length ? { witnessScene: true } : null; },',
+        '    get capabilities() { return capabilities; },',
+        '    get sourceIdentity() { return state.sourceIdentity; },',
+        '    get correctionApplication() { return state.correctionApplication; },',
+        '    get cropAppliedByRenderer() { return state.correctionApplication?.cropApplied; },',
+        '    setCameraMatrices(viewMatrix, projectionMatrix, cameraPosition) { state.frames += 1; state.lastViewLength = viewMatrix.length; state.lastProjectionLength = projectionMatrix.length; state.lastCameraLength = cameraPosition.length; publish(); },',
+        '    setModelMatrix(matrix) { state.modelMatrices.push(Array.from(matrix)); publish(); },',
+        '    setViewport(width, height, devicePixelRatio = 1) { state.viewports.push({ width, height, devicePixelRatio }); publish(); },',
+        '    setCorrectionIdentity(correction) { const cropApplied = correction?.crop?.enabled === true; state.corrections.push(correction); state.correctionApplication = { cropApplied, cropFrame: cropApplied ? "witness-renderer-crop" : "disabled", sourceCount: 3, keptCount: cropApplied ? 2 : 3 }; if (state.sourceIdentity) state.sourceIdentity = { ...state.sourceIdentity, correctionApplied: true, correctionIdentity: correction }; publish(); },',
+        '    setSceneContext(context) { state.sceneContexts.push(context); state.sceneContextTelemetry = undefined; publish(); },',
+        '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); state.sourceIdentity = { source: String(source), loadMethod: "ply-url", correctionApplied: false }; publish(); },',
+        '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); state.sourceIdentity = { source: String(url), loadMethod: "manifest", correctionApplied: false }; publish(); },',
+        '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); state.sourceIdentity = { source: String(attributes?.sourceKind || "attributes"), loadMethod: "attributes", correctionApplied: false }; publish(); },',
+        '    start() { state.started = true; publish(); },',
+        '    stop() { state.stopped = true; publish(); },',
+        '    destroy() { state.destroyed = true; canvas.remove(); publish(); },',
+        '  };',
+        '}',
+      ].join('\\n');
       const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
       const startResult = await window.startSelectedSplatHybridRenderer?.();
@@ -2526,6 +2558,15 @@ async function runHybridSplatOverlayScenario(ws) {
       const witness = window.__hybridSplatOverlayWitness || null;
       window.stopHybridSplatOverlay?.();
       URL.revokeObjectURL(moduleUrl);
+      const missingTelemetryModuleUrl = URL.createObjectURL(new Blob([missingTelemetryModuleSource], { type: 'text/javascript' }));
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(missingTelemetryModuleUrl);
+      const missingTelemetryStartResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(500);
+      const missingTelemetryOverlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const missingTelemetryHandoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const missingTelemetryWitness = window.__hybridSplatOverlayWitness || null;
+      window.stopHybridSplatOverlay?.();
+      URL.revokeObjectURL(missingTelemetryModuleUrl);
       return {
         actionExposed: !!actionButton,
         assetRowCount: assetRows.length,
@@ -2541,6 +2582,10 @@ async function runHybridSplatOverlayScenario(ws) {
         overlayDebug,
         handoffDebug,
         witness,
+        missingTelemetryStartResult,
+        missingTelemetryOverlayDebug,
+        missingTelemetryHandoffDebug,
+        missingTelemetryWitness,
       };
     })()
   `, { timeoutMs: 60000 });
@@ -2588,6 +2633,14 @@ async function runHybridSplatOverlayScenario(ws) {
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextAccepted !== true
       || lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextTelemetry?.accepted !== true) {
     throw new Error(`hybrid splat overlay did not report accepted scene context: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const missingTelemetry = lastEvidence.hybridSplatOverlay.missingTelemetryOverlayDebug?.sceneContextTelemetry || {};
+  if (lastEvidence.hybridSplatOverlay.missingTelemetryOverlayDebug?.sceneContextAccepted !== false
+      || missingTelemetry.accepted !== false
+      || missingTelemetry.missing !== true
+      || missingTelemetry.failurePhase !== 'setSceneContext.telemetry'
+      || !lastEvidence.hybridSplatOverlay.missingTelemetryWitness?.sceneContexts?.length) {
+    throw new Error(`hybrid splat overlay accepted missing scene-context telemetry: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sourceIdentity?.source !== splatSource
       || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== splatSource) {

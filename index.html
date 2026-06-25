@@ -1090,21 +1090,19 @@ function hybridSplatOverlaySceneContextCapability(handle = hybridSplatOverlaySta
 }
 
 function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}) {
-  const { accepted = true, unsupportedFields = [] } = options;
-  const resultObject = result && typeof result === 'object' ? result : {};
+  const hasStructuredTelemetry = !!result && typeof result === 'object' && !Array.isArray(result);
+  const fallbackUnsupportedFields = Array.isArray(options.unsupportedFields)
+    ? options.unsupportedFields.slice()
+    : (hasStructuredTelemetry ? [] : ['setSceneContext.telemetry']);
+  const fallbackMissing = options.missing === true || !hasStructuredTelemetry;
+  const fallbackFailurePhase = options.failurePhase
+    || (hasStructuredTelemetry ? null : 'setSceneContext.telemetry');
+  const fallbackMessage = options.message
+    || (hasStructuredTelemetry ? null : 'Renderer setSceneContext did not return structured acceptance telemetry');
+  const resultObject = hasStructuredTelemetry ? result : {};
   const acceptedFields = Array.isArray(resultObject.acceptedFields)
     ? resultObject.acceptedFields.slice()
-    : [
-        'camera.viewMatrix',
-        'camera.projectionMatrix',
-        'camera.positionWorld',
-        'camera.viewport',
-        'lighting.environment',
-        'lighting.exposure',
-        'lighting.toneMapping',
-        'composition.background',
-        'composition.capabilities',
-      ];
+    : [];
   const honoredFields = Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [];
   const rejectedFields = Array.isArray(resultObject.rejectedFields) ? resultObject.rejectedFields.slice() : [];
   return {
@@ -1114,16 +1112,16 @@ function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}
     contextTimestamp: context?.producer?.updatedAt || null,
     route: hybridMeshSplatRoute.id,
     capability: hybridSplatOverlaySceneContextCapability(),
-    accepted: resultObject.accepted ?? accepted,
+    accepted: hasStructuredTelemetry && resultObject.accepted === true,
     acceptedFields,
     honoredFields,
-    unsupportedFields: Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : unsupportedFields,
+    unsupportedFields: Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : fallbackUnsupportedFields,
     rejectedFields,
     stale: resultObject.stale === true,
-    missing: resultObject.missing === true,
+    missing: resultObject.missing === true || fallbackMissing,
     ignored: resultObject.ignored === true,
-    failurePhase: resultObject.failurePhase || null,
-    message: resultObject.message || null,
+    failurePhase: resultObject.failurePhase || fallbackFailurePhase,
+    message: resultObject.message || fallbackMessage,
   };
 }
 
@@ -1133,14 +1131,16 @@ function publishHybridSplatOverlaySceneContext(handle, frame = hybridSplatOverla
   if (!handle || typeof handle.setSceneContext !== 'function') {
     hybridSplatOverlayState.sceneContextAccepted = false;
     hybridSplatOverlayState.sceneContextTelemetry = normalizeHybridSplatSceneContextTelemetry(null, sceneContext, {
-      accepted: false,
+      missing: true,
+      failurePhase: 'setSceneContext.api',
+      message: 'Renderer handle does not expose setSceneContext',
       unsupportedFields: ['handle.setSceneContext'],
     });
     return hybridSplatOverlayState.sceneContextTelemetry;
   }
   const result = handle.setSceneContext(sceneContext);
   const telemetry = normalizeHybridSplatSceneContextTelemetry(result, sceneContext);
-  hybridSplatOverlayState.sceneContextAccepted = telemetry.accepted !== false;
+  hybridSplatOverlayState.sceneContextAccepted = telemetry.accepted === true;
   hybridSplatOverlayState.sceneContextTelemetry = telemetry;
   return telemetry;
 }
