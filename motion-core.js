@@ -7,6 +7,7 @@ export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
+export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -1615,6 +1616,48 @@ function temporalFixtureMetrics(generatedInput) {
   };
 }
 
+export function normalizeGeneratedPoseTemporalRegistry(registryInput = {}) {
+  if (registryInput?.schema !== 'kaminos.generated-pose-temporal-registry.v0') {
+    throw new Error(`Expected kaminos.generated-pose-temporal-registry.v0, got ${registryInput?.schema || 'missing schema'}`);
+  }
+  const registrySource = String(registryInput.registrySource || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL);
+  const clips = (Array.isArray(registryInput.clips) ? registryInput.clips : [])
+    .map(clip => normalizeGeneratedPoseTemporalInput({
+      ...clip,
+      sourceModel: clip.sourceModel || registryInput.sourceModel || 'unknown',
+      sourceFormat: clip.sourceFormat || registryInput.sourceFormat || 'unknown',
+      registrySource: clip.registrySource || registrySource,
+    }));
+  if (clips.length < 1) throw new Error(`Generated pose temporal registry ${registryInput.id || 'unknown'} needs at least one clip`);
+  const seen = new Set();
+  for (const clip of clips) {
+    if (seen.has(clip.id)) throw new Error(`Generated pose temporal registry has duplicate clip id: ${clip.id}`);
+    seen.add(clip.id);
+  }
+  return {
+    schema: 'kaminos.generated-pose-temporal-registry.v0',
+    id: String(registryInput.id || 'generated_pose_temporal_registry'),
+    label: registryInput.label || registryInput.id || 'Generated Pose Temporal Registry',
+    sourceModel: registryInput.sourceModel || 'unknown',
+    sourceFormat: registryInput.sourceFormat || 'unknown',
+    registrySource,
+    generatedFrom: registryInput.generatedFrom || null,
+    clipCount: clips.length,
+    clips,
+  };
+}
+
+export function generatedPoseTemporalClipById(id, registryInput) {
+  const registry = normalizeGeneratedPoseTemporalRegistry(registryInput);
+  const requestedId = String(id || registry.clips[0]?.id || '').trim();
+  const clip = registry.clips.find(candidate => candidate.id === requestedId);
+  if (!clip) throw new Error(`Unknown generated pose temporal clip id: ${requestedId}`);
+  return {
+    ...clip,
+    registrySource: clip.registrySource || registry.registrySource,
+  };
+}
+
 export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE, t = 0) {
   const input = trackOrInput?.temporalSamples
     ? { temporalSamples: trackOrInput.temporalSamples, duration: trackOrInput.duration }
@@ -1788,6 +1831,8 @@ export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMOD
     ...track,
     sourceFormat: input.sourceFormat || 'unknown',
     inputSha256: input.inputSha256 || null,
+    registryClipId: input.id,
+    registrySource: input.registrySource || null,
     sourceFrameStride: input.sourceFrameStride || 1,
     temporalSamples: input.temporalSamples,
     temporalMetrics: temporalFixtureMetrics(input),
@@ -1809,8 +1854,8 @@ export function buildGeneratedPoseTemporalHarness({
     count === 1 ? 0 : Math.round(i * (simulation.frames.length - 1) / (count - 1))
   ));
   const actor = {
-    id: 'kimodo-bow-temporal',
-    label: 'Kimodo Bow Temporal',
+    id: track.id,
+    label: track.label,
     color: '#f0b184',
     intent: track.intent,
   };
@@ -1823,6 +1868,8 @@ export function buildGeneratedPoseTemporalHarness({
     sourceRoute: track.sourceRoute,
     sourceFormat: track.sourceFormat,
     inputSha256: track.inputSha256,
+    registryClipId: track.registryClipId || track.id,
+    registrySource: track.registrySource || null,
     sourceFrameStride: track.sourceFrameStride,
     sampleCount: track.temporalSamples.length,
     track,

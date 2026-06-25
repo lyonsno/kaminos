@@ -480,6 +480,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Mapped Route</span><span class="route-chip">kaminos_motion_output_map=1</span></div>
       <div class="field"><span class="field-key">Temporal Route</span><span class="route-chip">kaminos_generated_pose_temporal=1</span></div>
       <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
+      <div class="volume-actions" id="motion-temporal-clips">
+        <button class="btn" data-motion-temporal-clip="kimodo_theatrical_bow_temporal_v0">Bow</button>
+        <button class="btn" data-motion-temporal-clip="kimodo_cautious_sneak_temporal_v0">Sneak</button>
+        <button class="btn" data-motion-temporal-clip="kimodo_startled_jumpback_temporal_v0">Startle</button>
+        <button class="btn" data-motion-temporal-clip="kimodo_energetic_dance_temporal_v0">Dance</button>
+        <button class="btn" data-motion-temporal-clip="kimodo_angry_kick_punch_temporal_v0">Fight</button>
+        <button class="btn" data-motion-temporal-clip="kimodo_curious_walk_look_temporal_v0">Curious</button>
+      </div>
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
@@ -799,6 +807,7 @@ import {
   DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
   DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
   DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL,
   MOTION_ROUTE_IDENTITY,
   applyMotionPhraseControls,
   buildMotionActorFixture,
@@ -808,6 +817,7 @@ import {
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
   buildGeneratedPoseTemporalHarness,
+  generatedPoseTemporalClipById,
   interpolateGeneratedPoseTemporalSample,
   motionClipById,
   motionPhraseBodyScale,
@@ -865,6 +875,7 @@ let motionPhraseControlState = null;
 let motionTrackState = null;
 let motionOutputMapState = null;
 let motionTemporalState = null;
+let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3977,7 +3988,20 @@ function createGeneratedPoseOutputMapScene({ force = false } = {}) {
   return motionOutputMapState;
 }
 
-function createGeneratedPoseTemporalScene({ force = false } = {}) {
+async function loadGeneratedPoseTemporalRegistry(url = DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL) {
+  const registryUrl = String(url || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL);
+  if (!generatedPoseTemporalRegistryPromise || generatedPoseTemporalRegistryPromise.url !== registryUrl) {
+    const promise = fetch(registryUrl, { cache: 'no-store' }).then(async response => {
+      if (!response.ok) throw new Error(`Generated pose temporal registry fetch failed ${response.status}: ${registryUrl}`);
+      return response.json();
+    });
+    promise.url = registryUrl;
+    generatedPoseTemporalRegistryPromise = promise;
+  }
+  return generatedPoseTemporalRegistryPromise;
+}
+
+async function createGeneratedPoseTemporalScene({ force = false, clipId = null, registryUrl = null } = {}) {
   if (motionTemporalState?.active && !force) return motionTemporalState;
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
@@ -3985,8 +4009,13 @@ function createGeneratedPoseTemporalScene({ force = false } = {}) {
   disposeMotionTrackScene();
   disposeMotionOutputMapScene();
   disposeMotionTemporalScene();
+  const params = new URLSearchParams(window.location.search);
+  const requestedRegistryUrl = registryUrl || params.get('kaminos_generated_pose_temporal_registry') || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL;
+  const requestedClipId = clipId || params.get('kaminos_generated_pose_temporal_clip') || DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE.id;
+  const registry = await loadGeneratedPoseTemporalRegistry(requestedRegistryUrl);
+  const generatedInput = generatedPoseTemporalClipById(requestedClipId, registry);
   const harness = buildGeneratedPoseTemporalHarness({
-    generatedInput: DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+    generatedInput,
     fps: 12,
     filmstripFrames: 7,
   });
@@ -3995,6 +4024,9 @@ function createGeneratedPoseTemporalScene({ force = false } = {}) {
   root.userData.kaminosGeneratedPoseTemporal = {
     route: MOTION_ROUTE_IDENTITY,
     harnessSchema: harness.schema,
+    requestedClipId,
+    registryClipId: harness.registryClipId,
+    registrySource: harness.registrySource,
     sourceRoute: harness.sourceRoute,
     sourceFormat: harness.sourceFormat,
     sampleCount: harness.sampleCount,
@@ -4010,8 +4042,8 @@ function createGeneratedPoseTemporalScene({ force = false } = {}) {
   root.add(floor);
 
   const visual = makeMotionDecisionVisual({
-    id: 'generated-pose-temporal-bow',
-    label: 'Kimodo Bow Temporal',
+    id: `generated-pose-temporal-${harness.registryClipId || harness.track.id}`,
+    label: harness.track.label || 'Kimodo Temporal Clip',
     color: '#f0b184',
     origin: [0, 0, 0],
     plan: null,
@@ -4036,19 +4068,24 @@ function createGeneratedPoseTemporalScene({ force = false } = {}) {
     root,
     harness,
     track: harness.track,
+    requestedClipId,
+    registryClipId: harness.registryClipId,
+    registrySource: harness.registrySource,
     visual,
     duration: harness.duration,
     startedAt: performance.now() / 1000,
     frameCount: 0,
     maxEffort: 0,
     maxBowCompression: harness.metrics.maxBowCompression,
+    horizontalDisplayScale: Math.min(2.2, Math.max(0.28, 1.65 / Math.max(0.75, harness.metrics.rootTravel || 1))),
+    verticalDisplayScale: 5.0,
     lastActors: [],
     lastTemporalSample: null,
   };
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
-  setInfo('Generated pose temporal harness spawned');
+  setInfo(`Generated pose temporal harness spawned: ${harness.track.label}`);
   return motionTemporalState;
 }
 
@@ -4285,8 +4322,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const sample = sampleGeneratedPoseTemporalMotion(state.track, localTime);
   const temporalSample = sample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, localTime);
   const compression = Number(temporalSample?.bowCompression || 0);
-  const rootPosition = new THREE.Vector3(sample.root[0] * 2.2, sample.root[1] * 5.0 + 0.24, sample.root[2] * 2.2);
-  const attention = new THREE.Vector3(sample.attention[0] * 2.2, sample.attention[1] * 2.2 + 0.24, sample.attention[2] * 2.2);
+  const horizontalDisplayScale = Number(state.horizontalDisplayScale || 2.2);
+  const verticalDisplayScale = Number(state.verticalDisplayScale || 5.0);
+  const rootPosition = new THREE.Vector3(sample.root[0] * horizontalDisplayScale, sample.root[1] * verticalDisplayScale + 0.24, sample.root[2] * horizontalDisplayScale);
+  const attention = new THREE.Vector3(sample.attention[0] * horizontalDisplayScale, sample.attention[1] * Math.min(2.2, verticalDisplayScale) + 0.24, sample.attention[2] * horizontalDisplayScale);
   const displayedFacing = attention.clone().sub(rootPosition).normalize();
   visual.group.position.copy(rootPosition);
   visual.group.lookAt(attention);
@@ -4307,9 +4346,9 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     const dot = visual.trail[i];
     dot.visible = true;
     dot.position.set(
-      trailSample.root[0] * 2.2 - sample.root[0] * 2.2,
-      trailSample.root[1] * 5.0 - sample.root[1] * 5.0,
-      trailSample.root[2] * 2.2 - sample.root[2] * 2.2,
+      trailSample.root[0] * horizontalDisplayScale - sample.root[0] * horizontalDisplayScale,
+      trailSample.root[1] * verticalDisplayScale - sample.root[1] * verticalDisplayScale,
+      trailSample.root[2] * horizontalDisplayScale - sample.root[2] * horizontalDisplayScale,
     );
     dot.material.opacity = Math.max(0.04, 0.32 - i * 0.03);
   }
@@ -4332,6 +4371,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     sourceTime: temporalSample?.time ?? null,
     sourceBracket: temporalSample?.bracket ?? null,
     sourceInterpolation: temporalSample?.interpolation ?? null,
+    horizontalDisplayScale: Number(horizontalDisplayScale.toFixed(5)),
+    verticalDisplayScale: Number(verticalDisplayScale.toFixed(5)),
     color: visual.color,
     sampler: temporalSample?.sampler ?? null,
   }];
@@ -4431,7 +4472,13 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-tracks-enable')?.addEventListener('click', () => createMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-generated-enable')?.addEventListener('click', () => createGeneratedMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-output-map-enable')?.addEventListener('click', () => createGeneratedPoseOutputMapScene({ force: true }));
-  document.getElementById('motion-temporal-enable')?.addEventListener('click', () => createGeneratedPoseTemporalScene({ force: true }));
+  document.getElementById('motion-temporal-enable')?.addEventListener('click', () => void createGeneratedPoseTemporalScene({ force: true }));
+  document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
+    button.addEventListener('click', () => void createGeneratedPoseTemporalScene({
+      force: true,
+      clipId: button.dataset.motionTemporalClip,
+    }));
+  });
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
     document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
@@ -4443,7 +4490,7 @@ function initKaminosMotionAgencyRoute() {
   if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_generated_pose_temporal')) createGeneratedPoseTemporalScene();
+    if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
     else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
     else if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
@@ -4712,6 +4759,9 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     sourceRoute: harness.sourceRoute,
     sourceFormat: harness.sourceFormat,
     inputSha256: harness.inputSha256,
+    requestedClipId: state?.requestedClipId || harness.registryClipId || harness.track.id,
+    registryClipId: harness.registryClipId || harness.track.id,
+    registrySource: harness.registrySource || null,
     sampleCount: harness.sampleCount,
     sourceFrameStride: harness.sourceFrameStride,
     phaseLabels: harness.metrics.phaseLabels,
@@ -4725,6 +4775,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
       sourceRoute: harness.sourceRoute,
       sourceFormat: harness.sourceFormat,
       inputSha256: harness.inputSha256,
+      registryClipId: harness.registryClipId || harness.track.id,
+      registrySource: harness.registrySource || null,
       sampleCount: harness.sampleCount,
       sourceFrameStride: harness.sourceFrameStride,
       track: {
