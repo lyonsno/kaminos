@@ -175,6 +175,8 @@ function pressureBufferBytes(gridSize) {
 
 const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
 const SIM_COST_LEDGER_EVIDENCE_SOURCE = 'cpu-structural-pass-ledger-plus-raf-queue-proxy';
+const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0';
+const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
 
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
@@ -781,7 +783,7 @@ fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let c = vec3<i32>(gid);
-  let div = pressureRead(c).x;
+  let div = divergenceAtCell(c);
   let neighborPressure =
     pressureRead(c + vec3<i32>(-1, 0, 0)).y +
     pressureRead(c + vec3<i32>( 1, 0, 0)).y +
@@ -2895,6 +2897,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantSkippedFrameCount: 0,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
+    pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
+    pressureDivergencePasses: 0,
+    pressureJacobiInlineDivergencePasses: 0,
+    fullGridPassBreakdown: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -3716,7 +3722,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureJacobiPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure jacobi pipeline layout',
-      bindGroupLayouts: [emptyBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     pressureProjectPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure projection pipeline layout',
@@ -3942,10 +3948,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const simPassesPerFrame = 1;
-    const pressureDivergencePasses = pressureEnabled ? 1 : 0;
+    const pressureSourceStrategy = pressureEnabled
+      ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
+      : PRESSURE_SOURCE_STRATEGY_DISABLED;
+    const pressureDivergencePasses = 0;
     const pressureJacobiPasses = pressureEnabled ? pressureIterations : 0;
+    const pressureJacobiInlineDivergencePasses = pressureJacobiPasses;
     const pressureProjectionPasses = pressureEnabled ? 1 : 0;
     const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiPasses + pressureProjectionPasses;
+    const fullGridPassBreakdown = {
+      fluidSim: simPassesPerFrame,
+      pressureDivergence: pressureDivergencePasses,
+      pressureJacobi: pressureJacobiPasses,
+      pressureJacobiInlineDivergence: pressureJacobiInlineDivergencePasses,
+      pressureProjection: pressureProjectionPasses,
+      total: fullGridPassesPerFrame,
+    };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
     const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
     const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
@@ -3958,6 +3976,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
+    state.pressureSourceStrategy = pressureSourceStrategy;
+    state.pressureDivergencePasses = pressureDivergencePasses;
+    state.pressureJacobiInlineDivergencePasses = pressureJacobiInlineDivergencePasses;
+    state.fullGridPassBreakdown = fullGridPassBreakdown;
     state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
     state.simCostLedger = {
       identity: SIM_COST_LEDGER_IDENTITY,
@@ -3972,10 +3994,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fullGridWorkgroupsPerPass,
       majorantWorkgroupsPerPass,
       simPassesPerFrame,
+      pressureSourceStrategy,
       pressureDivergencePasses,
       pressureJacobiPasses,
+      pressureJacobiInlineDivergencePasses,
       pressureProjectionPasses,
       fullGridPassesPerFrame,
+      fullGridPassBreakdown,
       fullGridCellVisitsPerFrame: fullGridCells * fullGridPassesPerFrame,
       majorantBuildCadence,
       majorantBuiltThisFrame,
@@ -4017,7 +4042,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodePressureProjection(encoder) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
-    if (!pressureDivergencePipeline || !pressureJacobiPipeline || !pressureProjectPipeline || !pressureWriteBindGroup || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) {
+    if (!pressureJacobiPipeline || !pressureProjectPipeline || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
@@ -4034,18 +4059,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return;
     }
     const workgroups = Math.ceil(gridSize / 4);
-    {
-      const pass = encoder.beginComputePass({ label: 'kaminos divergence pressure pass' });
-      pass.setPipeline(pressureDivergencePipeline);
-      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
-      pass.setBindGroup(2, pressureWriteBindGroup);
-      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
-      pass.end();
-    }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
-      const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi pass ${i + 1}` });
+      const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
       pass.setPipeline(pressureJacobiPipeline);
+      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
@@ -5125,6 +5143,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureProjectionIterations: state.pressureProjectionIterations,
         pressureIterationDefault: state.pressureIterationDefault,
         pressureIterationRequested: state.pressureIterationRequested,
+        pressureSourceStrategy: state.pressureSourceStrategy,
+        pressureDivergencePasses: state.pressureDivergencePasses,
+        pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
+        fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
         majorantGrid: state.majorantGrid,
         majorantBuilt: state.majorantBuilt,
         majorantCadence: state.majorantCadence,
@@ -5395,6 +5417,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureProjectionIterations: state.pressureProjectionIterations,
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested: state.pressureIterationRequested,
+      pressureSourceStrategy: state.pressureSourceStrategy,
+      pressureDivergencePasses: state.pressureDivergencePasses,
+      pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
+      fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
       majorantGrid: state.majorantGrid,
       majorantBuilt: state.majorantBuilt,
       majorantCadence: state.majorantCadence,
