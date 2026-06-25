@@ -9,6 +9,7 @@ assert.match(witness, /data-pipeline-asset-palette="image"/, 'Pipeline UI witnes
 assert.match(witness, /pipeline-asset-card/, 'Pipeline UI witness must start from a visible asset card');
 assert.match(witness, /Import Image/, 'Pipeline UI witness must activate the visible import button');
 assert.match(witness, /data-pipeline-generator-pipeline-id/, 'Pipeline UI witness must choose routes through visible generator cards');
+assert.match(witness, /drag\(cdp,\s*generatorCard\.point/, 'Pipeline UI witness must drag a visible generator card into the graph before execution');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
 assert.match(witness, /Load Output/, 'Pipeline UI witness must activate the visible output-node Load Output button after graph execution');

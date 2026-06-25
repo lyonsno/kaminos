@@ -69,6 +69,13 @@ assert.match(index, /id="pipeline-generator-library"/, 'Pipeline left rail expos
 assert.match(index, /data-pipeline-generator-pipeline-id/, 'Pipeline generator cards carry stable route ids for witness selection');
 assert.match(index, /function renderPipelineGeneratorLibrary\(/, 'Pipeline left rail renders routes as generator/function cards');
 assert.match(index, /function selectPipelineGenerator\(/, 'Pipeline route selection is owned by generator cards, not a select element');
+assert.match(index, /card\.draggable\s*=\s*true/, 'Available Pipeline generator cards can be dragged into the graph');
+assert.match(index, /application\/x-kaminos-generator-id/, 'Pipeline generator drags carry a generator route payload');
+assert.match(index, /function beginPipelineGeneratorCardDrag\(/, 'Pipeline generator cards have a trusted pointer-drag fallback');
+assert.match(index, /function handlePipelineGraphGeneratorDrop\(/, 'Pipeline graph can receive dropped generator cards');
+assert.match(index, /function placePipelineGeneratorRouteNode\(/, 'Dropped generator cards place or replace the graph route node');
+assert.match(index, /pipelineDockState\.graphNodePositions\.route/, 'Dropped generator cards update the graph route node position');
+assert.match(index, /function isPipelineInternalDrag\(/, 'Pipeline internal graph drags must not masquerade as viewport file drops');
 assert.match(index, /Ideogram 4/, 'Pipeline generator library reserves a visible future card for Ideogram 4');
 assert.match(index, /Trellis/, 'Pipeline generator library reserves a visible future card for Trellis');
 assert.match(index, /Kimodo Motion/, 'Pipeline generator library reserves a visible future card for motion generators');

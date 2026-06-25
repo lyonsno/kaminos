@@ -122,6 +122,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-generator-card { min-height: 112px; width: 100%; border: 1px solid #2f2f2f; border-radius: 8px; background: #181818; color: #ddd; padding: 10px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
 .pipeline-generator-card:hover { border-color: #4a4a4a; background: #202020; transform: translateY(-1px); }
 .pipeline-generator-card.selected { border-color: #1976d2; background: #172235; }
+.pipeline-generator-card.dragging { border-color: #f0b85a; background: #292313; }
 .pipeline-generator-card.future { border-style: dashed; color: #777; cursor: default; opacity: 0.72; }
 .pipeline-generator-card.future:hover { border-color: #343434; background: #181818; transform: none; }
 .pipeline-generator-kicker { color: #8ab9d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
@@ -4298,6 +4299,7 @@ let pipelineDockState = {
 	  graphImageNodes: [],
 	  graphDrag: null,
 	  assetCardDrag: null,
+	  generatorCardDrag: null,
 	  graphInspectorStatus: null,
 	  renderedRunId: null,
 	  lastRun: null,
@@ -5023,6 +5025,60 @@ function endPipelineAssetCardDrag(event) {
   setTimeout(() => { window.kaminosPipelineSuppressAssetClick = false; }, 0);
 }
 
+function beginPipelineGeneratorCardDrag(event, pipelineId) {
+  if (event.button !== 0 || !pipelineId) return;
+  pipelineDockState.generatorCardDrag = {
+    pipelineId,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    element: event.currentTarget,
+  };
+  window.kaminosPipelineDraggedGeneratorId = pipelineId;
+  document.addEventListener('pointermove', updatePipelineGeneratorCardDrag);
+  document.addEventListener('pointerup', endPipelineGeneratorCardDrag);
+  document.addEventListener('pointercancel', endPipelineGeneratorCardDrag);
+}
+
+function updatePipelineGeneratorCardDrag(event) {
+  const drag = pipelineDockState.generatorCardDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  if (Math.abs(event.clientX - drag.startX) > 6 || Math.abs(event.clientY - drag.startY) > 6) {
+    event.preventDefault();
+    event.stopPropagation();
+    drag.moved = true;
+    drag.element?.classList?.add('dragging');
+  }
+}
+
+function endPipelineGeneratorCardDrag(event) {
+  const drag = pipelineDockState.generatorCardDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  pipelineDockState.generatorCardDrag = null;
+  document.removeEventListener('pointermove', updatePipelineGeneratorCardDrag);
+  document.removeEventListener('pointerup', endPipelineGeneratorCardDrag);
+  document.removeEventListener('pointercancel', endPipelineGeneratorCardDrag);
+  drag.element?.classList?.remove('dragging');
+  if (!drag.moved) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const canvasFromPoint = document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.closest?.('#pipeline-graph-canvas');
+  const canvas = canvasFromPoint || document.getElementById('pipeline-graph-canvas');
+  const rect = canvas?.getBoundingClientRect?.();
+  const isOverCanvas = rect &&
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom;
+  if (!isOverCanvas) return;
+  placePipelineGeneratorRouteNode(drag.pipelineId, pipelineGraphDropPosition(event));
+  window.kaminosPipelineSuppressGeneratorClick = true;
+  setTimeout(() => { window.kaminosPipelineSuppressGeneratorClick = false; }, 0);
+}
+
 function pipelineGraphPortTargetFromPoint(event, fromNodeId) {
   const target = document
     .elementFromPoint(event.clientX, event.clientY)
@@ -5371,6 +5427,36 @@ function handlePipelineGraphAssetDrop(event) {
   createPipelineGraphImageNode(asset, pipelineGraphDropPosition(event));
 }
 
+function isPipelineInternalDrag(event) {
+  const types = event?.dataTransfer?.types || [];
+  return types.includes('application/x-kaminos-asset-id') || types.includes('application/x-kaminos-generator-id');
+}
+
+function placePipelineGeneratorRouteNode(pipelineId, position) {
+  const pipeline = selectPipelineGenerator(pipelineId);
+  if (!pipeline) return null;
+  if (position) {
+    pipelineDockState.graphNodePositions.route = {
+      x: Math.max(0, Math.round(position.x - 72)),
+      y: Math.max(0, Math.round(position.y - 48)),
+    };
+  }
+  pipelineDockState.selectedGraphNodeId = 'route';
+  pipelineDockState.selectedGraphEdgeId = null;
+  savePipelineGraphLocalState();
+  renderPipelineDock();
+  document.getElementById('viewport')?.classList.remove('dragover');
+  setInfo(`Generator placed on graph: ${pipeline.label || pipeline.id}`);
+  return pipeline;
+}
+
+function handlePipelineGraphGeneratorDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const pipelineId = event.dataTransfer?.getData('application/x-kaminos-generator-id') || window.kaminosPipelineDraggedGeneratorId || '';
+  placePipelineGeneratorRouteNode(pipelineId, pipelineGraphDropPosition(event));
+}
+
 function renderPipelineGraphWorkbench() {
   const canvas = document.getElementById('pipeline-graph-canvas');
   if (!canvas) return;
@@ -5467,9 +5553,11 @@ function renderPipelineGraphWorkbench() {
   `;
   if (!canvas.dataset.pipelineAssetDropInstalled) {
     canvas.addEventListener('dragover', event => {
-      if ((event.dataTransfer?.types || []).includes('application/x-kaminos-asset-id')) event.preventDefault();
+      const types = event.dataTransfer?.types || [];
+      if (types.includes('application/x-kaminos-asset-id') || types.includes('application/x-kaminos-generator-id')) event.preventDefault();
     });
     canvas.addEventListener('drop', handlePipelineGraphAssetDrop);
+    canvas.addEventListener('drop', handlePipelineGraphGeneratorDrop);
     canvas.dataset.pipelineAssetDropInstalled = 'true';
   }
   canvas.querySelectorAll('[data-pipeline-graph-edge-id]').forEach(edgeEl => {
@@ -5924,6 +6012,7 @@ function renderPipelineGeneratorLibrary() {
     card.setAttribute('aria-selected', record.id === pipelineDockState.selectedPipelineId ? 'true' : 'false');
     card.setAttribute('data-pipeline-generator-id', record.id);
     card.setAttribute('data-pipeline-generator-pipeline-id', record.id);
+    card.draggable = true;
     card.innerHTML = `
       <span class="pipeline-generator-kicker">${escapeHtml(record.kicker)}</span>
       <span class="pipeline-generator-title">${escapeHtml(record.title)}</span>
@@ -5932,7 +6021,18 @@ function renderPipelineGeneratorLibrary() {
         ${record.chips.map(chip => `<span class="pipeline-generator-chip ${escapeHtml(record.real ? 'real' : record.fixture ? 'fixture' : '')}">${escapeHtml(chip)}</span>`).join('')}
       </span>
     `;
-    card.addEventListener('click', () => selectPipelineGenerator(record.id));
+    card.onclick = () => {
+      if (window.kaminosPipelineSuppressGeneratorClick) return;
+      selectPipelineGenerator(record.id);
+    };
+    card.addEventListener('pointerdown', event => beginPipelineGeneratorCardDrag(event, record.id));
+    card.addEventListener('dragstart', event => {
+      card.classList.add('dragging');
+      event.dataTransfer?.setData('application/x-kaminos-generator-id', record.id);
+      event.dataTransfer?.setData('text/plain', record.id);
+      window.kaminosPipelineDraggedGeneratorId = record.id;
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
     host.appendChild(card);
   }
   for (const future of pipelineFutureGenerators) {
@@ -6784,6 +6884,10 @@ document.getElementById('dof-maxblur').addEventListener('input', e => {
 // --- Viewport GLB Drag & Drop ---
 const viewport = document.getElementById('viewport');
 viewport.addEventListener('dragover', e => {
+  if (isPipelineInternalDrag(e)) {
+    viewport.classList.remove('dragover');
+    return;
+  }
   e.preventDefault();
   viewport.classList.add('dragover');
 });
@@ -6792,6 +6896,10 @@ viewport.addEventListener('dragleave', e => {
   viewport.classList.remove('dragover');
 });
 viewport.addEventListener('drop', async e => {
+  if (isPipelineInternalDrag(e)) {
+    viewport.classList.remove('dragover');
+    return;
+  }
   e.preventDefault();
   viewport.classList.remove('dragover');
   const files = e.dataTransfer.files;
