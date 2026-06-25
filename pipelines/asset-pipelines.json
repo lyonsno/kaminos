@@ -5,9 +5,9 @@
   "pipelines": [
     {
       "id": "evil-orb-sharp-fixture-pbr-v0",
-      "label": "Evil Orb SHARP Fixture PBR Chain",
+      "label": "Evil Orb SHARP Fixture: Image To Visible Splat",
       "routeId": "fixture.sharp-splat-pbr-sidecar.v0",
-      "description": "Fixture-backed source-image to splat candidate to Kaminos import sidecar chain. This is not real SHARP, MoGE, or SuperMat inference; it fixes the pipeline receipt spine those routes will later inhabit.",
+      "description": "Fixture-backed source-image to visible splat candidate to Kaminos import sidecar chain. It copies KAMINOS_SHARP_FIXTURE_SPLAT or a local evil-orb SHARP-derived fixture into the run bundle, records provenance, and can be loaded into the scene. This is not live SHARP, MoGE, or SuperMat inference.",
       "artifacts": {
         "input": {
           "role": "source-image",
@@ -25,7 +25,7 @@
       "stages": [
         {
           "id": "fixture-sharp-splat",
-          "label": "Fixture SHARP Image To Splat",
+          "label": "Copy SHARP Fixture Splat",
           "statusMode": "fixture",
           "route": {
             "id": "fixture.sharp-image-to-splat.v0",
