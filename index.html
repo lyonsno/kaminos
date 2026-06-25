@@ -10235,6 +10235,7 @@ let pipelineDockState = {
 	  graphImageNodes: [],
 	  graphDrag: null,
 	  assetCardDrag: null,
+	  graphInspectorStatus: null,
 	  renderedRunId: null,
 	  lastRun: null,
 	  graph: null,
@@ -11099,19 +11100,19 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const actions = [];
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
   if (node?.kind === 'source' && (selectedRun?.source || node.source)) {
-    actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source).catch(() => {}) });
+    actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source) });
   }
   if (node?.kind === 'image' && node.source) {
-    actions.push({ label: 'Import Image to Scene', action: () => pipelineImportGraphImageNodeToScene(node).catch(() => {}) });
+    actions.push({ label: 'Import Image to Scene', action: () => pipelineImportGraphImageNodeToScene(node) });
   }
   if (node?.kind === 'output' && selectedRun && node.artifact?.path) {
-    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact).catch(() => {}) });
+    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact) });
   }
   if (node?.kind === 'evidence' && selectedRun) {
     const sidecarUrl = pipelineRunReadUrlForPath(selectedRun, node.sidecar?.path);
     const bundleUrl = pipelineRunReadUrlForPath(selectedRun, selectedRun.bundle?.path);
-	    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun).catch(() => {}) });
-	    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun).catch(() => {}) });
+	    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun) });
+	    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun) });
 	  }
   if (selectedEdge) {
     actions.push({ label: 'Remove Hook', action: () => pipelineRemoveGraphEdge(selectedEdge.id) });
@@ -11120,6 +11121,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
     <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
     <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.' : selectedEdge ? 'Selected hook is session-local composition structure.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
     <div class="pipeline-graph-inspector-actions" id="pipeline-graph-inspector-actions"></div>
+    <div class="pipeline-result-action-status" id="pipeline-graph-inspector-status">${escapeHtml(pipelineDockState.graphInspectorStatus || '')}</div>
     <div class="pipeline-graph-inspector-grid">
       ${pipelineGraphInspectorRows(node, selectedRun).map(row => `
         <div class="pipeline-graph-inspector-key">${escapeHtml(row.key)}</div>
@@ -11136,8 +11138,35 @@ function renderPipelineGraphInspector(node, selectedRun) {
     button.textContent = item.label;
     button.disabled = Boolean(item.disabled);
     button.addEventListener('pointerdown', event => event.stopPropagation());
-    button.addEventListener('click', item.action);
+    button.addEventListener('click', async () => {
+      await pipelineRunGraphInspectorAction(item, button);
+    });
     actionHost.appendChild(button);
+  }
+}
+
+function pipelineSetGraphInspectorStatus(message) {
+  pipelineDockState.graphInspectorStatus = message || '';
+  const status = document.getElementById('pipeline-graph-inspector-status');
+  if (status) status.textContent = pipelineDockState.graphInspectorStatus;
+  if (message) setInfo(message);
+}
+
+async function pipelineRunGraphInspectorAction(item, button) {
+  if (!item?.action || button?.disabled) return null;
+  if (button) button.disabled = true;
+  pipelineSetGraphInspectorStatus(`${item.label}...`);
+  try {
+    const result = await item.action();
+    pipelineSetGraphInspectorStatus(`${item.label} completed`);
+    return result;
+  } catch (err) {
+    const message = `${item.label} failed: ${err.message || err}`;
+    pipelineSetGraphInspectorStatus(message);
+    console.error(message, err);
+    return null;
+  } finally {
+    if (button?.isConnected) button.disabled = Boolean(item.disabled);
   }
 }
 
@@ -11445,13 +11474,23 @@ async function pipelineLoadRunSource(result) {
 }
 
 async function pipelineImportGraphImageNodeToScene(node) {
+  window.kaminosPipelineLastImportDebug = {
+    phase: 'starting',
+    nodeId: node?.id || null,
+    source: node?.source || null,
+    at: new Date().toISOString(),
+  };
   if (!node?.source) {
     pipelineSetActionStatus('Image node source required before scene import');
+    pipelineSetGraphInspectorStatus('Image node source required before scene import');
+    window.kaminosPipelineLastImportDebug.phase = 'missing-source';
     return null;
   }
   const fileName = node.path || node.detail || node.title || 'pipeline-image.png';
   pipelineSetActionStatus('Importing graph image node into scene...');
+  pipelineSetGraphInspectorStatus('Importing graph image node into scene...');
   try {
+    window.kaminosPipelineLastImportDebug.phase = 'loading-texture';
     const mesh = await showImagePlane(node.source, {
       clear: false,
       metadata: {
@@ -11471,14 +11510,23 @@ async function pipelineImportGraphImageNodeToScene(node) {
         },
       },
     });
+    window.kaminosPipelineLastImportDebug.phase = 'registered-scene-object';
     const record = sceneObjects.find(entry => entry.object === mesh) || selectedSceneObjectEntry();
+    window.kaminosPipelineLastImportDebug.recordId = record?.id || null;
     setActiveTab('assets');
+    window.kaminosPipelineLastImportDebug.phase = 'switched-to-assets';
     document.getElementById('sidebar')?.scrollTo({ top: 0, behavior: 'instant' });
-    document.querySelector(`[data-scene-object-id="${CSS.escape(record?.id || '')}"]`)?.scrollIntoView({ block: 'nearest' });
+    const escapedId = window.CSS?.escape ? CSS.escape(record?.id || '') : String(record?.id || '').replaceAll('"', '\\"');
+    document.querySelector(`[data-scene-object-id="${escapedId}"]`)?.scrollIntoView({ block: 'nearest' });
+    window.kaminosPipelineLastImportDebug.phase = 'visible-scene-row';
     pipelineSetActionStatus(`Imported image node to scene: ${record?.label || fileName}`);
+    pipelineSetGraphInspectorStatus(`Imported image node to scene: ${record?.label || fileName}`);
     return record;
   } catch (err) {
+    window.kaminosPipelineLastImportDebug.phase = 'failed';
+    window.kaminosPipelineLastImportDebug.error = err.message || String(err);
     pipelineSetActionStatus(`Image node scene import failed: ${err.message || err}`);
+    pipelineSetGraphInspectorStatus(`Image node scene import failed: ${err.message || err}`);
     throw err;
   }
 }
