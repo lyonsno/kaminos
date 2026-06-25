@@ -7,6 +7,7 @@ import {
   adaptGeneratedPoseTemporalToTrack,
   buildGeneratedPoseTemporalHarness,
   interpolateGeneratedPoseTemporalSample,
+  sampleGeneratedPoseTemporalMotion,
   sampleMotionTrack,
 } from '../motion-core.js';
 
@@ -14,6 +15,10 @@ const root = new URL('..', import.meta.url).pathname;
 const extractorPath = join(root, 'generated-pose-features.mjs');
 const indexPath = join(root, 'index.html');
 const witnessPath = join(root, 'motion-witness.mjs');
+
+function distance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
 
 assert.ok(existsSync(extractorPath), 'generated-pose-features.mjs must emit temporal samples');
 assert.ok(existsSync(indexPath), 'index.html must host generated pose temporal route');
@@ -73,6 +78,26 @@ assert.ok(
     && Math.abs(midpointTemporal.chestRoot[0] - secondTemporal.chestRoot[0]) > 1e-4,
   'chest/root roll evidence is interpolated between temporal source samples',
 );
+assert.equal(midpointTemporal.sampler, 'catmull-rom-continuous-velocity', 'temporal interpolation must not ease to a stop at each source sample');
+
+const interiorTemporal = track.temporalSamples.find(sample => sample.frame === 63);
+const dt = 1 / 120;
+const beforeInterior = interpolateGeneratedPoseTemporalSample(track, interiorTemporal.time - dt);
+const atInterior = interpolateGeneratedPoseTemporalSample(track, interiorTemporal.time);
+const afterInterior = interpolateGeneratedPoseTemporalSample(track, interiorTemporal.time + dt);
+assert.ok(
+  Math.abs(atInterior.sourceFrame - beforeInterior.sourceFrame) > 0.12
+    && Math.abs(afterInterior.sourceFrame - atInterior.sourceFrame) > 0.12,
+  'continuous temporal sampler keeps source-frame progress through interior sample times instead of pausing on them',
+);
+assert.ok(
+  distance(beforeInterior.head, atInterior.head) > 0.001
+    && distance(atInterior.head, afterInterior.head) > 0.001,
+  'continuous temporal sampler keeps visible head/attention motion through interior sample times',
+);
+const visibleTemporalMotion = sampleGeneratedPoseTemporalMotion(track, interiorTemporal.time + dt);
+assert.equal(visibleTemporalMotion.sampler, 'catmull-rom-continuous-velocity', 'route-facing temporal motion sample reports continuous sampler identity');
+assert.equal(visibleTemporalMotion.temporalSample.schema, 'kaminos.generated-pose-temporal-sample.v0', 'route-facing temporal motion includes the source temporal interpolation evidence');
 
 const harness = buildGeneratedPoseTemporalHarness({
   generatedInput: DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
@@ -96,6 +121,8 @@ assert.match(index, /updateGeneratedPoseTemporalFrame/, 'render loop advances te
 assert.match(index, /window\.kaminosGeneratedPoseTemporalDebugState/, 'browser exposes temporal route debug state');
 assert.doesNotMatch(index, /nearestTemporalSample/, 'browser temporal route must not nearest-sample runtime compression evidence');
 assert.match(index, /interpolateGeneratedPoseTemporalSample/, 'browser temporal route samples temporal evidence continuously');
+assert.match(index, /sampleGeneratedPoseTemporalMotion/, 'browser temporal route drives root/head motion from the continuous temporal sampler');
+assert.doesNotMatch(index, /sampleMotionTrack\(state\.track, localTime/, 'browser temporal route must not drive visible temporal motion through smoothstep track sampling');
 
 assert.match(witness, /isGeneratedPoseTemporalRoute/, 'motion witness detects generated pose temporal route');
 assert.match(witness, /buildGeneratedPoseTemporalHarness/, 'motion witness builds temporal filmstrip');
@@ -104,3 +131,4 @@ assert.match(witness, /generatedPoseTemporalHarness/, 'motion witness reports te
 assert.match(witness, /maxBowCompression/, 'motion witness validates temporal bow compression');
 assert.match(witness, /sourceInterpolation/, 'motion witness rejects temporal routes that do not expose between-source-frame interpolation');
 assert.match(witness, /sourceBracket/, 'motion witness records the temporal source-frame bracket used by the live actor');
+assert.match(witness, /catmull-rom-continuous-velocity/, 'motion witness validates continuous-velocity temporal sampler identity');

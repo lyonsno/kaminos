@@ -812,6 +812,7 @@ import {
   motionClipById,
   motionPhraseBodyScale,
   normalizeMotionPhraseControls,
+  sampleGeneratedPoseTemporalMotion,
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
@@ -4281,8 +4282,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const state = motionTemporalState;
   const visual = state.visual;
   const localTime = (nowSeconds - state.startedAt) % state.duration;
-  const sample = sampleMotionTrack(state.track, localTime, { mode: 'mass-attention' });
-  const temporalSample = interpolateGeneratedPoseTemporalSample(state.track, localTime);
+  const sample = sampleGeneratedPoseTemporalMotion(state.track, localTime);
+  const temporalSample = sample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, localTime);
   const compression = Number(temporalSample?.bowCompression || 0);
   const rootPosition = new THREE.Vector3(sample.root[0] * 2.2, sample.root[1] * 5.0 + 0.24, sample.root[2] * 2.2);
   const attention = new THREE.Vector3(sample.attention[0] * 2.2, sample.attention[1] * 2.2 + 0.24, sample.attention[2] * 2.2);
@@ -4302,7 +4303,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   visual.compressionRing.material.opacity = 0.18 + compression * 0.58;
   for (let i = 0; i < visual.trail.length; i++) {
     const trailTime = Math.max(0, localTime - (i + 1) * 0.12);
-    const trailSample = sampleMotionTrack(state.track, trailTime, { mode: 'mass-attention' });
+    const trailSample = sampleGeneratedPoseTemporalMotion(state.track, trailTime);
     const dot = visual.trail[i];
     dot.visible = true;
     dot.position.set(
@@ -4332,6 +4333,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     sourceBracket: temporalSample?.bracket ?? null,
     sourceInterpolation: temporalSample?.interpolation ?? null,
     color: visual.color,
+    sampler: temporalSample?.sampler ?? null,
   }];
   updateMotionAgencyReadout();
   return true;

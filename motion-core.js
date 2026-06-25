@@ -1625,22 +1625,50 @@ export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KI
   const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, duration || samples.at(-1).time || 0);
   const first = samples[0];
   const last = samples.at(-1);
-  const before = time <= first.time
-    ? first
-    : samples[Math.max(0, samples.findIndex(sample => sample.time >= time) - 1)] || last;
-  const after = time <= first.time
-    ? first
-    : (samples.find(sample => sample.time >= time) || last);
+  const afterIndex = time <= first.time
+    ? 1
+    : samples.findIndex(sample => sample.time >= time);
+  const toIndex = afterIndex < 0 ? samples.length - 1 : Math.max(1, afterIndex);
+  const fromIndex = Math.max(0, toIndex - 1);
+  const before = samples[fromIndex] || first;
+  const after = samples[toIndex] || last;
+  const previous = samples[Math.max(0, fromIndex - 1)] || before;
+  const next = samples[Math.min(samples.length - 1, toIndex + 1)] || after;
   const span = Math.max(1e-6, after.time - before.time);
   const rawU = before === after ? 0 : clamp((time - before.time) / span, 0, 1);
-  const u = smooth01(rawU);
-  const mixNumber = key => Number(lerp(Number(before[key]) || 0, Number(after[key]) || 0, u).toFixed(5));
-  const mixVector = key => mixVec3(vec3(before[key]), vec3(after[key]), u).map(value => Number(value.toFixed(5)));
+  const u = rawU;
+  const hermite = (p0, p1, p2, p3) => {
+    const t0 = Number(previous.time) || 0;
+    const t1 = Number(before.time) || 0;
+    const t2 = Number(after.time) || t1 + span;
+    const t3 = Number(next.time) || t2 + span;
+    const m1 = (Number(p2) - Number(p0)) / Math.max(1e-6, t2 - t0);
+    const m2 = (Number(p3) - Number(p1)) / Math.max(1e-6, t3 - t1);
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * Number(p1)
+      + (u3 - 2 * u2 + u) * span * m1
+      + (-2 * u3 + 3 * u2) * Number(p2)
+      + (u3 - u2) * span * m2;
+  };
+  const mixNumber = key => {
+    const values = [previous, before, after, next].map(sample => Number(sample[key]) || 0);
+    const interpolated = hermite(values[0], values[1], values[2], values[3]);
+    const minValue = Math.min(values[1], values[2]);
+    const maxValue = Math.max(values[1], values[2]);
+    const bounded = clamp(interpolated, minValue, maxValue);
+    return Number(bounded.toFixed(5));
+  };
+  const mixVector = key => [0, 1, 2].map(index => {
+    const values = [previous, before, after, next].map(sample => vec3(sample[key])[index]);
+    return Number(hermite(values[0], values[1], values[2], values[3]).toFixed(5));
+  });
   return {
     schema: 'kaminos.generated-pose-temporal-sample.v0',
+    sampler: 'catmull-rom-continuous-velocity',
     time: Number(time.toFixed(5)),
-    sourceFrame: Number(lerp(Number(before.frame) || 0, Number(after.frame) || 0, u).toFixed(5)),
-    sourceTime: Number(lerp(Number(before.time) || 0, Number(after.time) || 0, u).toFixed(5)),
+    sourceFrame: Number(lerp(Number(before.frame) || 0, Number(after.frame) || 0, rawU).toFixed(5)),
+    sourceTime: Number(lerp(Number(before.time) || 0, Number(after.time) || 0, rawU).toFixed(5)),
     phaseLabel: rawU < 0.5 ? before.phaseLabel : after.phaseLabel,
     interpolation: Number(u.toFixed(5)),
     rawInterpolation: Number(rawU.toFixed(5)),
@@ -1665,6 +1693,48 @@ export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KI
     stanceWidth: mixNumber('stanceWidth'),
     bboxVolume: mixNumber('bboxVolume'),
     bowCompression: clamp(mixNumber('bowCompression'), 0, 1),
+  };
+}
+
+export function sampleGeneratedPoseTemporalMotion(trackOrInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE, t = 0) {
+  const track = trackOrInput?.schema === MOTION_TRACK_SCHEMA
+    ? trackOrInput
+    : adaptGeneratedPoseTemporalToTrack(trackOrInput);
+  const temporalSample = interpolateGeneratedPoseTemporalSample(track, t);
+  const firstRoot = vec3(track.temporalSamples?.[0]?.root);
+  const normalizeWorld = value => {
+    const source = vec3(value);
+    return [
+      Number((source[0] - firstRoot[0]).toFixed(5)),
+      Number((source[1] - firstRoot[1]).toFixed(5)),
+      Number((source[2] - firstRoot[2]).toFixed(5)),
+    ];
+  };
+  const root = normalizeWorld(temporalSample.root);
+  const head = normalizeWorld(temporalSample.head);
+  const facing = normalizeVec3(subVec3(head, root), track.forwardAxis || [0, 0, 1]);
+  const maxHandSpan = Math.max(...track.temporalSamples.map(sample => Number(sample.handSpan) || 0), 1e-6);
+  const effort = clamp(0.18 + temporalSample.bowCompression * 0.78 + (temporalSample.handSpan / maxHandSpan) * 0.22, 0, 1);
+  const headRootSeparation = lengthVec3(subVec3(head, root));
+  const attentionMassContrast = Math.max(0, headRootSeparation - 0.49518);
+  return {
+    schema: 'kaminos.generated-pose-temporal-motion-sample.v0',
+    sampler: temporalSample.sampler,
+    trackId: track.id,
+    sourceKind: track.sourceKind,
+    mode: 'generated-pose-temporal',
+    attentionMode: 'generated-pose-temporal',
+    t: temporalSample.time,
+    phase: temporalSample.phaseLabel,
+    root: root.map(value => Number(value.toFixed(5))),
+    head: head.map(value => Number(value.toFixed(5))),
+    attention: head.map(value => Number(value.toFixed(5))),
+    facing: facing.map(value => Number(value.toFixed(5))),
+    scale: Number((1 + effort * 0.012).toFixed(5)),
+    effort: Number(effort.toFixed(5)),
+    headRootSeparation: Number(headRootSeparation.toFixed(5)),
+    attentionMassContrast: Number(attentionMassContrast.toFixed(5)),
+    temporalSample,
   };
 }
 
