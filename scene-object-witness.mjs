@@ -2549,6 +2549,10 @@ async function runHybridSplatOverlayScenario(ws) {
         '  };',
         '}',
       ].join('\\n');
+      const malformedTelemetryModuleSource = missingTelemetryModuleSource
+        .replace('missing-scene-context-telemetry', 'malformed-scene-context-telemetry')
+        .replace('setSceneContext(context) { state.sceneContexts.push(context); state.sceneContextTelemetry = undefined; publish(); }',
+          'setSceneContext(context) { const telemetry = {}; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }');
       const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
       const startResult = await window.startSelectedSplatHybridRenderer?.();
@@ -2567,6 +2571,15 @@ async function runHybridSplatOverlayScenario(ws) {
       const missingTelemetryWitness = window.__hybridSplatOverlayWitness || null;
       window.stopHybridSplatOverlay?.();
       URL.revokeObjectURL(missingTelemetryModuleUrl);
+      const malformedTelemetryModuleUrl = URL.createObjectURL(new Blob([malformedTelemetryModuleSource], { type: 'text/javascript' }));
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(malformedTelemetryModuleUrl);
+      const malformedTelemetryStartResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(500);
+      const malformedTelemetryOverlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const malformedTelemetryHandoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const malformedTelemetryWitness = window.__hybridSplatOverlayWitness || null;
+      window.stopHybridSplatOverlay?.();
+      URL.revokeObjectURL(malformedTelemetryModuleUrl);
       return {
         actionExposed: !!actionButton,
         assetRowCount: assetRows.length,
@@ -2586,6 +2599,10 @@ async function runHybridSplatOverlayScenario(ws) {
         missingTelemetryOverlayDebug,
         missingTelemetryHandoffDebug,
         missingTelemetryWitness,
+        malformedTelemetryStartResult,
+        malformedTelemetryOverlayDebug,
+        malformedTelemetryHandoffDebug,
+        malformedTelemetryWitness,
       };
     })()
   `, { timeoutMs: 60000 });
@@ -2641,6 +2658,16 @@ async function runHybridSplatOverlayScenario(ws) {
       || missingTelemetry.failurePhase !== 'setSceneContext.telemetry'
       || !lastEvidence.hybridSplatOverlay.missingTelemetryWitness?.sceneContexts?.length) {
     throw new Error(`hybrid splat overlay accepted missing scene-context telemetry: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const malformedTelemetry = lastEvidence.hybridSplatOverlay.malformedTelemetryOverlayDebug?.sceneContextTelemetry || {};
+  if (lastEvidence.hybridSplatOverlay.malformedTelemetryOverlayDebug?.sceneContextAccepted !== false
+      || malformedTelemetry.accepted !== false
+      || malformedTelemetry.missing !== true
+      || malformedTelemetry.failurePhase !== 'setSceneContext.telemetry'
+      || !Array.isArray(malformedTelemetry.acceptedFields)
+      || malformedTelemetry.acceptedFields.length !== 0
+      || !lastEvidence.hybridSplatOverlay.malformedTelemetryWitness?.sceneContexts?.length) {
+    throw new Error(`hybrid splat overlay accepted malformed scene-context telemetry: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sourceIdentity?.source !== splatSource
       || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== splatSource) {

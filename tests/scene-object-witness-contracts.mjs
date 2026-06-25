@@ -195,6 +195,7 @@ assert.match(witness, /setSceneContext\(context\)/, 'Hybrid Renderer witness stu
 assert.match(witness, /hybrid splat overlay did not publish scene context/, 'Hybrid Renderer witness proves Kaminos publishes scene context through overlay debug and handoff');
 assert.match(witness, /hybrid splat overlay did not report accepted scene context/, 'Hybrid Renderer witness proves Kaminos reports renderer scene-context acceptance');
 assert.match(witness, /hybrid splat overlay accepted missing scene-context telemetry/, 'Hybrid Renderer witness rejects renderer setSceneContext stubs that return no acceptance telemetry');
+assert.match(witness, /hybrid splat overlay accepted malformed scene-context telemetry/, 'Hybrid Renderer witness rejects renderer setSceneContext stubs that return object-shaped malformed telemetry');
 assert.match(witness, /hybrid splat overlay did not expose renderer source identity/, 'Hybrid Renderer witness proves Kaminos reads renderer-reported source identity');
 assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'Hybrid Renderer witness preserves P0 no-shared-command-encoder truth');
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');

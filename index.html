@@ -1090,7 +1090,9 @@ function hybridSplatOverlaySceneContextCapability(handle = hybridSplatOverlaySta
 }
 
 function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}) {
-  const hasStructuredTelemetry = !!result && typeof result === 'object' && !Array.isArray(result);
+  const hasTelemetryObject = !!result && typeof result === 'object' && !Array.isArray(result);
+  const resultObject = hasTelemetryObject ? result : {};
+  const hasStructuredTelemetry = hasTelemetryObject && typeof resultObject.accepted === 'boolean';
   const fallbackUnsupportedFields = Array.isArray(options.unsupportedFields)
     ? options.unsupportedFields.slice()
     : (hasStructuredTelemetry ? [] : ['setSceneContext.telemetry']);
@@ -1099,12 +1101,11 @@ function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}
     || (hasStructuredTelemetry ? null : 'setSceneContext.telemetry');
   const fallbackMessage = options.message
     || (hasStructuredTelemetry ? null : 'Renderer setSceneContext did not return structured acceptance telemetry');
-  const resultObject = hasStructuredTelemetry ? result : {};
-  const acceptedFields = Array.isArray(resultObject.acceptedFields)
+  const acceptedFields = hasStructuredTelemetry && Array.isArray(resultObject.acceptedFields)
     ? resultObject.acceptedFields.slice()
     : [];
-  const honoredFields = Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [];
-  const rejectedFields = Array.isArray(resultObject.rejectedFields) ? resultObject.rejectedFields.slice() : [];
+  const honoredFields = hasStructuredTelemetry && Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [];
+  const rejectedFields = hasStructuredTelemetry && Array.isArray(resultObject.rejectedFields) ? resultObject.rejectedFields.slice() : [];
   return {
     schema: 'kaminos.hybrid-splat-overlay.scene-context-telemetry.v0',
     contextSchema: context?.schema || null,
@@ -1112,10 +1113,10 @@ function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}
     contextTimestamp: context?.producer?.updatedAt || null,
     route: hybridMeshSplatRoute.id,
     capability: hybridSplatOverlaySceneContextCapability(),
-    accepted: hasStructuredTelemetry && resultObject.accepted === true,
+    accepted: resultObject.accepted === true,
     acceptedFields,
     honoredFields,
-    unsupportedFields: Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : fallbackUnsupportedFields,
+    unsupportedFields: hasStructuredTelemetry && Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : fallbackUnsupportedFields,
     rejectedFields,
     stale: resultObject.stale === true,
     missing: resultObject.missing === true || fallbackMissing,
