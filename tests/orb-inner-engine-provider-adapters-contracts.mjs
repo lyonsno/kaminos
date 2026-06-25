@@ -187,6 +187,28 @@ try {
   const blockProbe = detectProviderBlockedImage(blockedSource);
   assert.equal(blockProbe.blocked, true, 'blocked-card heuristic catches black safety-card style output');
 
+  const grayBlockedSource = join(outDir, 'gray-blocked-card.png');
+  const grayRgba = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < grayRgba.length; i += 4) {
+    grayRgba[i] = 128;
+    grayRgba[i + 1] = 128;
+    grayRgba[i + 2] = 128;
+    grayRgba[i + 3] = 255;
+  }
+  for (let y = 112; y < 144; y++) {
+    for (let x = 38; x < 218; x++) {
+      if ((x + y) % 5 !== 0) {
+        const i = (y * width + x) * 4;
+        grayRgba[i] = 238;
+        grayRgba[i + 1] = 238;
+        grayRgba[i + 2] = 238;
+      }
+    }
+  }
+  writeRgbaPng(grayBlockedSource, { width, height, rgba: grayRgba });
+  const grayBlockProbe = detectProviderBlockedImage(grayBlockedSource);
+  assert.equal(grayBlockProbe.blocked, true, 'blocked-card heuristic catches gray safety-card style output');
+
   const blockedRoot = join(outDir, 'blocked-ideogram');
   mkdirSync(blockedRoot, { recursive: true });
   writeExecutable(join(blockedRoot, 'generate.py'), [

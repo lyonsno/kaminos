@@ -431,6 +431,9 @@ export function detectProviderBlockedImage(path) {
     let white = 0;
     let centerWhite = 0;
     let saturatedNonWhiteColor = 0;
+    let neutralBackground = 0;
+    let luminanceSum = 0;
+    let luminanceSumSq = 0;
     const total = image.width * image.height;
     const y0 = image.height * 0.32;
     const y1 = image.height * 0.68;
@@ -442,7 +445,11 @@ export function detectProviderBlockedImage(path) {
         const b = image.rgba[i + 2];
         const max = Math.max(r, g, b);
         const min = Math.min(r, g, b);
+        const luminance = (r + g + b) / 3;
+        luminanceSum += luminance;
+        luminanceSumSq += luminance * luminance;
         if (max < 18) black++;
+        if (max - min < 8 && max >= 45 && max <= 190) neutralBackground++;
         if (min > 215) {
           white++;
           if (y >= y0 && y <= y1) centerWhite++;
@@ -455,14 +462,26 @@ export function detectProviderBlockedImage(path) {
     const whiteRatio = white / total;
     const centerWhiteRatio = centerWhite / Math.max(1, white);
     const colorRatio = saturatedNonWhiteColor / total;
-    const blocked = blackRatio > 0.82
+    const neutralBackgroundRatio = neutralBackground / total;
+    const meanLuminance = luminanceSum / total;
+    const luminanceVariance = Math.max(0, luminanceSumSq / total - meanLuminance * meanLuminance);
+    const luminanceStd = Math.sqrt(luminanceVariance);
+    const hasCenteredWhiteText = whiteRatio > 0.002
+      && whiteRatio < 0.16
+      && centerWhiteRatio > 0.68;
+    const blackCard = blackRatio > 0.82 && hasCenteredWhiteText;
+    const grayCard = neutralBackgroundRatio > 0.74
+      && hasCenteredWhiteText
+      && colorRatio < 0.08
+      && luminanceStd < 45;
+    const blocked = (blackCard || grayCard)
       && whiteRatio > 0.002
       && whiteRatio < 0.16
       && centerWhiteRatio > 0.68
       && colorRatio < 0.08;
     return {
       blocked,
-      reason: blocked ? 'provider output resembles a black safety-filter/block card, not usable generated art' : null,
+      reason: blocked ? 'provider output resembles a safety-filter/block card, not usable generated art' : null,
       metrics: {
         width: image.width,
         height: image.height,
@@ -470,6 +489,8 @@ export function detectProviderBlockedImage(path) {
         whiteRatio,
         centerWhiteRatio,
         colorRatio,
+        neutralBackgroundRatio,
+        luminanceStd,
       },
     };
   } catch (error) {
