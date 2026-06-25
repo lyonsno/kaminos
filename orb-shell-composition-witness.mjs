@@ -131,6 +131,9 @@ async function main() {
     assert.ok(state?.MacroTerritoryBody?.every(body => body?.schema === 'MacroTerritoryBody'), 'MacroTerritoryBody descriptors missing from debug state');
     assert.equal(state?.shapedBoundaryCount, state.macroAssemblageCount, 'composition must expose one shaped boundary per macro assemblage');
     assert.ok(state?.BoundaryPressureField?.every(field => field?.schema === 'BoundaryPressureField'), 'BoundaryPressureField descriptors missing from debug state');
+    assert.ok(state?.frontApertureOwnershipCount >= 4, 'primary aperture ownership descriptors missing from debug state');
+    assert.equal(state?.PrimaryApertureFrame?.schema, 'PrimaryApertureFrame', 'PrimaryApertureFrame missing from debug state');
+    assert.ok(state?.frontApertureOwnership?.frontCompositionBias?.includes('break-open-horseshoe-symmetry'), 'front composition bias missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
@@ -155,7 +158,10 @@ async function main() {
       territoryBodyCount: state.territoryBodyCount,
       closureAnchorCount: state.closureAnchorCount,
       shapedBoundaryCount: state.shapedBoundaryCount,
+      frontApertureOwnershipCount: state.frontApertureOwnershipCount,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
+      PrimaryApertureFrame: state.PrimaryApertureFrame,
+      frontApertureOwnership: state.frontApertureOwnership,
       MacroTerritoryBody: state.MacroTerritoryBody,
       BoundaryPressureField: state.BoundaryPressureField,
       boundaryPressureFields: state.boundaryPressureFields,
