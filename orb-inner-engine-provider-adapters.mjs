@@ -332,7 +332,7 @@ function rewriteProviderRecordEnvelope(recordsPath, { providerId, provider, medi
     const failedRecord = blocked.blocked
       ? {
           status: 'failed',
-          failurePhase: 'provider-blocked-output',
+          failurePhase: blocked.failurePhase || 'provider-blocked-output',
           failureReason: blocked.reason,
           providerBlockDetection: blocked,
         }
@@ -476,14 +476,23 @@ export function detectProviderBlockedImage(path) {
       && hasCenteredWhiteText
       && colorRatio < 0.08
       && luminanceStd < 45;
-    const blocked = (blackCard || grayCard)
-      && whiteRatio > 0.002
-      && whiteRatio < 0.16
-      && centerWhiteRatio > 0.68
+    const safetyCard = (blackCard || grayCard)
+      && hasCenteredWhiteText
       && colorRatio < 0.08;
+    const blankOutput = whiteRatio < 0.001
+      && blackRatio < 0.001
+      && colorRatio < 0.005
+      && luminanceStd < 3;
+    const blocked = safetyCard || blankOutput;
+    const failurePhase = safetyCard
+      ? 'provider-blocked-output'
+      : (blankOutput ? 'provider-blank-output' : null);
     return {
       blocked,
-      reason: blocked ? 'provider output resembles a safety-filter/block card, not usable generated art' : null,
+      failurePhase,
+      reason: safetyCard
+        ? 'provider output resembles a safety-filter/block card, not usable generated art'
+        : (blankOutput ? 'provider output is a low-variance blank/default image, not usable generated art' : null),
       metrics: {
         width: image.width,
         height: image.height,

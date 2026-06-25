@@ -215,6 +215,20 @@ try {
   writeRgbaPng(grayBlockedSource, { width, height, rgba: grayRgba });
   const grayBlockProbe = detectProviderBlockedImage(grayBlockedSource);
   assert.equal(grayBlockProbe.blocked, true, 'blocked-card heuristic catches gray safety-card style output');
+  assert.equal(grayBlockProbe.failurePhase, 'provider-blocked-output');
+
+  const blankSource = join(outDir, 'blank-neutral-output.png');
+  const blankRgba = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < blankRgba.length; i += 4) {
+    blankRgba[i] = 174;
+    blankRgba[i + 1] = 166;
+    blankRgba[i + 2] = 146;
+    blankRgba[i + 3] = 255;
+  }
+  writeRgbaPng(blankSource, { width, height, rgba: blankRgba });
+  const blankProbe = detectProviderBlockedImage(blankSource);
+  assert.equal(blankProbe.blocked, true, 'output heuristic catches blank low-variance neutral provider output');
+  assert.equal(blankProbe.failurePhase, 'provider-blank-output');
 
   const blockedRoot = join(outDir, 'blocked-ideogram');
   mkdirSync(blockedRoot, { recursive: true });
