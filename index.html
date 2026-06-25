@@ -868,6 +868,33 @@ function hybridSplatOverlayCropAppliedByRenderer() {
   return false;
 }
 
+function hybridSplatOverlayHandleSupportsCrop(handle) {
+  if (!handle) return false;
+  const capabilities = handle.capabilities || {};
+  return capabilities.cropAppliedByRenderer === true
+    || capabilities.crop === true
+    || capabilities.correctionCrop === true
+    || capabilities.correction?.crop === true;
+}
+
+function splatRecordRequiresRendererCrop(record) {
+  return normalizeSplatCorrection(record?.splat?.correction).crop.enabled === true;
+}
+
+function clearHybridSplatOverlayHandle() {
+  const handle = hybridSplatOverlayState.handle;
+  if (handle) {
+    handle.stop?.();
+    handle.destroy?.();
+  }
+  hybridSplatOverlayState.handle = null;
+  hybridSplatOverlayState.lastFrame = null;
+  hybridSplatOverlayState.lastSceneContext = null;
+  hybridSplatOverlayState.sceneContextAccepted = false;
+  hybridSplatOverlayState.sceneContextTelemetry = null;
+  hybridSplatOverlayState.frameCount = 0;
+}
+
 function hybridSplatOverlayDebugState() {
   const handle = hybridSplatOverlayState.handle;
   return {
@@ -1381,7 +1408,18 @@ async function startSelectedSplatHybridRenderer() {
       stopHybridSplatOverlay({ silent: true });
     }
     hybridSplatOverlayState.objectId = entry.id;
+    hybridSplatOverlayState.loadedSource = entry.source;
+    hybridSplatOverlayState.loadedFileName = entry.fileName || entry.label || null;
     const handle = await ensureHybridSplatOverlayHandle();
+    if (splatRecordRequiresRendererCrop(entry) && !hybridSplatOverlayHandleSupportsCrop(handle)) {
+      const error = new Error('Renderer crop unsupported for cropped splat; keeping Kaminos point-cloud preview active');
+      clearHybridSplatOverlayHandle();
+      setHybridSplatOverlayStatus('error', error);
+      buildRenderHandoffV0(entry);
+      window._kaminosDirty?.();
+      setInfo(error.message);
+      return hybridSplatOverlayDebugState();
+    }
     await handle.loadPly(entry.source, entry.fileName || entry.label || 'splat.ply');
     applyHybridSplatOverlayCorrectionIdentity(handle, entry, splatRawAssetToPreviewMatrix(entry));
     updateHybridSplatOverlayFrame();
@@ -1402,21 +1440,11 @@ async function startSelectedSplatHybridRenderer() {
 }
 
 function stopHybridSplatOverlay(options = {}) {
-  const handle = hybridSplatOverlayState.handle;
-  if (handle) {
-    handle.stop?.();
-    handle.destroy?.();
-  }
-  hybridSplatOverlayState.handle = null;
+  clearHybridSplatOverlayHandle();
   hybridSplatOverlayState.objectId = null;
   hybridSplatOverlayState.loadedSource = null;
   hybridSplatOverlayState.loadedFileName = null;
   hybridSplatOverlayState.loadedAt = null;
-  hybridSplatOverlayState.lastFrame = null;
-  hybridSplatOverlayState.lastSceneContext = null;
-  hybridSplatOverlayState.sceneContextAccepted = false;
-  hybridSplatOverlayState.sceneContextTelemetry = null;
-  hybridSplatOverlayState.frameCount = 0;
   setHybridSplatOverlayStatus('idle');
   const active = selectedSplatRecord();
   if (active) buildRenderHandoffV0(active);
@@ -3331,6 +3359,22 @@ window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
   }
+  window._kaminosDirty?.();
+  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
+};
+
+window.kaminosSetSplatCorrectionDebug = function(id, correction = {}) {
+  const entry = selectedSplatRecord(id);
+  if (!entry) throw new Error(`Splat scene object "${id}" was not found`);
+  const nextCorrection = normalizeSplatCorrection(correction);
+  setSceneObjectSplatMetadata(entry, {
+    ...entry.splat,
+    correction: nextCorrection,
+  });
+  applySplatCorrectionToRecord(entry, nextCorrection);
+  buildRenderHandoffV0(entry);
+  updateSplatCorrectionPanel(entry);
+  updateTransformInspector();
   window._kaminosDirty?.();
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };

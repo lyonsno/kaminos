@@ -143,6 +143,11 @@ assert.match(index, /canvasMode:\s*'dual-canvas-overlay'/, 'Hybrid Renderer rout
 assert.match(index, /correctionAppliedMode:\s*'visual-root-world-matrix'/, 'Hybrid Renderer overlay frame records how splat correction transforms are applied');
 assert.match(index, /function hybridSplatOverlayCropAppliedByRenderer\(/, 'Hybrid Renderer overlay reads live renderer crop application instead of hardcoding crop=false');
 assert.match(index, /cropAppliedByRenderer:\s*hybridSplatOverlayCropAppliedByRenderer\(\)/, 'Hybrid Renderer handoff reports renderer-side crop application from the active overlay handle');
+assert.match(index, /function hybridSplatOverlayHandleSupportsCrop\(/, 'Hybrid Renderer start path checks renderer crop support before expensive cropped-splat loads');
+assert.match(index, /function splatRecordRequiresRendererCrop\(/, 'Hybrid Renderer start path detects cropped splats before real overlay handoff');
+assert.match(index, /Renderer crop unsupported for cropped splat/, 'Hybrid Renderer start path fails loud when a cropped splat would render uncropped');
+assert.match(index, /splatRecordRequiresRendererCrop\(entry\) && !hybridSplatOverlayHandleSupportsCrop\(handle\)[\s\S]*?await handle\.loadPly/, 'Hybrid Renderer crop guard runs before loading the expensive PLY asset');
+assert.match(index, /window\.kaminosSetSplatCorrectionDebug/, 'browser witnesses can explicitly override imported splat correction without relying on import metadata side effects');
 assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witnesses can inspect Hybrid Renderer overlay state without DOM inference');
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');
