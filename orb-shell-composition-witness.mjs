@@ -129,6 +129,8 @@ async function main() {
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
     assert.ok(state?.closureAnchorCount >= 4, 'composition must expose spherical closure anchors');
     assert.ok(state?.MacroTerritoryBody?.every(body => body?.schema === 'MacroTerritoryBody'), 'MacroTerritoryBody descriptors missing from debug state');
+    assert.equal(state?.shapedBoundaryCount, state.macroAssemblageCount, 'composition must expose one shaped boundary per macro assemblage');
+    assert.ok(state?.BoundaryPressureField?.every(field => field?.schema === 'BoundaryPressureField'), 'BoundaryPressureField descriptors missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
@@ -152,8 +154,11 @@ async function main() {
       bandMemberCount: state.bandMemberCount,
       territoryBodyCount: state.territoryBodyCount,
       closureAnchorCount: state.closureAnchorCount,
+      shapedBoundaryCount: state.shapedBoundaryCount,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
       MacroTerritoryBody: state.MacroTerritoryBody,
+      BoundaryPressureField: state.BoundaryPressureField,
+      boundaryPressureFields: state.boundaryPressureFields,
       sphericalClosureAnchors: state.sphericalClosureAnchors,
       OrbShellComposition: state.OrbShellComposition,
       browserEvents,

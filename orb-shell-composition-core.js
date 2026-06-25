@@ -49,9 +49,59 @@ function band(id, parent, role, offset, width, layerIntervals, startType, endTyp
   };
 }
 
+function makeBoundaryPressureField(id, role, options = {}) {
+  return {
+    schema: 'BoundaryPressureField',
+    id: `${id}-boundary-pressure`,
+    proceduralFamilies: [
+      'pressure-field-boundary',
+      'trimmed-spherical-section',
+      'aperture-repulsor-boundary-field',
+      'offset-impulse-line-envelope',
+    ],
+    pressures: [
+      { type: 'aperture-bite', side: options.apertureSide || 'inner', t: 0.48, radius: 0.22, strength: options.apertureStrength ?? 0.34 },
+      { type: 'sibling-band-channel', side: 'both', t: 0.32, radius: 0.16, strength: 0.16 },
+      { type: 'sibling-band-channel', side: 'both', t: 0.72, radius: 0.18, strength: 0.14 },
+      { type: 'neighbor-tuck-clearance', side: options.tuckSide || 'outer', t: 0.58, radius: 0.2, strength: 0.2 },
+      { type: 'closure-taper', side: 'both', t: 0.03, radius: 0.18, strength: 0.32 },
+      { type: 'closure-taper', side: 'both', t: 0.97, radius: 0.18, strength: 0.32 },
+      { type: 'silhouette-relief', side: options.reliefSide || 'outer', t: 0.2, radius: 0.12, strength: 0.14 },
+      { type: 'silhouette-relief', side: options.reliefSide || 'outer', t: 0.84, radius: 0.12, strength: 0.12 },
+    ],
+    petalMaskFailurePressure: 'trim-wide-panels-into-forged-whorl-boundaries',
+    role,
+  };
+}
+
+function makeBoundaryCutProfile(field) {
+  const samples = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    let leftScale = 1;
+    let rightScale = 1;
+    for (const pressure of field.pressures) {
+      const influence = pressure.strength * Math.exp(-Math.pow((t - pressure.t) / pressure.radius, 2));
+      if (pressure.side === 'left' || pressure.side === 'inner') leftScale -= influence;
+      else if (pressure.side === 'right' || pressure.side === 'outer') rightScale -= influence;
+      else {
+        leftScale -= influence;
+        rightScale -= influence;
+      }
+    }
+    samples.push({
+      t,
+      leftScale: Math.max(0.38, leftScale),
+      rightScale: Math.max(0.38, rightScale),
+    });
+  }
+  return samples;
+}
+
 function territoryBody(id, role, territory, childBands, options = {}) {
   const primaryWidth = Math.max(...childBands.map(child => child.widthProfile.mid));
   const midWidth = Math.max(primaryWidth * 1.72, territory.lonWidth * (options.widthFactor || 0.22));
+  const boundaryPressureField = makeBoundaryPressureField(id, role, options);
   return {
     schema: 'MacroTerritoryBody',
     id: `${id}-territory-body`,
@@ -76,6 +126,9 @@ function territoryBody(id, role, territory, childBands, options = {}) {
     occupancyMode: 'area-bearing-spherical-ribbon',
     closureAnchorIds: options.closureAnchorIds || ['crown-closure-anchor', 'lower-socket-anchor'],
     uShapedCageFailurePressure: 'body-occupancy-must-close-sphere-not-only-draw-open-arcs',
+    petalMaskFailurePressure: 'boundary-shaping-must-prevent-broad-dark-panel-masks',
+    boundaryPressureField,
+    boundaryCutProfile: makeBoundaryCutProfile(boundaryPressureField),
   };
 }
 
@@ -366,6 +419,7 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
   const normals = [];
   const uvs = [];
   const indices = [];
+  const cutProfile = body.boundaryCutProfile || [];
 
   const centerline = [];
   for (let row = 0; row < rowCount; row++) {
@@ -388,14 +442,19 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
     side.normalize();
     const profile = Math.pow(Math.sin(Math.PI * t), 0.42);
     const terminalScale = 0.42 + 0.58 * profile;
-    const halfWidth = body.widthProfile.mid * terminalScale;
+    const nearestCut = cutProfile.reduce((best, item) => (
+      Math.abs(item.t - t) < Math.abs(best.t - t) ? item : best
+    ), cutProfile[0] || { leftScale: 1, rightScale: 1, t: 0 });
+    const leftWidth = body.widthProfile.mid * terminalScale * nearestCut.leftScale;
+    const rightWidth = body.widthProfile.mid * terminalScale * nearestCut.rightScale;
     const lift = body.thicknessProfile.mid * (0.45 + 0.55 * profile);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
       const q = u * 2 - 1;
+      const sideWidth = q < 0 ? leftWidth : rightWidth;
       const crown = 1 - Math.pow(Math.abs(q), 1.8) * 0.16;
       const pos = center.clone()
-        .addScaledVector(side, q * halfWidth)
+        .addScaledVector(side, q * sideWidth)
         .addScaledVector(normal, lift * crown);
       vertices.push(pos.x, pos.y, pos.z);
       normals.push(normal.x, normal.y, normal.z);
@@ -559,7 +618,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         bandMemberCount: composition.macroAssemblages.reduce((sum, item) => sum + item.childBandPlan.length, 0),
         territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
+        shapedBoundaryCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy?.boundaryPressureField).length,
         MacroTerritoryBody: composition.macroAssemblages.map(item => item.territoryBodyOccupancy),
+        BoundaryPressureField: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
+        boundaryPressureFields: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
         sphericalClosureAnchors: composition.sphericalClosureAnchors,
         OrbShellComposition: composition,
         inverseProceduralHypotheses: composition.inverseProceduralHypotheses,
