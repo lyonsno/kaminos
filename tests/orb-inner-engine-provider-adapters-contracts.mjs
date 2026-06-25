@@ -73,6 +73,7 @@ try {
   assert.equal(providers.get('local-image.ideogram4').status, 'configured');
   assert.equal(providers.get('local-image.ideogram4').mediaKind, 'image');
   assert.equal(providers.get('local-image.ideogram4').outputExtension, 'png');
+  assert.equal(providers.get('local-image.ideogram4').defaultArgs.preset, 'V4_DEFAULT_20');
   assert.equal(providers.get('local-video.cosmos3-mlx.t2v').status, 'configured');
   assert.equal(providers.get('local-video.cosmos3-mlx.t2v').mediaKind, 'video');
   assert.equal(providers.get('local-video.cosmos3-mlx.t2v').outputExtension, 'mp4');
@@ -99,6 +100,8 @@ try {
   assert.ok(ideogramCommand.args.includes('{seed}'));
   assert.ok(ideogramCommand.args.includes('--out'));
   assert.ok(ideogramCommand.args.includes('{output}'));
+  assert.ok(ideogramCommand.args.includes('--preset'));
+  assert.ok(ideogramCommand.args.includes('V4_DEFAULT_20'));
 
   const bundle = writeOrbInnerEngineConceptBundle({
     outDir,
@@ -131,7 +134,11 @@ try {
   assert.equal(readFileSync(ideogramRecords.records[0].outputImagePath).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   const nativeReceipt = JSON.parse(readFileSync(ideogramRecords.records[0].providerReceiptPath, 'utf8'));
   assert.match(nativeReceipt.seed, /^[0-9]+$/, 'adapter converts arbitrary concept seed to numeric provider seed');
-  assert.ok(nativeReceipt.prompt.includes('Avoid:'), 'adapter folds negative prompt into native Ideogram prompt surface');
+  assert.doesNotThrow(() => JSON.parse(nativeReceipt.prompt), 'adapter passes documented JSON prompt string to native Ideogram route');
+  const nativePrompt = JSON.parse(nativeReceipt.prompt);
+  assert.ok(nativePrompt.prompt.includes('contained radial molten engine core'), 'adapter preserves the positive prompt in JSON prompt field');
+  assert.ok(nativePrompt.negative_prompt.includes('flat orange disk'), 'adapter preserves negative prompt in JSON negative_prompt field');
+  assert.ok(!nativeReceipt.prompt.includes('Avoid:'), 'adapter must not inject negative prompt as visible natural-language content');
 
   const cosmosRun = runOrbInnerEngineProviderRoute({
     bundleRoot: bundle.bundleRoot,

@@ -122,6 +122,7 @@ export function createOrbInnerEngineProviderRegistry({
         pythonCommand,
         capability: ['text-to-image', 'square-core-concept-source'],
         defaultArgs: {
+          preset: 'V4_DEFAULT_20',
           timeoutMs: 900000,
         },
         notes: 'Uses local mlx-ideogram4 generate.py through the stable Kaminos adapter contract.',
@@ -230,6 +231,7 @@ export function resolveOrbInnerEngineProviderCommand({
   if (provider.defaultArgs?.steps) args.push('--steps', String(provider.defaultArgs.steps));
   if (provider.defaultArgs?.size) args.push('--size', provider.defaultArgs.size);
   if (provider.defaultArgs?.quantize) args.push('--quantize', String(provider.defaultArgs.quantize));
+  if (provider.defaultArgs?.preset) args.push('--preset', String(provider.defaultArgs.preset));
 
   return {
     ok: true,
@@ -506,7 +508,10 @@ export function detectProviderBlockedImage(path) {
 function combinedPrompt(prompt, negative) {
   const cleanPrompt = String(prompt || '').trim();
   const cleanNegative = String(negative || '').trim();
-  return cleanNegative ? `${cleanPrompt}\nAvoid: ${cleanNegative}` : cleanPrompt;
+  const payload = cleanNegative
+    ? { prompt: cleanPrompt, negative_prompt: cleanNegative }
+    : { prompt: cleanPrompt };
+  return JSON.stringify(payload);
 }
 
 function runNative(command, argv, cwd) {
@@ -541,7 +546,7 @@ function runIdeogramAdapter(args) {
     '--output', out,
     '--seed', seed,
     '--receipt', receipt,
-    '--preset', args.get('--preset') || 'V4_TURBO_12',
+    '--preset', args.get('--preset') || 'V4_DEFAULT_20',
   ];
   const providerPython = args.get('--provider-python') || executablePython(providerRoot);
   const spawned = runNative(providerPython, nativeArgv, providerRoot);
