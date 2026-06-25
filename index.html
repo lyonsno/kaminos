@@ -211,6 +211,16 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-inspector-key { color: #555; text-transform: uppercase; }
 .pipeline-graph-inspector-val { color: #aaa; overflow-wrap: anywhere; min-width: 0; }
 .pipeline-graph-inspector-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.pipeline-graph-inspector-status { border: 1px solid #3b3b3b; background: #181818; border-radius: 6px; padding: 8px 9px; margin: 10px 0 12px; min-height: 48px; }
+.pipeline-graph-inspector-status-kicker { color: #8fc7d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+.pipeline-graph-inspector-status-text { color: #d4d4d4; font: 11px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.pipeline-graph-inspector-status.idle { border-color: #333; background: #151515; }
+.pipeline-graph-inspector-status.idle .pipeline-graph-inspector-status-kicker { color: #777; }
+.pipeline-graph-inspector-status.running { border-color: #2f67c7; background: #121b2a; }
+.pipeline-graph-inspector-status.success { border-color: #3d6f42; background: #132015; }
+.pipeline-graph-inspector-status.success .pipeline-graph-inspector-status-kicker { color: #7ed184; }
+.pipeline-graph-inspector-status.error { border-color: #8f3a34; background: #261615; }
+.pipeline-graph-inspector-status.error .pipeline-graph-inspector-status-kicker { color: #ff938a; }
 .pipeline-run-result-panel { border: 1px solid #2d2d2d; background: #171717; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
 .pipeline-run-result-panel[hidden] { display: none; }
 .pipeline-run-result-title { color: #f1f1f1; font-size: 13px; font-weight: 750; margin-bottom: 4px; }
@@ -277,6 +287,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
 .scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
 .scene-object-empty { font-size: 11px; color: #555; }
+.scene-import-status { border: 1px solid #3d6f42; background: #132015; border-radius: 6px; padding: 8px 9px; margin: 0 0 8px; }
+.scene-import-status[hidden] { display: none; }
+.scene-import-status-kicker { color: #7ed184; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+.scene-import-status-text { color: #d4d4d4; font: 11px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
 .transform-inspector { display: flex; flex-direction: column; gap: 9px; }
 .transform-inspector-empty { font-size: 11px; color: #555; }
 .transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
@@ -343,6 +357,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div class="scene-object-tools">
         <button type="button" class="btn" data-scene-group-create>Create Group</button>
+      </div>
+      <div id="scene-import-status" class="scene-import-status" role="status" aria-live="polite" hidden>
+        <div class="scene-import-status-kicker">Scene Import</div>
+        <div class="scene-import-status-text" id="scene-import-status-text"></div>
       </div>
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
@@ -943,6 +961,7 @@ const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 let volumePrimitives = [];
 let sceneObjects = [];
+let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
@@ -2842,10 +2861,24 @@ function renderSceneGroupRow(group) {
   `;
 }
 
+function setSceneImportStatus(message) {
+  sceneImportStatus = message ? { message, at: new Date().toISOString() } : null;
+  renderSceneImportStatus();
+}
+
+function renderSceneImportStatus() {
+  const status = document.getElementById('scene-import-status');
+  const text = document.getElementById('scene-import-status-text');
+  if (!status || !text) return;
+  status.hidden = !sceneImportStatus?.message;
+  text.textContent = sceneImportStatus?.message || '';
+}
+
 function renderSceneObjectList() {
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
   if (!list || !empty) return;
+  renderSceneImportStatus();
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
   const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
@@ -5126,7 +5159,12 @@ function renderPipelineGraphInspector(node, selectedRun) {
     actions.push({ label: 'Load Source', action: () => pipelineLoadSourceRecord(selectedRun?.source || node.source) });
   }
   if (node?.kind === 'image' && node.source) {
-    actions.push({ label: 'Import Image to Scene', action: () => pipelineImportGraphImageNodeToScene(node) });
+    actions.push({
+      label: 'Import Image to Scene',
+      runningMessage: 'Importing image node into the left Scene Assets tab...',
+      successMessage: result => `Scene import landed in left Scene Assets tab: ${result?.label || node.title || 'image plane'}`,
+      action: () => pipelineImportGraphImageNodeToScene(node),
+    });
   }
   if (node?.kind === 'output' && selectedRun && node.artifact?.path) {
     actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact) });
@@ -5140,11 +5178,15 @@ function renderPipelineGraphInspector(node, selectedRun) {
   if (selectedEdge) {
     actions.push({ label: 'Remove Hook', action: () => pipelineRemoveGraphEdge(selectedEdge.id) });
   }
+  const statusRecord = pipelineGraphInspectorStatusRecord();
   inspector.innerHTML = `
     <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
     <div class="pipeline-graph-inspector-body">${escapeHtml(node ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.' : selectedEdge ? 'Selected hook is session-local composition structure.' : 'Select source, route, output, or evidence to inspect the composition.')}</div>
     <div class="pipeline-graph-inspector-actions" id="pipeline-graph-inspector-actions"></div>
-    <div class="pipeline-result-action-status" id="pipeline-graph-inspector-status">${escapeHtml(pipelineDockState.graphInspectorStatus || '')}</div>
+    <div class="pipeline-graph-inspector-status ${escapeHtml(statusRecord.kind)}" id="pipeline-graph-inspector-status" role="status" aria-live="polite">
+      <div class="pipeline-graph-inspector-status-kicker">Action Status</div>
+      <div class="pipeline-graph-inspector-status-text">${escapeHtml(statusRecord.message)}</div>
+    </div>
     <div class="pipeline-graph-inspector-grid">
       ${pipelineGraphInspectorRows(node, selectedRun).map(row => `
         <div class="pipeline-graph-inspector-key">${escapeHtml(row.key)}</div>
@@ -5168,24 +5210,62 @@ function renderPipelineGraphInspector(node, selectedRun) {
   }
 }
 
-function pipelineSetGraphInspectorStatus(message) {
-  pipelineDockState.graphInspectorStatus = message || '';
+function pipelineGraphInspectorSubjectId() {
+  if (pipelineDockState.selectedGraphEdgeId) return `edge:${pipelineDockState.selectedGraphEdgeId}`;
+  if (pipelineDockState.selectedGraphNodeId) return `node:${pipelineDockState.selectedGraphNodeId}`;
+  return 'none';
+}
+
+function pipelineGraphInspectorStatusRecord() {
+  const currentSubjectId = pipelineGraphInspectorSubjectId();
+  const record = pipelineDockState.graphInspectorStatus;
+  if (record?.subjectId === currentSubjectId && record.message) {
+    return {
+      kind: ['idle', 'running', 'success', 'error'].includes(record.kind) ? record.kind : 'idle',
+      message: record.message,
+      subjectId: currentSubjectId,
+    };
+  }
+  return {
+    kind: 'idle',
+    message: 'Idle: no action has run for this selected graph item.',
+    subjectId: currentSubjectId,
+  };
+}
+
+function pipelineRenderGraphInspectorStatus() {
   const status = document.getElementById('pipeline-graph-inspector-status');
-  if (status) status.textContent = pipelineDockState.graphInspectorStatus;
+  if (!status) return;
+  const record = pipelineGraphInspectorStatusRecord();
+  status.className = `pipeline-graph-inspector-status ${record.kind}`;
+  const text = status.querySelector('.pipeline-graph-inspector-status-text');
+  if (text) text.textContent = record.message;
+}
+
+function pipelineSetGraphInspectorStatus(message, kind = 'idle') {
+  pipelineDockState.graphInspectorStatus = {
+    kind,
+    message: message || 'Idle: no action has run for this selected graph item.',
+    subjectId: pipelineGraphInspectorSubjectId(),
+    at: new Date().toISOString(),
+  };
+  const status = document.getElementById('pipeline-graph-inspector-status');
+  if (status) pipelineRenderGraphInspectorStatus();
   if (message) setInfo(message);
 }
 
 async function pipelineRunGraphInspectorAction(item, button) {
   if (!item?.action || button?.disabled) return null;
   if (button) button.disabled = true;
-  pipelineSetGraphInspectorStatus(`${item.label}...`);
+  pipelineSetGraphInspectorStatus(item.runningMessage || `${item.label}...`, 'running');
   try {
     const result = await item.action();
-    pipelineSetGraphInspectorStatus(`${item.label} completed`);
+    const successMessage = typeof item.successMessage === 'function' ? item.successMessage(result) : item.successMessage;
+    pipelineSetGraphInspectorStatus(successMessage || `${item.label} completed`, 'success');
     return result;
   } catch (err) {
     const message = `${item.label} failed: ${err.message || err}`;
-    pipelineSetGraphInspectorStatus(message);
+    pipelineSetGraphInspectorStatus(message, 'error');
     console.error(message, err);
     return null;
   } finally {
@@ -5505,13 +5585,13 @@ async function pipelineImportGraphImageNodeToScene(node) {
   };
   if (!node?.source) {
     pipelineSetActionStatus('Image node source required before scene import');
-    pipelineSetGraphInspectorStatus('Image node source required before scene import');
+    pipelineSetGraphInspectorStatus('Image node source required before scene import', 'error');
     window.kaminosPipelineLastImportDebug.phase = 'missing-source';
-    return null;
+    throw new Error('Image node source required before scene import');
   }
   const fileName = node.path || node.detail || node.title || 'pipeline-image.png';
   pipelineSetActionStatus('Importing graph image node into scene...');
-  pipelineSetGraphInspectorStatus('Importing graph image node into scene...');
+  pipelineSetGraphInspectorStatus('Importing image node into the left Scene Assets tab...', 'running');
   try {
     window.kaminosPipelineLastImportDebug.phase = 'loading-texture';
     const mesh = await showImagePlane(node.source, {
@@ -5536,20 +5616,22 @@ async function pipelineImportGraphImageNodeToScene(node) {
     window.kaminosPipelineLastImportDebug.phase = 'registered-scene-object';
     const record = sceneObjects.find(entry => entry.object === mesh) || selectedSceneObjectEntry();
     window.kaminosPipelineLastImportDebug.recordId = record?.id || null;
+    const landedMessage = `Scene import landed in left Scene Assets tab: ${record?.label || fileName}`;
+    setSceneImportStatus(landedMessage);
     setActiveTab('assets');
     window.kaminosPipelineLastImportDebug.phase = 'switched-to-assets';
     document.getElementById('sidebar')?.scrollTo({ top: 0, behavior: 'instant' });
     const escapedId = window.CSS?.escape ? CSS.escape(record?.id || '') : String(record?.id || '').replaceAll('"', '\\"');
     document.querySelector(`[data-scene-object-id="${escapedId}"]`)?.scrollIntoView({ block: 'nearest' });
     window.kaminosPipelineLastImportDebug.phase = 'visible-scene-row';
-    pipelineSetActionStatus(`Imported image node to scene: ${record?.label || fileName}`);
-    pipelineSetGraphInspectorStatus(`Imported image node to scene: ${record?.label || fileName}`);
+    pipelineSetActionStatus(landedMessage);
+    pipelineSetGraphInspectorStatus(landedMessage, 'success');
     return record;
   } catch (err) {
     window.kaminosPipelineLastImportDebug.phase = 'failed';
     window.kaminosPipelineLastImportDebug.error = err.message || String(err);
     pipelineSetActionStatus(`Image node scene import failed: ${err.message || err}`);
-    pipelineSetGraphInspectorStatus(`Image node scene import failed: ${err.message || err}`);
+    pipelineSetGraphInspectorStatus(`Image node scene import failed: ${err.message || err}`, 'error');
     throw err;
   }
 }
@@ -5858,6 +5940,8 @@ window.buildPipelineDockGraphState = buildPipelineDockGraphState;
 window.buildPipelineGraphModel = buildPipelineGraphModel;
 window.selectPipelineGraphNode = selectPipelineGraphNode;
 window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
+window.kaminosPipelineSelectAssetPalette = selectPipelineAssetPalette;
+window.kaminosPipelineCreateGraphImageNode = createPipelineGraphImageNode;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;
 
 function readVolumeControls() {
