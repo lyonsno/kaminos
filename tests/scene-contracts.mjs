@@ -122,6 +122,12 @@ assert.match(index, /const cameraPosition = new Float32Array\(cameraWorld\.toArr
 assert.match(index, /\.setModelMatrix\(/, 'Hybrid Renderer overlay receives the effective overlay asset-world matrix through the PBRnext frame contract');
 assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewport identity through the PBRnext frame contract');
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');
+assert.match(index, /function buildHybridSplatOverlaySceneContextV0\(/, 'Hybrid Renderer overlay publishes a renderer-neutral scene-context packet');
+assert.match(index, /schema:\s*'hybrid-render\.scene-context\.v0'/, 'Hybrid Renderer scene context declares the shared renderer-neutral schema');
+assert.match(index, /\.setSceneContext\(/, 'Hybrid Renderer overlay calls setSceneContext when the renderer exposes the P0 API');
+assert.match(index, /sceneContextAccepted:\s*false/, 'Hybrid Renderer debug state fails loud when the renderer lacks the P0 scene-context API');
+assert.match(index, /unsupportedFields/, 'Hybrid Renderer scene-context telemetry exposes unsupported or unhandled fields');
+assert.match(index, /lastSceneContext/, 'Hybrid Renderer debug state preserves the last produced scene context for witnesses');
 assert.match(index, /cropCoordinateMatrix/, 'Hybrid Renderer correction identity carries the raw-asset-to-preview crop coordinate frame for PBRnext filtering');
 assert.match(index, /sourceIdentity/, 'Hybrid Renderer debug state exposes renderer-reported source identity');
 assert.match(index, /sharedCommandEncoder/, 'Hybrid Renderer route capabilities preserve explicit no-shared-command-encoder truth');

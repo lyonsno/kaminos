@@ -2493,7 +2493,7 @@ async function runHybridSplatOverlayScenario(ws) {
         '  canvas.height = 32;',
         '  container.appendChild(canvas);',
         '  const capabilities = Object.freeze({ canvasMode: "dual-canvas-overlay", meshDepthOcclusion: false, sharedCanvasComposite: false, sharedCommandEncoder: false, cropAppliedByRenderer: true });',
-        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], started: false, stopped: false, destroyed: false, options, sourceIdentity: null, correctionApplication: null, capabilities };',
+        '  const state = { sources: [], frames: 0, modelMatrices: [], viewports: [], corrections: [], sceneContexts: [], sceneContextTelemetry: null, started: false, stopped: false, destroyed: false, options, sourceIdentity: null, correctionApplication: null, capabilities };',
         '  function publish() { window.__hybridSplatOverlayWitness = { ...state, canvasConnected: canvas.isConnected }; }',
         '  publish();',
         '  return {',
@@ -2507,6 +2507,7 @@ async function runHybridSplatOverlayScenario(ws) {
         '    setModelMatrix(matrix) { state.modelMatrices.push(Array.from(matrix)); publish(); },',
         '    setViewport(width, height, devicePixelRatio = 1) { state.viewports.push({ width, height, devicePixelRatio }); publish(); },',
         '    setCorrectionIdentity(correction) { const cropApplied = correction?.crop?.enabled === true; state.corrections.push(correction); state.correctionApplication = { cropApplied, cropFrame: cropApplied ? "witness-renderer-crop" : "disabled", sourceCount: 3, keptCount: cropApplied ? 2 : 3 }; if (state.sourceIdentity) state.sourceIdentity = { ...state.sourceIdentity, correctionApplied: true, correctionIdentity: correction }; publish(); },',
+        '    setSceneContext(context) { const telemetry = { accepted: true, acceptedFields: ["lighting.environment", "lighting.exposure", "composition.background"], honoredFields: ["composition.background"], unsupportedFields: ["hostDepthTexture"], stale: false, ignored: false, missing: false, failurePhase: null }; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; },',
         '    async loadPly(source, fileName) { state.sources.push({ source: String(source), fileName: fileName || null }); state.sourceIdentity = { source: String(source), loadMethod: "ply-url", correctionApplied: false }; publish(); },',
         '    async loadManifest(url) { state.sources.push({ manifest: String(url) }); state.sourceIdentity = { source: String(url), loadMethod: "manifest", correctionApplied: false }; publish(); },',
         '    loadAttributes(attributes) { state.attributeKeys = Object.keys(attributes || {}); state.sourceIdentity = { source: String(attributes?.sourceKind || "attributes"), loadMethod: "attributes", correctionApplied: false }; publish(); },',
@@ -2578,6 +2579,15 @@ async function runHybridSplatOverlayScenario(ws) {
   }
   if (!witness.corrections?.length || witness.sourceIdentity?.correctionApplied !== true) {
     throw new Error(`hybrid splat overlay did not receive correction identity: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (!witness.sceneContexts?.length
+      || lastEvidence.hybridSplatOverlay.overlayDebug?.lastSceneContext?.schema !== 'hybrid-render.scene-context.v0'
+      || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.lastSceneContext?.schema !== 'hybrid-render.scene-context.v0') {
+    throw new Error(`hybrid splat overlay did not publish scene context: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  if (lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextAccepted !== true
+      || lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextTelemetry?.accepted !== true) {
+    throw new Error(`hybrid splat overlay did not report accepted scene context: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sourceIdentity?.source !== splatSource
       || lastEvidence.hybridSplatOverlay.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== splatSource) {

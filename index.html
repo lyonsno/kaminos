@@ -789,6 +789,9 @@ let hybridSplatOverlayState = {
   loadedFileName: null,
   loadedAt: null,
   lastFrame: null,
+  lastSceneContext: null,
+  sceneContextAccepted: false,
+  sceneContextTelemetry: null,
   frameCount: 0,
 };
 
@@ -812,6 +815,7 @@ class HybridMeshSplatRoute {
         sharedCommandEncoder: false,
         correctionAppliedMode: null,
         cropAppliedByRenderer: false,
+        sceneContextAccepted: false,
       };
     }
     const overlayCapabilities = hybridSplatOverlayState.handle?.capabilities || {};
@@ -824,6 +828,7 @@ class HybridMeshSplatRoute {
       canvasMode: overlayCapabilities.canvasMode || 'dual-canvas-overlay',
       correctionAppliedMode: 'visual-root-world-matrix',
       cropAppliedByRenderer: hybridSplatOverlayCropAppliedByRenderer(),
+      sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
     };
   }
 
@@ -882,6 +887,9 @@ function hybridSplatOverlayDebugState() {
     handleCapabilities: handle?.capabilities || null,
     sourceIdentity: handle?.sourceIdentity || null,
     correctionApplication: handle?.correctionApplication || null,
+    sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
+    sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
+    lastSceneContext: hybridSplatOverlayState.lastSceneContext,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
@@ -997,6 +1005,144 @@ function currentHybridOverlayViewport() {
     height: size.y,
     devicePixelRatio: window.devicePixelRatio || 1,
   };
+}
+
+function currentHybridSplatOverlayEnvironmentContext() {
+  const env = HDR_ENVS[currentEnvName] || HDR_ENVS.studio || {};
+  const intensity = readNumberControl('env-intensity-slider', scene?.environmentIntensity ?? env.intensity ?? 1);
+  const rotationY = readNumberControl('env-rotation-slider', scene?.environmentRotation?.y ?? 0);
+  const exposure = renderer?.toneMappingExposure ?? readNumberControl('exposure-slider', env.exposure ?? 1);
+  return {
+    name: currentEnvName,
+    label: env.label || currentEnvName || 'unknown',
+    url: env.url || null,
+    preset: currentEnvName,
+    intensity,
+    rotationY,
+    exposure,
+    toneMapping: renderer?.toneMapping === THREE.ACESFilmicToneMapping ? 'ACESFilmicToneMapping' : String(renderer?.toneMapping ?? 'unknown'),
+    backgroundVisible: !!showEnvBg,
+    backgroundBlur: readNumberControl('env-blur-slider', scene?.backgroundBlurriness ?? 0),
+  };
+}
+
+function buildHybridSplatOverlaySceneContextV0(frame = hybridSplatOverlayState.lastFrame) {
+  const viewport = frame?.viewport || currentHybridOverlayViewport();
+  const environment = currentHybridSplatOverlayEnvironmentContext();
+  return {
+    schema: 'hybrid-render.scene-context.v0',
+    producer: {
+      app: 'kaminos',
+      route: 'hybrid-mesh-splat-overlay',
+      frame: hybridSplatOverlayState.frameCount,
+      updatedAt: new Date().toISOString(),
+    },
+    coordinateSystem: {
+      worldUnits: 'kaminos-scene-units',
+      upAxis: 'Y',
+      handedness: 'three-js-right-handed',
+    },
+    camera: {
+      projectionFrame: 'three-webgpu-host',
+      viewMatrix: frame?.overlayViewMatrix || (camera ? Array.from(camera.matrixWorldInverse.elements) : null),
+      projectionMatrix: frame?.projectionMatrix || (camera ? Array.from(camera.projectionMatrix.elements) : null),
+      positionWorld: frame?.cameraPositionWorld || (camera ? camera.getWorldPosition(new THREE.Vector3()).toArray() : null),
+      viewport,
+    },
+    lighting: {
+      environment: {
+        name: environment.name,
+        label: environment.label,
+        url: environment.url,
+        preset: environment.preset,
+        intensity: environment.intensity,
+        rotationY: environment.rotationY,
+      },
+      exposure: environment.exposure,
+      toneMapping: environment.toneMapping,
+    },
+    composition: {
+      mode: 'dual-canvas-overlay',
+      background: 'transparent',
+      capabilities: {
+        meshDepthOcclusion: false,
+        sharedCanvasComposite: false,
+        sharedCommandEncoder: false,
+      },
+      hostBackground: {
+        visible: environment.backgroundVisible,
+        blur: environment.backgroundBlur,
+      },
+    },
+  };
+}
+
+function hybridSplatOverlaySceneContextCapability(handle = hybridSplatOverlayState.handle) {
+  const overlayCapabilities = handle?.capabilities || {};
+  return {
+    meshDepthOcclusion: false,
+    sharedCanvasComposite: false,
+    sharedCommandEncoder: false,
+    realSplatRendering: !!handle,
+    canvasMode: overlayCapabilities.canvasMode || (handle ? 'dual-canvas-overlay' : 'three-point-cloud-preview'),
+    sceneContextApi: typeof handle?.setSceneContext === 'function',
+  };
+}
+
+function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}) {
+  const { accepted = true, unsupportedFields = [] } = options;
+  const resultObject = result && typeof result === 'object' ? result : {};
+  const acceptedFields = Array.isArray(resultObject.acceptedFields)
+    ? resultObject.acceptedFields.slice()
+    : [
+        'camera.viewMatrix',
+        'camera.projectionMatrix',
+        'camera.positionWorld',
+        'camera.viewport',
+        'lighting.environment',
+        'lighting.exposure',
+        'lighting.toneMapping',
+        'composition.background',
+        'composition.capabilities',
+      ];
+  const honoredFields = Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [];
+  const rejectedFields = Array.isArray(resultObject.rejectedFields) ? resultObject.rejectedFields.slice() : [];
+  return {
+    schema: 'kaminos.hybrid-splat-overlay.scene-context-telemetry.v0',
+    contextSchema: context?.schema || null,
+    contextFrame: context?.producer?.frame ?? null,
+    contextTimestamp: context?.producer?.updatedAt || null,
+    route: hybridMeshSplatRoute.id,
+    capability: hybridSplatOverlaySceneContextCapability(),
+    accepted: resultObject.accepted ?? accepted,
+    acceptedFields,
+    honoredFields,
+    unsupportedFields: Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : unsupportedFields,
+    rejectedFields,
+    stale: resultObject.stale === true,
+    missing: resultObject.missing === true,
+    ignored: resultObject.ignored === true,
+    failurePhase: resultObject.failurePhase || null,
+    message: resultObject.message || null,
+  };
+}
+
+function publishHybridSplatOverlaySceneContext(handle, frame = hybridSplatOverlayState.lastFrame) {
+  const sceneContext = buildHybridSplatOverlaySceneContextV0(frame);
+  hybridSplatOverlayState.lastSceneContext = sceneContext;
+  if (!handle || typeof handle.setSceneContext !== 'function') {
+    hybridSplatOverlayState.sceneContextAccepted = false;
+    hybridSplatOverlayState.sceneContextTelemetry = normalizeHybridSplatSceneContextTelemetry(null, sceneContext, {
+      accepted: false,
+      unsupportedFields: ['handle.setSceneContext'],
+    });
+    return hybridSplatOverlayState.sceneContextTelemetry;
+  }
+  const result = handle.setSceneContext(sceneContext);
+  const telemetry = normalizeHybridSplatSceneContextTelemetry(result, sceneContext);
+  hybridSplatOverlayState.sceneContextAccepted = telemetry.accepted !== false;
+  hybridSplatOverlayState.sceneContextTelemetry = telemetry;
+  return telemetry;
 }
 
 function splatOverlayCorrectionIdentity(record, assetFrame = splatRawAssetToPreviewMatrix(record)) {
@@ -1167,6 +1313,7 @@ function updateHybridSplatOverlayFrame() {
     updatedAt: new Date().toISOString(),
   };
   hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);
+  hybridSplatOverlayState.lastFrame.sceneContextTelemetry = publishHybridSplatOverlaySceneContext(handle, hybridSplatOverlayState.lastFrame);
   return hybridSplatOverlayState.lastFrame;
 }
 
@@ -1218,6 +1365,9 @@ function stopHybridSplatOverlay(options = {}) {
   hybridSplatOverlayState.loadedFileName = null;
   hybridSplatOverlayState.loadedAt = null;
   hybridSplatOverlayState.lastFrame = null;
+  hybridSplatOverlayState.lastSceneContext = null;
+  hybridSplatOverlayState.sceneContextAccepted = false;
+  hybridSplatOverlayState.sceneContextTelemetry = null;
   hybridSplatOverlayState.frameCount = 0;
   setHybridSplatOverlayStatus('idle');
   const active = selectedSplatRecord();
