@@ -608,6 +608,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_orb_shell_grounding=1</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="orb-shell-composition-identity">orb-shell-macro-grammar-grounding-v0</span></div>
       <div class="field"><span class="field-key">Baseline</span><span class="field-val" id="orb-shell-composition-baseline">coherent-but-wrong-model-baseline</span></div>
+      <div class="field"><span class="field-key">Variant</span><span class="field-val" id="orb-shell-composition-variant">baseline:0</span></div>
       <div class="volume-actions">
         <button class="btn" id="orb-shell-composition-toggle">Enable</button>
         <button class="btn" id="orb-shell-composition-frame">Frame</button>
@@ -4366,6 +4367,7 @@ function updateOrbShellCompositionReadout() {
   document.getElementById('orb-shell-composition-identity').textContent = ORB_SHELL_COMPOSITION_IDENTITY;
   const state = orbShellCompositionWitness?.debugState?.();
   document.getElementById('orb-shell-composition-baseline').textContent = state?.baselineDisposition || 'coherent-but-wrong-model-baseline';
+  document.getElementById('orb-shell-composition-variant').textContent = `${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0}`;
   document.getElementById('orb-shell-composition-macros').textContent = String(state?.macroAssemblageCount ?? 0);
   document.getElementById('orb-shell-composition-bands').textContent = String(state?.bandMemberCount ?? 0);
   document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
@@ -4386,9 +4388,15 @@ function initOrbShellCompositionRoute() {
     camera,
     controls,
     onStatus: status => {
-      if (status.phase === 'built') setInfo(`Orb Shell Macro Grounding — ${status.macroAssemblageCount} macro thrusts`);
+      if (status.phase === 'built') setInfo(`Orb Shell Macro Grounding — ${status.macroAssemblageCount} macro thrusts / ${status.variantId}`);
     },
     onDirty: () => window._kaminosDirty?.(),
+  });
+  const requestedVariantId = params.get('orb_shell_variant') || 'baseline';
+  const requestedVariationSeed = Number(params.get('orb_shell_variation_seed') || 0);
+  orbShellCompositionWitness.setVariation({
+    variantId: requestedVariantId,
+    variationSeed: Number.isFinite(requestedVariationSeed) ? requestedVariationSeed : 0,
   });
   window.__kaminosOrbShellCompositionWitness = orbShellCompositionWitness;
 
