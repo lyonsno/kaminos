@@ -395,6 +395,77 @@ function createMacroBodyPromotionPlan(composition) {
   };
 }
 
+function createExpandedRegionProxyDescriptor(assemblage) {
+  const roleScale = assemblage.id === 'equatorial-cupping-whorl'
+    ? 1.24
+    : assemblage.id === 'north-east-counter-thrust'
+      ? 1.18
+      : assemblage.id === 'polar-crown-lock'
+        ? 1.14
+        : 1.2;
+  return {
+    schema: 'ExpandedMacroRegionProxy',
+    mode: 'macro-region-proxy-coverage-v0',
+    id: `${assemblage.id}-expanded-region-proxy`,
+    parentAssemblage: assemblage.id,
+    proxyStatus: 'proxy-not-final-plate',
+    futureMeshRole: 'future-mesh-boundary-input',
+    coverageScale: roleScale,
+    coverageIntent: 'macro-region-coverage-before-final-meshing',
+    preserveReadableGaps: true,
+    derivedFrom: assemblage.macroPromotedBody?.id,
+  };
+}
+
+function seamGap(id, type, regions, role, options = {}) {
+  return {
+    schema: 'MacroRegionSeamGapDescriptor',
+    id,
+    type,
+    regions,
+    role,
+    futureMeshRole: 'future-mesh-boundary-input',
+    proxyStatus: 'proxy-not-final-plate',
+    minimumReadability: options.minimumReadability || 0.035,
+    generatedBy: options.generatedBy || ['neighbor-pressure-field', 'macro-region-coverage'],
+  };
+}
+
+function createExpandedMacroRegionProxyPlan(composition) {
+  const expandedRegions = composition.macroAssemblages.map(createExpandedRegionProxyDescriptor);
+  return {
+    schema: 'ExpandedMacroRegionProxyPlan',
+    mode: 'macro-region-proxy-coverage-v0',
+    proxyStatus: 'proxy-not-final-plate',
+    futureMeshRole: 'future-mesh-boundary-input',
+    expandedRegions,
+    seamGaps: [
+      seamGap('primary-front-intentional-slit', 'intentional-slit', [
+        'north-west-dominant-thrust-expanded-region-proxy',
+        'north-east-counter-thrust-expanded-region-proxy',
+      ], 'front aperture readable slit', { generatedBy: ['aperture-pressure', 'dominance-crossing-field'] }),
+      seamGap('crossing-tuck-overlap-receiver', 'overlap-receiver', [
+        'north-east-counter-thrust-expanded-region-proxy',
+        'equatorial-cupping-whorl-expanded-region-proxy',
+      ], 'crossing tuck receiver', { generatedBy: ['front-crossing-tuck', 'neighbor-tuck-clearance'] }),
+      seamGap('lower-cup-socket-join-gap', 'lower-socket-join', [
+        'equatorial-cupping-whorl-expanded-region-proxy',
+        'north-west-dominant-thrust-expanded-region-proxy',
+        'north-east-counter-thrust-expanded-region-proxy',
+      ], 'contiguous lower socket join', { minimumReadability: 0.018, generatedBy: ['lower-cup-socket-contiguous'] }),
+      seamGap('upper-crown-receiver-gap', 'crown-receiver', [
+        'polar-crown-lock-expanded-region-proxy',
+        'north-west-dominant-thrust-expanded-region-proxy',
+        'north-east-counter-thrust-expanded-region-proxy',
+      ], 'future crown receiver seam', { generatedBy: ['crown-socket-overlap', 'termination-pressure'] }),
+      seamGap('right-side-rim-reveal-gap', 'side-rim-reveal', [
+        'north-east-counter-thrust-expanded-region-proxy',
+        'polar-crown-lock-expanded-region-proxy',
+      ], 'side rim reveal', { generatedBy: ['side-rim-pressure-anchor', 'silhouette-relief'] }),
+    ],
+  };
+}
+
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
@@ -443,6 +514,10 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   }
   if (next.macroBodyPromotion.crossingTuckIntegration) {
     next.frontApertureOwnership.crossingTuckIntegration = next.macroBodyPromotion.crossingTuckIntegration;
+  }
+  next.expandedMacroRegionProxyPlan = createExpandedMacroRegionProxyPlan(next);
+  for (const assemblage of next.macroAssemblages) {
+    assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
   }
   const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
   next.frontApertureOwnership.effectiveVariation = frontParameters;
@@ -799,7 +874,8 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     const nearestCut = cutProfile.reduce((best, item) => (
       Math.abs(item.t - t) < Math.abs(best.t - t) ? item : best
     ), cutProfile[0] || { leftScale: 1, rightScale: 1, t: 0 });
-    const scale = promoted?.promotedBodyScale || 1.22;
+    const expanded = assemblage.expandedRegionProxy;
+    const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
     const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
     const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
@@ -837,6 +913,7 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData.MacroPromotedBody = promoted;
+  geometry.userData.ExpandedMacroRegionProxy = assemblage.expandedRegionProxy;
   return geometry;
 }
 
@@ -852,6 +929,23 @@ function makeAperturePressureRing(THREE, voidRecord) {
     points.push(new THREE.Vector3(x, y, z));
   }
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 120, 0.006, 8, true);
+}
+
+function makeSeamGapHintGeometry(THREE, gap) {
+  const seamShapes = {
+    'primary-front-intentional-slit': [[-0.28, 0.42, 0.92], [-0.18, 0.16, 1.04], [-0.02, -0.12, 1.07], [0.16, -0.42, 0.9]],
+    'crossing-tuck-overlap-receiver': [[-0.1, -0.1, 1.05], [0.08, -0.2, 1.08], [0.28, -0.34, 0.94]],
+    'lower-cup-socket-join-gap': [[-0.28, -0.82, 0.67], [-0.05, -0.92, 0.58], [0.26, -0.82, 0.68]],
+    'upper-crown-receiver-gap': [[-0.28, 0.9, 0.52], [0.02, 1.02, 0.34], [0.32, 0.88, 0.52]],
+    'right-side-rim-reveal-gap': [[0.74, 0.3, 0.62], [0.86, 0.02, 0.58], [0.76, -0.24, 0.62]],
+  };
+  const points = (seamShapes[gap.id] || [[-0.2, 0, 1.02], [0, 0, 1.08], [0.2, 0, 1.02]])
+    .map(point => new THREE.Vector3(...point).normalize().multiplyScalar(1.085));
+  const radius = gap.type === 'lower-socket-join' ? 0.004 : 0.006;
+  const curve = new THREE.CatmullRomCurve3(points);
+  const geometry = new THREE.TubeGeometry(curve, 48, radius, 6, false);
+  geometry.userData.MacroRegionSeamGapDescriptor = gap;
+  return geometry;
 }
 
 function makeLowerCupClosureGeometry(THREE, lowerCupDepth = 1) {
@@ -1051,6 +1145,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const apertureOwnerRailMaterial = new THREE.MeshStandardMaterial({ color: 0x71828a, roughness: 0.18, metalness: 0.92, envMapIntensity: 3 });
   const promotedBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.24, metalness: 0.93, envMapIntensity: 2.5, side: THREE.DoubleSide });
   const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
+  const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -1062,6 +1157,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
     crossingTuckBodyMaterial,
+    seamGapHintMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -1126,6 +1222,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       ring.userData.AperturePressure = voidRecord;
       group.add(ring);
     }
+    for (const gap of composition.expandedMacroRegionProxyPlan?.seamGaps || []) {
+      const seam = new THREE.Mesh(makeSeamGapHintGeometry(THREE, gap), seamGapHintMaterial);
+      seam.name = `${gap.id}-future-mesh-boundary-input`;
+      seam.userData.MacroRegionSeamGapDescriptor = gap;
+      group.add(seam);
+    }
     addPrimaryApertureFrameGeometry(THREE, group, composition, {
       ownerBody: apertureOwnerBodyMaterial,
       ownerRail: apertureOwnerRailMaterial,
@@ -1140,6 +1242,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
       promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
+      expandedRegionCount: composition.expandedMacroRegionProxyPlan?.expandedRegions?.length || 0,
+      seamGapCount: composition.expandedMacroRegionProxyPlan?.seamGaps?.length || 0,
       territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
@@ -1184,6 +1288,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
         promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
+        expandedRegionCount: composition.expandedMacroRegionProxyPlan?.expandedRegions?.length || 0,
+        seamGapCount: composition.expandedMacroRegionProxyPlan?.seamGaps?.length || 0,
         bandMemberCount: composition.macroAssemblages.reduce((sum, item) => sum + item.childBandPlan.length, 0),
         territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
@@ -1196,6 +1302,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         MacroPromotedBody: composition.macroBodyPromotion?.promotedBodies || [],
         lowerCupClosure: composition.macroBodyPromotion?.lowerCupClosure,
         crossingTuckIntegration: composition.macroBodyPromotion?.crossingTuckIntegration,
+        ExpandedMacroRegionProxyPlan: composition.expandedMacroRegionProxyPlan,
+        expandedMacroRegionProxyPlan: composition.expandedMacroRegionProxyPlan,
+        ExpandedMacroRegionProxy: composition.expandedMacroRegionProxyPlan?.expandedRegions || [],
+        MacroRegionSeamGapDescriptor: composition.expandedMacroRegionProxyPlan?.seamGaps || [],
         MacroTerritoryBody: composition.macroAssemblages.map(item => item.territoryBodyOccupancy),
         BoundaryPressureField: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
         boundaryPressureFields: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),

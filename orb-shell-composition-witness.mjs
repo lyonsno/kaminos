@@ -142,6 +142,11 @@ async function main() {
     assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
     assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
     assert.equal(state?.crossingTuckIntegration?.mode, 'crossing-tuck-macro-body', 'crossing tuck integration descriptor missing from debug state');
+    assert.equal(state?.ExpandedMacroRegionProxyPlan?.schema, 'ExpandedMacroRegionProxyPlan', 'ExpandedMacroRegionProxyPlan missing from debug state');
+    assert.equal(state?.expandedRegionCount, state.macroAssemblageCount, 'composition must expose one ExpandedMacroRegionProxy per macro assemblage');
+    assert.ok(state?.ExpandedMacroRegionProxy?.every(region => region?.schema === 'ExpandedMacroRegionProxy'), 'ExpandedMacroRegionProxy descriptors missing from debug state');
+    assert.ok(state?.seamGapCount >= 5, 'composition must expose seam/gap descriptors');
+    assert.ok(state?.MacroRegionSeamGapDescriptor?.every(gap => gap?.schema === 'MacroRegionSeamGapDescriptor'), 'MacroRegionSeamGapDescriptor records missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
@@ -163,6 +168,8 @@ async function main() {
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
       promotedBodyCount: state.promotedBodyCount,
+      expandedRegionCount: state.expandedRegionCount,
+      seamGapCount: state.seamGapCount,
       bandMemberCount: state.bandMemberCount,
       territoryBodyCount: state.territoryBodyCount,
       closureAnchorCount: state.closureAnchorCount,
@@ -177,6 +184,10 @@ async function main() {
       MacroPromotedBody: state.MacroPromotedBody,
       lowerCupClosure: state.lowerCupClosure,
       crossingTuckIntegration: state.crossingTuckIntegration,
+      ExpandedMacroRegionProxyPlan: state.ExpandedMacroRegionProxyPlan,
+      expandedMacroRegionProxyPlan: state.expandedMacroRegionProxyPlan,
+      ExpandedMacroRegionProxy: state.ExpandedMacroRegionProxy,
+      MacroRegionSeamGapDescriptor: state.MacroRegionSeamGapDescriptor,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
       PrimaryApertureFrame: state.PrimaryApertureFrame,
       frontApertureOwnership: state.frontApertureOwnership,
