@@ -77,6 +77,33 @@ const PROMPT_FAMILIES = [
   },
 ];
 
+const DECOMPOSED_PROMPT_FAMILIES = [
+  {
+    id: 'black-ceramic-clockwork-insert',
+    decompositionLayer: 'mechanical-substrate',
+    compositionRole: 'cold-occluding-socket-structure',
+    subject: 'macro product render of a black ceramic clockwork aperture insert',
+    concreteParts: 'radial shutter leaves, nested baffle rings, hard occluder geometry, stepped gunmetal ribs, black ceramic teeth, copper pin joints, empty recessed central socket',
+    composition: 'orthographic front view, square crop, matte charcoal background, crisp machined silhouette, unlit opaque surfaces',
+  },
+  {
+    id: 'segmented-energy-inlay',
+    decompositionLayer: 'bounded-energy',
+    compositionRole: 'emissive-channel-plate',
+    subject: 'isolated red-orange emissive channel inlay plate for a circular artifact',
+    concreteParts: 'thin red-orange glowing enamel lines, segmented radial channel masks, amber light traces, small hot center mark, dark transparent gaps between channels',
+    composition: 'flat graphic material plate, square crop, black background, high contrast bounded glow, restrained low-bloom edges',
+  },
+  {
+    id: 'mechanical-energy-composite-reference',
+    decompositionLayer: 'composite-reference',
+    compositionRole: 'reference-only-combined-read',
+    subject: 'black ceramic radial shutter artifact with separate red-orange channel inlays seated beneath it',
+    concreteParts: 'dark occluding baffles, nested rings, radial ribs, red-orange emissive inlay lines visible only through grooves, recessed center, shadowed rim matter',
+    composition: 'front-biased socket insert, square crop, hard material edges, restrained glow contained below the top layer',
+  },
+];
+
 const SAFETY_AXES = [
   {
     id: 'legacy-evil-token',
@@ -116,11 +143,96 @@ function cleanPromptForFamily(family, mode) {
   ].join('. ');
 }
 
+function cleanPromptForDecomposedFamily(family, mode) {
+  const density = mode === 'dense'
+    ? 'many small asymmetric bevels, alternating narrow and wide segments, tiny fasteners, irregular soot-dark patina, high-frequency hard-surface detail'
+    : 'clear readable radial structure, sharp segment boundaries, layered depth, precise material separation';
+  const layerConstraint = family.decompositionLayer === 'mechanical-substrate'
+    ? 'cold inactive material study, matte opaque ceramic and alloy surfaces, mechanical parts remain solid and non-optical'
+    : (family.decompositionLayer === 'bounded-energy'
+        ? 'red-orange emissive channel material stays in thin bounded inlays, dark gaps stay visible, text-free abstract material plate'
+        : 'separate dark top structure and red-orange inlay layer remain readable as two composited materials, glow stays below the occluding top layer');
+  return [
+    family.subject,
+    family.concreteParts,
+    density,
+    layerConstraint,
+    family.composition,
+    'physically plausible hard-surface concept-art render',
+  ].join('. ');
+}
+
 function itemSeed({ matrixSeed, familyId, variantId }) {
   return String(hashString(`${matrixSeed}:${familyId}:${variantId}`) % 2147483647);
 }
 
-function qualityHypothesisFor(familyId) {
+function qualityHypothesisFor(familyId, decompositionLayer = null) {
+  if (decompositionLayer === 'mechanical-substrate') {
+    return {
+      familyTarget: familyId,
+      decompositionLayer,
+      mustRead: [
+        'radial shutter structure',
+        'nested rings',
+        'radial ribs',
+        'hard occluder geometry',
+        'dark outer machinery',
+        'empty socket depth',
+      ],
+      rejectRead: [
+        'clean camera lens',
+        'glowing glass eye',
+        'flat orange disk',
+        'full fireball',
+        'generic sci-fi portal',
+        'new outer shell design',
+      ],
+    };
+  }
+  if (decompositionLayer === 'bounded-energy') {
+    return {
+      familyTarget: familyId,
+      decompositionLayer,
+      mustRead: [
+        'bounded emissive channels',
+        'red-orange inlay material',
+        'segmented radial mask',
+        'small hot center',
+        'transparent gaps',
+      ],
+      rejectRead: [
+        'full fireball',
+        'unbounded bloom ball',
+        'smoke plume',
+        'flat orange disk',
+        'clean camera lens',
+        'warning text',
+        'new outer shell design',
+      ],
+    };
+  }
+  if (decompositionLayer === 'composite-reference') {
+    return {
+      familyTarget: familyId,
+      decompositionLayer,
+      mustRead: [
+        'two-layer composition',
+        'dark occluding top structure',
+        'bounded emissive channels',
+        'radial ribs',
+        'nested rings',
+        'contained center',
+      ],
+      rejectRead: [
+        'clean camera lens',
+        'full fireball',
+        'unbounded bloom ball',
+        'flat orange disk',
+        'single flat disk',
+        'new outer shell design',
+      ],
+    };
+  }
   return {
     familyTarget: familyId,
     mustRead: [
@@ -156,6 +268,8 @@ function makeItem({ index, coreSeed, matrixSeed, providerId, family, variant }) 
     generatorRoute: providerId,
     promptFamily: family.id,
     promptVariant: variant.id,
+    decompositionLayer: family.decompositionLayer || null,
+    compositionRole: family.compositionRole || null,
     batchLane: variant.batchLane,
     seed: itemSeed({ matrixSeed, familyId: family.id, variantId: variant.id }),
     positive,
@@ -166,7 +280,7 @@ function makeItem({ index, coreSeed, matrixSeed, providerId, family, variant }) 
       triggerTokens,
       notes: variant.notes,
     },
-    qualityHypothesis: qualityHypothesisFor(family.id),
+    qualityHypothesis: qualityHypothesisFor(family.id, family.decompositionLayer || null),
     framing: {
       aspectRatio: '1:1',
       crop: 'socket-centered circular core with readable outer machinery',
@@ -175,11 +289,58 @@ function makeItem({ index, coreSeed, matrixSeed, providerId, family, variant }) 
     },
     executionPolicy: {
       isolateFromQualityRun: variant.batchLane === 'safety-ablation',
+      greenroomRequired: false,
       timingRequired: true,
       blockedOutputStatus: 'provider-blocked-output',
       routeFailureMustWriteReceipt: true,
     },
     downstreamRoutes: ['sharp.splat', 'trellis2mlx.mesh-pbr', 'pixal3d.mesh-pbr'],
+  };
+}
+
+function makeDecomposedItem({ index, coreSeed, matrixSeed, providerId, family, variant }) {
+  const basePrompt = cleanPromptForDecomposedFamily(family, variant.mode || 'clean');
+  const positive = variant.mutate ? variant.mutate(basePrompt) : basePrompt;
+  const negative = '';
+  return {
+    id: `orb-inner-engine-prompt-${String(index + 1).padStart(2, '0')}`,
+    status: 'queued',
+    coreSeed,
+    matrixSeed,
+    providerId,
+    generatorRoute: providerId,
+    promptFamily: family.id,
+    promptVariant: variant.id,
+    decompositionLayer: family.decompositionLayer,
+    compositionRole: family.compositionRole,
+    batchLane: 'decomposed-quality',
+    seed: itemSeed({ matrixSeed, familyId: family.id, variantId: variant.id }),
+    positive,
+    negative,
+    promptSha256: sha256Text(JSON.stringify({ positive, negative })),
+    safetyHypothesis: {
+      expectedOutcome: 'should-complete',
+      triggerTokens: [],
+      notes: 'Decomposed affirmative prompt. Avoids overloaded structural and combustion vocabulary in the cold substrate pass.',
+    },
+    qualityHypothesis: qualityHypothesisFor(family.id, family.decompositionLayer),
+    framing: {
+      aspectRatio: '1:1',
+      crop: family.decompositionLayer === 'bounded-energy'
+        ? 'centered circular channel plate with transparent-looking dark gaps'
+        : 'socket-centered circular mechanical insert with readable edge machinery',
+      background: family.decompositionLayer === 'bounded-energy' ? 'black or transparent-looking dark field' : 'dark neutral material study',
+      camera: 'front-biased close-up',
+    },
+    executionPolicy: {
+      isolateFromQualityRun: true,
+      greenroomRequired: true,
+      timingRequired: true,
+      blockedOutputStatus: 'provider-blocked-output',
+      blankOutputStatus: 'provider-blank-output',
+      routeFailureMustWriteReceipt: true,
+    },
+    downstreamRoutes: ['shader.composite', 'sharp.splat', 'trellis2mlx.mesh-pbr', 'pixal3d.mesh-pbr'],
   };
 }
 
@@ -215,6 +376,52 @@ function makeVariantsForFamily(familyIndex) {
   ];
 }
 
+function makeDecomposedVariantsForFamily(family) {
+  if (family.decompositionLayer === 'mechanical-substrate') {
+    return [
+      { id: 'orthographic-cold-substrate', mode: 'clean' },
+      {
+        id: 'dense-baffle-substrate',
+        mode: 'dense',
+        mutate: prompt => `${prompt}. Emphasize broken ring cadence and visible negative space between occluder leaves.`,
+      },
+      {
+        id: 'aperture-shadow-substrate',
+        mode: 'clean',
+        mutate: prompt => `${prompt}. Foreground aperture shadow partially hides the outer baffle ring while the central socket remains empty.`,
+      },
+    ];
+  }
+  if (family.decompositionLayer === 'bounded-energy') {
+    return [
+      { id: 'thin-channel-energy', mode: 'clean' },
+      {
+        id: 'dense-channel-energy',
+        mode: 'dense',
+        mutate: prompt => `${prompt}. Emissive lines vary in thickness and leave dark masked separations between every segment.`,
+      },
+      {
+        id: 'center-pulse-energy',
+        mode: 'clean',
+        mutate: prompt => `${prompt}. The small center mark is brighter than the outer inlays but the outer glow remains tightly bounded.`,
+      },
+    ];
+  }
+  return [
+    { id: 'restrained-composite-reference', mode: 'clean' },
+    {
+      id: 'dense-composite-reference',
+      mode: 'dense',
+      mutate: prompt => `${prompt}. The dark top layer casts occlusion over the red-orange inlay layer.`,
+    },
+    {
+      id: 'aperture-composite-reference',
+      mode: 'clean',
+      mutate: prompt => `${prompt}. A dark aperture lip crops the outer ring without changing the artifact structure.`,
+    },
+  ];
+}
+
 export function createOrbInnerEnginePromptMatrix({
   coreSeed = 'molten-heartfucker-core-v0',
   matrixSeed = 'ideogram-prompt-matrix-v0',
@@ -224,6 +431,18 @@ export function createOrbInnerEnginePromptMatrix({
   for (const [familyIndex, family] of PROMPT_FAMILIES.entries()) {
     for (const variant of makeVariantsForFamily(familyIndex)) {
       items.push(makeItem({
+        index: items.length,
+        coreSeed,
+        matrixSeed,
+        providerId,
+        family,
+        variant,
+      }));
+    }
+  }
+  for (const family of DECOMPOSED_PROMPT_FAMILIES) {
+    for (const variant of makeDecomposedVariantsForFamily(family)) {
+      items.push(makeDecomposedItem({
         index: items.length,
         coreSeed,
         matrixSeed,
@@ -247,6 +466,12 @@ export function createOrbInnerEnginePromptMatrix({
         'Ideogram troubleshooting recommends visually grounded synonyms, important details early, and prompt length below roughly 150-160 words.',
         'Ideogram V4 API distinguishes text_prompt, which enables Magic Prompt automatically, from json_prompt, which disables Magic Prompt and is consumed directly.',
       ],
+      decompositionPlan: {
+        status: 'active',
+        layers: ['mechanical-substrate', 'bounded-energy', 'composite-reference'],
+        hypothesis: 'If the generator can make a cold hard-surface socket and a separate bounded red-orange energy plate more reliably than a combined molten engine, later shader/composite work can assemble the core while preserving procedural fallback.',
+        activeBatchLane: 'decomposed-quality',
+      },
       sourceDocs: [
         'https://docs.ideogram.ai/using-ideogram/prompting-guide/3-prompt-structure',
         'https://docs.ideogram.ai/using-ideogram/prompting-guide/4-handling-negatives',
@@ -279,6 +504,7 @@ export function createOrbInnerEnginePromptMatrix({
       },
     ],
     promptFamilies: PROMPT_FAMILIES,
+    decomposedPromptFamilies: DECOMPOSED_PROMPT_FAMILIES,
     safetyAxes: SAFETY_AXES.map(axis => ({
       id: axis.id,
       triggerCandidate: axis.triggerCandidate,
@@ -287,6 +513,7 @@ export function createOrbInnerEnginePromptMatrix({
     })),
     executionPlan: {
       firstPass: 'run quality-baseline items first, record timing and blocked-output status per item',
+      decomposedPass: 'run decomposed-quality items through greenroom in a small batch: mechanical substrate, bounded energy, then a composite reference control',
       secondPass: 'run safety-ablation items only in an isolated batch when mapping filter triggers',
       review: 'feed generated image paths and this rubric into Gemini or another VLM; keep human visual smoke for finalists',
       timing: 'Real local Ideogram observations are minutes per 512x512 image; fixture-route millisecond timing is not generator timing.',
@@ -323,6 +550,7 @@ export function createGeminiReviewPacket(matrix) {
         'aperture-contained emission',
         'dark rim machinery',
         'bounded orange channel readability',
+        'decomposed layer usability',
       ],
       outputSchema: {
         itemId: 'string',
@@ -336,6 +564,8 @@ export function createGeminiReviewPacket(matrix) {
       itemId: item.id,
       promptFamily: item.promptFamily,
       promptVariant: item.promptVariant,
+      decompositionLayer: item.decompositionLayer,
+      compositionRole: item.compositionRole,
       batchLane: item.batchLane,
       expectedImagePath: `${imageRoot}/${item.id}.png`,
       promptSha256: item.promptSha256,
@@ -363,6 +593,8 @@ function makePromptQueue(matrix) {
       batchLane: item.batchLane,
       promptFamily: item.promptFamily,
       promptVariant: item.promptVariant,
+      decompositionLayer: item.decompositionLayer,
+      compositionRole: item.compositionRole,
       safetyHypothesis: item.safetyHypothesis,
       qualityHypothesis: item.qualityHypothesis,
       downstreamRoutes: item.downstreamRoutes,
@@ -403,6 +635,7 @@ export function writeOrbInnerEnginePromptMatrixBundle({
     itemCount: matrix.items.length,
     qualityBaselineCount: matrix.items.filter(item => item.batchLane === 'quality-baseline').length,
     safetyAblationCount: matrix.items.filter(item => item.batchLane === 'safety-ablation').length,
+    decomposedQualityCount: matrix.items.filter(item => item.batchLane === 'decomposed-quality').length,
     outputs: {
       bundleRoot,
       matrixPath,
