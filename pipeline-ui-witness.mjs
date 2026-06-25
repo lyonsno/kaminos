@@ -18,7 +18,8 @@ const port = Number(args.get('port') || process.env.KAMINOS_UI_WITNESS_CDP_PORT 
 const assetNeedle = args.get('asset') || 'evil_orb_outer_shell_source_image';
 const scenario = args.get('scenario') || 'image-import';
 const generatorId = args.get('generator-id') || 'sharp';
-const pipelineId = args.get('pipeline-id') || 'evil-orb-sharp-fixture-pbr-v0';
+const pipelineId = args.get('pipeline-id') || 'sharp-image-to-splat-live-v0';
+const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
 const userDataDir = await mkdtemp(join(tmpdir(), 'kaminos-pipeline-ui-witness-'));
@@ -296,13 +297,19 @@ try {
       };
     })()`);
     assertWitness(!executeButton.disabled, 'Execute button was disabled', executeButton);
-    assertWitness(executeButton.inspectorText.includes('input provenance only; output fixed fixture'), 'Fixture-backed route inspector did not warn that graph input is provenance-only', executeButton);
+    assertWitness(executeButton.inspectorText.includes('graph-connected input record'), 'Route inspector did not say Execute uses the graph-connected input record', executeButton);
+    if (expectsFixture) {
+      assertWitness(executeButton.inspectorText.includes('input provenance only; output fixed fixture'), 'Fixture-backed route inspector did not warn that graph input is provenance-only', executeButton);
+    } else {
+      assertWitness(!executeButton.inspectorText.includes('input provenance only; output fixed fixture'), 'Live SHARP route still looked fixture-backed in the inspector', executeButton);
+    }
     await click(cdp, executeButton.point);
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
+      const splat = run?.report?.document?.artifacts?.splat || null;
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === 'output' && run?.report?.document?.artifacts?.splat?.fixtureSource),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === 'output' && splat?.path && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -310,10 +317,15 @@ try {
         source: run?.source || null,
         statusText: document.querySelector('#pipeline-graph-inspector-status')?.innerText || '',
         resultText: document.querySelector('#pipeline-run-result-panel')?.innerText || '',
-        splat: run?.report?.document?.artifacts?.splat || null,
+        splat,
       };
     })()`, 'Graph Execute SHARP route');
-    assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
+    if (expectsFixture) {
+      assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
+    } else {
+      assertWitness(!executed.resultText.includes('input provenance only; output fixed fixture'), 'Live SHARP result still looked fixture-backed', executed);
+      assertWitness(executed.splat?.status === 'real' && !executed.splat?.fixtureSource, 'Live SHARP result did not expose a real non-fixture splat artifact', executed);
+    }
     await capture(cdp, beforePath);
 
     const loadOutputButton = await evalJson(cdp, `(() => {
@@ -331,7 +343,7 @@ try {
     await click(cdp, loadOutputButton.point);
     const after = await waitFor(cdp, `(() => {
       const scene = window.kaminosSceneObjectDebugState?.() || [];
-      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.fixtureSource);
+      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
       return {
         ok: document.querySelector('.tab.active')?.dataset.tab === 'assets' && Boolean(loaded?.splat?.pointCount),
         activeTab: document.querySelector('.tab.active')?.dataset.tab || null,

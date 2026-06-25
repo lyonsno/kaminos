@@ -14,6 +14,9 @@ assert.match(witness, /backendPipelineId/, 'Pipeline UI witness must verify gene
 assert.match(witness, /drag\(cdp,\s*generatorCard\.point/, 'Pipeline UI witness must drag a visible generator card into the graph before execution');
 assert.match(witness, /drag\(cdp,\s*imageCard\.point/, 'Pipeline UI witness must drag a visible image card into the graph before graph execution');
 assert.match(witness, /sourceGraphNodeId/, 'Pipeline UI witness must assert graph execution used the connected image node source');
+assert.match(witness, /sharp-image-to-splat-live-v0/, 'Pipeline UI witness must default to the live SHARP route, not the evil-orb fixture route');
+assert.match(witness, /expectsFixture/, 'Pipeline UI witness must distinguish live SHARP expectations from fixture SHARP expectations');
+assert.match(witness, /splat\?\.status === 'real' && !splat\?\.fixtureSource/, 'Pipeline UI witness must assert live SHARP output is real and non-fixture');
 assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline UI witness must assert fixture-backed SHARP warns that connected images are provenance-only');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');

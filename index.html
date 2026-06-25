@@ -5298,6 +5298,8 @@ function renderPipelineGraphInspector(node, selectedRun) {
     ? 'Select another image card below to replace this node, or import this image into the scene.'
     : node?.kind === 'route' && pipelineRouteUsesFixture(node)
       ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
+      : node?.kind === 'route'
+        ? 'Execute uses the graph-connected input record and writes run-local output evidence.'
       : node
         ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.'
         : selectedEdge
@@ -6064,6 +6066,17 @@ const pipelineGeneratorDefinitions = [
     operationTitle: 'SHARP Image -> Splat',
     kicker: 'Splat Generator',
     detail: 'Image -> Gaussian splat',
+    defaultPipelineId: 'sharp-image-to-splat-live-v0',
+    backendLabel: 'Live route',
+    chips: ['live adapter', 'splat'],
+    available: true,
+  },
+  {
+    id: 'sharp-fixture',
+    title: 'SHARP Fixture',
+    operationTitle: 'SHARP Fixture Image -> Splat',
+    kicker: 'Splat Fixture',
+    detail: 'Evil orb fixture smoke',
     defaultPipelineId: 'evil-orb-sharp-fixture-pbr-v0',
     backendLabel: 'Fixture route',
     chips: ['fixture backend', 'splat'],

@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i++) {
@@ -210,10 +211,12 @@ function makeFixturePly(outputPath) {
   };
 }
 
-function makeSidecar(outputPath) {
+function makeSidecar(outputPath, options = {}) {
   const splatPath = artifactPathFor('splat');
   const inputEvidence = fileEvidence(inputPath);
   const splatEvidence = fileEvidence(splatPath);
+  const stageMode = options.stageMode || artifacts.splat?.status || 'fixture';
+  const truthBoundary = options.truthBoundary || 'fixture-backed pipeline witness; not real SHARP, MoGE, SuperMat, Trellis, or hybrid render proof';
   writeJson(outputPath, {
     schema: 'kaminos.pipeline-import-sidecar.v0',
     pipeline: {
@@ -240,8 +243,8 @@ function makeSidecar(outputPath) {
       },
     },
     status: {
-      stageMode: 'fixture',
-      truthBoundary: 'fixture-backed pipeline witness; not real SHARP, MoGE, SuperMat, Trellis, or hybrid render proof',
+      stageMode,
+      truthBoundary,
     },
   });
 }
@@ -363,6 +366,88 @@ function makeAdapterAvailabilityReport(outputPath, stage, availability) {
   });
 }
 
+function liveAdapterReportPath(outputPath, stage) {
+  const safeStage = String(stage.id || 'adapter').replace(/[^A-Za-z0-9_.-]+/g, '-');
+  return join(dirname(outputPath), `${safeStage}.adapter-report.json`);
+}
+
+function recordFailedStage(stage, outputPath, effectiveRoute, error) {
+  stages.push({
+    id: stage.id,
+    label: stage.label || stage.id,
+    status: 'failed',
+    requestedRoute: stage.route?.id || stage.id,
+    effectiveRoute,
+    inputArtifact: stage.inputArtifact,
+    outputArtifact: stage.outputArtifact,
+    outputPath,
+    error: error?.message || String(error),
+  });
+}
+
+function runLiveModelAdapter(outputPath, stage) {
+  const availability = adapterAvailability(stage);
+  const adapterReportPath = liveAdapterReportPath(outputPath, stage);
+  const effectiveRoute = {
+    id: stage.route?.id || stage.id,
+    tool: stage.route?.tool || 'SHARP',
+    effectiveBackend: stage.route?.effectiveBackend || 'external-command',
+    realModel: true,
+    executesModel: stage.route?.executesModel === true,
+    commandEnv: stage.route?.commandEnv || null,
+    availability,
+    adapterReportPath,
+  };
+  if (availability.status !== 'available') {
+    const error = new Error(`live model adapter unavailable: ${availability.envVar || 'command env'} is ${availability.status}`);
+    effectiveRoute.truthBoundary = 'requested live SHARP adapter did not execute; no fixture fallback was used';
+    recordFailedStage(stage, outputPath, effectiveRoute, error);
+    throw error;
+  }
+
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const command = availability.resolvedCommand || availability.configuredCommand;
+  const commandArgs = [
+    '--input', inputPath,
+    '--output', outputPath,
+    '--report', adapterReportPath,
+  ];
+  effectiveRoute.executedCommand = [command, ...commandArgs];
+  const proc = spawnSync(command, commandArgs, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_PIPELINE_INPUT: inputPath,
+      KAMINOS_PIPELINE_OUTPUT: outputPath,
+      KAMINOS_PIPELINE_ADAPTER_REPORT: adapterReportPath,
+      KAMINOS_PIPELINE_OUTPUT_ROOT: outDir,
+    },
+  });
+  effectiveRoute.exitCode = proc.status;
+  effectiveRoute.signal = proc.signal || null;
+  effectiveRoute.stdoutTail = (proc.stdout || '').slice(-4000);
+  effectiveRoute.stderrTail = (proc.stderr || '').slice(-4000);
+  if (proc.error || proc.status !== 0) {
+    const message = proc.error?.message || `live model adapter exited ${proc.status}`;
+    const error = new Error(message);
+    effectiveRoute.truthBoundary = 'requested live SHARP adapter failed; no fixture fallback was used';
+    recordFailedStage(stage, outputPath, effectiveRoute, error);
+    throw error;
+  }
+  if (!existsSync(outputPath)) {
+    const error = new Error(`live model adapter completed without writing output: ${outputPath}`);
+    effectiveRoute.truthBoundary = 'requested live SHARP adapter produced no output; no fixture fallback was used';
+    recordFailedStage(stage, outputPath, effectiveRoute, error);
+    throw error;
+  }
+  const outputEvidence = fileEvidence(outputPath);
+  effectiveRoute.outputSha256 = outputEvidence.sha256;
+  effectiveRoute.outputBytes = outputEvidence.bytes;
+  effectiveRoute.truthBoundary = 'live SHARP adapter output; external command produced the splat artifact';
+  return effectiveRoute;
+}
+
 function runStage(stage) {
   phase = `stage:${stage.id}`;
   const outputPath = artifactPathFor(stage.outputArtifact);
@@ -385,6 +470,15 @@ function runStage(stage) {
     makeAdapterAvailabilityReport(outputPath, stage, availability);
   } else if (existsSync(outputPath)) {
     status = 'cached';
+  } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'splat') {
+    status = 'real';
+    Object.assign(effectiveRoute, runLiveModelAdapter(outputPath, stage));
+  } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'sidecar') {
+    status = 'real';
+    makeSidecar(outputPath, {
+      stageMode: 'real',
+      truthBoundary: 'live SHARP adapter output sidecar; splat was produced by the configured external model command',
+    });
   } else if (stage.statusMode === 'prepared-artifact' && stage.outputArtifact === 'inspection') {
     status = 'real';
     makePreparedInspection(outputPath);

@@ -101,6 +101,57 @@
       ]
     },
     {
+      "id": "sharp-image-to-splat-live-v0",
+      "label": "SHARP Image To Visible Splat",
+      "routeId": "adapter.sharp-image-to-splat-live.v0",
+      "description": "Live source-image to visible splat route. It executes KAMINOS_SHARP_COMMAND with --input, --output, and --report paths. If the adapter is unavailable or fails, the run fails with a durable witness report and does not fall back to the evil-orb fixture.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "splat": {
+          "role": "splat-candidate",
+          "pathTemplate": "artifacts/sharp-output.ply"
+        },
+        "sidecar": {
+          "role": "kaminos-import-sidecar",
+          "pathTemplate": "artifacts/sharp-output.kaminos-pipeline.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-sharp-image-to-splat",
+          "label": "Run SHARP Image To Splat Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.sharp-image-to-splat.v0",
+            "tool": "SHARP",
+            "commandEnv": "KAMINOS_SHARP_COMMAND",
+            "modelFamily": "SHARP",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "external-command"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "splat"
+        },
+        {
+          "id": "write-live-sharp-sidecar",
+          "label": "Write Live SHARP Import Sidecar",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "local.kaminos-import-sidecar.v0",
+            "tool": "pipeline-witness.mjs",
+            "realModel": false,
+            "effectiveBackend": "local-sidecar-writer"
+          },
+          "inputArtifact": "splat",
+          "outputArtifact": "sidecar"
+        }
+      ]
+    },
+    {
       "id": "live-model-route-adapter-check-v0",
       "label": "Live Model Route Adapter Availability Check",
       "routeId": "adapter.model-chain-availability.v0",
