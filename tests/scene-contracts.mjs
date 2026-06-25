@@ -124,6 +124,8 @@ assert.match(index, /\.setViewport\(/, 'Hybrid Renderer overlay receives viewpor
 assert.match(index, /\.setCorrectionIdentity\(/, 'Hybrid Renderer overlay receives Kaminos sidecar correction identity through the PBRnext frame contract');
 assert.match(index, /function buildHybridSplatOverlaySceneContextV0\(/, 'Hybrid Renderer overlay publishes a renderer-neutral scene-context packet');
 assert.match(index, /schema:\s*'hybrid-render\.scene-context\.v0'/, 'Hybrid Renderer scene context declares the shared renderer-neutral schema');
+assert.match(index, /function hybridSplatOverlayEnvironmentKind\(/, 'Hybrid Renderer scene context declares renderer-neutral environment kind');
+assert.match(index, /kind:\s*hybridSplatOverlayEnvironmentKind\(environment\)/, 'Hybrid Renderer scene context sends environment.kind for renderer-side honoring');
 assert.match(index, /\.setSceneContext\(/, 'Hybrid Renderer overlay calls setSceneContext when the renderer exposes the P0 API');
 assert.match(index, /sceneContextAccepted:\s*false/, 'Hybrid Renderer debug state fails loud when the renderer lacks the P0 scene-context API');
 assert.match(index, /setSceneContext\.telemetry/, 'Hybrid Renderer debug state fails loud when the renderer omits scene-context acceptance telemetry');

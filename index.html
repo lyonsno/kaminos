@@ -1026,6 +1026,12 @@ function currentHybridSplatOverlayEnvironmentContext() {
   };
 }
 
+function hybridSplatOverlayEnvironmentKind(environment) {
+  if (environment?.url) return 'hdr-url';
+  if (environment?.preset && environment.preset !== 'neutral') return 'preset';
+  return 'none';
+}
+
 function buildHybridSplatOverlaySceneContextV0(frame = hybridSplatOverlayState.lastFrame) {
   const viewport = frame?.viewport || currentHybridOverlayViewport();
   const environment = currentHybridSplatOverlayEnvironmentContext();
@@ -1051,6 +1057,7 @@ function buildHybridSplatOverlaySceneContextV0(frame = hybridSplatOverlayState.l
     },
     lighting: {
       environment: {
+        kind: hybridSplatOverlayEnvironmentKind(environment),
         name: environment.name,
         label: environment.label,
         url: environment.url,
