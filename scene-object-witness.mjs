@@ -19,6 +19,7 @@ const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
+const splatAssetName = args.get('--splat-asset-name') || null;
 
 let phase = 'initializing';
 let stderr = '';
@@ -2940,8 +2941,10 @@ async function runRealHybridSplatOverlayScenario(ws) {
 
 async function runRealSavedSplatCropVisibilityScenario(ws) {
   phase = 'scenario-real-saved-splat-crop-visibility';
+  const requestedSplatAssetName = splatAssetName || 'evil_orb_multiview_emissive.ply';
   lastEvidence.realSavedSplatCropVisibility = await evaluate(ws, `
     (async () => {
+      const requestedSplatAssetName = ${JSON.stringify(requestedSplatAssetName)};
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
         id: row.dataset.sceneObjectId,
@@ -2969,12 +2972,12 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
       document.querySelector('[data-tab="greenroom"]').click();
       if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
       const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
-      const assetEntry = (assetData.entries || []).find(entry => entry.name === 'evil_orb_multiview_emissive.ply') || null;
+      const assetEntry = (assetData.entries || []).find(entry => entry.name === requestedSplatAssetName) || null;
       const beforeRows = rowState();
       const assetRows = await waitForAssetRows();
       const actionRows = assetRows.filter(row => [...row.querySelectorAll('button')]
         .some(button => button.textContent.trim() === 'Import Splat'));
-      const actionRow = actionRows.find(row => row.textContent.includes('Evil Orb Multiview Emissive')) || null;
+      const actionRow = actionRows.find(row => row.textContent.includes(assetEntry?.display?.title || requestedSplatAssetName)) || null;
       const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
         .find(button => button.textContent.trim() === 'Import Splat') : null;
       if (actionButton) actionButton.click();
@@ -2982,7 +2985,7 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
       await wait(500);
       const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
       const splat = sceneDebug.find(record => record.type === 'splat' && record.source === assetEntry?.source)
-        || sceneDebug.find(record => record.type === 'splat' && /evil_orb_multiview_emissive\\.ply/.test(record.source || ''))
+        || sceneDebug.find(record => record.type === 'splat' && String(record.source || '').includes(requestedSplatAssetName))
         || null;
       if (splat?.id) window.selectSceneObject?.(splat.id);
       await wait(250);
@@ -2997,6 +3000,7 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
       const pivotAfterClose = window.kaminosSplatPivotDebugState?.(splat?.id) || null;
       return {
         assetEntry,
+        requestedSplatAssetName,
         actionExposed: !!actionButton,
         splat,
         pivotBeforeMode,
@@ -3012,7 +3016,7 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
 
   const evidence = lastEvidence.realSavedSplatCropVisibility;
   if (!evidence.assetEntry?.source || !evidence.actionExposed || !evidence.splat) {
-    throw new Error(`real saved splat crop witness could not import evil_orb_multiview_emissive.ply: ${JSON.stringify(evidence)}`);
+    throw new Error(`real saved splat crop witness could not import ${requestedSplatAssetName}: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.splat.splat?.correction?.crop?.enabled) {
     throw new Error(`real saved splat crop did not load crop correction from sidecar: ${JSON.stringify(evidence)}`);
@@ -3023,6 +3027,10 @@ async function runRealSavedSplatCropVisibilityScenario(ws) {
       || evidence.previewBeforeMode.includedVisible !== true
       || evidence.previewBeforeMode.excludedVisible !== false) {
     throw new Error(`real saved splat crop did not show included points before edit mode: ${JSON.stringify(evidence)}`);
+  }
+  const includedRatio = evidence.previewBeforeMode.includedPointCount / Math.max(1, evidence.previewBeforeMode.totalPointCount || 0);
+  if (evidence.requestedSplatAssetName === 'evil_orb_final_composite.ply' && includedRatio < 0.01) {
+    throw new Error(`real saved final-composite crop chose a sparse false-positive frame: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.previewInMode
       || evidence.previewInMode.excludedPointCount < 1

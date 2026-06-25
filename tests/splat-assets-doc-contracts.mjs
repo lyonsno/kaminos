@@ -16,7 +16,9 @@ assert.match(docs, /faint crop context/i, 'Splat asset docs explain edit-mode cr
 assert.match(docs, /axis-flipped asset coordinates/i, 'Splat asset docs explain crop membership uses axis-flipped asset coordinates');
 assert.match(docs, /before `centroidOffset`/i, 'Splat asset docs explain centroid offset does not translate crop membership');
 assert.match(docs, /pivot-local-minus-centroid/i, 'Splat asset docs name the legacy pivot-local crop frame fallback');
+assert.match(docs, /raw-normalized/i, 'Splat asset docs name the legacy raw normalized crop frame fallback');
 assert.match(docs, /canonical frame would include zero points/i, 'Splat asset docs constrain the legacy crop frame fallback to empty canonical crops');
+assert.match(docs, /strongest nonzero match/i, 'Splat asset docs explain legacy crop fallback rejects sparse false-positive frames');
 assert.match(docs, /axisFlips/, 'Splat asset docs include correction axis flips');
 assert.match(docs, /orientation\.rotation/, 'Splat asset docs include orientation correction');
 assert.match(docs, /centroidOffset/, 'Splat asset docs include centroid correction');

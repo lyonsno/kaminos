@@ -5685,6 +5685,13 @@ function replaceSplatPointGeometry(points, geometry) {
 
 function splatCropPointCoordinates(positions, index, correction, frame = 'axis-flipped-asset') {
   const offset = index * 3;
+  if (frame === 'raw-normalized') {
+    return [
+      positions[offset + 0],
+      positions[offset + 1],
+      positions[offset + 2],
+    ];
+  }
   const coordinates = [
     positions[offset + 0] * correction.axisFlips[0],
     positions[offset + 1] * correction.axisFlips[1],
@@ -5728,28 +5735,48 @@ function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {
   if (!hasCentroidOffset) {
     return { frame: canonicalFrame, includedPointCount: canonicalCount, canonicalPointCount: canonicalCount };
   }
-  const pivotLocalFrame = 'pivot-local-minus-centroid';
-  const pivotLocalCount = countSplatCropFrame(
-    preview.sourcePositions,
-    preview.totalPointCount,
-    correction,
-    cropMin,
-    cropMax,
-    pivotLocalFrame,
-  );
-  if (pivotLocalCount > 0) {
+  const legacyCandidates = [
+    {
+      frame: 'pivot-local-minus-centroid',
+      includedPointCount: countSplatCropFrame(
+        preview.sourcePositions,
+        preview.totalPointCount,
+        correction,
+        cropMin,
+        cropMax,
+        'pivot-local-minus-centroid',
+      ),
+    },
+    {
+      frame: 'raw-normalized',
+      includedPointCount: countSplatCropFrame(
+        preview.sourcePositions,
+        preview.totalPointCount,
+        correction,
+        cropMin,
+        cropMax,
+        'raw-normalized',
+      ),
+    },
+  ];
+  const bestLegacy = legacyCandidates.reduce((best, candidate) => (
+    candidate.includedPointCount > best.includedPointCount ? candidate : best
+  ), legacyCandidates[0]);
+  if (bestLegacy.includedPointCount > 0) {
     return {
-      frame: pivotLocalFrame,
-      includedPointCount: pivotLocalCount,
+      frame: bestLegacy.frame,
+      includedPointCount: bestLegacy.includedPointCount,
       canonicalPointCount: canonicalCount,
-      pivotLocalPointCount: pivotLocalCount,
+      pivotLocalPointCount: legacyCandidates.find(candidate => candidate.frame === 'pivot-local-minus-centroid')?.includedPointCount ?? 0,
+      rawNormalizedPointCount: legacyCandidates.find(candidate => candidate.frame === 'raw-normalized')?.includedPointCount ?? 0,
     };
   }
   return {
     frame: canonicalFrame,
     includedPointCount: canonicalCount,
     canonicalPointCount: canonicalCount,
-    pivotLocalPointCount: pivotLocalCount,
+    pivotLocalPointCount: legacyCandidates.find(candidate => candidate.frame === 'pivot-local-minus-centroid')?.includedPointCount ?? 0,
+    rawNormalizedPointCount: legacyCandidates.find(candidate => candidate.frame === 'raw-normalized')?.includedPointCount ?? 0,
   };
 }
 
