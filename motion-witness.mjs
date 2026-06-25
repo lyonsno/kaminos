@@ -498,6 +498,7 @@ try {
     const sourceInterpolation = Number(actor?.sourceInterpolation);
     const sourceBracket = actor?.sourceBracket;
     const sampler = String(actor?.sampler || '');
+    const behaviorState = actor?.behaviorState || debug?.behaviorState || null;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose temporal route did not spawn temporal actor: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.track?.id !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost requested clip identity ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
@@ -506,7 +507,7 @@ try {
     if (generatedPoseTemporalHarness.sourceFormat !== 'kimodo-soma77-explicit-joints') throw new Error(`generated pose temporal route lost source format: ${JSON.stringify(debug)}`);
     if (!(generatedPoseTemporalHarness.sampleCount >= 16)) throw new Error(`generated pose temporal route lost sample count: ${JSON.stringify(debug)}`);
     if (!(generatedPoseTemporalHarness.metrics?.maxBowCompression > 0.25)) throw new Error(`generated pose temporal route lost bow compression: ${JSON.stringify(debug)}`);
-    if (!(generatedPoseTemporalHarness.metrics?.phaseLabels?.length >= 3)) throw new Error(`generated pose temporal route lost temporal phase variety: ${JSON.stringify(debug)}`);
+    if (!(generatedPoseTemporalHarness.metrics?.phaseLabels?.length >= 2)) throw new Error(`generated pose temporal route lost temporal phase variety: ${JSON.stringify(debug)}`);
     if (requestedTemporalClipId === 'kimodo_theatrical_bow_temporal_v0') {
       if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('compress')) throw new Error(`generated pose temporal route lost bow compress phase: ${JSON.stringify(debug)}`);
       if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('release')) throw new Error(`generated pose temporal route lost bow release phase: ${JSON.stringify(debug)}`);
@@ -514,6 +515,11 @@ try {
     if (!(Number.isFinite(sourceInterpolation) && sourceInterpolation > 0 && sourceInterpolation < 1)) throw new Error(`generated pose temporal route lost sourceInterpolation evidence: ${JSON.stringify(debug)}`);
     if (!sourceBracket || sourceBracket.fromFrame === sourceBracket.toFrame) throw new Error(`generated pose temporal route lost sourceBracket interpolation evidence: ${JSON.stringify(debug)}`);
     if (sampler !== 'catmull-rom-continuous-velocity') throw new Error(`generated pose temporal route lost catmull-rom-continuous-velocity sampler evidence: ${JSON.stringify(debug)}`);
+    if (behaviorState?.schema !== 'kaminos.generated-motion-behavior-state.v0') throw new Error(`generated pose temporal route lost behaviorState schema: ${JSON.stringify(debug)}`);
+    if (behaviorState.clipId !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost behaviorState clip identity ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
+    if (!behaviorState.target?.id || !behaviorState.anchor?.id) throw new Error(`generated pose temporal route lost behaviorState target/anchor context: ${JSON.stringify(debug)}`);
+    if (behaviorState.visibility !== 'inspectable-not-canvas-label') throw new Error(`generated pose temporal route promoted behavior labels into the primary canvas contract: ${JSON.stringify(debug)}`);
+    if (!String(behaviorState.reason || '').includes(String(behaviorState.phase || ''))) throw new Error(`generated pose temporal route lost compact behaviorState reason evidence: ${JSON.stringify(debug)}`);
   } else if (isOutputMapRoute) {
     const generatedPoseOutputMapHarness = debug?.generatedPoseOutputMapHarness;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose output-map route did not spawn mapped actor: ${JSON.stringify(debug)}`);

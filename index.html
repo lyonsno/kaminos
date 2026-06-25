@@ -816,6 +816,7 @@ import {
   buildMotionTrackHarness,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
+  buildGeneratedPoseTemporalBehaviorState,
   buildGeneratedPoseTemporalHarness,
   generatedPoseTemporalClipById,
   interpolateGeneratedPoseTemporalSample,
@@ -4079,8 +4080,12 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     maxBowCompression: harness.metrics.maxBowCompression,
     horizontalDisplayScale: Math.min(2.2, Math.max(0.28, 1.65 / Math.max(0.75, harness.metrics.rootTravel || 1))),
     verticalDisplayScale: 5.0,
+    targetContext: { id: 'generated-pose-temporal-attention-target', kind: 'attention-anchor' },
+    anchorContext: { id: 'generated-pose-temporal-stage-anchor', kind: 'spawn-anchor' },
+    behaviorVisibility: 'inspectable-not-canvas-label',
     lastActors: [],
     lastTemporalSample: null,
+    lastBehaviorState: null,
   };
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
@@ -4355,10 +4360,20 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.frameCount += 1;
   state.maxEffort = Math.max(state.maxEffort, sample.effort);
   state.lastTemporalSample = temporalSample;
+  const behaviorState = buildGeneratedPoseTemporalBehaviorState({
+    track: state.track,
+    sample,
+    temporalSample,
+    target: state.targetContext,
+    anchor: state.anchorContext,
+  });
+  state.lastBehaviorState = behaviorState;
   state.lastActors = [{
     id: visual.id,
     label: visual.label,
     intent: state.track.intent,
+    behaviorState,
+    behaviorStateLabel: behaviorState.state,
     phase: sample.phase,
     root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
     facing: sample.facing.map(value => Number(value.toFixed(5))),
@@ -4766,6 +4781,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     sourceFrameStride: harness.sourceFrameStride,
     phaseLabels: harness.metrics.phaseLabels,
     lastTemporalSample: state?.lastTemporalSample || null,
+    behaviorState: state?.lastBehaviorState || null,
+    behaviorVisibility: state?.behaviorVisibility || 'inspectable-not-canvas-label',
     generatedPoseTemporalHarness: {
       schema: harness.schema,
       route: harness.route,

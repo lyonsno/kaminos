@@ -6,6 +6,7 @@ export const MOTION_PLAN_SCHEMA = 'kaminos.motion-plan.v0';
 export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
+export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 
@@ -1778,6 +1779,68 @@ export function sampleGeneratedPoseTemporalMotion(trackOrInput = DEFAULT_KIMODO_
     headRootSeparation: Number(headRootSeparation.toFixed(5)),
     attentionMassContrast: Number(attentionMassContrast.toFixed(5)),
     temporalSample,
+  };
+}
+
+function generatedTemporalBehaviorLabel(track, sample, temporalSample) {
+  const phase = String(sample?.phase || temporalSample?.phaseLabel || 'carry');
+  const intent = String(track?.intent || track?.label || '').toLowerCase();
+  if (intent.includes('startled') || intent.includes('fright') || intent.includes('jumpback')) return 'avoiding-collision';
+  if (phase === 'enter') return intent.includes('curious') || intent.includes('look') ? 'noticed-target' : 'approaching';
+  if (phase === 'notice' || phase === 'anticipate') return 'hesitating';
+  if (phase === 'commit') return 'approaching';
+  if (phase === 'recover') return 'returning-to-anchor';
+  if (phase === 'compress' || phase === 'release') return 'performing-flourish';
+  if (intent.includes('dance') || intent.includes('bow') || intent.includes('kick') || intent.includes('punch')) return 'performing-flourish';
+  return 'wandering';
+}
+
+export function buildGeneratedPoseTemporalBehaviorState({
+  track,
+  sample,
+  temporalSample = sample?.temporalSample || null,
+  target = null,
+  anchor = null,
+} = {}) {
+  if (!track?.id) throw new Error('Generated pose temporal behavior state requires a track');
+  if (!sample?.schema) throw new Error('Generated pose temporal behavior state requires a motion sample');
+  const phase = String(sample.phase || temporalSample?.phaseLabel || 'carry');
+  const state = generatedTemporalBehaviorLabel(track, sample, temporalSample);
+  const evidence = {
+    phase,
+    sourceFrame: Number.isFinite(Number(temporalSample?.sourceFrame)) ? Number(temporalSample.sourceFrame) : null,
+    sourceTime: Number.isFinite(Number(temporalSample?.time)) ? Number(temporalSample.time) : null,
+    sourceBracket: temporalSample?.bracket || null,
+    sourceInterpolation: Number.isFinite(Number(temporalSample?.interpolation)) ? Number(temporalSample.interpolation) : null,
+    sampler: temporalSample?.sampler || sample.sampler || null,
+    effort: Number.isFinite(Number(sample.effort)) ? Number(sample.effort.toFixed(5)) : 0,
+    bowCompression: Number.isFinite(Number(temporalSample?.bowCompression)) ? Number(temporalSample.bowCompression.toFixed(5)) : 0,
+    headRootSeparation: Number.isFinite(Number(sample.headRootSeparation)) ? Number(sample.headRootSeparation.toFixed(5)) : null,
+    attentionMassContrast: Number.isFinite(Number(sample.attentionMassContrast)) ? Number(sample.attentionMassContrast.toFixed(5)) : null,
+  };
+  return {
+    schema: GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA,
+    state,
+    phase,
+    visibility: 'inspectable-not-canvas-label',
+    clipId: track.registryClipId || track.id,
+    trackId: track.id,
+    label: track.label || track.id,
+    intent: track.intent || 'generated-pose-temporal',
+    sourceKind: track.sourceKind || 'generated-pose-temporal',
+    sourceStatus: track.sourceStatus || 'fixture',
+    sourceModel: track.sourceModel || 'unknown',
+    sourceRoute: track.sourceRoute || 'unknown',
+    target: target ? {
+      id: String(target.id || 'target'),
+      kind: String(target.kind || 'attention-target'),
+    } : null,
+    anchor: anchor ? {
+      id: String(anchor.id || 'anchor'),
+      kind: String(anchor.kind || 'home-anchor'),
+    } : null,
+    reason: `${state} because phase ${phase} is active at source frame ${evidence.sourceFrame ?? 'unknown'} with effort ${evidence.effort}`,
+    evidence,
   };
 }
 
