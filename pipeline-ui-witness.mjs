@@ -235,14 +235,36 @@ try {
     const imageCard = await evalJson(cdp, `(() => {
       const cards = [...document.querySelectorAll('.pipeline-asset-card')];
       const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
+      const canvas = document.querySelector('#pipeline-graph-canvas');
       if (!card) throw new Error('Requested visible image asset card missing');
+      if (!canvas) throw new Error('Pipeline graph canvas missing for image drop');
       const rect = card.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
       return {
         cardText: card.innerText,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        drop: { x: canvasRect.left + canvasRect.width * 0.73, y: canvasRect.top + canvasRect.height * 0.32 },
       };
     })()`);
-    await click(cdp, imageCard.point);
+    await drag(cdp, imageCard.point, imageCard.drop);
+
+    const imageHook = await evalJson(cdp, `(() => {
+      const node = [...document.querySelectorAll('[data-pipeline-graph-image-node-id]')]
+        .find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
+      const routeInput = document.querySelector('[data-pipeline-graph-port-node-id="route"][data-pipeline-graph-port="input"]');
+      const output = node?.querySelector('[data-pipeline-graph-port="output"]');
+      const nodeRect = node?.getBoundingClientRect();
+      const outputRect = output?.getBoundingClientRect();
+      const routeRect = routeInput?.getBoundingClientRect();
+      if (!nodeRect || !outputRect || !routeRect) throw new Error('Graph image hook ports missing');
+      return {
+        graphImageNodeId: node.dataset.pipelineGraphImageNodeId,
+        nodeText: node.innerText,
+        outputPoint: { x: outputRect.left + outputRect.width / 2, y: outputRect.top + outputRect.height / 2 },
+        routeInputPoint: { x: routeRect.left + routeRect.width / 2, y: routeRect.top + routeRect.height / 2 },
+      };
+    })()`);
+    await drag(cdp, imageHook.outputPoint, imageHook.routeInputPoint);
 
     const routeNode = await evalJson(cdp, `(() => {
       const element = document.querySelector('[data-pipeline-graph-node-id="route"]');
@@ -254,10 +276,11 @@ try {
         selectedGeneratorId: state?.selectedGeneratorId || null,
         selectedPipelineId: state?.selectedPipelineId || null,
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
+        graphEdges: state?.graphEdges || [],
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
     })()`);
-    assertWitness(routeNode.selectedGeneratorId === generatorId && routeNode.selectedPipelineId === pipelineId && routeNode.selectedGraphNodeId === 'route', 'Generator drag did not place the requested route node', routeNode);
+    assertWitness(routeNode.selectedGeneratorId === generatorId && routeNode.selectedPipelineId === pipelineId && routeNode.graphEdges.some(edge => edge.from === imageHook.graphImageNodeId && edge.to === 'route'), 'Generator/image drag did not place the requested route node and image hook', { routeNode, imageHook });
     await click(cdp, routeNode.point);
 
     const executeButton = await evalJson(cdp, `(() => {
@@ -268,24 +291,29 @@ try {
       return {
         text: button.textContent,
         disabled: button.disabled,
+        inspectorText: document.querySelector('#pipeline-graph-inspector')?.innerText || '',
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
     })()`);
     assertWitness(!executeButton.disabled, 'Execute button was disabled', executeButton);
+    assertWitness(executeButton.inspectorText.includes('input provenance only; output fixed fixture'), 'Fixture-backed route inspector did not warn that graph input is provenance-only', executeButton);
     await click(cdp, executeButton.point);
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && state?.selectedGraphNodeId === 'output' && run?.report?.document?.artifacts?.splat?.fixtureSource),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === 'output' && run?.report?.document?.artifacts?.splat?.fixtureSource),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
         graphExecution: run?.graphExecution || null,
+        source: run?.source || null,
         statusText: document.querySelector('#pipeline-graph-inspector-status')?.innerText || '',
+        resultText: document.querySelector('#pipeline-run-result-panel')?.innerText || '',
         splat: run?.report?.document?.artifacts?.splat || null,
       };
     })()`, 'Graph Execute SHARP route');
+    assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
     await capture(cdp, beforePath);
 
     const loadOutputButton = await evalJson(cdp, `(() => {

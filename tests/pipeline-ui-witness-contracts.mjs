@@ -12,6 +12,9 @@ assert.match(witness, /const generatorId/, 'Pipeline UI witness must distinguish
 assert.match(witness, /pipelineGeneratorId/, 'Pipeline UI witness must select the generic generator card, not a route-preset title');
 assert.match(witness, /backendPipelineId/, 'Pipeline UI witness must verify generator cards preserve backend route binding');
 assert.match(witness, /drag\(cdp,\s*generatorCard\.point/, 'Pipeline UI witness must drag a visible generator card into the graph before execution');
+assert.match(witness, /drag\(cdp,\s*imageCard\.point/, 'Pipeline UI witness must drag a visible image card into the graph before graph execution');
+assert.match(witness, /sourceGraphNodeId/, 'Pipeline UI witness must assert graph execution used the connected image node source');
+assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline UI witness must assert fixture-backed SHARP warns that connected images are provenance-only');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
 assert.match(witness, /Load Output/, 'Pipeline UI witness must activate the visible output-node Load Output button after graph execution');
