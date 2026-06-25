@@ -21,6 +21,13 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance']);
+const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
+if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
+  throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
+}
+const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
+const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
 const routeParams = new URL(url).searchParams;
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
@@ -1315,6 +1322,7 @@ async function main() {
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
+    const performanceVisualWarnings = [];
     const canonicalPassiveBottomFieldProof = canonicalPassiveBottomNonRiseProof &&
       (sample.simReadback?.smokeWeight ?? 0) > 20 &&
       (canonicalFieldSlice?.xyActivePixelRatio ?? 0) > 0.001 &&
@@ -1340,6 +1348,29 @@ async function main() {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || visibleFirePixels > 220) {
         throw new Error(`fuel-starved tall plume did not preserve smoke-only negative evidence: ${JSON.stringify(metrics)}`);
       }
+    } else if (expectsPerformanceVolumeEvidence) {
+      const volumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0);
+      if (metrics.litPixels < 1000 || volumeSignalPixels < 1500 || metrics.meanLuma < 1.5) {
+        throw new Error(`blank frame or missing performance volume signal: ${JSON.stringify({
+          ...metrics,
+          volumeSignalPixels,
+        })}`);
+      }
+      if (visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+        performanceVisualWarnings.push({
+          code: 'low-fire-performance-evidence',
+          note: 'Performance mode accepted a real smoke/flame volume frame whose fire beauty signal is below the normal operator-smoke gate.',
+          litPixels: metrics.litPixels,
+          visibleFirePixels,
+          emissiveLikePixels: metrics.emissiveLikePixels,
+          smokeLikePixels: metrics.smokeLikePixels,
+          meanLuma: metrics.meanLuma,
+        });
+      }
     } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
@@ -1359,6 +1390,9 @@ async function main() {
       requestedRoute: url,
       settleMs,
       windowSize,
+      evidenceMode,
+      visualEvidenceMode,
+      performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -1529,6 +1563,8 @@ async function main() {
     const report = {
       requestedRoute: url,
       windowSize,
+      evidenceMode,
+      visualEvidenceMode,
       phase,
       error: err?.message || String(err),
       state,

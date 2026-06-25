@@ -25,6 +25,17 @@ const debugPort = Number(args.get('--debug-port') || 9500);
 const matrixMode = args.get('--matrix') || 'compact';
 const dryRun = args.has('--dry-run');
 
+const PERFORMANCE_MATRIX_ID = 'tall-plume-performance-matrix-v0';
+const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
+const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
+const FALSE_CLOSURE_LABELS = [
+  'wrong-fallback-route',
+  'stale-default-config',
+  'missing-primary-report',
+  'blank-or-partial-output',
+  'absent-effective-identity',
+];
+
 const COMPACT_MATRIX_SCENARIOS = [
   {
     id: 'draft-fast',
@@ -149,6 +160,99 @@ const COMPACT_MATRIX_SCENARIOS = [
   },
 ];
 
+const TALL_PLUME_PERFORMANCE_BASE = {
+  performanceMatrixId: PERFORMANCE_MATRIX_ID,
+  volumeScene: 'tall_plume',
+  tallPreset: 'operator_fire_0622',
+  reactionFuel: 1,
+  density: 3.05,
+  fire: 0.50,
+  radiance: 3,
+  absorption: 0,
+  glow: 2.5,
+  smoke: 2.8,
+  curl: 3.5,
+  microdetail: 2.5,
+  interfaceShred: 0,
+  fireLicks: 0,
+  projection: 1.5,
+  speed: 5,
+  fireScale: 0.59,
+  detailScale: 0.45,
+  plumeHeight: 2.2,
+  windStrength: 0,
+  windAngle: 180,
+  windHeight: -0.8,
+  inputRadius: 0.11,
+  flowRate: 0.35,
+  temporalAccum: 0,
+  temporalJitter: 0,
+  historyClamp: 1,
+  occupancySkip: 0.1,
+  majorantSkip: 0,
+  majorantSmooth: 0.1,
+  majorantGuard: 0.3,
+  majorantCadence: 1,
+  pressureIterations: 3,
+  simProfile: true,
+  renderScale: 0.75,
+  adaptiveRays: 0.75,
+  raySteps: 148,
+  majorantGrid: 48,
+};
+
+const PERFORMANCE_MATRIX_SCENARIOS = [
+  {
+    id: 'perf-096-baseline',
+    label: 'Perf 096 Baseline',
+    simGrid: 96,
+  },
+  {
+    id: 'perf-128-baseline',
+    label: 'Perf 128 Baseline',
+    simGrid: 128,
+  },
+  {
+    id: 'perf-160-baseline',
+    label: 'Perf 160 Baseline',
+    simGrid: 160,
+  },
+  {
+    id: 'perf-128-cadence2',
+    label: 'Perf 128 Majorant Cadence 2',
+    simGrid: 128,
+    majorantCadence: 2,
+  },
+  {
+    id: 'perf-128-cadence3',
+    label: 'Perf 128 Majorant Cadence 3',
+    simGrid: 128,
+    majorantCadence: 3,
+  },
+  {
+    id: 'perf-128-pressure4',
+    label: 'Perf 128 Pressure 4',
+    simGrid: 128,
+    pressureIterations: 4,
+  },
+  {
+    id: 'perf-128-ray96',
+    label: 'Perf 128 Raymarch 96',
+    simGrid: 128,
+    raySteps: 96,
+    renderScale: 0.6,
+    adaptiveRays: 0.75,
+  },
+  {
+    id: 'perf-128-ray160',
+    label: 'Perf 128 Raymarch 160',
+    simGrid: 128,
+    raySteps: 160,
+    renderScale: 0.75,
+    adaptiveRays: 0.25,
+  },
+].map((scenario) => ({ ...TALL_PLUME_PERFORMANCE_BASE, ...scenario }));
+
 function numberList(value, fallback) {
   return String(value || fallback)
     .split(',')
@@ -161,14 +265,14 @@ function finiteOr(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function parseScenarioList(value) {
-  if (!value || value === 'all') return COMPACT_MATRIX_SCENARIOS;
+function parseScenarioList(value, scenarios = COMPACT_MATRIX_SCENARIOS, label = 'compact') {
+  if (!value || value === 'all') return scenarios;
   const requested = new Set(String(value).split(',').map((entry) => entry.trim()).filter(Boolean));
-  const selected = COMPACT_MATRIX_SCENARIOS.filter((scenario) => requested.has(scenario.id));
+  const selected = scenarios.filter((scenario) => requested.has(scenario.id));
   if (selected.length !== requested.size) {
-    const known = new Set(COMPACT_MATRIX_SCENARIOS.map((scenario) => scenario.id));
+    const known = new Set(scenarios.map((scenario) => scenario.id));
     const unknown = [...requested].filter((id) => !known.has(id));
-    throw new Error(`Unknown compact matrix scenario(s): ${unknown.join(', ')}`);
+    throw new Error(`Unknown ${label} matrix scenario(s): ${unknown.join(', ')}`);
   }
   return selected;
 }
@@ -205,6 +309,9 @@ function gridRuns() {
 
 function selectedRuns() {
   if (matrixMode === 'grid') return gridRuns();
+  if (matrixMode === 'performance') {
+    return parseScenarioList(args.get('--scenarios'), PERFORMANCE_MATRIX_SCENARIOS, 'performance').map((scenario) => ({ ...scenario }));
+  }
   if (matrixMode !== 'compact') throw new Error(`Unknown sweep matrix mode: ${matrixMode}`);
   return parseScenarioList(args.get('--scenarios')).map((scenario) => ({ ...scenario }));
 }
@@ -213,10 +320,19 @@ function applyNumberParam(url, name, value) {
   if (Number.isFinite(value)) url.searchParams.set(name, String(value));
 }
 
+function applyStringParam(url, name, value) {
+  if (value !== undefined && value !== null && value !== '') url.searchParams.set(name, String(value));
+}
+
+function applyBooleanParam(url, name, value) {
+  if (value !== undefined && value !== null) url.searchParams.set(name, value ? '1' : '0');
+}
+
 function routeFor(run) {
   const url = new URL(baseUrl);
   url.searchParams.set('kaminos_volume_smoke', '1');
-  if (run.volumeScene) url.searchParams.set('volume_scene', run.volumeScene);
+  applyStringParam(url, 'volume_scene', run.volumeScene);
+  applyStringParam(url, 'volume_tall_preset', run.tallPreset);
   applyNumberParam(url, 'volume_resolution', run.simGrid);
   applyNumberParam(url, 'volume_majorant_grid', run.majorantGrid);
   applyNumberParam(url, 'volume_steps', run.raySteps);
@@ -229,13 +345,31 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_temporal_accum', run.temporalAccum);
   applyNumberParam(url, 'volume_temporal_jitter', run.temporalJitter);
   applyNumberParam(url, 'volume_history_clamp', run.historyClamp);
+  applyNumberParam(url, 'volume_density', run.density);
+  applyNumberParam(url, 'volume_fire', run.fire);
+  applyNumberParam(url, 'volume_smoke', run.smoke);
+  applyNumberParam(url, 'volume_glow', run.glow);
+  applyNumberParam(url, 'volume_curl', run.curl);
+  applyNumberParam(url, 'volume_reaction_fuel', run.reactionFuel);
+  applyNumberParam(url, 'volume_microdetail', run.microdetail);
+  applyNumberParam(url, 'volume_interface_shred', run.interfaceShred);
+  applyNumberParam(url, 'volume_fire_licks', run.fireLicks);
+  applyNumberParam(url, 'volume_projection', run.projection);
+  applyNumberParam(url, 'volume_speed', run.speed);
   applyNumberParam(url, 'volume_flow_rate', run.flowRate);
   applyNumberParam(url, 'volume_fire_scale', run.fireScale);
   applyNumberParam(url, 'volume_detail_scale', run.detailScale);
   applyNumberParam(url, 'volume_plume_height', run.plumeHeight);
   applyNumberParam(url, 'volume_radiance', run.radiance);
   applyNumberParam(url, 'volume_absorption', run.absorption);
-  if (run.externalEmitterMode) url.searchParams.set('volume_external_emitters', run.externalEmitterMode);
+  applyNumberParam(url, 'volume_wind_strength', run.windStrength);
+  applyNumberParam(url, 'volume_wind_angle', run.windAngle);
+  applyNumberParam(url, 'volume_wind_height', run.windHeight);
+  applyNumberParam(url, 'volume_input_radius', run.inputRadius);
+  applyNumberParam(url, 'volume_majorant_cadence', run.majorantCadence);
+  applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
+  applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
+  applyStringParam(url, 'volume_external_emitters', run.externalEmitterMode);
   return url.toString();
 }
 
@@ -245,9 +379,11 @@ function slugFor(run) {
 
 function requestedConfig(run) {
   return {
+    performanceMatrixId: run.performanceMatrixId || null,
     scenarioId: run.id,
     label: run.label,
     volumeScene: run.volumeScene || 'compact_plume',
+    tallPreset: run.tallPreset,
     simGrid: run.simGrid,
     majorantGrid: run.majorantGrid,
     raySteps: run.raySteps,
@@ -260,39 +396,288 @@ function requestedConfig(run) {
     temporalAccum: run.temporalAccum,
     temporalJitter: run.temporalJitter,
     historyClamp: run.historyClamp,
+    density: run.density,
+    fire: run.fire,
+    radiance: run.radiance,
+    absorption: run.absorption,
+    glow: run.glow,
+    smoke: run.smoke,
+    curl: run.curl,
+    reactionFuel: run.reactionFuel,
+    fireScale: run.fireScale,
+    detailScale: run.detailScale,
+    microdetail: run.microdetail,
+    interfaceShred: run.interfaceShred,
+    fireLicks: run.fireLicks,
+    projection: run.projection,
+    speed: run.speed,
+    plumeHeight: run.plumeHeight,
+    windStrength: run.windStrength,
+    windAngle: run.windAngle,
+    windHeight: run.windHeight,
+    inputRadius: run.inputRadius,
+    flowRate: run.flowRate,
+    majorantCadence: run.majorantCadence,
+    pressureIterations: run.pressureIterations,
+    simProfile: run.simProfile,
     externalEmitterMode: run.externalEmitterMode || 'off',
   };
 }
 
 function effectiveConfig(witness) {
+  const controls = witness.controls || {};
+  const effectiveTallPreset = witness.tallPreset
+    ?? controls.tallPreset
+    ?? controls.tallPlumePreset
+    ?? controls.volumeTallPreset
+    ?? null;
   return {
     backend: witness.backend,
     effectiveRoute: witness.effectiveRoute,
-    volumeScene: witness.volumeScene || 'compact_plume',
+    prototypeIdentity: witness.prototypeIdentity,
+    evidenceMode: witness.evidenceMode,
+    visualEvidenceMode: witness.visualEvidenceMode,
+    performanceVisualWarnings: witness.performanceVisualWarnings || [],
+    volumeScene: witness.volumeScene || controls.volumeScene || 'compact_plume',
+    tallPreset: effectiveTallPreset,
+    tallPresetEvidence: effectiveTallPreset ? 'reported' : 'expanded-controls',
     simGrid: witness.simGrid,
     majorantGrid: witness.majorantGrid,
-    raySteps: witness.raySteps,
-    renderScale: witness.renderScale,
+    raySteps: witness.raySteps ?? controls.raySteps,
+    renderScale: witness.renderScale ?? controls.renderScale,
     renderPixelRatio: witness.renderPixelRatio,
     displayWidth: witness.displayWidth,
     displayHeight: witness.displayHeight,
     renderWidth: witness.renderWidth,
     renderHeight: witness.renderHeight,
     volumeReconstructionStyle: witness.volumeReconstructionStyle,
-    adaptiveRaymarch: witness.adaptiveRaymarch,
-    occupancySkip: witness.occupancySkip,
-    majorantSkip: witness.majorantSkip,
-    majorantSmooth: witness.majorantSmooth,
-    majorantGuard: witness.majorantGuard,
-    temporalAccum: witness.temporalAccum,
-    temporalJitter: witness.temporalJitter,
-    historyClamp: witness.historyClamp,
+    adaptiveRaymarch: witness.adaptiveRaymarch ?? controls.adaptiveRaymarch ?? controls.adaptiveRays,
+    occupancySkip: witness.occupancySkip ?? controls.occupancySkip,
+    majorantSkip: witness.majorantSkip ?? controls.majorantSkip,
+    majorantSmooth: witness.majorantSmooth ?? controls.majorantSmooth,
+    majorantGuard: witness.majorantGuard ?? controls.majorantGuard,
+    temporalAccum: witness.temporalAccum ?? controls.temporalAccum,
+    temporalJitter: witness.temporalJitter ?? controls.temporalJitter,
+    historyClamp: witness.historyClamp ?? controls.historyClamp,
+    density: witness.density ?? controls.density,
+    fire: witness.fire ?? controls.fire,
+    radiance: witness.radiance ?? controls.radiance,
+    absorption: witness.absorption ?? controls.absorption,
+    glow: witness.glow ?? controls.glow,
+    smoke: witness.smoke ?? controls.smoke,
+    curl: witness.curl ?? controls.curl,
+    reactionFuelScale: witness.reactionFuelScale ?? controls.reactionFuelScale ?? controls.reactionFuel,
+    fireScale: witness.fireScale ?? controls.fireScale,
+    detailScale: witness.detailScale ?? controls.detailScale,
+    microdetail: witness.microdetail ?? controls.microdetail,
+    interfaceShred: witness.interfaceShred ?? controls.interfaceShred,
+    fireLicks: witness.fireLicks ?? controls.fireLicks,
+    projection: witness.projection ?? controls.projection,
+    speed: witness.speed ?? controls.speed,
+    plumeHeight: witness.plumeHeight ?? controls.plumeHeight,
+    windStrength: witness.windStrength ?? controls.windStrength,
+    windAngle: witness.windAngle ?? controls.windAngle,
+    windHeight: witness.windHeight ?? controls.windHeight,
+    inputRadius: witness.inputRadius ?? controls.inputRadius,
+    flowRate: witness.flowRate ?? controls.flowRate,
+    majorantCadence: witness.majorantCadence ?? controls.majorantCadence,
+    majorantBuildCadence: witness.majorantBuildCadence || witness.simCostLedger?.majorantBuildCadence,
+    majorantBuiltThisFrame: witness.majorantBuiltThisFrame || witness.simCostLedger?.majorantBuiltThisFrame,
+    majorantLastBuiltFrame: witness.majorantLastBuiltFrame || witness.simCostLedger?.majorantLastBuiltFrame,
+    majorantSkippedFrameCount: witness.majorantSkippedFrameCount || witness.simCostLedger?.majorantSkippedFrameCount,
+    pressureProjectionEnabled: witness.pressureProjectionEnabled ?? controls.pressureProjectionEnabled,
+    pressureProjectionIterations: witness.pressureProjectionIterations ?? controls.pressureProjectionIterations ?? controls.pressureIterations,
+    pressureIterationRequested: witness.pressureIterationRequested ?? controls.pressureIterationRequested,
+    pressureIterationDefault: witness.pressureIterationDefault ?? controls.pressureIterationDefault,
+    simProfile: witness.simProfile ?? Boolean(witness.simCostLedger),
+    simCostLedger: witness.simCostLedger,
     temporalEvidenceSource: witness.temporalEvidenceSource,
     timingEvidenceSource: witness.timingEvidenceSource,
     timingDisclaimer: witness.timingDisclaimer,
     externalEmitterMode: witness.externalEmitterMode,
     externalEmitterCount: witness.externalEmitterCount,
     externalEmitterCoordinateSpace: witness.externalEmitterCoordinateSpace,
+  };
+}
+
+function makeSweepFailure(code, failurePhase, message, details = {}) {
+  const error = new Error(`${code}: ${message}`);
+  error.code = code;
+  error.failurePhase = failurePhase;
+  error.details = details;
+  return error;
+}
+
+function throwSweepFailure(code, failurePhase, message, details = {}) {
+  throw makeSweepFailure(code, failurePhase, message, details);
+}
+
+function closeEnough(actual, expected, epsilon = 0.015) {
+  const actualNumber = Number(actual);
+  const expectedNumber = Number(expected);
+  return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) && Math.abs(actualNumber - expectedNumber) <= epsilon;
+}
+
+function witnessNumber(effective, primary, fallback) {
+  const value = effective[primary] ?? (fallback ? effective[fallback] : undefined);
+  return Number(value);
+}
+
+function checkNumber(checks, run, effective, runKey, effectiveKey = runKey, epsilon = 0.015) {
+  if (run[runKey] === undefined) return;
+  const actual = witnessNumber(effective, effectiveKey);
+  if (!closeEnough(actual, run[runKey], epsilon)) {
+    throwSweepFailure('stale-default-config', 'validation', `${runKey} requested ${run[runKey]} but effective ${effectiveKey} was ${effective[effectiveKey]}`, {
+      scenarioId: run.id,
+      runKey,
+      effectiveKey,
+      requested: run[runKey],
+      effective: effective[effectiveKey],
+    });
+  }
+  checks.push({ name: runKey, requested: run[runKey], effective: actual });
+}
+
+function checkExact(checks, run, effective, runKey, effectiveKey = runKey) {
+  if (run[runKey] === undefined) return;
+  if (String(effective[effectiveKey]) !== String(run[runKey])) {
+    throwSweepFailure('stale-default-config', 'validation', `${runKey} requested ${run[runKey]} but effective ${effectiveKey} was ${effective[effectiveKey]}`, {
+      scenarioId: run.id,
+      runKey,
+      effectiveKey,
+      requested: run[runKey],
+      effective: effective[effectiveKey],
+    });
+  }
+  checks.push({ name: runKey, requested: run[runKey], effective: effective[effectiveKey] });
+}
+
+function validateWitness(run, witness, effective) {
+  const checks = [];
+  const warnings = [];
+  if (effective.effectiveRoute !== EXPECTED_VOLUME_ROUTE_ID) {
+    throwSweepFailure('wrong-fallback-route', 'validation', `expected ${EXPECTED_VOLUME_ROUTE_ID}, got ${effective.effectiveRoute || 'none'}`, {
+      scenarioId: run.id,
+      expected: EXPECTED_VOLUME_ROUTE_ID,
+      effective: effective.effectiveRoute,
+    });
+  }
+  checks.push({ name: 'effectiveRoute', effective: effective.effectiveRoute });
+
+  if (effective.prototypeIdentity !== EXPECTED_PROTOTYPE_ID) {
+    throwSweepFailure('absent-effective-identity', 'validation', `expected ${EXPECTED_PROTOTYPE_ID}, got ${effective.prototypeIdentity || 'none'}`, {
+      scenarioId: run.id,
+      expected: EXPECTED_PROTOTYPE_ID,
+      effective: effective.prototypeIdentity,
+    });
+  }
+  checks.push({ name: 'prototypeIdentity', effective: effective.prototypeIdentity });
+
+  checkExact(checks, run, effective, 'volumeScene');
+  if (run.tallPreset !== undefined) {
+    if (effective.tallPreset === null || effective.tallPreset === undefined || effective.tallPreset === '') {
+      warnings.push({
+        code: 'preset-identity-not-retained',
+        requested: run.tallPreset,
+        effective: effective.tallPreset,
+        evidence: effective.tallPresetEvidence,
+        note: 'The page applied the tall-plume route controls but did not echo the preset label in witness state; expanded control checks carry effective identity.',
+      });
+      checks.push({
+        name: 'tallPreset',
+        requested: run.tallPreset,
+        effective: effective.tallPreset,
+        evidence: effective.tallPresetEvidence,
+      });
+    } else {
+      checkExact(checks, run, effective, 'tallPreset');
+    }
+  }
+  checkNumber(checks, run, effective, 'simGrid', 'simGrid', 0.5);
+  checkNumber(checks, run, effective, 'majorantGrid', 'majorantGrid', 0.5);
+  checkNumber(checks, run, effective, 'raySteps', 'raySteps', 0.5);
+  checkNumber(checks, run, effective, 'renderScale');
+  checkNumber(checks, run, effective, 'adaptiveRays', 'adaptiveRaymarch');
+  checkNumber(checks, run, effective, 'occupancySkip');
+  checkNumber(checks, run, effective, 'majorantSkip');
+  checkNumber(checks, run, effective, 'majorantSmooth');
+  checkNumber(checks, run, effective, 'majorantGuard');
+  checkNumber(checks, run, effective, 'temporalAccum');
+  checkNumber(checks, run, effective, 'temporalJitter');
+  checkNumber(checks, run, effective, 'historyClamp');
+  checkNumber(checks, run, effective, 'density');
+  checkNumber(checks, run, effective, 'fire');
+  checkNumber(checks, run, effective, 'smoke');
+  checkNumber(checks, run, effective, 'glow');
+  checkNumber(checks, run, effective, 'curl');
+  checkNumber(checks, run, effective, 'radiance');
+  checkNumber(checks, run, effective, 'absorption');
+  checkNumber(checks, run, effective, 'reactionFuel', 'reactionFuelScale');
+  checkNumber(checks, run, effective, 'fireScale');
+  checkNumber(checks, run, effective, 'detailScale');
+  checkNumber(checks, run, effective, 'microdetail');
+  checkNumber(checks, run, effective, 'interfaceShred');
+  checkNumber(checks, run, effective, 'fireLicks');
+  checkNumber(checks, run, effective, 'projection');
+  checkNumber(checks, run, effective, 'speed');
+  checkNumber(checks, run, effective, 'plumeHeight');
+  checkNumber(checks, run, effective, 'windStrength');
+  checkNumber(checks, run, effective, 'windAngle');
+  checkNumber(checks, run, effective, 'windHeight');
+  checkNumber(checks, run, effective, 'inputRadius');
+  checkNumber(checks, run, effective, 'flowRate');
+  checkNumber(checks, run, effective, 'majorantCadence', 'majorantBuildCadence', 0.5);
+  checkNumber(checks, run, effective, 'pressureIterations', 'pressureProjectionIterations', 0.5);
+
+  if (run.simProfile !== undefined && !effective.simProfile && !effective.simCostLedger) {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation profile was requested but no effective cost ledger was produced', {
+      scenarioId: run.id,
+      requested: run.simProfile,
+      effective: effective.simProfile,
+    });
+  }
+  checks.push({ name: 'simProfile', requested: Boolean(run.simProfile), effective: Boolean(effective.simProfile || effective.simCostLedger) });
+
+  const metrics = witness.metrics || {};
+  const visualPixels = Number(metrics.litPixels || 0)
+    + Number(metrics.smokeLikePixels || 0)
+    + Number(metrics.fireLikePixels || 0)
+    + Number(metrics.emissiveLikePixels || 0);
+  if (!Number.isFinite(visualPixels) || visualPixels <= 0) {
+    throwSweepFailure('blank-or-partial-output', 'validation', 'witness reported no lit, smoke, fire, or emissive pixels', {
+      scenarioId: run.id,
+      metrics,
+    });
+  }
+  checks.push({ name: 'visualSignalPixels', effective: visualPixels });
+
+  const ledger = effective.simCostLedger;
+  if (!ledger || ledger.identity !== 'tall-plume-sim-cost-ledger-v0' || ledger.routeIdentity !== EXPECTED_VOLUME_ROUTE_ID) {
+    throwSweepFailure('missing-primary-report', 'validation', 'witness did not produce a trustworthy tall-plume simulation cost ledger', {
+      scenarioId: run.id,
+      ledger,
+    });
+  }
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureJacobiPasses', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+    if (!Number.isFinite(Number(ledger[field]))) {
+      throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
+        scenarioId: run.id,
+        field,
+        ledger,
+      });
+    }
+  }
+  checks.push({ name: 'simCostLedger', effective: ledger.identity });
+
+  return {
+    status: 'passed',
+    matrixId: run.performanceMatrixId || null,
+    checks,
+    warnings,
+    falseClosureLabels: FALSE_CLOSURE_LABELS,
+    simCostLedgerIdentity: ledger.identity,
+    routeIdentity: effective.effectiveRoute,
+    prototypeIdentity: effective.prototypeIdentity,
   };
 }
 
@@ -346,10 +731,14 @@ const aggregate = {
   baseUrl,
   generatedAt: new Date().toISOString(),
   matrixMode,
+  performanceMatrixId: PERFORMANCE_MATRIX_ID,
+  expectedRoute: EXPECTED_VOLUME_ROUTE_ID,
+  expectedPrototype: EXPECTED_PROTOTYPE_ID,
   dryRun,
   settleMs,
   windowSize,
   compactScenarioIds: COMPACT_MATRIX_SCENARIOS.map((scenario) => scenario.id),
+  performanceScenarioIds: PERFORMANCE_MATRIX_SCENARIOS.map((scenario) => scenario.id),
   runs: [],
   failures: [],
   recommendations: [],
@@ -383,10 +772,14 @@ for (let i = 0; i < runs.length; i += 1) {
       '--user-data-dir', `${outDir}/profile-${slug}`,
       '--settle-ms', String(settleMs),
       '--window-size', windowSize,
+      '--evidence-mode', matrixMode === 'performance' ? 'performance' : 'fire-volume',
     ], { cwd: new URL('.', import.meta.url).pathname, stdio: 'pipe' });
     const witness = JSON.parse(readFileSync(report, 'utf8'));
     const effective = effectiveConfig(witness);
+    const validation = validateWitness(run, witness, effective);
+    const simCostLedger = witness.simCostLedger;
     aggregate.runs.push({
+      performanceMatrixId: run.performanceMatrixId || null,
       scenarioId: run.id,
       label: run.label,
       url,
@@ -394,8 +787,19 @@ for (let i = 0; i < runs.length; i += 1) {
       screenshot,
       requestedConfig: requestedConfig(run),
       effectiveConfig: effective,
+      validation,
+      evidenceMode: witness.evidenceMode,
+      visualEvidenceMode: witness.visualEvidenceMode,
+      performanceVisualWarnings: witness.performanceVisualWarnings || [],
+      simCostLedger,
+      fullGridPassesPerFrame: simCostLedger?.fullGridPassesPerFrame,
+      fullGridCellVisitsPerFrame: simCostLedger?.fullGridCellVisitsPerFrame,
+      fluidBufferBytes: simCostLedger?.fluidBufferBytes,
+      pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
+      majorantBuildCadence: simCostLedger?.majorantBuildCadence,
       backend: witness.backend,
       effectiveRoute: witness.effectiveRoute,
+      prototypeIdentity: witness.prototypeIdentity,
       raySteps: witness.raySteps,
       adaptiveRaymarch: witness.adaptiveRaymarch,
       occupancySkip: witness.occupancySkip,
@@ -432,6 +836,10 @@ for (let i = 0; i < runs.length; i += 1) {
       report,
       screenshot,
       requestedConfig: requestedConfig(run),
+      failureCode: error?.code || 'missing-primary-report',
+      failurePhase: error?.failurePhase || 'witness-execution',
+      failureDetails: error?.details || null,
+      validation: error?.validation || null,
       error: error?.message || String(error),
       stdout: String(error?.stdout || ''),
       stderr: String(error?.stderr || ''),
