@@ -15,22 +15,34 @@ if (!input || !output || !report) {
 
 const inputBytes = readFileSync(input);
 const inputSha256 = createHash('sha256').update(inputBytes).digest('hex');
+const points = [];
+for (let y = 0; y < 27; y += 1) {
+  for (let x = 0; x < 27; x += 1) {
+    const nx = (x - 13) / 13;
+    const ny = (y - 13) / 13;
+    const radius = Math.hypot(nx, ny);
+    const z = Math.cos(radius * Math.PI) * 0.18;
+    const red = Math.round(80 + 175 * Math.max(0, 1 - radius * 0.55));
+    const green = Math.round(80 + 140 * Math.max(0, 1 - Math.abs(nx)));
+    const blue = Math.round(120 + 100 * Math.max(0, 1 - Math.abs(ny)));
+    points.push(`${nx.toFixed(4)} ${ny.toFixed(4)} ${z.toFixed(4)} ${red} ${green} ${blue}`);
+  }
+}
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, [
   'ply',
   'format ascii 1.0',
   'comment mock live SHARP output',
   `comment source_sha256 ${inputSha256}`,
-  'element vertex 3',
+  `element vertex ${points.length}`,
   'property float x',
   'property float y',
   'property float z',
-  'property float f_dc_0',
-  'property float opacity',
+  'property uchar red',
+  'property uchar green',
+  'property uchar blue',
   'end_header',
-  '0 0 0 1 1',
-  '0.1 0 0 1 1',
-  '0 0.1 0 1 1',
+  ...points,
   '',
 ].join('\n'));
 

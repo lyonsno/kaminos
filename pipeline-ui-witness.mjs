@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -149,6 +150,97 @@ async function capture(cdp, path) {
     captureBeyondViewport: false,
   });
   await writeFile(path, Buffer.from(shot.data, 'base64'));
+}
+
+function parsePngRgba(buffer) {
+  const signature = '89504e470d0a1a0a';
+  if (buffer.subarray(0, 8).toString('hex') !== signature) throw new Error('not a PNG screenshot');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = null;
+  const idat = [];
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      colorType = data[9];
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+  const bpp = colorType === 6 ? 4 : colorType === 2 ? 3 : null;
+  if (!width || !height || !bpp) throw new Error(`unsupported PNG screenshot color type: ${colorType}`);
+  const inflated = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const rgba = new Uint8Array(width * height * 4);
+  let sourceOffset = 0;
+  let previous = new Uint8Array(stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[sourceOffset++];
+    const row = new Uint8Array(stride);
+    for (let x = 0; x < stride; x += 1) {
+      const raw = inflated[sourceOffset++];
+      const left = x >= bpp ? row[x - bpp] : 0;
+      const up = previous[x] || 0;
+      const upLeft = x >= bpp ? previous[x - bpp] || 0 : 0;
+      const paeth = (() => {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        if (pa <= pb && pa <= pc) return left;
+        return pb <= pc ? up : upLeft;
+      })();
+      row[x] = (raw + [0, left, up, Math.floor((left + up) / 2), paeth][filter]) & 255;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const src = x * bpp;
+      const dst = (y * width + x) * 4;
+      rgba[dst + 0] = row[src + 0];
+      rgba[dst + 1] = row[src + 1];
+      rgba[dst + 2] = row[src + 2];
+      rgba[dst + 3] = bpp === 4 ? row[src + 3] : 255;
+    }
+    previous = row;
+  }
+  return { width, height, rgba };
+}
+
+async function screenshotVisibleProbe(path, rect = null) {
+  const parsed = parsePngRgba(await readFile(path));
+  const x0 = Math.max(0, Math.floor(rect?.x || 0));
+  const y0 = Math.max(0, Math.floor(rect?.y || 0));
+  const x1 = Math.min(parsed.width, Math.ceil((rect?.x || 0) + (rect?.width || parsed.width)));
+  const y1 = Math.min(parsed.height, Math.ceil((rect?.y || 0) + (rect?.height || parsed.height)));
+  let visiblePixels = 0;
+  let saturatedPixels = 0;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const offset = (y * parsed.width + x) * 4;
+      const r = parsed.rgba[offset + 0];
+      const g = parsed.rgba[offset + 1];
+      const b = parsed.rgba[offset + 2];
+      const a = parsed.rgba[offset + 3];
+      if (a <= 8 || r + g + b <= 24) continue;
+      visiblePixels += 1;
+      if (Math.max(r, g, b) - Math.min(r, g, b) > 45) saturatedPixels += 1;
+    }
+  }
+  return {
+    sampled: true,
+    width: parsed.width,
+    height: parsed.height,
+    rect: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+    visiblePixels,
+    saturatedPixels,
+  };
 }
 
 async function waitFor(cdp, expression, label, timeoutMs = 90000) {
@@ -344,16 +436,35 @@ try {
     const after = await waitFor(cdp, `(() => {
       const scene = window.kaminosSceneObjectDebugState?.() || [];
       const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
+      const previewDebug = loaded ? window.kaminosSplatPreviewDebugState?.(loaded.id) : null;
+      const viewportRect = document.querySelector('#viewport')?.getBoundingClientRect();
+      const minimumIncluded = ${JSON.stringify(expectsFixture)} ? 1 : 700;
       return {
-        ok: document.querySelector('.tab.active')?.dataset.tab === 'assets' && Boolean(loaded?.splat?.pointCount),
+        ok: document.querySelector('.tab.active')?.dataset.tab === 'assets'
+          && loaded?.splat?.previewKind === 'point-cloud'
+          && Boolean(loaded?.splat?.pointCount)
+          && previewDebug?.previewKind === 'point-cloud'
+          && previewDebug?.includedVisible === true
+          && Number(previewDebug?.includedPointCount || 0) >= minimumIncluded,
         activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
         objectRows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.innerText),
         pointCount: loaded?.splat?.pointCount || 0,
+        previewKind: loaded?.splat?.previewKind || null,
+        previewDebug,
+        viewportRect: viewportRect ? { x: viewportRect.x, y: viewportRect.y, width: viewportRect.width, height: viewportRect.height } : null,
         source: loaded?.source || null,
         statusText: document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '',
       };
     })()`, 'Graph Execute Load Output');
+    assertWitness(after.previewKind === 'point-cloud' && after.previewDebug?.includedVisible, 'Loaded pipeline output did not produce point-cloud preview evidence', after);
     await capture(cdp, afterPath);
+    const screenshotProbe = await screenshotVisibleProbe(afterPath, after.viewportRect);
+    const minimumSaturatedPixels = expectsFixture ? 150 : 1500;
+    assertWitness(screenshotProbe.saturatedPixels >= minimumSaturatedPixels, 'Loaded pipeline output screenshot did not contain visible colored point-cloud pixels', {
+      after,
+      screenshotProbe,
+      minimumSaturatedPixels,
+    });
 
     console.log(JSON.stringify({
       ok: true,
@@ -368,6 +479,7 @@ try {
       executed,
       loadOutputButton,
       after,
+      screenshotProbe,
     }, null, 2));
   } else {
   const dragPoints = await evalJson(cdp, `(() => {
