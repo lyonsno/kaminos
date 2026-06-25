@@ -34,9 +34,24 @@ assert.match(preparedPipeline.description, /Load Source/i, 'prepared route descr
 const tempRoot = mkdtempSync(join(tmpdir(), 'kaminos-pipeline-contract-'));
 try {
   const inputPath = join(tempRoot, 'evil-orb-source.fixture');
+  const fixtureSplatPath = join(tempRoot, 'evil-orb-sharp-fixture-source.ply');
   const outDir = join(tempRoot, 'out-a');
   const reportPath = join(tempRoot, 'reports', 'witness.json');
   writeFileSync(inputPath, 'fixture source image bytes\n');
+  writeFileSync(fixtureSplatPath, [
+    'ply',
+    'format ascii 1.0',
+    'comment configured sharp fixture source',
+    'element vertex 123',
+    'property float x',
+    'property float y',
+    'property float z',
+    'property float f_dc_0',
+    'property float opacity',
+    'end_header',
+    '0 0 0 1 1',
+    '',
+  ].join('\n'));
 
   const result = spawnSync(process.execPath, [
     witnessPath,
@@ -45,7 +60,13 @@ try {
     '--input', inputPath,
     '--out-dir', outDir,
     '--report', reportPath,
-  ], { encoding: 'utf8' });
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SHARP_FIXTURE_SPLAT: fixtureSplatPath,
+    },
+  });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.ok(existsSync(reportPath), 'witness must write the requested report path');
@@ -68,9 +89,13 @@ try {
   assert.ok(report.artifacts.sidecar.path.startsWith(outDir), 'sidecar output must live under caller-provided out-dir');
   assert.ok(existsSync(report.artifacts.splat.path), 'witness must write the fixture splat artifact');
   assert.ok(existsSync(report.artifacts.sidecar.path), 'witness must write the import sidecar artifact');
+  const copiedFixtureSplat = readFileSync(report.artifacts.splat.path, 'utf8');
+  assert.match(copiedFixtureSplat, /element vertex 123/, 'configured SHARP fixture route must copy a visible fixture splat instead of one-vertex placeholder output');
+  assert.match(copiedFixtureSplat, /property float f_dc_0/, 'configured SHARP fixture route must preserve gaussian-splat-like fixture properties');
   assert.equal(report.stages.length, fixturePipeline.stages.length);
   assert.deepEqual(new Set(report.stages.map(stage => stage.status)), new Set(['fixture']));
   assert.ok(report.stages.every(stage => stage.requestedRoute && stage.effectiveRoute), 'each stage must record requested and effective route identity');
+  assert.equal(report.stages[0].effectiveRoute.fixtureSource, fixtureSplatPath, 'SHARP fixture stage must record copied fixture source identity');
   assert.ok(report.stages.every(stage => !stage.outputPath || stage.outputPath.startsWith(outDir)), 'stage outputs must not use singleton paths');
   assert.ok(existsSync(report.bundleIndex.path), 'witness must write a per-run bundle index');
 
@@ -87,6 +112,7 @@ try {
     routeId: stage.requestedRoute,
   })));
   assert.ok(bundleIndex.artifacts.some(artifact => artifact.id === 'sidecar' && artifact.role === 'kaminos-import-sidecar'), 'bundle index must list sidecar artifacts by role');
+  assert.equal(bundleIndex.artifacts.find(artifact => artifact.id === 'splat')?.fixtureSource?.path, fixtureSplatPath, 'bundle index must keep SHARP fixture source provenance with the splat artifact');
   assert.ok(bundleIndex.artifacts.every(artifact => artifact.id === 'input' || artifact.path.startsWith(outDir)), 'bundle index must keep generated artifacts caller-rooted');
   assert.equal(bundleIndex.registryScope, 'run-local', 'bundle index must not claim to be a global sidecar registry');
 
@@ -96,6 +122,8 @@ try {
   assert.equal(sidecar.pipeline.routeId, fixturePipeline.routeId);
   assert.equal(sidecar.source.inputPath, inputPath);
   assert.equal(sidecar.asset.type, 'splat');
+  assert.equal(sidecar.asset.fixtureSource?.path, fixtureSplatPath, 'sidecar must preserve SHARP fixture source identity');
+  assert.equal(sidecar.asset.fixtureSource?.stageMode, 'fixture', 'sidecar must label copied SHARP output as fixture-backed');
   assert.equal(sidecar.asset.renderCapabilities.realHybridRender, false, 'fixture sidecar must not claim real hybrid rendering');
 
   const rerunReportPath = join(tempRoot, 'reports', 'witness-rerun.json');

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 
 const args = new Map();
@@ -31,6 +31,11 @@ let pipeline = null;
 let lastTrustworthyEvidence = {};
 const stages = [];
 const artifacts = {};
+const sharpFixtureSplatCandidates = [
+  '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb_trimmed_050.ply',
+  '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb_full_pbr_2k.ply',
+  '/Users/noahlyons/.local/state/kaminos-smoke/splats/inbox/evil_orb.ply',
+].map(path => ({ path, mode: 'local-candidate' }));
 
 function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -61,6 +66,31 @@ function fileEvidence(path) {
     bytes: stat.size,
     sha256: sha256Bytes(readFileSync(path)),
   };
+}
+
+function candidatePathList(value) {
+  return (value || '')
+    .split(delimiter)
+    .map(candidate => candidate.trim())
+    .filter(Boolean);
+}
+
+function resolveSharpFixtureSplat() {
+  const explicitPath = (process.env.KAMINOS_SHARP_FIXTURE_SPLAT || '').trim();
+  const explicitCandidates = explicitPath ? [{ path: explicitPath, mode: 'env' }] : [];
+  const listCandidates = candidatePathList(process.env.KAMINOS_SHARP_FIXTURE_SPLAT_CANDIDATES)
+    .map(path => ({ path, mode: 'env-candidate-list' }));
+  for (const candidate of [...explicitCandidates, ...listCandidates, ...sharpFixtureSplatCandidates]) {
+    const resolvedPath = resolve(candidate.path);
+    if (!existsSync(resolvedPath)) continue;
+    const stat = statSync(resolvedPath);
+    if (!stat.isFile()) continue;
+    return {
+      path: resolvedPath,
+      mode: candidate.mode,
+    };
+  }
+  return null;
 }
 
 function reportBase(extra = {}) {
@@ -115,6 +145,7 @@ function buildBundleIndex() {
       path: artifact.path,
       bytes: artifact.bytes,
       sha256: artifact.sha256,
+      fixtureSource: artifact.fixtureSource || null,
     })),
   };
 }
@@ -136,9 +167,20 @@ function requireInputs() {
 }
 
 function makeFixturePly(outputPath) {
+  const fixtureSource = resolveSharpFixtureSplat();
+  mkdirSync(dirname(outputPath), { recursive: true });
+  if (fixtureSource) {
+    copyFileSync(fixtureSource.path, outputPath);
+    return {
+      stageMode: 'fixture',
+      mode: fixtureSource.mode,
+      truthBoundary: 'fixture-backed copied SHARP-derived splat; not live SHARP inference',
+      ...fileEvidence(fixtureSource.path),
+    };
+  }
+
   const inputBytes = readFileSync(inputPath);
   const inputHash = sha256Bytes(inputBytes);
-  mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, [
     'ply',
     'format ascii 1.0',
@@ -156,6 +198,16 @@ function makeFixturePly(outputPath) {
     '0 0 0 255 128 32',
     '',
   ].join('\n'));
+  return {
+    stageMode: 'fixture',
+    mode: 'generated-placeholder',
+    path: null,
+    bytes: null,
+    sha256: null,
+    inputPath,
+    inputSha256: inputHash,
+    truthBoundary: 'generated one-vertex placeholder because no SHARP fixture splat source was configured or found',
+  };
 }
 
 function makeSidecar(outputPath) {
@@ -179,6 +231,7 @@ function makeSidecar(outputPath) {
       path: splatPath,
       sha256: splatEvidence.sha256,
       bytes: splatEvidence.bytes,
+      fixtureSource: artifacts.splat?.fixtureSource || null,
       renderCapabilities: {
         realHybridRender: false,
         meshDepthOcclusion: false,
@@ -323,6 +376,7 @@ function runStage(stage) {
   };
   let status = stage.statusMode || 'fixture';
   let availability = null;
+  let fixtureSource = null;
   if (stage.statusMode === 'adapter-check') {
     availability = adapterAvailability(stage);
     effectiveRoute.availability = availability;
@@ -338,7 +392,12 @@ function runStage(stage) {
     status = 'real';
     makePreparedSidecar(outputPath);
   } else if (stage.outputArtifact === 'splat') {
-    makeFixturePly(outputPath);
+    fixtureSource = makeFixturePly(outputPath);
+    effectiveRoute.fixtureSource = fixtureSource.path;
+    effectiveRoute.fixtureSourceMode = fixtureSource.mode;
+    effectiveRoute.fixtureSourceSha256 = fixtureSource.sha256;
+    effectiveRoute.fixtureSourceBytes = fixtureSource.bytes;
+    effectiveRoute.truthBoundary = fixtureSource.truthBoundary;
   } else if (stage.outputArtifact === 'sidecar') {
     makeSidecar(outputPath);
   } else {
@@ -349,6 +408,7 @@ function runStage(stage) {
   artifacts[stage.outputArtifact] = {
     role: pipeline.artifacts[stage.outputArtifact]?.role || stage.outputArtifact,
     status,
+    ...(fixtureSource ? { fixtureSource } : {}),
     ...evidence,
   };
   const record = {
