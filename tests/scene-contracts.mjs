@@ -109,6 +109,8 @@ assert.match(index, /panel\.dataset\.pipelineRunId/, 'Pipeline document panel st
 assert.match(index, /pipelineClearRunDocument\(/, 'Pipeline clears stale sidecar/bundle documents when selected run evidence changes');
 assert.doesNotMatch(index, /function selectPipelineBrowserAsset[\s\S]*?pipelineDockState\.lastRun\s*=\s*null[\s\S]*?function pipelineStatusClass/, 'Selecting a new source asset must not erase prior run evidence');
 assert.match(index, /window\.kaminosPipelineSelectAsset/, 'browser witnesses can select a Pipeline browser asset without DOM inference');
+assert.match(index, /window\.kaminosPipelineSelectAssetPalette/, 'browser witnesses can switch Pipeline asset palettes without brittle tab clicks');
+assert.match(index, /window\.kaminosPipelineCreateGraphImageNode/, 'browser witnesses can create graph image nodes without brittle drag simulation');
 assert.match(index, /id="pipeline-graph-workbench"/, 'Pipeline browser exposes a graph workbench as the primary composition surface');
 assert.match(index, /id="pipeline-graph-canvas"/, 'Pipeline graph workbench has a selectable node canvas');
 assert.match(index, /id="pipeline-graph-inspector"/, 'Pipeline graph workbench has a node inspector for actions/evidence');
@@ -160,6 +162,14 @@ assert.match(index, /Texture load failed/, 'Image scene import must fail loud wh
 assert.match(index, /scrollTo\(\{\s*top:\s*0/, 'Graph image scene import must bring the authored scene object list into view after switching to Assets');
 assert.match(index, /pipelineRunGraphInspectorAction/, 'Pipeline graph inspector actions must own visible success and failure status');
 assert.match(index, /pipeline-graph-inspector-status/, 'Pipeline graph inspector must render action status near the clicked node action');
+assert.match(index, /pipeline-graph-inspector-status-kicker/, 'Pipeline graph inspector status must have a visible label, not an empty low-contrast line');
+assert.match(index, /Action Status/, 'Pipeline graph inspector status must name itself as action status');
+assert.match(index, /role="status"/, 'Pipeline graph inspector status must expose live status semantics');
+assert.match(index, /aria-live="polite"/, 'Pipeline graph inspector status must announce action updates without relying on toast timing');
+assert.doesNotMatch(index, /<div class="pipeline-result-action-status" id="pipeline-graph-inspector-status"/, 'Pipeline graph inspector must not reuse the generic low-contrast result action line');
+assert.match(index, /id="scene-import-status"/, 'Successful graph imports must leave a visible receipt on the destination Scene Objects surface');
+assert.match(index, /Scene Import/, 'Destination scene import receipt must have a visible label');
+assert.match(index, /Scene import landed in left Scene Assets tab/, 'Graph image import success copy must name the exact destination surface');
 assert.match(index, /kaminosPipelineLastImportDebug/, 'Pipeline image import records its last trustworthy phase for failed operator smokes');
 assert.match(index, /phase\s*=\s*'loading-texture'/, 'Pipeline image import records texture-load phase before awaiting image decode');
 assert.match(index, /phase = 'visible-scene-row'/, 'Pipeline image import records when the scene row is visibly targeted');
