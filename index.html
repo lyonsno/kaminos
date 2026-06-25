@@ -808,6 +808,7 @@ import {
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
   buildGeneratedPoseTemporalHarness,
+  interpolateGeneratedPoseTemporalSample,
   motionClipById,
   motionPhraseBodyScale,
   normalizeMotionPhraseControls,
@@ -3975,14 +3976,6 @@ function createGeneratedPoseOutputMapScene({ force = false } = {}) {
   return motionOutputMapState;
 }
 
-function nearestTemporalSample(track, localTime) {
-  const samples = track?.temporalSamples || [];
-  if (!samples.length) return null;
-  return samples.reduce((best, sample) => (
-    Math.abs(sample.time - localTime) < Math.abs(best.time - localTime) ? sample : best
-  ), samples[0]);
-}
-
 function createGeneratedPoseTemporalScene({ force = false } = {}) {
   if (motionTemporalState?.active && !force) return motionTemporalState;
   disposeMotionAgencyScene();
@@ -4289,7 +4282,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const visual = state.visual;
   const localTime = (nowSeconds - state.startedAt) % state.duration;
   const sample = sampleMotionTrack(state.track, localTime, { mode: 'mass-attention' });
-  const temporalSample = nearestTemporalSample(state.track, localTime);
+  const temporalSample = interpolateGeneratedPoseTemporalSample(state.track, localTime);
   const compression = Number(temporalSample?.bowCompression || 0);
   const rootPosition = new THREE.Vector3(sample.root[0] * 2.2, sample.root[1] * 5.0 + 0.24, sample.root[2] * 2.2);
   const attention = new THREE.Vector3(sample.attention[0] * 2.2, sample.attention[1] * 2.2 + 0.24, sample.attention[2] * 2.2);
@@ -4334,8 +4327,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     effort: Number(sample.effort.toFixed(5)),
     scale: Number(sample.scale.toFixed(5)),
     bowCompression: Number(compression.toFixed(5)),
-    sourceFrame: temporalSample?.frame ?? null,
+    sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
+    sourceBracket: temporalSample?.bracket ?? null,
+    sourceInterpolation: temporalSample?.interpolation ?? null,
     color: visual.color,
   }];
   updateMotionAgencyReadout();

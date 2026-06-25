@@ -6,6 +6,7 @@ import {
   DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
   adaptGeneratedPoseTemporalToTrack,
   buildGeneratedPoseTemporalHarness,
+  interpolateGeneratedPoseTemporalSample,
   sampleMotionTrack,
 } from '../motion-core.js';
 
@@ -52,6 +53,27 @@ assert.ok(compress.effort > start.effort, 'bow compression raises temporal effor
 assert.ok(release.phase === 'release' || release.phase === 'recover', 'release/recover phase survives sampling');
 assert.ok(compress.headRootSeparation !== start.headRootSeparation, 'head/root relationship changes over time');
 
+const firstTemporal = track.temporalSamples[0];
+const secondTemporal = track.temporalSamples[1];
+const midpointTime = (firstTemporal.time + secondTemporal.time) / 2;
+const midpointTemporal = interpolateGeneratedPoseTemporalSample(track, midpointTime);
+assert.equal(midpointTemporal.schema, 'kaminos.generated-pose-temporal-sample.v0');
+assert.equal(midpointTemporal.bracket.fromFrame, firstTemporal.frame);
+assert.equal(midpointTemporal.bracket.toFrame, secondTemporal.frame);
+assert.ok(midpointTemporal.interpolation > 0 && midpointTemporal.interpolation < 1, 'midpoint temporal sample records between-frame interpolation');
+assert.notEqual(midpointTemporal.sourceFrame, firstTemporal.frame, 'interpolated temporal sample must not snap to the previous source frame');
+assert.notEqual(midpointTemporal.sourceFrame, secondTemporal.frame, 'interpolated temporal sample must not snap to the next source frame');
+assert.ok(
+  Math.abs(midpointTemporal.bowCompression - firstTemporal.bowCompression) > 1e-4
+    && Math.abs(midpointTemporal.bowCompression - secondTemporal.bowCompression) > 1e-4,
+  'bow compression is interpolated between temporal source samples instead of nearest-sample snapped',
+);
+assert.ok(
+  Math.abs(midpointTemporal.chestRoot[0] - firstTemporal.chestRoot[0]) > 1e-4
+    && Math.abs(midpointTemporal.chestRoot[0] - secondTemporal.chestRoot[0]) > 1e-4,
+  'chest/root roll evidence is interpolated between temporal source samples',
+);
+
 const harness = buildGeneratedPoseTemporalHarness({
   generatedInput: DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
   fps: 12,
@@ -72,9 +94,13 @@ assert.match(index, /motion-temporal-enable/, 'motion tab exposes temporal route
 assert.match(index, /createGeneratedPoseTemporalScene/, 'browser creates temporal route scene');
 assert.match(index, /updateGeneratedPoseTemporalFrame/, 'render loop advances temporal route');
 assert.match(index, /window\.kaminosGeneratedPoseTemporalDebugState/, 'browser exposes temporal route debug state');
+assert.doesNotMatch(index, /nearestTemporalSample/, 'browser temporal route must not nearest-sample runtime compression evidence');
+assert.match(index, /interpolateGeneratedPoseTemporalSample/, 'browser temporal route samples temporal evidence continuously');
 
 assert.match(witness, /isGeneratedPoseTemporalRoute/, 'motion witness detects generated pose temporal route');
 assert.match(witness, /buildGeneratedPoseTemporalHarness/, 'motion witness builds temporal filmstrip');
 assert.match(witness, /window\.kaminosGeneratedPoseTemporalDebugState/, 'motion witness reads temporal browser debug state');
 assert.match(witness, /generatedPoseTemporalHarness/, 'motion witness reports temporal harness evidence');
 assert.match(witness, /maxBowCompression/, 'motion witness validates temporal bow compression');
+assert.match(witness, /sourceInterpolation/, 'motion witness rejects temporal routes that do not expose between-source-frame interpolation');
+assert.match(witness, /sourceBracket/, 'motion witness records the temporal source-frame bracket used by the live actor');

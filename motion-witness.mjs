@@ -455,7 +455,24 @@ try {
   lastEvidence.debug = debug;
   if (debug?.route !== 'procedural-orb-motion-grammar-v0') throw new Error(`motion route identity mismatch: ${JSON.stringify(debug)}`);
   if (isGeneratedPoseTemporalRoute) {
+    for (let i = 0; i < 24; i++) {
+      const actor = debug?.actors?.[0];
+      const bracket = actor?.sourceBracket;
+      const sourceInterpolation = Number(actor?.sourceInterpolation);
+      if (
+        Number.isFinite(sourceInterpolation)
+        && sourceInterpolation > 0
+        && sourceInterpolation < 1
+        && bracket?.fromFrame !== bracket?.toFrame
+      ) break;
+      await delay(83);
+      debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
+      lastEvidence.debug = debug;
+    }
     const generatedPoseTemporalHarness = debug?.generatedPoseTemporalHarness;
+    const actor = debug?.actors?.[0];
+    const sourceInterpolation = Number(actor?.sourceInterpolation);
+    const sourceBracket = actor?.sourceBracket;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose temporal route did not spawn temporal actor: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.track?.id !== 'kimodo_theatrical_bow_temporal_v0') throw new Error(`generated pose temporal route lost Kimodo bow track identity: ${JSON.stringify(debug)}`);
@@ -465,6 +482,8 @@ try {
     if (!(generatedPoseTemporalHarness.metrics?.maxBowCompression > 0.25)) throw new Error(`generated pose temporal route lost bow compression: ${JSON.stringify(debug)}`);
     if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('compress')) throw new Error(`generated pose temporal route lost compress phase: ${JSON.stringify(debug)}`);
     if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('release')) throw new Error(`generated pose temporal route lost release phase: ${JSON.stringify(debug)}`);
+    if (!(Number.isFinite(sourceInterpolation) && sourceInterpolation > 0 && sourceInterpolation < 1)) throw new Error(`generated pose temporal route lost sourceInterpolation evidence: ${JSON.stringify(debug)}`);
+    if (!sourceBracket || sourceBracket.fromFrame === sourceBracket.toFrame) throw new Error(`generated pose temporal route lost sourceBracket interpolation evidence: ${JSON.stringify(debug)}`);
   } else if (isOutputMapRoute) {
     const generatedPoseOutputMapHarness = debug?.generatedPoseOutputMapHarness;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose output-map route did not spawn mapped actor: ${JSON.stringify(debug)}`);

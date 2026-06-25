@@ -1615,6 +1615,59 @@ function temporalFixtureMetrics(generatedInput) {
   };
 }
 
+export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE, t = 0) {
+  const input = trackOrInput?.temporalSamples
+    ? { temporalSamples: trackOrInput.temporalSamples, duration: trackOrInput.duration }
+    : normalizeGeneratedPoseTemporalInput(trackOrInput);
+  const samples = input.temporalSamples || [];
+  if (!samples.length) return null;
+  const duration = Math.max(0, Number(input.duration) || samples.at(-1).time || 0);
+  const time = clamp(Number.isFinite(Number(t)) ? Number(t) : 0, 0, duration || samples.at(-1).time || 0);
+  const first = samples[0];
+  const last = samples.at(-1);
+  const before = time <= first.time
+    ? first
+    : samples[Math.max(0, samples.findIndex(sample => sample.time >= time) - 1)] || last;
+  const after = time <= first.time
+    ? first
+    : (samples.find(sample => sample.time >= time) || last);
+  const span = Math.max(1e-6, after.time - before.time);
+  const rawU = before === after ? 0 : clamp((time - before.time) / span, 0, 1);
+  const u = smooth01(rawU);
+  const mixNumber = key => Number(lerp(Number(before[key]) || 0, Number(after[key]) || 0, u).toFixed(5));
+  const mixVector = key => mixVec3(vec3(before[key]), vec3(after[key]), u).map(value => Number(value.toFixed(5)));
+  return {
+    schema: 'kaminos.generated-pose-temporal-sample.v0',
+    time: Number(time.toFixed(5)),
+    sourceFrame: Number(lerp(Number(before.frame) || 0, Number(after.frame) || 0, u).toFixed(5)),
+    sourceTime: Number(lerp(Number(before.time) || 0, Number(after.time) || 0, u).toFixed(5)),
+    phaseLabel: rawU < 0.5 ? before.phaseLabel : after.phaseLabel,
+    interpolation: Number(u.toFixed(5)),
+    rawInterpolation: Number(rawU.toFixed(5)),
+    bracket: {
+      fromFrame: before.frame,
+      toFrame: after.frame,
+      fromTime: before.time,
+      toTime: after.time,
+      fromPhaseLabel: before.phaseLabel,
+      toPhaseLabel: after.phaseLabel,
+    },
+    root: mixVector('root'),
+    head: mixVector('head'),
+    chest: mixVector('chest'),
+    leftHand: mixVector('leftHand'),
+    rightHand: mixVector('rightHand'),
+    leftFoot: mixVector('leftFoot'),
+    rightFoot: mixVector('rightFoot'),
+    headRoot: mixVector('headRoot'),
+    chestRoot: mixVector('chestRoot'),
+    handSpan: mixNumber('handSpan'),
+    stanceWidth: mixNumber('stanceWidth'),
+    bboxVolume: mixNumber('bboxVolume'),
+    bowCompression: clamp(mixNumber('bowCompression'), 0, 1),
+  };
+}
+
 export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE) {
   const input = normalizeGeneratedPoseTemporalInput(generatedInput);
   const id = String(input.id || '').trim();
