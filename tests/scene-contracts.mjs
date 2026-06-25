@@ -66,8 +66,12 @@ assert.match(index, /data-tab="pipeline"/, 'sidebar exposes a Pipeline tab for a
 assert.match(index, /id="tab-pipeline"/, 'Pipeline tab content is present');
 assert.match(index, /Generator Library/, 'Pipeline left rail is framed as a generator/function library');
 assert.match(index, /id="pipeline-generator-library"/, 'Pipeline left rail exposes generator cards instead of a route dropdown');
-assert.match(index, /data-pipeline-generator-pipeline-id/, 'Pipeline generator cards carry stable route ids for witness selection');
-assert.match(index, /function renderPipelineGeneratorLibrary\(/, 'Pipeline left rail renders routes as generator/function cards');
+assert.match(index, /const pipelineGeneratorDefinitions/, 'Pipeline generator palette is driven by explicit generator primitives, not raw manifest routes');
+assert.match(index, /id:\s*'sharp'[\s\S]*title:\s*'SHARP'/, 'Pipeline generator palette exposes SHARP as the draggable primitive');
+assert.match(index, /defaultPipelineId:\s*'evil-orb-sharp-fixture-pbr-v0'/, 'SHARP generator preserves its current fixture route as backend binding');
+assert.match(index, /data-pipeline-generator-id/, 'Pipeline generator cards carry stable generator ids for witness selection');
+assert.match(index, /data-pipeline-generator-pipeline-id/, 'Pipeline generator cards expose backend route ids without making them the card identity');
+assert.match(index, /function renderPipelineGeneratorLibrary\(/, 'Pipeline left rail renders generator/function cards');
 assert.match(index, /function selectPipelineGenerator\(/, 'Pipeline route selection is owned by generator cards, not a select element');
 assert.match(index, /card\.draggable\s*=\s*true/, 'Available Pipeline generator cards can be dragged into the graph');
 assert.match(index, /application\/x-kaminos-generator-id/, 'Pipeline generator drags carry a generator route payload');
@@ -79,6 +83,11 @@ assert.match(index, /function isPipelineInternalDrag\(/, 'Pipeline internal grap
 assert.match(index, /Ideogram 4/, 'Pipeline generator library reserves a visible future card for Ideogram 4');
 assert.match(index, /Trellis/, 'Pipeline generator library reserves a visible future card for Trellis');
 assert.match(index, /Kimodo Motion/, 'Pipeline generator library reserves a visible future card for motion generators');
+assert.match(index, /SHARP Image -> Splat/, 'Pipeline graph route node uses generic SHARP operation labeling');
+assert.match(index, /backendPipelineId/, 'Pipeline graph route node preserves effective backend route identity separately from generator identity');
+assert.match(index, /function pipelineRunTitle\(/, 'Pipeline run shelf titles use generator-facing identity, not backend route preset labels');
+assert.match(index, /generatorLabel/, 'Pipeline run records preserve generator labels separately from backend pipeline labels');
+assert.doesNotMatch(index, /title:\s*pipeline\?\.label/, 'Generator card titles must not be raw manifest route labels');
 assert.doesNotMatch(index, /<select[^>]+id="pipeline-route-select"/, 'Pipeline generator selection must not be a visible route dropdown');
 assert.match(index, /async function loadPipelineManifest\(/, 'Pipeline Dock loads the route manifest through an explicit function');
 assert.match(index, /\/api\/pipeline-manifest/, 'Pipeline Dock reads the server manifest endpoint instead of hardcoded pipeline ids only');

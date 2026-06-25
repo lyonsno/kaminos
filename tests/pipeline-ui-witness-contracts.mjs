@@ -8,7 +8,9 @@ assert.match(witness, /data-tab="pipeline"/, 'Pipeline UI witness must enter the
 assert.match(witness, /data-pipeline-asset-palette="image"/, 'Pipeline UI witness must switch to the visible Images palette tab');
 assert.match(witness, /pipeline-asset-card/, 'Pipeline UI witness must start from a visible asset card');
 assert.match(witness, /Import Image/, 'Pipeline UI witness must activate the visible import button');
-assert.match(witness, /data-pipeline-generator-pipeline-id/, 'Pipeline UI witness must choose routes through visible generator cards');
+assert.match(witness, /const generatorId/, 'Pipeline UI witness must distinguish generator id from backend pipeline id');
+assert.match(witness, /pipelineGeneratorId/, 'Pipeline UI witness must select the generic generator card, not a route-preset title');
+assert.match(witness, /backendPipelineId/, 'Pipeline UI witness must verify generator cards preserve backend route binding');
 assert.match(witness, /drag\(cdp,\s*generatorCard\.point/, 'Pipeline UI witness must drag a visible generator card into the graph before execution');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');

@@ -17,6 +17,7 @@ const appUrl = args.get('url') || `http://localhost:60105/?pipeline_ui_witness=$
 const port = Number(args.get('port') || process.env.KAMINOS_UI_WITNESS_CDP_PORT || 63112);
 const assetNeedle = args.get('asset') || 'evil_orb_outer_shell_source_image';
 const scenario = args.get('scenario') || 'image-import';
+const generatorId = args.get('generator-id') || 'sharp';
 const pipelineId = args.get('pipeline-id') || 'evil-orb-sharp-fixture-pbr-v0';
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
@@ -214,8 +215,8 @@ try {
 
   if (scenario === 'graph-execute-sharp') {
     const generatorCard = await evalJson(cdp, `(() => {
-      const element = [...document.querySelectorAll('[data-pipeline-generator-pipeline-id]')]
-        .find(item => item.dataset.pipelineGeneratorPipelineId === ${JSON.stringify(pipelineId)});
+      const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
+        .find(item => item.dataset.pipelineGeneratorId === ${JSON.stringify(generatorId)});
       const canvas = document.querySelector('#pipeline-graph-canvas');
       const rect = element?.getBoundingClientRect();
       const canvasRect = canvas?.getBoundingClientRect();
@@ -223,10 +224,13 @@ try {
       if (!canvasRect) throw new Error('Pipeline graph canvas missing for generator drop');
       return {
         cardText: element.innerText,
+        pipelineGeneratorId: element.dataset.pipelineGeneratorId,
+        backendPipelineId: element.dataset.pipelineGeneratorPipelineId || null,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
         drop: { x: canvasRect.left + canvasRect.width * 0.34, y: canvasRect.top + canvasRect.height * 0.40 },
       };
     })()`);
+    assertWitness(generatorCard.pipelineGeneratorId === generatorId && generatorCard.backendPipelineId === pipelineId, 'Generator card did not preserve generic id plus backend route binding', generatorCard);
     await drag(cdp, generatorCard.point, generatorCard.drop);
     const imageCard = await evalJson(cdp, `(() => {
       const cards = [...document.querySelectorAll('.pipeline-asset-card')];
@@ -247,12 +251,13 @@ try {
       const state = window.kaminosPipelineDockDebugState?.();
       return {
         nodeText: element.innerText,
+        selectedGeneratorId: state?.selectedGeneratorId || null,
         selectedPipelineId: state?.selectedPipelineId || null,
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
     })()`);
-    assertWitness(routeNode.selectedPipelineId === pipelineId && routeNode.selectedGraphNodeId === 'route', 'Generator drag did not place the requested route node', routeNode);
+    assertWitness(routeNode.selectedGeneratorId === generatorId && routeNode.selectedPipelineId === pipelineId && routeNode.selectedGraphNodeId === 'route', 'Generator drag did not place the requested route node', routeNode);
     await click(cdp, routeNode.point);
 
     const executeButton = await evalJson(cdp, `(() => {

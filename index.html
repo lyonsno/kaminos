@@ -4277,6 +4277,7 @@ let pipelineManifest = null;
 let pipelineDockState = {
   schema: 'kaminos.pipeline-dock-state.v0',
 	  registryScope: 'run-local',
+	  selectedGeneratorId: 'sharp',
 	  selectedPipelineId: 'prepared-splat-import-sidecar-v0',
 	  selectedSource: null,
 	  runHistory: [],
@@ -4546,8 +4547,14 @@ function pipelineRunDisplayId(result) {
   return result?.runId || result?.bundle?.document?.runId || result?.report?.document?.runId || result?.pipelineId || 'pipeline-run';
 }
 
+function pipelineRunTitle(result) {
+  return result?.generatorOperationTitle || result?.generatorLabel || result?.pipelineLabel || result?.pipelineId || 'Pipeline run';
+}
+
 function pipelineRememberRun(result, source, pipeline) {
   const stamp = new Date().toISOString();
+  const generator = selectedPipelineGeneratorRecord();
+  const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const runId = [
     'pipeline-run',
     stamp.replace(/[-:.TZ]/g, '').slice(0, 14),
@@ -4566,6 +4573,11 @@ function pipelineRememberRun(result, source, pipeline) {
     pipelineId: result?.pipelineId || pipeline?.id || pipelineDockState.selectedPipelineId,
     pipelineLabel: pipeline?.label || result?.pipelineId || pipelineDockState.selectedPipelineId,
     pipelineDescription: pipeline?.description || '',
+    generatorId: generator?.id || pipelineDockState.selectedGeneratorId || null,
+    generatorLabel: generator?.title || null,
+    generatorOperationTitle: generatorRecord?.operationTitle || generator?.title || null,
+    backendPipelineId: result?.pipelineId || pipeline?.id || pipelineDockState.selectedPipelineId,
+    backendPipelineLabel: pipeline?.label || result?.pipelineId || pipelineDockState.selectedPipelineId,
     source: sourceRecord,
     graphExecution: result?.graphExecution || null,
   };
@@ -4814,13 +4826,17 @@ function createPipelineGraphImageNode(asset, position = null) {
 
 function buildPipelineGraphModel(source, selectedRun) {
   const pipeline = selectedPipelineRecord();
+  const generator = selectedPipelineGeneratorRecord();
+  const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
   const splat = pipelineRunArtifact(selectedRun, 'splat');
   const runId = selectedRun ? pipelineRunDisplayId(selectedRun) : null;
   const fixtureBacked = pipelineRunUsesFixture(selectedRun);
   const sourceLabel = selectedRun?.source?.label || source?.label || 'No source selected';
   const sourcePath = selectedRun?.source?.source || source?.source || null;
-  const routeLabel = selectedRun?.pipelineLabel || pipeline?.label || 'No route selected';
+  const routeLabel = generatorRecord?.operationTitle || 'No generator selected';
+  const backendPipelineId = selectedRun?.pipelineId || generatorRecord?.backendPipelineId || pipeline?.id || null;
+  const routeDetail = `${generatorRecord?.backendLabel || 'Backend route'}: ${backendPipelineId || 'unrouted'}${fixtureBacked ? ' / fixture-backed' : ''}`;
   const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : ''}Splat output` : sidecar?.path ? 'No new splat' : 'No output yet';
   const evidenceLabel = selectedRun?.ok ? 'Run evidence written' : selectedRun ? 'Run failed' : 'No run evidence';
   const nodes = [
@@ -4836,8 +4852,10 @@ function buildPipelineGraphModel(source, selectedRun) {
       id: 'route',
       kind: 'route',
       title: routeLabel,
-      detail: `${selectedRun?.pipelineId || pipeline?.id || 'unrouted'}${fixtureBacked ? ' / fixture-backed' : ''}`,
+      detail: routeDetail,
       runId,
+      generator,
+      backendPipelineId,
       pipeline,
       fixtureBacked,
     },
@@ -5199,9 +5217,13 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     { key: 'detail', value: node.detail || 'none' },
   ];
   if (selectedRun) rows.push({ key: 'run', value: pipelineRunDisplayId(selectedRun) });
-  if (node.kind === 'route' && selectedRun) {
-    rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
-    rows.push({ key: 'execution', value: selectedRun.graphExecution?.nodeId ? `graph node ${selectedRun.graphExecution.nodeId}` : 'sidebar or prior run' });
+  if (node.kind === 'route') {
+    rows.push({ key: 'generator', value: node.generator?.title || node.title || 'unknown' });
+    rows.push({ key: 'backend', value: node.backendPipelineId || node.pipeline?.id || 'unrouted' });
+    if (selectedRun) {
+      rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
+      rows.push({ key: 'execution', value: selectedRun.graphExecution?.nodeId ? `graph node ${selectedRun.graphExecution.nodeId}` : 'sidebar or prior run' });
+    }
   }
   if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
   if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
@@ -5432,8 +5454,9 @@ function isPipelineInternalDrag(event) {
   return types.includes('application/x-kaminos-asset-id') || types.includes('application/x-kaminos-generator-id');
 }
 
-function placePipelineGeneratorRouteNode(pipelineId, position) {
-  const pipeline = selectPipelineGenerator(pipelineId);
+function placePipelineGeneratorRouteNode(generatorId, position) {
+  const generator = pipelineGeneratorById(generatorId) || pipelineGeneratorForPipelineId(generatorId);
+  const pipeline = selectPipelineGenerator(generatorId);
   if (!pipeline) return null;
   if (position) {
     pipelineDockState.graphNodePositions.route = {
@@ -5446,7 +5469,7 @@ function placePipelineGeneratorRouteNode(pipelineId, position) {
   savePipelineGraphLocalState();
   renderPipelineDock();
   document.getElementById('viewport')?.classList.remove('dragover');
-  setInfo(`Generator placed on graph: ${pipeline.label || pipeline.id}`);
+  setInfo(`Generator placed on graph: ${generator?.title || pipeline.label || pipeline.id}`);
   return pipeline;
 }
 
@@ -5604,6 +5627,8 @@ function pipelineRunResultRows(result) {
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const splat = pipelineRunArtifact(result, 'splat');
   return [
+    { key: 'generator', value: result.generatorLabel || 'unknown' },
+    { key: 'backend', value: result.backendPipelineId || result.pipelineId || 'unknown' },
     { key: 'effect', value: splat ? 'Splat output artifact written; preview still must be loaded explicitly.' : 'Sidecar metadata written; no new splat generated.' },
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
@@ -5825,7 +5850,7 @@ function renderPipelineRunShelf() {
     };
     card.innerHTML = `
       <div class="pipeline-run-card-head">
-        <div class="pipeline-run-card-title">${escapeHtml(run.pipelineLabel || run.pipelineId || 'Pipeline run')}</div>
+        <div class="pipeline-run-card-title">${escapeHtml(pipelineRunTitle(run))}</div>
         <span class="pipeline-status-chip ${run.ok ? 'real' : 'failed'}">${run.ok ? 'written' : 'failed'}</span>
       </div>
       <div class="pipeline-run-card-meta">${escapeHtml(pipelineRunDisplayId(run))}</div>
@@ -5853,7 +5878,7 @@ function renderPipelineRunResultPanel() {
   const body = document.getElementById('pipeline-run-result-body');
   const grid = document.getElementById('pipeline-run-result-grid');
   const actions = document.getElementById('pipeline-result-actions');
-  if (title) title.textContent = result.ok ? `${result.pipelineLabel || result.pipelineId || 'Pipeline'} completed` : 'Pipeline run failed';
+  if (title) title.textContent = result.ok ? `${pipelineRunTitle(result)} completed` : 'Pipeline run failed';
   if (body) {
     body.textContent = result.ok
       ? (splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
@@ -5943,27 +5968,72 @@ function buildPipelineDockGraphState(source, runResult) {
   };
 }
 
-const pipelineFutureGenerators = [
+const pipelineGeneratorDefinitions = [
   {
-    id: 'ideogram-4-future',
+    id: 'sharp',
+    title: 'SHARP',
+    operationTitle: 'SHARP Image -> Splat',
+    kicker: 'Splat Generator',
+    detail: 'Image -> Gaussian splat',
+    defaultPipelineId: 'evil-orb-sharp-fixture-pbr-v0',
+    backendLabel: 'Fixture route',
+    chips: ['fixture backend', 'splat'],
+    available: true,
+  },
+  {
+    id: 'import-sidecar',
+    title: 'Import Sidecar Writer',
+    operationTitle: 'Import Sidecar Writer',
+    kicker: 'Utility',
+    detail: 'Prepared splat -> Kaminos sidecar',
+    defaultPipelineId: 'prepared-splat-import-sidecar-v0',
+    backendLabel: 'Local sidecar writer',
+    chips: ['local', 'sidecar'],
+    available: true,
+  },
+  {
+    id: 'route-adapter-check',
+    title: 'Route Adapter Check',
+    operationTitle: 'Route Adapter Check',
+    kicker: 'Diagnostic',
+    detail: 'Report configured model routes',
+    defaultPipelineId: 'live-model-route-adapter-check-v0',
+    backendLabel: 'Adapter report',
+    chips: ['report', 'local'],
+    available: true,
+  },
+  {
+    id: 'ideogram-4',
     title: 'Ideogram 4',
     kicker: 'Image Generator',
+    operationTitle: 'Ideogram 4 Image Generator',
     detail: 'Awaiting manifest route',
+    defaultPipelineId: null,
+    backendLabel: 'No route yet',
     chips: ['future', 'image'],
+    available: false,
   },
   {
-    id: 'trellis-future',
+    id: 'trellis',
     title: 'Trellis',
     kicker: '3D Generator',
+    operationTitle: 'Trellis 3D Generator',
     detail: 'Awaiting manifest route',
+    defaultPipelineId: null,
+    backendLabel: 'No route yet',
     chips: ['future', 'mesh'],
+    available: false,
   },
   {
-    id: 'kimodo-motion-future',
+    id: 'kimodo-motion',
     title: 'Kimodo Motion',
     kicker: 'Motion Generator',
+    operationTitle: 'Kimodo Motion Generator',
     detail: 'Awaiting socket route',
+    defaultPipelineId: null,
+    backendLabel: 'No route yet',
     chips: ['future', 'motion'],
+    available: false,
   },
 ];
 
@@ -5971,48 +6041,72 @@ function pipelineRouteStageModes(pipeline) {
   return [...new Set((pipeline?.stages || []).map(stage => stage.statusMode || stage.status || stage.route?.effectiveBackend).filter(Boolean))];
 }
 
-function pipelineGeneratorCardRecord(pipeline) {
+function pipelineGeneratorById(generatorId) {
+  return pipelineGeneratorDefinitions.find(generator => generator.id === generatorId) || null;
+}
+
+function pipelineGeneratorForPipelineId(pipelineId) {
+  return pipelineGeneratorDefinitions.find(generator => generator.defaultPipelineId === pipelineId) || null;
+}
+
+function selectedPipelineGeneratorRecord() {
+  return pipelineGeneratorById(pipelineDockState.selectedGeneratorId) || pipelineGeneratorForPipelineId(pipelineDockState.selectedPipelineId) || pipelineGeneratorDefinitions[0] || null;
+}
+
+function pipelineGeneratorBackendPipeline(generator) {
+  const pipelineId = generator?.defaultPipelineId;
+  if (!pipelineId || !pipelineManifest?.pipelines?.length) return null;
+  return pipelineManifest.pipelines.find(route => route.id === pipelineId) || null;
+}
+
+function pipelineGeneratorCardRecord(generator) {
+  const pipeline = pipelineGeneratorBackendPipeline(generator);
   const modes = pipelineRouteStageModes(pipeline);
-  const stageFamilies = (pipeline?.stages || []).map(stage => stage.route?.modelFamily || stage.route?.id || stage.id || '').join(' ').toLowerCase();
-  const routeText = `${pipeline?.id || ''} ${pipeline?.routeId || ''} ${stageFamilies}`.toLowerCase();
-  const fixture = modes.includes('fixture') || routeText.includes('fixture');
+  const routeText = `${pipeline?.id || ''} ${pipeline?.routeId || ''} ${modes.join(' ')}`.toLowerCase();
+  const fixture = routeText.includes('fixture') || modes.includes('fixture');
   const real = (pipeline?.stages || []).some(stage => stage.route?.realModel === true);
-  const kind = routeText.includes('sharp') ? 'SHARP' : routeText.includes('adapter') ? 'Adapter' : routeText.includes('prepared') ? 'Utility' : 'Pipeline';
-  const output = pipeline?.artifacts?.splat ? 'visible splat' : pipeline?.artifacts?.sidecar ? 'sidecar' : 'report';
   return {
-    id: pipeline?.id || 'unknown-pipeline',
-    title: pipeline?.label || pipeline?.id || 'Pipeline route',
-    kicker: `${kind} Function`,
-    detail: pipeline?.routeId || pipeline?.id || 'manifest route',
-    description: pipeline?.description || 'Manifest-backed pipeline route.',
-    chips: [
-      real ? 'real' : fixture ? 'fixture' : modes[0] || 'local',
-      output,
-    ],
+    id: generator.id,
+    title: generator.title,
+    operationTitle: generator.operationTitle || generator.title,
+    kicker: generator.kicker,
+    detail: generator.detail,
+    backendPipelineId: generator.defaultPipelineId || null,
+    backendLabel: generator.backendLabel || pipeline?.routeId || 'No backend route',
+    description: pipeline?.description || (generator.available ? 'Generator route is not present in the loaded manifest.' : 'Awaiting manifest route.'),
+    chips: generator.chips || [],
+    available: Boolean(generator.available && pipeline),
     real,
     fixture,
     pipeline,
+    generator,
   };
 }
 
 function renderPipelineGeneratorLibrary() {
   const host = document.getElementById('pipeline-generator-library');
   if (!host) return;
-  const pipelines = pipelineManifest?.pipelines || [];
-  if (pipelines.length && !pipelines.some(route => route.id === pipelineDockState.selectedPipelineId)) {
-    pipelineDockState.selectedPipelineId = pipelines[0].id;
+  const selectedGenerator = selectedPipelineGeneratorRecord();
+  if (selectedGenerator?.id) pipelineDockState.selectedGeneratorId = selectedGenerator.id;
+  const selectedBackend = pipelineGeneratorBackendPipeline(selectedGenerator);
+  if (selectedBackend?.id) {
+    pipelineDockState.selectedPipelineId = selectedBackend.id;
+  } else if (pipelineManifest?.pipelines?.length && !pipelineManifest.pipelines.some(route => route.id === pipelineDockState.selectedPipelineId)) {
+    pipelineDockState.selectedPipelineId = pipelineManifest.pipelines[0].id;
   }
   host.innerHTML = '';
-  for (const pipeline of pipelines) {
-    const record = pipelineGeneratorCardRecord(pipeline);
+  for (const generator of pipelineGeneratorDefinitions) {
+    const record = pipelineGeneratorCardRecord(generator);
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = `pipeline-generator-card${record.id === pipelineDockState.selectedPipelineId ? ' selected' : ''}`;
+    card.className = `pipeline-generator-card${record.id === pipelineDockState.selectedGeneratorId ? ' selected' : ''}${record.available ? '' : ' future'}`;
+    card.disabled = !record.available;
     card.setAttribute('role', 'option');
-    card.setAttribute('aria-selected', record.id === pipelineDockState.selectedPipelineId ? 'true' : 'false');
+    card.setAttribute('aria-selected', record.id === pipelineDockState.selectedGeneratorId ? 'true' : 'false');
+    if (!record.available) card.setAttribute('aria-disabled', 'true');
     card.setAttribute('data-pipeline-generator-id', record.id);
-    card.setAttribute('data-pipeline-generator-pipeline-id', record.id);
-    card.draggable = true;
+    if (record.backendPipelineId) card.setAttribute('data-pipeline-generator-pipeline-id', record.backendPipelineId);
+    card.draggable = record.available;
     card.innerHTML = `
       <span class="pipeline-generator-kicker">${escapeHtml(record.kicker)}</span>
       <span class="pipeline-generator-title">${escapeHtml(record.title)}</span>
@@ -6027,38 +6121,22 @@ function renderPipelineGeneratorLibrary() {
     };
     card.addEventListener('pointerdown', event => beginPipelineGeneratorCardDrag(event, record.id));
     card.addEventListener('dragstart', event => {
+      if (!record.available) return;
       card.classList.add('dragging');
       event.dataTransfer?.setData('application/x-kaminos-generator-id', record.id);
+      if (record.backendPipelineId) event.dataTransfer?.setData('application/x-kaminos-generator-backend-pipeline-id', record.backendPipelineId);
       event.dataTransfer?.setData('text/plain', record.id);
       window.kaminosPipelineDraggedGeneratorId = record.id;
     });
     card.addEventListener('dragend', () => card.classList.remove('dragging'));
     host.appendChild(card);
   }
-  for (const future of pipelineFutureGenerators) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'pipeline-generator-card future';
-    card.disabled = true;
-    card.setAttribute('role', 'option');
-    card.setAttribute('aria-disabled', 'true');
-    card.setAttribute('data-pipeline-generator-id', future.id);
-    card.innerHTML = `
-      <span class="pipeline-generator-kicker">${escapeHtml(future.kicker)}</span>
-      <span class="pipeline-generator-title">${escapeHtml(future.title)}</span>
-      <span class="pipeline-generator-detail">${escapeHtml(future.detail)}</span>
-      <span class="pipeline-generator-chips">
-        ${future.chips.map(chip => `<span class="pipeline-generator-chip future">${escapeHtml(chip)}</span>`).join('')}
-      </span>
-    `;
-    host.appendChild(card);
-  }
   const inspector = document.getElementById('pipeline-generator-inspector');
   if (inspector) {
-    const selected = selectedPipelineRecord();
+    const selected = pipelineGeneratorCardRecord(selectedGenerator);
     inspector.innerHTML = `
-      <div class="pipeline-generator-inspector-title">${escapeHtml(selected?.label || 'No generator selected')}</div>
-      <div class="pipeline-generator-inspector-body">${escapeHtml(selected?.description || 'Select a manifest route from the generator library.')}</div>
+      <div class="pipeline-generator-inspector-title">${escapeHtml(selected?.title || 'No generator selected')}</div>
+      <div class="pipeline-generator-inspector-body">${escapeHtml(selected?.description || 'Select a generator primitive from the library.')} ${selected?.backendPipelineId ? `Backend route: ${escapeHtml(selected.backendPipelineId)}.` : ''}</div>
     `;
   }
 }
@@ -6068,11 +6146,14 @@ function renderPipelineRouteSelect() {
 }
 
 function selectPipelineGenerator(pipelineId) {
-  const pipelines = pipelineManifest?.pipelines || [];
-  if (!pipelines.some(route => route.id === pipelineId)) return null;
-  pipelineDockState.selectedPipelineId = pipelineId;
+  const generator = pipelineGeneratorById(pipelineId) || pipelineGeneratorForPipelineId(pipelineId);
+  if (!generator) return null;
+  const pipeline = pipelineGeneratorBackendPipeline(generator);
+  if (!pipeline) return null;
+  pipelineDockState.selectedGeneratorId = generator.id;
+  pipelineDockState.selectedPipelineId = pipeline.id;
   renderPipelineDock();
-  return selectedPipelineRecord();
+  return pipeline;
 }
 
 function renderPipelineDock() {
