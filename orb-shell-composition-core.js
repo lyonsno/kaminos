@@ -1,6 +1,7 @@
 export const ORB_SHELL_COMPOSITION_IDENTITY = 'orb-shell-macro-grammar-grounding-v0';
 export const ORB_SHELL_COMPOSITION_BASELINE = 'coherent-but-wrong-model-baseline';
 export const ORB_SHELL_CONTROLLED_VARIATION_MODE = 'orb-shell-controlled-variation-assay-v0';
+export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -58,6 +59,10 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
     macroAssemblages[id] = {
       phaseShift: clamp(stableNoise(`${base}:phase`) * 0.2 * amplitude, -0.22, 0.22),
       bowDelta: clamp(stableNoise(`${base}:bow`) * 0.18 * amplitude, -0.2, 0.2),
+      twistDelta: clamp(stableNoise(`${base}:twist-delta`) * 0.22 * amplitude, -0.24, 0.24),
+      torsionGradient: clamp(stableNoise(`${base}:torsion-gradient`) * 0.18 * amplitude, -0.2, 0.2),
+      surfaceRoll: clamp(stableNoise(`${base}:surface-roll`) * 0.16 * amplitude, -0.18, 0.18),
+      phaseLag: clamp(stableNoise(`${base}:phase-lag`) * 0.12 * amplitude, -0.14, 0.14),
       territoryWidthScale: clamp(1 + stableNoise(`${base}:territory`) * 0.16 * amplitude, 0.84, 1.18),
       siblingOffsetScale: clamp(1 + stableNoise(`${base}:sibling`) * 0.14 * amplitude, 0.86, 1.16),
       apertureBiteDelta: clamp(stableNoise(`${base}:bite`) * 0.09 * amplitude, -0.1, 0.1),
@@ -73,6 +78,9 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
     boundedParameterFamilies: [
       'macro phase',
       'macro bow',
+      'macro torsion',
+      'twist delta',
+      'surface roll',
       'territory width',
       'child sibling offset',
       'boundary aperture bite',
@@ -395,6 +403,57 @@ function createMacroBodyPromotionPlan(composition) {
   };
 }
 
+function createMacroTorsionField(assemblage, params = {}) {
+  const baselineTwist = assemblage.spine.control.baseTwist ?? assemblage.spine.control.twist;
+  const twistDelta = params.twistDelta ?? 0;
+  const torsionGradient = params.torsionGradient ?? 0;
+  const surfaceRoll = params.surfaceRoll ?? 0;
+  const phaseLag = params.phaseLag ?? 0;
+  return {
+    schema: 'MacroTorsionField',
+    mode: ORB_SHELL_MACRO_TORSION_MODE,
+    id: `${assemblage.id}-macro-torsion-field`,
+    parentAssemblage: assemblage.id,
+    baselineTwist,
+    twistDelta,
+    effectiveTwist: clamp(baselineTwist + twistDelta, 0.48, 1.82),
+    torsionGradient,
+    surfaceRoll,
+    phaseLag,
+    appliesTo: [
+      'spine-sampling',
+      'expanded-region-proxy-surface',
+      'future-mesh-boundary-input',
+    ],
+    preserve: [
+      'lower-cup-socket-contiguous',
+      'crossing-tuck-macro-body',
+      'MacroRegionSeamGapDescriptor',
+    ],
+    proceduralFamily: 'bounded-spherical-torsion-field',
+    failurePressure: 'twist-must-support-macro-design-not-arbitrary-tangle',
+  };
+}
+
+function createMacroTorsionFieldPlan(composition, macroParameters = {}) {
+  const fields = composition.macroAssemblages.map(assemblage => (
+    createMacroTorsionField(assemblage, macroParameters[assemblage.id])
+  ));
+  return {
+    schema: 'MacroTorsionFieldPlan',
+    mode: ORB_SHELL_MACRO_TORSION_MODE,
+    fields,
+    futureMeshRole: 'future-mesh-boundary-input',
+    variationFamilies: ['twistDelta', 'torsionGradient', 'surfaceRoll', 'phaseLag'],
+    preserves: [
+      'ExpandedMacroRegionProxy',
+      'MacroRegionSeamGapDescriptor',
+      'lower-cup-socket-contiguous',
+      'crossing-tuck-macro-body',
+    ],
+  };
+}
+
 function createExpandedRegionProxyDescriptor(assemblage) {
   const roleScale = assemblage.id === 'equatorial-cupping-whorl'
     ? 1.24
@@ -413,6 +472,13 @@ function createExpandedRegionProxyDescriptor(assemblage) {
     coverageScale: roleScale,
     coverageIntent: 'macro-region-coverage-before-final-meshing',
     preserveReadableGaps: true,
+    effectiveTorsion: assemblage.macroTorsionField ? {
+      fieldId: assemblage.macroTorsionField.id,
+      effectiveTwist: assemblage.macroTorsionField.effectiveTwist,
+      torsionGradient: assemblage.macroTorsionField.torsionGradient,
+      surfaceRoll: assemblage.macroTorsionField.surfaceRoll,
+      phaseLag: assemblage.macroTorsionField.phaseLag,
+    } : null,
     derivedFrom: assemblage.macroPromotedBody?.id,
   };
 }
@@ -508,6 +574,16 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.macroBodyPromotion = createMacroBodyPromotionPlan(next);
   for (const assemblage of next.macroAssemblages) {
     assemblage.macroPromotedBody = next.macroBodyPromotion.promotedBodies.find(body => body.parentAssemblage === assemblage.id);
+  }
+  next.macroTorsionFieldPlan = createMacroTorsionFieldPlan(next, macroParameters);
+  for (const assemblage of next.macroAssemblages) {
+    const field = next.macroTorsionFieldPlan.fields.find(item => item.parentAssemblage === assemblage.id);
+    assemblage.macroTorsionField = field;
+    assemblage.spine.control.baseTwist = field.baselineTwist;
+    assemblage.spine.control.effectiveTwist = field.effectiveTwist;
+    assemblage.spine.control.torsionGradient = field.torsionGradient;
+    assemblage.spine.control.surfaceRoll = field.surfaceRoll;
+    assemblage.spine.control.phaseLag = field.phaseLag;
   }
   if (next.macroBodyPromotion.lowerCupClosure) {
     next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
@@ -748,16 +824,42 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
   const control = assemblage.spine.control;
+  const torsion = assemblage.macroTorsionField;
   const lat = control.startLat + (control.endLat - control.startLat) * t;
   const widthPressure = assemblage.sphericalTerritory.lonWidth * 0.12;
   const siblingOffset = bandMember.siblingOffset + Math.sin(Math.PI * t) * widthPressure * 0.18;
+  const effectiveTwist = control.effectiveTwist ?? control.twist;
+  const torsionWave = torsion
+    ? Math.sin(TAU * t + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * t)
+    : 0;
+  const surfaceRollBias = torsion
+    ? torsion.surfaceRoll * Math.sin(Math.PI * t) * (bandMember.siblingOffset || 0) * 0.9
+    : 0;
   const lon = assemblage.sphericalTerritory.centerPhase
-    + assemblage.handedness * control.twist * (t - 0.5)
+    + assemblage.handedness * effectiveTwist * (t - 0.5)
     + Math.sin(Math.PI * t) * control.bow
+    + torsionWave
+    + surfaceRollBias
     + siblingOffset;
   const layer = bandMember.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer';
   const layerBias = layer === 'inner-support' ? -0.045 : layer === 'under-neighbor' ? -0.025 : 0.02;
   return makeVec3(THREE, spherePoint(lat, lon, radius + layerBias));
+}
+
+function torsionSurfaceFrame(THREE, assemblage, side, normal, t, strength = 1) {
+  const field = assemblage.macroTorsionField;
+  if (!field) return { side, normal };
+  const roll = (
+    field.surfaceRoll * Math.sin(Math.PI * t)
+    + field.torsionGradient * Math.sin(TAU * t + field.phaseLag) * 0.35
+  ) * strength;
+  if (Math.abs(roll) < 1e-5) return { side, normal };
+  const sideAxis = side.clone().multiplyScalar(Math.cos(roll)).add(normal.clone().multiplyScalar(Math.sin(roll))).normalize();
+  const normalAxis = normal.clone().multiplyScalar(Math.cos(roll * 0.42)).add(side.clone().multiplyScalar(-Math.sin(roll * 0.42))).normalize();
+  return {
+    side: sideAxis.lengthSq() > 1e-8 ? sideAxis : new THREE.Vector3(1, 0, 0),
+    normal: normalAxis.lengthSq() > 1e-8 ? normalAxis : normal,
+  };
 }
 
 function makeBandTube(THREE, assemblage, bandMember) {
@@ -797,6 +899,9 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
     let side = new THREE.Vector3().crossVectors(normal, tangent);
     if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
     side.normalize();
+    const frame = torsionSurfaceFrame(THREE, assemblage, side, normal, t, 0.62);
+    const sideAxis = frame.side;
+    const normalAxis = frame.normal;
     const profile = Math.pow(Math.sin(Math.PI * t), 0.42);
     const terminalScale = 0.42 + 0.58 * profile;
     const nearestCut = cutProfile.reduce((best, item) => (
@@ -811,10 +916,10 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
       const sideWidth = q < 0 ? leftWidth : rightWidth;
       const crown = 1 - Math.pow(Math.abs(q), 1.8) * 0.16;
       const pos = center.clone()
-        .addScaledVector(side, q * sideWidth)
-        .addScaledVector(normal, lift * crown);
+        .addScaledVector(sideAxis, q * sideWidth)
+        .addScaledVector(normalAxis, lift * crown);
       vertices.push(pos.x, pos.y, pos.z);
-      normals.push(normal.x, normal.y, normal.z);
+      normals.push(normalAxis.x, normalAxis.y, normalAxis.z);
       uvs.push(u, t);
     }
   }
@@ -837,6 +942,7 @@ function makeMacroTerritoryBodyGeometry(THREE, assemblage) {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData.MacroTerritoryBody = body;
+  geometry.userData.MacroTorsionField = assemblage.macroTorsionField;
   return geometry;
 }
 
@@ -869,6 +975,9 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     let side = new THREE.Vector3().crossVectors(normal, tangent);
     if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
     side.normalize();
+    const frame = torsionSurfaceFrame(THREE, assemblage, side, normal, t, 1);
+    const sideAxis = frame.side;
+    const normalAxis = frame.normal;
     const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
     const terminalScale = 0.52 + 0.48 * profile;
     const nearestCut = cutProfile.reduce((best, item) => (
@@ -887,10 +996,10 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
       const centerRelief = 1 - Math.exp(-Math.pow(q, 2) / 0.028) * 0.06;
       const crown = (1 - Math.pow(Math.abs(q), 2.2) * 0.2) * ridgeChannel * centerRelief;
       const pos = center.clone()
-        .addScaledVector(side, q * sideWidth)
-        .addScaledVector(normal, lift * crown);
+        .addScaledVector(sideAxis, q * sideWidth)
+        .addScaledVector(normalAxis, lift * crown);
       vertices.push(pos.x, pos.y, pos.z);
-      normals.push(normal.x, normal.y, normal.z);
+      normals.push(normalAxis.x, normalAxis.y, normalAxis.z);
       uvs.push(u, t);
     }
   }
@@ -914,6 +1023,7 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
   geometry.computeBoundingSphere();
   geometry.userData.MacroPromotedBody = promoted;
   geometry.userData.ExpandedMacroRegionProxy = assemblage.expandedRegionProxy;
+  geometry.userData.MacroTorsionField = assemblage.macroTorsionField;
   return geometry;
 }
 
@@ -1192,13 +1302,16 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       const macroGroup = new THREE.Group();
       macroGroup.name = assemblage.id;
       macroGroup.userData.MacroAssemblage = assemblage;
+      macroGroup.userData.MacroTorsionField = assemblage.macroTorsionField;
       const promotedMesh = new THREE.Mesh(makeMacroPromotedBodyGeometry(THREE, assemblage), promotedBodyMaterial);
       promotedMesh.name = `${assemblage.id}-macro-promoted-body`;
       promotedMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+      promotedMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
       macroGroup.add(promotedMesh);
       const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
       territoryMesh.name = `${assemblage.id}-macro-territory-body`;
       territoryMesh.userData.MacroTerritoryBody = assemblage.territoryBodyOccupancy;
+      territoryMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
       macroGroup.add(territoryMesh);
       for (const bandMember of assemblage.childBandPlan) {
         const mesh = new THREE.Mesh(makeBandTube(THREE, assemblage, bandMember), materialForBand(bandMember));
@@ -1241,6 +1354,16 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variantId: composition.effectiveVariation.variantId,
       variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
+      torsionFieldCount: composition.macroTorsionFieldPlan?.fields?.length || 0,
+      effectiveTorsion: composition.macroTorsionFieldPlan?.fields?.map(field => ({
+        id: field.id,
+        parentAssemblage: field.parentAssemblage,
+        effectiveTwist: field.effectiveTwist,
+        twistDelta: field.twistDelta,
+        torsionGradient: field.torsionGradient,
+        surfaceRoll: field.surfaceRoll,
+        phaseLag: field.phaseLag,
+      })) || [],
       promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
       expandedRegionCount: composition.expandedMacroRegionProxyPlan?.expandedRegions?.length || 0,
       seamGapCount: composition.expandedMacroRegionProxyPlan?.seamGaps?.length || 0,
@@ -1287,6 +1410,16 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
+        torsionFieldCount: composition.macroTorsionFieldPlan?.fields?.length || 0,
+        effectiveTorsion: composition.macroTorsionFieldPlan?.fields?.map(field => ({
+          id: field.id,
+          parentAssemblage: field.parentAssemblage,
+          effectiveTwist: field.effectiveTwist,
+          twistDelta: field.twistDelta,
+          torsionGradient: field.torsionGradient,
+          surfaceRoll: field.surfaceRoll,
+          phaseLag: field.phaseLag,
+        })) || [],
         promotedBodyCount: composition.macroBodyPromotion?.promotedBodies?.length || 0,
         expandedRegionCount: composition.expandedMacroRegionProxyPlan?.expandedRegions?.length || 0,
         seamGapCount: composition.expandedMacroRegionProxyPlan?.seamGaps?.length || 0,
@@ -1297,6 +1430,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
         PrimaryApertureFrame: composition.frontApertureOwnership,
         frontApertureOwnership: composition.frontApertureOwnership,
+        MacroTorsionFieldPlan: composition.macroTorsionFieldPlan,
+        macroTorsionFieldPlan: composition.macroTorsionFieldPlan,
+        MacroTorsionField: composition.macroTorsionFieldPlan?.fields || [],
         MacroBodyPromotionPlan: composition.macroBodyPromotion,
         macroBodyPromotion: composition.macroBodyPromotion,
         MacroPromotedBody: composition.macroBodyPromotion?.promotedBodies || [],

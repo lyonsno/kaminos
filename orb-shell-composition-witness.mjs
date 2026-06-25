@@ -137,6 +137,11 @@ async function main() {
     assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
     assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
     assert.ok(state?.variantId, 'variantId missing from debug state');
+    assert.equal(state?.MacroTorsionFieldPlan?.schema, 'MacroTorsionFieldPlan', 'MacroTorsionFieldPlan missing from debug state');
+    assert.equal(state?.MacroTorsionFieldPlan?.mode, 'macro-torsion-field-v0', 'MacroTorsionFieldPlan mode missing from debug state');
+    assert.equal(state?.torsionFieldCount, state.macroAssemblageCount, 'composition must expose one MacroTorsionField per macro assemblage');
+    assert.ok(state?.MacroTorsionField?.every(field => field?.schema === 'MacroTorsionField'), 'MacroTorsionField descriptors missing from debug state');
+    assert.ok(state?.effectiveTorsion?.every(field => typeof field?.effectiveTwist === 'number'), 'effective torsion missing from debug state');
     assert.equal(state?.MacroBodyPromotionPlan?.schema, 'MacroBodyPromotionPlan', 'MacroBodyPromotionPlan missing from debug state');
     assert.equal(state?.promotedBodyCount, state.macroAssemblageCount, 'composition must expose one MacroPromotedBody per macro assemblage');
     assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
@@ -167,6 +172,11 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      torsionFieldCount: state.torsionFieldCount,
+      effectiveTorsion: state.effectiveTorsion,
+      MacroTorsionFieldPlan: state.MacroTorsionFieldPlan,
+      macroTorsionFieldPlan: state.macroTorsionFieldPlan,
+      MacroTorsionField: state.MacroTorsionField,
       promotedBodyCount: state.promotedBodyCount,
       expandedRegionCount: state.expandedRegionCount,
       seamGapCount: state.seamGapCount,
