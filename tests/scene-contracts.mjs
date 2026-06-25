@@ -148,6 +148,7 @@ assert.match(index, /Texture load failed/, 'Image scene import must fail loud wh
 assert.match(index, /scrollTo\(\{\s*top:\s*0/, 'Graph image scene import must bring the authored scene object list into view after switching to Assets');
 assert.match(index, /pipelineRunGraphInspectorAction/, 'Pipeline graph inspector actions must own visible success and failure status');
 assert.match(index, /pipeline-graph-inspector-status/, 'Pipeline graph inspector must render action status near the clicked node action');
+assert.match(index, /pipelineActivateGraphInspectorAction/, 'Pipeline graph inspector actions must activate from the trusted pointer-up path, not only synthetic click');
 assert.match(index, /pipeline-graph-inspector-status-kicker/, 'Pipeline graph inspector status must have a visible label, not an empty low-contrast line');
 assert.match(index, /Action Status/, 'Pipeline graph inspector status must name itself as action status');
 assert.match(index, /role="status"/, 'Pipeline graph inspector status must expose live status semantics');

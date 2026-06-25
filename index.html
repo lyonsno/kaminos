@@ -5202,12 +5202,34 @@ function renderPipelineGraphInspector(node, selectedRun) {
     button.className = 'btn';
     button.textContent = item.label;
     button.disabled = Boolean(item.disabled);
-    button.addEventListener('pointerdown', event => event.stopPropagation());
-    button.addEventListener('click', async () => {
-      await pipelineRunGraphInspectorAction(item, button);
+    button.addEventListener('pointerdown', event => {
+      event.stopPropagation();
+      button.dataset.graphInspectorPointerDown = 'true';
+    });
+    button.addEventListener('pointerup', async event => {
+      event.stopPropagation();
+      if (button.dataset.graphInspectorPointerDown !== 'true') return;
+      button.dataset.graphInspectorPointerDown = '';
+      await pipelineActivateGraphInspectorAction(item, button, 'pointer');
+    });
+    button.addEventListener('pointercancel', () => {
+      button.dataset.graphInspectorPointerDown = '';
+    });
+    button.addEventListener('click', async event => {
+      event.stopPropagation();
+      await pipelineActivateGraphInspectorAction(item, button, 'click');
     });
     actionHost.appendChild(button);
   }
+}
+
+async function pipelineActivateGraphInspectorAction(item, button, source = 'click') {
+  if (source === 'click' && button?.dataset.graphInspectorPointerActivated === 'true') {
+    button.dataset.graphInspectorPointerActivated = '';
+    return null;
+  }
+  if (source === 'pointer' && button) button.dataset.graphInspectorPointerActivated = 'true';
+  return pipelineRunGraphInspectorAction(item, button);
 }
 
 function pipelineGraphInspectorSubjectId() {
