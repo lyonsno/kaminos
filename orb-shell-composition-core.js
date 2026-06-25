@@ -1,7 +1,14 @@
 export const ORB_SHELL_COMPOSITION_IDENTITY = 'orb-shell-macro-grammar-grounding-v0';
 export const ORB_SHELL_COMPOSITION_BASELINE = 'coherent-but-wrong-model-baseline';
+export const ORB_SHELL_CONTROLLED_VARIATION_MODE = 'orb-shell-controlled-variation-assay-v0';
 
 const TAU = Math.PI * 2;
+const MACRO_VARIATION_IDS = [
+  'north-west-dominant-thrust',
+  'north-east-counter-thrust',
+  'equatorial-cupping-whorl',
+  'polar-crown-lock',
+];
 
 function spherePoint(lat, lon, radius = 1) {
   const c = Math.cos(lat);
@@ -14,6 +21,91 @@ function makeVec3(THREE, point) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function stableNoise(key) {
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+function variantPreset(variantId) {
+  const presets = {
+    baseline: { amplitude: 0, cupBias: 0, tuckBias: 0, dominanceBias: 0 },
+    'asymmetric-tuck': { amplitude: 0.88, cupBias: 0.12, tuckBias: 0.18, dominanceBias: 0.1 },
+    'wide-cup': { amplitude: 0.72, cupBias: 0.22, tuckBias: -0.05, dominanceBias: -0.04 },
+    'tight-crown': { amplitude: 0.64, cupBias: -0.08, tuckBias: 0.1, dominanceBias: 0.16 },
+    'left-heavy-rim': { amplitude: 0.78, cupBias: 0.04, tuckBias: -0.16, dominanceBias: 0.2 },
+  };
+  return presets[variantId] || { amplitude: 0.7, cupBias: 0, tuckBias: 0, dominanceBias: 0 };
+}
+
+export function createControlledOrbShellVariationDescriptor({ variantId = 'baseline', variationSeed = 0 } = {}) {
+  const normalizedVariantId = String(variantId || 'baseline');
+  const seed = Number.isFinite(Number(variationSeed)) ? Number(variationSeed) : 0;
+  const preset = variantPreset(normalizedVariantId);
+  const macroAssemblages = {};
+  for (const id of MACRO_VARIATION_IDS) {
+    const base = `${normalizedVariantId}:${seed}:${id}`;
+    const amplitude = preset.amplitude;
+    macroAssemblages[id] = {
+      phaseShift: clamp(stableNoise(`${base}:phase`) * 0.2 * amplitude, -0.22, 0.22),
+      bowDelta: clamp(stableNoise(`${base}:bow`) * 0.18 * amplitude, -0.2, 0.2),
+      territoryWidthScale: clamp(1 + stableNoise(`${base}:territory`) * 0.16 * amplitude, 0.84, 1.18),
+      siblingOffsetScale: clamp(1 + stableNoise(`${base}:sibling`) * 0.14 * amplitude, 0.86, 1.16),
+      apertureBiteDelta: clamp(stableNoise(`${base}:bite`) * 0.09 * amplitude, -0.1, 0.1),
+      terminationFlavor: stableNoise(`${base}:termination`) > 0 ? 'socket-heavy-compatible' : 'rim-absorbed-compatible',
+    };
+  }
+  return {
+    schema: 'OrbShellVariationDescriptor',
+    mode: ORB_SHELL_CONTROLLED_VARIATION_MODE,
+    generationLaw: 'bounded-semantic-assay-not-free-randomization',
+    variantId: normalizedVariantId,
+    variationSeed: seed,
+    boundedParameterFamilies: [
+      'macro phase',
+      'macro bow',
+      'territory width',
+      'child sibling offset',
+      'boundary aperture bite',
+      'lower cup depth',
+      'crossing tuck phase',
+      'owner dominance',
+      'compatible termination flavor',
+    ],
+    forbiddenVariationClasses: [
+      'free-randomization',
+      'unbounded-macro-count-randomization',
+      'aperture-owner-removal',
+      'global-braid-randomization',
+      'core-material-randomization',
+    ],
+    preservedInvariants: [
+      'PrimaryApertureFrame',
+      'front-aperture-ownership',
+      'four-macro-assay-count',
+      'spherical-closure-anchors',
+      'shaped-boundary-pressure-fields',
+      'wrong-model-baseline-warning',
+    ],
+    effectiveParameters: {
+      macroAssemblages,
+      frontApertureOwnership: {
+        lowerCupDepth: clamp(1 + preset.cupBias + stableNoise(`${normalizedVariantId}:${seed}:lower-cup`) * 0.12 * preset.amplitude, 0.82, 1.26),
+        crossingTuckPhase: clamp(preset.tuckBias + stableNoise(`${normalizedVariantId}:${seed}:crossing-tuck`) * 0.18 * preset.amplitude, -0.24, 0.26),
+        ownerDominance: clamp(1 + preset.dominanceBias + stableNoise(`${normalizedVariantId}:${seed}:owner-dominance`) * 0.1 * preset.amplitude, 0.84, 1.28),
+        apertureBite: clamp(1 + stableNoise(`${normalizedVariantId}:${seed}:aperture-bite`) * 0.12 * preset.amplitude, 0.84, 1.18),
+      },
+    },
+  };
 }
 
 function band(id, parent, role, offset, width, layerIntervals, startType, endType) {
@@ -236,7 +328,69 @@ function makePrimaryApertureFrame() {
   };
 }
 
-export function createTargetOrbShellCompositionFixture() {
+export function applyControlledOrbShellVariation(composition, descriptor) {
+  const next = clone(composition);
+  const macroParameters = descriptor.effectiveParameters.macroAssemblages;
+  for (const assemblage of next.macroAssemblages) {
+    const params = macroParameters[assemblage.id];
+    if (!params) continue;
+    assemblage.sphericalTerritory.centerPhase += params.phaseShift;
+    assemblage.sphericalTerritory.lonWidth = clamp(
+      assemblage.sphericalTerritory.lonWidth * params.territoryWidthScale,
+      0.48,
+      1.24,
+    );
+    assemblage.spine.control.bow = clamp(assemblage.spine.control.bow + params.bowDelta, -0.62, 0.62);
+    for (const [index, member] of assemblage.childBandPlan.entries()) {
+      const sign = index % 2 === 0 ? -1 : 1;
+      member.siblingOffset = clamp(
+        member.siblingOffset * params.siblingOffsetScale + sign * params.phaseShift * 0.08,
+        -0.24,
+        0.24,
+      );
+      member.widthProfile.mid = clamp(member.widthProfile.mid * (0.96 + (params.territoryWidthScale - 1) * 0.35), 0.036, 0.18);
+      member.widthProfile.root = member.widthProfile.mid * 0.72;
+      member.widthProfile.tip = member.widthProfile.mid * 0.58;
+      member.variationFlavor = params.terminationFlavor;
+      if (params.terminationFlavor === 'socket-heavy-compatible' && member.role !== 'body') {
+        member.endTermination.type = member.endTermination.type === 'amber-seam-cap' ? 'socket-cap' : member.endTermination.type;
+      }
+    }
+    const body = assemblage.territoryBodyOccupancy;
+    if (body) {
+      body.widthProfile.mid = clamp(body.widthProfile.mid * params.territoryWidthScale, 0.16, 0.34);
+      body.widthProfile.root = body.widthProfile.mid * 0.68;
+      body.widthProfile.tip = body.widthProfile.mid * 0.72;
+      body.variationFlavor = params.terminationFlavor;
+      const aperturePressure = body.boundaryPressureField?.pressures?.find(pressure => pressure.type === 'aperture-bite');
+      if (aperturePressure) aperturePressure.strength = clamp(aperturePressure.strength + params.apertureBiteDelta, 0.18, 0.48);
+      body.boundaryCutProfile = makeBoundaryCutProfile(body.boundaryPressureField);
+    }
+  }
+  const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
+  next.frontApertureOwnership.effectiveVariation = frontParameters;
+  for (const owner of next.frontApertureOwnership.owners) {
+    owner.preservedByVariation = true;
+    if (owner.role === 'lower-cupping-owner') owner.ownerDominance = frontParameters.ownerDominance;
+    if (owner.role === 'crossing-tuck-owner') owner.crossingTuckPhase = frontParameters.crossingTuckPhase;
+  }
+  for (const voidRecord of next.AperturePressure.primaryVoids) {
+    voidRecord.radius = [
+      clamp(voidRecord.radius[0] * frontParameters.apertureBite, 0.26, 0.42),
+      clamp(voidRecord.radius[1] * frontParameters.lowerCupDepth, 0.46, 0.68),
+    ];
+    voidRecord.effectiveVariation = {
+      apertureBite: frontParameters.apertureBite,
+      lowerCupDepth: frontParameters.lowerCupDepth,
+    };
+  }
+  next.controlledVariation = descriptor;
+  next.effectiveVariation = descriptor;
+  return next;
+}
+
+export function createTargetOrbShellCompositionFixture(options = {}) {
+  const controlledVariation = createControlledOrbShellVariationDescriptor(options);
   const sphericalClosureAnchors = [
     {
       id: 'crown-closure-anchor',
@@ -376,7 +530,7 @@ export function createTargetOrbShellCompositionFixture() {
     }),
   ];
 
-  return {
+  const composition = {
     schema: 'OrbShellComposition',
     identity: ORB_SHELL_COMPOSITION_IDENTITY,
     baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
@@ -437,6 +591,7 @@ export function createTargetOrbShellCompositionFixture() {
       terminations: ['termination-pressure', 'crown-lock', 'rim-absorption', 'socket-cap'],
     },
   };
+  return applyControlledOrbShellVariation(composition, controlledVariation);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -552,7 +707,7 @@ function makeFrontOwnerCurveGeometry(THREE, points, radius) {
   return new THREE.TubeGeometry(curve, 72, radius, 10, false);
 }
 
-function makeLowerFrontCupGeometry(THREE) {
+function makeLowerFrontCupGeometry(THREE, lowerCupDepth = 1) {
   const rowCount = 24;
   const columnCount = 9;
   const vertices = [];
@@ -560,14 +715,14 @@ function makeLowerFrontCupGeometry(THREE) {
   const indices = [];
   for (let row = 0; row < rowCount; row++) {
     const t = row / (rowCount - 1);
-    const y = -0.72 + t * 0.34;
-    const centerX = -0.05 + Math.sin(t * Math.PI) * 0.06;
-    const halfWidth = 0.28 + Math.sin(t * Math.PI) * 0.1;
+    const y = -0.72 + t * (0.3 + lowerCupDepth * 0.05);
+    const centerX = -0.05 + Math.sin(t * Math.PI) * 0.06 * lowerCupDepth;
+    const halfWidth = 0.26 + lowerCupDepth * 0.03 + Math.sin(t * Math.PI) * 0.1 * lowerCupDepth;
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
       const q = u * 2 - 1;
       const x = centerX + q * halfWidth * (0.62 + 0.38 * Math.sin(t * Math.PI));
-      const z = 0.78 + Math.sin(t * Math.PI) * 0.1 - Math.abs(q) * 0.055;
+      const z = 0.78 + Math.sin(t * Math.PI) * 0.1 * lowerCupDepth - Math.abs(q) * 0.055;
       const point = new THREE.Vector3(x, y, z).normalize().multiplyScalar(1.07);
       vertices.push(point.x, point.y, point.z);
       normals.push(point.x, point.y, point.z);
@@ -593,7 +748,8 @@ function makeLowerFrontCupGeometry(THREE) {
 
 function addPrimaryApertureFrameGeometry(THREE, group, composition, materials) {
   const frame = composition.frontApertureOwnership;
-  const cup = new THREE.Mesh(makeLowerFrontCupGeometry(THREE), materials.ownerBody);
+  const variation = frame.effectiveVariation || {};
+  const cup = new THREE.Mesh(makeLowerFrontCupGeometry(THREE, variation.lowerCupDepth || 1), materials.ownerBody);
   cup.name = 'primary-front-aperture-lower-cupping-owner';
   cup.userData.PrimaryApertureFrame = frame;
   cup.userData.frontApertureOwnerRole = 'lower-cupping-owner';
@@ -601,10 +757,10 @@ function addPrimaryApertureFrameGeometry(THREE, group, composition, materials) {
 
   const crossing = new THREE.Mesh(makeFrontOwnerCurveGeometry(THREE, [
     [-0.38, 0.38, 0.86],
-    [-0.16, 0.12, 1.03],
-    [0.1, -0.08, 1.08],
-    [0.34, -0.33, 0.88],
-  ], 0.026), materials.ownerRail);
+    [-0.16 + (variation.crossingTuckPhase || 0) * 0.18, 0.12, 1.03],
+    [0.1 + (variation.crossingTuckPhase || 0) * 0.24, -0.08, 1.08],
+    [0.34, -0.33 + (variation.crossingTuckPhase || 0) * 0.12, 0.88],
+  ], 0.026 * (variation.ownerDominance || 1)), materials.ownerRail);
   crossing.name = 'primary-front-aperture-crossing-tuck-owner';
   crossing.userData.PrimaryApertureFrame = frame;
   crossing.userData.frontApertureOwnerRole = 'crossing-tuck-owner';
@@ -619,7 +775,8 @@ function disposeObject(child, sharedMaterials) {
 export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, controls, onStatus, onDirty } = {}) {
   let active = false;
   let group = null;
-  let composition = createTargetOrbShellCompositionFixture();
+  let variationOptions = { variantId: 'baseline', variationSeed: 0 };
+  let composition = createTargetOrbShellCompositionFixture(variationOptions);
 
   const sharedMaterials = new Set();
   const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x252c30, roughness: 0.24, metalness: 0.92, envMapIntensity: 2.4 });
@@ -662,7 +819,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
 
   function build() {
     disposeGroup();
-    composition = createTargetOrbShellCompositionFixture();
+    composition = createTargetOrbShellCompositionFixture(variationOptions);
     group = new THREE.Group();
     group.name = ORB_SHELL_COMPOSITION_IDENTITY;
     group.userData.OrbShellComposition = composition;
@@ -714,6 +871,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     onStatus?.({
       phase: 'built',
       identity: ORB_SHELL_COMPOSITION_IDENTITY,
+      variantId: composition.effectiveVariation.variantId,
+      variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
       territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
@@ -723,6 +882,15 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   }
 
   return {
+    setVariation(next = {}) {
+      variationOptions = {
+        variantId: next.variantId ?? variationOptions.variantId,
+        variationSeed: next.variationSeed ?? variationOptions.variationSeed,
+      };
+      composition = createTargetOrbShellCompositionFixture(variationOptions);
+      if (active) build();
+      onDirty?.();
+    },
     setActive(next) {
       active = !!next;
       if (active) build();
@@ -744,6 +912,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         identity: ORB_SHELL_COMPOSITION_IDENTITY,
         active,
         baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
+        variantId: composition.effectiveVariation.variantId,
+        variationSeed: composition.effectiveVariation.variationSeed,
+        controlledVariation: composition.controlledVariation,
+        effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
         bandMemberCount: composition.macroAssemblages.reduce((sum, item) => sum + item.childBandPlan.length, 0),
         territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,

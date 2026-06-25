@@ -134,6 +134,9 @@ async function main() {
     assert.ok(state?.frontApertureOwnershipCount >= 4, 'primary aperture ownership descriptors missing from debug state');
     assert.equal(state?.PrimaryApertureFrame?.schema, 'PrimaryApertureFrame', 'PrimaryApertureFrame missing from debug state');
     assert.ok(state?.frontApertureOwnership?.frontCompositionBias?.includes('break-open-horseshoe-symmetry'), 'front composition bias missing from debug state');
+    assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
+    assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
+    assert.ok(state?.variantId, 'variantId missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
     assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
@@ -159,6 +162,10 @@ async function main() {
       closureAnchorCount: state.closureAnchorCount,
       shapedBoundaryCount: state.shapedBoundaryCount,
       frontApertureOwnershipCount: state.frontApertureOwnershipCount,
+      variantId: state.variantId,
+      variationSeed: state.variationSeed,
+      controlledVariation: state.controlledVariation,
+      effectiveVariation: state.effectiveVariation,
       inverseProceduralHypotheses: state.inverseProceduralHypotheses,
       PrimaryApertureFrame: state.PrimaryApertureFrame,
       frontApertureOwnership: state.frontApertureOwnership,
