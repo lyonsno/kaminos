@@ -187,6 +187,55 @@ function macro(id, role, dominance, phase, handedness, territory, childBands, op
   };
 }
 
+function makePrimaryApertureFrame() {
+  return {
+    schema: 'PrimaryApertureFrame',
+    id: 'primary-front-aperture-frame',
+    proceduralFamilies: [
+      'aperture-repulsor-field',
+      'dominance-crossing-field',
+      'front-cupping-thrust',
+      'front-crossing-tuck',
+    ],
+    frontCompositionBias: [
+      'break-open-horseshoe-symmetry',
+      'reduce-passive-central-oval',
+      'assign-front-aperture-ownership',
+    ],
+    owners: [
+      {
+        role: 'lower-cupping-owner',
+        assemblageId: 'equatorial-cupping-whorl',
+        memberIds: ['eq-body', 'eq-rail'],
+        generatedBy: ['front-cupping-thrust', 'aperture-repulsor-field'],
+        visibleGeometry: 'lower-front-cup-body',
+      },
+      {
+        role: 'crossing-tuck-owner',
+        assemblageId: 'north-east-counter-thrust',
+        memberIds: ['ne-body', 'ne-support'],
+        generatedBy: ['front-crossing-tuck', 'dominance-crossing-field'],
+        visibleGeometry: 'front-crossing-tuck-member',
+      },
+      {
+        role: 'side-rim-owner',
+        side: 'left',
+        assemblageId: 'north-west-dominant-thrust',
+        memberIds: ['nw-body', 'nw-rail'],
+        generatedBy: ['aperture-repulsor-field', 'side-rim-pressure-anchor'],
+      },
+      {
+        role: 'side-rim-owner',
+        side: 'right',
+        assemblageId: 'north-east-counter-thrust',
+        memberIds: ['ne-body', 'ne-support'],
+        generatedBy: ['aperture-repulsor-field', 'side-rim-pressure-anchor'],
+      },
+    ],
+    variationParameters: ['cupDepth', 'crossingTuckPhase', 'ownerDominance', 'apertureBite'],
+  };
+}
+
 export function createTargetOrbShellCompositionFixture() {
   const sphericalClosureAnchors = [
     {
@@ -349,6 +398,7 @@ export function createTargetOrbShellCompositionFixture() {
     ],
     macroAssemblages,
     sphericalClosureAnchors,
+    frontApertureOwnership: makePrimaryApertureFrame(),
     AperturePressure: {
       schema: 'AperturePressure',
       proceduralFamily: 'aperture-pressure-field-from-macro-thrusts',
@@ -497,6 +547,70 @@ function makeAperturePressureRing(THREE, voidRecord) {
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 120, 0.006, 8, true);
 }
 
+function makeFrontOwnerCurveGeometry(THREE, points, radius) {
+  const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
+  return new THREE.TubeGeometry(curve, 72, radius, 10, false);
+}
+
+function makeLowerFrontCupGeometry(THREE) {
+  const rowCount = 24;
+  const columnCount = 9;
+  const vertices = [];
+  const normals = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    const y = -0.72 + t * 0.34;
+    const centerX = -0.05 + Math.sin(t * Math.PI) * 0.06;
+    const halfWidth = 0.28 + Math.sin(t * Math.PI) * 0.1;
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = u * 2 - 1;
+      const x = centerX + q * halfWidth * (0.62 + 0.38 * Math.sin(t * Math.PI));
+      const z = 0.78 + Math.sin(t * Math.PI) * 0.1 - Math.abs(q) * 0.055;
+      const point = new THREE.Vector3(x, y, z).normalize().multiplyScalar(1.07);
+      vertices.push(point.x, point.y, point.z);
+      normals.push(point.x, point.y, point.z);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function addPrimaryApertureFrameGeometry(THREE, group, composition, materials) {
+  const frame = composition.frontApertureOwnership;
+  const cup = new THREE.Mesh(makeLowerFrontCupGeometry(THREE), materials.ownerBody);
+  cup.name = 'primary-front-aperture-lower-cupping-owner';
+  cup.userData.PrimaryApertureFrame = frame;
+  cup.userData.frontApertureOwnerRole = 'lower-cupping-owner';
+  group.add(cup);
+
+  const crossing = new THREE.Mesh(makeFrontOwnerCurveGeometry(THREE, [
+    [-0.38, 0.38, 0.86],
+    [-0.16, 0.12, 1.03],
+    [0.1, -0.08, 1.08],
+    [0.34, -0.33, 0.88],
+  ], 0.026), materials.ownerRail);
+  crossing.name = 'primary-front-aperture-crossing-tuck-owner';
+  crossing.userData.PrimaryApertureFrame = frame;
+  crossing.userData.frontApertureOwnerRole = 'crossing-tuck-owner';
+  group.add(crossing);
+}
+
 function disposeObject(child, sharedMaterials) {
   child.geometry?.dispose?.();
   if (child.material && !sharedMaterials.has(child.material)) child.material.dispose?.();
@@ -520,7 +634,18 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const hopMaterial = new THREE.MeshStandardMaterial({ color: 0x42302a, roughness: 0.28, metalness: 0.86, envMapIntensity: 2.2 });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.72 });
-  for (const material of [bodyMaterial, territoryMaterial, railMaterial, hopMaterial, apertureMaterial, terminationMaterial]) sharedMaterials.add(material);
+  const apertureOwnerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x20272a, roughness: 0.25, metalness: 0.9, envMapIntensity: 2.2, side: THREE.DoubleSide });
+  const apertureOwnerRailMaterial = new THREE.MeshStandardMaterial({ color: 0x71828a, roughness: 0.18, metalness: 0.92, envMapIntensity: 3 });
+  for (const material of [
+    bodyMaterial,
+    territoryMaterial,
+    railMaterial,
+    hopMaterial,
+    apertureMaterial,
+    terminationMaterial,
+    apertureOwnerBodyMaterial,
+    apertureOwnerRailMaterial,
+  ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
     if (bandMember.role === 'body') return bodyMaterial;
@@ -580,6 +705,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       ring.userData.AperturePressure = voidRecord;
       group.add(ring);
     }
+    addPrimaryApertureFrameGeometry(THREE, group, composition, {
+      ownerBody: apertureOwnerBodyMaterial,
+      ownerRail: apertureOwnerRailMaterial,
+    });
 
     scene.add(group);
     onStatus?.({
@@ -587,8 +716,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       identity: ORB_SHELL_COMPOSITION_IDENTITY,
       macroAssemblageCount: composition.macroAssemblages.length,
       territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
-      closureAnchorCount: composition.sphericalClosureAnchors.length,
-    });
+        closureAnchorCount: composition.sphericalClosureAnchors.length,
+        frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
+      });
     onDirty?.();
   }
 
@@ -619,6 +749,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         territoryBodyCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy).length,
         closureAnchorCount: composition.sphericalClosureAnchors.length,
         shapedBoundaryCount: composition.macroAssemblages.filter(item => item.territoryBodyOccupancy?.boundaryPressureField).length,
+        frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
+        PrimaryApertureFrame: composition.frontApertureOwnership,
+        frontApertureOwnership: composition.frontApertureOwnership,
         MacroTerritoryBody: composition.macroAssemblages.map(item => item.territoryBodyOccupancy),
         BoundaryPressureField: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
         boundaryPressureFields: composition.macroAssemblages.map(item => item.territoryBodyOccupancy?.boundaryPressureField),
