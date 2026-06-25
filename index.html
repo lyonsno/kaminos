@@ -1089,6 +1089,38 @@ function hybridSplatOverlaySceneContextCapability(handle = hybridSplatOverlaySta
   };
 }
 
+function normalizeRendererSceneContextHonoredFields(resultObject) {
+  if (Array.isArray(resultObject?.honoredFields)) return resultObject.honoredFields.slice();
+  const honored = resultObject?.honored;
+  if (!honored || typeof honored !== 'object' || Array.isArray(honored)) return [];
+  const fieldMap = {
+    environment: 'lighting.environment',
+    environmentIntensity: 'lighting.environment.intensity',
+    environmentRotation: 'lighting.environment.rotationY',
+    exposure: 'lighting.exposure',
+    toneMapping: 'lighting.toneMapping',
+    lights: 'lighting.lights',
+    depthSource: 'composition.depthSource',
+  };
+  return Object.entries(fieldMap)
+    .filter(([key]) => honored[key] === true)
+    .map(([, field]) => field);
+}
+
+function normalizeRendererSceneContextUnsupportedFields(resultObject, fallbackUnsupportedFields = []) {
+  if (Array.isArray(resultObject?.unsupportedFields)) return resultObject.unsupportedFields.slice();
+  if (Array.isArray(resultObject?.unsupported)) return resultObject.unsupported.slice();
+  return fallbackUnsupportedFields.slice();
+}
+
+function normalizeRendererSceneContextHonoredMap(resultObject) {
+  const honored = resultObject?.honored;
+  if (!honored || typeof honored !== 'object' || Array.isArray(honored)) return null;
+  return Object.fromEntries(
+    Object.entries(honored).filter(([, value]) => typeof value === 'boolean')
+  );
+}
+
 function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}) {
   const hasTelemetryObject = !!result && typeof result === 'object' && !Array.isArray(result);
   const resultObject = hasTelemetryObject ? result : {};
@@ -1104,19 +1136,27 @@ function normalizeHybridSplatSceneContextTelemetry(result, context, options = {}
   const acceptedFields = hasStructuredTelemetry && Array.isArray(resultObject.acceptedFields)
     ? resultObject.acceptedFields.slice()
     : [];
-  const honoredFields = hasStructuredTelemetry && Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [];
+  const honoredFields = hasStructuredTelemetry ? normalizeRendererSceneContextHonoredFields(resultObject) : [];
   const rejectedFields = hasStructuredTelemetry && Array.isArray(resultObject.rejectedFields) ? resultObject.rejectedFields.slice() : [];
+  const unsupportedFields = hasStructuredTelemetry
+    ? normalizeRendererSceneContextUnsupportedFields(resultObject, fallbackUnsupportedFields)
+    : fallbackUnsupportedFields;
   return {
     schema: 'kaminos.hybrid-splat-overlay.scene-context-telemetry.v0',
+    rendererSchema: hasStructuredTelemetry && typeof resultObject.schema === 'string' ? resultObject.schema : null,
     contextSchema: context?.schema || null,
     contextFrame: context?.producer?.frame ?? null,
+    contextFrameId: context?.producer?.frameId ?? null,
     contextTimestamp: context?.producer?.updatedAt || null,
+    rendererTimestamp: hasStructuredTelemetry && typeof resultObject.timestamp === 'string' ? resultObject.timestamp : null,
+    rendererFrameId: hasStructuredTelemetry && typeof resultObject.frameId === 'string' ? resultObject.frameId : null,
     route: hybridMeshSplatRoute.id,
     capability: hybridSplatOverlaySceneContextCapability(),
     accepted: resultObject.accepted === true,
     acceptedFields,
+    honored: hasStructuredTelemetry ? normalizeRendererSceneContextHonoredMap(resultObject) : null,
     honoredFields,
-    unsupportedFields: hasStructuredTelemetry && Array.isArray(resultObject.unsupportedFields) ? resultObject.unsupportedFields.slice() : fallbackUnsupportedFields,
+    unsupportedFields,
     rejectedFields,
     stale: resultObject.stale === true,
     missing: resultObject.missing === true || fallbackMissing,

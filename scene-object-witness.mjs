@@ -2553,6 +2553,10 @@ async function runHybridSplatOverlayScenario(ws) {
         .replace('missing-scene-context-telemetry', 'malformed-scene-context-telemetry')
         .replace('setSceneContext(context) { state.sceneContexts.push(context); state.sceneContextTelemetry = undefined; publish(); }',
           'setSceneContext(context) { const telemetry = {}; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }');
+      const rendererTelemetryModuleSource = moduleSource
+        .replace('hybridSplatOverlayWitness = "1"', 'hybridSplatOverlayWitness = "renderer-scene-context-telemetry"')
+        .replace('setSceneContext(context) { const telemetry = { accepted: true, acceptedFields: ["lighting.environment", "lighting.exposure", "composition.background"], honoredFields: ["composition.background"], unsupportedFields: ["hostDepthTexture"], stale: false, ignored: false, missing: false, failurePhase: null }; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }',
+          'setSceneContext(context) { const telemetry = { schema: "hybrid-render.scene-context.v0", accepted: true, timestamp: "2026-06-25T00:00:00.000Z", frameId: context?.producer?.frameId || null, honored: { environment: true, environmentIntensity: true, environmentRotation: true, exposure: false, toneMapping: false, lights: false, depthSource: false }, unsupported: ["toneMapping:aces", "lights", "depthSource:host-depth-texture"] }; state.sceneContexts.push(context); state.sceneContextTelemetry = telemetry; publish(); return telemetry; }');
       const moduleUrl = URL.createObjectURL(new Blob([moduleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(moduleUrl);
       const startResult = await window.startSelectedSplatHybridRenderer?.();
@@ -2562,6 +2566,15 @@ async function runHybridSplatOverlayScenario(ws) {
       const witness = window.__hybridSplatOverlayWitness || null;
       window.stopHybridSplatOverlay?.();
       URL.revokeObjectURL(moduleUrl);
+      const rendererTelemetryModuleUrl = URL.createObjectURL(new Blob([rendererTelemetryModuleSource], { type: 'text/javascript' }));
+      window.kaminosSetHybridSplatOverlayModuleUrl?.(rendererTelemetryModuleUrl);
+      const rendererTelemetryStartResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(500);
+      const rendererTelemetryOverlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const rendererTelemetryHandoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const rendererTelemetryWitness = window.__hybridSplatOverlayWitness || null;
+      window.stopHybridSplatOverlay?.();
+      URL.revokeObjectURL(rendererTelemetryModuleUrl);
       const missingTelemetryModuleUrl = URL.createObjectURL(new Blob([missingTelemetryModuleSource], { type: 'text/javascript' }));
       window.kaminosSetHybridSplatOverlayModuleUrl?.(missingTelemetryModuleUrl);
       const missingTelemetryStartResult = await window.startSelectedSplatHybridRenderer?.();
@@ -2595,6 +2608,10 @@ async function runHybridSplatOverlayScenario(ws) {
         overlayDebug,
         handoffDebug,
         witness,
+        rendererTelemetryStartResult,
+        rendererTelemetryOverlayDebug,
+        rendererTelemetryHandoffDebug,
+        rendererTelemetryWitness,
         missingTelemetryStartResult,
         missingTelemetryOverlayDebug,
         missingTelemetryHandoffDebug,
@@ -2650,6 +2667,17 @@ async function runHybridSplatOverlayScenario(ws) {
   if (lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextAccepted !== true
       || lastEvidence.hybridSplatOverlay.overlayDebug?.sceneContextTelemetry?.accepted !== true) {
     throw new Error(`hybrid splat overlay did not report accepted scene context: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
+  }
+  const rendererTelemetry = lastEvidence.hybridSplatOverlay.rendererTelemetryOverlayDebug?.sceneContextTelemetry || {};
+  if (lastEvidence.hybridSplatOverlay.rendererTelemetryOverlayDebug?.sceneContextAccepted !== true
+      || rendererTelemetry.accepted !== true
+      || !rendererTelemetry.honored?.environment
+      || !Array.isArray(rendererTelemetry.honoredFields)
+      || !rendererTelemetry.honoredFields.includes('lighting.environment')
+      || !Array.isArray(rendererTelemetry.unsupportedFields)
+      || !rendererTelemetry.unsupportedFields.includes('toneMapping:aces')
+      || !lastEvidence.hybridSplatOverlay.rendererTelemetryWitness?.sceneContexts?.length) {
+    throw new Error(`hybrid splat overlay dropped renderer-owned scene-context telemetry: ${JSON.stringify(lastEvidence.hybridSplatOverlay)}`);
   }
   const missingTelemetry = lastEvidence.hybridSplatOverlay.missingTelemetryOverlayDebug?.sceneContextTelemetry || {};
   if (lastEvidence.hybridSplatOverlay.missingTelemetryOverlayDebug?.sceneContextAccepted !== false

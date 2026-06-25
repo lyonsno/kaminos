@@ -130,6 +130,8 @@ assert.match(index, /setSceneContext\.telemetry/, 'Hybrid Renderer debug state f
 assert.match(index, /Renderer setSceneContext did not return structured acceptance telemetry/, 'Hybrid Renderer scene-context telemetry names missing renderer acceptance evidence');
 assert.match(index, /accepted'\)\s*===\s*'boolean'|typeof\s+resultObject\.accepted\s*===\s*'boolean'/, 'Hybrid Renderer scene-context telemetry requires an explicit boolean accepted field');
 assert.doesNotMatch(index, /accepted\s*=\s*true/, 'Hybrid Renderer scene-context telemetry must not default to accepted without renderer evidence');
+assert.match(index, /function normalizeRendererSceneContextHonoredFields/, 'Hybrid Renderer scene-context telemetry consumes the renderer-owned honored map shape');
+assert.match(index, /function normalizeRendererSceneContextUnsupportedFields/, 'Hybrid Renderer scene-context telemetry consumes the renderer-owned unsupported array shape');
 assert.match(index, /unsupportedFields/, 'Hybrid Renderer scene-context telemetry exposes unsupported or unhandled fields');
 assert.match(index, /lastSceneContext/, 'Hybrid Renderer debug state preserves the last produced scene context for witnesses');
 assert.match(index, /cropCoordinateMatrix/, 'Hybrid Renderer correction identity carries the raw-asset-to-preview crop coordinate frame for PBRnext filtering');
