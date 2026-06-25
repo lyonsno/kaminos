@@ -9,6 +9,7 @@ import {
   buildMotionDecisionComparison,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
+  buildGeneratedPoseTemporalHarness,
   buildMotionPhraseControlHarness,
   buildMotionTrackHarness,
   buildMotionWitnessTimeline,
@@ -25,6 +26,7 @@ const isPhraseControlRoute = url.includes('kaminos_motion_phrase_controls=1');
 const isTrackRoute = url.includes('kaminos_motion_tracks=1');
 const isGeneratedTrackRoute = url.includes('kaminos_generated_motion_track=1');
 const isOutputMapRoute = url.includes('kaminos_motion_output_map=1');
+const isGeneratedPoseTemporalRoute = url.includes('kaminos_generated_pose_temporal=1');
 const out = resolve(args.get('--out') || '/tmp/kaminos-motion-agency-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const filmstripPath = resolve(args.get('--filmstrip') || out.replace(/\.png$/i, '-filmstrip.png'));
@@ -234,7 +236,9 @@ try {
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
 
   phase = 'rendering-filmstrip';
-  const timeline = isOutputMapRoute
+  const timeline = isGeneratedPoseTemporalRoute
+    ? buildGeneratedPoseTemporalHarness({ fps: 12, filmstripFrames: 7 })
+    : (isOutputMapRoute
     ? buildGeneratedPoseOutputMapHarness({ fps: 12, filmstripFrames: 7 })
     : (isGeneratedTrackRoute
     ? buildGeneratedMotionTrackHarness({ fps: 12, filmstripFrames: 7 })
@@ -244,9 +248,37 @@ try {
     ? buildMotionPhraseControlHarness({ duration: 7.2, fps: 12, filmstripFrames: 7 })
     : (isPhraseRoute
       ? buildMotionDecisionComparison({ duration: 7.2, fps: 12, filmstripFrames: 7 })
-      : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 })))));
+      : buildMotionWitnessTimeline({ duration: 5.2, fps: 12, filmstripFrames: 6 }))))));
   const filmstrip = drawFilmstrip(timeline, filmstripPath);
-  if (isOutputMapRoute) {
+  if (isGeneratedPoseTemporalRoute) {
+    lastEvidence.generatedPoseTemporalHarness = {
+      schema: timeline.schema,
+      route: timeline.route,
+      sourceStatus: timeline.sourceStatus,
+      sourceKind: timeline.sourceKind,
+      sourceModel: timeline.sourceModel,
+      sourceRoute: timeline.sourceRoute,
+      sourceFormat: timeline.sourceFormat,
+      inputSha256: timeline.inputSha256,
+      sampleCount: timeline.sampleCount,
+      sourceFrameStride: timeline.sourceFrameStride,
+      track: {
+        schema: timeline.track.schema,
+        id: timeline.track.id,
+        sourceKind: timeline.track.sourceKind,
+        sourceStatus: timeline.track.sourceStatus,
+        sourceModel: timeline.track.sourceModel,
+        sourceRoute: timeline.track.sourceRoute,
+        rawFrameCount: timeline.track.rawFrameCount,
+        fps: timeline.track.fps,
+        duration: timeline.track.duration,
+        jointMapping: timeline.track.jointMapping,
+        extractionAssumptions: timeline.track.extractionAssumptions,
+      },
+      metrics: timeline.metrics,
+      filmstrip,
+    };
+  } else if (isOutputMapRoute) {
     lastEvidence.generatedPoseOutputMapHarness = {
       schema: timeline.schema,
       route: timeline.route,
@@ -389,7 +421,9 @@ try {
   phase = 'settling-route';
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
-  const routeParam = isOutputMapRoute
+  const routeParam = isGeneratedPoseTemporalRoute
+    ? 'kaminos_generated_pose_temporal=1'
+    : (isOutputMapRoute
     ? 'kaminos_motion_output_map=1'
     : (isGeneratedTrackRoute
     ? 'kaminos_generated_motion_track=1'
@@ -397,9 +431,11 @@ try {
     ? 'kaminos_motion_phrase_controls=1'
     : (isTrackRoute
       ? 'kaminos_motion_tracks=1'
-      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1'))));
+      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1')))));
   if (!effectiveUrl.includes(routeParam)) throw new Error(`effective URL lost motion route ${routeParam}: ${effectiveUrl}`);
-  const debugExpression = isOutputMapRoute
+  const debugExpression = isGeneratedPoseTemporalRoute
+    ? 'window.kaminosGeneratedPoseTemporalDebugState?.()'
+    : (isOutputMapRoute
     ? 'window.kaminosGeneratedPoseOutputMapDebugState?.()'
     : (isGeneratedTrackRoute
     ? 'window.kaminosGeneratedMotionTrackDebugState?.()'
@@ -409,11 +445,27 @@ try {
       ? 'window.kaminosMotionTrackDebugState?.()'
       : (isPhraseRoute
       ? 'window.kaminosMotionDecisionDebugState?.()'
-      : 'window.kaminosMotionAgencyDebugState?.()'))));
-  const debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
+      : 'window.kaminosMotionAgencyDebugState?.()')))));
+  let debug = null;
+  for (let i = 0; i < 48; i++) {
+    debug = await evaluate(ws, debugExpression, { timeoutMs: 10000 });
+    if (debug?.route) break;
+    await delay(125);
+  }
   lastEvidence.debug = debug;
   if (debug?.route !== 'procedural-orb-motion-grammar-v0') throw new Error(`motion route identity mismatch: ${JSON.stringify(debug)}`);
-  if (isOutputMapRoute) {
+  if (isGeneratedPoseTemporalRoute) {
+    const generatedPoseTemporalHarness = debug?.generatedPoseTemporalHarness;
+    if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose temporal route did not spawn temporal actor: ${JSON.stringify(debug)}`);
+    if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
+    if (generatedPoseTemporalHarness.track?.id !== 'kimodo_theatrical_bow_temporal_v0') throw new Error(`generated pose temporal route lost Kimodo bow track identity: ${JSON.stringify(debug)}`);
+    if (!String(generatedPoseTemporalHarness.sourceRoute || '').includes('03_a_person_performs_an_exaggerated_theatrical_bow_sw.npz')) throw new Error(`generated pose temporal route lost source route: ${JSON.stringify(debug)}`);
+    if (generatedPoseTemporalHarness.sourceFormat !== 'kimodo-soma77-explicit-joints') throw new Error(`generated pose temporal route lost source format: ${JSON.stringify(debug)}`);
+    if (!(generatedPoseTemporalHarness.sampleCount >= 16)) throw new Error(`generated pose temporal route lost sample count: ${JSON.stringify(debug)}`);
+    if (!(generatedPoseTemporalHarness.metrics?.maxBowCompression > 0.25)) throw new Error(`generated pose temporal route lost bow compression: ${JSON.stringify(debug)}`);
+    if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('compress')) throw new Error(`generated pose temporal route lost compress phase: ${JSON.stringify(debug)}`);
+    if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('release')) throw new Error(`generated pose temporal route lost release phase: ${JSON.stringify(debug)}`);
+  } else if (isOutputMapRoute) {
     const generatedPoseOutputMapHarness = debug?.generatedPoseOutputMapHarness;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose output-map route did not spawn mapped actor: ${JSON.stringify(debug)}`);
     if (generatedPoseOutputMapHarness?.schema !== 'kaminos.generated-pose-output-map-harness.v0') throw new Error(`generated pose output-map route lost harness schema: ${JSON.stringify(debug)}`);
@@ -507,6 +559,7 @@ try {
     motionTrackHarness: debug.motionTrackHarness || lastEvidence.motionTrackHarness || null,
     generatedMotionTrackHarness: debug.generatedMotionTrackHarness || lastEvidence.generatedMotionTrackHarness || null,
     generatedPoseOutputMapHarness: debug.generatedPoseOutputMapHarness || lastEvidence.generatedPoseOutputMapHarness || null,
+    generatedPoseTemporalHarness: debug.generatedPoseTemporalHarness || lastEvidence.generatedPoseTemporalHarness || null,
     effectiveControls: debug.effectiveControls || null,
     debug,
     timeline: lastEvidence.timeline,

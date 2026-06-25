@@ -437,6 +437,52 @@ export const DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE = {
   },
 };
 
+export const DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE = {
+  schema: 'kaminos.generated-pose-temporal.v0',
+  id: 'kimodo_theatrical_bow_temporal_v0',
+  label: 'Kimodo Theatrical Bow Temporal V0',
+  intent: 'exaggerated-theatrical-bow',
+  sourceKind: 'generated-pose-temporal',
+  sourceStatus: 'fixture',
+  sourceModel: 'Kimodo',
+  sourceRoute: '/private/tmp/kimodo_matrix/03_a_person_performs_an_exaggerated_theatrical_bow_sw.npz',
+  sourceFormat: 'kimodo-soma77-explicit-joints',
+  inputSha256: '0d8d0c3533e63e2f06e783fa80b6e194a81fa9770c0c89e6e4cce600e6ad38f6',
+  fps: 30,
+  rawFrameCount: 180,
+  duration: 5.96667,
+  jointMapping: { Hips: 0, Chest: 3, Head: 6, LeftHand: 14, RightHand: 42, LeftFoot: 69, RightFoot: 74 },
+  sourceFrameStride: 11,
+  sampleCount: 18,
+  extractionAssumptions: [
+    'input temporal samples are distilled from actual SOMA77 joints in a Kimodo NPZ',
+    'Hips/root_positions drive root motion when present',
+    'Head and Chest drive attention, bow compression, and body lean',
+    'Hands and feet drive effort, limb spread, and grounding cues',
+    'phase labels are heuristic and must not claim source-authored semantics',
+  ],
+  temporalSamples: [
+    { frame: 0, time: 0, phaseLabel: 'enter', root: [0.04437, 1.00735, 0.04932], head: [0.04229, 1.60229, 0.09108], chest: [0.04294, 1.20295, 0.03764], leftHand: [0.25898, 0.89271, 0.1968], rightHand: [-0.13022, 0.86501, 0.18485], leftFoot: [0.19302, 0.07302, -0.01729], rightFoot: [-0.01675, 0.07151, -0.00538], headRoot: [-0.00208, 0.59493, 0.04176], chestRoot: [-0.00143, 0.1956, -0.01168], handSpan: 0.39036, stanceWidth: 0.21012, bboxVolume: 0.23844, bowCompression: 0.37731 },
+    { frame: 11, time: 0.36667, phaseLabel: 'enter', root: [-0.01098, 1.00434, 0.02475], head: [-0.01026, 1.5948, 0.10844], chest: [-0.01625, 1.20062, 0.02231], leftHand: [0.10547, 1.09378, 0.33967], rightHand: [-0.08702, 1.06018, 0.33994], leftFoot: [0.18047, 0.0845, -0.02191], rightFoot: [-0.01711, 0.07246, -0.00815], headRoot: [0.00072, 0.59047, 0.08369], chestRoot: [-0.00527, 0.19628, -0.00244], handSpan: 0.1954, stanceWidth: 0.19842, bboxVolume: 0.46358, bowCompression: 0.33392 },
+    { frame: 21, time: 0.7, phaseLabel: 'enter', root: [-0.04781, 0.99408, 0.00899], head: [-0.01666, 1.56703, 0.17141], chest: [-0.03665, 1.18921, 0.02941], leftHand: [0.09795, 1.24472, 0.34801], rightHand: [-0.03578, 1.22679, 0.36902], leftFoot: [-0.10403, 0.20655, -0.28233], rightFoot: [-0.02302, 0.07227, -0.01261], headRoot: [0.03115, 0.57295, 0.16242], chestRoot: [0.01116, 0.19513, 0.02042], handSpan: 0.13656, stanceWidth: 0.31201, bboxVolume: 0.73874, bowCompression: 0.28073 },
+    { frame: 32, time: 1.06667, phaseLabel: 'enter', root: [-0.06703, 0.95155, -0.02737], head: [0.01725, 1.44277, 0.29308], chest: [-0.0216, 1.13067, 0.03967], leftHand: [0.13492, 1.10841, 0.36729], rightHand: [-0.01453, 1.0908, 0.38213], leftFoot: [-0.36848, 0.26551, -0.4714], rightFoot: [-0.02284, 0.06644, -0.01559], headRoot: [0.08428, 0.49122, 0.32046], chestRoot: [0.04543, 0.17912, 0.06704], handSpan: 0.15121, stanceWidth: 0.60569, bboxVolume: 1.10781, bowCompression: 0.24858 },
+    { frame: 42, time: 1.4, phaseLabel: 'commit', root: [-0.07356, 0.93489, -0.0906], head: [0.00287, 1.24106, 0.37688], chest: [-0.01878, 1.08635, 0.0218], leftHand: [0.30314, 0.81598, 0.26362], rightHand: [-0.21362, 0.78329, 0.30495], leftFoot: [-0.45962, 0.22521, -0.47219], rightFoot: [-0.02498, 0.07004, -0.01764], headRoot: [0.07643, 0.30617, 0.46748], chestRoot: [0.05478, 0.15146, 0.1124], handSpan: 0.51945, stanceWidth: 0.64777, bboxVolume: 1.08681, bowCompression: 0.54827 },
+    { frame: 53, time: 1.76667, phaseLabel: 'compress', root: [-0.0754, 0.91369, -0.14671], head: [-0.03654, 1.12342, 0.35939], chest: [-0.03011, 1.04681, -0.00999], leftHand: [0.608, 0.92047, 0.0422], rightHand: [-0.65701, 0.85853, 0.11687], leftFoot: [-0.46615, 0.19243, -0.49345], rightFoot: [-0.01991, 0.06905, -0.02432], headRoot: [0.03886, 0.20973, 0.5061], chestRoot: [0.04529, 0.13312, 0.13671], handSpan: 1.26872, stanceWidth: 0.65912, bboxVolume: 1.81676, bowCompression: 0.56004 },
+    { frame: 63, time: 2.1, phaseLabel: 'compress', root: [-0.08924, 0.91555, -0.1557], head: [-0.04524, 1.146, 0.3294], chest: [-0.04262, 1.05883, -0.03016], leftHand: [0.64838, 1.14952, -0.00036], rightHand: [-0.72876, 1.06088, 0.07377], leftFoot: [-0.4685, 0.18957, -0.48632], rightFoot: [-0.02655, 0.06569, -0.02663], headRoot: [0.04401, 0.23045, 0.4851], chestRoot: [0.04662, 0.14327, 0.12553], handSpan: 1.38198, stanceWidth: 0.6496, bboxVolume: 2.01814, bowCompression: 0.62826 },
+    { frame: 74, time: 2.46667, phaseLabel: 'compress', root: [-0.08423, 0.94143, -0.11803], head: [-0.05361, 1.26143, 0.31308], chest: [-0.0478, 1.10846, -0.02137], leftHand: [0.65826, 1.27511, 0.01303], rightHand: [-0.74413, 1.15582, 0.15971], leftFoot: [-0.41898, 0.2187, -0.46013], rightFoot: [-0.03343, 0.06284, -0.02977], headRoot: [0.03062, 0.31999, 0.43112], chestRoot: [0.03643, 0.16703, 0.09666], handSpan: 1.41508, stanceWidth: 0.59845, bboxVolume: 2.12827, bowCompression: 0.61813 },
+    { frame: 84, time: 2.8, phaseLabel: 'release', root: [-0.06796, 0.96781, -0.0675], head: [-0.05376, 1.42777, 0.24548], chest: [-0.05678, 1.15764, -0.01728], leftHand: [0.64633, 1.41495, 0.0377], rightHand: [-0.75651, 1.34625, 0.16409], leftFoot: [-0.21463, 0.17889, -0.34886], rightFoot: [-0.02887, 0.06076, -0.02797], headRoot: [0.0142, 0.45996, 0.31298], chestRoot: [0.01118, 0.18984, 0.05022], handSpan: 1.4102, stanceWidth: 0.38915, bboxVolume: 1.90065, bowCompression: 0.46785 },
+    { frame: 95, time: 3.16667, phaseLabel: 'carry', root: [-0.01656, 0.99139, -0.0255], head: [-0.04163, 1.5577, 0.11412], chest: [-0.02408, 1.18778, -0.01894], leftHand: [0.6512, 1.35589, 0.03055], rightHand: [-0.70603, 1.22838, 0.0748], leftFoot: [0.07412, 0.0921, -0.15514], rightFoot: [-0.0189, 0.06242, -0.02689], headRoot: [-0.02506, 0.56631, 0.13962], chestRoot: [-0.00752, 0.19639, 0.00656], handSpan: 1.36392, stanceWidth: 0.16119, bboxVolume: 1.01196, bowCompression: 0.35764 },
+    { frame: 105, time: 3.5, phaseLabel: 'carry', root: [0.04028, 1.00093, -0.01749], head: [0.0161, 1.59221, 0.01105], chest: [0.03349, 1.19627, -0.0356], leftHand: [0.50102, 0.97045, 0.0376], rightHand: [-0.3565, 0.89756, 0.07808], leftFoot: [0.16165, 0.06846, -0.06102], rightFoot: [-0.01399, 0.06453, -0.03266], headRoot: [-0.02419, 0.59128, 0.02854], chestRoot: [-0.00679, 0.19534, -0.0181], handSpan: 0.86156, stanceWidth: 0.17795, bboxVolume: 0.40028, bowCompression: 0.38672 },
+    { frame: 116, time: 3.86667, phaseLabel: 'carry', root: [0.05132, 0.99969, -0.02763], head: [0.05396, 1.59481, -0.04437], chest: [0.04948, 1.19348, -0.05708], leftHand: [0.22439, 0.91595, 0.14918], rightHand: [-0.07123, 0.91996, 0.16066], leftFoot: [0.16238, 0.06536, -0.06295], rightFoot: [-0.01543, 0.06249, -0.03857], headRoot: [0.00265, 0.59512, -0.01674], chestRoot: [-0.00183, 0.1938, -0.02944], handSpan: 0.29586, stanceWidth: 0.17949, bboxVolume: 0.30829, bowCompression: 0.37454 },
+    { frame: 126, time: 4.2, phaseLabel: 'carry', root: [0.04756, 1.00008, -0.03199], head: [0.05476, 1.59579, -0.05062], chest: [0.0461, 1.19372, -0.06242], leftHand: [0.2465, 0.88274, 0.12063], rightHand: [-0.10491, 0.89689, 0.1526], leftFoot: [0.16097, 0.06569, -0.06444], rightFoot: [-0.01752, 0.06314, -0.03986], headRoot: [0.00719, 0.59571, -0.01863], chestRoot: [-0.00147, 0.19365, -0.03043], handSpan: 0.35314, stanceWidth: 0.18019, bboxVolume: 0.30049, bowCompression: 0.3689 },
+    { frame: 137, time: 4.56667, phaseLabel: 'carry', root: [0.04349, 1.00077, -0.0325], head: [0.05298, 1.59586, -0.04014], chest: [0.04198, 1.19449, -0.0623], leftHand: [0.29383, 0.85995, 0.04188], rightHand: [-0.17462, 0.84763, 0.0384], leftFoot: [0.16069, 0.06627, -0.06537], rightFoot: [-0.01854, 0.06395, -0.04122], headRoot: [0.00949, 0.59509, -0.00763], chestRoot: [-0.00151, 0.19373, -0.0298], handSpan: 0.46862, stanceWidth: 0.18086, bboxVolume: 0.20051, bowCompression: 0.39696 },
+    { frame: 147, time: 4.9, phaseLabel: 'recover', root: [0.04366, 1.00168, -0.03343], head: [0.05381, 1.59657, -0.02811], chest: [0.04298, 1.19598, -0.05971], leftHand: [0.28304, 0.87034, 0.07569], rightHand: [-0.16683, 0.856, 0.07133], leftFoot: [0.16152, 0.06666, -0.06381], rightFoot: [-0.01863, 0.06443, -0.03955], headRoot: [0.01016, 0.59489, 0.00531], chestRoot: [-0.00068, 0.1943, -0.02628], handSpan: 0.45012, stanceWidth: 0.18179, bboxVolume: 0.1902, bowCompression: 0.40123 },
+    { frame: 158, time: 5.26667, phaseLabel: 'recover', root: [0.04339, 1.00104, -0.02484], head: [0.05614, 1.59596, -0.01664], chest: [0.04303, 1.19547, -0.05009], leftHand: [0.27718, 0.8662, 0.08875], rightHand: [-0.15054, 0.8595, 0.09077], leftFoot: [0.16056, 0.06644, -0.06279], rightFoot: [-0.01903, 0.0638, -0.03872], headRoot: [0.01275, 0.59492, 0.0082], chestRoot: [-0.00036, 0.19443, -0.02524], handSpan: 0.42778, stanceWidth: 0.18122, bboxVolume: 0.19483, bowCompression: 0.3991 },
+    { frame: 168, time: 5.6, phaseLabel: 'recover', root: [0.04644, 1.00123, -0.0189], head: [0.05872, 1.59622, -0.01174], chest: [0.04643, 1.19563, -0.04448], leftHand: [0.29355, 0.86774, 0.0942], rightHand: [-0.17035, 0.85743, 0.08514], leftFoot: [0.1598, 0.06702, -0.06283], rightFoot: [-0.01929, 0.06426, -0.03837], headRoot: [0.01229, 0.59499, 0.00717], chestRoot: [0, 0.1944, -0.02557], handSpan: 0.4641, stanceWidth: 0.18077, bboxVolume: 0.19095, bowCompression: 0.39942 },
+    { frame: 179, time: 5.96667, phaseLabel: 'recover', root: [0.05097, 1.00143, -0.01436], head: [0.0603, 1.59681, -0.00067], chest: [0.05157, 1.19611, -0.03766], leftHand: [0.28218, 0.86473, 0.09808], rightHand: [-0.14487, 0.85592, 0.08905], leftFoot: [0.15897, 0.06686, -0.06057], rightFoot: [-0.01864, 0.06421, -0.03534], headRoot: [0.00933, 0.59538, 0.01368], chestRoot: [0.0006, 0.19468, -0.02331], handSpan: 0.42724, stanceWidth: 0.17941, bboxVolume: 0.18835, bowCompression: 0.39523 },
+  ],
+};
+
 export function normalizeMotionClip(clip) {
   if (!clip || typeof clip !== 'object') throw new Error('Motion clip must be an object');
   const duration = Number(clip.duration);
@@ -1522,6 +1568,153 @@ export function buildGeneratedMotionTrackHarness({
     duration: simDuration,
     variants,
     filmstrip,
+  };
+}
+
+function normalizeGeneratedPoseTemporalInput(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE) {
+  if (generatedInput?.schema !== 'kaminos.generated-pose-temporal.v0') {
+    throw new Error(`Expected kaminos.generated-pose-temporal.v0, got ${generatedInput?.schema || 'missing schema'}`);
+  }
+  const samples = Array.isArray(generatedInput.temporalSamples) ? generatedInput.temporalSamples : [];
+  if (samples.length < 2) throw new Error(`Generated pose temporal input ${generatedInput.id || 'unknown'} needs at least two temporal samples`);
+  return {
+    ...generatedInput,
+    temporalSamples: samples.map((sample, index) => ({
+      frame: Math.round(Number(sample.frame) || index),
+      time: Number.isFinite(Number(sample.time)) ? Number(sample.time) : index / Math.max(1, Number(generatedInput.fps) || 30),
+      phaseLabel: String(sample.phaseLabel || 'carry'),
+      root: vec3(sample.root),
+      head: vec3(sample.head),
+      chest: vec3(sample.chest),
+      leftHand: vec3(sample.leftHand),
+      rightHand: vec3(sample.rightHand),
+      leftFoot: vec3(sample.leftFoot),
+      rightFoot: vec3(sample.rightFoot),
+      headRoot: vec3(sample.headRoot),
+      chestRoot: vec3(sample.chestRoot),
+      handSpan: Number.isFinite(Number(sample.handSpan)) ? Number(sample.handSpan) : 0,
+      stanceWidth: Number.isFinite(Number(sample.stanceWidth)) ? Number(sample.stanceWidth) : 0,
+      bboxVolume: Number.isFinite(Number(sample.bboxVolume)) ? Number(sample.bboxVolume) : 0,
+      bowCompression: clamp(Number(sample.bowCompression) || 0, 0, 1),
+    })).sort((a, b) => a.time - b.time),
+  };
+}
+
+function temporalFixtureMetrics(generatedInput) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const phaseLabels = [...new Set(input.temporalSamples.map(sample => sample.phaseLabel))];
+  const handSpanValues = input.temporalSamples.map(sample => sample.handSpan);
+  const bowValues = input.temporalSamples.map(sample => sample.bowCompression);
+  return {
+    sampleCount: input.temporalSamples.length,
+    sourceFrameStride: Number(input.sourceFrameStride || 1),
+    phaseLabels,
+    maxBowCompression: Number(Math.max(...bowValues).toFixed(5)),
+    meanBowCompression: Number((bowValues.reduce((sum, value) => sum + value, 0) / Math.max(1, bowValues.length)).toFixed(5)),
+    handSpanRange: Number((Math.max(...handSpanValues) - Math.min(...handSpanValues)).toFixed(5)),
+  };
+}
+
+export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const id = String(input.id || '').trim();
+  if (!id) throw new Error('Generated pose temporal id is required');
+  const fps = Math.max(1, Math.round(Number(input.fps) || 30));
+  const duration = Number.isFinite(Number(input.duration))
+    ? Number(input.duration)
+    : input.temporalSamples.at(-1).time;
+  const firstRoot = input.temporalSamples[0].root;
+  const maxHandSpan = Math.max(...input.temporalSamples.map(sample => sample.handSpan), 1e-6);
+  const normalizeWorld = value => {
+    const source = vec3(value);
+    return [
+      Number((source[0] - firstRoot[0]).toFixed(5)),
+      Number((source[1] - firstRoot[1]).toFixed(5)),
+      Number((source[2] - firstRoot[2]).toFixed(5)),
+    ];
+  };
+  const track = normalizeMotionTrack({
+    schema: MOTION_TRACK_SCHEMA,
+    id,
+    label: input.label || id,
+    intent: input.intent || 'generated-pose-temporal',
+    sourceKind: input.sourceKind || 'generated-pose-temporal',
+    sourceStatus: input.sourceStatus || 'fixture',
+    sourceModel: input.sourceModel || 'unknown',
+    sourceRoute: input.sourceRoute || 'unknown',
+    prompt: input.intent || null,
+    rawFrameCount: input.rawFrameCount || input.temporalSamples.length,
+    jointMapping: input.jointMapping || null,
+    extractionAssumptions: input.extractionAssumptions || [],
+    fps,
+    duration,
+    units: 'meters',
+    upAxis: [0, 1, 0],
+    forwardAxis: [0, 0, 1],
+    tracks: {
+      root: input.temporalSamples.map(sample => ({ t: sample.time, value: normalizeWorld(sample.root) })),
+      head: input.temporalSamples.map(sample => ({ t: sample.time, value: normalizeWorld(sample.head) })),
+      effort: input.temporalSamples.map(sample => ({
+        t: sample.time,
+        value: Number((0.18 + sample.bowCompression * 0.78 + (sample.handSpan / maxHandSpan) * 0.22).toFixed(5)),
+      })),
+      phase: input.temporalSamples.map(sample => ({ t: sample.time, value: sample.phaseLabel })),
+    },
+  });
+  return {
+    ...track,
+    sourceFormat: input.sourceFormat || 'unknown',
+    inputSha256: input.inputSha256 || null,
+    sourceFrameStride: input.sourceFrameStride || 1,
+    temporalSamples: input.temporalSamples,
+    temporalMetrics: temporalFixtureMetrics(input),
+  };
+}
+
+export function buildGeneratedPoseTemporalHarness({
+  generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  duration,
+  fps = 12,
+  filmstripFrames = 7,
+} = {}) {
+  const track = adaptGeneratedPoseTemporalToTrack(generatedInput);
+  const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
+  const simFps = Math.max(1, Math.round(Number(fps) || 12));
+  const simulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'mass-attention' });
+  const count = Math.max(1, Math.min(Math.round(Number(filmstripFrames) || 7), simulation.frames.length));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (simulation.frames.length - 1) / (count - 1))
+  ));
+  const actor = {
+    id: 'kimodo-bow-temporal',
+    label: 'Kimodo Bow Temporal',
+    color: '#f0b184',
+    intent: track.intent,
+  };
+  return {
+    schema: 'kaminos.generated-pose-temporal-harness.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    sourceStatus: track.sourceStatus,
+    sourceKind: track.sourceKind,
+    sourceModel: track.sourceModel,
+    sourceRoute: track.sourceRoute,
+    sourceFormat: track.sourceFormat,
+    inputSha256: track.inputSha256,
+    sourceFrameStride: track.sourceFrameStride,
+    sampleCount: track.temporalSamples.length,
+    track,
+    fps: simFps,
+    duration: simDuration,
+    metrics: {
+      ...simulation.metrics,
+      ...track.temporalMetrics,
+    },
+    simulation,
+    filmstrip: frameIndexes.map(index => ({
+      frameIndex: index,
+      t: simulation.frames[index].t,
+      actors: [motionTrackActorSample(actor, simulation.frames[index].sample, [0, 0, 0])],
+    })),
   };
 }
 

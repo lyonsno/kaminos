@@ -35,6 +35,7 @@ const requestedInput = args.get('--input') || '';
 const effectiveInput = requestedInput ? resolve(requestedInput) : null;
 const reportPath = resolve(args.get('--report') || '/tmp/kaminos-generated-pose-features.json');
 const fps = Math.max(1, Number(args.get('--fps') || 30));
+const temporalSampleBudget = Math.max(2, Math.round(Number(args.get('--temporal-samples') || 24)));
 const unzipPath = args.get('--unzip') || 'unzip';
 
 let phase = 'initializing';
@@ -56,6 +57,7 @@ function writeReport(report) {
     effectiveInput,
     reportPath,
     fps,
+    temporalSampleBudget,
     phase,
     ...lastEvidence,
     ...report,
@@ -244,6 +246,65 @@ function topSpikes(samples, accessors, count = 8) {
   return spikes.sort((a, b) => b.speed - a.speed).slice(0, count);
 }
 
+function phaseLabelForSample(index, count, bowCompression, peakIndex) {
+  const progress = count <= 1 ? 0 : index / (count - 1);
+  if (bowCompression >= 0.56) return 'compress';
+  if (index > peakIndex && bowCompression >= 0.42) return 'release';
+  if (index < peakIndex && bowCompression >= 0.42) return 'commit';
+  if (progress < 0.18) return 'enter';
+  if (progress > 0.82) return 'recover';
+  return 'carry';
+}
+
+function temporalSamples(samples, budget = temporalSampleBudget) {
+  const count = Math.max(2, Math.min(Math.round(Number(budget) || 24), samples.length));
+  const frameIndexes = Array.from({ length: count }, (_, i) => (
+    count === 1 ? 0 : Math.round(i * (samples.length - 1) / (count - 1))
+  ));
+  const headRootMagnitudes = samples.map(sample => mag(sample.headRoot));
+  const bboxVolumes = samples.map(sample => sample.bbox.volume);
+  const maxHeadRoot = Math.max(...headRootMagnitudes);
+  const minHeadRoot = Math.min(...headRootMagnitudes);
+  const maxVolume = Math.max(...bboxVolumes);
+  const minVolume = Math.min(...bboxVolumes);
+  const headRange = Math.max(1e-6, maxHeadRoot - minHeadRoot);
+  const volumeRange = Math.max(1e-6, maxVolume - minVolume);
+  const records = frameIndexes.map((frameIndex, sampleIndex) => {
+    const sample = samples[frameIndex];
+    const headCompression = 1 - ((headRootMagnitudes[frameIndex] - minHeadRoot) / headRange);
+    const volumeCompression = 1 - ((bboxVolumes[frameIndex] - minVolume) / volumeRange);
+    const bowCompression = Math.max(0, Math.min(1, headCompression * 0.62 + volumeCompression * 0.38));
+    return { frameIndex, sampleIndex, sample, bowCompression };
+  });
+  const peak = records.reduce((best, record) => (
+    record.bowCompression > best.bowCompression ? record : best
+  ), records[0]);
+  return {
+    sourceFrameStride: Math.max(1, Math.round((samples.length - 1) / Math.max(1, count - 1))),
+    sampleCount: count,
+    samples: records.map(({ sample, sampleIndex, bowCompression }) => {
+      return {
+        frame: sample.frame,
+        time: round(sample.time),
+        phaseLabel: phaseLabelForSample(sampleIndex, count, bowCompression, peak.sampleIndex),
+        root: vecRound(sample.root),
+        head: vecRound(sample.head),
+        chest: vecRound(sample.chest),
+        leftHand: vecRound(sample.leftHand),
+        rightHand: vecRound(sample.rightHand),
+        leftFoot: vecRound(sample.leftFoot),
+        rightFoot: vecRound(sample.rightFoot),
+        headRoot: vecRound(sample.headRoot),
+        chestRoot: vecRound(sample.chestRoot),
+        handSpan: round(sample.handSpan),
+        stanceWidth: round(sample.stanceWidth),
+        bboxVolume: round(sample.bbox.volume),
+        bowCompression: round(bowCompression),
+      };
+    }),
+  };
+}
+
 function extractFeatures(posed, roots, npzKeys) {
   if (posed.shape.length !== 3 || posed.shape[2] !== 3) {
     throw new Error(`posed_joints.npy must be shaped [frames,joints,3], got ${JSON.stringify(posed.shape)}`);
@@ -282,6 +343,7 @@ function extractFeatures(posed, roots, npzKeys) {
   const contactTolerance = 0.035;
   const leftContactFrames = samples.filter(sample => sample.leftFootHeight <= footHeightFloor + contactTolerance).map(sample => sample.frame);
   const rightContactFrames = samples.filter(sample => sample.rightFootHeight <= footHeightFloor + contactTolerance).map(sample => sample.frame);
+  const temporal = temporalSamples(samples);
 
   return {
     ok: true,
@@ -311,6 +373,12 @@ function extractFeatures(posed, roots, npzKeys) {
     frameCount: posed.shape[0],
     jointCount: posed.shape[1],
     duration: round((posed.shape[0] - 1) / fps),
+    temporalSamples: {
+      schema: 'kaminos.generated-pose-temporal.v0',
+      sourceFrameStride: temporal.sourceFrameStride,
+      sampleCount: temporal.sampleCount,
+      samples: temporal.samples,
+    },
     rootMetrics: {
       start: vecRound(rootStart),
       end: vecRound(rootEnd),

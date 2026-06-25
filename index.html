@@ -466,6 +466,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="motion-tracks-enable">Tracks</button>
         <button class="btn" id="motion-generated-enable">Generated</button>
         <button class="btn" id="motion-output-map-enable">Mapped</button>
+        <button class="btn" id="motion-temporal-enable">Temporal</button>
         <button class="btn" id="motion-frame-camera">Frame</button>
       </div>
     </div>
@@ -477,6 +478,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Track Route</span><span class="route-chip">kaminos_motion_tracks=1</span></div>
       <div class="field"><span class="field-key">Generated Route</span><span class="route-chip">kaminos_generated_motion_track=1</span></div>
       <div class="field"><span class="field-key">Mapped Route</span><span class="route-chip">kaminos_motion_output_map=1</span></div>
+      <div class="field"><span class="field-key">Temporal Route</span><span class="route-chip">kaminos_generated_pose_temporal=1</span></div>
       <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
     </div>
     <div class="panel">
@@ -796,6 +798,7 @@ import {
   DEFAULT_MOTION_TRACK_FIXTURE,
   DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
   DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
+  DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
   MOTION_ROUTE_IDENTITY,
   applyMotionPhraseControls,
   buildMotionActorFixture,
@@ -804,6 +807,7 @@ import {
   buildMotionTrackHarness,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
+  buildGeneratedPoseTemporalHarness,
   motionClipById,
   motionPhraseBodyScale,
   normalizeMotionPhraseControls,
@@ -858,6 +862,7 @@ let motionDecisionState = null;
 let motionPhraseControlState = null;
 let motionTrackState = null;
 let motionOutputMapState = null;
+let motionTemporalState = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -3340,6 +3345,19 @@ function disposeMotionOutputMapScene() {
   motionOutputMapState.active = false;
 }
 
+function disposeMotionTemporalScene() {
+  if (!motionTemporalState?.root) return;
+  scene.remove(motionTemporalState.root);
+  motionTemporalState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => material.dispose?.());
+      else object.material.dispose?.();
+    }
+  });
+  motionTemporalState.active = false;
+}
+
 function frameMotionAgencyCamera() {
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
@@ -3349,17 +3367,20 @@ function frameMotionAgencyCamera() {
 }
 
 function updateMotionAgencyReadout() {
+  const temporalDebug = window.kaminosGeneratedPoseTemporalDebugState?.();
   const outputMapDebug = window.kaminosGeneratedPoseOutputMapDebugState?.();
   const trackDebug = window.kaminosMotionTrackDebugState?.();
   const phraseControlDebug = window.kaminosMotionPhraseControlDebugState?.();
   const decisionDebug = window.kaminosMotionDecisionDebugState?.();
-  const debug = outputMapDebug?.active
+  const debug = temporalDebug?.active
+    ? temporalDebug
+    : (outputMapDebug?.active
     ? outputMapDebug
     : (trackDebug?.active
     ? trackDebug
     : (phraseControlDebug?.active
     ? phraseControlDebug
-    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.())));
+    : (decisionDebug?.active ? decisionDebug : window.kaminosMotionAgencyDebugState?.()))));
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
@@ -3372,6 +3393,7 @@ function updateMotionAgencyReadout() {
 
 function createMotionAgencyFixtureScene({ force = false } = {}) {
   if (motionAgencyState?.active && !force) return motionAgencyState;
+  disposeMotionTemporalScene();
   disposeMotionOutputMapScene();
   disposeMotionPhraseControlScene();
   disposeMotionDecisionScene();
@@ -3492,6 +3514,7 @@ function makeMotionDecisionVisual({ id, label, color, origin, plan }) {
 
 function createMotionDecisionComparisonScene({ force = false } = {}) {
   if (motionDecisionState?.active && !force) return motionDecisionState;
+  disposeMotionTemporalScene();
   disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionPhraseControlScene();
@@ -3632,6 +3655,7 @@ function refreshMotionPhraseControlledPlan(controls = motionPhraseControlsFromIn
 
 function createMotionPhraseControlHarnessScene({ force = false } = {}) {
   if (motionPhraseControlState?.active && !force) return motionPhraseControlState;
+  disposeMotionTemporalScene();
   disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
@@ -3693,6 +3717,7 @@ function createMotionPhraseControlHarnessScene({ force = false } = {}) {
 
 function createMotionTrackHarnessScene({ force = false } = {}) {
   if (motionTrackState?.active && !force) return motionTrackState;
+  disposeMotionTemporalScene();
   disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
@@ -3759,6 +3784,7 @@ function createMotionTrackHarnessScene({ force = false } = {}) {
 
 function createGeneratedMotionTrackHarnessScene({ force = false } = {}) {
   if (motionTrackState?.active && motionTrackState.generated && !force) return motionTrackState;
+  disposeMotionTemporalScene();
   disposeMotionOutputMapScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
@@ -3908,6 +3934,7 @@ function makeGeneratedPoseOutputMapVisual(harness) {
 
 function createGeneratedPoseOutputMapScene({ force = false } = {}) {
   if (motionOutputMapState?.active && !force) return motionOutputMapState;
+  disposeMotionTemporalScene();
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
   disposeMotionPhraseControlScene();
@@ -3946,6 +3973,89 @@ function createGeneratedPoseOutputMapScene({ force = false } = {}) {
   frameMotionAgencyCamera();
   setInfo('Generated pose output map harness spawned');
   return motionOutputMapState;
+}
+
+function nearestTemporalSample(track, localTime) {
+  const samples = track?.temporalSamples || [];
+  if (!samples.length) return null;
+  return samples.reduce((best, sample) => (
+    Math.abs(sample.time - localTime) < Math.abs(best.time - localTime) ? sample : best
+  ), samples[0]);
+}
+
+function createGeneratedPoseTemporalScene({ force = false } = {}) {
+  if (motionTemporalState?.active && !force) return motionTemporalState;
+  disposeMotionAgencyScene();
+  disposeMotionDecisionScene();
+  disposeMotionPhraseControlScene();
+  disposeMotionTrackScene();
+  disposeMotionOutputMapScene();
+  disposeMotionTemporalScene();
+  const harness = buildGeneratedPoseTemporalHarness({
+    generatedInput: DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+    fps: 12,
+    filmstripFrames: 7,
+  });
+  const root = new THREE.Group();
+  root.name = 'generated-pose-temporal-harness-root';
+  root.userData.kaminosGeneratedPoseTemporal = {
+    route: MOTION_ROUTE_IDENTITY,
+    harnessSchema: harness.schema,
+    sourceRoute: harness.sourceRoute,
+    sourceFormat: harness.sourceFormat,
+    sampleCount: harness.sampleCount,
+  };
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.4, 3.2, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x11161c, transparent: true, opacity: 0.36, side: THREE.DoubleSide })
+  );
+  floor.name = 'generated-pose-temporal-floor';
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.012, 0.1);
+  root.add(floor);
+
+  const visual = makeMotionDecisionVisual({
+    id: 'generated-pose-temporal-bow',
+    label: 'Kimodo Bow Temporal',
+    color: '#f0b184',
+    origin: [0, 0, 0],
+    plan: null,
+  });
+  const compressionRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.28, 0.01, 8, 72),
+    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.46 })
+  );
+  compressionRing.name = 'generated-pose-temporal-compression-ring';
+  compressionRing.rotation.x = -Math.PI / 2;
+  visual.group.add(compressionRing);
+  visual.compressionRing = compressionRing;
+  visual.track = harness.track;
+  root.add(visual.group);
+  root.add(visual.target);
+
+  scene.add(root);
+  motionTemporalState = {
+    schema: 'kaminos.generated-pose-temporal-route.v0',
+    active: true,
+    route: MOTION_ROUTE_IDENTITY,
+    root,
+    harness,
+    track: harness.track,
+    visual,
+    duration: harness.duration,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+    maxEffort: 0,
+    maxBowCompression: harness.metrics.maxBowCompression,
+    lastActors: [],
+    lastTemporalSample: null,
+  };
+  updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+  updateMotionAgencyReadout();
+  frameMotionAgencyCamera();
+  setInfo('Generated pose temporal harness spawned');
+  return motionTemporalState;
 }
 
 function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
@@ -4173,6 +4283,65 @@ function updateGeneratedPoseOutputMapFrame(nowSeconds = performance.now() / 1000
   return true;
 }
 
+function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000) {
+  if (!motionTemporalState?.active) return false;
+  const state = motionTemporalState;
+  const visual = state.visual;
+  const localTime = (nowSeconds - state.startedAt) % state.duration;
+  const sample = sampleMotionTrack(state.track, localTime, { mode: 'mass-attention' });
+  const temporalSample = nearestTemporalSample(state.track, localTime);
+  const compression = Number(temporalSample?.bowCompression || 0);
+  const rootPosition = new THREE.Vector3(sample.root[0] * 2.2, sample.root[1] * 5.0 + 0.24, sample.root[2] * 2.2);
+  const attention = new THREE.Vector3(sample.attention[0] * 2.2, sample.attention[1] * 2.2 + 0.24, sample.attention[2] * 2.2);
+  const displayedFacing = attention.clone().sub(rootPosition).normalize();
+  visual.group.position.copy(rootPosition);
+  visual.group.lookAt(attention);
+  visual.group.rotation.z += (temporalSample?.chestRoot?.[0] || 0) * 1.8;
+  visual.body.scale.set(1 + compression * 0.18, 1.14 - compression * 0.34, 1 + compression * 0.46);
+  visual.group.updateMatrixWorld(true);
+  const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar(0.22 + sample.effort * 0.02));
+  visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
+  visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + sample.effort * 0.22 + compression * 0.24);
+  visual.target.position.copy(attention);
+  visual.target.material.opacity = 0.34 + compression * 0.58;
+  visual.target.scale.setScalar(0.68 + compression * 1.1);
+  visual.compressionRing.scale.setScalar(0.75 + compression * 1.7);
+  visual.compressionRing.material.opacity = 0.18 + compression * 0.58;
+  for (let i = 0; i < visual.trail.length; i++) {
+    const trailTime = Math.max(0, localTime - (i + 1) * 0.12);
+    const trailSample = sampleMotionTrack(state.track, trailTime, { mode: 'mass-attention' });
+    const dot = visual.trail[i];
+    dot.visible = true;
+    dot.position.set(
+      trailSample.root[0] * 2.2 - sample.root[0] * 2.2,
+      trailSample.root[1] * 5.0 - sample.root[1] * 5.0,
+      trailSample.root[2] * 2.2 - sample.root[2] * 2.2,
+    );
+    dot.material.opacity = Math.max(0.04, 0.32 - i * 0.03);
+  }
+  state.frameCount += 1;
+  state.maxEffort = Math.max(state.maxEffort, sample.effort);
+  state.lastTemporalSample = temporalSample;
+  state.lastActors = [{
+    id: visual.id,
+    label: visual.label,
+    intent: state.track.intent,
+    phase: sample.phase,
+    root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
+    facing: sample.facing.map(value => Number(value.toFixed(5))),
+    displayFacing: displayedFacing.toArray().map(value => Number(value.toFixed(5))),
+    attention: attention.toArray().map(value => Number(value.toFixed(5))),
+    effort: Number(sample.effort.toFixed(5)),
+    scale: Number(sample.scale.toFixed(5)),
+    bowCompression: Number(compression.toFixed(5)),
+    sourceFrame: temporalSample?.frame ?? null,
+    sourceTime: temporalSample?.time ?? null,
+    color: visual.color,
+  }];
+  updateMotionAgencyReadout();
+  return true;
+}
+
 function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
   if (!motionTrackState?.active) return false;
   const state = motionTrackState;
@@ -4265,6 +4434,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-tracks-enable')?.addEventListener('click', () => createMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-generated-enable')?.addEventListener('click', () => createGeneratedMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-output-map-enable')?.addEventListener('click', () => createGeneratedPoseOutputMapScene({ force: true }));
+  document.getElementById('motion-temporal-enable')?.addEventListener('click', () => createGeneratedPoseTemporalScene({ force: true }));
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
     document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
@@ -4273,10 +4443,11 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map')) {
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
+    if (params.has('kaminos_generated_pose_temporal')) createGeneratedPoseTemporalScene();
+    else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
     else if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_phrase_controls')) createMotionPhraseControlHarnessScene();
@@ -4516,6 +4687,62 @@ window.kaminosGeneratedPoseOutputMapDebugState = function() {
       strongestOutput: harness.strongestOutput,
       maxOutputValue: harness.maxOutputValue,
       normalizedOutputs: harness.normalizedOutputs,
+      metrics: harness.metrics,
+      filmstripFrames: harness.filmstrip.length,
+    },
+    actors: state?.lastActors || [],
+  };
+};
+
+window.kaminosGeneratedPoseTemporalDebugState = function() {
+  const state = motionTemporalState;
+  const harness = state?.harness || buildGeneratedPoseTemporalHarness({
+    generatedInput: DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+    fps: 12,
+  });
+  return {
+    schema: 'kaminos.generated-pose-temporal-debug.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    active: !!state?.active,
+    actorCount: state?.active ? 1 : 0,
+    fallbackCount: 0,
+    frameCount: state?.frameCount || 0,
+    maxEffort: Number(state?.maxEffort || harness.metrics.maxEffort || 0),
+    maxBowCompression: Number(harness.metrics.maxBowCompression || 0),
+    sourceKind: harness.sourceKind,
+    sourceStatus: harness.sourceStatus,
+    sourceModel: harness.sourceModel,
+    sourceRoute: harness.sourceRoute,
+    sourceFormat: harness.sourceFormat,
+    inputSha256: harness.inputSha256,
+    sampleCount: harness.sampleCount,
+    sourceFrameStride: harness.sourceFrameStride,
+    phaseLabels: harness.metrics.phaseLabels,
+    lastTemporalSample: state?.lastTemporalSample || null,
+    generatedPoseTemporalHarness: {
+      schema: harness.schema,
+      route: harness.route,
+      sourceKind: harness.sourceKind,
+      sourceStatus: harness.sourceStatus,
+      sourceModel: harness.sourceModel,
+      sourceRoute: harness.sourceRoute,
+      sourceFormat: harness.sourceFormat,
+      inputSha256: harness.inputSha256,
+      sampleCount: harness.sampleCount,
+      sourceFrameStride: harness.sourceFrameStride,
+      track: {
+        schema: harness.track.schema,
+        id: harness.track.id,
+        sourceKind: harness.track.sourceKind,
+        sourceStatus: harness.track.sourceStatus,
+        sourceModel: harness.track.sourceModel,
+        sourceRoute: harness.track.sourceRoute,
+        rawFrameCount: harness.track.rawFrameCount,
+        fps: harness.track.fps,
+        duration: harness.track.duration,
+        jointMapping: harness.track.jointMapping,
+        extractionAssumptions: harness.track.extractionAssumptions,
+      },
       metrics: harness.metrics,
       filmstripFrames: harness.filmstrip.length,
     },
@@ -4871,9 +5098,10 @@ async function initScene() {
     const motionPhraseControlActive = updateMotionPhraseControlFrame(performance.now() / 1000);
     const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
+    const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
