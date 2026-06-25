@@ -216,14 +216,18 @@ try {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-pipeline-id]')]
         .find(item => item.dataset.pipelineGeneratorPipelineId === ${JSON.stringify(pipelineId)});
+      const canvas = document.querySelector('#pipeline-graph-canvas');
       const rect = element?.getBoundingClientRect();
+      const canvasRect = canvas?.getBoundingClientRect();
       if (!rect) throw new Error('Pipeline generator card missing');
+      if (!canvasRect) throw new Error('Pipeline graph canvas missing for generator drop');
       return {
         cardText: element.innerText,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        drop: { x: canvasRect.left + canvasRect.width * 0.34, y: canvasRect.top + canvasRect.height * 0.40 },
       };
     })()`);
-    await click(cdp, generatorCard.point);
+    await drag(cdp, generatorCard.point, generatorCard.drop);
     const imageCard = await evalJson(cdp, `(() => {
       const cards = [...document.querySelectorAll('.pipeline-asset-card')];
       const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
@@ -240,11 +244,15 @@ try {
       const element = document.querySelector('[data-pipeline-graph-node-id="route"]');
       const rect = element?.getBoundingClientRect();
       if (!rect) throw new Error('Route graph node missing');
+      const state = window.kaminosPipelineDockDebugState?.();
       return {
         nodeText: element.innerText,
+        selectedPipelineId: state?.selectedPipelineId || null,
+        selectedGraphNodeId: state?.selectedGraphNodeId || null,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
     })()`);
+    assertWitness(routeNode.selectedPipelineId === pipelineId && routeNode.selectedGraphNodeId === 'route', 'Generator drag did not place the requested route node', routeNode);
     await click(cdp, routeNode.point);
 
     const executeButton = await evalJson(cdp, `(() => {
