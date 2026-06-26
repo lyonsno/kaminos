@@ -1099,6 +1099,43 @@ function prepareHybridSplatOverlayHost(host) {
   return host;
 }
 
+const HYBRID_SPLAT_ENV_PRESETS = {
+  studio: 'studio_small_09',
+  outdoor: 'kloofendal_48d',
+  warehouse: 'empty_warehouse_01',
+  esplanade: 'royal_esplanade',
+  moonlit: 'moonlit_golf',
+};
+
+function hybridSplatOverlaySceneContext(viewport) {
+  const env = HDR_ENVS[currentEnvName] || HDR_ENVS.studio;
+  const preset = HYBRID_SPLAT_ENV_PRESETS[currentEnvName] || 'studio_small_09';
+  const rotationY = parseFloat(document.getElementById('env-rotation-slider')?.value || '0');
+  const intensity = parseFloat(document.getElementById('env-intensity-slider')?.value || `${env?.intensity ?? 1}`);
+  const exposure = parseFloat(document.getElementById('exposure-slider')?.value || `${env?.exposure ?? 1}`);
+  return {
+    schema: 'hybrid-render.scene-context.v0',
+    producer: { app: 'kaminos' },
+    frame: { worldUnits: 'meters', upAxis: 'Y', handedness: 'right', colorSpace: 'linear-srgb' },
+    camera: {
+      viewMatrix: Array.from(camera.matrixWorldInverse.elements),
+      projectionMatrix: Array.from(camera.projectionMatrix.elements),
+      positionWorld: camera.getWorldPosition(new THREE.Vector3()).toArray(),
+      viewport,
+    },
+    lighting: {
+      environment: { kind: 'preset', preset, intensity, rotationY },
+      exposure,
+      toneMapping: 'reinhard',
+    },
+    composition: {
+      mode: 'overlay',
+      background: showEnvBg ? 'environment' : 'scene',
+    },
+    objects: [],
+  };
+}
+
 async function ensureHybridSplatOverlayHandle() {
   const host = document.getElementById('hybrid-splat-overlay-host');
   if (!host) throw new Error('Hybrid overlay host is missing');
@@ -1135,6 +1172,9 @@ function updateHybridSplatOverlayFrame() {
   handle.setViewport(viewport.width, viewport.height, viewport.devicePixelRatio);
   handle.setModelMatrix(new Float32Array(overlayAssetWorldMatrix.elements));
   handle.setCameraMatrices(view, projection, cameraPosition);
+  const sceneContextTelemetry = typeof handle.setSceneContext === 'function'
+    ? handle.setSceneContext(hybridSplatOverlaySceneContext(viewport))
+    : null;
   hybridSplatOverlayState.frameCount += 1;
   hybridSplatOverlayState.lastFrame = {
     schema: 'kaminos.hybrid-splat-overlay.frame.v0',
@@ -1164,6 +1204,8 @@ function updateHybridSplatOverlayFrame() {
     overlayCapabilities: handle.capabilities || null,
     sourceIdentity: handle.sourceIdentity || null,
     correctionApplication: handle.correctionApplication || null,
+    environmentStatus: handle.environmentStatus || null,
+    sceneContextTelemetry,
     updatedAt: new Date().toISOString(),
   };
   hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);
