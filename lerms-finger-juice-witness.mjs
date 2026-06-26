@@ -111,6 +111,7 @@ async function run() {
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${userDataDir}`,
       '--headless=new',
+      '--enable-unsafe-webgpu',
       '--disable-gpu-sandbox',
       '--no-first-run',
       '--no-default-browser-check',
@@ -139,6 +140,11 @@ async function run() {
     lastTrustworthyState = state;
     assert.ok(state, 'missing lerms finger-juice debug state');
     assert.equal(state.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0', 'wrong effectiveRoute');
+    assert.equal(state.solver_backend, 'webgpu_compute', 'finger-juice route must use WebGPU compute backend');
+    assert.equal(state.solverRoute, 'webgpu_particle_solver_v0', 'wrong WebGPU solver route');
+    assert.equal(state.shaderRoute, 'wgsl-ballistic-heightfield-surface-v0', 'wrong WebGPU shader route');
+    assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
+    assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
     assert.equal(state.terrainContract, 'hill-of-hills-heightfield-collision-v0', 'wrong terrain contract');
     assert.equal(state.simulation_authority, 'synthetic_fixture', 'wrong simulation_authority');
@@ -162,6 +168,7 @@ async function run() {
     assert.ok(state.goinImpulseCount > 0, 'route did not produce goin impulse evidence');
 
     phase = 'capture_screenshot';
+    await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
     const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
     const png = Buffer.from(shot.data, 'base64');
     assert.ok(png.length > 4096, 'screenshot is too small to be credible visual evidence');
@@ -175,6 +182,12 @@ async function run() {
       failure_phase: null,
       screenshot: out,
       effectiveRoute: state.effectiveRoute,
+      solver_backend: state.solver_backend,
+      solverRoute: state.solverRoute,
+      shaderRoute: state.shaderRoute,
+      adapterInfo: state.adapterInfo,
+      workgroupSize: state.workgroupSize,
+      cpuOracle: state.cpuOracle,
       terrainContract: state.terrainContract,
       visualRenderer: state.visualRenderer,
       simulation_authority: state.simulation_authority,
