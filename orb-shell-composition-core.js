@@ -454,7 +454,95 @@ function createMacroTorsionFieldPlan(composition, macroParameters = {}) {
   };
 }
 
-function createExpandedRegionProxyDescriptor(assemblage) {
+function createCleanProxySurfacePolicy() {
+  return {
+    schema: 'CleanProxySurfacePolicy',
+    mode: 'clean-proxy-surface-diagnostic-v0',
+    surfaceDetailMode: 'diagnostic-smooth-sheet',
+    decorativeMicroVariation: 'forbidden',
+    topologyOnlySurfaceRelief: true,
+    allowedReliefEvents: [
+      'level-change-dip',
+      'under-neighbor',
+      'inner-support',
+      'local-layer-event-schedule',
+    ],
+    forbiddenSurfaceNoise: [
+      'ridgeChannel',
+      'centerRelief',
+      'decorative-micro-variation',
+      'scratch-simulacrum',
+    ],
+    reason: 'proxy-surfaces-must-expose-grammar-failures-before-final-meshing',
+  };
+}
+
+function crossingSubSurge(id, role, centerline, options = {}) {
+  return {
+    schema: 'CrossingSubSurge',
+    id,
+    role,
+    parentAssemblage: 'north-east-counter-thrust',
+    centerline,
+    widthProfile: options.widthProfile || { root: 0.052, mid: 0.082, tip: 0.046 },
+    thicknessProfile: options.thicknessProfile || { root: 0.012, mid: 0.022, tip: 0.012 },
+    seamReceivers: options.seamReceivers || ['crossing-tuck-overlap-receiver'],
+    levelEvents: options.levelEvents || [],
+    surfacePolicy: 'topologyOnlySurfaceRelief',
+    objecthood: role === 'dominant-crossing-body'
+      ? 'macro-body-sub-surge-not-wand'
+      : 'subordinate-anatomy-not-standalone-bar',
+  };
+}
+
+function createCrossingSubSurgePlan(frontParameters = {}) {
+  const phase = frontParameters.crossingTuckPhase || 0;
+  const dominance = frontParameters.ownerDominance || 1;
+  const bodyLine = [
+    [-0.42, 0.43, 0.82],
+    [-0.21 + phase * 0.14, 0.18, 1.01],
+    [0.08 + phase * 0.18, -0.06, 1.09],
+    [0.38, -0.34 + phase * 0.1, 0.88],
+  ];
+  return {
+    schema: 'CrossingSubSurgePlan',
+    mode: 'crossing-sub-surge-decomposition-v0',
+    id: 'north-east-counter-thrust-crossing-sub-surge-plan',
+    ownerAssemblageId: 'north-east-counter-thrust',
+    ownerRole: 'crossing-tuck-owner',
+    bodySemantics: 'front-crossing-tuck-body-with-subordinate-anatomy',
+    subSurges: [
+      crossingSubSurge('crossing-tuck-dominant-body-surge', 'dominant-crossing-body', bodyLine, {
+        widthProfile: { root: 0.072 * dominance, mid: 0.138 * dominance, tip: 0.064 * dominance },
+        thicknessProfile: { root: 0.014, mid: 0.03, tip: 0.014 },
+        seamReceivers: ['crossing-tuck-overlap-receiver', 'primary-front-intentional-slit'],
+        levelEvents: [
+          { type: 'level-change-dip', t: 0.42, layer: 'under-neighbor', generatedBy: 'dominance-crossing-field' },
+          { type: 'reseat-after-underpass', t: 0.68, layer: 'outer', generatedBy: 'front-crossing-tuck' },
+        ],
+      }),
+      crossingSubSurge('crossing-tuck-upper-edge-rail', 'subordinate-edge-rail', bodyLine.map(point => [point[0] - 0.028, point[1] + 0.018, point[2] + 0.006]), {
+        widthProfile: { root: 0.016, mid: 0.02, tip: 0.014 },
+        thicknessProfile: { root: 0.006, mid: 0.009, tip: 0.006 },
+        seamReceivers: ['primary-front-intentional-slit'],
+        levelEvents: [
+          { type: 'level-change-dip', t: 0.46, layer: 'under-neighbor', generatedBy: 'edge-rail-follows-body-underpass' },
+        ],
+      }),
+      crossingSubSurge('crossing-tuck-lower-seam-rail', 'subordinate-edge-rail', bodyLine.map(point => [point[0] + 0.034, point[1] - 0.022, point[2] - 0.004]), {
+        widthProfile: { root: 0.014, mid: 0.018, tip: 0.012 },
+        thicknessProfile: { root: 0.005, mid: 0.008, tip: 0.005 },
+        seamReceivers: ['crossing-tuck-overlap-receiver'],
+        levelEvents: [
+          { type: 'level-change-dip', t: 0.52, layer: 'under-neighbor', generatedBy: 'seam-receiver-clearance' },
+        ],
+      }),
+    ],
+    failurePressure: 'central-crossing-must-not-read-as-isolated-wand',
+  };
+}
+
+function createExpandedRegionProxyDescriptor(assemblage, cleanPolicy) {
   const roleScale = assemblage.id === 'equatorial-cupping-whorl'
     ? 1.24
     : assemblage.id === 'north-east-counter-thrust'
@@ -472,6 +560,13 @@ function createExpandedRegionProxyDescriptor(assemblage) {
     coverageScale: roleScale,
     coverageIntent: 'macro-region-coverage-before-final-meshing',
     preserveReadableGaps: true,
+    surfaceDetailMode: cleanPolicy?.surfaceDetailMode || 'diagnostic-smooth-sheet',
+    topologyOnlySurfaceRelief: cleanPolicy?.topologyOnlySurfaceRelief ?? true,
+    cleanSurfacePolicy: cleanPolicy ? {
+      mode: cleanPolicy.mode,
+      decorativeMicroVariation: cleanPolicy.decorativeMicroVariation,
+      allowedReliefEvents: cleanPolicy.allowedReliefEvents,
+    } : null,
     effectiveTorsion: assemblage.macroTorsionField ? {
       fieldId: assemblage.macroTorsionField.id,
       effectiveTwist: assemblage.macroTorsionField.effectiveTwist,
@@ -497,13 +592,16 @@ function seamGap(id, type, regions, role, options = {}) {
   };
 }
 
-function createExpandedMacroRegionProxyPlan(composition) {
-  const expandedRegions = composition.macroAssemblages.map(createExpandedRegionProxyDescriptor);
+function createExpandedMacroRegionProxyPlan(composition, cleanPolicy) {
+  const expandedRegions = composition.macroAssemblages.map(assemblage => (
+    createExpandedRegionProxyDescriptor(assemblage, cleanPolicy)
+  ));
   return {
     schema: 'ExpandedMacroRegionProxyPlan',
     mode: 'macro-region-proxy-coverage-v0',
     proxyStatus: 'proxy-not-final-plate',
     futureMeshRole: 'future-mesh-boundary-input',
+    cleanSurfacePolicy: cleanPolicy,
     expandedRegions,
     seamGaps: [
       seamGap('primary-front-intentional-slit', 'intentional-slit', [
@@ -535,6 +633,7 @@ function createExpandedMacroRegionProxyPlan(composition) {
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
+  const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
   for (const assemblage of next.macroAssemblages) {
     const params = macroParameters[assemblage.id];
     if (!params) continue;
@@ -591,11 +690,23 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   if (next.macroBodyPromotion.crossingTuckIntegration) {
     next.frontApertureOwnership.crossingTuckIntegration = next.macroBodyPromotion.crossingTuckIntegration;
   }
-  next.expandedMacroRegionProxyPlan = createExpandedMacroRegionProxyPlan(next);
+  next.crossingSubSurgePlan = createCrossingSubSurgePlan(frontParameters);
+  next.cleanProxySurfacePolicy = createCleanProxySurfacePolicy();
+  const northEast = next.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
+  if (northEast) {
+    northEast.crossingSubSurgePlan = next.crossingSubSurgePlan;
+    northEast.macroPromotedBody.crossingSubSurgePlan = next.crossingSubSurgePlan;
+  }
+  next.frontApertureOwnership.crossingSubSurgePlan = next.crossingSubSurgePlan;
+  if (next.frontApertureOwnership.crossingTuckIntegration) {
+    next.frontApertureOwnership.crossingTuckIntegration.crossingSubSurgePlanId = next.crossingSubSurgePlan.id;
+    next.frontApertureOwnership.crossingTuckIntegration.subSurgeRailRole = 'subordinate-edge-rail-not-lone-wand';
+  }
+  next.expandedMacroRegionProxyPlan = createExpandedMacroRegionProxyPlan(next, next.cleanProxySurfacePolicy);
   for (const assemblage of next.macroAssemblages) {
     assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
+    assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
   }
-  const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -862,6 +973,20 @@ function torsionSurfaceFrame(THREE, assemblage, side, normal, t, strength = 1) {
   };
 }
 
+function topologyReliefStrength(assemblage, t) {
+  const intervals = assemblage.layerItinerary?.intervals || [];
+  let strength = 0;
+  for (const interval of intervals) {
+    const isTopologyCarrier = interval.layer === 'under-neighbor' || interval.layer === 'inner-support';
+    if (!isTopologyCarrier || t < interval.t0 - 0.08 || t > interval.t1 + 0.08) continue;
+    const center = (interval.t0 + interval.t1) * 0.5;
+    const radius = Math.max(0.045, (interval.t1 - interval.t0) * 0.62);
+    const levelChangeDip = Math.exp(-Math.pow((t - center) / radius, 2));
+    strength = Math.max(strength, interval.layer === 'inner-support' ? levelChangeDip * 0.86 : levelChangeDip * 0.68);
+  }
+  return clamp(strength, 0, 1);
+}
+
 function makeBandTube(THREE, assemblage, bandMember) {
   const points = [];
   for (let i = 0; i < 72; i++) points.push(sampleSpine(THREE, assemblage, bandMember, i / 71));
@@ -988,16 +1113,17 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
     const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
+    const topologyDip = topologyReliefStrength(assemblage, t);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
       const q = u * 2 - 1;
       const sideWidth = q < 0 ? leftWidth : rightWidth;
-      const ridgeChannel = 1 - Math.exp(-Math.pow(Math.abs(q) - 0.62, 2) / 0.012) * 0.08;
-      const centerRelief = 1 - Math.exp(-Math.pow(q, 2) / 0.028) * 0.06;
-      const crown = (1 - Math.pow(Math.abs(q), 2.2) * 0.2) * ridgeChannel * centerRelief;
+      const diagnosticCrown = 1 - Math.pow(Math.abs(q), 2.2) * 0.18;
+      const topologyDipMask = (1 - Math.pow(Math.abs(q), 1.4)) * topologyDip;
+      const crown = Math.max(0.58, diagnosticCrown - topologyDipMask * 0.28);
       const pos = center.clone()
         .addScaledVector(sideAxis, q * sideWidth)
-        .addScaledVector(normalAxis, lift * crown);
+        .addScaledVector(normalAxis, lift * crown - topologyDipMask * 0.018);
       vertices.push(pos.x, pos.y, pos.z);
       normals.push(normalAxis.x, normalAxis.y, normalAxis.z);
       uvs.push(u, t);
@@ -1103,10 +1229,27 @@ function makeFrontOwnerCurveGeometry(THREE, points, radius) {
   return new THREE.TubeGeometry(curve, 72, radius, 10, false);
 }
 
-function makeCrossingTuckBodyGeometry(THREE, points, ownerDominance = 1) {
-  const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
+function subSurgeLevelDip(surge, t) {
+  let strength = 0;
+  for (const event of surge.levelEvents || []) {
+    if (event.type !== 'level-change-dip') continue;
+    strength = Math.max(strength, Math.exp(-Math.pow((t - event.t) / 0.12, 2)));
+  }
+  return clamp(strength, 0, 1);
+}
+
+function surgeWidthAt(surge, t) {
+  const width = surge.widthProfile || { root: 0.052, mid: 0.082, tip: 0.046 };
+  return t < 0.5
+    ? width.root + (width.mid - width.root) * t * 2
+    : width.mid + (width.tip - width.mid) * (t - 0.5) * 2;
+}
+
+function makeCrossingTuckBodyGeometry(THREE, surge, ownerDominance = 1) {
+  const centerline = surge.centerline || surge;
+  const curve = new THREE.CatmullRomCurve3(centerline.map(point => new THREE.Vector3(...point)));
   const rowCount = 48;
-  const columnCount = 7;
+  const columnCount = 9;
   const vertices = [];
   const normals = [];
   const indices = [];
@@ -1120,16 +1263,18 @@ function makeCrossingTuckBodyGeometry(THREE, points, ownerDominance = 1) {
     let side = new THREE.Vector3().crossVectors(normal, tangent);
     if (side.lengthSq() < 1e-8) side = new THREE.Vector3(1, 0, 0);
     side.normalize();
-    const width = (0.042 + Math.sin(Math.PI * t) * 0.024) * ownerDominance;
+    const levelDip = subSurgeLevelDip(surge, t);
+    const width = surgeWidthAt(surge, t) * ownerDominance * (1 + levelDip * 0.18);
+    const thickness = (surge.thicknessProfile?.mid || 0.022) * (0.72 + Math.sin(Math.PI * t) * 0.5);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
       const q = u * 2 - 1;
-      const crown = 1 - Math.pow(Math.abs(q), 1.9) * 0.18;
+      const crown = 1 - Math.pow(Math.abs(q), 1.9) * 0.16 - levelDip * (1 - Math.abs(q)) * 0.28;
       const pos = center.clone()
         .addScaledVector(side, q * width)
-        .addScaledVector(normal, 0.016 * crown)
+        .addScaledVector(normal, thickness * crown - levelDip * 0.015)
         .normalize()
-        .multiplyScalar(1.066);
+        .multiplyScalar(1.07 - levelDip * 0.012);
       const posNormal = pos.clone().normalize();
       vertices.push(pos.x, pos.y, pos.z);
       normals.push(posNormal.x, posNormal.y, posNormal.z);
@@ -1150,7 +1295,13 @@ function makeCrossingTuckBodyGeometry(THREE, points, ownerDominance = 1) {
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
+  geometry.userData.CrossingSubSurge = surge;
   return geometry;
+}
+
+function makeCrossingSubSurgeRailGeometry(THREE, surge) {
+  const radius = surgeWidthAt(surge, 0.5) * 0.24;
+  return makeFrontOwnerCurveGeometry(THREE, surge.centerline, Math.max(0.006, radius));
 }
 
 function makeLowerFrontCupGeometry(THREE, lowerCupDepth = 1) {
@@ -1207,24 +1358,29 @@ function addPrimaryApertureFrameGeometry(THREE, group, composition, materials) {
   cup.userData.frontApertureOwnerRole = 'lower-cupping-owner';
   group.add(cup);
 
-  const crossingPoints = [
-    [-0.38, 0.38, 0.86],
-    [-0.16 + (variation.crossingTuckPhase || 0) * 0.18, 0.12, 1.03],
-    [0.1 + (variation.crossingTuckPhase || 0) * 0.24, -0.08, 1.08],
-    [0.34, -0.33 + (variation.crossingTuckPhase || 0) * 0.12, 0.88],
-  ];
-  const crossingBody = new THREE.Mesh(makeCrossingTuckBodyGeometry(THREE, crossingPoints, variation.ownerDominance || 1), materials.crossingBody);
-  crossingBody.name = 'primary-front-aperture-crossing-tuck-macro-body';
-  crossingBody.userData.crossingTuckIntegration = frame.crossingTuckIntegration;
-  crossingBody.userData.MacroPromotedBody = composition.macroBodyPromotion?.promotedBodies?.find(body => body.parentAssemblage === 'north-east-counter-thrust');
-  group.add(crossingBody);
-
-  const crossing = new THREE.Mesh(makeFrontOwnerCurveGeometry(THREE, crossingPoints, 0.016 * (variation.ownerDominance || 1)), materials.ownerRail);
-  crossing.name = 'primary-front-aperture-crossing-tuck-owner';
-  crossing.userData.PrimaryApertureFrame = frame;
-  crossing.userData.frontApertureOwnerRole = 'crossing-tuck-owner';
-  crossing.userData.railRole = 'subordinate-ridge-not-lone-wand';
-  group.add(crossing);
+  const crossingPlan = frame.crossingSubSurgePlan || createCrossingSubSurgePlan(variation);
+  for (const surge of crossingPlan.subSurges) {
+    const isBody = surge.role === 'dominant-crossing-body';
+    const mesh = new THREE.Mesh(
+      isBody
+        ? makeCrossingTuckBodyGeometry(THREE, surge, variation.ownerDominance || 1)
+        : makeCrossingSubSurgeRailGeometry(THREE, surge),
+      isBody ? materials.crossingBody : materials.subSurgeRail,
+    );
+    mesh.name = isBody
+      ? 'primary-front-aperture-crossing-tuck-macro-body'
+      : surge.id === 'crossing-tuck-upper-edge-rail'
+        ? 'primary-front-aperture-crossing-tuck-owner'
+        : `${surge.id}-topology-only-relief`;
+    mesh.userData.PrimaryApertureFrame = frame;
+    mesh.userData.CrossingSubSurgePlan = crossingPlan;
+    mesh.userData.CrossingSubSurge = surge;
+    mesh.userData.crossingTuckIntegration = frame.crossingTuckIntegration;
+    mesh.userData.MacroPromotedBody = composition.macroBodyPromotion?.promotedBodies?.find(body => body.parentAssemblage === 'north-east-counter-thrust');
+    mesh.userData.frontApertureOwnerRole = 'crossing-tuck-owner';
+    mesh.userData.railRole = surge.role === 'subordinate-edge-rail' ? 'subordinate-edge-rail-not-lone-wand' : 'dominant-crossing-body';
+    group.add(mesh);
+  }
 }
 
 function disposeObject(child, sharedMaterials) {
@@ -1253,6 +1409,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.42 });
   const apertureOwnerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x20272a, roughness: 0.25, metalness: 0.9, envMapIntensity: 2.2, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = new THREE.MeshStandardMaterial({ color: 0x71828a, roughness: 0.18, metalness: 0.92, envMapIntensity: 3 });
+  const crossingSubSurgeRailMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2a2f, roughness: 0.44, metalness: 0.74, envMapIntensity: 0.9 });
   const promotedBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.24, metalness: 0.93, envMapIntensity: 2.5, side: THREE.DoubleSide });
   const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
   const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
@@ -1342,10 +1499,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       group.add(seam);
     }
     addPrimaryApertureFrameGeometry(THREE, group, composition, {
-      ownerBody: apertureOwnerBodyMaterial,
-      ownerRail: apertureOwnerRailMaterial,
-      crossingBody: crossingTuckBodyMaterial,
-    });
+    ownerBody: apertureOwnerBodyMaterial,
+    ownerRail: apertureOwnerRailMaterial,
+    subSurgeRail: crossingSubSurgeRailMaterial,
+    crossingBody: crossingTuckBodyMaterial,
+  });
 
     scene.add(group);
     onStatus?.({
@@ -1354,6 +1512,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variantId: composition.effectiveVariation.variantId,
       variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
+      crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
+      cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
+      topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
       torsionFieldCount: composition.macroTorsionFieldPlan?.fields?.length || 0,
       effectiveTorsion: composition.macroTorsionFieldPlan?.fields?.map(field => ({
         id: field.id,
@@ -1410,6 +1571,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
+        crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
+        cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
+        topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
         torsionFieldCount: composition.macroTorsionFieldPlan?.fields?.length || 0,
         effectiveTorsion: composition.macroTorsionFieldPlan?.fields?.map(field => ({
           id: field.id,
@@ -1430,6 +1594,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
         PrimaryApertureFrame: composition.frontApertureOwnership,
         frontApertureOwnership: composition.frontApertureOwnership,
+        CrossingSubSurgePlan: composition.crossingSubSurgePlan,
+        crossingSubSurgePlan: composition.crossingSubSurgePlan,
+        CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],
+        CleanProxySurfacePolicy: composition.cleanProxySurfacePolicy,
+        cleanProxySurfacePolicy: composition.cleanProxySurfacePolicy,
         MacroTorsionFieldPlan: composition.macroTorsionFieldPlan,
         macroTorsionFieldPlan: composition.macroTorsionFieldPlan,
         MacroTorsionField: composition.macroTorsionFieldPlan?.fields || [],

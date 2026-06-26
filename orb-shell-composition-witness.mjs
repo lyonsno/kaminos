@@ -137,6 +137,13 @@ async function main() {
     assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
     assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
     assert.ok(state?.variantId, 'variantId missing from debug state');
+    assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
+    assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
+    assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
+    assert.ok(state?.CrossingSubSurge?.every(surge => surge?.schema === 'CrossingSubSurge'), 'CrossingSubSurge descriptors missing from debug state');
+    assert.equal(state?.CleanProxySurfacePolicy?.schema, 'CleanProxySurfacePolicy', 'CleanProxySurfacePolicy missing from debug state');
+    assert.equal(state?.CleanProxySurfacePolicy?.mode, 'clean-proxy-surface-diagnostic-v0', 'clean proxy surface policy mode missing from debug state');
+    assert.equal(state?.topologyOnlySurfaceRelief, true, 'topology-only surface relief missing from debug state');
     assert.equal(state?.MacroTorsionFieldPlan?.schema, 'MacroTorsionFieldPlan', 'MacroTorsionFieldPlan missing from debug state');
     assert.equal(state?.MacroTorsionFieldPlan?.mode, 'macro-torsion-field-v0', 'MacroTorsionFieldPlan mode missing from debug state');
     assert.equal(state?.torsionFieldCount, state.macroAssemblageCount, 'composition must expose one MacroTorsionField per macro assemblage');
@@ -172,6 +179,14 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      crossingSubSurgeCount: state.crossingSubSurgeCount,
+      cleanProxySurfaceMode: state.cleanProxySurfaceMode,
+      topologyOnlySurfaceRelief: state.topologyOnlySurfaceRelief,
+      CrossingSubSurgePlan: state.CrossingSubSurgePlan,
+      crossingSubSurgePlan: state.crossingSubSurgePlan,
+      CrossingSubSurge: state.CrossingSubSurge,
+      CleanProxySurfacePolicy: state.CleanProxySurfacePolicy,
+      cleanProxySurfacePolicy: state.cleanProxySurfacePolicy,
       torsionFieldCount: state.torsionFieldCount,
       effectiveTorsion: state.effectiveTorsion,
       MacroTorsionFieldPlan: state.MacroTorsionFieldPlan,
