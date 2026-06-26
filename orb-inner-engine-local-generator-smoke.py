@@ -19,6 +19,8 @@ ROUTES = {
         "defaultSteps": 9,
         "defaultGuidance": 0.0,
         "defaultDtype": "bfloat16",
+        "supportsPlainNegativePrompt": True,
+        "supportsImageConditioning": False,
     },
     "flux2-klein": {
         "model": "black-forest-labs/FLUX.2-klein-9B",
@@ -26,6 +28,8 @@ ROUTES = {
         "defaultSteps": 4,
         "defaultGuidance": 1.0,
         "defaultDtype": "bfloat16",
+        "supportsPlainNegativePrompt": False,
+        "supportsImageConditioning": True,
     },
 }
 
@@ -64,6 +68,54 @@ def default_prompt():
         "segmented shutter ribs, hard occluder blades, bounded amber orange emissive channels, hot small central well, "
         "dark outer machinery rim, opaque machined material, orthographic hard surface concept asset, black background"
     )
+
+
+PROMPT_PROFILES = {
+    "tag-soup": {
+        "source": "built-in",
+        "prompt": default_prompt(),
+    },
+    "cinematic-macro": {
+        "source": "built-in",
+        "prompt": (
+            "A dark cinematic macro photograph looking straight into the interior of a sealed industrial plasma reactor. "
+            "The foreground aperture rim is almost black and partially blocks the machinery behind it. Deep nested blackened "
+            "metal rings recede inward. Radial graphite ribs cross over narrow amber-orange coolant channels. The center "
+            "contains a small white-hot ignition well behind a bolted inner plate. Orange light is trapped under metal and "
+            "leaks only through thin physical slots. Soot-dark ceramic, machined titanium, worn edges, high-frequency "
+            "mechanical detail, heavy inner occlusion, faint volumetric haze inside the chamber."
+        ),
+    },
+    "cutaway-mechanical": {
+        "source": "built-in",
+        "prompt": (
+            "A production-quality hard-surface concept render of a tight cutaway into a contained radial engine interior, "
+            "not an exterior shell. The view peers into a dark socket with nested annular plates, overlapping occluder "
+            "shutters, radial support ribs, recessed orange emissive conduits, a small hot central combustion well, and "
+            "dark outer machinery in shadow. The orange emission is trapped under metal, bounded by physical channels, "
+            "and partially hidden by black metal ribs. Industrial reactor internals, precise machining, layered depth, "
+            "asymmetric soot-dark details, no clean speaker grille composition."
+        ),
+    },
+    "reference-conditioned": {
+        "source": "built-in",
+        "prompt": (
+            "Reinterpret the reference image as the interior of a dark contained radial engine socket. Preserve the "
+            "reference's radial structure only as a layout guide, then replace any clean product-token or lens-like "
+            "reading with nested blackened machinery, overlapping occluder shutters, radial graphite ribs, recessed "
+            "amber-orange emissive conduits, a small hot central well, and deep rim shadow. Orange light should feel "
+            "trapped behind physical metal slots rather than painted on top."
+        ),
+    },
+    "model-card-sanity": {
+        "source": "built-in",
+        "prompt": (
+            "A weathered astronaut stands in a lush alien jungle at dawn, wearing a scratched orange exploration suit. "
+            "Towering translucent blue plants glow softly behind them, mist hangs between the leaves, tiny airborne "
+            "particles catch warm sunlight, and every surface has crisp cinematic detail."
+        ),
+    },
+}
 
 
 def default_negative_prompt():
@@ -114,6 +166,51 @@ def output_metrics(path):
     }
 
 
+def effective_prompt_controls(args):
+    route = ROUTES[args.route]
+    negative_requested = bool(args.negative_prompt)
+    if not negative_requested:
+        negative_mode = "none"
+        negative_passed = False
+        negative_reason = "no negative prompt requested"
+    elif route["supportsPlainNegativePrompt"]:
+        negative_mode = "plain-negative"
+        negative_passed = True
+        negative_reason = "pipeline exposes negative_prompt"
+    else:
+        negative_mode = "unsupported"
+        negative_passed = False
+        negative_reason = "pipeline does not expose plain negative_prompt"
+
+    image_requested = args.conditioning_image is not None
+    if not image_requested:
+        image_mode = "none"
+        image_passed = False
+        image_reason = "no conditioning image requested"
+    elif route["supportsImageConditioning"]:
+        image_mode = "image-arg"
+        image_passed = True
+        image_reason = "pipeline exposes image conditioning"
+    else:
+        image_mode = "unsupported"
+        image_passed = False
+        image_reason = "route does not support image conditioning"
+
+    return {
+        "promptProfile": args.prompt_profile,
+        "promptProfileSource": args.prompt_profile_source,
+        "negativePromptRequested": negative_requested,
+        "negativePromptMode": negative_mode,
+        "negativePromptPassed": negative_passed,
+        "negativePromptReason": negative_reason,
+        "imageConditioningRequested": image_requested,
+        "imageConditioningMode": image_mode,
+        "imageConditioningPassed": image_passed,
+        "imageConditioningReason": image_reason,
+        "conditioningImagePath": str(args.conditioning_image) if args.conditioning_image else None,
+    }
+
+
 def build_receipt(args, status, ok, started_at, ended_at, output_path=None, error=None):
     route = ROUTES[args.route]
     return {
@@ -136,8 +233,12 @@ def build_receipt(args, status, ok, started_at, ended_at, output_path=None, erro
         "device": args.device,
         "dtype": args.dtype,
         "liveGeneratorInvoked": status not in ("dry-run", "load-only", "failed-before-generation"),
+        "promptProfile": args.prompt_profile,
+        "promptProfileSource": args.prompt_profile_source,
         "prompt": args.prompt,
         "negativePrompt": args.negative_prompt,
+        "conditioningImagePath": str(args.conditioning_image) if args.conditioning_image else None,
+        "effectivePromptControls": effective_prompt_controls(args),
         "outputs": {
             "outDir": str(args.out_dir),
             "requestPath": str(args.out_dir / "request.json"),
@@ -160,8 +261,10 @@ def parse_args():
     parser.add_argument("--guidance-scale", type=float, default=None)
     parser.add_argument("--device", default="mps")
     parser.add_argument("--dtype", choices=["float16", "float32", "bfloat16"], default=None)
-    parser.add_argument("--prompt", default=default_prompt())
+    parser.add_argument("--prompt-profile", choices=sorted(PROMPT_PROFILES), default="tag-soup")
+    parser.add_argument("--prompt", default=None)
     parser.add_argument("--negative-prompt", default=default_negative_prompt())
+    parser.add_argument("--conditioning-image", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--load-only", action="store_true")
     parser.add_argument("--validate-output", type=Path, default=None)
@@ -173,6 +276,13 @@ def resolve_args(args):
     args.steps = int(args.steps if args.steps is not None else route["defaultSteps"])
     args.guidance_scale = float(args.guidance_scale if args.guidance_scale is not None else route["defaultGuidance"])
     args.dtype = args.dtype or route["defaultDtype"]
+    if args.prompt is None:
+        profile = PROMPT_PROFILES[args.prompt_profile]
+        args.prompt = profile["prompt"]
+        args.prompt_profile_source = profile["source"]
+    else:
+        args.prompt_profile = "custom"
+        args.prompt_profile_source = "cli"
     args._model_path = latest_snapshot(route["model"])
     return args
 
@@ -223,12 +333,45 @@ def main():
         "guidanceScale": args.guidance_scale,
         "device": args.device,
         "dtype": args.dtype,
+        "promptProfile": args.prompt_profile,
+        "promptProfileSource": args.prompt_profile_source,
         "prompt": args.prompt,
         "negativePrompt": args.negative_prompt,
+        "conditioningImagePath": str(args.conditioning_image) if args.conditioning_image else None,
+        "effectivePromptControls": effective_prompt_controls(args),
         "dryRun": args.dry_run,
         "loadOnly": args.load_only,
     }
     write_json(args.out_dir / "request.json", request)
+
+    if args.conditioning_image and not args.conditioning_image.exists():
+        receipt = build_receipt(
+            args,
+            "failed-before-generation",
+            False,
+            started_at,
+            now_iso(),
+            None,
+            {"phase": "conditioning-image", "reason": f"missing conditioning image: {args.conditioning_image}"},
+        )
+        write_json(args.out_dir / "receipt.json", receipt)
+        print(json.dumps(receipt, indent=2))
+        return 2
+
+    controls = effective_prompt_controls(args)
+    if args.conditioning_image and not controls["imageConditioningPassed"] and not args.dry_run:
+        receipt = build_receipt(
+            args,
+            "failed-before-generation",
+            False,
+            started_at,
+            now_iso(),
+            None,
+            {"phase": "conditioning-image", "reason": controls["imageConditioningReason"]},
+        )
+        write_json(args.out_dir / "receipt.json", receipt)
+        print(json.dumps(receipt, indent=2))
+        return 2
 
     if args.validate_output:
         args._output_metrics = output_metrics(args.validate_output)
@@ -299,9 +442,11 @@ def main():
             "num_inference_steps": args.steps,
             "generator": generator,
         }
-        if args.route == "z-image-turbo":
-            # Z-Image Turbo is distilled and its model card recommends CFG off.
-            kwargs["guidance_scale"] = args.guidance_scale
+        controls = effective_prompt_controls(args)
+        if controls["negativePromptPassed"]:
+            kwargs["negative_prompt"] = args.negative_prompt
+        if controls["imageConditioningPassed"]:
+            kwargs["image"] = Image.open(args.conditioning_image).convert("RGB")
         result = pipe(**kwargs)
         result.images[0].save(output_path)
         args._output_metrics = output_metrics(output_path)
