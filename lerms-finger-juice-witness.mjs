@@ -135,6 +135,11 @@ async function run() {
     assert.equal(state.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0', 'wrong effectiveRoute');
     assert.equal(state.routeActive, true, 'route did not activate');
     assert.equal(state.terrainContract, 'hill-of-hills-heightfield-collision-v0', 'wrong terrain contract');
+    assert.equal(state.simulation_authority, 'synthetic_fixture', 'wrong simulation_authority');
+    assert.equal(state.evidence_kind, 'synthetic_fixture', 'wrong evidence_kind');
+    assert.equal(state.authority?.simulation_safe, true, 'synthetic fixture packet did not become simulation-safe');
+    assert.ok(state.hand_sample_space?.id, 'missing hand sample space identity');
+    assert.ok(state.lerms_world_frame?.world_from_hand_sample, 'missing world_from_hand_sample transform identity');
     assert.ok(state.particleCount > 0, 'route did not spawn particles');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
     assert.ok(state.lermImpulseCount > 0, 'route did not produce lerm impulse evidence');
@@ -155,6 +160,10 @@ async function run() {
       screenshot: out,
       effectiveRoute: state.effectiveRoute,
       terrainContract: state.terrainContract,
+      simulation_authority: state.simulation_authority,
+      evidence_kind: state.evidence_kind,
+      hand_sample_space: state.hand_sample_space,
+      lerms_world_frame: state.lerms_world_frame,
       particleCount: state.particleCount,
       surfaceFlowCount: state.surfaceFlowCount,
       lermImpulseCount: state.lermImpulseCount,
