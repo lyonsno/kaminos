@@ -305,6 +305,7 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       const rate = emitter.emission_state === 'jet' ? 4 : 2;
       for (let i = 0; i < rate && particles.length < maxParticles; i += 1) {
         const jitter = [(rng() - 0.5) * emitter.radius, (rng() - 0.5) * emitter.radius, (rng() - 0.5) * emitter.radius];
+        const start = add(emitter.origin_world, jitter);
         const aim = normalize3(emitter.aim_world);
         const motion = vec3(emitter.motion_world);
         const arcBoost = 0.42 + Math.max(0, aim[1]) * 1.6;
@@ -319,11 +320,12 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
           age: 0,
           life: emitter.chemistry === 'pooling' ? 2.9 : 2.15,
           phase: 'airborne',
-          position: add(emitter.origin_world, jitter),
+          position: start,
           velocity,
           surface_flow: false,
           pooling: false,
-          visual_trail: [trailSample(add(emitter.origin_world, jitter), 'airborne')],
+          source_anchor: trailSample(start, 'source_anchor'),
+          visual_trail: [trailSample(start, 'airborne')],
           hitTargets: new Set(),
         };
         particles.push(particle);
@@ -395,9 +397,7 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       }
       maxRangeZ = Math.max(maxRangeZ, particle.position[2] + 0.82);
       particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, particle.phase)];
-      if (particle.visual_trail.length > 24) {
-        particle.visual_trail = [particle.visual_trail[0], ...particle.visual_trail.slice(-23)];
-      }
+      if (particle.visual_trail.length > 24) particle.visual_trail = particle.visual_trail.slice(-24);
       applyTargetImpulses(particle);
       next.push(particle);
     }
@@ -418,6 +418,10 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         chemistry: particle.chemistry,
         phase: particle.phase,
         surface_flow: particle.surface_flow,
+        source_anchor: particle.source_anchor ? {
+          position: particle.source_anchor.position.map(value => round(value, 4)),
+          phase: particle.source_anchor.phase,
+        } : null,
         samples: particle.visual_trail.map(sample => ({
           position: sample.position.map(value => round(value, 4)),
           phase: sample.phase,
@@ -428,6 +432,12 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     const surfaceStreakCount = trails.filter(trail => trail.surface_flow || trail.samples.some(sample => sample.phase === 'surface_flow')).length;
     const zValues = trailSamples.map(sample => sample.position[2]);
     const trailSpanZ = zValues.length > 0 ? Math.max(...zValues) - Math.min(...zValues) : 0;
+    const sourceAnchorCount = new Set(trails.filter(trail => trail.source_anchor).map(trail => trail.emitter_id)).size;
+    const segmentLengths = trails.flatMap(trail => trail.samples.slice(1).map((sample, index) => {
+      const previous = trail.samples[index];
+      return length3(sub(sample.position, previous.position));
+    }));
+    const maxTrailSegmentLength = segmentLengths.length > 0 ? Math.max(...segmentLengths) : 0;
     return {
       schema: 'lerms.world-finger-juice-debug.v0',
       effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
@@ -450,6 +460,8 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       trailEmitterCount,
       surfaceStreakCount,
       trailSpanZ: round(trailSpanZ, 4),
+      sourceAnchorCount,
+      maxTrailSegmentLength: round(maxTrailSegmentLength, 4),
       lermImpulseCount,
       goinImpulseCount,
       maxRangeZ: round(maxRangeZ, 4),
@@ -466,6 +478,10 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         phase: particle.phase,
         surface_flow: particle.surface_flow,
         pooling: particle.pooling,
+        source_anchor: particle.source_anchor ? {
+          position: particle.source_anchor.position.map(value => round(value, 4)),
+          phase: particle.source_anchor.phase,
+        } : null,
         visual_trail: (particle.visual_trail || []).slice(-6).map(sample => ({
           position: sample.position.map(value => round(value, 4)),
           phase: sample.phase,

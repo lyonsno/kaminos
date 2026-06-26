@@ -142,13 +142,15 @@ async function run() {
     assert.equal(state.authority?.simulation_safe, true, 'synthetic fixture packet did not become simulation-safe');
     assert.ok(state.hand_sample_space?.id, 'missing hand sample space identity');
     assert.ok(state.lerms_world_frame?.world_from_hand_sample, 'missing world_from_hand_sample transform identity');
-    assert.equal(state.visualRenderer, 'source-legible-trail-ribbons-v0', 'wrong visual renderer');
+    assert.equal(state.visualRenderer, 'source-legible-splat-ribbons-v1', 'wrong visual renderer');
     assert.ok(state.particleCount > 0, 'route did not spawn particles');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
     assert.ok(state.trailSampleCount >= 180, 'route did not retain enough visual trail samples');
     assert.ok(state.trailEmitterCount >= 3, 'route did not retain trails from all synthetic emitters');
     assert.ok(state.surfaceStreakCount > 0, 'route did not expose surface streak evidence');
     assert.ok(state.trailSpanZ > 0.45, 'route trails did not preserve forward travel span');
+    assert.ok(state.sourceAnchorCount >= 3, 'route did not preserve separate source anchors');
+    assert.ok(state.maxTrailSegmentLength < 0.34, 'route contains a false long trail bridge');
     assert.ok(state.lermImpulseCount > 0, 'route did not produce lerm impulse evidence');
     assert.ok(state.goinImpulseCount > 0, 'route did not produce goin impulse evidence');
 
@@ -178,6 +180,8 @@ async function run() {
       trailEmitterCount: state.trailEmitterCount,
       surfaceStreakCount: state.surfaceStreakCount,
       trailSpanZ: state.trailSpanZ,
+      sourceAnchorCount: state.sourceAnchorCount,
+      maxTrailSegmentLength: state.maxTrailSegmentLength,
       lermImpulseCount: state.lermImpulseCount,
       goinImpulseCount: state.goinImpulseCount,
       maxRangeZ: state.maxRangeZ,
