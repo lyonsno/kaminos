@@ -20,6 +20,12 @@ assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_ROUTE\s*=\s*'world-space-ball
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT\s*=\s*'hill-of-hills-heightfield-collision-v0'/, 'terrain collision contract is explicit');
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT\s*=\s*'finger-aim-ballistic-arc-range-v0'/, 'ballistic arc contract is explicit');
 assert.match(coreSource, /stale_visual_only/, 'normalization preserves stale visual-only authority');
+assert.match(coreSource, /simulation_authority/, 'normalization records whole-packet simulation authority');
+assert.match(coreSource, /hand_sample_space/, 'packet records source hand sample space');
+assert.match(coreSource, /lerms_world_frame/, 'packet records destination LERMS world frame');
+assert.match(coreSource, /world_from_hand_sample/, 'packet records transform identity instead of guessing signs');
+assert.match(coreSource, /force_safe/, 'per-emitter authority records force safety');
+assert.match(coreSource, /synthetic_fixture/, 'synthetic fixture authority is explicitly labeled');
 assert.match(coreSource, /origin_world/, 'per-finger packet carries world origin');
 assert.match(coreSource, /aim_world/, 'per-finger packet carries world aim');
 assert.match(coreSource, /motion_world/, 'per-finger packet carries world motion');
@@ -48,9 +54,25 @@ assert.equal(mod.LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT, 'hill-of-hills-heigh
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT, 'finger-aim-ballistic-arc-range-v0');
 
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
+  packet_id: 'test-live-packet-1',
+  source_route: 'perceptasia-finger-fluid-swarm',
   source_backend: 'perceptasia.synthetic-hand-route',
+  source_frame_id: 'perceptasia-swarm-world-v0',
+  sidecar_sequence: 42,
+  evidence_kind: 'synthetic_fixture',
   sample_age_ms: 24,
-  terrain_frame: { id: 'palm-daddy-rounded-channel', units: 'normalized_world' },
+  simulation_authority: 'synthetic_fixture',
+  hand_sample_space: {
+    id: 'perceptasia.hand-sample-space.v0',
+    handedness: 'right',
+    screen_x: 'operator_unmirrored',
+  },
+  lerms_world_frame: {
+    id: 'palm-daddy-rounded-channel',
+    units: 'normalized_world',
+    projection_contract: 'sampled_triangle_mesh_rounded_channel_manifold_v0',
+    world_from_hand_sample: 'synthetic-fixture-transform-v0',
+  },
   emitters: [
     {
       id: 'index',
@@ -62,6 +84,7 @@ const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
       chemistry: 'knockback',
       radius: 0.044,
       strength: 1.25,
+      authority: { valid: true, stale: false, confidence: 0.93, force_safe: true },
       active: true,
     },
     {
@@ -71,15 +94,28 @@ const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
       aim_world: [0, 0.22, 1.0],
       extension: 0.45,
       chemistry: 'pooling',
+      authority: { valid: true, stale: false, confidence: 0.82, force_safe: true },
       active: true,
     },
   ],
 });
 
 assert.equal(packet.schema, 'lerms.world-finger-juice-emitters.v0');
+assert.equal(packet.packet_id, 'test-live-packet-1');
+assert.equal(packet.source_route, 'perceptasia-finger-fluid-swarm');
+assert.equal(packet.source_frame_id, 'perceptasia-swarm-world-v0');
+assert.equal(packet.sidecar_sequence, 42);
+assert.equal(packet.evidence_kind, 'synthetic_fixture');
+assert.equal(packet.simulation_authority, 'synthetic_fixture');
+assert.equal(packet.authority.simulation_safe, true);
+assert.equal(packet.hand_sample_space.screen_x, 'operator_unmirrored');
+assert.equal(packet.lerms_world_frame.world_from_hand_sample, 'synthetic-fixture-transform-v0');
 assert.equal(packet.active_emitter_count, 2);
 assert.equal(packet.authority.stale_visual_only, false);
 assert.equal(packet.emitters[0].id, 'index');
+assert.equal(packet.emitters[0].authority.force_safe, true);
+assert.equal(packet.emitters[0].origin_screen, null);
+assert.equal(packet.emitters[0].aim_screen, null);
 assert.ok(Math.abs(packet.emitters[0].aim_world.y - 0.427) < 0.002, 'world aim is normalized with upward arc intact');
 assert.equal(packet.emitters[1].chemistry, 'pooling');
 assert.equal(packet.terrain_frame.id, 'palm-daddy-rounded-channel');
@@ -116,3 +152,59 @@ for (let i = 0; i < 90; i += 1) {
 const hitState = hitPrototype.debugState();
 assert.ok(hitState.lermImpulseCount > 0, 'world particles apply lerm impulses');
 assert.ok(hitState.goinImpulseCount > 0, 'world particles apply goin impulses');
+
+for (const simulation_authority of ['visual_only', 'stale_hold', 'invalid']) {
+  const unsafe = mod.normalizeWorldFingerJuiceEmitterPacket({
+    simulation_authority,
+    source_route: 'perceptasia-finger-fluid-swarm',
+    source_backend: 'perceptasia.synthetic-hand-route',
+    source_frame_id: 'perceptasia-swarm-world-v0',
+    evidence_kind: simulation_authority,
+    hand_sample_space: { id: 'perceptasia.hand-sample-space.v0' },
+    lerms_world_frame: {
+      id: 'palm-daddy-rounded-channel',
+      units: 'normalized_world',
+      world_from_hand_sample: 'visual-only-transform-v0',
+    },
+    emitters: [{
+      id: 'index',
+      origin_world: [0, 0.38, -0.82],
+      aim_world: [0.18, 0.48, 1.0],
+      extension: 0.95,
+      chemistry: 'knockback',
+      authority: { valid: true, stale: simulation_authority !== 'visual_only', confidence: 0.9, force_safe: true },
+      active: true,
+    }],
+  });
+  assert.equal(unsafe.authority.simulation_safe, false, `${simulation_authority} packet must not be simulation-safe`);
+  assert.equal(unsafe.emitters[0].active, false, `${simulation_authority} emitter must not apply force`);
+  assert.equal(unsafe.emitters[0].authority.render_safe, true, `${simulation_authority} emitter can remain render/debug safe`);
+  const unsafePrototype = mod.createWorldFingerJuiceTransportPrototype({
+    maxParticles: 64,
+    seed: 5,
+    lerms: [{ id: 'red-lerm-unsafe', position: [0.11, 0.1, -0.13], radius: 0.18 }],
+  });
+  unsafePrototype.setEmitters(unsafe);
+  for (let i = 0; i < 90; i += 1) {
+    unsafePrototype.step(1 / 60);
+  }
+  const unsafeState = unsafePrototype.debugState();
+  assert.equal(unsafeState.particleCount, 0, `${simulation_authority} packet must not spawn particles`);
+  assert.equal(unsafeState.lermImpulseCount, 0, `${simulation_authority} packet must not apply lerm force`);
+}
+
+const missingFrame = mod.normalizeWorldFingerJuiceEmitterPacket({
+  simulation_authority: 'live_simulation',
+  source_backend: 'perceptasia.synthetic-hand-route',
+  emitters: [{
+    id: 'index',
+    origin_world: [0, 0.38, -0.82],
+    aim_world: [0.18, 0.48, 1.0],
+    extension: 0.95,
+    authority: { valid: true, stale: false, confidence: 0.9, force_safe: true },
+    active: true,
+  }],
+});
+assert.equal(missingFrame.simulation_authority, 'invalid');
+assert.equal(missingFrame.authority.simulation_safe, false);
+assert.match(missingFrame.authority.reason, /missing.*frame/i);

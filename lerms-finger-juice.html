@@ -71,14 +71,35 @@
     });
 
     const emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+      packet_id: 'kaminos-synthetic-finger-juice-smoke-1',
+      source_route: 'kaminos.lerms-finger-juice.synthetic-caster',
       source_backend: 'kaminos.synthetic-caster-hand',
+      source_frame_id: 'kaminos-synthetic-caster-hand-frame-v0',
+      sidecar_sequence: 1,
+      evidence_kind: 'synthetic_fixture',
+      simulation_authority: 'synthetic_fixture',
       sample_age_ms: 0,
       route_identity: 'kaminos-lerms-finger-juice-synthetic-smoke',
-      terrain_frame: { id: 'kaminos-hill-of-hills-local-v0', units: 'normalized_world' },
+      hand_sample_space: {
+        id: 'kaminos.synthetic-hand-sample-space.v0',
+        convention: 'screen-origin-upper-left-to-world-fixture-v0',
+        handedness: 'right',
+        screen_x: 'operator_unmirrored',
+        screen_coordinates: 'css_pixels',
+        world_coordinates: 'kaminos_normalized_world',
+      },
+      lerms_world_frame: {
+        id: 'kaminos-hill-of-hills-local-v0',
+        terrain_frame_id: 'kaminos-hill-of-hills-local-v0',
+        units: 'normalized_world',
+        heightfield_contract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+        projection_contract: 'synthetic-caster-perspective-v0',
+        world_from_hand_sample: 'kaminos.synthetic-caster-hand-to-hill-of-hills-v0',
+      },
       emitters: [
-        { id: 'index', tip_index: 8, origin_world: [-0.18, 0.42, -0.86], aim_world: [0.18, 0.5, 1], motion_world: [0.05, 0, 0.06], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, active: true },
-        { id: 'middle', tip_index: 12, origin_world: [0.02, 0.39, -0.84], aim_world: [0, 0.3, 1], motion_world: [0, 0, 0.04], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, active: true },
-        { id: 'ring', tip_index: 16, origin_world: [0.18, 0.36, -0.82], aim_world: [-0.08, 0.24, 1], motion_world: [-0.02, 0, 0.03], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, active: true },
+        { id: 'index', tip_index: 8, origin_world: [-0.18, 0.42, -0.86], aim_world: [0.18, 0.5, 1], motion_world: [0.05, 0, 0.06], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.02, 0.39, -0.84], aim_world: [0, 0.3, 1], motion_world: [0, 0, 0.04], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.18, 0.36, -0.82], aim_world: [-0.08, 0.24, 1], motion_world: [-0.02, 0, 0.03], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
     prototype.setEmitters(emitterPacket);
@@ -210,7 +231,7 @@
       drawCaster();
       drawTargets(state);
       drawParticles(state);
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT}<br>particles ${state.particleCount} | surface ${state.surfaceFlowCount} | lerm hits ${state.lermImpulseCount} | goin hits ${state.goinImpulseCount}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.simulation_authority} | ${state.evidence_kind}<br>${state.lerms_world_frame.world_from_hand_sample}<br>particles ${state.particleCount} | surface ${state.surfaceFlowCount} | lerm hits ${state.lermImpulseCount} | goin hits ${state.goinImpulseCount}`;
       window.__lermsFingerJuiceDebug = () => ({
         requestedRoute: 'lerms_world_finger_juice=1',
         routeActive,
