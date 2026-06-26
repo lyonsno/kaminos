@@ -172,9 +172,21 @@ async function main() {
     assert.equal(state?.LamellarInnerReturnPlan?.mode, 'inner-return-side-plane-v0', 'LamellarInnerReturnPlan mode missing from debug state');
     assert.ok(state?.innerReturnSidePlaneMeshCount >= 1, 'inner-return side-plane mesh missing from debug state');
     assert.equal(state?.innerReturnSidePlaneTopologyVerdict, 'one-visible-side-rim-return-side-plane-meshed', 'inner-return side-plane topology verdict missing from debug state');
+    assert.equal(state?.innerReturnSideWallVisibilityVerdict, 'visible-sidewall-render-surface-required', 'inner-return sidewall visibility verdict missing from debug state');
+    assert.ok(state?.visibleSideWallSurfaceCount >= 1, 'visible sidewall render surface missing from debug state');
     assert.equal(state?.declaredSecondLayer, false, 'inner-return side plane must not declare a full second layer');
     assert.ok(state?.targetInnerReturnBoundaryIds?.includes('right-side-rim-reveal-gap'), 'right-side rim target missing from debug state');
     assert.ok(state?.LamellarInnerReturnSidePlaneMesh?.every(mesh => mesh?.schema === 'LamellarInnerReturnSidePlaneMesh'), 'LamellarInnerReturnSidePlaneMesh records missing from debug state');
+    const sideWallVisibilityProbe = await evaluate(ws, `
+      window.__kaminosOrbShellCompositionWitness?.sideWallVisibilityProbe?.({
+        width: window.innerWidth,
+        height: window.innerHeight
+      })
+    `);
+    assert.equal(sideWallVisibilityProbe?.schema, 'LamellarInnerReturnSideWallVisibilityProbe', 'sidewall visibility probe missing schema');
+    assert.ok(sideWallVisibilityProbe?.meshCount >= 1, 'sidewall visibility probe found no sidewall meshes');
+    assert.ok(sideWallVisibilityProbe?.visibleMeshCount >= 1, 'sidewall visibility probe found no visible sidewall footprint');
+    assert.ok(sideWallVisibilityProbe?.probes?.some(probe => probe.projectedWidthPx >= probe.contract.minimumProjectedWidthPx), 'sidewall projected width below contract minimum');
     assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
     assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
@@ -236,6 +248,9 @@ async function main() {
       suppressedProxyFeatureCount: state.suppressedProxyFeatureCount,
       innerReturnSidePlaneMeshCount: state.innerReturnSidePlaneMeshCount,
       innerReturnSidePlaneTopologyVerdict: state.innerReturnSidePlaneTopologyVerdict,
+      innerReturnSideWallVisibilityVerdict: state.innerReturnSideWallVisibilityVerdict,
+      visibleSideWallSurfaceCount: state.visibleSideWallSurfaceCount,
+      sideWallVisibilityProbe,
       targetInnerReturnBoundaryIds: state.targetInnerReturnBoundaryIds,
       declaredSecondLayer: state.declaredSecondLayer,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
