@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import fcntl
 import json
 import math
 import shutil
@@ -12,10 +13,12 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 IDENTITY = "orb-inner-engine-generator-campaign-v0"
+GPU_LOCK_POLICY = "per-live-candidate-flock"
 ROOT = Path(__file__).resolve().parent
 SMOKE_SCRIPT = ROOT / "orb-inner-engine-local-generator-smoke.py"
 PYTHON = Path("/Users/noahlyons/dev/SuperMat/.venv/bin/python")
 OUTPUT_ROOT = Path("/Users/noahlyons/.local/state/gpu-greenroom/outputs")
+DEFAULT_GPU_LOCK = OUTPUT_ROOT.parent / "gpu.lock"
 
 KNOWN_SOURCE_IMAGES = {
     "guide": OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-guide-substrate-witness-20260626T201000Z/orb-inner-engine-guide-substrate.png",
@@ -262,15 +265,64 @@ def candidate_command(candidate, out_dir, args):
     return cmd
 
 
+def gpu_lock_manifest(args):
+    return {
+        "path": str(args.gpu_lock),
+        "policy": GPU_LOCK_POLICY,
+        "dryRunAcquisition": False,
+    }
+
+
+def dry_run_gpu_lock(args):
+    return {
+        **gpu_lock_manifest(args),
+        "acquired": False,
+        "skippedReason": "dry-run",
+        "waitStartedAt": None,
+        "acquiredAt": None,
+        "releasedAt": None,
+    }
+
+
+def run_candidate_process(command, args):
+    if args.dry_run:
+        return subprocess.run(
+            command,
+            cwd=str(ROOT),
+            text=True,
+            capture_output=True,
+        ), dry_run_gpu_lock(args)
+
+    lock_info = {
+        **gpu_lock_manifest(args),
+        "acquired": False,
+        "skippedReason": None,
+        "waitStartedAt": now_iso(),
+        "acquiredAt": None,
+        "releasedAt": None,
+    }
+    args.gpu_lock.parent.mkdir(parents=True, exist_ok=True)
+    with args.gpu_lock.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        lock_info["acquired"] = True
+        lock_info["acquiredAt"] = now_iso()
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=str(ROOT),
+                text=True,
+                capture_output=True,
+            )
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_info["releasedAt"] = now_iso()
+    return proc, lock_info
+
+
 def run_candidate(candidate, args):
     candidate_dir = args.out_dir / "runs" / candidate["id"]
     started_at = now_iso()
-    proc = subprocess.run(
-        candidate_command(candidate, candidate_dir, args),
-        cwd=str(ROOT),
-        text=True,
-        capture_output=True,
-    )
+    proc, gpu_lock = run_candidate_process(candidate_command(candidate, candidate_dir, args), args)
     ended_at = now_iso()
     stdout_path = candidate_dir / "stdout.log"
     stderr_path = candidate_dir / "stderr.log"
@@ -308,6 +360,7 @@ def run_candidate(candidate, args):
         "exitCode": proc.returncode,
         "startedAt": started_at,
         "endedAt": ended_at,
+        "gpuLock": gpu_lock,
         "stdoutPath": str(stdout_path),
         "stderrPath": str(stderr_path),
         "routeReceiptPath": str(receipt_path),
@@ -360,6 +413,7 @@ def parse_args():
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--candidate", action="append", default=[])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--gpu-lock", type=Path, default=DEFAULT_GPU_LOCK)
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--height", type=int, default=1024)
     return parser.parse_args()
@@ -396,6 +450,7 @@ def main():
         "dryRun": args.dry_run,
         "width": args.width,
         "height": args.height,
+        "gpuLock": gpu_lock_manifest(args),
         "references": {key: str(path) for key, path in references.items()},
         "candidates": candidates,
     }
@@ -425,6 +480,10 @@ def build_receipt(args, started_at, results, status):
         "endedAt": now_iso(),
         "dryRun": args.dry_run,
         "liveGeneratorInvoked": not args.dry_run,
+        "gpuLock": {
+            **gpu_lock_manifest(args),
+            "acquiredCount": sum(1 for result in results if result.get("gpuLock", {}).get("acquired")),
+        },
         "candidateCount": len(results),
         "completedCount": sum(1 for result in results if result.get("ok")),
         "outputs": {

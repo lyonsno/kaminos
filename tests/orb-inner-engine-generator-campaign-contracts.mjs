@@ -11,11 +11,13 @@ const python = '/Users/noahlyons/dev/SuperMat/.venv/bin/python';
 assert.ok(existsSync(campaignPath), 'orb-inner-engine-generator-campaign.py must exist');
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-generator-campaign-'));
+const gpuLockPath = join(outDir, 'gpu.lock');
 try {
   const run = spawnSync(python, [
     campaignPath,
     '--campaign', 'molten-campaign-v0',
     '--out-dir', outDir,
+    '--gpu-lock', gpuLockPath,
     '--dry-run',
     '--candidate', 'z-comp-cropped-aperture-a',
     '--candidate', 'z-vocab-occluded-channel-a',
@@ -35,6 +37,10 @@ try {
   assert.equal(printed.candidateCount, 3);
   assert.equal(printed.completedCount, 3);
   assert.equal(printed.liveGeneratorInvoked, false);
+  assert.equal(printed.gpuLock.path, gpuLockPath);
+  assert.equal(printed.gpuLock.policy, 'per-live-candidate-flock');
+  assert.equal(printed.gpuLock.acquiredCount, 0);
+  assert.equal(printed.gpuLock.dryRunAcquisition, false);
   assert.equal(printed.agentReview.status, 'pending-agent-inspection');
   assert.equal(printed.agentReview.visualOutputsInspected, false);
   assert.ok(printed.outputs.manifestPath.endsWith('/manifest.json'));
@@ -64,10 +70,25 @@ try {
   assert.equal(manifest.candidates[2].series, 'reference-conditioning');
   assert.equal(manifest.candidates[2].route, 'flux2-klein');
   assert.ok(manifest.candidates[2].conditioningImagePath, 'reference candidate records conditioning image');
+  assert.deepEqual(manifest.gpuLock, {
+    path: gpuLockPath,
+    policy: 'per-live-candidate-flock',
+    dryRunAcquisition: false,
+  });
 
   const receipt = JSON.parse(readFileSync(printed.outputs.receiptPath, 'utf8'));
   assert.equal(receipt.candidates.length, 3);
+  assert.equal(receipt.gpuLock.path, gpuLockPath);
+  assert.equal(receipt.gpuLock.acquiredCount, 0);
+  assert.equal(receipt.gpuLock.dryRunAcquisition, false);
   assert.equal(receipt.candidates[0].status, 'dry-run');
+  assert.equal(receipt.candidates[0].gpuLock.path, gpuLockPath);
+  assert.equal(receipt.candidates[0].gpuLock.policy, 'per-live-candidate-flock');
+  assert.equal(receipt.candidates[0].gpuLock.acquired, false);
+  assert.equal(receipt.candidates[0].gpuLock.skippedReason, 'dry-run');
+  assert.equal(receipt.candidates[0].gpuLock.waitStartedAt, null);
+  assert.equal(receipt.candidates[0].gpuLock.acquiredAt, null);
+  assert.equal(receipt.candidates[0].gpuLock.releasedAt, null);
   assert.equal(receipt.candidates[0].routeReceipt.status, 'dry-run');
   assert.equal(receipt.candidates[0].routeReceipt.effectivePromptControls.negativePromptMode, 'plain-negative');
   assert.equal(receipt.candidates[2].routeReceipt.effectivePromptControls.imageConditioningMode, 'image-arg');
