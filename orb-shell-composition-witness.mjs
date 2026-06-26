@@ -20,6 +20,7 @@ let browser = null;
 let stderr = '';
 let counter = 0;
 const browserEvents = [];
+let cleanSidewallTopologyWitness = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -124,6 +125,10 @@ async function main() {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameSideRimReturn?.()');
       await delay(500);
     }
+    if (focus === 'side-rim-clean-topology') {
+      cleanSidewallTopologyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableCleanSidewallTopologyWitness?.()');
+      await delay(500);
+    }
 
     phase = 'state';
     const state = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.debugState?.()');
@@ -174,6 +179,14 @@ async function main() {
     assert.equal(state?.innerReturnSidePlaneTopologyVerdict, 'one-visible-side-rim-return-side-plane-meshed', 'inner-return side-plane topology verdict missing from debug state');
     assert.equal(state?.innerReturnSideWallVisibilityVerdict, 'visible-sidewall-render-surface-required', 'inner-return sidewall visibility verdict missing from debug state');
     assert.ok(state?.visibleSideWallSurfaceCount >= 1, 'visible sidewall render surface missing from debug state');
+    assert.equal(state?.cleanTopologyWitnessMode, 'clean-sidewall-topology-v0', 'clean sidewall topology witness mode missing from debug state');
+    assert.equal(state?.cleanTopologyProxyClutterVisible, false, 'clean topology witness must suppress proxy clutter');
+    if (focus === 'side-rim-clean-topology') {
+      assert.equal(cleanSidewallTopologyWitness?.schema, 'CleanSidewallTopologyWitnessState', 'clean sidewall topology witness did not activate');
+      assert.equal(cleanSidewallTopologyWitness?.materialMode, 'flat-diagnostic-no-metal', 'clean sidewall topology witness must use flat materials');
+      assert.equal(cleanSidewallTopologyWitness?.surfaceDetailMode, 'disabled', 'clean sidewall topology witness must disable surface detail');
+      assert.equal(cleanSidewallTopologyWitness?.proxyClutterVisible, false, 'clean sidewall topology witness must hide proxy clutter');
+    }
     assert.equal(state?.declaredSecondLayer, false, 'inner-return side plane must not declare a full second layer');
     assert.ok(state?.targetInnerReturnBoundaryIds?.includes('right-side-rim-reveal-gap'), 'right-side rim target missing from debug state');
     assert.ok(state?.LamellarInnerReturnSidePlaneMesh?.every(mesh => mesh?.schema === 'LamellarInnerReturnSidePlaneMesh'), 'LamellarInnerReturnSidePlaneMesh records missing from debug state');
@@ -214,7 +227,20 @@ async function main() {
     assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
 
     phase = 'screenshot';
-    const shot = await send(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    let captureOptions = { format: 'png', captureBeyondViewport: false };
+    if (focus === 'side-rim-clean-topology') {
+      const canvasRect = await evaluate(ws, `
+        (() => {
+          const canvas = document.querySelector('canvas');
+          if (!canvas) return null;
+          const rect = canvas.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 };
+        })()
+      `);
+      assert.ok(canvasRect?.width > 300 && canvasRect?.height > 300, 'clean topology witness could not find a captureable canvas');
+      captureOptions = { ...captureOptions, clip: canvasRect };
+    }
+    const shot = await send(ws, 'Page.captureScreenshot', captureOptions);
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, Buffer.from(shot.data, 'base64'));
     const stats = pngStats(out);
@@ -250,6 +276,9 @@ async function main() {
       innerReturnSidePlaneTopologyVerdict: state.innerReturnSidePlaneTopologyVerdict,
       innerReturnSideWallVisibilityVerdict: state.innerReturnSideWallVisibilityVerdict,
       visibleSideWallSurfaceCount: state.visibleSideWallSurfaceCount,
+      cleanTopologyWitnessMode: state.cleanTopologyWitnessMode,
+      cleanTopologyProxyClutterVisible: state.cleanTopologyProxyClutterVisible,
+      cleanSidewallTopologyWitness,
       sideWallVisibilityProbe,
       targetInnerReturnBoundaryIds: state.targetInnerReturnBoundaryIds,
       declaredSecondLayer: state.declaredSecondLayer,
