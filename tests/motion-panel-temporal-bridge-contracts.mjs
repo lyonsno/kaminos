@@ -77,7 +77,16 @@ assert.match(index, /motion-panel-orb-preview/, 'Motion tab exposes a panel-gene
 assert.match(index, /kaminosPreviewMotionServerResult/, 'browser exposes a callable motion server result preview bridge');
 assert.match(index, /adaptMotionServerResultToGeneratedPoseTemporalClip/, 'browser imports the motion server temporal adapter');
 assert.match(index, /kaminos_motion_panel_temporal_fixture/, 'browser has a deterministic panel-result fixture route for smoke');
+assert.match(index, /motion-panel-source-ghost-mode/, 'Motion tab exposes source skeleton ghost mode control');
+assert.match(index, /motion-panel-source-opacity/, 'Motion tab exposes source skeleton ghost opacity control');
+assert.match(index, /motion-panel-speed/, 'Motion tab exposes temporal preview speed control');
+assert.match(index, /createMotionSourceGhostVisual/, 'browser builds a phase-locked generated source skeleton visual');
+assert.match(index, /updateMotionSourceGhostFrame/, 'browser updates source skeleton from the temporal source frame clock');
+assert.match(index, /sourceGhost/, 'browser temporal debug exposes source skeleton ghost evidence');
+assert.match(index, /sourceFrameSharedWithOrb/, 'debug evidence states whether source skeleton and orb share the same source frame');
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos_motion_panel_temporal_fixture/, 'motion witness can smoke the panel temporal fixture route');
 assert.match(witness, /motion-server-soma77-json/, 'motion witness validates panel-generated source format');
+assert.match(witness, /sourceGhost/, 'motion witness validates source skeleton ghost evidence');
+assert.match(witness, /sourceFrameSharedWithOrb/, 'motion witness rejects unpaired skeleton/orb phase clocks');

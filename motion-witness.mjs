@@ -511,6 +511,7 @@ try {
     const sampler = String(actor?.sampler || '');
     const behaviorState = actor?.behaviorState || debug?.behaviorState || null;
     const behaviorReadout = actor?.behaviorReadout || debug?.behaviorReadout || null;
+    const sourceGhost = actor?.sourceGhost || debug?.sourceGhost || null;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose temporal route did not spawn temporal actor: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.track?.id !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost requested clip identity ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
@@ -544,6 +545,15 @@ try {
     if (behaviorReadout.style !== 'partial-ground-ring') throw new Error(`generated pose temporal route lost partial-ground-ring behaviorReadout style: ${JSON.stringify(debug)}`);
     if (behaviorReadout.label !== behaviorState.state) throw new Error(`generated pose temporal route behaviorReadout label diverged from behaviorState: ${JSON.stringify(debug)}`);
     if (!String(behaviorReadout.ringObjectName || '').includes('ground-ring') || !String(behaviorReadout.labelObjectName || '').includes('ground-label')) throw new Error(`generated pose temporal route lost named world readout meshes: ${JSON.stringify(debug)}`);
+    if (isMotionPanelTemporalFixtureRoute) {
+      if (sourceGhost?.schema !== 'kaminos.motion-source-ghost.v0') throw new Error(`panel temporal route lost sourceGhost schema: ${JSON.stringify(debug)}`);
+      if (sourceGhost.available !== true || sourceGhost.visible !== true) throw new Error(`panel temporal route lost visible sourceGhost evidence: ${JSON.stringify(debug)}`);
+      if (sourceGhost.mode !== 'sidecar') throw new Error(`panel temporal route lost default sidecar sourceGhost mode: ${JSON.stringify(debug)}`);
+      if (sourceGhost.sourceFrameSharedWithOrb !== true) throw new Error(`panel temporal route desynchronized sourceGhost from orb source frame: ${JSON.stringify(debug)}`);
+      if (sourceGhost.jointCount !== 77) throw new Error(`panel temporal route lost SOMA77 sourceGhost joints: ${JSON.stringify(debug)}`);
+      if (!(sourceGhost.boneCount >= 70)) throw new Error(`panel temporal route lost sourceGhost bone coverage: ${JSON.stringify(debug)}`);
+      if (!String(sourceGhost.lineObjectName || '').includes('soma77-bones') || !String(sourceGhost.pointsObjectName || '').includes('soma77-joints')) throw new Error(`panel temporal route lost named sourceGhost render objects: ${JSON.stringify(debug)}`);
+    }
   } else if (isOutputMapRoute) {
     const generatedPoseOutputMapHarness = debug?.generatedPoseOutputMapHarness;
     if (!debug?.active || debug.actorCount < 1) throw new Error(`generated pose output-map route did not spawn mapped actor: ${JSON.stringify(debug)}`);
