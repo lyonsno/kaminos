@@ -21,6 +21,7 @@ let phase = 'initializing';
 let stderr = '';
 let primaryOutputWritten = false;
 let browserVersion = null;
+let lastTrustworthyState = null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -131,6 +132,7 @@ async function run() {
 
     phase = 'read_debug_state';
     const state = await evaluate(ws, 'window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug()');
+    lastTrustworthyState = state;
     assert.ok(state, 'missing lerms finger-juice debug state');
     assert.equal(state.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0', 'wrong effectiveRoute');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -140,8 +142,13 @@ async function run() {
     assert.equal(state.authority?.simulation_safe, true, 'synthetic fixture packet did not become simulation-safe');
     assert.ok(state.hand_sample_space?.id, 'missing hand sample space identity');
     assert.ok(state.lerms_world_frame?.world_from_hand_sample, 'missing world_from_hand_sample transform identity');
+    assert.equal(state.visualRenderer, 'source-legible-trail-ribbons-v0', 'wrong visual renderer');
     assert.ok(state.particleCount > 0, 'route did not spawn particles');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
+    assert.ok(state.trailSampleCount >= 180, 'route did not retain enough visual trail samples');
+    assert.ok(state.trailEmitterCount >= 3, 'route did not retain trails from all synthetic emitters');
+    assert.ok(state.surfaceStreakCount > 0, 'route did not expose surface streak evidence');
+    assert.ok(state.trailSpanZ > 0.45, 'route trails did not preserve forward travel span');
     assert.ok(state.lermImpulseCount > 0, 'route did not produce lerm impulse evidence');
     assert.ok(state.goinImpulseCount > 0, 'route did not produce goin impulse evidence');
 
@@ -160,19 +167,27 @@ async function run() {
       screenshot: out,
       effectiveRoute: state.effectiveRoute,
       terrainContract: state.terrainContract,
+      visualRenderer: state.visualRenderer,
       simulation_authority: state.simulation_authority,
       evidence_kind: state.evidence_kind,
       hand_sample_space: state.hand_sample_space,
       lerms_world_frame: state.lerms_world_frame,
       particleCount: state.particleCount,
       surfaceFlowCount: state.surfaceFlowCount,
+      trailSampleCount: state.trailSampleCount,
+      trailEmitterCount: state.trailEmitterCount,
+      surfaceStreakCount: state.surfaceStreakCount,
+      trailSpanZ: state.trailSpanZ,
       lermImpulseCount: state.lermImpulseCount,
       goinImpulseCount: state.goinImpulseCount,
       maxRangeZ: state.maxRangeZ,
       state,
     });
   } catch (error) {
-    writeReport({ error: error.message });
+    writeReport({
+      error: error.message,
+      lastTrustworthyState,
+    });
     throw error;
   } finally {
     if (ws) ws.close();

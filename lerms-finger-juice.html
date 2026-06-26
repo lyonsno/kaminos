@@ -41,6 +41,7 @@
   data-route="lerms_world_finger_juice=1"
   data-effective-route="world-space-ballistic-surface-flow-particles-v0"
   data-terrain-contract="hill-of-hills-heightfield-collision-v0"
+  data-visual-renderer="source-legible-trail-ribbons-v0"
 >
   <canvas id="stage" width="1280" height="720"></canvas>
   <div class="hud" id="hud"></div>
@@ -57,6 +58,7 @@
     const hud = document.getElementById('hud');
     const params = new URLSearchParams(location.search);
     const routeActive = params.get('lerms_world_finger_juice') === '1';
+    const visualRenderer = 'source-legible-trail-ribbons-v0';
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
       maxParticles: 900,
@@ -66,7 +68,7 @@
         { id: 'yellow-lerm-1', position: [0.08, -0.09, 1.46], radius: 0.18, mass: 1.0 },
       ],
       goins: [
-        { id: 'goin-1', position: [-0.04, -0.08, 1.34], radius: 0.16, mass: 2.2 },
+        { id: 'goin-1', position: [0.02, -0.08, 1.22], radius: 0.24, mass: 2.2 },
       ],
     });
 
@@ -179,16 +181,51 @@
       }
     }
 
+    function juiceColor(chemistry, alpha) {
+      if (chemistry === 'knockback') return `rgba(255, 103, 86, ${alpha})`;
+      if (chemistry === 'pooling') return `rgba(72, 222, 198, ${alpha})`;
+      return `rgba(216, 168, 255, ${alpha})`;
+    }
+
+    function drawJuiceTrails(state) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const trail of state.trails || []) {
+        if (!trail.samples || trail.samples.length < 2) continue;
+        const points = trail.samples.map(sample => project(sample.position));
+        const surface = trail.surface_flow || trail.samples.some(sample => sample.phase === 'surface_flow');
+        ctx.strokeStyle = juiceColor(trail.chemistry, surface ? 0.56 : 0.72);
+        ctx.lineWidth = surface ? 15 : 10;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowBlur = surface ? 18 : 12;
+        ctx.shadowColor = juiceColor(trail.chemistry, 0.78);
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.stroke();
+        ctx.strokeStyle = juiceColor(trail.chemistry, surface ? 0.26 : 0.34);
+        ctx.lineWidth = surface ? 24 : 17;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+        if (surface) {
+          const last = points[points.length - 1];
+          ctx.fillStyle = juiceColor(trail.chemistry, 0.22);
+          ctx.beginPath();
+          ctx.ellipse(last.x, last.y + 2, 15, 6, 0.08, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
     function drawParticles(state) {
       for (const particle of state.particles) {
         const p = project(particle.position);
         const alpha = particle.phase === 'airborne' ? 0.86 : 0.55;
-        const color = particle.chemistry === 'knockback'
-          ? `rgba(255, 103, 86, ${alpha})`
-          : particle.chemistry === 'pooling'
-            ? `rgba(72, 222, 198, ${alpha})`
-            : `rgba(216, 168, 255, ${alpha})`;
-        ctx.fillStyle = color;
+        ctx.fillStyle = juiceColor(particle.chemistry, alpha);
         ctx.beginPath();
         ctx.arc(p.x, p.y, particle.phase === 'airborne' ? 4.8 : 6.2, 0, Math.PI * 2);
         ctx.fill();
@@ -230,12 +267,14 @@
       drawTerrain();
       drawCaster();
       drawTargets(state);
+      drawJuiceTrails(state);
       drawParticles(state);
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.simulation_authority} | ${state.evidence_kind}<br>${state.lerms_world_frame.world_from_hand_sample}<br>particles ${state.particleCount} | surface ${state.surfaceFlowCount} | lerm hits ${state.lermImpulseCount} | goin hits ${state.goinImpulseCount}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${visualRenderer} | ${state.simulation_authority}<br>${state.lerms_world_frame.world_from_hand_sample}<br>particles ${state.particleCount} | trails ${state.trailSampleCount} / ${state.trailEmitterCount} | surface ${state.surfaceFlowCount}`;
       window.__lermsFingerJuiceDebug = () => ({
         requestedRoute: 'lerms_world_finger_juice=1',
         routeActive,
         effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
+        visualRenderer,
         terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
         emitterPacket,
         ...state,
