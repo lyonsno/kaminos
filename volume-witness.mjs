@@ -28,6 +28,25 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 }
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
+const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
+const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
+const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
+
+function fireLickOperatorGainFromAmount(value) {
+  const numeric = Number(value);
+  const amount = Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
+  return amount * (0.82 + amount * 0.110);
+}
+
+function expectedMainFluidKernelStrategy(fireLicks) {
+  return fireLickOperatorGainFromAmount(fireLicks) > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD
+    ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
+    : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
+}
+
+function expectedFireLickBreakupEvaluationsPerCell(fireLicks) {
+  return expectedMainFluidKernelStrategy(fireLicks) === MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP ? 2 : 0;
+}
 const routeParams = new URL(url).searchParams;
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
@@ -795,6 +814,9 @@ async function main() {
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
+    const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
+    const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
+    const expectedFireLickBreakupEvaluations = expectedFireLickBreakupEvaluationsPerCell(effectiveFireLicks);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -803,6 +825,8 @@ async function main() {
     assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
     assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
+    assert.equal(stateLedger.mainFluidKernelStrategy, expectedMainFluidStrategy, 'sim cost ledger main fluid kernel strategy does not match effective fire-lick state');
+    assert.equal(Number(stateLedger.fireLickBreakupEvaluationsPerCell), expectedFireLickBreakupEvaluations, 'sim cost ledger fire-lick breakup evaluation count does not match effective fire-lick state');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
@@ -829,11 +853,16 @@ async function main() {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
+    const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
+    const sampleMainFluidStrategy = expectedMainFluidKernelStrategy(sampleFireLicks);
+    const sampleFireLickBreakupEvaluations = expectedFireLickBreakupEvaluationsPerCell(sampleFireLicks);
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
       sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
       sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
+      sampleLedger?.mainFluidKernelStrategy !== sampleMainFluidStrategy ||
+      Number(sampleLedger?.fireLickBreakupEvaluationsPerCell) !== sampleFireLickBreakupEvaluations ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||

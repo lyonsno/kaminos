@@ -28,6 +28,8 @@ const dryRun = args.has('--dry-run');
 const PERFORMANCE_MATRIX_ID = 'tall-plume-performance-matrix-v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
+const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
+const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const FALSE_CLOSURE_LABELS = [
   'wrong-fallback-route',
   'stale-default-config',
@@ -658,7 +660,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -671,6 +673,27 @@ function validateWitness(run, witness, effective) {
     throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown pressure source strategy', {
       scenarioId: run.id,
       pressureSourceStrategy: ledger.pressureSourceStrategy,
+      ledger,
+    });
+  }
+  if (![MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP, MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS].includes(ledger.mainFluidKernelStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown main fluid kernel strategy', {
+      scenarioId: run.id,
+      mainFluidKernelStrategy: ledger.mainFluidKernelStrategy,
+      ledger,
+    });
+  }
+  if (ledger.mainFluidKernelStrategy === MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS && Number(ledger.fireLickBreakupEvaluationsPerCell) !== 0) {
+    throwSweepFailure('stale-default-config', 'validation', 'zero fire-lick bypass still reports breakup evaluations', {
+      scenarioId: run.id,
+      fireLickBreakupEvaluationsPerCell: ledger.fireLickBreakupEvaluationsPerCell,
+      ledger,
+    });
+  }
+  if (ledger.mainFluidKernelStrategy === MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP && Number(ledger.fireLickBreakupEvaluationsPerCell) <= 0) {
+    throwSweepFailure('partial-primary-output', 'validation', 'active fire-lick strategy did not report breakup evaluations', {
+      scenarioId: run.id,
+      fireLickBreakupEvaluationsPerCell: ledger.fireLickBreakupEvaluationsPerCell,
       ledger,
     });
   }
@@ -826,6 +849,9 @@ for (let i = 0; i < runs.length; i += 1) {
       fullGridCellVisitsPerFrame: simCostLedger?.fullGridCellVisitsPerFrame,
       fluidBufferBytes: simCostLedger?.fluidBufferBytes,
       pressureSourceStrategy: simCostLedger?.pressureSourceStrategy,
+      mainFluidKernelStrategy: simCostLedger?.mainFluidKernelStrategy,
+      fireLickBreakupEvaluationsPerCell: simCostLedger?.fireLickBreakupEvaluationsPerCell,
+      fireLickOperatorGain: simCostLedger?.fireLickOperatorGain,
       pressureDivergencePasses: simCostLedger?.pressureDivergencePasses,
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
