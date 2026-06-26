@@ -490,19 +490,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
     </div>
     <div class="panel" id="motion-panel-orb-preview">
-      <div class="field"><span class="field-key">Panel Bridge</span><span class="route-chip">kaminos_motion_panel_temporal_fixture=1</span></div>
+      <div class="field"><span class="field-key">Generate Motion</span><span class="route-chip">kaminos_motion_panel_temporal_fixture=1</span></div>
       <input class="gen-input" id="motion-panel-server-url" value="http://localhost:8098" aria-label="Motion server URL">
-      <textarea class="gen-input" id="motion-panel-prompt" rows="2" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
-      <div class="slider-row">
-        <span class="slider-label">Duration</span>
-        <input type="range" id="motion-panel-duration" min="1" max="18" step="1" value="6">
-        <span class="slider-val" id="motion-panel-duration-val">6s</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Steps</span>
-        <input type="range" id="motion-panel-steps" min="10" max="200" step="10" value="100">
-        <span class="slider-val" id="motion-panel-steps-val">100</span>
-      </div>
       <div class="slider-row">
         <span class="slider-label">Source</span>
         <select id="motion-panel-source-ghost-mode" class="select-input">
@@ -521,7 +510,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="motion-panel-speed" min="0.25" max="3" step="0.05" value="1">
         <span class="slider-val" id="motion-panel-speed-val">1.00x</span>
       </div>
+      <textarea class="gen-input" id="motion-panel-prompt" rows="2" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
+      <div class="slider-row">
+        <span class="slider-label">Duration</span>
+        <input type="range" id="motion-panel-duration" min="1" max="18" step="1" value="6">
+        <span class="slider-val" id="motion-panel-duration-val">6s</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Steps</span>
+        <input type="range" id="motion-panel-steps" min="10" max="200" step="10" value="100">
+        <span class="slider-val" id="motion-panel-steps-val">100</span>
+      </div>
       <div class="volume-actions">
+        <button class="btn" id="motion-gen-btn">Generate Motion</button>
         <button class="btn" id="motion-panel-generate-preview">Generate + Preview</button>
         <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
       </div>
@@ -4921,6 +4922,11 @@ function setMotionPanelTemporalStatus(message, color = '#777') {
   if (!status) return;
   status.textContent = message;
   status.style.color = color;
+  const legacyStatus = document.getElementById('motion-status');
+  if (legacyStatus && legacyStatus !== status) {
+    legacyStatus.textContent = message;
+    legacyStatus.style.color = color;
+  }
 }
 
 function wireMotionPanelSlider(id, suffix = '') {
@@ -4933,6 +4939,23 @@ function wireMotionPanelSlider(id, suffix = '') {
   };
   input.addEventListener('input', update);
   update();
+}
+
+function motionPromptValueForPreview() {
+  return String(
+    document.getElementById('motion-panel-prompt')?.value
+    || document.getElementById('motion-prompt')?.value
+    || ''
+  ).trim();
+}
+
+function motionPreviewNumberFromInputs(panelId, legacyId, fallback) {
+  const value = Number(
+    document.getElementById(panelId)?.value
+    ?? document.getElementById(legacyId)?.value
+    ?? fallback
+  );
+  return Number.isFinite(value) ? value : fallback;
 }
 
 window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
@@ -4967,15 +4990,18 @@ async function previewMotionPanelTemporalFixture() {
 
 async function generateMotionPanelTemporalPreview() {
   const serverUrl = String(document.getElementById('motion-panel-server-url')?.value || 'http://localhost:8098').replace(/\/+$/, '');
-  const prompt = String(document.getElementById('motion-panel-prompt')?.value || '').trim();
+  const prompt = motionPromptValueForPreview();
   if (!prompt) {
     setMotionPanelTemporalStatus('Prompt required', '#ef5350');
     return null;
   }
-  const duration = Number(document.getElementById('motion-panel-duration')?.value || 6);
-  const steps = Number(document.getElementById('motion-panel-steps')?.value || 100);
-  const button = document.getElementById('motion-panel-generate-preview');
-  if (button) button.disabled = true;
+  const duration = motionPreviewNumberFromInputs('motion-panel-duration', 'motion-duration', 6);
+  const steps = motionPreviewNumberFromInputs('motion-panel-steps', 'motion-steps', 100);
+  const buttons = [
+    document.getElementById('motion-panel-generate-preview'),
+    document.getElementById('motion-gen-btn'),
+  ].filter(Boolean);
+  for (const button of buttons) button.disabled = true;
   setMotionPanelTemporalStatus('Generating motion...', '#42a5f5');
   try {
     const response = await fetch(`${serverUrl}/generate`, {
@@ -4998,9 +5024,10 @@ async function generateMotionPanelTemporalPreview() {
     setMotionPanelTemporalStatus(`Motion bridge failed: ${error.message}`, '#ef5350');
     throw error;
   } finally {
-    if (button) button.disabled = false;
+    for (const button of buttons) button.disabled = false;
   }
 }
+window.generateMotion = generateMotionPanelTemporalPreview;
 
 function initKaminosMotionAgencyRoute() {
   renderMotionClipList();
@@ -5016,6 +5043,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-generated-enable')?.addEventListener('click', () => createGeneratedMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-output-map-enable')?.addEventListener('click', () => createGeneratedPoseOutputMapScene({ force: true }));
   document.getElementById('motion-temporal-enable')?.addEventListener('click', () => void createGeneratedPoseTemporalScene({ force: true }));
+  document.getElementById('motion-gen-btn')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {

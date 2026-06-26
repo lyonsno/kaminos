@@ -80,6 +80,9 @@ assert.match(index, /kaminos_motion_panel_temporal_fixture/, 'browser has a dete
 assert.match(index, /motion-panel-source-ghost-mode/, 'Motion tab exposes source skeleton ghost mode control');
 assert.match(index, /motion-panel-source-opacity/, 'Motion tab exposes source skeleton ghost opacity control');
 assert.match(index, /motion-panel-speed/, 'Motion tab exposes temporal preview speed control');
+assert.match(index, /motion-gen-btn/, 'Motion tab exposes the plain Generate Motion button on the source-ghost preview path');
+assert.match(index, /window\.generateMotion\s*=\s*generateMotionPanelTemporalPreview/, 'plain Generate Motion path uses the source-ghost preview bridge');
+assert.match(index, /motionPromptValueForPreview/, 'preview bridge reads both motion-panel and text-to-motion prompt controls');
 assert.match(index, /createMotionSourceGhostVisual/, 'browser builds a phase-locked generated source skeleton visual');
 assert.match(index, /updateMotionSourceGhostFrame/, 'browser updates source skeleton from the temporal source frame clock');
 assert.match(index, /sourceGhost/, 'browser temporal debug exposes source skeleton ghost evidence');
