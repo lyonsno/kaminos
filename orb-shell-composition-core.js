@@ -811,24 +811,36 @@ function createLamellarChannelMeshPlan(channelPlan) {
   const unsolvedChannelDescriptors = [];
   for (const descriptor of channelPlan?.descriptors || []) {
     if (descriptor.id === 'north-east-counter-thrust-ne-support-channel-through-line' && descriptor.pairedEdgeSamples.length >= 2) {
+      const visualWidthScale = 1.92;
       const edgeSamples = descriptor.pairedEdgeSamples.map(sample => {
-        const center = [
+        const sourceCenter = [
           (sample.leftEdge[0] + sample.rightEdge[0]) * 0.5,
           (sample.leftEdge[1] + sample.rightEdge[1]) * 0.5,
           (sample.leftEdge[2] + sample.rightEdge[2]) * 0.5,
         ];
+        const edgeAxis = normalizePoint([
+          sample.rightEdge[0] - sample.leftEdge[0],
+          sample.rightEdge[1] - sample.leftEdge[1],
+          sample.rightEdge[2] - sample.leftEdge[2],
+        ]);
+        const visualHalfWidth = descriptor.constantGapBudget.target * visualWidthScale * 0.5;
+        const leftEdge = addScaledPoint(sourceCenter, edgeAxis, -visualHalfWidth);
+        const rightEdge = addScaledPoint(sourceCenter, edgeAxis, visualHalfWidth);
         return {
           t: sample.t,
-          leftEdge: sample.leftEdge,
-          rightEdge: sample.rightEdge,
-          center,
-          surfaceNormal: normalizePoint(center),
-          measuredWidth: pointDistance(sample.leftEdge, sample.rightEdge),
+          leftEdge,
+          rightEdge,
+          sourceLeftEdge: sample.leftEdge,
+          sourceRightEdge: sample.rightEdge,
+          center: sourceCenter,
+          surfaceNormal: normalizePoint(sourceCenter),
+          measuredWidth: pointDistance(leftEdge, rightEdge),
+          sourceMeasuredWidth: pointDistance(sample.leftEdge, sample.rightEdge),
           bodyLayer: sample.bodyLayer,
           railLayer: sample.railLayer,
         };
       });
-      stripMeshes.push({
+      const strip = {
         schema: 'LamellarChannelStripMesh',
         mode: 'flat-lamellar-channel-strip-v0',
         id: `${descriptor.id}-flat-strip-mesh`,
@@ -841,11 +853,13 @@ function createLamellarChannelMeshPlan(channelPlan) {
         meshTopology: 'sampled-paired-edge-ribbon-buffer-geometry',
         renderRole: 'final-visible-flat-channel-scaffold',
         roundDiagnosticRailFinalVisible: false,
+        visualWidthScale,
         edgeSamples,
         widthBudget: {
           target: descriptor.constantGapBudget.target,
           tolerance: descriptor.constantGapBudget.tolerance,
           measuredMean: descriptor.gapDistanceStats.mean,
+          visualTarget: descriptor.constantGapBudget.target * visualWidthScale,
           sourceRelativeVariation: descriptor.sourceGapDistanceStats?.relativeVariation,
         },
         thicknessBudget: {
@@ -857,7 +871,52 @@ function createLamellarChannelMeshPlan(channelPlan) {
         meshReadinessVerdict: descriptor.constantGapVerdict === 'within-budget'
           ? 'flat-strip-mesh-scaffolded-from-within-budget-descriptor'
           : 'flat-strip-mesh-scaffolded-source-still-outside-budget',
-      });
+      };
+      strip.plateLips = [
+        {
+          schema: 'LamellarPlateLip',
+          mode: 'flat-lamellar-channel-strip-v0',
+          id: `${strip.id}-left-plate-lip`,
+          sourceStripMeshId: strip.id,
+          edgeRole: 'left-shoulder',
+          geometryKind: 'flat-beveled-lip-not-round-rod',
+          lipWidth: 0.05,
+          lipHeight: 0.018,
+          highlightMaterialRole: 'cool-metal-edge-shoulder-highlight',
+          edgeSamples: edgeSamples.map(sample => ({
+            t: sample.t,
+            edgePoint: sample.leftEdge,
+            innerPoint: [
+              sample.leftEdge[0] * 0.62 + sample.center[0] * 0.38,
+              sample.leftEdge[1] * 0.62 + sample.center[1] * 0.38,
+              sample.leftEdge[2] * 0.62 + sample.center[2] * 0.38,
+            ],
+            surfaceNormal: sample.surfaceNormal,
+          })),
+        },
+        {
+          schema: 'LamellarPlateLip',
+          mode: 'flat-lamellar-channel-strip-v0',
+          id: `${strip.id}-right-plate-lip`,
+          sourceStripMeshId: strip.id,
+          edgeRole: 'right-shoulder',
+          geometryKind: 'flat-beveled-lip-not-round-rod',
+          lipWidth: 0.05,
+          lipHeight: 0.018,
+          highlightMaterialRole: 'cool-metal-edge-shoulder-highlight',
+          edgeSamples: edgeSamples.map(sample => ({
+            t: sample.t,
+            edgePoint: sample.rightEdge,
+            innerPoint: [
+              sample.rightEdge[0] * 0.62 + sample.center[0] * 0.38,
+              sample.rightEdge[1] * 0.62 + sample.center[1] * 0.38,
+              sample.rightEdge[2] * 0.62 + sample.center[2] * 0.38,
+            ],
+            surfaceNormal: sample.surfaceNormal,
+          })),
+        },
+      ];
+      stripMeshes.push(strip);
     } else {
       unsolvedChannelDescriptors.push({
         sourceDescriptorId: descriptor.id,
@@ -873,8 +932,12 @@ function createLamellarChannelMeshPlan(channelPlan) {
     sourcePlanSchema: channelPlan?.schema,
     stripMeshes,
     stripMeshCount: stripMeshes.length,
+    plateLipCount: stripMeshes.reduce((sum, strip) => sum + (strip.plateLips?.length || 0), 0),
     unsolvedChannelDescriptors,
     roundDiagnosticRailFinalVisible: false,
+    plateLipVisualLegibilityVerdict: stripMeshes.some(strip => strip.plateLips?.length >= 2)
+      ? 'raised-flat-lips-visible-plate-language'
+      : 'flat-strip-lacks-visible-plate-lips',
     meshVerdict: stripMeshes.length
       ? 'first-channel-flat-strip-mesh-scaffolded'
       : 'no-flat-channel-strip-mesh-scaffolded',
@@ -1531,6 +1594,51 @@ function makeLamellarChannelStripGeometry(THREE, strip) {
   return geometry;
 }
 
+function makeLamellarPlateLipGeometry(THREE, lip) {
+  const rowCount = lip.edgeSamples.length;
+  const columnCount = 3;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const sample = lip.edgeSamples[row];
+    const edge = new THREE.Vector3(...sample.edgePoint);
+    const inner = new THREE.Vector3(...sample.innerPoint);
+    const normal = new THREE.Vector3(...sample.surfaceNormal).normalize();
+    const shoulder = edge.clone().lerp(inner, 0.42);
+    const points = [
+      edge.clone().addScaledVector(normal, lip.lipHeight * 0.42),
+      shoulder.clone().addScaledVector(normal, lip.lipHeight),
+      inner.clone().addScaledVector(normal, lip.lipHeight * 0.18),
+    ];
+    for (let col = 0; col < columnCount; col++) {
+      const point = points[col];
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(col / (columnCount - 1), sample.t);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LamellarPlateLip = lip;
+  return geometry;
+}
+
 function makeLowerCupClosureGeometry(THREE, lowerCupDepth = 1) {
   const rowCount = 22;
   const columnCount = 13;
@@ -1761,10 +1869,17 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
   const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
   const lamellarChannelStripMaterial = new THREE.MeshStandardMaterial({
-    color: 0x11181b,
+    color: 0x233036,
     roughness: 0.28,
     metalness: 0.94,
-    envMapIntensity: 2.8,
+    envMapIntensity: 3.4,
+    side: THREE.DoubleSide,
+  });
+  const lamellarPlateLipMaterial = new THREE.MeshStandardMaterial({
+    color: 0xaec2cb,
+    roughness: 0.16,
+    metalness: 0.96,
+    envMapIntensity: 5.2,
     side: THREE.DoubleSide,
   });
   for (const material of [
@@ -1780,6 +1895,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     crossingTuckBodyMaterial,
     seamGapHintMaterial,
     lamellarChannelStripMaterial,
+    lamellarPlateLipMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -1853,6 +1969,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       stripMesh.userData.LamellarChannelMeshPlan = composition.lamellarChannelMeshPlan;
       stripMesh.userData.LamellarChannelStripMesh = strip;
       group.add(stripMesh);
+      for (const lip of strip.plateLips || []) {
+        const lipMesh = new THREE.Mesh(makeLamellarPlateLipGeometry(THREE, lip), lamellarPlateLipMaterial);
+        lipMesh.name = lip.id;
+        lipMesh.userData.LamellarChannelMeshPlan = composition.lamellarChannelMeshPlan;
+        lipMesh.userData.LamellarChannelStripMesh = strip;
+        lipMesh.userData.LamellarPlateLip = lip;
+        group.add(lipMesh);
+      }
     }
 
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
@@ -1888,6 +2012,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
       lamellarChannelStripMeshCount: composition.lamellarChannelMeshPlan?.stripMeshCount || 0,
       lamellarChannelMeshVerdict: composition.lamellarChannelMeshPlan?.meshVerdict,
+      lamellarPlateLipCount: composition.lamellarChannelMeshPlan?.plateLipCount || 0,
+      plateLipVisualLegibilityVerdict: composition.lamellarChannelMeshPlan?.plateLipVisualLegibilityVerdict,
       roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
@@ -1955,6 +2081,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
         lamellarChannelStripMeshCount: composition.lamellarChannelMeshPlan?.stripMeshCount || 0,
         lamellarChannelMeshVerdict: composition.lamellarChannelMeshPlan?.meshVerdict,
+        lamellarPlateLipCount: composition.lamellarChannelMeshPlan?.plateLipCount || 0,
+        plateLipVisualLegibilityVerdict: composition.lamellarChannelMeshPlan?.plateLipVisualLegibilityVerdict,
         roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
@@ -1987,6 +2115,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LamellarChannelMeshPlan: composition.lamellarChannelMeshPlan,
         lamellarChannelMeshPlan: composition.lamellarChannelMeshPlan,
         LamellarChannelStripMesh: composition.lamellarChannelMeshPlan?.stripMeshes || [],
+        LamellarPlateLip: composition.lamellarChannelMeshPlan?.stripMeshes?.flatMap(strip => strip.plateLips || []) || [],
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],

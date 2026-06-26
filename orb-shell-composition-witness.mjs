@@ -149,8 +149,11 @@ async function main() {
     assert.equal(state?.LamellarChannelMeshPlan?.schema, 'LamellarChannelMeshPlan', 'LamellarChannelMeshPlan missing from debug state');
     assert.equal(state?.LamellarChannelMeshPlan?.mode, 'flat-lamellar-channel-strip-v0', 'LamellarChannelMeshPlan mode missing from debug state');
     assert.ok(state?.lamellarChannelStripMeshCount >= 1, 'flat lamellar channel strip mesh missing from debug state');
+    assert.ok(state?.lamellarPlateLipCount >= 2, 'flat lamellar plate lips missing from debug state');
+    assert.equal(state?.plateLipVisualLegibilityVerdict, 'raised-flat-lips-visible-plate-language', 'plate lip visual verdict missing from debug state');
     assert.equal(state?.roundDiagnosticRailFinalVisible, false, 'round channel rails must not be final-visible geometry');
     assert.ok(state?.LamellarChannelStripMesh?.every(strip => strip?.schema === 'LamellarChannelStripMesh'), 'LamellarChannelStripMesh records missing from debug state');
+    assert.ok(state?.LamellarPlateLip?.every(lip => lip?.schema === 'LamellarPlateLip'), 'LamellarPlateLip records missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
     assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
@@ -200,6 +203,8 @@ async function main() {
       channelCorridorVerdict: state.channelCorridorVerdict,
       lamellarChannelStripMeshCount: state.lamellarChannelStripMeshCount,
       lamellarChannelMeshVerdict: state.lamellarChannelMeshVerdict,
+      lamellarPlateLipCount: state.lamellarPlateLipCount,
+      plateLipVisualLegibilityVerdict: state.plateLipVisualLegibilityVerdict,
       roundDiagnosticRailFinalVisible: state.roundDiagnosticRailFinalVisible,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
       channelThroughLineAudit: state.channelThroughLineAudit,
@@ -209,6 +214,7 @@ async function main() {
       LamellarChannelMeshPlan: state.LamellarChannelMeshPlan,
       lamellarChannelMeshPlan: state.lamellarChannelMeshPlan,
       LamellarChannelStripMesh: state.LamellarChannelStripMesh,
+      LamellarPlateLip: state.LamellarPlateLip,
       crossingSubSurgeCount: state.crossingSubSurgeCount,
       cleanProxySurfaceMode: state.cleanProxySurfaceMode,
       topologyOnlySurfaceRelief: state.topologyOnlySurfaceRelief,
