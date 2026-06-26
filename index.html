@@ -228,6 +228,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node.selected { border-color: #2f67c7; background: #172235; color: #fff; }
 .pipeline-graph-node.image { border-color: #3a4c2a; background: #1b2218; }
 .pipeline-graph-node.image.selected { border-color: #77a651; background: #1f3219; }
+.pipeline-graph-node.generated-output { border-color: #45623a; background: #172118; }
+.pipeline-graph-node.generated-output.selected { border-color: #7fb35b; background: #1e321a; }
 .pipeline-graph-node.connecting { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node.port-target { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #141414; background: #555; padding: 0; z-index: 3; cursor: crosshair; }
@@ -238,6 +240,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node-kicker { font: 9px 'SF Mono', monospace; color: #777; text-transform: uppercase; letter-spacing: 0.7px; }
 .pipeline-graph-node-title { font-size: 12px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-graph-node-detail { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-node-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+.pipeline-graph-node-action { border: 1px solid #3a3a3a; background: #242424; color: #d8d8d8; border-radius: 5px; padding: 4px 8px; font-size: 10px; cursor: pointer; }
+.pipeline-graph-node-action:hover { background: #303030; border-color: #555; color: #fff; }
+.pipeline-graph-node-action.primary { background: #1e3c27; border-color: #45623a; color: #bfe7a4; }
+.pipeline-graph-node-action[disabled] { opacity: 0.45; cursor: default; }
 .pipeline-graph-node.source { left: 18px; top: 92px; }
 .pipeline-graph-node.route { left: 180px; top: 92px; }
 .pipeline-graph-node.output { left: 342px; top: 44px; }
@@ -10279,6 +10286,7 @@ let pipelineDockState = {
 	  assetCardDrag: null,
 	  generatorCardDrag: null,
 	  graphInspectorStatus: null,
+	  loadedPipelineArtifactPaths: {},
 	  renderedRunId: null,
 	  lastRun: null,
 	  graph: null,
@@ -10847,12 +10855,28 @@ function createPipelineGraphImageNode(asset, position = null) {
   return node;
 }
 
+function pipelineRunPreviewTruthLabel(result, artifact = null) {
+  if (!artifact?.path) return 'no generated preview';
+  if (pipelineRunUsesFixture(result)) return 'fixture / point-cloud preview';
+  if ((result?.generatorId || result?.generatorLabel || result?.pipelineId || '').toString().toLowerCase().includes('sharp')) {
+    return 'real SHARP / point-cloud preview';
+  }
+  return 'generated artifact / point-cloud preview';
+}
+
+function pipelineArtifactLoadedRecord(artifact) {
+  const path = artifact?.path || null;
+  if (!path) return null;
+  return pipelineDockState.loadedPipelineArtifactPaths?.[path] || null;
+}
+
 function buildPipelineGraphModel(source, selectedRun) {
   const pipeline = selectedPipelineRecord();
   const generator = selectedPipelineGeneratorRecord();
   const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
   const splat = pipelineRunArtifact(selectedRun, 'splat');
+  const loadedArtifact = pipelineArtifactLoadedRecord(splat);
   const runId = selectedRun ? pipelineRunDisplayId(selectedRun) : null;
   const fixtureBacked = pipelineRunUsesFixture(selectedRun) || pipelineRouteUsesFixture(pipeline);
   const sourceLabel = selectedRun?.source?.label || source?.label || 'No source selected';
@@ -10860,8 +10884,34 @@ function buildPipelineGraphModel(source, selectedRun) {
   const routeLabel = generatorRecord?.operationTitle || 'No generator selected';
   const backendPipelineId = selectedRun?.pipelineId || generatorRecord?.backendPipelineId || pipeline?.id || null;
   const routeDetail = `${generatorRecord?.backendLabel || 'Backend route'}: ${backendPipelineId || 'unrouted'}${fixtureBacked ? ' / input provenance only; output fixed fixture' : ''}`;
-  const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : ''}Splat output` : sidecar?.path ? 'No new splat' : 'No output yet';
+  const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : 'Generated '}SHARP Splat` : sidecar?.path ? 'No new splat' : 'No output yet';
+  const outputTruth = pipelineRunPreviewTruthLabel(selectedRun, splat);
   const evidenceLabel = selectedRun?.ok ? 'Run evidence written' : selectedRun ? 'Run failed' : 'No run evidence';
+  const outputNode = splat?.path ? {
+    id: 'output',
+    kind: 'generated-output',
+    title: outputLabel,
+    detail: outputTruth,
+    runId,
+    artifact: splat,
+    sidecar,
+    fixtureBacked,
+    previewTruth: outputTruth,
+    loaded: Boolean(loadedArtifact),
+    loadedSceneObjectId: loadedArtifact?.sceneObjectId || null,
+  } : {
+    id: 'output',
+    kind: 'output',
+    title: outputLabel,
+    detail: 'fixture/sidecar-only or not run',
+    runId,
+    artifact: splat,
+    sidecar,
+    fixtureBacked,
+    previewTruth: outputTruth,
+    loaded: false,
+    loadedSceneObjectId: null,
+  };
   const nodes = [
     {
       id: 'source',
@@ -10882,15 +10932,7 @@ function buildPipelineGraphModel(source, selectedRun) {
       pipeline,
       fixtureBacked,
     },
-    {
-      id: 'output',
-      kind: 'output',
-      title: outputLabel,
-      detail: splat?.path || 'fixture/sidecar-only or not run',
-      runId,
-      artifact: splat,
-      fixtureBacked,
-    },
+    outputNode,
     {
       id: 'evidence',
       kind: 'evidence',
@@ -11251,9 +11293,11 @@ function pipelineGraphInspectorRows(node, selectedRun) {
       rows.push({ key: 'execution', value: selectedRun.graphExecution?.nodeId ? `graph node ${selectedRun.graphExecution.nodeId}` : 'sidebar or prior run' });
     }
   }
-  if (node.kind === 'output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
-  if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
-  if (node.kind === 'output' && node.fixtureBacked) rows.push({ key: 'input', value: pipelineFixtureInputBoundaryText(node) });
+  if (node.kind === 'output' || node.kind === 'generated-output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
+  if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
+  if (node.kind === 'generated-output') rows.push({ key: 'loaded', value: node.loaded ? `yes${node.loadedSceneObjectId ? ` (${node.loadedSceneObjectId})` : ''}` : 'not loaded' });
+  if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
+  if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'input', value: pipelineFixtureInputBoundaryText(node) });
   if (node.kind === 'image') {
     rows.push({ key: 'source', value: node.source || 'missing' });
     rows.push({ key: 'scope', value: 'graph working input' });
@@ -11273,6 +11317,8 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
   const bodyText = node?.kind === 'image'
     ? 'Select another image card below to replace this node, or import this image into the scene.'
+    : node?.kind === 'generated-output'
+      ? 'Generated artifact node. Load appends this run-local output to the scene; renderer quality depends on the current preview/baking route.'
     : node?.kind === 'route' && pipelineRouteUsesFixture(node)
       ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
       : node?.kind === 'route'
@@ -11307,7 +11353,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
       action: () => pipelineImportGraphImageNodeToScene(node),
     });
   }
-  if (node?.kind === 'output' && selectedRun && node.artifact?.path) {
+  if ((node?.kind === 'output' || node?.kind === 'generated-output') && selectedRun && node.artifact?.path) {
     actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact) });
   }
   if (node?.kind === 'evidence' && selectedRun) {
@@ -11528,6 +11574,69 @@ function handlePipelineGraphGeneratorDrop(event) {
   placePipelineGeneratorRouteNode(pipelineId, pipelineGraphDropPosition(event));
 }
 
+function pipelineGraphNodeActionsMarkup(node) {
+  if (node.kind === 'route') {
+    return `
+      <span class="pipeline-graph-node-actions">
+        <button
+          type="button"
+          class="pipeline-graph-node-action primary"
+          data-pipeline-graph-node-action="execute"
+          data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
+        >Execute</button>
+      </span>
+    `;
+  }
+  if (node.kind === 'generated-output') {
+    const loaded = Boolean(node.loaded);
+    return `
+      <span class="pipeline-graph-node-actions">
+        <button
+          type="button"
+          class="pipeline-graph-node-action${loaded ? '' : ' primary'}"
+          data-pipeline-graph-node-action="load-output"
+          data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
+          ${loaded ? 'disabled' : ''}
+        >${loaded ? 'Loaded' : 'Load'}</button>
+      </span>
+    `;
+  }
+  return '';
+}
+
+function pipelineGraphNodeActionItem(node, action) {
+  if (action === 'execute' && node?.kind === 'route') {
+    return {
+      label: 'Execute',
+      runningMessage: `Executing ${node.title || 'pipeline route'}...`,
+      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelineRunArtifact(result, 'splat')?.path ? 'generated output node selected' : 'evidence node selected'}`,
+      action: () => pipelineExecuteGraphRouteNode(node),
+    };
+  }
+  if (action === 'load-output' && node?.kind === 'generated-output') {
+    const run = selectedPipelineRun();
+    return {
+      label: 'Load Output',
+      runningMessage: 'Loading generated output into the scene...',
+      successMessage: record => `Loaded generated output${record?.id ? ` as ${record.id}` : ''}`,
+      action: () => pipelineLoadRunSplatArtifact(run, node.artifact),
+      disabled: !run || !node.artifact?.path || node.loaded,
+    };
+  }
+  return null;
+}
+
+async function pipelineActivateGraphNodeAction(nodeId, action) {
+  const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  const node = pipelineGraphNodeForId(graph, nodeId);
+  const item = pipelineGraphNodeActionItem(node, action);
+  if (!item || item.disabled) return null;
+  pipelineDockState.selectedGraphNodeId = nodeId;
+  pipelineDockState.selectedGraphEdgeId = null;
+  renderPipelineGraphWorkbench();
+  return pipelineRunGraphInspectorAction(item, null);
+}
+
 function renderPipelineGraphWorkbench() {
   const canvas = document.getElementById('pipeline-graph-canvas');
   if (!canvas) return;
@@ -11547,6 +11656,7 @@ function renderPipelineGraphWorkbench() {
       class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}${node.id === pipelineDockState.graphConnectionStartId ? ' connecting' : ''}${isTarget ? ' port-target' : ''}"
       data-pipeline-graph-node-id="${escapeHtml(node.id)}"
       ${node.kind === 'image' ? `data-pipeline-graph-image-node-id="${escapeHtml(node.id)}"` : ''}
+      ${node.kind === 'generated-output' ? `data-pipeline-generated-output-node-id="${escapeHtml(node.id)}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
@@ -11561,6 +11671,7 @@ function renderPipelineGraphWorkbench() {
       <span class="pipeline-graph-node-kicker">${escapeHtml(node.kind)}</span>
       <span class="pipeline-graph-node-title">${escapeHtml(node.title)}</span>
       <span class="pipeline-graph-node-detail">${escapeHtml(node.detail || '')}</span>
+      ${pipelineGraphNodeActionsMarkup(node)}
       <button
         type="button"
         class="pipeline-graph-port output"
@@ -11651,6 +11762,23 @@ function renderPipelineGraphWorkbench() {
     const nodeId = portEl.dataset.pipelineGraphPortNodeId;
     const portKind = portEl.dataset.pipelineGraphPort;
     portEl.addEventListener('pointerdown', event => beginPipelineGraphPortDrag(event, nodeId, portKind));
+  });
+  canvas.querySelectorAll('[data-pipeline-graph-node-action]').forEach(actionEl => {
+    actionEl.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    actionEl.addEventListener('pointerup', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      pipelineActivateGraphNodeAction(actionEl.dataset.pipelineGraphNodeActionNodeId, actionEl.dataset.pipelineGraphNodeAction).catch(err => {
+        console.error('Pipeline graph node action failed', err);
+      });
+    });
+    actionEl.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
   });
   canvas.querySelectorAll('[data-pipeline-graph-node-id]').forEach(nodeEl => {
     const nodeId = nodeEl.dataset.pipelineGraphNodeId;
@@ -11767,6 +11895,13 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
         },
       },
     });
+    pipelineDockState.loadedPipelineArtifactPaths ||= {};
+    pipelineDockState.loadedPipelineArtifactPaths[artifact.path] = {
+      sceneObjectId: record?.id || null,
+      at: new Date().toISOString(),
+      previewRoute: 'point-cloud-preview',
+    };
+    renderPipelineGraphWorkbench();
     setActiveTab('assets');
     pipelineSetActionStatus(`Loaded generated output: ${fileName}`);
     return record;
