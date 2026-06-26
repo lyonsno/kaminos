@@ -3037,6 +3037,141 @@ async function runRealHybridCroppedUnsupportedGuardScenario(ws) {
   }
 }
 
+async function runRealHybridCroppedSupportedOverlayScenario(ws) {
+  phase = 'scenario-real-hybrid-cropped-supported-overlay';
+  lastEvidence.realHybridCroppedSupportedOverlay = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const rowState = () => [...document.querySelectorAll('[data-scene-object-id]')].map(row => ({
+        id: row.dataset.sceneObjectId,
+        active: row.classList.contains('active'),
+        label: row.querySelector('[data-scene-object-name]')?.value?.trim() || row.querySelector('.scene-object-name')?.textContent?.trim() || null,
+      }));
+      document.querySelector('[data-tab="greenroom"]').click();
+      if (window.grBrowseSplatAssets) await window.grBrowseSplatAssets();
+      const beforeRows = rowState();
+      const assetData = await fetch('/api/assets?kind=splat').then(resp => resp.json());
+      const assetEntry = (assetData.entries || []).find(entry => entry.name === 'evil_orb_final_composite.ply') || null;
+      if (assetEntry) {
+        await window.greenroomImportSplat(assetEntry.source, assetEntry.name, assetEntry.display || { title: assetEntry.name }, {
+          clear: false,
+          metadata: {
+            source: assetEntry.source,
+            fileName: assetEntry.name,
+            label: assetEntry.display?.title || assetEntry.name,
+            splat: {
+              schema: 'kaminos.splat-asset.v0',
+              assetSource: assetEntry.source,
+              fileName: assetEntry.name,
+              format: 'ply',
+              bounds: null,
+              splatCount: null,
+              sidecars: [],
+              correction: assetEntry.correction || null,
+              provenance: {
+                source_group: 'splat-inbox',
+                source_url: assetEntry.source,
+                root_id: assetEntry.root_id || null,
+                root_label: assetEntry.root_label || null,
+                asset_stage: assetEntry.stage || 'experimental',
+                asset_path: assetEntry.path || null,
+              },
+            },
+          },
+        });
+      }
+      for (let i = 0; i < 120; i++) {
+        if (rowState().length > beforeRows.length) break;
+        await wait(125);
+      }
+      const splatObject = (window.kaminosSceneObjectDebugState?.() || [])
+        .find(record => record.type === 'splat' && record.source === assetEntry?.source) || null;
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
+      const previewDebugBefore = window.kaminosSplatPreviewDebugState?.(splatObject?.id) || null;
+      const requestedHybridModuleUrl = ${JSON.stringify(hybridModuleUrl)};
+      if (requestedHybridModuleUrl) {
+        window.kaminosSetHybridSplatOverlayModuleUrl?.(requestedHybridModuleUrl);
+      }
+      const startResult = await window.startSelectedSplatHybridRenderer?.();
+      await wait(2200);
+      const overlayDebug = window.kaminosHybridSplatOverlayDebugState?.() || null;
+      const handoffDebug = window.kaminosRenderHandoffDebugState?.(splatObject?.id) || null;
+      const previewDebugAfter = window.kaminosSplatPreviewDebugState?.(splatObject?.id) || null;
+      const statusText = document.getElementById('splat-hybrid-renderer-status')?.textContent || null;
+      const overlayCanvas = document.querySelector('#hybrid-splat-overlay-host canvas');
+      const host = document.getElementById('hybrid-splat-overlay-host');
+      return {
+        assetEntry,
+        splatObject,
+        startResult,
+        overlayDebug,
+        handoffDebug,
+        previewDebugBefore,
+        previewDebugAfter,
+        statusText,
+        overlayCanvas: overlayCanvas ? {
+          width: overlayCanvas.width,
+          height: overlayCanvas.height,
+          connected: overlayCanvas.isConnected,
+        } : null,
+        overlayHost: host ? (() => {
+          const rect = host.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        })() : null,
+        sceneRows: rowState(),
+      };
+    })()
+  `, { timeoutMs: 90000 });
+
+  const evidence = lastEvidence.realHybridCroppedSupportedOverlay;
+  if (!evidence.assetEntry?.correction?.crop?.enabled || !evidence.splatObject) {
+    throw new Error(`crop-capable renderer witness could not import the corrected final composite: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.previewDebugBefore?.cropEnabled !== true
+      || !(evidence.previewDebugBefore?.includedPointCount > 0)
+      || evidence.previewDebugAfter?.cropEnabled !== true
+      || !(evidence.previewDebugAfter?.includedPointCount > 0)) {
+    throw new Error(`crop-capable renderer witness did not prove Kaminos had a visible corrected crop before handoff: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.overlayDebug?.status !== 'rendering'
+      || !evidence.overlayDebug?.canvasConnected
+      || !evidence.overlayDebug?.sceneLoaded
+      || !evidence.overlayCanvas?.connected
+      || (evidence.overlayHost?.width || 0) < 64
+      || (evidence.overlayHost?.height || 0) < 64) {
+    throw new Error(`crop-capable renderer did not render the corrected cropped splat: ${JSON.stringify(evidence)}`);
+  }
+  const capabilities = evidence.overlayDebug?.capabilities || {};
+  const correctionApplication = evidence.overlayDebug?.correctionApplication || {};
+  if (evidence.overlayDebug?.cropAppliedByRenderer !== true
+      || capabilities.cropAppliedByRenderer !== true
+      || correctionApplication.cropApplied !== true
+      || evidence.handoffDebug?.activeHandoff?.evidence?.cropAppliedByRenderer !== true) {
+    throw new Error(`cropped hybrid overlay did not report renderer-side crop application: ${JSON.stringify(evidence)}`);
+  }
+  if (correctionApplication.sourceCount > 0 && !(correctionApplication.keptCount > 0)) {
+    throw new Error(`cropped hybrid overlay reported zero kept splats after renderer-side crop: ${JSON.stringify(evidence)}`);
+  }
+  if (correctionApplication.sourceCount > 0
+      && correctionApplication.keptCount > 0
+      && correctionApplication.keptCount >= correctionApplication.sourceCount) {
+    throw new Error(`cropped hybrid overlay reported no dropped splats for an enabled crop: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source
+      || evidence.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== evidence.splatObject.source) {
+    throw new Error(`cropped hybrid overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.overlayDebug?.sceneContextAccepted !== true
+      || evidence.handoffDebug?.activeHandoff?.evidence?.sceneContextAccepted !== true
+      || !evidence.overlayDebug?.sceneContextTelemetry) {
+    throw new Error(`cropped hybrid overlay lost scene-context acceptance: ${JSON.stringify(evidence)}`);
+  }
+  if (/crop unsupported/i.test(evidence.statusText || '')
+      || /point-cloud fallback/i.test(evidence.statusText || '')) {
+    throw new Error(`crop-capable renderer witness stayed on the Kaminos fallback path: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runRealSavedSplatCropVisibilityScenario(ws) {
   phase = 'scenario-real-saved-splat-crop-visibility';
   const requestedSplatAssetName = splatAssetName || 'evil_orb_multiview_emissive.ply';
@@ -4003,6 +4138,8 @@ try {
     await runRealHybridSplatOverlayScenario(ws);
   } else if (scenario === 'real-hybrid-cropped-unsupported-guard') {
     await runRealHybridCroppedUnsupportedGuardScenario(ws);
+  } else if (scenario === 'real-hybrid-cropped-supported-overlay') {
+    await runRealHybridCroppedSupportedOverlayScenario(ws);
   } else if (scenario === 'real-saved-splat-crop-visibility') {
     await runRealSavedSplatCropVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {

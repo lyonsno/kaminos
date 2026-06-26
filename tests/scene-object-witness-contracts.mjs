@@ -205,6 +205,10 @@ assert.match(witness, /hybrid splat overlay lost sharedCommandEncoder=false/, 'H
 assert.match(witness, /real hybrid splat overlay canvas has no visible geometry/, 'Real Hybrid Renderer witness fails when Start Hybrid renders into a zero-sized overlay surface');
 assert.match(witness, /real-hybrid-cropped-unsupported-guard/, 'Real Hybrid Renderer witness covers cropped assets when renderer crop is unsupported');
 assert.match(witness, /uncropped expensive renderer start/, 'Real Hybrid Renderer witness rejects starting an uncropped full renderer for cropped splats');
+assert.match(witness, /real-hybrid-cropped-supported-overlay/, 'Real Hybrid Renderer witness covers cropped assets when renderer advertises crop support');
+assert.match(witness, /crop-capable renderer did not render the corrected cropped splat/, 'Real Hybrid Renderer witness requires corrected cropped splats to reach the overlay');
+assert.match(witness, /cropped hybrid overlay did not report renderer-side crop application/, 'Real Hybrid Renderer witness requires renderer-side crop telemetry before trusting cropped overlays');
+assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'Real Hybrid Renderer witness keeps cropped overlay acceptance tied to scene-context telemetry');
 assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordinates into the normalized preview frame/, 'Real Hybrid Renderer witness fails when raw PLY splats are rendered without Kaminos preview normalization');
 assert.match(witness, /real hybrid splat overlay did not hand model matrix ownership to PBRnext/, 'Real Hybrid Renderer witness fails while Kaminos still bakes object matrices into camera view');
 assert.match(witness, /hybrid splat overlay camera motion inverted relative to Kaminos preview/, 'Real Hybrid Renderer witness fails when the overlay layer moves inverted under camera motion');
