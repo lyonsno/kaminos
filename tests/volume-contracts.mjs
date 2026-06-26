@@ -792,9 +792,16 @@ assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carr
 assert.match(core, /SIM_COST_LEDGER_IDENTITY\s*=\s*'tall-plume-sim-cost-ledger-v0'/, 'volume core names the tall-plume sim-cost ledger identity');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE/, 'volume core names inline-divergence pressure source strategy');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_DISABLED/, 'volume core names disabled pressure source strategy');
+assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP\s*=\s*'main-fluid-fire-lick-breakup-v0'/, 'volume core names the active fire-lick breakup main-kernel strategy');
+assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS\s*=\s*'main-fluid-zero-fire-lick-bypass-v0'/, 'volume core names the zero-fire-lick bypass main-kernel strategy');
+assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
 assert.match(core, /cpu-structural-pass-ledger-plus-raf-queue-proxy/, 'sim-cost ledger labels structural pass counts separately from timing proxies');
+assert.match(core, /mainFluidKernelStrategy/, 'sim-cost ledger records the main-fluid kernel strategy');
+assert.match(core, /fireLickBreakupEvaluationsPerCell/, 'sim-cost ledger records fire-lick breakup evaluations per cell');
+assert.match(core, /fireLickBreakupEnabled/, 'main-fluid shader makes zero-fire-lick breakup bypass explicit');
+assert.match(core, /fireLickAshCarry/, 'main-fluid shader preserves zero-lick ash carry without paying breakup evaluation');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');
 assert.match(core, /pressureSourceStrategy/, 'sim-cost ledger records pressure source strategy');
 assert.match(core, /pressureDivergencePasses/, 'sim-cost ledger records pressure divergence pass count');
@@ -956,6 +963,9 @@ assert.match(witness, /simCostLedger/, 'witness records sim-cost ledger evidence
 assert.match(witness, /tall-plume-sim-cost-ledger-v0/, 'witness requires the tall-plume sim-cost ledger identity');
 assert.match(witness, /fullGridCellVisitsPerFrame/, 'witness reports full-grid cell visit cost');
 assert.match(witness, /majorantBuiltThisFrame/, 'witness reports whether the sampled frame rebuilt the majorant');
+assert.match(witness, /mainFluidKernelStrategy/, 'witness reports the main-fluid kernel strategy');
+assert.match(witness, /main-fluid-zero-fire-lick-bypass-v0/, 'witness recognizes the zero-fire-lick bypass strategy');
+assert.match(witness, /fireLickBreakupEvaluationsPerCell/, 'witness reports fire-lick breakup evaluations per cell');
 assert.match(witness, /pressureSourceStrategy/, 'witness reports pressure source strategy');
 assert.match(witness, /jacobi-inline-divergence-v0/, 'witness recognizes inline-divergence pressure source identity');
 assert.match(witness, /pressureDivergencePasses/, 'witness reports pressure divergence pass cost');
@@ -1077,6 +1087,8 @@ assert.match(sweep, /simCostLedger/, 'sweep aggregate preserves the simulation c
 assert.match(sweep, /fullGridPassesPerFrame/, 'sweep aggregate preserves full-grid pass count');
 assert.match(sweep, /fullGridCellVisitsPerFrame/, 'sweep aggregate preserves full-grid cell visit count');
 assert.match(sweep, /fluidBufferBytes/, 'sweep aggregate preserves fluid buffer byte estimates');
+assert.match(sweep, /mainFluidKernelStrategy/, 'sweep aggregate preserves main-fluid kernel strategy');
+assert.match(sweep, /fireLickBreakupEvaluationsPerCell/, 'sweep aggregate preserves fire-lick breakup evaluations per cell');
 assert.match(sweep, /pressureSourceStrategy/, 'sweep aggregate preserves pressure source strategy');
 assert.match(sweep, /pressureDivergencePasses/, 'sweep aggregate preserves pressure divergence cost');
 assert.match(sweep, /pressureJacobiPasses/, 'sweep aggregate preserves pressure projection cost');

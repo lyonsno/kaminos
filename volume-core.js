@@ -177,6 +177,9 @@ const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
 const SIM_COST_LEDGER_EVIDENCE_SOURCE = 'cpu-structural-pass-ledger-plus-raf-queue-proxy';
 const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0';
 const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
+const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
+const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
+const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
@@ -186,6 +189,11 @@ function clampFinite(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function fireLickOperatorGainFromAmount(value) {
+  const amount = clampFinite(value, 0, 5, 0);
+  return amount * (0.82 + amount * 0.110);
 }
 
 function normalizeMajorantBuildCadence(value) {
@@ -953,6 +961,13 @@ fn smokeShredEnergy(c: vec3<i32>) -> f32 {
   return m.x * 0.52 + m.y * 0.90 + m.z * 0.30;
 }
 
+fn fireLickAshCarry(c: vec3<i32>, lick: f32, bonfireBlend: f32) -> f32 {
+  let shred = smoothstep(0.18, 1.4, smokeShredEnergy(c));
+  let baseAsh = mix(0.06, 0.055, bonfireBlend);
+  let lickAsh = mix(0.34, 0.30, bonfireBlend);
+  return shred * (baseAsh + lick * lickAsh);
+}
+
 fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceEnergy = length(materialInterfaceGradient(c));
   let lickWarp = turbulentDetailForce(p * 2.64 + vec3<f32>(0.19, -0.23, 0.11), time * 0.91) * (0.046 + source * 0.040 + heat * 0.018 + flameDetail * 0.016);
@@ -963,7 +978,7 @@ fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32
   let verticalComb = clamp(0.54 + 0.22 * combA + 0.18 * combB + 0.10 * (combC - 0.5), 0.12, 1.10);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
   let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
-  let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.06 + lick * 0.34);
+  let ash = fireLickAshCarry(c, lick, 0.0);
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
@@ -978,7 +993,7 @@ fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f
   let verticalComb = clamp(0.56 + 0.22 * combA + 0.16 * combB + 0.08 * (combC - 0.5), 0.14, 1.06);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
   let lick = hotEdge * verticalComb * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
-  let ash = smoothstep(0.18, 1.4, smokeShredEnergy(c)) * (0.055 + lick * 0.30);
+  let ash = fireLickAshCarry(c, lick, 1.0);
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
@@ -2013,8 +2028,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
-  let columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
-  let bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  let fireLickBreakupEnabled = fireLickOperatorGain > 0.0005;
+  var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
+  var bonfireLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 1.0));
+  if (fireLickBreakupEnabled) {
+    columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
+    bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+  }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let columnCombustionFrontBirth = clamp(
     (lickBirth.y * 0.34 + interfaceEnergy * source * 0.62 + fireBirth * 0.12) * (0.36 + fireLickOperatorGain * 0.07),
@@ -2898,6 +2918,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
+    mainFluidKernelStrategy: MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS,
+    fireLickBreakupEnabled: false,
+    fireLickBreakupEvaluationsPerCell: 0,
+    fireLickOperatorGain: 0,
     pressureDivergencePasses: 0,
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
@@ -3948,6 +3972,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const simPassesPerFrame = 1;
+    const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
+    const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
+    const mainFluidKernelStrategy = fireLickBreakupEnabled
+      ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
+      : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
+    const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 2 : 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -3977,6 +4007,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
+    state.mainFluidKernelStrategy = mainFluidKernelStrategy;
+    state.fireLickBreakupEnabled = fireLickBreakupEnabled;
+    state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
+    state.fireLickOperatorGain = fireLickOperatorGain;
     state.pressureDivergencePasses = pressureDivergencePasses;
     state.pressureJacobiInlineDivergencePasses = pressureJacobiInlineDivergencePasses;
     state.fullGridPassBreakdown = fullGridPassBreakdown;
@@ -3995,6 +4029,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantWorkgroupsPerPass,
       simPassesPerFrame,
       pressureSourceStrategy,
+      mainFluidKernelStrategy,
+      fireLickBreakupEnabled,
+      fireLickBreakupEvaluationsPerCell,
+      fireLickOperatorGain,
       pressureDivergencePasses,
       pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses,
@@ -5144,6 +5182,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureIterationDefault: state.pressureIterationDefault,
         pressureIterationRequested: state.pressureIterationRequested,
         pressureSourceStrategy: state.pressureSourceStrategy,
+        mainFluidKernelStrategy: state.mainFluidKernelStrategy,
+        fireLickBreakupEnabled: state.fireLickBreakupEnabled,
+        fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
+        fireLickOperatorGain: state.fireLickOperatorGain,
         pressureDivergencePasses: state.pressureDivergencePasses,
         pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
         fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
@@ -5418,6 +5460,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested: state.pressureIterationRequested,
       pressureSourceStrategy: state.pressureSourceStrategy,
+      mainFluidKernelStrategy: state.mainFluidKernelStrategy,
+      fireLickBreakupEnabled: state.fireLickBreakupEnabled,
+      fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
+      fireLickOperatorGain: state.fireLickOperatorGain,
       pressureDivergencePasses: state.pressureDivergencePasses,
       pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
       fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
