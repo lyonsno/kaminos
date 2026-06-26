@@ -41,7 +41,7 @@
   data-route="lerms_world_finger_juice=1"
   data-effective-route="world-space-ballistic-surface-flow-particles-v0"
   data-terrain-contract="hill-of-hills-heightfield-collision-v0"
-  data-visual-renderer="source-legible-splat-ribbons-v1"
+  data-visual-renderer="source-legible-phase-breadcrumbs-v2"
 >
   <canvas id="stage" width="1280" height="720"></canvas>
   <div class="hud" id="hud"></div>
@@ -58,7 +58,7 @@
     const hud = document.getElementById('hud');
     const params = new URLSearchParams(location.search);
     const routeActive = params.get('lerms_world_finger_juice') === '1';
-    const visualRenderer = 'source-legible-splat-ribbons-v1';
+    const visualRenderer = 'source-legible-phase-breadcrumbs-v2';
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
       maxParticles: 900,
@@ -105,6 +105,27 @@
       ],
     });
     prototype.setEmitters(emitterPacket);
+
+    function readDebugState() {
+      return {
+        requestedRoute: 'lerms_world_finger_juice=1',
+        routeActive,
+        effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
+        visualRenderer,
+        terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+        emitterPacket,
+        ...prototype.debugState(),
+      };
+    }
+
+    window.__lermsFingerJuiceStepForWitness = ({ steps = 150, dt = 1 / 60 } = {}) => {
+      const safeSteps = Math.max(0, Math.min(360, Math.floor(Number(steps) || 0)));
+      const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
+      if (routeActive) {
+        for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
+      }
+      return readDebugState();
+    };
 
     function resize() {
       const ratio = window.devicePixelRatio || 1;
@@ -187,31 +208,62 @@
       return `rgba(216, 168, 255, ${alpha})`;
     }
 
+    function drawAirborneBreadcrumb(sample, trail) {
+      const p = project(sample.position);
+      const v = sample.velocity_hint || [0, 0, 0];
+      const head = project([sample.position[0] + v[0] * 0.022, sample.position[1] + v[1] * 0.022, sample.position[2] + v[2] * 0.022]);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.48);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(head.x, head.y);
+      ctx.stroke();
+      ctx.fillStyle = juiceColor(trail.chemistry, 0.36);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawImpactRing(sample, trail) {
+      const p = project(sample.position);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.56);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + 1, 9, 3.8, 0.08, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawSurfaceSmear(sample, trail) {
+      const p = project(sample.position);
+      const v = sample.velocity_hint || [0, 0, 0];
+      const tail = project([sample.position[0] - v[0] * 0.035, sample.position[1], sample.position[2] - v[2] * 0.035]);
+      ctx.strokeStyle = juiceColor(trail.chemistry, 0.28);
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(tail.x, tail.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.fillStyle = juiceColor(trail.chemistry, 0.16);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + 2, 8, 3.2, 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     function drawJuiceTrails(state) {
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
-      for (const trail of state.trails || []) {
+      for (const trail of (state.trails || []).slice(0, 96)) {
         if (!trail.samples || trail.samples.length < 2) continue;
-        const points = trail.samples.map(sample => project(sample.position));
-        const surface = trail.surface_flow || trail.samples.some(sample => sample.phase === 'surface_flow');
-        ctx.strokeStyle = juiceColor(trail.chemistry, surface ? 0.34 : 0.42);
-        ctx.lineWidth = surface ? 8 : 6;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.shadowBlur = surface ? 8 : 5;
+        const renderSamples = trail.samples.filter((_, index) => index % 3 === 0 || index === trail.samples.length - 1);
+        ctx.shadowBlur = 4;
         ctx.shadowColor = juiceColor(trail.chemistry, 0.34);
-        ctx.beginPath();
-        points.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        });
-        ctx.stroke();
-        if (surface) {
-          const last = points[points.length - 1];
-          ctx.fillStyle = juiceColor(trail.chemistry, 0.18);
-          ctx.beginPath();
-          ctx.ellipse(last.x, last.y + 2, 11, 4.5, 0.08, 0, Math.PI * 2);
-          ctx.fill();
+        for (const sample of renderSamples) {
+          if (sample.phase === 'surface_flow') drawSurfaceSmear(sample, trail);
+        }
+        for (const marker of trail.phase_markers || []) {
+          if (marker.phase === 'airborne') drawAirborneBreadcrumb(marker, trail);
+          else if (marker.phase === 'impact') drawImpactRing(marker, trail);
         }
         if (trail.source_anchor) {
           const anchor = project(trail.source_anchor.position);
@@ -276,15 +328,7 @@
       drawJuiceTrails(state);
       drawParticles(state);
       hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${visualRenderer} | ${state.simulation_authority}<br>${state.lerms_world_frame.world_from_hand_sample}<br>particles ${state.particleCount} | trails ${state.trailSampleCount} / ${state.trailEmitterCount} | surface ${state.surfaceFlowCount}`;
-      window.__lermsFingerJuiceDebug = () => ({
-        requestedRoute: 'lerms_world_finger_juice=1',
-        routeActive,
-        effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
-        visualRenderer,
-        terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
-        emitterPacket,
-        ...state,
-      });
+      window.__lermsFingerJuiceDebug = readDebugState;
       requestAnimationFrame(frame);
     }
 
