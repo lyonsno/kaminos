@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LERMS Finger Juice Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #10120f;
+      color: #f7f1d2;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    .hud {
+      position: fixed;
+      left: 14px;
+      top: 12px;
+      max-width: min(520px, calc(100vw - 28px));
+      padding: 10px 12px;
+      border: 1px solid rgba(247, 241, 210, 0.22);
+      background: rgba(16, 18, 15, 0.72);
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .hud b {
+      color: #ffcf5a;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body
+  data-route="lerms_world_finger_juice=1"
+  data-effective-route="world-space-ballistic-surface-flow-particles-v0"
+  data-terrain-contract="hill-of-hills-heightfield-collision-v0"
+>
+  <canvas id="stage" width="1280" height="720"></canvas>
+  <div class="hud" id="hud"></div>
+  <script type="module">
+    import {
+      LERMS_WORLD_FINGER_JUICE_ROUTE,
+      LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+      createWorldFingerJuiceTransportPrototype,
+      normalizeWorldFingerJuiceEmitterPacket,
+    } from './lerms-finger-juice-core.js';
+
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    const hud = document.getElementById('hud');
+    const params = new URLSearchParams(location.search);
+    const routeActive = params.get('lerms_world_finger_juice') === '1';
+    const prototype = createWorldFingerJuiceTransportPrototype({
+      seed: 11,
+      maxParticles: 900,
+      lerms: [
+        { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
+        { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
+        { id: 'yellow-lerm-1', position: [0.08, -0.09, 1.46], radius: 0.18, mass: 1.0 },
+      ],
+      goins: [
+        { id: 'goin-1', position: [-0.04, -0.08, 1.34], radius: 0.16, mass: 2.2 },
+      ],
+    });
+
+    const emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+      source_backend: 'kaminos.synthetic-caster-hand',
+      sample_age_ms: 0,
+      route_identity: 'kaminos-lerms-finger-juice-synthetic-smoke',
+      terrain_frame: { id: 'kaminos-hill-of-hills-local-v0', units: 'normalized_world' },
+      emitters: [
+        { id: 'index', tip_index: 8, origin_world: [-0.18, 0.42, -0.86], aim_world: [0.18, 0.5, 1], motion_world: [0.05, 0, 0.06], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.02, 0.39, -0.84], aim_world: [0, 0.3, 1], motion_world: [0, 0, 0.04], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.18, 0.36, -0.82], aim_world: [-0.08, 0.24, 1], motion_world: [-0.02, 0, 0.03], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, active: true },
+      ],
+    });
+    prototype.setEmitters(emitterPacket);
+
+    function resize() {
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(window.innerWidth * ratio);
+      canvas.height = Math.floor(window.innerHeight * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+
+    function project(point) {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const depth = 1.45 + point[2];
+      const scale = 390 / Math.max(0.42, depth);
+      return {
+        x: width * 0.5 + point[0] * scale,
+        y: height * 0.78 - point[2] * 178 - point[1] * scale * 0.52,
+        scale,
+      };
+    }
+
+    function drawTerrain() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const horizon = height * 0.22;
+      const near = height * 0.91;
+      const gradient = ctx.createLinearGradient(0, horizon, 0, near);
+      gradient.addColorStop(0, '#24341f');
+      gradient.addColorStop(0.45, '#536735');
+      gradient.addColorStop(1, '#1b2418');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(0, near);
+      for (let i = 0; i <= 80; i += 1) {
+        const x = -1.2 + i * 2.4 / 80;
+        const y = prototype.terrainHeightAt(x, 0);
+        const p = project([x, y - 0.03, -0.05 + Math.abs(x) * 0.12]);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.lineTo(width, near);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 207, 90, 0.20)';
+      ctx.lineWidth = 1;
+      for (let band = 0; band < 7; band += 1) {
+        const z = -0.5 + band * 0.22;
+        ctx.beginPath();
+        for (let i = 0; i <= 80; i += 1) {
+          const x = -1 + i * 2 / 80;
+          const p = project([x, prototype.terrainHeightAt(x, z), z]);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function drawTargets(state) {
+      const lermColors = ['#ff5c57', '#36b8d9', '#e2d34c'];
+      state.targets.lerms.forEach((target, index) => {
+        const p = project(target.position);
+        ctx.fillStyle = lermColors[index % lermColors.length];
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, Math.min(28, 16 + target.hits * 0.02), Math.min(30, 20 + target.hits * 0.012), 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      for (const goin of state.targets.goins) {
+        const g = project(goin.position);
+        ctx.fillStyle = '#ffbf30';
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, Math.min(24, 14 + goin.hits * 0.02), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff1a8';
+        ctx.stroke();
+      }
+    }
+
+    function drawParticles(state) {
+      for (const particle of state.particles) {
+        const p = project(particle.position);
+        const alpha = particle.phase === 'airborne' ? 0.86 : 0.55;
+        const color = particle.chemistry === 'knockback'
+          ? `rgba(255, 103, 86, ${alpha})`
+          : particle.chemistry === 'pooling'
+            ? `rgba(72, 222, 198, ${alpha})`
+            : `rgba(216, 168, 255, ${alpha})`;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, particle.phase === 'airborne' ? 4.8 : 6.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawCaster() {
+      const wrist = project([0, 0.12, -0.96]);
+      ctx.fillStyle = 'rgba(242, 220, 177, 0.28)';
+      ctx.beginPath();
+      ctx.ellipse(wrist.x, wrist.y + 38, 56, 38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (const emitter of emitterPacket.emitters.filter(item => item.active)) {
+        const origin = project(emitter.origin_world);
+        const aimEnd = project([
+          emitter.origin_world[0] + emitter.aim_world[0] * 0.28,
+          emitter.origin_world[1] + emitter.aim_world[1] * 0.28,
+          emitter.origin_world[2] + emitter.aim_world[2] * 0.28,
+        ]);
+        ctx.strokeStyle = emitter.chemistry === 'knockback' ? '#ff6756' : emitter.chemistry === 'pooling' ? '#48dec6' : '#d8a8ff';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(aimEnd.x, aimEnd.y);
+        ctx.stroke();
+      }
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(1 / 120, (now - last) / 1000));
+      last = now;
+      if (routeActive) {
+        for (let i = 0; i < 2; i += 1) prototype.step(dt * 0.5);
+      }
+      const state = prototype.debugState();
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      drawTerrain();
+      drawCaster();
+      drawTargets(state);
+      drawParticles(state);
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT}<br>particles ${state.particleCount} | surface ${state.surfaceFlowCount} | lerm hits ${state.lermImpulseCount} | goin hits ${state.goinImpulseCount}`;
+      window.__lermsFingerJuiceDebug = () => ({
+        requestedRoute: 'lerms_world_finger_juice=1',
+        routeActive,
+        effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
+        terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+        emitterPacket,
+        ...state,
+      });
+      requestAnimationFrame(frame);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
