@@ -154,6 +154,14 @@ async function main() {
     assert.equal(state?.roundDiagnosticRailFinalVisible, false, 'round channel rails must not be final-visible geometry');
     assert.ok(state?.LamellarChannelStripMesh?.every(strip => strip?.schema === 'LamellarChannelStripMesh'), 'LamellarChannelStripMesh records missing from debug state');
     assert.ok(state?.LamellarPlateLip?.every(lip => lip?.schema === 'LamellarPlateLip'), 'LamellarPlateLip records missing from debug state');
+    assert.equal(state?.LamellarPlateBoundaryPlan?.schema, 'LamellarPlateBoundaryPlan', 'LamellarPlateBoundaryPlan missing from debug state');
+    assert.equal(state?.LamellarPlateBoundaryPlan?.mode, 'plate-boundary-topology-v0', 'LamellarPlateBoundaryPlan mode missing from debug state');
+    assert.ok(state?.plateBoundaryMeshCount >= 1, 'plate boundary mesh missing from debug state');
+    assert.equal(state?.plateBoundaryTopologyVerdict, 'one-intentional-gap-boundary-meshed', 'plate boundary topology verdict missing from debug state');
+    assert.ok(state?.targetPlateBoundaryIds?.includes('lower-cup-socket-join-gap'), 'lower cup target boundary missing from debug state');
+    assert.equal(state?.decorativeSeamHintsFinalVisible, false, 'decorative seam hints must be suppressed in topology witness');
+    assert.equal(state?.proxyPlateLipsFinalVisible, false, 'proxy plate lips must be suppressed in topology witness');
+    assert.ok(state?.LamellarPlateBoundaryMesh?.every(mesh => mesh?.schema === 'LamellarPlateBoundaryMesh'), 'LamellarPlateBoundaryMesh records missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
     assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
@@ -206,6 +214,13 @@ async function main() {
       lamellarPlateLipCount: state.lamellarPlateLipCount,
       plateLipVisualLegibilityVerdict: state.plateLipVisualLegibilityVerdict,
       roundDiagnosticRailFinalVisible: state.roundDiagnosticRailFinalVisible,
+      plateBoundaryMeshCount: state.plateBoundaryMeshCount,
+      plateBoundaryTopologyVerdict: state.plateBoundaryTopologyVerdict,
+      targetPlateBoundaryIds: state.targetPlateBoundaryIds,
+      decorativeSeamHintsFinalVisible: state.decorativeSeamHintsFinalVisible,
+      proxyPlateLipsFinalVisible: state.proxyPlateLipsFinalVisible,
+      suppressedDecorativeHintCount: state.suppressedDecorativeHintCount,
+      suppressedProxyFeatureCount: state.suppressedProxyFeatureCount,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
       channelThroughLineAudit: state.channelThroughLineAudit,
       ChannelThroughLinePlan: state.ChannelThroughLinePlan,
@@ -215,6 +230,9 @@ async function main() {
       lamellarChannelMeshPlan: state.lamellarChannelMeshPlan,
       LamellarChannelStripMesh: state.LamellarChannelStripMesh,
       LamellarPlateLip: state.LamellarPlateLip,
+      LamellarPlateBoundaryPlan: state.LamellarPlateBoundaryPlan,
+      lamellarPlateBoundaryPlan: state.lamellarPlateBoundaryPlan,
+      LamellarPlateBoundaryMesh: state.LamellarPlateBoundaryMesh,
       crossingSubSurgeCount: state.crossingSubSurgeCount,
       cleanProxySurfaceMode: state.cleanProxySurfaceMode,
       topologyOnlySurfaceRelief: state.topologyOnlySurfaceRelief,

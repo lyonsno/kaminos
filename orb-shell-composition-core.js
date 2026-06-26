@@ -59,6 +59,50 @@ function addScaledPoint(point, normal, amount) {
   ];
 }
 
+function subtractPoints(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function crossPoints(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function lerpPoint(a, b, t) {
+  return [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+}
+
+function scaledNormalizedPoint(point, radius = 1) {
+  const normal = normalizePoint(point);
+  return [normal[0] * radius, normal[1] * radius, normal[2] * radius];
+}
+
+function seamGapSeedPoints(gapId, radius = 1.085) {
+  const seamShapes = {
+    'primary-front-intentional-slit': [[-0.28, 0.42, 0.92], [-0.18, 0.16, 1.04], [-0.02, -0.12, 1.07], [0.16, -0.42, 0.9]],
+    'crossing-tuck-overlap-receiver': [[-0.1, -0.1, 1.05], [0.08, -0.2, 1.08], [0.28, -0.34, 0.94]],
+    'lower-cup-socket-join-gap': [[-0.28, -0.82, 0.67], [-0.05, -0.92, 0.58], [0.26, -0.82, 0.68]],
+    'upper-crown-receiver-gap': [[-0.28, 0.9, 0.52], [0.02, 1.02, 0.34], [0.32, 0.88, 0.52]],
+    'right-side-rim-reveal-gap': [[0.74, 0.3, 0.62], [0.86, 0.02, 0.58], [0.76, -0.24, 0.62]],
+  };
+  return (seamShapes[gapId] || [[-0.2, 0, 1.02], [0, 0, 1.08], [0.2, 0, 1.02]])
+    .map(point => scaledNormalizedPoint(point, radius));
+}
+
+function samplePolyline(points, t) {
+  if (points.length <= 1) return points[0] || [0, 0, 1];
+  const scaled = clamp(t, 0, 1) * (points.length - 1);
+  const index = Math.min(points.length - 2, Math.floor(scaled));
+  return lerpPoint(points[index], points[index + 1], scaled - index);
+}
+
 function stableNoise(key) {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
@@ -945,6 +989,112 @@ function createLamellarChannelMeshPlan(channelPlan) {
   };
 }
 
+function createLamellarPlateBoundaryMesh(gap) {
+  const gapWidth = 0.096;
+  const centerline = seamGapSeedPoints(gap.id, 1.09);
+  const sharedBoundarySamples = [];
+  const pairedBoundaryEdges = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const center = samplePolyline(centerline, t);
+    const prev = samplePolyline(centerline, Math.max(0, t - 0.03));
+    const next = samplePolyline(centerline, Math.min(1, t + 0.03));
+    const surfaceNormal = normalizePoint(center);
+    const tangent = normalizePoint(subtractPoints(next, prev));
+    let sideAxis = normalizePoint(crossPoints(surfaceNormal, tangent));
+    if (Math.hypot(...sideAxis) < 1e-5) sideAxis = [1, 0, 0];
+    const leftPlateEdge = addScaledPoint(center, sideAxis, -gapWidth * 0.5);
+    const rightPlateEdge = addScaledPoint(center, sideAxis, gapWidth * 0.5);
+    sharedBoundarySamples.push({
+      t,
+      center,
+      tangent,
+      surfaceNormal,
+      sideAxis,
+    });
+    pairedBoundaryEdges.push({
+      t,
+      leftPlateEdge,
+      rightPlateEdge,
+      gapCenter: center,
+      recessedFloorCenter: addScaledPoint(center, surfaceNormal, -0.026),
+      measuredGap: pointDistance(leftPlateEdge, rightPlateEdge),
+      surfaceNormal,
+      sideAxis,
+    });
+  }
+  const gapRadiusStats = summarizeDistances(pairedBoundaryEdges.map(sample => ({
+    t: sample.t,
+    distance: sample.measuredGap,
+  })));
+  const endpointDeltas = [
+    Math.abs(pairedBoundaryEdges[0].measuredGap - gapWidth),
+    Math.abs(pairedBoundaryEdges[pairedBoundaryEdges.length - 1].measuredGap - gapWidth),
+  ];
+  return {
+    schema: 'LamellarPlateBoundaryMesh',
+    mode: 'plate-boundary-topology-v0',
+    id: `${gap.id}-intentional-gap-boundary-mesh`,
+    targetBoundaryId: gap.id,
+    sourceGapDescriptorId: gap.id,
+    boundaryMode: 'intentional-gap',
+    finalGeometryKind: 'constant-gap-chamfered-plate-boundary',
+    sharedBoundarySamples,
+    pairedBoundaryEdges,
+    gapRadiusStats,
+    endpointContinuityStats: {
+      maxEndpointGapDelta: Math.max(...endpointDeltas),
+      startGap: pairedBoundaryEdges[0].measuredGap,
+      endGap: pairedBoundaryEdges[pairedBoundaryEdges.length - 1].measuredGap,
+    },
+    topologyFaces: [
+      'topFace-left-return',
+      'topFace-right-return',
+      'left-chamfer-face',
+      'right-chamfer-face',
+      'left-side-wall',
+      'right-side-wall',
+      'recessed-gap-floor',
+    ],
+    topFace: 'paired plate top returns terminate at measured boundary edges',
+    bevelFace: 'left/right chamfer faces descend into recessed gap floor',
+    sideWall: 'side-wall faces give the gap thickness rather than a line overlay',
+    decorativeRailFinalVisible: false,
+    suppressedDecorativeHintIds: [`${gap.id}-future-mesh-boundary-input`],
+    visualContract: 'one lower-cup discontinuity becomes an intentional constant-width chamfered gap',
+  };
+}
+
+function createLamellarPlateBoundaryPlan(composition) {
+  const targetGap = composition.expandedMacroRegionProxyPlan?.seamGaps?.find(gap => gap.id === 'lower-cup-socket-join-gap');
+  const boundaryMeshes = targetGap ? [createLamellarPlateBoundaryMesh(targetGap)] : [];
+  const suppressedDecorativeHintIds = boundaryMeshes.length
+    ? (composition.expandedMacroRegionProxyPlan?.seamGaps || []).map(gap => `${gap.id}-future-mesh-boundary-input`)
+    : [];
+  const suppressedProxyFeatureIds = boundaryMeshes.length
+    ? (composition.lamellarChannelMeshPlan?.stripMeshes || []).flatMap(strip => (strip.plateLips || []).map(lip => lip.id))
+    : [];
+  return {
+    schema: 'LamellarPlateBoundaryPlan',
+    mode: 'plate-boundary-topology-v0',
+    boundaryMeshes,
+    boundaryMeshCount: boundaryMeshes.length,
+    targetBoundaryIds: boundaryMeshes.map(mesh => mesh.targetBoundaryId),
+    suppressedDecorativeHintIds,
+    suppressedProxyFeatureIds,
+    decorativeSeamHintsFinalVisible: false,
+    proxyPlateLipsFinalVisible: false,
+    plateBoundaryTopologyVerdict: boundaryMeshes.length === 1
+      ? 'one-intentional-gap-boundary-meshed'
+      : 'no-plate-boundary-topology-mesh',
+    nonGoals: [
+      'do-not-add-transverse-crosscutting-band',
+      'do-not-call-visual-lips-real-topology',
+      'do-not-solve-whole-orb-boundary-system',
+    ],
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -1069,6 +1219,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.channelThroughLineAudit = createChannelThroughLineAudit(next);
   next.channelThroughLinePlan = createChannelThroughLinePlan(next, next.channelThroughLineAudit);
   next.lamellarChannelMeshPlan = createLamellarChannelMeshPlan(next.channelThroughLinePlan);
+  next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -1534,19 +1685,66 @@ function makeAperturePressureRing(THREE, voidRecord) {
 }
 
 function makeSeamGapHintGeometry(THREE, gap) {
-  const seamShapes = {
-    'primary-front-intentional-slit': [[-0.28, 0.42, 0.92], [-0.18, 0.16, 1.04], [-0.02, -0.12, 1.07], [0.16, -0.42, 0.9]],
-    'crossing-tuck-overlap-receiver': [[-0.1, -0.1, 1.05], [0.08, -0.2, 1.08], [0.28, -0.34, 0.94]],
-    'lower-cup-socket-join-gap': [[-0.28, -0.82, 0.67], [-0.05, -0.92, 0.58], [0.26, -0.82, 0.68]],
-    'upper-crown-receiver-gap': [[-0.28, 0.9, 0.52], [0.02, 1.02, 0.34], [0.32, 0.88, 0.52]],
-    'right-side-rim-reveal-gap': [[0.74, 0.3, 0.62], [0.86, 0.02, 0.58], [0.76, -0.24, 0.62]],
-  };
-  const points = (seamShapes[gap.id] || [[-0.2, 0, 1.02], [0, 0, 1.08], [0.2, 0, 1.02]])
-    .map(point => new THREE.Vector3(...point).normalize().multiplyScalar(1.085));
+  const points = seamGapSeedPoints(gap.id, 1.085).map(point => new THREE.Vector3(...point));
   const radius = gap.type === 'lower-socket-join' ? 0.004 : 0.006;
   const curve = new THREE.CatmullRomCurve3(points);
   const geometry = new THREE.TubeGeometry(curve, 48, radius, 6, false);
   geometry.userData.MacroRegionSeamGapDescriptor = gap;
+  return geometry;
+}
+
+function makeLamellarPlateBoundaryGeometry(THREE, boundary) {
+  const rowCount = boundary.pairedBoundaryEdges.length;
+  const columnCount = 7;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  const chamferHeight = 0.034;
+  const floorDepth = 0.03;
+  const floorInset = 0.22;
+  for (let row = 0; row < rowCount; row++) {
+    const sample = boundary.pairedBoundaryEdges[row];
+    const left = new THREE.Vector3(...sample.leftPlateEdge);
+    const right = new THREE.Vector3(...sample.rightPlateEdge);
+    const center = new THREE.Vector3(...sample.gapCenter);
+    const normal = new THREE.Vector3(...sample.surfaceNormal).normalize();
+    const side = new THREE.Vector3(...sample.sideAxis).normalize();
+    const leftFloor = left.clone().lerp(center, floorInset).addScaledVector(normal, -floorDepth);
+    const rightFloor = right.clone().lerp(center, floorInset).addScaledVector(normal, -floorDepth);
+    const points = [
+      left.clone().addScaledVector(side, -0.032).addScaledVector(normal, chamferHeight * 0.42),
+      left.clone().addScaledVector(normal, chamferHeight),
+      leftFloor,
+      center.clone().addScaledVector(normal, -floorDepth * 1.08),
+      rightFloor,
+      right.clone().addScaledVector(normal, chamferHeight),
+      right.clone().addScaledVector(side, 0.032).addScaledVector(normal, chamferHeight * 0.42),
+    ];
+    for (let col = 0; col < columnCount; col++) {
+      const point = points[col];
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(col / (columnCount - 1), sample.t);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LamellarPlateBoundaryMesh = boundary;
   return geometry;
 }
 
@@ -1882,6 +2080,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     envMapIntensity: 5.2,
     side: THREE.DoubleSide,
   });
+  const lamellarPlateBoundaryMaterial = new THREE.MeshStandardMaterial({
+    color: 0x151d20,
+    roughness: 0.22,
+    metalness: 0.94,
+    envMapIntensity: 3.2,
+    side: THREE.DoubleSide,
+  });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -1896,6 +2101,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     seamGapHintMaterial,
     lamellarChannelStripMaterial,
     lamellarPlateLipMaterial,
+    lamellarPlateBoundaryMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -1970,6 +2176,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       stripMesh.userData.LamellarChannelStripMesh = strip;
       group.add(stripMesh);
       for (const lip of strip.plateLips || []) {
+        if (composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.includes(lip.id)) continue;
         const lipMesh = new THREE.Mesh(makeLamellarPlateLipGeometry(THREE, lip), lamellarPlateLipMaterial);
         lipMesh.name = lip.id;
         lipMesh.userData.LamellarChannelMeshPlan = composition.lamellarChannelMeshPlan;
@@ -1979,6 +2186,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       }
     }
 
+    for (const boundary of composition.lamellarPlateBoundaryPlan?.boundaryMeshes || []) {
+      const boundaryMesh = new THREE.Mesh(makeLamellarPlateBoundaryGeometry(THREE, boundary), lamellarPlateBoundaryMaterial);
+      boundaryMesh.name = boundary.id;
+      boundaryMesh.userData.LamellarPlateBoundaryPlan = composition.lamellarPlateBoundaryPlan;
+      boundaryMesh.userData.LamellarPlateBoundaryMesh = boundary;
+      group.add(boundaryMesh);
+    }
+
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
       const ring = new THREE.Mesh(makeAperturePressureRing(THREE, voidRecord), apertureMaterial);
       ring.name = `${voidRecord.id}-aperture-pressure-ring`;
@@ -1986,8 +2201,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       group.add(ring);
     }
     for (const gap of composition.expandedMacroRegionProxyPlan?.seamGaps || []) {
+      const seamName = `${gap.id}-future-mesh-boundary-input`;
+      if (composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.includes(seamName)) continue;
       const seam = new THREE.Mesh(makeSeamGapHintGeometry(THREE, gap), seamGapHintMaterial);
-      seam.name = `${gap.id}-future-mesh-boundary-input`;
+      seam.name = seamName;
       seam.userData.MacroRegionSeamGapDescriptor = gap;
       group.add(seam);
     }
@@ -2015,6 +2232,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       lamellarPlateLipCount: composition.lamellarChannelMeshPlan?.plateLipCount || 0,
       plateLipVisualLegibilityVerdict: composition.lamellarChannelMeshPlan?.plateLipVisualLegibilityVerdict,
       roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
+      plateBoundaryMeshCount: composition.lamellarPlateBoundaryPlan?.boundaryMeshCount || 0,
+      plateBoundaryTopologyVerdict: composition.lamellarPlateBoundaryPlan?.plateBoundaryTopologyVerdict,
+      targetPlateBoundaryIds: composition.lamellarPlateBoundaryPlan?.targetBoundaryIds || [],
+      decorativeSeamHintsFinalVisible: composition.lamellarPlateBoundaryPlan?.decorativeSeamHintsFinalVisible,
+      proxyPlateLipsFinalVisible: composition.lamellarPlateBoundaryPlan?.proxyPlateLipsFinalVisible,
+      suppressedDecorativeHintCount: composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.length || 0,
+      suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
       topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -2084,6 +2308,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         lamellarPlateLipCount: composition.lamellarChannelMeshPlan?.plateLipCount || 0,
         plateLipVisualLegibilityVerdict: composition.lamellarChannelMeshPlan?.plateLipVisualLegibilityVerdict,
         roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
+        plateBoundaryMeshCount: composition.lamellarPlateBoundaryPlan?.boundaryMeshCount || 0,
+        plateBoundaryTopologyVerdict: composition.lamellarPlateBoundaryPlan?.plateBoundaryTopologyVerdict,
+        targetPlateBoundaryIds: composition.lamellarPlateBoundaryPlan?.targetBoundaryIds || [],
+        decorativeSeamHintsFinalVisible: composition.lamellarPlateBoundaryPlan?.decorativeSeamHintsFinalVisible,
+        proxyPlateLipsFinalVisible: composition.lamellarPlateBoundaryPlan?.proxyPlateLipsFinalVisible,
+        suppressedDecorativeHintCount: composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.length || 0,
+        suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
         topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -2116,6 +2347,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         lamellarChannelMeshPlan: composition.lamellarChannelMeshPlan,
         LamellarChannelStripMesh: composition.lamellarChannelMeshPlan?.stripMeshes || [],
         LamellarPlateLip: composition.lamellarChannelMeshPlan?.stripMeshes?.flatMap(strip => strip.plateLips || []) || [],
+        LamellarPlateBoundaryPlan: composition.lamellarPlateBoundaryPlan,
+        lamellarPlateBoundaryPlan: composition.lamellarPlateBoundaryPlan,
+        LamellarPlateBoundaryMesh: composition.lamellarPlateBoundaryPlan?.boundaryMeshes || [],
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],
