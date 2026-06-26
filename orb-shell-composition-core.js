@@ -28,6 +28,24 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function pointDistance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function summarizeDistances(samples) {
+  const values = samples.map(sample => sample.distance);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return {
+    min,
+    max,
+    mean,
+    variation: max - min,
+    relativeVariation: mean ? (max - min) / mean : 0,
+  };
+}
+
 function stableNoise(key) {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
@@ -630,6 +648,86 @@ function createExpandedMacroRegionProxyPlan(composition, cleanPolicy) {
   };
 }
 
+function createBandChannelCandidate(assemblage, bodyId, railId) {
+  const body = assemblage.childBandPlan.find(member => member.id === bodyId);
+  const rail = assemblage.childBandPlan.find(member => member.id === railId);
+  if (!body || !rail) return null;
+  const gapSamples = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = 0.1 + i * 0.1;
+    const bodyPoint = sampleSpinePoint(assemblage, body, t, 1.045);
+    const railPoint = sampleSpinePoint(assemblage, rail, t, 1.045);
+    gapSamples.push({
+      t,
+      distance: pointDistance(bodyPoint, railPoint),
+      bodyLayer: body.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer',
+      railLayer: rail.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer',
+    });
+  }
+  const gapDistanceStats = summarizeDistances(gapSamples);
+  return {
+    schema: 'ChannelThroughLineCandidate',
+    id: `${assemblage.id}-${rail.id}-visible-rail`,
+    sourceKind: 'BandMember',
+    parentAssemblage: assemblage.id,
+    bodyBandId: body.id,
+    railBandId: rail.id,
+    generationPath: 'sampleSpine-shared-parent-macro',
+    sharedParentSpine: true,
+    gapSamples,
+    gapDistanceStats,
+    continuityEvidence: [
+      'same MacroAssemblage',
+      'same sampleSpine function',
+      'bounded siblingOffset variation',
+    ],
+    limitation: 'rail is not yet a meshed channel wall or constant-gap corridor',
+  };
+}
+
+function createChannelThroughLineAudit(composition) {
+  const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
+  const candidates = [
+    northEast ? createBandChannelCandidate(northEast, 'ne-body', 'ne-support') : null,
+  ].filter(Boolean);
+  const rightSideReveal = composition.expandedMacroRegionProxyPlan?.seamGaps?.find(gap => gap.id === 'right-side-rim-reveal-gap');
+  if (rightSideReveal) {
+    candidates.push({
+      schema: 'ChannelThroughLineCandidate',
+      id: rightSideReveal.id,
+      sourceKind: 'MacroRegionSeamGapDescriptor',
+      parentAssemblage: 'north-east-counter-thrust',
+      generationPath: 'hardcoded-seam-hint',
+      sharedParentSpine: false,
+      gapSamples: [],
+      gapDistanceStats: null,
+      continuityEvidence: [
+        'named seam/gap descriptor',
+        'future mesh boundary input',
+      ],
+      limitation: 'seam hint polyline is not generated from the macro spine or solved as a constant-gap channel',
+    });
+  }
+  const sampledCandidates = candidates.filter(candidate => candidate.gapDistanceStats);
+  const maxRelativeVariation = Math.max(0, ...sampledCandidates.map(candidate => candidate.gapDistanceStats.relativeVariation));
+  return {
+    schema: 'ChannelThroughLineAudit',
+    mode: 'channel-through-line-audit-v0',
+    inspectedAttractorQuestion: 'are visible channels coherent through-lines or semi-aligned proxy artifacts',
+    channelCandidates: candidates,
+    maxRelativeGapVariation: maxRelativeVariation,
+    channelAuditVerdict: 'semi-coherent-shared-spine-plus-hardcoded-seam-hint',
+    constantGapVerdict: 'not-yet-proven',
+    summary: 'one visible rail shares the parent macro spine; the side reveal remains a hardcoded seam hint; neither is a solved constant-gap channel corridor',
+    requiredBeforeMeshing: [
+      'ChannelThroughLineDescriptor',
+      'paired-channel-edge-sampling',
+      'constant-gap-distance-budget',
+      'surface-attachment-proof',
+    ],
+  };
+}
+
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
@@ -707,6 +805,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
     assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
   }
+  next.channelThroughLineAudit = createChannelThroughLineAudit(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -933,7 +1032,7 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
   return applyControlledOrbShellVariation(composition, controlledVariation);
 }
 
-function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
+function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
   const lat = control.startLat + (control.endLat - control.startLat) * t;
@@ -954,7 +1053,11 @@ function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
     + siblingOffset;
   const layer = bandMember.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer';
   const layerBias = layer === 'inner-support' ? -0.045 : layer === 'under-neighbor' ? -0.025 : 0.02;
-  return makeVec3(THREE, spherePoint(lat, lon, radius + layerBias));
+  return spherePoint(lat, lon, radius + layerBias);
+}
+
+function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
+  return makeVec3(THREE, sampleSpinePoint(assemblage, bandMember, t, radius));
 }
 
 function torsionSurfaceFrame(THREE, assemblage, side, normal, t, strength = 1) {
@@ -1512,6 +1615,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variantId: composition.effectiveVariation.variantId,
       variationSeed: composition.effectiveVariation.variationSeed,
       macroAssemblageCount: composition.macroAssemblages.length,
+      channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
+      constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,
+      channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
       topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1571,6 +1677,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
+        channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
+        constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,
+        channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
         topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1594,6 +1703,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         frontApertureOwnershipCount: composition.frontApertureOwnership?.owners?.length || 0,
         PrimaryApertureFrame: composition.frontApertureOwnership,
         frontApertureOwnership: composition.frontApertureOwnership,
+        ChannelThroughLineAudit: composition.channelThroughLineAudit,
+        channelThroughLineAudit: composition.channelThroughLineAudit,
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],

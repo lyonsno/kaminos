@@ -137,6 +137,10 @@ async function main() {
     assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
     assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
     assert.ok(state?.variantId, 'variantId missing from debug state');
+    assert.equal(state?.ChannelThroughLineAudit?.schema, 'ChannelThroughLineAudit', 'ChannelThroughLineAudit missing from debug state');
+    assert.equal(state?.ChannelThroughLineAudit?.mode, 'channel-through-line-audit-v0', 'ChannelThroughLineAudit mode missing from debug state');
+    assert.equal(state?.constantGapVerdict, 'not-yet-proven', 'channel audit must not claim solved constant-gap corridors');
+    assert.ok(state?.channelCandidateCount >= 2, 'channel audit candidates missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
     assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
@@ -179,6 +183,11 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      channelAuditVerdict: state.channelAuditVerdict,
+      constantGapVerdict: state.constantGapVerdict,
+      channelCandidateCount: state.channelCandidateCount,
+      ChannelThroughLineAudit: state.ChannelThroughLineAudit,
+      channelThroughLineAudit: state.channelThroughLineAudit,
       crossingSubSurgeCount: state.crossingSubSurgeCount,
       cleanProxySurfaceMode: state.cleanProxySurfaceMode,
       topologyOnlySurfaceRelief: state.topologyOnlySurfaceRelief,
