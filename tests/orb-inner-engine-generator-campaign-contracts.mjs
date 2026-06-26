@@ -12,6 +12,8 @@ assert.ok(existsSync(campaignPath), 'orb-inner-engine-generator-campaign.py must
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-generator-campaign-'));
 const gpuLockPath = join(outDir, 'gpu.lock');
+const outDirV1 = mkdtempSync(join(tmpdir(), 'kaminos-generator-campaign-v1-'));
+const gpuLockPathV1 = join(outDirV1, 'gpu.lock');
 try {
   const run = spawnSync(python, [
     campaignPath,
@@ -95,6 +97,45 @@ try {
   assert.equal(receipt.candidates[2].routeReceipt.effectivePromptControls.imageConditioningPassed, true);
   assert.equal(receipt.candidates[2].agentReview.status, 'pending-agent-inspection');
   assert.equal(receipt.visualSummary.status, 'pending-agent-inspection');
+
+  const runV1 = spawnSync(python, [
+    campaignPath,
+    '--campaign', 'molten-flux-crop-v1',
+    '--out-dir', outDirV1,
+    '--gpu-lock', gpuLockPathV1,
+    '--dry-run',
+    '--candidate', 'flux-v1-off-axis-lip-a',
+    '--candidate', 'flux-v1-cutaway-rib-window-a',
+    '--candidate', 'flux-v1-channel-material-transfer-a',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+  });
+
+  assert.equal(runV1.status, 0, runV1.stderr || runV1.stdout);
+  const printedV1 = JSON.parse(runV1.stdout);
+  assert.equal(printedV1.ok, true);
+  assert.equal(printedV1.campaign, 'molten-flux-crop-v1');
+  assert.equal(printedV1.candidateCount, 3);
+  assert.equal(printedV1.gpuLock.path, gpuLockPathV1);
+
+  const manifestV1 = JSON.parse(readFileSync(printedV1.outputs.manifestPath, 'utf8'));
+  assert.deepEqual(manifestV1.candidates.map(candidate => candidate.id), [
+    'flux-v1-off-axis-lip-a',
+    'flux-v1-cutaway-rib-window-a',
+    'flux-v1-channel-material-transfer-a',
+  ]);
+  assert.ok(manifestV1.references['campaign-off-axis-lip'], 'v1 derives a prior-campaign off-axis lip crop');
+  assert.ok(manifestV1.references['campaign-cutaway-rib-window'], 'v1 derives a prior-campaign cutaway rib/window crop');
+  assert.ok(manifestV1.references['campaign-channel-material'], 'v1 derives a prior-campaign channel material crop');
+  for (const candidate of manifestV1.candidates) {
+    assert.equal(candidate.route, 'flux2-klein');
+    assert.equal(candidate.series, 'flux-crop-reference');
+    assert.ok(candidate.conditioningImagePath, `${candidate.id} records conditioning image`);
+    assert.match(candidate.prompt, /partial|aperture|occluded|not a centered product render/i);
+  }
 } finally {
   rmSync(outDir, { recursive: true, force: true });
+  rmSync(outDirV1, { recursive: true, force: true });
 }

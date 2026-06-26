@@ -19,12 +19,17 @@ SMOKE_SCRIPT = ROOT / "orb-inner-engine-local-generator-smoke.py"
 PYTHON = Path("/Users/noahlyons/dev/SuperMat/.venv/bin/python")
 OUTPUT_ROOT = Path("/Users/noahlyons/.local/state/gpu-greenroom/outputs")
 DEFAULT_GPU_LOCK = OUTPUT_ROOT.parent / "gpu.lock"
+PRIOR_CAMPAIGN_ROOT = OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-campaign-20260626T222732Z"
 
 KNOWN_SOURCE_IMAGES = {
     "guide": OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-guide-substrate-witness-20260626T201000Z/orb-inner-engine-guide-substrate.png",
     "z-cutaway": OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-z-image-cutaway-20260626T212714Z/z-image-turbo.png",
     "z-off-axis": OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-z-image-off-axis-interior-20260626T214442Z/z-image-turbo.png",
     "z-channel": OUTPUT_ROOT / "kaminos-evil-orb-inner-engine-z-image-occluded-channel-20260626T214246Z/z-image-turbo.png",
+    "campaign-off-axis": PRIOR_CAMPAIGN_ROOT / "review/flux-ref-off-axis-channel-a.png",
+    "campaign-cutaway": PRIOR_CAMPAIGN_ROOT / "review/flux-ref-cutaway-left-rim-a.png",
+    "campaign-channel-material": PRIOR_CAMPAIGN_ROOT / "review/z-vocab-occluded-channel-a.png",
+    "campaign-rib-edge": PRIOR_CAMPAIGN_ROOT / "review/z-vocab-rib-edge-a.png",
 }
 
 
@@ -64,6 +69,12 @@ def crop_source(source_path, target_path, box_name):
         "lower-arc": (0, int(h * 0.42), w, h),
         "center-well": (int(w * 0.22), int(h * 0.22), int(w * 0.78), int(h * 0.78)),
         "diagonal-material": (int(w * 0.08), int(h * 0.08), int(w * 0.92), int(h * 0.92)),
+        "off-axis-lip": (int(w * 0.18), 0, w, int(h * 0.72)),
+        "off-axis-inner-wall": (int(w * 0.32), int(h * 0.10), w, int(h * 0.90)),
+        "cutaway-rib-window": (0, int(h * 0.10), int(w * 0.78), int(h * 0.88)),
+        "cutaway-hot-slot": (0, 0, int(w * 0.72), int(h * 0.62)),
+        "channel-material-tight": (0, int(h * 0.08), int(w * 0.78), int(h * 0.92)),
+        "rib-edge-tight": (int(w * 0.04), int(h * 0.04), int(w * 0.96), int(h * 0.82)),
     }
     crop = image.crop(boxes.get(box_name, (0, 0, w, h)))
     crop = crop.resize((1024, 1024), Image.Resampling.LANCZOS)
@@ -79,6 +90,12 @@ def make_references(out_dir):
         "cutaway-center": crop_source(KNOWN_SOURCE_IMAGES["z-cutaway"], refs / "cutaway-center.png", "center-well"),
         "off-axis-right-channel": crop_source(KNOWN_SOURCE_IMAGES["z-off-axis"], refs / "off-axis-right-channel.png", "right-channel"),
         "channel-material": crop_source(KNOWN_SOURCE_IMAGES["z-channel"], refs / "channel-material.png", "diagonal-material"),
+        "campaign-off-axis-lip": crop_source(KNOWN_SOURCE_IMAGES["campaign-off-axis"], refs / "campaign-off-axis-lip.png", "off-axis-lip"),
+        "campaign-off-axis-inner-wall": crop_source(KNOWN_SOURCE_IMAGES["campaign-off-axis"], refs / "campaign-off-axis-inner-wall.png", "off-axis-inner-wall"),
+        "campaign-cutaway-rib-window": crop_source(KNOWN_SOURCE_IMAGES["campaign-cutaway"], refs / "campaign-cutaway-rib-window.png", "cutaway-rib-window"),
+        "campaign-cutaway-hot-slot": crop_source(KNOWN_SOURCE_IMAGES["campaign-cutaway"], refs / "campaign-cutaway-hot-slot.png", "cutaway-hot-slot"),
+        "campaign-channel-material": crop_source(KNOWN_SOURCE_IMAGES["campaign-channel-material"], refs / "campaign-channel-material.png", "channel-material-tight"),
+        "campaign-rib-edge": crop_source(KNOWN_SOURCE_IMAGES["campaign-rib-edge"], refs / "campaign-rib-edge.png", "rib-edge-tight"),
     }
 
 
@@ -129,10 +146,29 @@ PROMPTS = {
         "then make it more cropped, more occluded, less product-like, and more layered: black ceramic ribs, nested baffles, "
         "tiny bolts, amber-orange strips behind metal lips, deep rim shadow, no clean lens or speaker grille."
     ),
+    "flux-crop-aperture": (
+        "Use the reference only as a partial crop rhythm for a shell aperture view into a contained radial engine. Keep "
+        "foreground black shell lips and occluded dark rim matter blocking the image. Show nested ribs, baffles, tiny fasteners, "
+        "and bounded amber-orange channels trapped behind metal, not a centered product render and not a complete circular object."
+    ),
+    "flux-crop-rib-window": (
+        "Use the reference only as a cropped rib-and-window layout for an occluded inner engine socket. Make the view partial "
+        "and aperture-bound: dark graphite ribs cross over recessed orange slots, shadowed annular fragments recede behind shell "
+        "matter, and the center is partly off-frame, not a centered product render."
+    ),
+    "flux-material-transfer": (
+        "Use the reference only for material vocabulary inside a partial aperture crop: chipped black ceramic, soot-dark metal, "
+        "occluded amber channel light under overlapping lips, small screws, heat staining, and trapped glow. Preserve bounded "
+        "emission and dark rim occlusion, not a centered product render."
+    ),
 }
 
 
-def build_candidates(references):
+def build_candidates(references, campaign):
+    if campaign == "molten-flux-crop-v1":
+        return build_flux_crop_candidates(references)
+    if campaign != "molten-campaign-v0":
+        return None
     return [
         {
             "id": "z-comp-cropped-aperture-a",
@@ -235,6 +271,59 @@ def build_candidates(references):
             "prompt": PROMPTS["reference-reinterpret"],
             "conditioningImagePath": str(references["channel-material"]),
             "seed": "molten-campaign-flux-ref-channel-material-a",
+        },
+    ]
+
+
+def build_flux_crop_candidates(references):
+    return [
+        {
+            "id": "flux-v1-off-axis-lip-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-crop-aperture"],
+            "conditioningImagePath": str(references["campaign-off-axis-lip"]),
+            "seed": "molten-flux-crop-v1-off-axis-lip-a",
+        },
+        {
+            "id": "flux-v1-off-axis-inner-wall-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-crop-rib-window"],
+            "conditioningImagePath": str(references["campaign-off-axis-inner-wall"]),
+            "seed": "molten-flux-crop-v1-off-axis-inner-wall-a",
+        },
+        {
+            "id": "flux-v1-cutaway-rib-window-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-crop-rib-window"],
+            "conditioningImagePath": str(references["campaign-cutaway-rib-window"]),
+            "seed": "molten-flux-crop-v1-cutaway-rib-window-a",
+        },
+        {
+            "id": "flux-v1-cutaway-hot-slot-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-crop-aperture"],
+            "conditioningImagePath": str(references["campaign-cutaway-hot-slot"]),
+            "seed": "molten-flux-crop-v1-cutaway-hot-slot-a",
+        },
+        {
+            "id": "flux-v1-channel-material-transfer-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-material-transfer"],
+            "conditioningImagePath": str(references["campaign-channel-material"]),
+            "seed": "molten-flux-crop-v1-channel-material-transfer-a",
+        },
+        {
+            "id": "flux-v1-rib-edge-material-transfer-a",
+            "series": "flux-crop-reference",
+            "route": "flux2-klein",
+            "prompt": PROMPTS["flux-material-transfer"],
+            "conditioningImagePath": str(references["campaign-rib-edge"]),
+            "seed": "molten-flux-crop-v1-rib-edge-material-transfer-a",
         },
     ]
 
@@ -426,7 +515,18 @@ def main():
     args.review_dir = args.out_dir / "review"
     args.review_dir.mkdir(parents=True, exist_ok=True)
     references = make_references(args.out_dir)
-    candidates = build_candidates(references)
+    candidates = build_candidates(references, args.campaign)
+    if candidates is None:
+        receipt = {
+            "ok": False,
+            "identity": IDENTITY,
+            "status": "failed-before-campaign",
+            "campaign": args.campaign,
+            "failure": {"phase": "campaign-selection", "reason": f"unknown campaign: {args.campaign}"},
+        }
+        write_json(args.out_dir / "receipt.json", receipt)
+        print(json.dumps(receipt, indent=2))
+        return 2
     if args.candidate:
         selected = set(args.candidate)
         candidates = [candidate for candidate in candidates if candidate["id"] in selected]
