@@ -30,6 +30,9 @@ assert.match(coreSource, /origin_world/, 'per-finger packet carries world origin
 assert.match(coreSource, /aim_world/, 'per-finger packet carries world aim');
 assert.match(coreSource, /motion_world/, 'per-finger packet carries world motion');
 assert.match(coreSource, /surface_flow/, 'particle state records surface-flow phase');
+assert.match(coreSource, /visual_trail/, 'particle state records visual trail samples');
+assert.match(coreSource, /trailSampleCount/, 'debug state records trail sample coverage');
+assert.match(coreSource, /surfaceStreakCount/, 'debug state records surface streak coverage');
 assert.match(coreSource, /lerm_impulse/, 'particle hit records lerm impulse events');
 assert.match(coreSource, /goin_impulse/, 'particle hit records goin impulse events');
 assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame identity');
@@ -40,10 +43,14 @@ assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares 
 assert.match(pageSource, /window\.__lermsFingerJuiceDebug/, 'prototype exposes route debug state for witnesses');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
 assert.match(pageSource, /hill-of-hills-heightfield-collision-v0/, 'prototype page displays terrain contract');
+assert.match(pageSource, /drawJuiceTrails/, 'prototype page draws persistent juice trails');
+assert.match(pageSource, /source-legible-trail-ribbons-v0/, 'prototype page labels the visual legibility renderer');
 
 assert.match(witnessSource, /lerms_world_finger_juice=1/, 'witness captures the explicit LERMS finger-juice route');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witnessSource, /world-space-ballistic-surface-flow-particles-v0/, 'witness requires the world-space transport route');
+assert.match(witnessSource, /trailSampleCount/, 'witness requires trail sample evidence');
+assert.match(witnessSource, /trailEmitterCount/, 'witness requires multi-emitter trail evidence');
 assert.match(witnessSource, /primary_output_written/, 'witness records primary output durability');
 assert.match(witnessSource, /failure_phase/, 'witness records failure phase before throwing');
 
@@ -137,6 +144,10 @@ const settled = prototype.debugState();
 assert.ok(settled.surfaceFlowCount > 0, 'particles collide with heightfield and enter surface flow');
 assert.ok(settled.poolingCount > 0, 'surface-flow particles can pool on the terrain');
 assert.ok(settled.maxRangeZ > 0.25, 'ballistic arc produces forward range');
+assert.ok(settled.trailSampleCount >= 96, 'late state retains enough trail samples to show motion');
+assert.ok(settled.trailEmitterCount >= 2, 'late state preserves multiple emitter trail identities');
+assert.ok(settled.surfaceStreakCount > 0, 'late state exposes surface-flow streak evidence');
+assert.ok(settled.trailSpanZ > 0.35, 'late trails preserve forward travel span');
 assert.ok(settled.heightfieldSamples.length >= 5, 'debug state records heightfield samples');
 
 const hitPrototype = mod.createWorldFingerJuiceTransportPrototype({

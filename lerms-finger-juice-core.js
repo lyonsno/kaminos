@@ -181,6 +181,13 @@ function slideVelocityOnTerrain(velocity, normal, chemistry) {
   return add(mul(tangent, viscosity), mul(downhill, chemistry === 'pooling' ? 0.1 : 0.04));
 }
 
+function trailSample(position, phase = 'airborne') {
+  return {
+    position: vec3(position).map(value => round(value, 4)),
+    phase,
+  };
+}
+
 function normalizeEmitter(raw = {}, index = 0, packetAuthority = { simulation_safe: false }) {
   const id = String(raw.id || DEFAULT_FINGER_IDS[index] || `finger-${index}`);
   const aim = normalize3(raw.aim_world || raw.aimWorld || raw.aim, [0, 0.34, 0.94]);
@@ -316,6 +323,7 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
           velocity,
           surface_flow: false,
           pooling: false,
+          visual_trail: [trailSample(add(emitter.origin_world, jitter), 'airborne')],
           hitTargets: new Set(),
         };
         particles.push(particle);
@@ -386,6 +394,10 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         particle.position[1] = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
       }
       maxRangeZ = Math.max(maxRangeZ, particle.position[2] + 0.82);
+      particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, particle.phase)];
+      if (particle.visual_trail.length > 24) {
+        particle.visual_trail = [particle.visual_trail[0], ...particle.visual_trail.slice(-23)];
+      }
       applyTargetImpulses(particle);
       next.push(particle);
     }
@@ -397,6 +409,25 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     const airborneCount = particles.filter(particle => particle.phase === 'airborne').length;
     const surfaceFlowCount = particles.filter(particle => particle.surface_flow).length;
     const poolingCount = particles.filter(particle => particle.pooling || particle.chemistry === 'pooling' && particle.surface_flow).length;
+    const trails = particles
+      .filter(particle => (particle.visual_trail || []).length >= 2)
+      .slice(0, 160)
+      .map(particle => ({
+        id: particle.id,
+        emitter_id: particle.emitter_id,
+        chemistry: particle.chemistry,
+        phase: particle.phase,
+        surface_flow: particle.surface_flow,
+        samples: particle.visual_trail.map(sample => ({
+          position: sample.position.map(value => round(value, 4)),
+          phase: sample.phase,
+        })),
+      }));
+    const trailSamples = trails.flatMap(trail => trail.samples);
+    const trailEmitterCount = new Set(trails.map(trail => trail.emitter_id)).size;
+    const surfaceStreakCount = trails.filter(trail => trail.surface_flow || trail.samples.some(sample => sample.phase === 'surface_flow')).length;
+    const zValues = trailSamples.map(sample => sample.position[2]);
+    const trailSpanZ = zValues.length > 0 ? Math.max(...zValues) - Math.min(...zValues) : 0;
     return {
       schema: 'lerms.world-finger-juice-debug.v0',
       effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
@@ -415,6 +446,10 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       airborneCount,
       surfaceFlowCount,
       poolingCount,
+      trailSampleCount: trailSamples.length,
+      trailEmitterCount,
+      surfaceStreakCount,
+      trailSpanZ: round(trailSpanZ, 4),
       lermImpulseCount,
       goinImpulseCount,
       maxRangeZ: round(maxRangeZ, 4),
@@ -431,9 +466,14 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         phase: particle.phase,
         surface_flow: particle.surface_flow,
         pooling: particle.pooling,
+        visual_trail: (particle.visual_trail || []).slice(-6).map(sample => ({
+          position: sample.position.map(value => round(value, 4)),
+          phase: sample.phase,
+        })),
         position: particle.position.map(value => round(value, 4)),
         velocity: particle.velocity.map(value => round(value, 4)),
       })),
+      trails,
       targets: {
         lerms: lerms.map(target => ({
           id: target.id,
