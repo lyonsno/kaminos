@@ -82,6 +82,56 @@ try {
   assert.doesNotMatch(profileReceipt.prompt, /orthographic hard surface concept asset/i);
   assert.equal(profileReceipt.effectivePromptControls.promptProfileSource, 'built-in');
 
+  const croppedDir = join(outDir, 'cropped-aperture-profile');
+  const croppedRun = spawnSync(python, [
+    smokePath,
+    '--route', 'z-image-turbo',
+    '--out-dir', croppedDir,
+    '--seed', 'molten-heartfucker-cropped-aperture-profile-contract',
+    '--width', '1024',
+    '--height', '1024',
+    '--prompt-profile', 'cropped-aperture-interior',
+    '--dry-run',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+  });
+  assert.equal(croppedRun.status, 0, croppedRun.stderr || croppedRun.stdout);
+  const croppedReceipt = JSON.parse(croppedRun.stdout);
+  assert.equal(croppedReceipt.promptProfile, 'cropped-aperture-interior');
+  assert.match(croppedReceipt.prompt, /cropped aperture interior/i);
+  assert.match(croppedReceipt.prompt, /foreground shell/i);
+  assert.match(croppedReceipt.prompt, /outside the frame/i);
+  assert.match(croppedReceipt.prompt, /incomplete radial machinery/i);
+  assert.match(croppedReceipt.prompt, /not a complete circular product/i);
+  assert.equal(croppedReceipt.effectivePromptControls.promptProfileSource, 'built-in');
+
+  const channelDir = join(outDir, 'occluded-channel-profile');
+  const channelRun = spawnSync(python, [
+    smokePath,
+    '--route', 'z-image-turbo',
+    '--out-dir', channelDir,
+    '--seed', 'molten-heartfucker-occluded-channel-profile-contract',
+    '--width', '1024',
+    '--height', '1024',
+    '--prompt-profile', 'occluded-channel-material',
+    '--dry-run',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: false,
+  });
+  assert.equal(channelRun.status, 0, channelRun.stderr || channelRun.stdout);
+  const channelReceipt = JSON.parse(channelRun.stdout);
+  assert.equal(channelReceipt.promptProfile, 'occluded-channel-material');
+  assert.match(channelReceipt.prompt, /material study/i);
+  assert.match(channelReceipt.prompt, /heat-stained black ceramic/i);
+  assert.match(channelReceipt.prompt, /amber-orange light/i);
+  assert.match(channelReceipt.prompt, /narrow recessed slots/i);
+  assert.match(channelReceipt.prompt, /shader substrate/i);
+  assert.equal(channelReceipt.effectivePromptControls.promptProfileSource, 'built-in');
+
   const conditioningPath = join(outDir, 'conditioning.png');
   writeRgbaPng(conditioningPath, {
     width: 8,

@@ -97,6 +97,29 @@ PROMPT_PROFILES = {
             "asymmetric soot-dark details, no clean speaker grille composition."
         ),
     },
+    "cropped-aperture-interior": {
+        "source": "built-in",
+        "prompt": (
+            "Cropped aperture interior view into a sealed dark radial engine core, as if the camera is pressed close to "
+            "one opening in a thick outer shell. The foreground shell lip and matte black rim occlude large parts of the "
+            "socket, with the outer body outside the frame. Only fragments of incomplete radial machinery are visible: "
+            "staggered graphite ribs, offset baffle plates, broken nested annular rails, small recessed fasteners, soot "
+            "and heat staining, and narrow amber-orange emission slots hidden behind overlapping metal. The composition "
+            "is asymmetrical and partially blocked, not a complete circular product render. Orange light is trapped deep "
+            "behind shell matter and appears only through occluded physical apertures."
+        ),
+    },
+    "occluded-channel-material": {
+        "source": "built-in",
+        "prompt": (
+            "Material study for an Evil Orb inner engine shader substrate: heat-stained black ceramic plates and dark "
+            "gunmetal baffles overlapping narrow recessed slots of amber-orange light. The view is close, cropped, and "
+            "partial, focused on occluded emissive channel material rather than a whole device. Orange glow leaks from "
+            "under chipped metal lips, through soot-dark grooves, around tiny fasteners, and behind staggered shutter "
+            "edges. High-frequency machined wear, carbon scoring, dark rim shadows, bounded emission masks, useful as a "
+            "shader substrate reference for trapped heat channels."
+        ),
+    },
     "reference-conditioned": {
         "source": "built-in",
         "prompt": (
