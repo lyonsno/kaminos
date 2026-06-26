@@ -16,6 +16,7 @@ assert.match(coreSource, /orb-inner-engine-witness-v0/, 'core module names the w
 assert.match(coreSource, /createOrbInnerEngineCore/, 'core module exports deterministic core construction');
 assert.match(coreSource, /renderOrbInnerEngineFrame/, 'core module renders the standalone core frame');
 assert.match(coreSource, /renderOrbApertureProxyFrame/, 'core module renders a masked aperture proxy frame');
+assert.match(coreSource, /createOrbInnerEngineGuideSubstrate/, 'core module exposes the radial guide as procedural substrate input');
 assert.match(coreSource, /radialRib/, 'core renderer has explicit radial rib structure');
 assert.match(coreSource, /nestedRing/, 'core renderer has explicit nested ring structure');
 assert.match(coreSource, /occluder/, 'core renderer has explicit inner occluders');
@@ -25,6 +26,7 @@ assert.match(coreSource, /shellOcclusion/, 'core module exposes shell occlusion/
 const {
   ORB_INNER_ENGINE_IDENTITY,
   createOrbInnerEngineCore,
+  createOrbInnerEngineGuideSubstrate,
   renderOrbInnerEngineFrame,
   renderOrbApertureProxyFrame,
 } = await import(`${corePath}?contract=${Date.now()}`);
@@ -49,6 +51,23 @@ assert.ok(core.lightSpill.rimCatch > 0, 'rim light-spill affordance must be pres
 assert.ok(core.lightSpill.apertureTransmission > 0, 'aperture light-spill affordance must be present');
 assert.ok(core.volumetric.heatCadenceHz > 0, 'heat cadence must be explicit even if v0 is software-rendered');
 
+const guideSubstrate = createOrbInnerEngineGuideSubstrate({
+  seed: 'molten-heartfucker-core-contract',
+  width: 256,
+  height: 256,
+});
+
+assert.equal(guideSubstrate.identity, 'orb-inner-engine-guide-substrate-v0');
+assert.equal(guideSubstrate.seed, 'molten-heartfucker-core-contract');
+assert.equal(guideSubstrate.width, 256);
+assert.equal(guideSubstrate.height, 256);
+assert.equal(typeof guideSubstrate.sample, 'function', 'guide substrate exposes a shader-like sampler');
+assert.ok(guideSubstrate.metrics.guideRingPixels > 1200, 'guide substrate has nested ring fields');
+assert.ok(guideSubstrate.metrics.guideRibPixels > 900, 'guide substrate has radial rib fields');
+assert.ok(guideSubstrate.metrics.guideOccluderPixels > 700, 'guide substrate has occluder fields');
+assert.ok(guideSubstrate.metrics.guideChannelPixels > 1000, 'guide substrate has bounded channel fields');
+assert.ok(guideSubstrate.sample(0, 0).hotCenter > 0.8, 'guide substrate marks the hot center');
+
 const standalone = renderOrbInnerEngineFrame({
   width: 256,
   height: 256,
@@ -68,6 +87,20 @@ assert.ok(standalone.metrics.occluderPixels > 700, 'standalone core must contain
 assert.ok(standalone.metrics.orangeChannelPixels > 1600, 'standalone core must contain bounded orange emissive channels');
 assert.ok(standalone.metrics.darkRimContrast > 0.16, 'standalone core must have a darker occluded outer rim');
 assert.ok(standalone.metrics.flatGlowScore < 0.58, 'standalone core must not collapse into a flat glow disk');
+
+const guideDriven = renderOrbInnerEngineFrame({
+  width: 256,
+  height: 256,
+  seed: 'molten-heartfucker-core-contract',
+  animationPhase: 0.375,
+  guideSubstrate,
+});
+
+assert.ok(guideDriven.metrics.guideSubstratePixels > 2200, 'guided frame consumes guide substrate fields');
+assert.ok(guideDriven.metrics.guideChannelPixels > 900, 'guided frame carries bounded guide channels into the render');
+assert.ok(guideDriven.metrics.guideOccluderPixels > 650, 'guided frame carries occluder fields into the render');
+assert.ok(guideDriven.metrics.radialRibPixels >= standalone.metrics.radialRibPixels, 'guide substrate must not weaken radial ribs');
+assert.ok(guideDriven.metrics.flatGlowScore <= standalone.metrics.flatGlowScore, 'guide substrate must not increase flat-glow risk');
 
 const aperture = renderOrbApertureProxyFrame({
   width: 256,
@@ -91,6 +124,7 @@ assert.match(witnessSource, /occlusion/, 'witness receipt records occlusion/fall
 assert.match(witnessSource, /lightSpill/, 'witness receipt records aperture/rim light-spill affordances');
 assert.match(witnessSource, /standalonePng/, 'witness receipt records standalone witness image');
 assert.match(witnessSource, /apertureProxyPng/, 'witness receipt records aperture-proxy witness image');
+assert.match(witnessSource, /guideSubstratePng/, 'witness receipt records guide-substrate witness image');
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-orb-inner-engine-contract-'));
 try {
@@ -105,11 +139,14 @@ try {
   const reportPath = join(outDir, 'orb-inner-engine-witness-v0.json');
   const standalonePng = join(outDir, 'orb-inner-engine-standalone.png');
   const aperturePng = join(outDir, 'orb-inner-engine-aperture-proxy.png');
+  const guideSubstratePng = join(outDir, 'orb-inner-engine-guide-substrate.png');
   assert.ok(existsSync(reportPath), 'witness writes a JSON receipt');
   assert.ok(existsSync(standalonePng), 'witness writes standalone PNG');
   assert.ok(existsSync(aperturePng), 'witness writes aperture-proxy PNG');
+  assert.ok(existsSync(guideSubstratePng), 'witness writes guide-substrate PNG');
   assert.equal(readFileSync(standalonePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'standalone image is a PNG');
   assert.equal(readFileSync(aperturePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'aperture proxy image is a PNG');
+  assert.equal(readFileSync(guideSubstratePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'guide-substrate image is a PNG');
 
   const report = JSON.parse(readFileSync(reportPath, 'utf8'));
   assert.equal(report.ok, true);
@@ -117,8 +154,11 @@ try {
   assert.equal(report.seed, 'molten-heartfucker-core-contract');
   assert.equal(report.outputs.standalonePng, standalonePng);
   assert.equal(report.outputs.apertureProxyPng, aperturePng);
+  assert.equal(report.outputs.guideSubstratePng, guideSubstratePng);
   assert.ok(report.metrics.standalone.radialRibPixels > 900);
   assert.ok(report.metrics.standalone.nestedRingPixels > 1200);
+  assert.ok(report.metrics.guideSubstrate.guideSubstratePixels > 2200);
+  assert.ok(report.metrics.guideSubstrate.guideChannelPixels > 900);
   assert.ok(report.metrics.apertureProxy.shellOccludedPixels > 8000);
   assert.ok(report.handoff.socket.radius > 0);
   assert.ok(report.handoff.emissiveField.hotCenterGain > 0);

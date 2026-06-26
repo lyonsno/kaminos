@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
 export const ORB_INNER_ENGINE_IDENTITY = 'orb-inner-engine-witness-v0';
+export const ORB_INNER_ENGINE_GUIDE_SUBSTRATE_IDENTITY = 'orb-inner-engine-guide-substrate-v0';
 
 const TAU = Math.PI * 2;
 
@@ -51,6 +52,93 @@ function makeSeedProfile(seed) {
   const occluderPhase = random() * TAU;
   const heatPhase = random() * TAU;
   return { seedHash, ringJitter, ribPhase, occluderPhase, heatPhase };
+}
+
+function sampleGuideSubstrate(nx, ny, profile) {
+  const r = Math.hypot(nx, ny);
+  const theta = Math.atan2(ny, nx);
+  if (r > 1.02) {
+    return { ring: 0, rib: 0, occluder: 0, channel: 0, hotCenter: 0, darkRim: 0, strength: 0 };
+  }
+
+  const guideRingCenters = [0.24, 0.34, 0.46, 0.58, 0.7, 0.82, 0.92];
+  let ring = 0;
+  for (let i = 0; i < guideRingCenters.length; i++) {
+    const arcBreak = 0.72 + 0.28 * smoothstep(-0.28, 0.82, Math.sin(theta * (4 + i) + profile.occluderPhase - r * 6.5));
+    ring = Math.max(ring, ringBand(r, guideRingCenters[i] + profile.ringJitter[i] * 0.5, 0.015 + i * 0.002) * arcBreak);
+  }
+
+  const ribWave = Math.cos(theta * 18 + profile.ribPhase);
+  const rib = Math.pow(clamp((ribWave - 0.62) / 0.38), 1.45)
+    * smoothstep(0.24, 0.36, r)
+    * (1 - smoothstep(0.88, 0.99, r));
+
+  const occluderWave = Math.cos(theta * 10 + profile.occluderPhase + Math.sin(r * 4.5));
+  const occluder = Math.pow(clamp((occluderWave - 0.16) / 0.84), 1.12)
+    * smoothstep(0.46, 0.58, r)
+    * (1 - smoothstep(0.86, 0.96, r));
+
+  const shutterBlade = Math.max(
+    0,
+    1 - smoothstep(0.018, 0.05, Math.abs(Math.sin(theta * 5 + r * 3.6 + profile.occluderPhase))),
+  ) * smoothstep(0.52, 0.64, r) * (1 - smoothstep(0.9, 0.98, r));
+
+  const channelWave = Math.cos(theta * 9 - profile.ribPhase * 0.5 + r * 5.2);
+  const channel = Math.pow(clamp((channelWave - 0.5) / 0.5), 1.35)
+    * smoothstep(0.2, 0.34, r)
+    * (1 - smoothstep(0.78, 0.92, r));
+
+  const hotCenter = 1 - smoothstep(0.105, 0.19, r);
+  const darkRim = smoothstep(0.72, 0.97, r);
+  const finalOccluder = Math.max(occluder, shutterBlade);
+  return {
+    ring,
+    rib,
+    occluder: finalOccluder,
+    channel,
+    hotCenter,
+    darkRim,
+    strength: Math.max(ring, rib, finalOccluder, channel, hotCenter * 0.7),
+  };
+}
+
+export function createOrbInnerEngineGuideSubstrate({
+  seed = 'molten-heartfucker-core-v0',
+  width = 640,
+  height = 640,
+} = {}) {
+  const profile = makeSeedProfile(seed);
+  const counts = {
+    guideRingPixels: 0,
+    guideRibPixels: 0,
+    guideOccluderPixels: 0,
+    guideChannelPixels: 0,
+    guideHotCenterPixels: 0,
+  };
+  const scale = 2 / Math.min(width, height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const nx = (x + 0.5 - width / 2) * scale;
+      const ny = (y + 0.5 - height / 2) * scale;
+      const guide = sampleGuideSubstrate(nx, ny, profile);
+      if (guide.ring > 0.34) counts.guideRingPixels++;
+      if (guide.rib > 0.28) counts.guideRibPixels++;
+      if (guide.occluder > 0.32) counts.guideOccluderPixels++;
+      if (guide.channel > 0.3) counts.guideChannelPixels++;
+      if (guide.hotCenter > 0.5) counts.guideHotCenterPixels++;
+    }
+  }
+  return {
+    identity: ORB_INNER_ENGINE_GUIDE_SUBSTRATE_IDENTITY,
+    seed,
+    width,
+    height,
+    metrics: counts,
+    fields: ['ring', 'rib', 'occluder', 'channel', 'hotCenter', 'darkRim'],
+    sample(nx, ny) {
+      return sampleGuideSubstrate(nx, ny, profile);
+    },
+  };
 }
 
 export function createOrbInnerEngineCore({
@@ -106,21 +194,22 @@ export function createOrbInnerEngineCore({
   };
 }
 
-function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false) {
+function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, guideSample = null) {
   const r = Math.hypot(nx, ny);
   const theta = Math.atan2(ny, nx);
   const disk = 1 - smoothstep(0.96, 1.03, r);
   if (disk <= 0) {
     return {
       rgba: [3, 4, 6, 255],
-      feature: { hotCenter: 0, radialRib: 0, nestedRing: 0, occluder: 0, orangeChannel: 0 },
+      feature: { hotCenter: 0, radialRib: 0, nestedRing: 0, occluder: 0, orangeChannel: 0, guideSubstrate: 0, guideChannel: 0, guideOccluder: 0 },
       luma: 4,
     };
   }
 
   const radialVoid = smoothstep(0.18, 0.72, r);
-  const darkRim = smoothstep(0.58, 0.98, r);
-  const centerHeat = Math.exp(-Math.pow(r / 0.158, 2.1));
+  const guide = guideSample || { ring: 0, rib: 0, occluder: 0, channel: 0, hotCenter: 0, darkRim: 0, strength: 0 };
+  let darkRim = smoothstep(0.58, 0.98, r);
+  let centerHeat = Math.exp(-Math.pow(r / 0.158, 2.1));
   const innerCore = Math.exp(-Math.pow(r / 0.34, 2.8));
   const heatBeat = 0.88 + 0.12 * Math.sin(animationPhase * TAU + profile.heatPhase + r * 9.0);
 
@@ -143,14 +232,20 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false) 
 
   const ribCount = 18;
   const ribWave = Math.cos(theta * ribCount + profile.ribPhase + Math.sin(r * 12) * 0.25);
-  const radialRib = Math.pow(clamp((ribWave - 0.78) / 0.22), 2.2) * smoothstep(0.25, 0.42, r) * (1 - smoothstep(0.9, 1.0, r));
+  let radialRib = Math.pow(clamp((ribWave - 0.78) / 0.22), 2.2) * smoothstep(0.25, 0.42, r) * (1 - smoothstep(0.9, 1.0, r));
 
   const channelWave = Math.cos(theta * 9 - profile.ribPhase * 0.7 + r * 7.4);
-  const orangeChannel = Math.pow(clamp((channelWave - 0.58) / 0.42), 1.7) * smoothstep(0.18, 0.36, r) * (1 - smoothstep(0.84, 0.97, r));
+  let orangeChannel = Math.pow(clamp((channelWave - 0.58) / 0.42), 1.7) * smoothstep(0.18, 0.36, r) * (1 - smoothstep(0.84, 0.97, r));
 
   const occluderSlots = 10;
   const occluderWave = Math.cos(theta * occluderSlots + profile.occluderPhase + Math.sin(r * 8.5));
-  const occluder = Math.pow(clamp((occluderWave - 0.34) / 0.66), 1.15) * smoothstep(0.42, 0.56, r) * (1 - smoothstep(0.83, 0.94, r));
+  let occluder = Math.pow(clamp((occluderWave - 0.34) / 0.66), 1.15) * smoothstep(0.42, 0.56, r) * (1 - smoothstep(0.83, 0.94, r));
+  nestedRing = Math.max(nestedRing, guide.ring * 0.58);
+  radialRib = Math.max(radialRib, guide.rib * 0.92);
+  orangeChannel = Math.max(orangeChannel, guide.channel * 0.62);
+  occluder = Math.max(occluder, guide.occluder * 1.05);
+  centerHeat = Math.max(centerHeat, guide.hotCenter * 0.76);
+  darkRim = Math.max(darkRim, guide.darkRim * 0.96);
 
   const diagonalBrace = Math.max(
     0,
@@ -201,6 +296,9 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false) 
       nestedRing: nestedRing > 0.34 ? 1 : 0,
       occluder: occluder > 0.36 || diagonalBrace > 0.45 || centralOccluder > 0.28 ? 1 : 0,
       orangeChannel: channelEmission > 0.26 && r > 0.18 ? 1 : 0,
+      guideSubstrate: guide.strength > 0.32 ? 1 : 0,
+      guideChannel: guide.channel > 0.3 ? 1 : 0,
+      guideOccluder: guide.occluder > 0.32 ? 1 : 0,
     },
     luma,
     radius: r,
@@ -238,6 +336,7 @@ export function renderOrbInnerEngineFrame({
   height = 640,
   seed = 'molten-heartfucker-core-v0',
   animationPhase = 0,
+  guideSubstrate = null,
 } = {}) {
   const profile = makeSeedProfile(seed);
   const rgba = new Uint8ClampedArray(width * height * 4);
@@ -247,6 +346,9 @@ export function renderOrbInnerEngineFrame({
     nestedRingPixels: 0,
     occluderPixels: 0,
     orangeChannelPixels: 0,
+    guideSubstratePixels: 0,
+    guideChannelPixels: 0,
+    guideOccluderPixels: 0,
   };
   const lumaCenter = makeLumaAccumulator();
   const lumaRim = makeLumaAccumulator();
@@ -256,7 +358,7 @@ export function renderOrbInnerEngineFrame({
     for (let x = 0; x < width; x++) {
       const nx = (x + 0.5 - width / 2) * scale;
       const ny = (y + 0.5 - height / 2) * scale;
-      const sample = renderCorePixel(nx, ny, profile, animationPhase);
+      const sample = renderCorePixel(nx, ny, profile, animationPhase, false, guideSubstrate?.sample?.(nx, ny));
       const i = (y * width + x) * 4;
       rgba[i] = sample.rgba[0];
       rgba[i + 1] = sample.rgba[1];
@@ -272,6 +374,9 @@ export function renderOrbInnerEngineFrame({
       if (sample.feature.nestedRing) counts.nestedRingPixels++;
       if (sample.feature.occluder) counts.occluderPixels++;
       if (sample.feature.orangeChannel) counts.orangeChannelPixels++;
+      if (sample.feature.guideSubstrate) counts.guideSubstratePixels++;
+      if (sample.feature.guideChannel) counts.guideChannelPixels++;
+      if (sample.feature.guideOccluder) counts.guideOccluderPixels++;
     }
   }
   return {
