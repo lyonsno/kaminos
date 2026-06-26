@@ -181,10 +181,11 @@ function slideVelocityOnTerrain(velocity, normal, chemistry) {
   return add(mul(tangent, viscosity), mul(downhill, chemistry === 'pooling' ? 0.1 : 0.04));
 }
 
-function trailSample(position, phase = 'airborne') {
+function trailSample(position, phase = 'airborne', velocity = [0, 0, 0]) {
   return {
     position: vec3(position).map(value => round(value, 4)),
     phase,
+    velocity_hint: vec3(velocity).map(value => round(value, 4)),
   };
 }
 
@@ -324,8 +325,9 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
           velocity,
           surface_flow: false,
           pooling: false,
-          source_anchor: trailSample(start, 'source_anchor'),
-          visual_trail: [trailSample(start, 'airborne')],
+          source_anchor: trailSample(start, 'source_anchor', velocity),
+          phase_markers: [trailSample(start, 'airborne', velocity)],
+          visual_trail: [trailSample(start, 'airborne', velocity)],
           hitTargets: new Set(),
         };
         particles.push(particle);
@@ -387,6 +389,8 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
           particle.phase = 'surface_flow';
           particle.surface_flow = true;
           particle.velocity = slideVelocityOnTerrain(particle.velocity, terrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry);
+          particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, 'impact', particle.velocity)];
+          particle.phase_markers = [...(particle.phase_markers || []), trailSample(particle.position, 'impact', particle.velocity)].slice(-6);
         }
       } else {
         particle.surface_flow = true;
@@ -396,7 +400,7 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         particle.position[1] = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
       }
       maxRangeZ = Math.max(maxRangeZ, particle.position[2] + 0.82);
-      particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, particle.phase)];
+      particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, particle.phase, particle.velocity)];
       if (particle.visual_trail.length > 24) particle.visual_trail = particle.visual_trail.slice(-24);
       applyTargetImpulses(particle);
       next.push(particle);
@@ -409,9 +413,8 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     const airborneCount = particles.filter(particle => particle.phase === 'airborne').length;
     const surfaceFlowCount = particles.filter(particle => particle.surface_flow).length;
     const poolingCount = particles.filter(particle => particle.pooling || particle.chemistry === 'pooling' && particle.surface_flow).length;
-    const trails = particles
+    const trailCandidates = particles
       .filter(particle => (particle.visual_trail || []).length >= 2)
-      .slice(0, 160)
       .map(particle => ({
         id: particle.id,
         emitter_id: particle.emitter_id,
@@ -422,12 +425,26 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
           position: particle.source_anchor.position.map(value => round(value, 4)),
           phase: particle.source_anchor.phase,
         } : null,
+        phase_markers: (particle.phase_markers || []).map(sample => ({
+          position: sample.position.map(value => round(value, 4)),
+          phase: sample.phase,
+          velocity_hint: sample.velocity_hint.map(value => round(value, 4)),
+        })),
         samples: particle.visual_trail.map(sample => ({
           position: sample.position.map(value => round(value, 4)),
           phase: sample.phase,
+          velocity_hint: sample.velocity_hint.map(value => round(value, 4)),
         })),
       }));
+    const trailsByEmitter = new Map();
+    for (const trail of trailCandidates) {
+      const list = trailsByEmitter.get(trail.emitter_id) || [];
+      list.push(trail);
+      trailsByEmitter.set(trail.emitter_id, list);
+    }
+    const trails = [...trailsByEmitter.values()].flatMap(list => list.slice(-54));
     const trailSamples = trails.flatMap(trail => trail.samples);
+    const phaseMarkers = trails.flatMap(trail => trail.phase_markers || []);
     const trailEmitterCount = new Set(trails.map(trail => trail.emitter_id)).size;
     const surfaceStreakCount = trails.filter(trail => trail.surface_flow || trail.samples.some(sample => sample.phase === 'surface_flow')).length;
     const zValues = trailSamples.map(sample => sample.position[2]);
@@ -438,6 +455,9 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       return length3(sub(sample.position, previous.position));
     }));
     const maxTrailSegmentLength = segmentLengths.length > 0 ? Math.max(...segmentLengths) : 0;
+    const airborneBreadcrumbCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'airborne').length;
+    const impactRingCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'impact').length;
+    const surfaceSmearCount = trailSamples.filter(sample => sample.phase === 'surface_flow').length;
     return {
       schema: 'lerms.world-finger-juice-debug.v0',
       effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
@@ -462,6 +482,9 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       trailSpanZ: round(trailSpanZ, 4),
       sourceAnchorCount,
       maxTrailSegmentLength: round(maxTrailSegmentLength, 4),
+      airborneBreadcrumbCount,
+      impactRingCount,
+      surfaceSmearCount,
       lermImpulseCount,
       goinImpulseCount,
       maxRangeZ: round(maxRangeZ, 4),
@@ -481,10 +504,17 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
         source_anchor: particle.source_anchor ? {
           position: particle.source_anchor.position.map(value => round(value, 4)),
           phase: particle.source_anchor.phase,
+          velocity_hint: particle.source_anchor.velocity_hint.map(value => round(value, 4)),
         } : null,
+        phase_markers: (particle.phase_markers || []).map(sample => ({
+          position: sample.position.map(value => round(value, 4)),
+          phase: sample.phase,
+          velocity_hint: sample.velocity_hint.map(value => round(value, 4)),
+        })),
         visual_trail: (particle.visual_trail || []).slice(-6).map(sample => ({
           position: sample.position.map(value => round(value, 4)),
           phase: sample.phase,
+          velocity_hint: sample.velocity_hint.map(value => round(value, 4)),
         })),
         position: particle.position.map(value => round(value, 4)),
         velocity: particle.velocity.map(value => round(value, 4)),

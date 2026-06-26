@@ -16,6 +16,7 @@ const port = Number(args.get('--debug-port') || 9446);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lerms-finger-juice-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 1700);
+const witnessSteps = Number(args.get('--witness-steps') || 180);
 
 let phase = 'initializing';
 let stderr = '';
@@ -36,6 +37,7 @@ function writeReport(report) {
     chrome,
     userDataDir,
     settleMs,
+    witnessSteps,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
@@ -131,7 +133,9 @@ async function run() {
     await delay(settleMs);
 
     phase = 'read_debug_state';
-    const state = await evaluate(ws, 'window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug()');
+    const state = await evaluate(ws, `window.__lermsFingerJuiceStepForWitness
+      ? window.__lermsFingerJuiceStepForWitness({ steps: ${JSON.stringify(witnessSteps)}, dt: 1 / 60 })
+      : window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug()`);
     lastTrustworthyState = state;
     assert.ok(state, 'missing lerms finger-juice debug state');
     assert.equal(state.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0', 'wrong effectiveRoute');
@@ -142,7 +146,7 @@ async function run() {
     assert.equal(state.authority?.simulation_safe, true, 'synthetic fixture packet did not become simulation-safe');
     assert.ok(state.hand_sample_space?.id, 'missing hand sample space identity');
     assert.ok(state.lerms_world_frame?.world_from_hand_sample, 'missing world_from_hand_sample transform identity');
-    assert.equal(state.visualRenderer, 'source-legible-splat-ribbons-v1', 'wrong visual renderer');
+    assert.equal(state.visualRenderer, 'source-legible-phase-breadcrumbs-v2', 'wrong visual renderer');
     assert.ok(state.particleCount > 0, 'route did not spawn particles');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
     assert.ok(state.trailSampleCount >= 180, 'route did not retain enough visual trail samples');
@@ -151,6 +155,9 @@ async function run() {
     assert.ok(state.trailSpanZ > 0.45, 'route trails did not preserve forward travel span');
     assert.ok(state.sourceAnchorCount >= 3, 'route did not preserve separate source anchors');
     assert.ok(state.maxTrailSegmentLength < 0.34, 'route contains a false long trail bridge');
+    assert.ok(state.airborneBreadcrumbCount > 0, 'route did not preserve airborne breadcrumb evidence');
+    assert.ok(state.impactRingCount > 0, 'route did not preserve impact/contact ring evidence');
+    assert.ok(state.surfaceSmearCount > 0, 'route did not preserve surface smear evidence');
     assert.ok(state.lermImpulseCount > 0, 'route did not produce lerm impulse evidence');
     assert.ok(state.goinImpulseCount > 0, 'route did not produce goin impulse evidence');
 
@@ -182,6 +189,9 @@ async function run() {
       trailSpanZ: state.trailSpanZ,
       sourceAnchorCount: state.sourceAnchorCount,
       maxTrailSegmentLength: state.maxTrailSegmentLength,
+      airborneBreadcrumbCount: state.airborneBreadcrumbCount,
+      impactRingCount: state.impactRingCount,
+      surfaceSmearCount: state.surfaceSmearCount,
       lermImpulseCount: state.lermImpulseCount,
       goinImpulseCount: state.goinImpulseCount,
       maxRangeZ: state.maxRangeZ,

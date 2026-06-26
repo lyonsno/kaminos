@@ -35,6 +35,10 @@ assert.match(coreSource, /source_anchor/, 'trail debug state separates source an
 assert.match(coreSource, /trailSampleCount/, 'debug state records trail sample coverage');
 assert.match(coreSource, /surfaceStreakCount/, 'debug state records surface streak coverage');
 assert.match(coreSource, /maxTrailSegmentLength/, 'debug state records maximum trail segment length');
+assert.match(coreSource, /airborneBreadcrumbCount/, 'debug state records airborne breadcrumb coverage');
+assert.match(coreSource, /impactRingCount/, 'debug state records impact/contact ring coverage');
+assert.match(coreSource, /surfaceSmearCount/, 'debug state records phase-aware surface smear coverage');
+assert.match(coreSource, /velocity_hint/, 'trail debug state carries velocity hints');
 assert.match(coreSource, /lerm_impulse/, 'particle hit records lerm impulse events');
 assert.match(coreSource, /goin_impulse/, 'particle hit records goin impulse events');
 assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame identity');
@@ -43,18 +47,26 @@ assert.match(coreSource, /export function createWorldFingerJuiceTransportPrototy
 
 assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares its smoke route query');
 assert.match(pageSource, /window\.__lermsFingerJuiceDebug/, 'prototype exposes route debug state for witnesses');
+assert.match(pageSource, /window\.__lermsFingerJuiceStepForWitness/, 'prototype exposes deterministic witness stepping');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
 assert.match(pageSource, /hill-of-hills-heightfield-collision-v0/, 'prototype page displays terrain contract');
 assert.match(pageSource, /drawJuiceTrails/, 'prototype page draws persistent juice trails');
-assert.match(pageSource, /source-legible-splat-ribbons-v1/, 'prototype page labels the unclipped trail renderer');
+assert.match(pageSource, /source-legible-phase-breadcrumbs-v2/, 'prototype page labels the phase-aware breadcrumb renderer');
+assert.match(pageSource, /drawAirborneBreadcrumb/, 'prototype page draws airborne breadcrumb ticks');
+assert.match(pageSource, /drawImpactRing/, 'prototype page draws contact/impact rings');
+assert.match(pageSource, /drawSurfaceSmear/, 'prototype page draws surface-flow smears');
 assert.doesNotMatch(pageSource, /globalCompositeOperation\s*=\s*['"]lighter['"]/, 'trail renderer must not use additive lighter compositing');
 
 assert.match(witnessSource, /lerms_world_finger_juice=1/, 'witness captures the explicit LERMS finger-juice route');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
+assert.match(witnessSource, /__lermsFingerJuiceStepForWitness/, 'witness advances simulation through explicit route hook');
 assert.match(witnessSource, /world-space-ballistic-surface-flow-particles-v0/, 'witness requires the world-space transport route');
 assert.match(witnessSource, /trailSampleCount/, 'witness requires trail sample evidence');
 assert.match(witnessSource, /trailEmitterCount/, 'witness requires multi-emitter trail evidence');
 assert.match(witnessSource, /maxTrailSegmentLength/, 'witness rejects false long trail bridges');
+assert.match(witnessSource, /airborneBreadcrumbCount/, 'witness requires airborne breadcrumb evidence');
+assert.match(witnessSource, /impactRingCount/, 'witness requires impact/contact ring evidence');
+assert.match(witnessSource, /surfaceSmearCount/, 'witness requires surface smear evidence');
 assert.match(witnessSource, /primary_output_written/, 'witness records primary output durability');
 assert.match(witnessSource, /failure_phase/, 'witness records failure phase before throwing');
 
@@ -154,6 +166,10 @@ assert.ok(settled.surfaceStreakCount > 0, 'late state exposes surface-flow strea
 assert.ok(settled.trailSpanZ > 0.35, 'late trails preserve forward travel span');
 assert.ok(settled.sourceAnchorCount >= 2, 'late state preserves separate source anchors');
 assert.ok(settled.maxTrailSegmentLength < 0.34, 'late state does not draw false long trail bridges');
+assert.ok(settled.airborneBreadcrumbCount > 0, 'late state preserves airborne breadcrumb evidence');
+assert.ok(settled.impactRingCount > 0, 'late state preserves contact/impact ring evidence');
+assert.ok(settled.surfaceSmearCount > 0, 'late state preserves phase-aware surface smear evidence');
+assert.ok(settled.trails.some(trail => trail.samples.some(sample => Array.isArray(sample.velocity_hint))), 'trail samples carry velocity hints');
 assert.ok(settled.heightfieldSamples.length >= 5, 'debug state records heightfield samples');
 
 const hitPrototype = mod.createWorldFingerJuiceTransportPrototype({
