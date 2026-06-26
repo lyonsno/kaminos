@@ -40,6 +40,7 @@
 <body
   data-route="lerms_world_finger_juice=1"
   data-effective-route="world-space-ballistic-surface-flow-particles-v0"
+  data-solver-route="webgpu_particle_solver_v0"
   data-terrain-contract="hill-of-hills-heightfield-collision-v0"
   data-visual-renderer="source-legible-phase-breadcrumbs-v2"
 >
@@ -52,6 +53,10 @@
       createWorldFingerJuiceTransportPrototype,
       normalizeWorldFingerJuiceEmitterPacket,
     } from './lerms-finger-juice-core.js';
+    import {
+      LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      createWebGPUFingerJuiceSolver,
+    } from './lerms-finger-juice-webgpu-core.js';
 
     const canvas = document.getElementById('stage');
     const ctx = canvas.getContext('2d');
@@ -59,17 +64,19 @@
     const params = new URLSearchParams(location.search);
     const routeActive = params.get('lerms_world_finger_juice') === '1';
     const visualRenderer = 'source-legible-phase-breadcrumbs-v2';
+    const lerms = [
+      { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
+      { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
+      { id: 'yellow-lerm-1', position: [0.08, -0.09, 1.46], radius: 0.18, mass: 1.0 },
+    ];
+    const goins = [
+      { id: 'goin-1', position: [0.0, -0.09, 1.66], radius: 0.24, mass: 2.2 },
+    ];
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
       maxParticles: 900,
-      lerms: [
-        { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
-        { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
-        { id: 'yellow-lerm-1', position: [0.08, -0.09, 1.46], radius: 0.18, mass: 1.0 },
-      ],
-      goins: [
-        { id: 'goin-1', position: [0.02, -0.08, 1.22], radius: 0.24, mass: 2.2 },
-      ],
+      lerms,
+      goins,
     });
 
     const emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
@@ -105,23 +112,78 @@
       ],
     });
     prototype.setEmitters(emitterPacket);
+    let webgpuSolver = null;
+    let webgpuState = {
+      solver_backend: 'initializing',
+      solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+    };
+    let webgpuFramePending = false;
+
+    createWebGPUFingerJuiceSolver({
+      seed: 11,
+      maxParticles: 900,
+      emitterPacket,
+      lerms,
+      goins,
+    }).then(solver => {
+      webgpuSolver = solver;
+      webgpuState = {
+        ...webgpuState,
+        solver_backend: solver.solver_backend,
+        solverRoute: solver.solverRoute,
+        shaderRoute: solver.shaderRoute,
+        adapterInfo: solver.adapterInfo,
+        reason: solver.reason,
+        cpuOracle: solver.cpuOracle,
+        workgroupSize: solver.workgroupSize,
+        maxParticles: solver.maxParticles,
+      };
+      return solver.stepAndRead?.(30, 1 / 60);
+    }).then(state => {
+      if (state) webgpuState = state;
+    }).catch(error => {
+      webgpuState = {
+        solver_backend: 'webgpu_unavailable',
+        solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        error: error.message,
+      };
+    });
 
     function readDebugState() {
+      const cpuState = prototype.debugState();
+      const solverState = webgpuState?.solver_backend === 'webgpu_compute' ? webgpuState : {
+        ...cpuState,
+        solver_backend: webgpuState?.solver_backend || 'cpu_fallback',
+        solverRoute: webgpuState?.solverRoute || LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        shaderRoute: webgpuState?.shaderRoute || null,
+        adapterInfo: webgpuState?.adapterInfo || null,
+        reason: webgpuState?.reason || webgpuState?.error || null,
+        cpuOracle: webgpuState?.cpuOracle || null,
+      };
       return {
         requestedRoute: 'lerms_world_finger_juice=1',
         routeActive,
         effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
+        solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
         visualRenderer,
         terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
         emitterPacket,
-        ...prototype.debugState(),
+        ...solverState,
+        evidence_kind: emitterPacket.evidence_kind,
+        simulation_authority: emitterPacket.simulation_authority,
+        authority: emitterPacket.authority,
+        hand_sample_space: emitterPacket.hand_sample_space,
+        lerms_world_frame: emitterPacket.lerms_world_frame,
+        terrain_frame: emitterPacket.terrain_frame,
       };
     }
 
-    window.__lermsFingerJuiceStepForWitness = ({ steps = 150, dt = 1 / 60 } = {}) => {
+    window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60 } = {}) => {
       const safeSteps = Math.max(0, Math.min(360, Math.floor(Number(steps) || 0)));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
-      if (routeActive) {
+      if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
+        webgpuState = await webgpuSolver.stepAndRead(safeSteps, safeDt);
+      } else if (routeActive) {
         for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
       }
       return readDebugState();
@@ -141,7 +203,7 @@
       const scale = 390 / Math.max(0.42, depth);
       return {
         x: width * 0.5 + point[0] * scale,
-        y: height * 0.78 - point[2] * 178 - point[1] * scale * 0.52,
+        y: height * 0.78 - point[2] * 122 - point[1] * scale * 0.52,
         scale,
       };
     }
@@ -313,22 +375,39 @@
       }
     }
 
-    let last = performance.now();
-    function frame(now) {
-      const dt = Math.min(1 / 30, Math.max(1 / 120, (now - last) / 1000));
-      last = now;
-      if (routeActive) {
-        for (let i = 0; i < 2; i += 1) prototype.step(dt * 0.5);
-      }
-      const state = prototype.debugState();
+    function renderCurrentState() {
+      const state = readDebugState();
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       drawTerrain();
       drawCaster();
       drawTargets(state);
       drawJuiceTrails(state);
       drawParticles(state);
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${visualRenderer} | ${state.simulation_authority}<br>${state.lerms_world_frame.world_from_hand_sample}<br>particles ${state.particleCount} | trails ${state.trailSampleCount} / ${state.trailEmitterCount} | surface ${state.surfaceFlowCount}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${visualRenderer} | ${state.simulation_authority}<br>particles ${state.particleCount || 0} | trails ${state.trailSampleCount || 0} / ${state.trailEmitterCount || 0} | surface ${state.surfaceFlowCount || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
+      window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
+      return state;
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(1 / 120, (now - last) / 1000));
+      last = now;
+      if (routeActive) {
+        if (webgpuSolver?.solver_backend === 'webgpu_compute') {
+          if (!webgpuFramePending) {
+            webgpuFramePending = true;
+            webgpuSolver.stepAndRead(2, dt * 0.5).then(state => {
+              webgpuState = state;
+            }).finally(() => {
+              webgpuFramePending = false;
+            });
+          }
+        } else {
+          for (let i = 0; i < 2; i += 1) prototype.step(dt * 0.5);
+        }
+      }
+      renderCurrentState();
       requestAnimationFrame(frame);
     }
 

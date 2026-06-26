@@ -4,14 +4,17 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const corePath = join(root, 'lerms-finger-juice-core.js');
+const webgpuCorePath = join(root, 'lerms-finger-juice-webgpu-core.js');
 const pagePath = join(root, 'lerms-finger-juice.html');
 const witnessPath = join(root, 'lerms-finger-juice-witness.mjs');
 
 assert.ok(existsSync(corePath), 'world finger-juice core module exists');
+assert.ok(existsSync(webgpuCorePath), 'WebGPU finger-juice core module exists');
 assert.ok(existsSync(pagePath), 'world finger-juice prototype page exists');
 assert.ok(existsSync(witnessPath), 'world finger-juice route witness exists');
 
 const coreSource = readFileSync(corePath, 'utf8');
+const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
 const pageSource = readFileSync(pagePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
 
@@ -45,9 +48,23 @@ assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame ide
 assert.match(coreSource, /export function normalizeWorldFingerJuiceEmitterPacket/, 'core exports packet normalizer');
 assert.match(coreSource, /export function createWorldFingerJuiceTransportPrototype/, 'core exports deterministic transport prototype');
 
+assert.match(webgpuCoreSource, /webgpu_particle_solver_v0/, 'WebGPU solver route identity is explicit');
+assert.match(webgpuCoreSource, /wgsl-ballistic-heightfield-surface-v0/, 'WebGPU shader route identity is explicit');
+assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
+assert.match(webgpuCoreSource, /webgpu_compute/, 'WebGPU solver can report compute backend');
+assert.match(webgpuCoreSource, /webgpu_unavailable/, 'WebGPU solver can report unavailable backend');
+assert.match(webgpuCoreSource, /GPUBufferUsage\.STORAGE/, 'WebGPU solver uses storage buffers');
+assert.match(webgpuCoreSource, /GPUBufferUsage\.COPY_SRC/, 'WebGPU solver exposes readback from GPU-owned state');
+assert.match(webgpuCoreSource, /createComputePipeline/, 'WebGPU solver advances through a compute pipeline');
+assert.match(webgpuCoreSource, /@compute\s+@workgroup_size/, 'WebGPU solver shader contains compute entry point');
+assert.match(webgpuCoreSource, /runCpuFingerJuiceOracle/, 'WebGPU route keeps CPU oracle comparison');
+assert.match(webgpuCoreSource, /adapterInfo/, 'WebGPU route records adapter identity');
+
 assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares its smoke route query');
 assert.match(pageSource, /window\.__lermsFingerJuiceDebug/, 'prototype exposes route debug state for witnesses');
 assert.match(pageSource, /window\.__lermsFingerJuiceStepForWitness/, 'prototype exposes deterministic witness stepping');
+assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates WebGPU finger-juice solver');
+assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
 assert.match(pageSource, /hill-of-hills-heightfield-collision-v0/, 'prototype page displays terrain contract');
 assert.match(pageSource, /drawJuiceTrails/, 'prototype page draws persistent juice trails');
@@ -60,6 +77,11 @@ assert.doesNotMatch(pageSource, /globalCompositeOperation\s*=\s*['"]lighter['"]/
 assert.match(witnessSource, /lerms_world_finger_juice=1/, 'witness captures the explicit LERMS finger-juice route');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witnessSource, /__lermsFingerJuiceStepForWitness/, 'witness advances simulation through explicit route hook');
+assert.match(witnessSource, /solver_backend/, 'witness records effective solver backend');
+assert.match(witnessSource, /webgpu_compute/, 'witness requires WebGPU compute backend');
+assert.match(witnessSource, /webgpu_particle_solver_v0/, 'witness records WebGPU solver route');
+assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
+assert.match(witnessSource, /cpuOracle/, 'witness records CPU oracle comparison');
 assert.match(witnessSource, /world-space-ballistic-surface-flow-particles-v0/, 'witness requires the world-space transport route');
 assert.match(witnessSource, /trailSampleCount/, 'witness requires trail sample evidence');
 assert.match(witnessSource, /trailEmitterCount/, 'witness requires multi-emitter trail evidence');
@@ -71,10 +93,13 @@ assert.match(witnessSource, /primary_output_written/, 'witness records primary o
 assert.match(witnessSource, /failure_phase/, 'witness records failure phase before throwing');
 
 const mod = await import(corePath);
+const webgpuMod = await import(webgpuCorePath);
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_EMITTERS_SCHEMA, 'lerms.world-finger-juice-emitters.v0');
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_ROUTE, 'world-space-ballistic-surface-flow-particles-v0');
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT, 'hill-of-hills-heightfield-collision-v0');
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT, 'finger-aim-ballistic-arc-range-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE, 'webgpu_particle_solver_v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE, 'wgsl-ballistic-heightfield-surface-v0');
 
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
   packet_id: 'test-live-packet-1',
