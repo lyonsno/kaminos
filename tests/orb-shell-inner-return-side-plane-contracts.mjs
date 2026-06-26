@@ -11,8 +11,12 @@ assert.match(core, /LamellarInnerReturnSidePlaneMesh/, 'composition module names
 assert.match(core, /right-side-rim-reveal-gap/, 'side-plane slice targets the right-side rim reveal gap');
 assert.match(core, /inner-return-side-plane-v0/, 'composition module names inner-return side-plane mode');
 assert.match(core, /makeLamellarInnerReturnSidePlaneGeometry/, 'composition module renders inner-return side-plane geometry');
+assert.match(core, /makeLamellarInnerReturnSideWallGeometry/, 'composition module renders a separately legible sidewall surface');
 assert.match(witness, /LamellarInnerReturnSidePlaneMesh/, 'composition witness reports inner-return side-plane meshes');
 assert.match(witness, /innerReturnSidePlaneTopologyVerdict/, 'composition witness reports side-plane topology verdict');
+assert.match(witness, /innerReturnSideWallVisibilityVerdict/, 'composition witness reports sidewall visibility verdict');
+assert.match(witness, /sideWallVisibilityProbe/, 'composition witness measures projected sidewall visibility');
+assert.match(core, /sideWallVisibilityProbe/, 'composition module exposes a sidewall projection probe');
 assert.match(witness, /frameSideRimReturn/, 'composition witness can focus the side-rim return target');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
@@ -36,6 +40,10 @@ assert.ok(sidePlane.innerReturnEdge.length >= 9, 'side-plane carries inner retur
 assert.ok(sidePlane.sideWallFaces.includes('outer-chamfer-return'), 'side-plane includes outer chamfer return');
 assert.ok(sidePlane.sideWallFaces.includes('inner-return-wall'), 'side-plane includes inner return wall');
 assert.ok(sidePlane.sideWallFaces.includes('inner-return-chamfer'), 'side-plane includes inner chamfer return');
+assert.ok(sidePlane.sideWallRenderableSurfaces?.includes('visible-return-sidewall-band'), 'side-plane exposes a separately renderable visible sidewall band');
+assert.equal(sidePlane.sideWallVisibilityContract?.status, 'operator-visible', 'sidewall visibility contract must require operator-visible geometry');
+assert.ok(sidePlane.sideWallVisibilityContract?.minimumScreenContrast >= 0.18, 'sidewall visibility contract requires measurable screen contrast');
+assert.ok(sidePlane.sideWallVisibilityContract?.minimumProjectedWidthPx >= 10, 'sidewall visibility contract requires visible projected width');
 assert.ok(sidePlane.returnThicknessStats.relativeVariation <= 0.05, 'return thickness is held close enough to constant');
 assert.ok(sidePlane.endpointContinuityStats.maxEndpointThicknessDelta <= 0.004, 'return endpoints preserve thickness continuity');
 assert.equal(sidePlane.proxyRailFinalVisible, false, 'side-plane must not rely on proxy rails');

@@ -1161,6 +1161,18 @@ function createLamellarInnerReturnSidePlaneMesh(gap) {
       'inner-return-chamfer',
       'side-plane-bridge',
     ],
+    sideWallRenderableSurfaces: [
+      'visible-return-sidewall-band',
+      'outer-edge-shadow-break',
+      'inner-return-highlight-break',
+    ],
+    sideWallVisibilityContract: {
+      status: 'operator-visible',
+      targetSurface: 'visible-return-sidewall-band',
+      minimumScreenContrast: 0.18,
+      minimumProjectedWidthPx: 10,
+      materialIntent: 'slate-silver-side-plane-visible-against-black-carapace',
+    },
     proxyRailFinalVisible: false,
     suppressedProxyHintIds: [`${gap.id}-future-mesh-boundary-input`],
     visualContract: 'visible right-side rim complication gets explicit side planes, not a declared second layer',
@@ -1179,6 +1191,10 @@ function createLamellarInnerReturnPlan(composition) {
     declaredSecondLayer: false,
     proxyRailFinalVisible: false,
     suppressedProxyHintIds: sidePlaneMeshes.flatMap(mesh => mesh.suppressedProxyHintIds),
+    visibleSideWallSurfaceCount: sidePlaneMeshes.reduce((sum, mesh) => sum + (mesh.sideWallRenderableSurfaces?.length ? 1 : 0), 0),
+    innerReturnSideWallVisibilityVerdict: sidePlaneMeshes.every(mesh => mesh.sideWallVisibilityContract?.status === 'operator-visible')
+      ? 'visible-sidewall-render-surface-required'
+      : 'sidewall-render-surface-not-yet-visible',
     innerReturnSidePlaneTopologyVerdict: sidePlaneMeshes.length === 1
       ? 'one-visible-side-rim-return-side-plane-meshed'
       : 'no-inner-return-side-plane-mesh',
@@ -1892,6 +1908,58 @@ function makeLamellarInnerReturnSidePlaneGeometry(THREE, mesh) {
   return geometry;
 }
 
+function makeLamellarInnerReturnSideWallGeometry(THREE, mesh) {
+  const rowCount = mesh.sidePlaneSamples.length;
+  const columnCount = 4;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const sample = mesh.sidePlaneSamples[row];
+    const outer = new THREE.Vector3(...sample.outerPlateEdge);
+    const inner = new THREE.Vector3(...sample.innerReturnEdge);
+    const tangent = new THREE.Vector3(...sample.tangent).normalize();
+    const sideAxis = new THREE.Vector3(...sample.sideAxis).normalize();
+    const surfaceNormal = new THREE.Vector3(...sample.surfaceNormal).normalize();
+    const faceNormal = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
+    if (faceNormal.dot(sideAxis) < 0) faceNormal.multiplyScalar(-1);
+    const lift = 0.026;
+    const ridge = Math.sin(sample.t * Math.PI) * 0.006;
+    const points = [
+      outer.clone().lerp(inner, 0.08).addScaledVector(faceNormal, lift + ridge).addScaledVector(surfaceNormal, 0.006),
+      outer.clone().lerp(inner, 0.34).addScaledVector(faceNormal, lift + ridge),
+      outer.clone().lerp(inner, 0.66).addScaledVector(faceNormal, lift + ridge),
+      outer.clone().lerp(inner, 0.92).addScaledVector(faceNormal, lift + ridge).addScaledVector(surfaceNormal, -0.008),
+    ];
+    for (let col = 0; col < columnCount; col++) {
+      const point = points[col];
+      vertices.push(point.x, point.y, point.z);
+      normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+      uvs.push(col / (columnCount - 1), sample.t);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LamellarInnerReturnSidePlaneMesh = mesh;
+  geometry.userData.visibleSideWallSurface = mesh.sideWallVisibilityContract;
+  return geometry;
+}
+
 function makeLamellarChannelStripGeometry(THREE, strip) {
   const rowCount = strip.edgeSamples.length;
   const columnCount = 5;
@@ -2238,6 +2306,15 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     envMapIntensity: 3.6,
     side: THREE.DoubleSide,
   });
+  const lamellarInnerReturnSideWallMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9eb0b7,
+    emissive: 0x273940,
+    emissiveIntensity: 0.48,
+    roughness: 0.34,
+    metalness: 0.72,
+    envMapIntensity: 3.4,
+    side: THREE.DoubleSide,
+  });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -2254,6 +2331,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     lamellarPlateLipMaterial,
     lamellarPlateBoundaryMaterial,
     lamellarInnerReturnMaterial,
+    lamellarInnerReturnSideWallMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -2352,6 +2430,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       sidePlaneMesh.userData.LamellarInnerReturnPlan = composition.lamellarInnerReturnPlan;
       sidePlaneMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
       group.add(sidePlaneMesh);
+      const sideWallMesh = new THREE.Mesh(makeLamellarInnerReturnSideWallGeometry(THREE, sidePlane), lamellarInnerReturnSideWallMaterial);
+      sideWallMesh.name = `${sidePlane.id}-visible-return-sidewall-band`;
+      sideWallMesh.userData.LamellarInnerReturnPlan = composition.lamellarInnerReturnPlan;
+      sideWallMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
+      sideWallMesh.userData.visibleSideWallSurface = sidePlane.sideWallVisibilityContract;
+      group.add(sideWallMesh);
     }
 
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
@@ -2401,6 +2485,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
       innerReturnSidePlaneMeshCount: composition.lamellarInnerReturnPlan?.sidePlaneMeshCount || 0,
       innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
+      innerReturnSideWallVisibilityVerdict: composition.lamellarInnerReturnPlan?.innerReturnSideWallVisibilityVerdict,
+      visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
       targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
       declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
@@ -2449,10 +2535,65 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       onDirty?.();
     },
     frameSideRimReturn() {
-      camera.position.set(2.42, 0.12, 1.18);
-      controls.target.set(0.84, 0.02, 0.62);
+      camera.position.set(2.18, 0.08, -1.08);
+      controls.target.set(0.89, 0.02, 0.6);
       controls.update();
       onDirty?.();
+    },
+    sideWallVisibilityProbe(viewport = { width: 1600, height: 1100 }) {
+      const sideWallMeshes = [];
+      group?.traverse(child => {
+        if (child.userData?.visibleSideWallSurface) sideWallMeshes.push(child);
+      });
+      const width = Math.max(1, Number(viewport.width) || 1600);
+      const height = Math.max(1, Number(viewport.height) || 1100);
+      const probes = sideWallMeshes.map(mesh => {
+        const box = new THREE.Box3().setFromObject(mesh);
+        const corners = [
+          [box.min.x, box.min.y, box.min.z],
+          [box.min.x, box.min.y, box.max.z],
+          [box.min.x, box.max.y, box.min.z],
+          [box.min.x, box.max.y, box.max.z],
+          [box.max.x, box.min.y, box.min.z],
+          [box.max.x, box.min.y, box.max.z],
+          [box.max.x, box.max.y, box.min.z],
+          [box.max.x, box.max.y, box.max.z],
+        ].map(point => new THREE.Vector3(...point).project(camera));
+        const screenPoints = corners
+          .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y) && point.z > -1 && point.z < 1)
+          .map(point => ({
+            x: (point.x * 0.5 + 0.5) * width,
+            y: (-point.y * 0.5 + 0.5) * height,
+          }));
+        if (!screenPoints.length) {
+          return {
+            name: mesh.name,
+            visible: false,
+            projectedWidthPx: 0,
+            projectedHeightPx: 0,
+            contract: mesh.userData.visibleSideWallSurface,
+          };
+        }
+        const minX = Math.min(...screenPoints.map(point => point.x));
+        const maxX = Math.max(...screenPoints.map(point => point.x));
+        const minY = Math.min(...screenPoints.map(point => point.y));
+        const maxY = Math.max(...screenPoints.map(point => point.y));
+        const projectedWidthPx = maxX - minX;
+        const projectedHeightPx = maxY - minY;
+        return {
+          name: mesh.name,
+          visible: projectedWidthPx >= mesh.userData.visibleSideWallSurface.minimumProjectedWidthPx,
+          projectedWidthPx,
+          projectedHeightPx,
+          contract: mesh.userData.visibleSideWallSurface,
+        };
+      });
+      return {
+        schema: 'LamellarInnerReturnSideWallVisibilityProbe',
+        meshCount: sideWallMeshes.length,
+        visibleMeshCount: probes.filter(probe => probe.visible).length,
+        probes,
+      };
     },
     dispose() {
       active = false;
@@ -2487,6 +2628,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
         innerReturnSidePlaneMeshCount: composition.lamellarInnerReturnPlan?.sidePlaneMeshCount || 0,
         innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
+        innerReturnSideWallVisibilityVerdict: composition.lamellarInnerReturnPlan?.innerReturnSideWallVisibilityVerdict,
+        visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
         targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
         declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
