@@ -10278,9 +10278,10 @@ let pipelineDockState = {
 	  },
 	  graphEdges: [
 	    { id: 'source-to-route', from: 'source', to: 'route' },
-	    { id: 'route-to-output', from: 'route', to: 'output' },
 	    { id: 'route-to-evidence', from: 'route', to: 'evidence' },
 	  ],
+	  graphRouteNodes: [],
+	  generatedOutputNodes: [],
 	  graphImageNodes: [],
 	  graphDrag: null,
 	  assetCardDrag: null,
@@ -10635,6 +10636,7 @@ const pipelineGraphDefaultPositions = {
   source: { x: 18, y: 92 },
   route: { x: 180, y: 92 },
   output: { x: 342, y: 44 },
+  'output-stack': { x: 342, y: 44 },
   evidence: { x: 342, y: 150 },
 };
 const pipelineGraphDefaultEdges = [
@@ -10683,6 +10685,50 @@ function normalizePipelineGraphImageNode(value) {
   };
 }
 
+function normalizePipelineGraphRouteNode(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = String(value.id || '').trim();
+  const pipelineId = String(value.pipelineId || value.backendPipelineId || '').trim();
+  if (!id || !pipelineId) return null;
+  return {
+    id,
+    kind: 'route',
+    generatorId: value.generatorId || null,
+    pipelineId,
+    title: String(value.title || 'Pipeline route'),
+    detail: String(value.detail || pipelineId),
+    createdAt: value.createdAt || null,
+  };
+}
+
+function normalizePipelineGeneratedOutputNode(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = String(value.id || '').trim();
+  const runId = String(value.runId || '').trim();
+  const routeNodeId = String(value.routeNodeId || '').trim();
+  const artifact = value.artifact && typeof value.artifact === 'object' ? value.artifact : null;
+  if (!id || !runId || !routeNodeId || !artifact?.path) return null;
+  return {
+    id,
+    kind: 'generated-output',
+    runId,
+    routeNodeId,
+    sourceGraphNodeId: value.sourceGraphNodeId || null,
+    sourceLabel: value.sourceLabel || null,
+    artifact,
+    sidecar: value.sidecar && typeof value.sidecar === 'object' ? value.sidecar : null,
+    outputRoot: value.outputRoot || null,
+    reportPath: value.reportPath || null,
+    bundlePath: value.bundlePath || null,
+    pipelineId: value.pipelineId || null,
+    generatorId: value.generatorId || null,
+    generatorLabel: value.generatorLabel || null,
+    fixtureBacked: Boolean(value.fixtureBacked),
+    previewTruth: value.previewTruth || null,
+    createdAt: value.createdAt || null,
+  };
+}
+
 function loadPipelineGraphLocalState() {
   try {
     const raw = localStorage.getItem(pipelineGraphStorageKey);
@@ -10700,6 +10746,12 @@ function loadPipelineGraphLocalState() {
     const nextImageNodes = Array.isArray(document.graphImageNodes)
       ? document.graphImageNodes.map(normalizePipelineGraphImageNode).filter(Boolean)
       : null;
+    const nextRouteNodes = Array.isArray(document.graphRouteNodes)
+      ? document.graphRouteNodes.map(normalizePipelineGraphRouteNode).filter(Boolean)
+      : null;
+    const nextGeneratedOutputNodes = Array.isArray(document.generatedOutputNodes)
+      ? document.generatedOutputNodes.map(normalizePipelineGeneratedOutputNode).filter(Boolean)
+      : null;
     if (Object.keys(nextPositions).length) {
       pipelineDockState.graphNodePositions = {
         ...pipelineDockState.graphNodePositions,
@@ -10708,6 +10760,8 @@ function loadPipelineGraphLocalState() {
     }
     if (nextEdges) pipelineDockState.graphEdges = nextEdges;
     if (nextImageNodes) pipelineDockState.graphImageNodes = nextImageNodes;
+    if (nextRouteNodes) pipelineDockState.graphRouteNodes = nextRouteNodes;
+    if (nextGeneratedOutputNodes) pipelineDockState.generatedOutputNodes = nextGeneratedOutputNodes;
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state ignored:', error);
@@ -10723,6 +10777,8 @@ function savePipelineGraphLocalState() {
       updatedAt: new Date().toISOString(),
       graphNodePositions: pipelineDockState.graphNodePositions || {},
       graphEdges: pipelineGraphEdges(),
+      graphRouteNodes: pipelineDockState.graphRouteNodes || [],
+      generatedOutputNodes: pipelineDockState.generatedOutputNodes || [],
       graphImageNodes: pipelineDockState.graphImageNodes || [],
     };
     localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
@@ -10756,6 +10812,20 @@ function pipelineGraphEdges() {
     .map(edge => ({ id: edge.id || `${edge.from}-to-${edge.to}`, from: edge.from, to: edge.to }))
     .filter(edge => edge.from && edge.to && edge.from !== edge.to);
   return pipelineDockState.graphEdges;
+}
+
+function pipelineGraphRouteNodes() {
+  pipelineDockState.graphRouteNodes = (pipelineDockState.graphRouteNodes || [])
+    .map(normalizePipelineGraphRouteNode)
+    .filter(Boolean);
+  return pipelineDockState.graphRouteNodes;
+}
+
+function pipelineGeneratedOutputNodes() {
+  pipelineDockState.generatedOutputNodes = (pipelineDockState.generatedOutputNodes || [])
+    .map(normalizePipelineGeneratedOutputNode)
+    .filter(Boolean);
+  return pipelineDockState.generatedOutputNodes;
 }
 
 function pipelineGraphEdgeForId(edgeId) {
@@ -10821,6 +10891,38 @@ function pipelineGraphImageNodeRecord(id, asset) {
   };
 }
 
+function pipelineGraphRouteNodeRecord(id, generator, pipeline) {
+  if (!id || !pipeline?.id) return null;
+  const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
+  return {
+    id,
+    kind: 'route',
+    generatorId: generator?.id || null,
+    pipelineId: pipeline.id,
+    title: generatorRecord?.operationTitle || generator?.title || pipeline.label || pipeline.id,
+    detail: `${generatorRecord?.backendLabel || 'Backend route'}: ${pipeline.id}`,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function pipelineRouteGraphNodeFromRecord(record) {
+  const pipeline = pipelineManifest?.pipelines?.find(route => route.id === record.pipelineId) || selectedPipelineRecord();
+  const generator = pipelineGeneratorById(record.generatorId) || pipelineGeneratorForPipelineId(record.pipelineId) || selectedPipelineGeneratorRecord();
+  const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
+  const fixtureBacked = pipelineRouteUsesFixture({ pipeline, generator });
+  return {
+    id: record.id,
+    kind: 'route',
+    title: generatorRecord?.operationTitle || record.title || pipeline?.label || record.pipelineId,
+    detail: `${generatorRecord?.backendLabel || 'Backend route'}: ${record.pipelineId}${fixtureBacked ? ' / input provenance only; output fixed fixture' : ''}`,
+    runId: null,
+    generator,
+    backendPipelineId: record.pipelineId,
+    pipeline,
+    fixtureBacked,
+  };
+}
+
 function updateSelectedPipelineGraphImageNodeAsset(asset) {
   const selectedId = pipelineDockState.selectedGraphNodeId;
   if (!selectedId || asset?.kind !== 'image') return null;
@@ -10870,13 +10972,72 @@ function pipelineArtifactLoadedRecord(artifact) {
   return pipelineDockState.loadedPipelineArtifactPaths?.[path] || null;
 }
 
+function pipelineGeneratedOutputRunRecord(node) {
+  if (!node?.runId) return null;
+  const run = (pipelineDockState.runHistory || []).find(candidate => candidate.runId === node.runId);
+  if (run) return run;
+  return {
+    ok: true,
+    runId: node.runId,
+    pipelineId: node.pipelineId || null,
+    generatorId: node.generatorId || null,
+    generatorLabel: node.generatorLabel || null,
+    source: {
+      label: node.sourceLabel || 'Generated output source',
+      graphNodeId: node.sourceGraphNodeId || null,
+    },
+    report: {
+      path: node.reportPath || null,
+      document: {
+        artifacts: [node.artifact, node.sidecar].filter(Boolean),
+        stages: node.fixtureBacked ? [{ status: 'fixture' }] : [],
+      },
+    },
+    bundle: {
+      path: node.bundlePath || null,
+      document: {
+        outputRoot: node.outputRoot || '',
+        artifacts: [node.artifact, node.sidecar].filter(Boolean),
+      },
+    },
+  };
+}
+
+function pipelineGeneratedOutputGraphNode(record) {
+  const run = pipelineGeneratedOutputRunRecord(record);
+  const artifact = pipelineRunArtifact(run, 'splat') || record.artifact;
+  const sidecar = pipelineRunArtifact(run, 'sidecar') || record.sidecar || null;
+  const loadedArtifact = pipelineArtifactLoadedRecord(artifact);
+  const fixtureBacked = pipelineRunUsesFixture(run) || Boolean(record.fixtureBacked);
+  const previewTruth = record.previewTruth || pipelineRunPreviewTruthLabel(run, artifact);
+  return {
+    id: record.id,
+    kind: 'generated-output',
+    title: `${fixtureBacked ? 'Fixture' : 'Generated'} SHARP Splat`,
+    detail: previewTruth,
+    runId: record.runId,
+    routeNodeId: record.routeNodeId,
+    sourceGraphNodeId: record.sourceGraphNodeId || null,
+    sourceLabel: record.sourceLabel || run?.source?.label || null,
+    artifact,
+    sidecar,
+    runRecord: run,
+    fixtureBacked,
+    previewTruth,
+    loaded: Boolean(loadedArtifact),
+    loadedSceneObjectId: loadedArtifact?.sceneObjectId || null,
+  };
+}
+
+function pipelineGraphGeneratedOutputNodes() {
+  return pipelineGeneratedOutputNodes().map(pipelineGeneratedOutputGraphNode).filter(node => node.artifact?.path);
+}
+
 function buildPipelineGraphModel(source, selectedRun) {
   const pipeline = selectedPipelineRecord();
   const generator = selectedPipelineGeneratorRecord();
   const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const sidecar = pipelineRunArtifact(selectedRun, 'sidecar');
-  const splat = pipelineRunArtifact(selectedRun, 'splat');
-  const loadedArtifact = pipelineArtifactLoadedRecord(splat);
   const runId = selectedRun ? pipelineRunDisplayId(selectedRun) : null;
   const fixtureBacked = pipelineRunUsesFixture(selectedRun) || pipelineRouteUsesFixture(pipeline);
   const sourceLabel = selectedRun?.source?.label || source?.label || 'No source selected';
@@ -10884,31 +11045,31 @@ function buildPipelineGraphModel(source, selectedRun) {
   const routeLabel = generatorRecord?.operationTitle || 'No generator selected';
   const backendPipelineId = selectedRun?.pipelineId || generatorRecord?.backendPipelineId || pipeline?.id || null;
   const routeDetail = `${generatorRecord?.backendLabel || 'Backend route'}: ${backendPipelineId || 'unrouted'}${fixtureBacked ? ' / input provenance only; output fixed fixture' : ''}`;
-  const outputLabel = splat?.path ? `${fixtureBacked ? 'Fixture ' : 'Generated '}SHARP Splat` : sidecar?.path ? 'No new splat' : 'No output yet';
-  const outputTruth = pipelineRunPreviewTruthLabel(selectedRun, splat);
   const evidenceLabel = selectedRun?.ok ? 'Run evidence written' : selectedRun ? 'Run failed' : 'No run evidence';
-  const outputNode = splat?.path ? {
-    id: 'output',
-    kind: 'generated-output',
-    title: outputLabel,
-    detail: outputTruth,
-    runId,
-    artifact: splat,
-    sidecar,
-    fixtureBacked,
-    previewTruth: outputTruth,
-    loaded: Boolean(loadedArtifact),
-    loadedSceneObjectId: loadedArtifact?.sceneObjectId || null,
-  } : {
-    id: 'output',
+  const routeNodes = pipelineGraphRouteNodes().length
+    ? pipelineGraphRouteNodes().map(pipelineRouteGraphNodeFromRecord)
+    : [{
+      id: 'route',
+      kind: 'route',
+      title: routeLabel,
+      detail: routeDetail,
+      runId,
+      generator,
+      backendPipelineId,
+      pipeline,
+      fixtureBacked,
+    }];
+  const generatedOutputNodes = pipelineGraphGeneratedOutputNodes();
+  const outputStackNode = {
+    id: 'output-stack',
     kind: 'output',
-    title: outputLabel,
-    detail: 'fixture/sidecar-only or not run',
+    title: generatedOutputNodes.length ? 'Output stack' : 'No output yet',
+    detail: generatedOutputNodes.length ? `${generatedOutputNodes.length} generated output${generatedOutputNodes.length === 1 ? '' : 's'}` : 'Run a route to append generated artifacts',
     runId,
-    artifact: splat,
-    sidecar,
-    fixtureBacked,
-    previewTruth: outputTruth,
+    artifact: null,
+    sidecar: null,
+    fixtureBacked: false,
+    previewTruth: generatedOutputNodes.length ? 'scratch output stack' : 'no generated preview',
     loaded: false,
     loadedSceneObjectId: null,
   };
@@ -10921,18 +11082,8 @@ function buildPipelineGraphModel(source, selectedRun) {
       runId,
       source: selectedRun?.source || source || null,
     },
-    {
-      id: 'route',
-      kind: 'route',
-      title: routeLabel,
-      detail: routeDetail,
-      runId,
-      generator,
-      backendPipelineId,
-      pipeline,
-      fixtureBacked,
-    },
-    outputNode,
+    ...routeNodes,
+    outputStackNode,
     {
       id: 'evidence',
       kind: 'evidence',
@@ -10943,13 +11094,19 @@ function buildPipelineGraphModel(source, selectedRun) {
       bundlePath: selectedRun?.bundle?.path || null,
       reportPath: selectedRun?.report?.path || null,
     },
+    ...generatedOutputNodes,
     ...pipelineGraphImageNodes(),
   ];
+  const nodeIds = new Set(nodes.map(node => node.id));
+  const userEdges = pipelineGraphEdges().filter(edge => nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  const generatedEdges = generatedOutputNodes
+    .filter(node => nodeIds.has(node.routeNodeId))
+    .map(node => ({ id: `${node.routeNodeId}-to-${node.id}`, from: node.routeNodeId, to: node.id, generated: true }));
   return {
 	    schema: 'kaminos.pipeline-graph-model.v0',
 	    selectedRunId: runId,
 	    nodes,
-	    edges: pipelineGraphEdges(),
+	    edges: [...userEdges, ...generatedEdges],
 	  };
 }
 
@@ -10992,13 +11149,21 @@ function pipelineStartGraphConnection(nodeId) {
 
 function pipelineCreateGraphEdge(fromNodeId, toNodeId) {
   const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  const fromNode = pipelineGraphNodeForId(graph, fromNodeId);
+  const toNode = pipelineGraphNodeForId(graph, toNodeId);
   if (
-    !pipelineGraphNodeForId(graph, fromNodeId) ||
-    !pipelineGraphNodeForId(graph, toNodeId) ||
+    !fromNode ||
+    !toNode ||
     fromNodeId === toNodeId
   ) return null;
   const id = `${fromNodeId}-to-${toNodeId}`;
-  pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => edge.id !== id);
+  const replacesSingleRouteInput = toNode.kind === 'route' && ['source', 'image'].includes(fromNode.kind);
+  pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => {
+    if (edge.id === id) return false;
+    if (!replacesSingleRouteInput || edge.to !== toNodeId) return true;
+    const existingFromNode = pipelineGraphNodeForId(graph, edge.from);
+    return !['source', 'image'].includes(existingFromNode?.kind);
+  });
   pipelineDockState.graphEdges.push({ id, from: fromNodeId, to: toNodeId });
   pipelineDockState.graphConnectionStartId = null;
   pipelineDockState.graphConnectionPreview = null;
@@ -11276,12 +11441,13 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     ];
   }
   if (!node) return [{ key: 'status', value: 'No graph node selected' }];
+  const nodeRun = node.kind === 'generated-output' ? (node.runRecord || pipelineGeneratedOutputRunRecord(node)) : selectedRun;
   const rows = [
     { key: 'kind', value: node.kind },
     { key: 'title', value: node.title },
     { key: 'detail', value: node.detail || 'none' },
   ];
-  if (selectedRun) rows.push({ key: 'run', value: pipelineRunDisplayId(selectedRun) });
+  if (nodeRun) rows.push({ key: 'run', value: pipelineRunDisplayId(nodeRun) });
   if (node.kind === 'route') {
     const inputSource = pipelineGraphRouteInputSource(node.id);
     rows.push({ key: 'generator', value: node.generator?.title || node.title || 'unknown' });
@@ -11296,6 +11462,8 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'output' || node.kind === 'generated-output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loaded', value: node.loaded ? `yes${node.loadedSceneObjectId ? ` (${node.loadedSceneObjectId})` : ''}` : 'not loaded' });
+  if (node.kind === 'generated-output') rows.push({ key: 'route node', value: node.routeNodeId || 'unknown' });
+  if (node.kind === 'generated-output') rows.push({ key: 'source node', value: node.sourceGraphNodeId || 'unknown' });
   if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
   if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'input', value: pipelineFixtureInputBoundaryText(node) });
   if (node.kind === 'image') {
@@ -11353,8 +11521,9 @@ function renderPipelineGraphInspector(node, selectedRun) {
       action: () => pipelineImportGraphImageNodeToScene(node),
     });
   }
-  if ((node?.kind === 'output' || node?.kind === 'generated-output') && selectedRun && node.artifact?.path) {
-    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(selectedRun, node.artifact) });
+  const nodeRun = node?.kind === 'generated-output' ? (node.runRecord || pipelineGeneratedOutputRunRecord(node)) : selectedRun;
+  if ((node?.kind === 'output' || node?.kind === 'generated-output') && nodeRun && node.artifact?.path) {
+    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(nodeRun, node.artifact) });
   }
   if (node?.kind === 'evidence' && selectedRun) {
     const sidecarUrl = pipelineRunReadUrlForPath(selectedRun, node.sidecar?.path);
@@ -11375,7 +11544,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
       <div class="pipeline-graph-inspector-status-text">${escapeHtml(statusRecord.message)}</div>
     </div>
     <div class="pipeline-graph-inspector-grid">
-      ${pipelineGraphInspectorRows(node, selectedRun).map(row => `
+      ${pipelineGraphInspectorRows(node, nodeRun || selectedRun).map(row => `
         <div class="pipeline-graph-inspector-key">${escapeHtml(row.key)}</div>
         <div class="pipeline-graph-inspector-val">${escapeHtml(row.value)}</div>
       `).join('')}
@@ -11453,12 +11622,51 @@ async function pipelineExecuteGraphRouteNode(node) {
   }
   pipelineDockState.selectedGraphEdgeId = null;
   if (pipelineRunArtifact(run, 'splat')?.path) {
-    pipelineDockState.selectedGraphNodeId = 'output';
+    const outputNode = pipelineAppendGeneratedOutputNode(run, node);
+    pipelineDockState.selectedGraphNodeId = outputNode?.id || node?.id || 'source';
   } else {
     pipelineDockState.selectedGraphNodeId = 'evidence';
   }
   renderPipelineDock();
   return run;
+}
+
+function pipelineAppendGeneratedOutputNode(run, routeNode) {
+  const artifact = pipelineRunArtifact(run, 'splat');
+  if (!run?.runId || !artifact?.path || !routeNode?.id) return null;
+  const sidecar = pipelineRunArtifact(run, 'sidecar');
+  const outputNodeId = `generated-output-${run.runId}`;
+  const routePosition = pipelineGraphNodePosition(routeNode.id);
+  const routeOutputCount = pipelineGeneratedOutputNodes().filter(node => node.routeNodeId === routeNode.id).length;
+  const record = {
+    id: outputNodeId,
+    kind: 'generated-output',
+    runId: run.runId,
+    routeNodeId: routeNode.id,
+    sourceGraphNodeId: run.graphExecution?.sourceGraphNodeId || run.source?.graphNodeId || null,
+    sourceLabel: run.source?.label || null,
+    artifact,
+    sidecar,
+    outputRoot: run.bundle?.document?.outputRoot || null,
+    reportPath: run.report?.path || null,
+    bundlePath: run.bundle?.path || null,
+    pipelineId: run.pipelineId || null,
+    generatorId: run.generatorId || routeNode.generator?.id || null,
+    generatorLabel: run.generatorLabel || routeNode.generator?.title || null,
+    fixtureBacked: pipelineRunUsesFixture(run),
+    previewTruth: pipelineRunPreviewTruthLabel(run, artifact),
+    createdAt: new Date().toISOString(),
+  };
+  pipelineDockState.generatedOutputNodes = [
+    record,
+    ...pipelineGeneratedOutputNodes().filter(node => node.id !== outputNodeId),
+  ];
+  pipelineDockState.graphNodePositions[outputNodeId] = pipelineClampGraphNodePosition({
+    x: routePosition.x + 190,
+    y: routePosition.y + Math.min(180, 8 + routeOutputCount * 92),
+  }, document.getElementById('pipeline-graph-canvas'));
+  savePipelineGraphLocalState();
+  return pipelineGeneratedOutputGraphNode(record);
 }
 
 function pipelineGraphInspectorSubjectId() {
@@ -11552,19 +11760,28 @@ function placePipelineGeneratorRouteNode(generatorId, position) {
   const generator = pipelineGeneratorById(generatorId) || pipelineGeneratorForPipelineId(generatorId);
   const pipeline = selectPipelineGenerator(generatorId);
   if (!pipeline) return null;
+  pipelineDockState.graphRouteNodes ||= [];
+  const routeId = `route-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const routeNode = pipelineGraphRouteNodeRecord(routeId, generator, pipeline);
+  if (!routeNode) return null;
+  pipelineDockState.graphRouteNodes.push(routeNode);
   if (position) {
-    pipelineDockState.graphNodePositions.route = {
+    pipelineDockState.graphNodePositions[routeId] = {
       x: Math.max(0, Math.round(position.x - 72)),
       y: Math.max(0, Math.round(position.y - 48)),
     };
+  } else {
+    pipelineGraphNodePosition(routeId);
   }
-  pipelineDockState.selectedGraphNodeId = 'route';
+  pipelineCreateGraphEdge('source', routeId);
+  pipelineCreateGraphEdge(routeId, 'evidence');
+  pipelineDockState.selectedGraphNodeId = routeId;
   pipelineDockState.selectedGraphEdgeId = null;
   savePipelineGraphLocalState();
   renderPipelineDock();
   document.getElementById('viewport')?.classList.remove('dragover');
   setInfo(`Generator placed on graph: ${generator?.title || pipeline.label || pipeline.id}`);
-  return pipeline;
+  return routeNode;
 }
 
 function handlePipelineGraphGeneratorDrop(event) {
@@ -11614,7 +11831,7 @@ function pipelineGraphNodeActionItem(node, action) {
     };
   }
   if (action === 'load-output' && node?.kind === 'generated-output') {
-    const run = selectedPipelineRun();
+    const run = node.runRecord || pipelineGeneratedOutputRunRecord(node);
     return {
       label: 'Load Output',
       runningMessage: 'Loading generated output into the scene...',
@@ -11787,7 +12004,9 @@ function renderPipelineGraphWorkbench() {
     nodeEl.addEventListener('pointerup', endPipelineGraphNodeDrag);
     nodeEl.addEventListener('pointercancel', endPipelineGraphNodeDrag);
   });
-  renderPipelineGraphInspector(pipelineDockState.selectedGraphEdgeId ? null : pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId), selectedRun);
+  const selectedNode = pipelineDockState.selectedGraphEdgeId ? null : pipelineGraphNodeForId(graph, pipelineDockState.selectedGraphNodeId);
+  const inspectorRun = selectedNode?.kind === 'generated-output' ? (selectedNode.runRecord || pipelineGeneratedOutputRunRecord(selectedNode)) : selectedRun;
+  renderPipelineGraphInspector(selectedNode, inspectorRun);
 }
 
 function pipelineRunReadUrlForPath(result, artifactPath) {

@@ -21,11 +21,15 @@ assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline U
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
 assert.match(witness, /data-pipeline-graph-node-action="execute"/, 'Pipeline UI witness must activate Execute from the in-canvas route node');
-assert.match(witness, /data-pipeline-generated-output-node-id="output"/, 'Pipeline UI witness must require the generated output graph node after execution');
 assert.match(witness, /real SHARP \/ point-cloud preview/, 'Pipeline UI witness must assert the generated node exposes the live SHARP preview truth boundary');
 assert.match(witness, /Load Output/, 'Pipeline UI witness must activate the visible output-node Load Output button after graph execution');
 assert.match(witness, /data-pipeline-graph-node-action="load-output"/, 'Pipeline UI witness must activate Load from the generated output graph node');
 assert.match(witness, /loadedPipelineArtifactPaths/, 'Pipeline UI witness must assert generated output load state is recorded on the pipeline graph');
+assert.match(witness, /secondAssetNeedle/, 'Pipeline UI witness must support a two-input repeated-generation smoke');
+assert.match(witness, /generatedOutputNodes/, 'Pipeline UI witness must inspect generated-output records, not only singleton DOM nodes');
+assert.match(witness, /distinctGeneratedOutputs/, 'Pipeline UI witness must assert repeated generation preserves distinct output identities');
+assert.doesNotMatch(witness, /data-pipeline-graph-node-id="route"/, 'Pipeline UI witness must not depend on singleton route node ids');
+assert.doesNotMatch(witness, /data-pipeline-generated-output-node-id="output"/, 'Pipeline UI witness must not depend on singleton output node ids');
 assert.match(witness, /graphExecution/, 'Pipeline UI witness must assert graph execution provenance on the selected run');
 assert.match(witness, /previewKind === 'point-cloud'/, 'Pipeline UI witness must assert the loaded graph output rendered through the point-cloud preview path');
 assert.match(witness, /kaminosSplatPreviewDebugState/, 'Pipeline UI witness must inspect the point-cloud preview debug surface after Load Output');
