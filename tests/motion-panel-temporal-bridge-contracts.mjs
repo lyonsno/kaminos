@@ -85,6 +85,9 @@ assert.match(index, /window\.generateMotion\s*=\s*generateMotionPanelTemporalPre
 assert.match(index, /motionPromptValueForPreview/, 'preview bridge reads both motion-panel and text-to-motion prompt controls');
 assert.match(index, /createMotionSourceGhostVisual/, 'browser builds a phase-locked generated source skeleton visual');
 assert.match(index, /updateMotionSourceGhostFrame/, 'browser updates source skeleton from the temporal source frame clock');
+assert.match(index, /inferMotionSourceGhostAxes/, 'browser infers source skeleton display axes instead of assuming y-up');
+assert.match(index, /upAxis/, 'source ghost debug exposes the inferred up axis');
+assert.match(index, /displayBasis/, 'source ghost debug exposes the raw-to-display basis');
 assert.match(index, /sourceGhost/, 'browser temporal debug exposes source skeleton ghost evidence');
 assert.match(index, /sourceFrameSharedWithOrb/, 'debug evidence states whether source skeleton and orb share the same source frame');
 

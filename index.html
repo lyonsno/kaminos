@@ -4190,6 +4190,51 @@ function motionServerJointBounds(result) {
   return bounds;
 }
 
+function inferMotionSourceGhostAxes(result, bounds = motionServerJointBounds(result)) {
+  const axisNames = ['x', 'y', 'z'];
+  const frame = Array.isArray(result?.joints?.[0]) ? result.joints[0] : [];
+  const head = frame[6] || null;
+  const leftFoot = frame[69] || null;
+  const rightFoot = frame[74] || null;
+  const avgFoot = leftFoot && rightFoot
+    ? [
+      ((Number(leftFoot[0]) || 0) + (Number(rightFoot[0]) || 0)) * 0.5,
+      ((Number(leftFoot[1]) || 0) + (Number(rightFoot[1]) || 0)) * 0.5,
+      ((Number(leftFoot[2]) || 0) + (Number(rightFoot[2]) || 0)) * 0.5,
+    ]
+    : null;
+  const spans = axisNames.map((_, axis) => Math.max(0, (Number(bounds.max[axis]) || 0) - (Number(bounds.min[axis]) || 0)));
+  const landmarkScores = axisNames.map((_, axis) => {
+    if (!head || !avgFoot) return spans[axis];
+    return Math.abs((Number(head[axis]) || 0) - avgFoot[axis]) + spans[axis] * 0.04;
+  });
+  const upAxis = landmarkScores
+    .map((score, axis) => ({ score, axis }))
+    .sort((a, b) => b.score - a.score)[0]?.axis ?? 1;
+  const remainingAxes = [0, 1, 2]
+    .filter(axis => axis !== upAxis)
+    .sort((a, b) => spans[b] - spans[a]);
+  const rightAxis = remainingAxes[0] ?? (upAxis === 0 ? 1 : 0);
+  const depthAxis = remainingAxes[1] ?? [0, 1, 2].find(axis => axis !== upAxis && axis !== rightAxis) ?? 2;
+  return {
+    schema: 'kaminos.motion-source-ghost-display-basis.v0',
+    upAxis,
+    rightAxis,
+    depthAxis,
+    upAxisName: axisNames[upAxis],
+    rightAxisName: axisNames[rightAxis],
+    depthAxisName: axisNames[depthAxis],
+    spans: spans.map(value => Number(value.toFixed(5))),
+    landmarkScores: landmarkScores.map(value => Number(value.toFixed(5))),
+    sourceConvention: upAxis === 2 ? 'z-up-inferred' : (upAxis === 1 ? 'y-up-inferred' : 'x-up-inferred'),
+    displayMapping: {
+      x: axisNames[rightAxis],
+      y: axisNames[upAxis],
+      z: axisNames[depthAxis],
+    },
+  };
+}
+
 function motionServerSourceBones(result) {
   const jointCount = Math.max(0, Number(result?.num_joints) || result?.joints?.[0]?.length || 0);
   const parents = Array.isArray(result?.parents) ? result.parents : [];
@@ -4242,6 +4287,7 @@ function sampleMotionServerJointFrame(result, sourceFrame = 0) {
 
 function transformSourceGhostJoint(joint, sourceGhost, mode, rootPosition = null) {
   const sourceRoot = sourceGhost.sourceRoot;
+  const basis = sourceGhost.displayBasis;
   const scale = mode === 'overlay' ? sourceGhost.overlayScale : sourceGhost.sidecarScale;
   const base = mode === 'overlay'
     ? [
@@ -4251,9 +4297,9 @@ function transformSourceGhostJoint(joint, sourceGhost, mode, rootPosition = null
     ]
     : sourceGhost.sidecarOffset;
   return [
-    base[0] + ((Number(joint?.[0]) || 0) - sourceRoot[0]) * scale,
-    base[1] + ((Number(joint?.[1]) || 0) - sourceGhost.bounds.min[1]) * scale,
-    base[2] + ((Number(joint?.[2]) || 0) - sourceRoot[2]) * scale,
+    base[0] + ((Number(joint?.[basis.rightAxis]) || 0) - sourceRoot[basis.rightAxis]) * scale,
+    base[1] + ((Number(joint?.[basis.upAxis]) || 0) - sourceGhost.bounds.min[basis.upAxis]) * scale,
+    base[2] + ((Number(joint?.[basis.depthAxis]) || 0) - sourceRoot[basis.depthAxis]) * scale,
   ];
 }
 
@@ -4296,6 +4342,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
   group.add(points);
 
   const bounds = motionServerJointBounds(result);
+  const displayBasis = inferMotionSourceGhostAxes(result, bounds);
   const sourceRoot = motionServerSourceRoot(result);
   const span = Math.max(
     0.25,
@@ -4313,6 +4360,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
     bones,
     jointCount,
     bounds,
+    displayBasis,
     sourceRoot,
     sidecarScale,
     overlayScale: sidecarScale * 0.48,
@@ -4350,6 +4398,14 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
   sourceGhost.group.visible = jointCount > 0;
   sourceGhost.lines.material.opacity = opacity;
   sourceGhost.points.material.opacity = Math.min(0.72, opacity * 1.2);
+  const displayMin = [Infinity, Infinity, Infinity];
+  const displayMax = [-Infinity, -Infinity, -Infinity];
+  const noteDisplayPoint = point => {
+    for (let axis = 0; axis < 3; axis++) {
+      displayMin[axis] = Math.min(displayMin[axis], point[axis]);
+      displayMax[axis] = Math.max(displayMax[axis], point[axis]);
+    }
+  };
   const linePositions = sourceGhost.lines.geometry.getAttribute('position');
   for (let boneIndex = 0; boneIndex < sourceGhost.bones.length; boneIndex++) {
     const [parent, child] = sourceGhost.bones[boneIndex];
@@ -4363,6 +4419,7 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
   const pointPositions = sourceGhost.points.geometry.getAttribute('position');
   for (let i = 0; i < jointCount; i++) {
     const p = transformSourceGhostJoint(frame[i], sourceGhost, mode, rootPosition);
+    noteDisplayPoint(p);
     pointPositions.setXYZ(i, p[0], p[1], p[2]);
   }
   pointPositions.needsUpdate = true;
@@ -4378,6 +4435,10 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     opacity: Number(opacity.toFixed(5)),
     sourceFormat: 'motion-server-soma77-json',
     skeletonType: result.skeleton_type || null,
+    upAxis: sourceGhost.displayBasis.upAxis,
+    rightAxis: sourceGhost.displayBasis.rightAxis,
+    depthAxis: sourceGhost.displayBasis.depthAxis,
+    displayBasis: sourceGhost.displayBasis,
     sourceFrame: Number(frameNumber.toFixed(5)),
     orbSourceFrame: Number.isFinite(orbSourceFrame) ? Number(orbSourceFrame.toFixed(5)) : null,
     sourceFrameSharedWithOrb,
@@ -4389,6 +4450,11 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     pointsObjectName: sourceGhost.points.name,
     sidecarScale: Number(sourceGhost.sidecarScale.toFixed(5)),
     overlayScale: Number(sourceGhost.overlayScale.toFixed(5)),
+    displayBounds: {
+      min: displayMin.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
+      max: displayMax.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
+      span: displayMax.map((value, axis) => Number(((Number.isFinite(value) ? value : 0) - (Number.isFinite(displayMin[axis]) ? displayMin[axis] : 0)).toFixed(5))),
+    },
   };
   sourceGhost.lastDebug = debug;
   return debug;
