@@ -86,8 +86,11 @@ assert.match(index, /motionPromptValueForPreview/, 'preview bridge reads both mo
 assert.match(index, /createMotionSourceGhostVisual/, 'browser builds a phase-locked generated source skeleton visual');
 assert.match(index, /updateMotionSourceGhostFrame/, 'browser updates source skeleton from the temporal source frame clock');
 assert.match(index, /inferMotionSourceGhostAxes/, 'browser infers source skeleton display axes instead of assuming y-up');
+assert.match(index, /motionSourceGhostReadableBones/, 'browser renders a readable source skeleton subset instead of dense SOMA finger clutter');
+assert.match(index, /targetSourceGhostHeight/, 'browser scales the source ghost from inferred body height');
 assert.match(index, /upAxis/, 'source ghost debug exposes the inferred up axis');
 assert.match(index, /displayBasis/, 'source ghost debug exposes the raw-to-display basis');
+assert.match(index, /renderedBoneCount/, 'source ghost debug exposes readable rendered bone count separately from raw joints');
 assert.match(index, /sourceGhost/, 'browser temporal debug exposes source skeleton ghost evidence');
 assert.match(index, /sourceFrameSharedWithOrb/, 'debug evidence states whether source skeleton and orb share the same source frame');
 

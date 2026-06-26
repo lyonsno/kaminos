@@ -4263,6 +4263,28 @@ function motionServerSourceBones(result) {
   return bones;
 }
 
+function motionSourceGhostReadableBones(result) {
+  const jointCount = Math.max(0, Number(result?.num_joints) || result?.joints?.[0]?.length || 0);
+  const readable = [
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6],
+    [3, 11], [11, 12], [12, 13], [13, 14],
+    [3, 39], [39, 40], [40, 41], [41, 42],
+    [0, 67], [67, 68], [68, 69], [69, 70],
+    [0, 72], [72, 73], [73, 74], [74, 75],
+  ];
+  const filtered = readable.filter(([parent, child]) => parent < jointCount && child < jointCount);
+  return filtered.length >= 12 ? filtered : motionServerSourceBones(result);
+}
+
+function targetSourceGhostHeight(displayBasis, bounds) {
+  const upSpan = Math.max(
+    0.25,
+    (Number(bounds.max[displayBasis.upAxis]) || 0) - (Number(bounds.min[displayBasis.upAxis]) || 0),
+  );
+  const targetHeight = 0.92;
+  return Math.max(0.28, Math.min(0.72, targetHeight / upSpan));
+}
+
 function sampleMotionServerJointFrame(result, sourceFrame = 0) {
   const joints = Array.isArray(result?.joints) ? result.joints : [];
   if (!joints.length) return [];
@@ -4306,7 +4328,8 @@ function transformSourceGhostJoint(joint, sourceGhost, mode, rootPosition = null
 function createMotionSourceGhostVisual(result, options = {}) {
   const joints = Array.isArray(result?.joints) ? result.joints : [];
   const jointCount = Math.max(0, Number(result?.num_joints) || joints[0]?.length || 0);
-  const bones = motionServerSourceBones(result);
+  const rawBones = motionServerSourceBones(result);
+  const bones = motionSourceGhostReadableBones(result);
   const group = new THREE.Group();
   group.name = 'motion-source-ghost-root';
   group.userData.kaminosMotionSourceGhost = {
@@ -4344,13 +4367,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
   const bounds = motionServerJointBounds(result);
   const displayBasis = inferMotionSourceGhostAxes(result, bounds);
   const sourceRoot = motionServerSourceRoot(result);
-  const span = Math.max(
-    0.25,
-    bounds.max[0] - bounds.min[0],
-    bounds.max[1] - bounds.min[1],
-    bounds.max[2] - bounds.min[2],
-  );
-  const sidecarScale = Math.max(0.38, Math.min(0.95, 1.45 / span));
+  const sidecarScale = targetSourceGhostHeight(displayBasis, bounds);
   const sourceGhost = {
     schema: 'kaminos.motion-source-ghost.v0',
     group,
@@ -4358,6 +4375,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
     points,
     result,
     bones,
+    rawBoneCount: rawBones.length,
     jointCount,
     bounds,
     displayBasis,
@@ -4445,6 +4463,8 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     sourceTime: Number((frameNumber / Math.max(1, Number(result.fps) || 30)).toFixed(5)),
     jointCount,
     boneCount: sourceGhost.bones.length,
+    rawBoneCount: sourceGhost.rawBoneCount,
+    renderedBoneCount: sourceGhost.bones.length,
     rootObjectName: sourceGhost.group.name,
     lineObjectName: sourceGhost.lines.name,
     pointsObjectName: sourceGhost.points.name,

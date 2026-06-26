@@ -551,7 +551,8 @@ try {
       if (sourceGhost.mode !== 'sidecar') throw new Error(`panel temporal route lost default sidecar sourceGhost mode: ${JSON.stringify(debug)}`);
       if (sourceGhost.sourceFrameSharedWithOrb !== true) throw new Error(`panel temporal route desynchronized sourceGhost from orb source frame: ${JSON.stringify(debug)}`);
       if (sourceGhost.jointCount !== 77) throw new Error(`panel temporal route lost SOMA77 sourceGhost joints: ${JSON.stringify(debug)}`);
-      if (!(sourceGhost.boneCount >= 70)) throw new Error(`panel temporal route lost sourceGhost bone coverage: ${JSON.stringify(debug)}`);
+      if (!(sourceGhost.rawBoneCount >= 70)) throw new Error(`panel temporal route lost raw sourceGhost bone coverage: ${JSON.stringify(debug)}`);
+      if (!(sourceGhost.renderedBoneCount >= 12 && sourceGhost.renderedBoneCount <= sourceGhost.rawBoneCount)) throw new Error(`panel temporal route lost readable rendered sourceGhost bone coverage: ${JSON.stringify(debug)}`);
       if (!Number.isInteger(sourceGhost.upAxis) || !sourceGhost.displayBasis?.displayMapping) throw new Error(`panel temporal route lost sourceGhost display-basis evidence: ${JSON.stringify(debug)}`);
       if (!String(sourceGhost.lineObjectName || '').includes('soma77-bones') || !String(sourceGhost.pointsObjectName || '').includes('soma77-joints')) throw new Error(`panel temporal route lost named sourceGhost render objects: ${JSON.stringify(debug)}`);
     }
