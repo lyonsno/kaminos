@@ -4,10 +4,13 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const witnessPath = join(root, 'scene-object-witness.mjs');
+const indexPath = join(root, 'index.html');
 
 assert.ok(existsSync(witnessPath), 'scene-object-witness.mjs must provide a reusable browser witness for scene object UI');
+assert.ok(existsSync(indexPath), 'index.html must provide the browser debug surface consumed by the witness');
 
 const witness = readFileSync(witnessPath, 'utf8');
+const indexHtml = readFileSync(indexPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
@@ -213,6 +216,7 @@ assert.match(witness, /real hybrid splat overlay did not bridge raw asset coordi
 assert.match(witness, /real hybrid splat overlay did not hand model matrix ownership to PBRnext/, 'Real Hybrid Renderer witness fails while Kaminos still bakes object matrices into camera view');
 assert.match(witness, /hybrid splat overlay camera motion inverted relative to Kaminos preview/, 'Real Hybrid Renderer witness fails when the overlay layer moves inverted under camera motion');
 assert.match(witness, /--hybrid-module-url/, 'Real Hybrid Renderer witness can target a non-default PBRnext module server without rewriting the witness');
+assert.match(indexHtml, /capabilities: handle\?\.capabilities \|\| null/, 'Hybrid Renderer debug state exposes stable overlayDebug.capabilities alias');
 assert.match(witness, /kaminosSetCameraDebugPose/, 'Real Hybrid Renderer witness can move the Kaminos camera through an explicit debug surface');
 assert.match(witness, /kaminosHybridSplatOverlayProjectionProbe/, 'Real Hybrid Renderer witness reads the overlay projection coherence probe');
 assert.match(witness, /kaminosHybridSplatOverlayDebugState/, 'Hybrid Renderer witness reads the explicit overlay debug surface');

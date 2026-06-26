@@ -3162,7 +3162,7 @@ async function runRealHybridCroppedSupportedOverlayScenario(ws) {
     throw new Error(`cropped hybrid overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
   }
   if (evidence.overlayDebug?.sceneContextAccepted !== true
-      || evidence.handoffDebug?.activeHandoff?.evidence?.sceneContextAccepted !== true
+      || evidence.handoffDebug?.activeHandoff?.hybridOverlay?.sceneContextAccepted !== true
       || !evidence.overlayDebug?.sceneContextTelemetry) {
     throw new Error(`cropped hybrid overlay lost scene-context acceptance: ${JSON.stringify(evidence)}`);
   }

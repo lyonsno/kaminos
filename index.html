@@ -911,6 +911,7 @@ function hybridSplatOverlayDebugState() {
     cropAppliedByRenderer: hybridSplatOverlayCropAppliedByRenderer(),
     canvasConnected: !!handle?.canvas?.isConnected,
     sceneLoaded: !!handle?.scene,
+    capabilities: handle?.capabilities || null,
     handleCapabilities: handle?.capabilities || null,
     sourceIdentity: handle?.sourceIdentity || null,
     correctionApplication: handle?.correctionApplication || null,
