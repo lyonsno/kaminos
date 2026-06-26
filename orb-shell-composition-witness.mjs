@@ -13,6 +13,7 @@ const port = Number(args.get('--debug-port') || 9230);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-orb-shell-composition-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 2500);
+const focus = args.get('--focus') || 'wide';
 
 let phase = 'init';
 let browser = null;
@@ -75,6 +76,7 @@ async function main() {
     requestedUrl: url,
     routeGate: 'kaminos_orb_shell_grounding=1',
     expectedIdentity: 'orb-shell-macro-grammar-grounding-v0',
+    focus,
     phase,
   };
   try {
@@ -118,6 +120,10 @@ async function main() {
     await send(ws, 'Runtime.enable');
     await send(ws, 'Page.enable');
     await delay(settleMs);
+    if (focus === 'side-rim-return') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameSideRimReturn?.()');
+      await delay(500);
+    }
 
     phase = 'state';
     const state = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.debugState?.()');
@@ -162,6 +168,13 @@ async function main() {
     assert.equal(state?.decorativeSeamHintsFinalVisible, false, 'decorative seam hints must be suppressed in topology witness');
     assert.equal(state?.proxyPlateLipsFinalVisible, false, 'proxy plate lips must be suppressed in topology witness');
     assert.ok(state?.LamellarPlateBoundaryMesh?.every(mesh => mesh?.schema === 'LamellarPlateBoundaryMesh'), 'LamellarPlateBoundaryMesh records missing from debug state');
+    assert.equal(state?.LamellarInnerReturnPlan?.schema, 'LamellarInnerReturnPlan', 'LamellarInnerReturnPlan missing from debug state');
+    assert.equal(state?.LamellarInnerReturnPlan?.mode, 'inner-return-side-plane-v0', 'LamellarInnerReturnPlan mode missing from debug state');
+    assert.ok(state?.innerReturnSidePlaneMeshCount >= 1, 'inner-return side-plane mesh missing from debug state');
+    assert.equal(state?.innerReturnSidePlaneTopologyVerdict, 'one-visible-side-rim-return-side-plane-meshed', 'inner-return side-plane topology verdict missing from debug state');
+    assert.equal(state?.declaredSecondLayer, false, 'inner-return side plane must not declare a full second layer');
+    assert.ok(state?.targetInnerReturnBoundaryIds?.includes('right-side-rim-reveal-gap'), 'right-side rim target missing from debug state');
+    assert.ok(state?.LamellarInnerReturnSidePlaneMesh?.every(mesh => mesh?.schema === 'LamellarInnerReturnSidePlaneMesh'), 'LamellarInnerReturnSidePlaneMesh records missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.schema, 'CrossingSubSurgePlan', 'CrossingSubSurgePlan missing from debug state');
     assert.equal(state?.CrossingSubSurgePlan?.mode, 'crossing-sub-surge-decomposition-v0', 'CrossingSubSurgePlan mode missing from debug state');
     assert.ok(state?.crossingSubSurgeCount >= 3, 'composition must expose crossing body plus subordinate sub-surges');
@@ -221,6 +234,10 @@ async function main() {
       proxyPlateLipsFinalVisible: state.proxyPlateLipsFinalVisible,
       suppressedDecorativeHintCount: state.suppressedDecorativeHintCount,
       suppressedProxyFeatureCount: state.suppressedProxyFeatureCount,
+      innerReturnSidePlaneMeshCount: state.innerReturnSidePlaneMeshCount,
+      innerReturnSidePlaneTopologyVerdict: state.innerReturnSidePlaneTopologyVerdict,
+      targetInnerReturnBoundaryIds: state.targetInnerReturnBoundaryIds,
+      declaredSecondLayer: state.declaredSecondLayer,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
       channelThroughLineAudit: state.channelThroughLineAudit,
       ChannelThroughLinePlan: state.ChannelThroughLinePlan,
@@ -233,6 +250,9 @@ async function main() {
       LamellarPlateBoundaryPlan: state.LamellarPlateBoundaryPlan,
       lamellarPlateBoundaryPlan: state.lamellarPlateBoundaryPlan,
       LamellarPlateBoundaryMesh: state.LamellarPlateBoundaryMesh,
+      LamellarInnerReturnPlan: state.LamellarInnerReturnPlan,
+      lamellarInnerReturnPlan: state.lamellarInnerReturnPlan,
+      LamellarInnerReturnSidePlaneMesh: state.LamellarInnerReturnSidePlaneMesh,
       crossingSubSurgeCount: state.crossingSubSurgeCount,
       cleanProxySurfaceMode: state.cleanProxySurfaceMode,
       topologyOnlySurfaceRelief: state.topologyOnlySurfaceRelief,

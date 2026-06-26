@@ -1095,6 +1095,101 @@ function createLamellarPlateBoundaryPlan(composition) {
   };
 }
 
+function createLamellarInnerReturnSidePlaneMesh(gap) {
+  const outerRadius = 1.108;
+  const innerRadius = 1.036;
+  const centerline = seamGapSeedPoints(gap.id, outerRadius);
+  const outerPlateEdge = [];
+  const innerReturnEdge = [];
+  const sidePlaneSamples = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const outerCenter = samplePolyline(centerline, t);
+    const prev = samplePolyline(centerline, Math.max(0, t - 0.03));
+    const next = samplePolyline(centerline, Math.min(1, t + 0.03));
+    const surfaceNormal = normalizePoint(outerCenter);
+    const tangent = normalizePoint(subtractPoints(next, prev));
+    let sideAxis = normalizePoint(crossPoints(surfaceNormal, tangent));
+    if (Math.hypot(...sideAxis) < 1e-5) sideAxis = [1, 0, 0];
+    const outer = addScaledPoint(scaledNormalizedPoint(outerCenter, outerRadius), sideAxis, 0.018);
+    const innerBase = scaledNormalizedPoint(addScaledPoint(outerCenter, surfaceNormal, -0.01), innerRadius);
+    const inner = addScaledPoint(innerBase, sideAxis, -0.012);
+    const measuredThickness = pointDistance(outer, inner);
+    outerPlateEdge.push({ t, point: outer, surfaceNormal, tangent, sideAxis });
+    innerReturnEdge.push({ t, point: inner, surfaceNormal, tangent, sideAxis });
+    sidePlaneSamples.push({
+      t,
+      outerPlateEdge: outer,
+      innerReturnEdge: inner,
+      midpoint: lerpPoint(outer, inner, 0.5),
+      measuredThickness,
+      surfaceNormal,
+      tangent,
+      sideAxis,
+    });
+  }
+  const returnThicknessStats = summarizeDistances(sidePlaneSamples.map(sample => ({
+    t: sample.t,
+    distance: sample.measuredThickness,
+  })));
+  const targetThickness = returnThicknessStats.mean;
+  const endpointThicknessDeltas = [
+    Math.abs(sidePlaneSamples[0].measuredThickness - targetThickness),
+    Math.abs(sidePlaneSamples[sidePlaneSamples.length - 1].measuredThickness - targetThickness),
+  ];
+  return {
+    schema: 'LamellarInnerReturnSidePlaneMesh',
+    mode: 'inner-return-side-plane-v0',
+    id: `${gap.id}-inner-return-side-plane-mesh`,
+    targetBoundaryId: gap.id,
+    sourceGapDescriptorId: gap.id,
+    boundaryRole: 'visible-side-rim-inner-return-candidate',
+    declaredSecondLayer: false,
+    finalGeometryKind: 'outer-edge-to-inner-return-side-wall',
+    outerPlateEdge,
+    innerReturnEdge,
+    sidePlaneSamples,
+    returnThicknessStats,
+    endpointContinuityStats: {
+      maxEndpointThicknessDelta: Math.max(...endpointThicknessDeltas),
+      startThickness: sidePlaneSamples[0].measuredThickness,
+      endThickness: sidePlaneSamples[sidePlaneSamples.length - 1].measuredThickness,
+    },
+    sideWallFaces: [
+      'outer-chamfer-return',
+      'inner-return-wall',
+      'inner-return-chamfer',
+      'side-plane-bridge',
+    ],
+    proxyRailFinalVisible: false,
+    suppressedProxyHintIds: [`${gap.id}-future-mesh-boundary-input`],
+    visualContract: 'visible right-side rim complication gets explicit side planes, not a declared second layer',
+  };
+}
+
+function createLamellarInnerReturnPlan(composition) {
+  const targetGap = composition.expandedMacroRegionProxyPlan?.seamGaps?.find(gap => gap.id === 'right-side-rim-reveal-gap');
+  const sidePlaneMeshes = targetGap ? [createLamellarInnerReturnSidePlaneMesh(targetGap)] : [];
+  return {
+    schema: 'LamellarInnerReturnPlan',
+    mode: 'inner-return-side-plane-v0',
+    sidePlaneMeshes,
+    sidePlaneMeshCount: sidePlaneMeshes.length,
+    targetBoundaryIds: sidePlaneMeshes.map(mesh => mesh.targetBoundaryId),
+    declaredSecondLayer: false,
+    proxyRailFinalVisible: false,
+    suppressedProxyHintIds: sidePlaneMeshes.flatMap(mesh => mesh.suppressedProxyHintIds),
+    innerReturnSidePlaneTopologyVerdict: sidePlaneMeshes.length === 1
+      ? 'one-visible-side-rim-return-side-plane-meshed'
+      : 'no-inner-return-side-plane-mesh',
+    nonGoals: [
+      'do-not-declare-full-second-layer',
+      'do-not-use-round-rail-as-side-plane',
+      'do-not-broaden-to-all-rim-boundaries',
+    ],
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -1220,6 +1315,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.channelThroughLinePlan = createChannelThroughLinePlan(next, next.channelThroughLineAudit);
   next.lamellarChannelMeshPlan = createLamellarChannelMeshPlan(next.channelThroughLinePlan);
   next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
+  next.lamellarInnerReturnPlan = createLamellarInnerReturnPlan(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -1748,6 +1844,54 @@ function makeLamellarPlateBoundaryGeometry(THREE, boundary) {
   return geometry;
 }
 
+function makeLamellarInnerReturnSidePlaneGeometry(THREE, mesh) {
+  const rowCount = mesh.sidePlaneSamples.length;
+  const columnCount = 5;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  for (let row = 0; row < rowCount; row++) {
+    const sample = mesh.sidePlaneSamples[row];
+    const outer = new THREE.Vector3(...sample.outerPlateEdge);
+    const inner = new THREE.Vector3(...sample.innerReturnEdge);
+    const normal = new THREE.Vector3(...sample.surfaceNormal).normalize();
+    const tangent = new THREE.Vector3(...sample.tangent).normalize();
+    const sideNormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+    const points = [
+      outer.clone().addScaledVector(normal, 0.018),
+      outer.clone().lerp(inner, 0.18).addScaledVector(normal, 0.008),
+      outer.clone().lerp(inner, 0.5).addScaledVector(sideNormal, 0.004),
+      outer.clone().lerp(inner, 0.82).addScaledVector(normal, -0.006),
+      inner.clone().addScaledVector(normal, -0.014),
+    ];
+    for (let col = 0; col < columnCount; col++) {
+      const point = points[col];
+      vertices.push(point.x, point.y, point.z);
+      normals.push(sideNormal.x, sideNormal.y, sideNormal.z);
+      uvs.push(col / (columnCount - 1), sample.t);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LamellarInnerReturnSidePlaneMesh = mesh;
+  return geometry;
+}
+
 function makeLamellarChannelStripGeometry(THREE, strip) {
   const rowCount = strip.edgeSamples.length;
   const columnCount = 5;
@@ -2087,6 +2231,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     envMapIntensity: 3.2,
     side: THREE.DoubleSide,
   });
+  const lamellarInnerReturnMaterial = new THREE.MeshStandardMaterial({
+    color: 0x263238,
+    roughness: 0.24,
+    metalness: 0.92,
+    envMapIntensity: 3.6,
+    side: THREE.DoubleSide,
+  });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -2102,6 +2253,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     lamellarChannelStripMaterial,
     lamellarPlateLipMaterial,
     lamellarPlateBoundaryMaterial,
+    lamellarInnerReturnMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -2194,6 +2346,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       group.add(boundaryMesh);
     }
 
+    for (const sidePlane of composition.lamellarInnerReturnPlan?.sidePlaneMeshes || []) {
+      const sidePlaneMesh = new THREE.Mesh(makeLamellarInnerReturnSidePlaneGeometry(THREE, sidePlane), lamellarInnerReturnMaterial);
+      sidePlaneMesh.name = sidePlane.id;
+      sidePlaneMesh.userData.LamellarInnerReturnPlan = composition.lamellarInnerReturnPlan;
+      sidePlaneMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
+      group.add(sidePlaneMesh);
+    }
+
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
       const ring = new THREE.Mesh(makeAperturePressureRing(THREE, voidRecord), apertureMaterial);
       ring.name = `${voidRecord.id}-aperture-pressure-ring`;
@@ -2239,6 +2399,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       proxyPlateLipsFinalVisible: composition.lamellarPlateBoundaryPlan?.proxyPlateLipsFinalVisible,
       suppressedDecorativeHintCount: composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.length || 0,
       suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
+      innerReturnSidePlaneMeshCount: composition.lamellarInnerReturnPlan?.sidePlaneMeshCount || 0,
+      innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
+      targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
+      declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
       topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -2284,6 +2448,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    frameSideRimReturn() {
+      camera.position.set(2.42, 0.12, 1.18);
+      controls.target.set(0.84, 0.02, 0.62);
+      controls.update();
+      onDirty?.();
+    },
     dispose() {
       active = false;
       disposeGroup();
@@ -2315,6 +2485,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         proxyPlateLipsFinalVisible: composition.lamellarPlateBoundaryPlan?.proxyPlateLipsFinalVisible,
         suppressedDecorativeHintCount: composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.length || 0,
         suppressedProxyFeatureCount: composition.lamellarPlateBoundaryPlan?.suppressedProxyFeatureIds?.length || 0,
+        innerReturnSidePlaneMeshCount: composition.lamellarInnerReturnPlan?.sidePlaneMeshCount || 0,
+        innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
+        targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
+        declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
         topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -2350,6 +2524,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LamellarPlateBoundaryPlan: composition.lamellarPlateBoundaryPlan,
         lamellarPlateBoundaryPlan: composition.lamellarPlateBoundaryPlan,
         LamellarPlateBoundaryMesh: composition.lamellarPlateBoundaryPlan?.boundaryMeshes || [],
+        LamellarInnerReturnPlan: composition.lamellarInnerReturnPlan,
+        lamellarInnerReturnPlan: composition.lamellarInnerReturnPlan,
+        LamellarInnerReturnSidePlaneMesh: composition.lamellarInnerReturnPlan?.sidePlaneMeshes || [],
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],
