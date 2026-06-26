@@ -377,13 +377,14 @@ try {
     await click(cdp, routeNode.point);
 
     const executeButton = await evalJson(cdp, `(() => {
-      const button = [...document.querySelectorAll('#pipeline-graph-inspector-actions button')]
-        .find(item => item.textContent.trim() === 'Execute');
+      const button = document.querySelector('[data-pipeline-graph-node-action="execute"][data-pipeline-graph-node-action-node-id="route"]');
+      const route = document.querySelector('[data-pipeline-graph-node-id="route"]');
       const rect = button?.getBoundingClientRect();
-      if (!rect) throw new Error('Execute button missing');
+      if (!rect) throw new Error('Route node Execute button missing');
       return {
         text: button.textContent,
         disabled: button.disabled,
+        nodeText: route?.innerText || '',
         inspectorText: document.querySelector('#pipeline-graph-inspector')?.innerText || '',
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
@@ -400,8 +401,11 @@ try {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
       const splat = run?.report?.document?.artifacts?.splat || null;
+      const outputNode = document.querySelector('[data-pipeline-generated-output-node-id="output"]');
+      const outputLoadButton = document.querySelector('[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="output"]');
+      const expectedTruth = ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === 'output' && splat?.path && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === 'route' && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === 'output' && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -409,6 +413,8 @@ try {
         source: run?.source || null,
         statusText: document.querySelector('#pipeline-graph-inspector-status')?.innerText || '',
         resultText: document.querySelector('#pipeline-run-result-panel')?.innerText || '',
+        generatedOutputNodeText: outputNode?.innerText || '',
+        generatedOutputLoadAction: Boolean(outputLoadButton),
         splat,
       };
     })()`, 'Graph Execute SHARP route');
@@ -421,13 +427,14 @@ try {
     await capture(cdp, beforePath);
 
     const loadOutputButton = await evalJson(cdp, `(() => {
-      const button = [...document.querySelectorAll('#pipeline-graph-inspector-actions button')]
-        .find(item => item.textContent.trim() === 'Load Output');
+      const button = document.querySelector('[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="output"]');
+      const outputNode = document.querySelector('[data-pipeline-generated-output-node-id="output"]');
       const rect = button?.getBoundingClientRect();
-      if (!rect) throw new Error('Load Output button missing');
+      if (!rect) throw new Error('Generated output node Load button missing');
       return {
         text: button.textContent,
         disabled: button.disabled,
+        nodeText: outputNode?.innerText || '',
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       };
     })()`);
@@ -437,6 +444,8 @@ try {
       const scene = window.kaminosSceneObjectDebugState?.() || [];
       const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
       const previewDebug = loaded ? window.kaminosSplatPreviewDebugState?.(loaded.id) : null;
+      const state = window.kaminosPipelineDockDebugState?.();
+      const loadedArtifactPath = loaded?.splat?.pipelineArtifact?.path || null;
       const viewportRect = document.querySelector('#viewport')?.getBoundingClientRect();
       const minimumIncluded = ${JSON.stringify(expectsFixture)} ? 1 : 700;
       return {
@@ -445,12 +454,15 @@ try {
           && Boolean(loaded?.splat?.pointCount)
           && previewDebug?.previewKind === 'point-cloud'
           && previewDebug?.includedVisible === true
-          && Number(previewDebug?.includedPointCount || 0) >= minimumIncluded,
+          && Number(previewDebug?.includedPointCount || 0) >= minimumIncluded
+          && Boolean(loadedArtifactPath && state?.loadedPipelineArtifactPaths?.[loadedArtifactPath]),
         activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
         objectRows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.innerText),
         pointCount: loaded?.splat?.pointCount || 0,
         previewKind: loaded?.splat?.previewKind || null,
         previewDebug,
+        loadedArtifactPath,
+        loadedPipelineArtifactPaths: state?.loadedPipelineArtifactPaths || {},
         viewportRect: viewportRect ? { x: viewportRect.x, y: viewportRect.y, width: viewportRect.width, height: viewportRect.height } : null,
         source: loaded?.source || null,
         statusText: document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '',

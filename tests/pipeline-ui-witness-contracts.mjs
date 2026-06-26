@@ -20,7 +20,12 @@ assert.match(witness, /splat\?\.status === 'real' && !splat\?\.fixtureSource/, '
 assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline UI witness must assert fixture-backed SHARP warns that connected images are provenance-only');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
+assert.match(witness, /data-pipeline-graph-node-action="execute"/, 'Pipeline UI witness must activate Execute from the in-canvas route node');
+assert.match(witness, /data-pipeline-generated-output-node-id="output"/, 'Pipeline UI witness must require the generated output graph node after execution');
+assert.match(witness, /real SHARP \/ point-cloud preview/, 'Pipeline UI witness must assert the generated node exposes the live SHARP preview truth boundary');
 assert.match(witness, /Load Output/, 'Pipeline UI witness must activate the visible output-node Load Output button after graph execution');
+assert.match(witness, /data-pipeline-graph-node-action="load-output"/, 'Pipeline UI witness must activate Load from the generated output graph node');
+assert.match(witness, /loadedPipelineArtifactPaths/, 'Pipeline UI witness must assert generated output load state is recorded on the pipeline graph');
 assert.match(witness, /graphExecution/, 'Pipeline UI witness must assert graph execution provenance on the selected run');
 assert.match(witness, /previewKind === 'point-cloud'/, 'Pipeline UI witness must assert the loaded graph output rendered through the point-cloud preview path');
 assert.match(witness, /kaminosSplatPreviewDebugState/, 'Pipeline UI witness must inspect the point-cloud preview debug surface after Load Output');

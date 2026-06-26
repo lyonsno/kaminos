@@ -175,6 +175,12 @@ assert.match(index, /pipeline-graph-inspector-status/, 'Pipeline graph inspector
 assert.match(index, /pipelineActivateGraphInspectorAction/, 'Pipeline graph inspector actions must activate from the trusted pointer-up path, not only synthetic click');
 assert.match(index, /async function pipelineExecuteGraphRouteNode\(/, 'Pipeline route nodes expose graph-local execution instead of relying only on the sidebar Run button');
 assert.match(index, /Execute/, 'Pipeline route-node inspector exposes an explicit Execute action');
+assert.match(index, /data-pipeline-graph-node-action="execute"/, 'Pipeline route nodes expose Execute as an in-canvas node action, not only an inspector button');
+assert.match(index, /kind:\s*'generated-output'/, 'Successful generated splat runs should become generated-output graph nodes, not only side-panel run evidence');
+assert.match(index, /real SHARP \/ point-cloud preview/, 'Generated SHARP output nodes must label the current preview truth boundary');
+assert.match(index, /pipelineDockState\.loadedPipelineArtifactPaths/, 'Pipeline graph tracks whether a generated artifact has been loaded into the scene');
+assert.match(index, /data-pipeline-generated-output-node-id/, 'Generated output nodes expose stable DOM ids for browser smokes');
+assert.match(index, /data-pipeline-graph-node-action="load-output"/, 'Generated output nodes expose Load as an in-canvas node action');
 assert.match(index, /pipelineSetGraphInspectorStatus\(`Executing \$\{/, 'Graph execution must visibly report which route node is running');
 assert.match(index, /pipelineDockState\.selectedGraphNodeId = 'output'/, 'Graph execution should move selection to the output node after a route produces a loadable artifact');
 assert.match(index, /graphExecution/, 'Pipeline run records must preserve graph execution provenance');
