@@ -806,6 +806,82 @@ function createChannelThroughLinePlan(composition, audit) {
   };
 }
 
+function createLamellarChannelMeshPlan(channelPlan) {
+  const stripMeshes = [];
+  const unsolvedChannelDescriptors = [];
+  for (const descriptor of channelPlan?.descriptors || []) {
+    if (descriptor.id === 'north-east-counter-thrust-ne-support-channel-through-line' && descriptor.pairedEdgeSamples.length >= 2) {
+      const edgeSamples = descriptor.pairedEdgeSamples.map(sample => {
+        const center = [
+          (sample.leftEdge[0] + sample.rightEdge[0]) * 0.5,
+          (sample.leftEdge[1] + sample.rightEdge[1]) * 0.5,
+          (sample.leftEdge[2] + sample.rightEdge[2]) * 0.5,
+        ];
+        return {
+          t: sample.t,
+          leftEdge: sample.leftEdge,
+          rightEdge: sample.rightEdge,
+          center,
+          surfaceNormal: normalizePoint(center),
+          measuredWidth: pointDistance(sample.leftEdge, sample.rightEdge),
+          bodyLayer: sample.bodyLayer,
+          railLayer: sample.railLayer,
+        };
+      });
+      stripMeshes.push({
+        schema: 'LamellarChannelStripMesh',
+        mode: 'flat-lamellar-channel-strip-v0',
+        id: `${descriptor.id}-flat-strip-mesh`,
+        sourceDescriptorId: descriptor.id,
+        sourceCandidateId: descriptor.sourceCandidateId,
+        parentAssemblage: descriptor.parentAssemblage,
+        replacesRoundBandId: 'ne-support',
+        finalGeometryKind: 'flat-shell-conforming-lamellar-strip',
+        crossSection: 'flat-ribbon-not-round-tube',
+        meshTopology: 'sampled-paired-edge-ribbon-buffer-geometry',
+        renderRole: 'final-visible-flat-channel-scaffold',
+        roundDiagnosticRailFinalVisible: false,
+        edgeSamples,
+        widthBudget: {
+          target: descriptor.constantGapBudget.target,
+          tolerance: descriptor.constantGapBudget.tolerance,
+          measuredMean: descriptor.gapDistanceStats.mean,
+          sourceRelativeVariation: descriptor.sourceGapDistanceStats?.relativeVariation,
+        },
+        thicknessBudget: {
+          target: 0.014,
+          tolerance: 0.006,
+        },
+        constantGapVerdict: descriptor.constantGapVerdict,
+        solvedForMeshing: false,
+        meshReadinessVerdict: descriptor.constantGapVerdict === 'within-budget'
+          ? 'flat-strip-mesh-scaffolded-from-within-budget-descriptor'
+          : 'flat-strip-mesh-scaffolded-source-still-outside-budget',
+      });
+    } else {
+      unsolvedChannelDescriptors.push({
+        sourceDescriptorId: descriptor.id,
+        sourceCandidateId: descriptor.sourceCandidateId,
+        reason: descriptor.pairedEdgeSamples?.length ? 'descriptor-not-yet-selected-for-first-mesh' : 'no-paired-edge-samples',
+        requiredAction: descriptor.correctiveAction,
+      });
+    }
+  }
+  return {
+    schema: 'LamellarChannelMeshPlan',
+    mode: 'flat-lamellar-channel-strip-v0',
+    sourcePlanSchema: channelPlan?.schema,
+    stripMeshes,
+    stripMeshCount: stripMeshes.length,
+    unsolvedChannelDescriptors,
+    roundDiagnosticRailFinalVisible: false,
+    meshVerdict: stripMeshes.length
+      ? 'first-channel-flat-strip-mesh-scaffolded'
+      : 'no-flat-channel-strip-mesh-scaffolded',
+    futureMeshRole: 'replace-round-diagnostic-rails-with-flat-shell-conforming-lamellar-strips',
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -929,6 +1005,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   }
   next.channelThroughLineAudit = createChannelThroughLineAudit(next);
   next.channelThroughLinePlan = createChannelThroughLinePlan(next, next.channelThroughLineAudit);
+  next.lamellarChannelMeshPlan = createLamellarChannelMeshPlan(next.channelThroughLinePlan);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -1410,6 +1487,50 @@ function makeSeamGapHintGeometry(THREE, gap) {
   return geometry;
 }
 
+function makeLamellarChannelStripGeometry(THREE, strip) {
+  const rowCount = strip.edgeSamples.length;
+  const columnCount = 5;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  const centerColumn = (columnCount - 1) * 0.5;
+  for (let row = 0; row < rowCount; row++) {
+    const sample = strip.edgeSamples[row];
+    const left = new THREE.Vector3(...sample.leftEdge);
+    const right = new THREE.Vector3(...sample.rightEdge);
+    const normal = new THREE.Vector3(...sample.surfaceNormal).normalize();
+    const thickness = strip.thicknessBudget.target;
+    for (let col = 0; col < columnCount; col++) {
+      const u = col / (columnCount - 1);
+      const q = Math.abs(col - centerColumn) / centerColumn;
+      const crown = (1 - q * q) * thickness;
+      const point = left.clone().lerp(right, u).addScaledVector(normal, crown);
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(u, sample.t);
+    }
+  }
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LamellarChannelStripMesh = strip;
+  return geometry;
+}
+
 function makeLowerCupClosureGeometry(THREE, lowerCupDepth = 1) {
   const rowCount = 22;
   const columnCount = 13;
@@ -1639,6 +1760,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const promotedBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.24, metalness: 0.93, envMapIntensity: 2.5, side: THREE.DoubleSide });
   const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
   const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
+  const lamellarChannelStripMaterial = new THREE.MeshStandardMaterial({
+    color: 0x11181b,
+    roughness: 0.28,
+    metalness: 0.94,
+    envMapIntensity: 2.8,
+    side: THREE.DoubleSide,
+  });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -1651,6 +1779,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     promotedBodyMaterial,
     crossingTuckBodyMaterial,
     seamGapHintMaterial,
+    lamellarChannelStripMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -1697,6 +1826,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       territoryMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
       macroGroup.add(territoryMesh);
       for (const bandMember of assemblage.childBandPlan) {
+        const replacementStrip = composition.lamellarChannelMeshPlan?.stripMeshes?.find(strip => (
+          strip.parentAssemblage === assemblage.id
+          && strip.replacesRoundBandId === bandMember.id
+          && strip.roundDiagnosticRailFinalVisible === false
+        ));
+        if (replacementStrip) continue;
         const mesh = new THREE.Mesh(makeBandTube(THREE, assemblage, bandMember), materialForBand(bandMember));
         mesh.name = bandMember.id;
         mesh.userData.BandMember = bandMember;
@@ -1710,6 +1845,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         }
       }
       group.add(macroGroup);
+    }
+
+    for (const strip of composition.lamellarChannelMeshPlan?.stripMeshes || []) {
+      const stripMesh = new THREE.Mesh(makeLamellarChannelStripGeometry(THREE, strip), lamellarChannelStripMaterial);
+      stripMesh.name = `${strip.id}-flat-lamellar-channel-strip`;
+      stripMesh.userData.LamellarChannelMeshPlan = composition.lamellarChannelMeshPlan;
+      stripMesh.userData.LamellarChannelStripMesh = strip;
+      group.add(stripMesh);
     }
 
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
@@ -1743,6 +1886,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
       channelThroughLineDescriptorCount: composition.channelThroughLinePlan?.descriptorCount || 0,
       channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
+      lamellarChannelStripMeshCount: composition.lamellarChannelMeshPlan?.stripMeshCount || 0,
+      lamellarChannelMeshVerdict: composition.lamellarChannelMeshPlan?.meshVerdict,
+      roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
       topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1807,6 +1953,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
         channelThroughLineDescriptorCount: composition.channelThroughLinePlan?.descriptorCount || 0,
         channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
+        lamellarChannelStripMeshCount: composition.lamellarChannelMeshPlan?.stripMeshCount || 0,
+        lamellarChannelMeshVerdict: composition.lamellarChannelMeshPlan?.meshVerdict,
+        roundDiagnosticRailFinalVisible: composition.lamellarChannelMeshPlan?.roundDiagnosticRailFinalVisible,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
         topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1835,6 +1984,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         ChannelThroughLinePlan: composition.channelThroughLinePlan,
         channelThroughLinePlan: composition.channelThroughLinePlan,
         ChannelThroughLineDescriptor: composition.channelThroughLinePlan?.descriptors || [],
+        LamellarChannelMeshPlan: composition.lamellarChannelMeshPlan,
+        lamellarChannelMeshPlan: composition.lamellarChannelMeshPlan,
+        LamellarChannelStripMesh: composition.lamellarChannelMeshPlan?.stripMeshes || [],
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],
