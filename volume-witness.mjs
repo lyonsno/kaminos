@@ -30,6 +30,7 @@ const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
+const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function fireLickOperatorGainFromAmount(value) {
@@ -816,6 +817,7 @@ async function main() {
     const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
     const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
+    const expectedMainFluidLocalProjectionStrategy = MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY;
     const expectedFireLickBreakupEvaluations = expectedFireLickBreakupEvaluationsPerCell(effectiveFireLicks);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
@@ -826,6 +828,8 @@ async function main() {
     assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
     assert.equal(stateLedger.mainFluidKernelStrategy, expectedMainFluidStrategy, 'sim cost ledger main fluid kernel strategy does not match effective fire-lick state');
+    assert.equal(stateLedger.mainFluidLocalProjectionStrategy, expectedMainFluidLocalProjectionStrategy, 'sim cost ledger main fluid local projection strategy does not match staged pressure-only contract');
+    assert.equal(Number(stateLedger.mainFluidLocalProjectionDivergenceEvaluationsPerCell), 0, 'sim cost ledger should not report local main-fluid divergence projection evaluations');
     assert.equal(Number(stateLedger.fireLickBreakupEvaluationsPerCell), expectedFireLickBreakupEvaluations, 'sim cost ledger fire-lick breakup evaluation count does not match effective fire-lick state');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
@@ -862,6 +866,8 @@ async function main() {
       sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
       sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
       sampleLedger?.mainFluidKernelStrategy !== sampleMainFluidStrategy ||
+      sampleLedger?.mainFluidLocalProjectionStrategy !== expectedMainFluidLocalProjectionStrategy ||
+      Number(sampleLedger?.mainFluidLocalProjectionDivergenceEvaluationsPerCell) !== 0 ||
       Number(sampleLedger?.fireLickBreakupEvaluationsPerCell) !== sampleFireLickBreakupEvaluations ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||

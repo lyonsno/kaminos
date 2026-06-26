@@ -179,6 +179,7 @@ const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0'
 const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
+const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -2086,7 +2087,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
   let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
   let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
-  let projectionCorrection = pressureProjectionCorrection(cellI, effectiveProjection);
+  let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
@@ -2919,6 +2920,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
     mainFluidKernelStrategy: MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS,
+    mainFluidLocalProjectionStrategy: MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY,
+    mainFluidLocalProjectionDivergenceEvaluationsPerCell: 0,
     fireLickBreakupEnabled: false,
     fireLickBreakupEvaluationsPerCell: 0,
     fireLickOperatorGain: 0,
@@ -3978,6 +3981,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
       : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
     const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 2 : 0;
+    const mainFluidLocalProjectionStrategy = MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY;
+    const mainFluidLocalProjectionDivergenceEvaluationsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4008,6 +4013,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
+    state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
+    state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4030,6 +4037,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simPassesPerFrame,
       pressureSourceStrategy,
       mainFluidKernelStrategy,
+      mainFluidLocalProjectionStrategy,
+      mainFluidLocalProjectionDivergenceEvaluationsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5183,6 +5192,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureIterationRequested: state.pressureIterationRequested,
         pressureSourceStrategy: state.pressureSourceStrategy,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
+        mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
+        mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5461,6 +5472,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureIterationRequested: state.pressureIterationRequested,
       pressureSourceStrategy: state.pressureSourceStrategy,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
+      mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
+      mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,
