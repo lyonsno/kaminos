@@ -18,6 +18,9 @@ assert.match(witness, /innerReturnSideWallVisibilityVerdict/, 'composition witne
 assert.match(witness, /sideWallVisibilityProbe/, 'composition witness measures projected sidewall visibility');
 assert.match(core, /sideWallVisibilityProbe/, 'composition module exposes a sidewall projection probe');
 assert.match(witness, /frameSideRimReturn/, 'composition witness can focus the side-rim return target');
+assert.match(witness, /side-rim-clean-topology/, 'composition witness has a stripped clean topology focus');
+assert.match(core, /enableCleanSidewallTopologyWitness/, 'composition module can strip the sidewall witness to flat diagnostic topology');
+assert.match(core, /cleanTopologyWitnessMode/, 'composition module reports clean topology witness mode');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
 
@@ -44,6 +47,12 @@ assert.ok(sidePlane.sideWallRenderableSurfaces?.includes('visible-return-sidewal
 assert.equal(sidePlane.sideWallVisibilityContract?.status, 'operator-visible', 'sidewall visibility contract must require operator-visible geometry');
 assert.ok(sidePlane.sideWallVisibilityContract?.minimumScreenContrast >= 0.18, 'sidewall visibility contract requires measurable screen contrast');
 assert.ok(sidePlane.sideWallVisibilityContract?.minimumProjectedWidthPx >= 10, 'sidewall visibility contract requires visible projected width');
+assert.equal(sidePlane.cleanTopologyWitness?.mode, 'clean-sidewall-topology-v0', 'side-plane declares clean diagnostic topology witness mode');
+assert.equal(sidePlane.cleanTopologyWitness?.materialMode, 'flat-diagnostic-no-metal', 'clean sidewall witness disables fancy metal shader');
+assert.equal(sidePlane.cleanTopologyWitness?.surfaceDetailMode, 'disabled', 'clean sidewall witness disables surface detail');
+assert.equal(sidePlane.cleanTopologyWitness?.proxyClutterVisible, false, 'clean sidewall witness suppresses proxy clutter');
+assert.equal(sidePlane.sideWallCouplingContract?.outerEdgeShared, true, 'sidewall must share the outer plate edge');
+assert.equal(sidePlane.sideWallCouplingContract?.innerEdgeShared, true, 'sidewall must share the inner return edge');
 assert.ok(sidePlane.returnThicknessStats.relativeVariation <= 0.05, 'return thickness is held close enough to constant');
 assert.ok(sidePlane.endpointContinuityStats.maxEndpointThicknessDelta <= 0.004, 'return endpoints preserve thickness continuity');
 assert.equal(sidePlane.proxyRailFinalVisible, false, 'side-plane must not rely on proxy rails');

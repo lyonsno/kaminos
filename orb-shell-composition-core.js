@@ -1173,6 +1173,22 @@ function createLamellarInnerReturnSidePlaneMesh(gap) {
       minimumProjectedWidthPx: 10,
       materialIntent: 'slate-silver-side-plane-visible-against-black-carapace',
     },
+    cleanTopologyWitness: {
+      mode: 'clean-sidewall-topology-v0',
+      materialMode: 'flat-diagnostic-no-metal',
+      surfaceDetailMode: 'disabled',
+      proxyClutterVisible: false,
+      visibleSurfaces: [
+        'outer-plate-edge-diagnostic',
+        'inner-return-edge-diagnostic',
+        'coupled-sidewall-face-diagnostic',
+      ],
+    },
+    sideWallCouplingContract: {
+      outerEdgeShared: true,
+      innerEdgeShared: true,
+      couplingVerdict: 'sidewall-face-shares-outer-and-inner-edge-vertices',
+    },
     proxyRailFinalVisible: false,
     suppressedProxyHintIds: [`${gap.id}-future-mesh-boundary-input`],
     visualContract: 'visible right-side rim complication gets explicit side planes, not a declared second layer',
@@ -1195,6 +1211,10 @@ function createLamellarInnerReturnPlan(composition) {
     innerReturnSideWallVisibilityVerdict: sidePlaneMeshes.every(mesh => mesh.sideWallVisibilityContract?.status === 'operator-visible')
       ? 'visible-sidewall-render-surface-required'
       : 'sidewall-render-surface-not-yet-visible',
+    cleanTopologyWitnessMode: sidePlaneMeshes.every(mesh => mesh.cleanTopologyWitness?.mode === 'clean-sidewall-topology-v0')
+      ? 'clean-sidewall-topology-v0'
+      : 'not-configured',
+    cleanTopologyProxyClutterVisible: sidePlaneMeshes.some(mesh => mesh.cleanTopologyWitness?.proxyClutterVisible !== false),
     innerReturnSidePlaneTopologyVerdict: sidePlaneMeshes.length === 1
       ? 'one-visible-side-rim-return-side-plane-meshed'
       : 'no-inner-return-side-plane-mesh',
@@ -1924,13 +1944,11 @@ function makeLamellarInnerReturnSideWallGeometry(THREE, mesh) {
     const surfaceNormal = new THREE.Vector3(...sample.surfaceNormal).normalize();
     const faceNormal = new THREE.Vector3().crossVectors(tangent, surfaceNormal).normalize();
     if (faceNormal.dot(sideAxis) < 0) faceNormal.multiplyScalar(-1);
-    const lift = 0.026;
-    const ridge = Math.sin(sample.t * Math.PI) * 0.006;
     const points = [
-      outer.clone().lerp(inner, 0.08).addScaledVector(faceNormal, lift + ridge).addScaledVector(surfaceNormal, 0.006),
-      outer.clone().lerp(inner, 0.34).addScaledVector(faceNormal, lift + ridge),
-      outer.clone().lerp(inner, 0.66).addScaledVector(faceNormal, lift + ridge),
-      outer.clone().lerp(inner, 0.92).addScaledVector(faceNormal, lift + ridge).addScaledVector(surfaceNormal, -0.008),
+      outer.clone(),
+      outer.clone().lerp(inner, 0.33),
+      outer.clone().lerp(inner, 0.67),
+      inner.clone(),
     ];
     for (let col = 0; col < columnCount; col++) {
       const point = points[col];
@@ -1958,6 +1976,12 @@ function makeLamellarInnerReturnSideWallGeometry(THREE, mesh) {
   geometry.userData.LamellarInnerReturnSidePlaneMesh = mesh;
   geometry.userData.visibleSideWallSurface = mesh.sideWallVisibilityContract;
   return geometry;
+}
+
+function makeLamellarInnerReturnDiagnosticEdgeGeometry(THREE, edgeSamples, radius = 0.006) {
+  const points = edgeSamples.map(sample => new THREE.Vector3(...sample.point));
+  const curve = new THREE.CatmullRomCurve3(points);
+  return new THREE.TubeGeometry(curve, Math.max(8, points.length * 2), radius, 8, false);
 }
 
 function makeLamellarChannelStripGeometry(THREE, strip) {
@@ -2315,6 +2339,16 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     envMapIntensity: 3.4,
     side: THREE.DoubleSide,
   });
+  const cleanSideWallMaterial = new THREE.MeshBasicMaterial({
+    color: 0xb8c6ca,
+    side: THREE.DoubleSide,
+  });
+  const cleanSidePlaneMaterial = new THREE.MeshBasicMaterial({
+    color: 0x273238,
+    side: THREE.DoubleSide,
+  });
+  const cleanOuterEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xf2f7f8 });
+  const cleanInnerEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0x20313a });
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -2332,6 +2366,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     lamellarPlateBoundaryMaterial,
     lamellarInnerReturnMaterial,
     lamellarInnerReturnSideWallMaterial,
+    cleanSideWallMaterial,
+    cleanSidePlaneMaterial,
+    cleanOuterEdgeMaterial,
+    cleanInnerEdgeMaterial,
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -2429,13 +2467,27 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       sidePlaneMesh.name = sidePlane.id;
       sidePlaneMesh.userData.LamellarInnerReturnPlan = composition.lamellarInnerReturnPlan;
       sidePlaneMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
+      sidePlaneMesh.userData.cleanTopologyRole = 'coupled-sidewall-underlay';
       group.add(sidePlaneMesh);
       const sideWallMesh = new THREE.Mesh(makeLamellarInnerReturnSideWallGeometry(THREE, sidePlane), lamellarInnerReturnSideWallMaterial);
       sideWallMesh.name = `${sidePlane.id}-visible-return-sidewall-band`;
       sideWallMesh.userData.LamellarInnerReturnPlan = composition.lamellarInnerReturnPlan;
       sideWallMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
       sideWallMesh.userData.visibleSideWallSurface = sidePlane.sideWallVisibilityContract;
+      sideWallMesh.userData.cleanTopologyRole = 'coupled-sidewall-face-diagnostic';
       group.add(sideWallMesh);
+      const outerEdgeMesh = new THREE.Mesh(makeLamellarInnerReturnDiagnosticEdgeGeometry(THREE, sidePlane.outerPlateEdge), cleanOuterEdgeMaterial);
+      outerEdgeMesh.name = `${sidePlane.id}-outer-plate-edge-diagnostic`;
+      outerEdgeMesh.visible = false;
+      outerEdgeMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
+      outerEdgeMesh.userData.cleanTopologyRole = 'outer-plate-edge-diagnostic';
+      group.add(outerEdgeMesh);
+      const innerEdgeMesh = new THREE.Mesh(makeLamellarInnerReturnDiagnosticEdgeGeometry(THREE, sidePlane.innerReturnEdge), cleanInnerEdgeMaterial);
+      innerEdgeMesh.name = `${sidePlane.id}-inner-return-edge-diagnostic`;
+      innerEdgeMesh.visible = false;
+      innerEdgeMesh.userData.LamellarInnerReturnSidePlaneMesh = sidePlane;
+      innerEdgeMesh.userData.cleanTopologyRole = 'inner-return-edge-diagnostic';
+      group.add(innerEdgeMesh);
     }
 
     for (const voidRecord of composition.AperturePressure.primaryVoids) {
@@ -2487,6 +2539,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
       innerReturnSideWallVisibilityVerdict: composition.lamellarInnerReturnPlan?.innerReturnSideWallVisibilityVerdict,
       visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
+      cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
+      cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
       targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
       declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
@@ -2539,6 +2593,40 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.target.set(0.89, 0.02, 0.6);
       controls.update();
       onDirty?.();
+    },
+    enableCleanSidewallTopologyWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.cleanSidewallTopologyHidden = true;
+          child.visible = false;
+        }
+      });
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const role = child.userData?.cleanTopologyRole;
+        child.visible = !!role;
+        if (role === 'coupled-sidewall-face-diagnostic') child.material = cleanSideWallMaterial;
+        if (role === 'coupled-sidewall-underlay') child.material = cleanSidePlaneMaterial;
+        if (role === 'outer-plate-edge-diagnostic') child.material = cleanOuterEdgeMaterial;
+        if (role === 'inner-return-edge-diagnostic') child.material = cleanInnerEdgeMaterial;
+      });
+      camera.position.set(1.72, 0.03, -0.78);
+      controls.target.set(0.89, 0.02, 0.6);
+      controls.update();
+      onDirty?.();
+      return {
+        schema: 'CleanSidewallTopologyWitnessState',
+        cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
+        materialMode: 'flat-diagnostic-no-metal',
+        surfaceDetailMode: 'disabled',
+        proxyClutterVisible: false,
+        visibleRoles: [
+          'outer-plate-edge-diagnostic',
+          'inner-return-edge-diagnostic',
+          'coupled-sidewall-face-diagnostic',
+          'coupled-sidewall-underlay',
+        ],
+      };
     },
     sideWallVisibilityProbe(viewport = { width: 1600, height: 1100 }) {
       const sideWallMeshes = [];
@@ -2630,6 +2718,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         innerReturnSidePlaneTopologyVerdict: composition.lamellarInnerReturnPlan?.innerReturnSidePlaneTopologyVerdict,
         innerReturnSideWallVisibilityVerdict: composition.lamellarInnerReturnPlan?.innerReturnSideWallVisibilityVerdict,
         visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
+        cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
+        cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
         targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
         declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
