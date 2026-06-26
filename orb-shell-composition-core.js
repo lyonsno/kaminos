@@ -46,6 +46,19 @@ function summarizeDistances(samples) {
   };
 }
 
+function normalizePoint(point) {
+  const length = Math.hypot(point[0], point[1], point[2]) || 1;
+  return [point[0] / length, point[1] / length, point[2] / length];
+}
+
+function addScaledPoint(point, normal, amount) {
+  return [
+    point[0] + normal[0] * amount,
+    point[1] + normal[1] * amount,
+    point[2] + normal[2] * amount,
+  ];
+}
+
 function stableNoise(key) {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
@@ -685,6 +698,114 @@ function createBandChannelCandidate(assemblage, bodyId, railId) {
   };
 }
 
+function createSharedSpineChannelDescriptor(assemblage, candidate) {
+  const body = assemblage.childBandPlan.find(member => member.id === candidate.bodyBandId);
+  const rail = assemblage.childBandPlan.find(member => member.id === candidate.railBandId);
+  const constantGapBudget = {
+    target: 0.12,
+    tolerance: 0.018,
+    maxRelativeVariation: 0.18,
+  };
+  const pairedEdgeSamples = candidate.gapSamples.map(sample => {
+    const bodyPoint = sampleSpinePoint(assemblage, body, sample.t, 1.052);
+    const railPoint = sampleSpinePoint(assemblage, rail, sample.t, 1.052);
+    const railDirection = normalizePoint([
+      railPoint[0] - bodyPoint[0],
+      railPoint[1] - bodyPoint[1],
+      railPoint[2] - bodyPoint[2],
+    ]);
+    const midpoint = [
+      (bodyPoint[0] + railPoint[0]) * 0.5,
+      (bodyPoint[1] + railPoint[1]) * 0.5,
+      (bodyPoint[2] + railPoint[2]) * 0.5,
+    ];
+    const leftEdge = addScaledPoint(midpoint, railDirection, -constantGapBudget.target * 0.5);
+    const rightEdge = addScaledPoint(midpoint, railDirection, constantGapBudget.target * 0.5);
+    return {
+      t: sample.t,
+      leftEdge,
+      rightEdge,
+      measuredGap: pointDistance(leftEdge, rightEdge),
+      sourceBodyPoint: bodyPoint,
+      sourceRailPoint: railPoint,
+      bodyLayer: sample.bodyLayer,
+      railLayer: sample.railLayer,
+    };
+  });
+  const gapDistanceStats = summarizeDistances(pairedEdgeSamples.map(sample => ({
+    t: sample.t,
+    distance: sample.measuredGap,
+  })));
+  const sourceStats = candidate.gapDistanceStats;
+  const sourceOutsideBudget = sourceStats.relativeVariation > constantGapBudget.maxRelativeVariation;
+  return {
+    schema: 'ChannelThroughLineDescriptor',
+    mode: 'channel-through-line-descriptor-v0',
+    id: `${assemblage.id}-${candidate.railBandId}-channel-through-line`,
+    sourceCandidateId: candidate.id,
+    sourceGapDistanceStats: sourceStats,
+    parentAssemblage: assemblage.id,
+    sourceKind: candidate.sourceKind,
+    generationPath: 'paired-edge-sampled-from-shared-parent-spine',
+    surfaceAttachment: 'expanded-region-proxy-surface',
+    constantGapBudget,
+    pairedEdgeSamples,
+    gapDistanceStats,
+    constantGapVerdict: sourceOutsideBudget ? 'outside-budget' : 'within-budget',
+    solvedForMeshing: !sourceOutsideBudget,
+    correctiveAction: sourceOutsideBudget
+      ? 'meshing-must-resample-channel-corridor-to-budget-before-preserving-groove'
+      : 'eligible-for-bounded-meshing',
+  };
+}
+
+function createUnsolvedSeamHintChannelDescriptor(candidate) {
+  return {
+    schema: 'ChannelThroughLineDescriptor',
+    mode: 'channel-through-line-descriptor-v0',
+    id: `${candidate.id}-channel-through-line`,
+    sourceCandidateId: candidate.id,
+    parentAssemblage: candidate.parentAssemblage,
+    sourceKind: candidate.sourceKind,
+    generationPath: 'unsolved-hardcoded-seam-hint',
+    surfaceAttachment: 'not-proven',
+    constantGapBudget: {
+      target: 0.12,
+      tolerance: 0.018,
+      maxRelativeVariation: 0.18,
+    },
+    pairedEdgeSamples: [],
+    gapDistanceStats: null,
+    constantGapVerdict: 'not-applicable-hardcoded-hint',
+    solvedForMeshing: false,
+    correctiveAction: 'replace-hardcoded-seam-hint-with-generated-channel-through-line',
+  };
+}
+
+function createChannelThroughLinePlan(composition, audit) {
+  const descriptors = [];
+  for (const candidate of audit.channelCandidates) {
+    if (candidate.id === 'north-east-counter-thrust-ne-support-visible-rail') {
+      const assemblage = composition.macroAssemblages.find(item => item.id === candidate.parentAssemblage);
+      descriptors.push(createSharedSpineChannelDescriptor(assemblage, candidate));
+    } else if (candidate.generationPath === 'hardcoded-seam-hint') {
+      descriptors.push(createUnsolvedSeamHintChannelDescriptor(candidate));
+    }
+  }
+  const solvedCount = descriptors.filter(descriptor => descriptor.solvedForMeshing).length;
+  return {
+    schema: 'ChannelThroughLinePlan',
+    mode: 'channel-through-line-descriptor-v0',
+    descriptors,
+    descriptorCount: descriptors.length,
+    solvedDescriptorCount: solvedCount,
+    channelCorridorVerdict: solvedCount === descriptors.length
+      ? 'all-channel-corridors-within-budget'
+      : 'channel-corridors-described-but-not-all-solved',
+    futureMeshRole: 'consume-channel-through-line-descriptors-before-preserving-grooves',
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -723,6 +844,7 @@ function createChannelThroughLineAudit(composition) {
       'ChannelThroughLineDescriptor',
       'paired-channel-edge-sampling',
       'constant-gap-distance-budget',
+      'constant-gap-distance-budget-satisfied-or-explicitly-unsolved',
       'surface-attachment-proof',
     ],
   };
@@ -806,6 +928,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
   }
   next.channelThroughLineAudit = createChannelThroughLineAudit(next);
+  next.channelThroughLinePlan = createChannelThroughLinePlan(next, next.channelThroughLineAudit);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -1618,6 +1741,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
       constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,
       channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
+      channelThroughLineDescriptorCount: composition.channelThroughLinePlan?.descriptorCount || 0,
+      channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
       cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
       topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1680,6 +1805,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
         constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,
         channelCandidateCount: composition.channelThroughLineAudit?.channelCandidates?.length || 0,
+        channelThroughLineDescriptorCount: composition.channelThroughLinePlan?.descriptorCount || 0,
+        channelCorridorVerdict: composition.channelThroughLinePlan?.channelCorridorVerdict,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
         cleanProxySurfaceMode: composition.cleanProxySurfacePolicy?.mode,
         topologyOnlySurfaceRelief: composition.cleanProxySurfacePolicy?.topologyOnlySurfaceRelief,
@@ -1705,6 +1832,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         frontApertureOwnership: composition.frontApertureOwnership,
         ChannelThroughLineAudit: composition.channelThroughLineAudit,
         channelThroughLineAudit: composition.channelThroughLineAudit,
+        ChannelThroughLinePlan: composition.channelThroughLinePlan,
+        channelThroughLinePlan: composition.channelThroughLinePlan,
+        ChannelThroughLineDescriptor: composition.channelThroughLinePlan?.descriptors || [],
         CrossingSubSurgePlan: composition.crossingSubSurgePlan,
         crossingSubSurgePlan: composition.crossingSubSurgePlan,
         CrossingSubSurge: composition.crossingSubSurgePlan?.subSurges || [],
