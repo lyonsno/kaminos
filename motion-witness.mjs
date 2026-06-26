@@ -6,7 +6,9 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 import {
+  DEFAULT_MOTION_SERVER_RESULT_FIXTURE,
   DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL,
+  adaptMotionServerResultToGeneratedPoseTemporalClip,
   buildMotionDecisionComparison,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
@@ -28,9 +30,12 @@ const isPhraseControlRoute = url.includes('kaminos_motion_phrase_controls=1');
 const isTrackRoute = url.includes('kaminos_motion_tracks=1');
 const isGeneratedTrackRoute = url.includes('kaminos_generated_motion_track=1');
 const isOutputMapRoute = url.includes('kaminos_motion_output_map=1');
-const isGeneratedPoseTemporalRoute = url.includes('kaminos_generated_pose_temporal=1');
+const isMotionPanelTemporalFixtureRoute = url.includes('kaminos_motion_panel_temporal_fixture=1');
+const isGeneratedPoseTemporalRoute = url.includes('kaminos_generated_pose_temporal=1') || isMotionPanelTemporalFixtureRoute;
 const requestedParams = new URL(url).searchParams;
-const requestedTemporalClipId = requestedParams.get('kaminos_generated_pose_temporal_clip') || 'kimodo_theatrical_bow_temporal_v0';
+const requestedTemporalClipId = isMotionPanelTemporalFixtureRoute
+  ? 'panel_lerm_creep_temporal_v0'
+  : requestedParams.get('kaminos_generated_pose_temporal_clip') || 'kimodo_theatrical_bow_temporal_v0';
 const requestedTemporalRegistryPath = requestedParams.get('kaminos_generated_pose_temporal_registry') || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL;
 const KNOWN_GENERATED_POSE_TEMPORAL_CLIP_IDS = [
   'kimodo_theatrical_bow_temporal_v0',
@@ -249,13 +254,17 @@ try {
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
 
   phase = 'rendering-filmstrip';
-  const temporalRegistry = isGeneratedPoseTemporalRoute
+  const temporalRegistry = isGeneratedPoseTemporalRoute && !isMotionPanelTemporalFixtureRoute
     ? JSON.parse(readFileSync(resolve(requestedTemporalRegistryPath), 'utf8'))
     : null;
-  const temporalClip = temporalRegistry
-    ? generatedPoseTemporalClipById(requestedTemporalClipId, temporalRegistry)
-    : null;
-  if (isGeneratedPoseTemporalRoute && !KNOWN_GENERATED_POSE_TEMPORAL_CLIP_IDS.includes(requestedTemporalClipId)) {
+  const temporalClip = isMotionPanelTemporalFixtureRoute
+    ? adaptMotionServerResultToGeneratedPoseTemporalClip(DEFAULT_MOTION_SERVER_RESULT_FIXTURE, {
+      id: requestedTemporalClipId,
+      label: 'Panel Lerm Creep',
+      sourceRoute: 'motion-server:fixture/kaminos_motion_panel_temporal_fixture',
+    })
+    : (temporalRegistry ? generatedPoseTemporalClipById(requestedTemporalClipId, temporalRegistry) : null);
+  if (isGeneratedPoseTemporalRoute && !isMotionPanelTemporalFixtureRoute && !KNOWN_GENERATED_POSE_TEMPORAL_CLIP_IDS.includes(requestedTemporalClipId)) {
     throw new Error(`unknown generated pose temporal clip id for witness: ${requestedTemporalClipId}`);
   }
   const timeline = isGeneratedPoseTemporalRoute
@@ -445,7 +454,9 @@ try {
   phase = 'settling-route';
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'window.location.href');
-  const routeParam = isGeneratedPoseTemporalRoute
+  const routeParam = isMotionPanelTemporalFixtureRoute
+    ? 'kaminos_motion_panel_temporal_fixture=1'
+    : (isGeneratedPoseTemporalRoute
     ? 'kaminos_generated_pose_temporal=1'
     : (isOutputMapRoute
     ? 'kaminos_motion_output_map=1'
@@ -455,7 +466,7 @@ try {
     ? 'kaminos_motion_phrase_controls=1'
     : (isTrackRoute
       ? 'kaminos_motion_tracks=1'
-      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1')))));
+      : (isPhraseRoute ? 'kaminos_motion_phrase=1' : 'kaminos_motion_agency=1'))))));
   if (!effectiveUrl.includes(routeParam)) throw new Error(`effective URL lost motion route ${routeParam}: ${effectiveUrl}`);
   const debugExpression = isGeneratedPoseTemporalRoute
     ? 'window.kaminosGeneratedPoseTemporalDebugState?.()'
@@ -504,12 +515,18 @@ try {
     if (generatedPoseTemporalHarness?.schema !== 'kaminos.generated-pose-temporal-harness.v0') throw new Error(`generated pose temporal route lost harness schema: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.track?.id !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost requested clip identity ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
     if (generatedPoseTemporalHarness.registryClipId !== requestedTemporalClipId) throw new Error(`generated pose temporal route lost registryClipId ${requestedTemporalClipId}: ${JSON.stringify(debug)}`);
-    if (!String(generatedPoseTemporalHarness.sourceRoute || '').includes('.npz')) throw new Error(`generated pose temporal route lost source route: ${JSON.stringify(debug)}`);
-    if (generatedPoseTemporalHarness.sourceFormat !== 'kimodo-soma77-explicit-joints') throw new Error(`generated pose temporal route lost source format: ${JSON.stringify(debug)}`);
+    if (isMotionPanelTemporalFixtureRoute) {
+      if (!String(generatedPoseTemporalHarness.sourceRoute || '').includes('kaminos_motion_panel_temporal_fixture')) throw new Error(`panel temporal route lost motion-server fixture source route: ${JSON.stringify(debug)}`);
+      if (generatedPoseTemporalHarness.sourceFormat !== 'motion-server-soma77-json') throw new Error(`panel temporal route lost motion-server-soma77-json source format: ${JSON.stringify(debug)}`);
+      if (generatedPoseTemporalHarness.sourceStatus !== 'live-generated') throw new Error(`panel temporal route lost live-generated source status: ${JSON.stringify(debug)}`);
+    } else {
+      if (!String(generatedPoseTemporalHarness.sourceRoute || '').includes('.npz')) throw new Error(`generated pose temporal route lost source route: ${JSON.stringify(debug)}`);
+      if (generatedPoseTemporalHarness.sourceFormat !== 'kimodo-soma77-explicit-joints') throw new Error(`generated pose temporal route lost source format: ${JSON.stringify(debug)}`);
+    }
     if (!(generatedPoseTemporalHarness.sampleCount >= 16)) throw new Error(`generated pose temporal route lost sample count: ${JSON.stringify(debug)}`);
     if (!(generatedPoseTemporalHarness.metrics?.maxBowCompression > 0.25)) throw new Error(`generated pose temporal route lost bow compression: ${JSON.stringify(debug)}`);
     if (!(generatedPoseTemporalHarness.metrics?.phaseLabels?.length >= 2)) throw new Error(`generated pose temporal route lost temporal phase variety: ${JSON.stringify(debug)}`);
-    if (requestedTemporalClipId === 'kimodo_theatrical_bow_temporal_v0') {
+    if (!isMotionPanelTemporalFixtureRoute && requestedTemporalClipId === 'kimodo_theatrical_bow_temporal_v0') {
       if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('compress')) throw new Error(`generated pose temporal route lost bow compress phase: ${JSON.stringify(debug)}`);
       if (!generatedPoseTemporalHarness.metrics?.phaseLabels?.includes('release')) throw new Error(`generated pose temporal route lost bow release phase: ${JSON.stringify(debug)}`);
     }

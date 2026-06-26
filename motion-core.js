@@ -9,6 +9,17 @@ export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-m
 export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
+export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
+
+const SOMA77_TEMPORAL_JOINT = {
+  Hips: 0,
+  Chest: 3,
+  Head: 6,
+  LeftHand: 14,
+  RightHand: 42,
+  LeftFoot: 69,
+  RightFoot: 74,
+};
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -58,6 +69,43 @@ function pulse01(t) {
   const x = smooth01(t);
   return clamp(4 * x * (1 - x), 0, 1);
 }
+
+function defaultMotionServerFrame(frameIndex) {
+  const t = frameIndex / 29;
+  return Array.from({ length: 77 }, (_, jointIndex) => {
+    const side = jointIndex % 2 === 0 ? -1 : 1;
+    const height = jointIndex === SOMA77_TEMPORAL_JOINT.Head
+      ? 1.62
+      : jointIndex === SOMA77_TEMPORAL_JOINT.Chest
+        ? 1.18
+        : jointIndex >= SOMA77_TEMPORAL_JOINT.LeftFoot
+          ? 0.08
+          : 0.82;
+    return [
+      Number((t * 0.55 + side * 0.015 * Math.sin(t * Math.PI * 2 + jointIndex)).toFixed(5)),
+      Number((height + 0.08 * Math.sin(t * Math.PI * 3 + jointIndex * 0.13)).toFixed(5)),
+      Number((0.18 * Math.sin(t * Math.PI * 1.5) + side * 0.04).toFixed(5)),
+    ];
+  });
+}
+
+export const DEFAULT_MOTION_SERVER_RESULT_FIXTURE = {
+  prompt: 'a little lerm creeps uphill and waves',
+  model: 'kimodo',
+  skeleton_type: 'soma77',
+  fps: 30,
+  duration: 1,
+  num_frames: 30,
+  num_joints: 77,
+  gen_time: 7.3,
+  parents: Array.from({ length: 77 }, (_, index) => (index === 0 ? -1 : Math.max(0, index - 1))),
+  joints: Array.from({ length: 30 }, (_, frameIndex) => defaultMotionServerFrame(frameIndex)),
+  root_positions: Array.from({ length: 30 }, (_, frameIndex) => [
+    Number((frameIndex / 29 * 0.55).toFixed(5)),
+    0,
+    0,
+  ]),
+};
 
 function normalizeSample(sample, fallbackTime = 0) {
   return {
@@ -1614,6 +1662,141 @@ function temporalFixtureMetrics(generatedInput) {
     maxBowCompression: Number(Math.max(...bowValues).toFixed(5)),
     meanBowCompression: Number((bowValues.reduce((sum, value) => sum + value, 0) / Math.max(1, bowValues.length)).toFixed(5)),
     handSpanRange: Number((Math.max(...handSpanValues) - Math.min(...handSpanValues)).toFixed(5)),
+  };
+}
+
+function motionServerPhaseLabel(frameIndex, frameCount, sample) {
+  const p = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1);
+  if (sample?.bowCompression > 0.62) return 'compress';
+  if (p < 0.18) return 'enter';
+  if (p < 0.36) return 'notice';
+  if (p < 0.72) return 'commit';
+  if (p < 0.9) return 'recover';
+  return 'return';
+}
+
+function motionServerRootForFrame(result, frameIndex, frame) {
+  const root = Array.isArray(result?.root_positions?.[frameIndex])
+    ? result.root_positions[frameIndex]
+    : frame?.[SOMA77_TEMPORAL_JOINT.Hips];
+  return vec3(root);
+}
+
+function motionServerJoint(frame, jointName, fallbackRoot) {
+  return vec3(frame?.[SOMA77_TEMPORAL_JOINT[jointName]], fallbackRoot);
+}
+
+export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFAULT_MOTION_SERVER_RESULT_FIXTURE, options = {}) {
+  const joints = Array.isArray(result?.joints) ? result.joints : [];
+  if (joints.length < 2) throw new Error('Motion server result needs at least two joint frames');
+  const jointCount = Array.isArray(joints[0]) ? joints[0].length : 0;
+  if (jointCount < 77) throw new Error(`Motion server result needs SOMA77 joints; got ${jointCount}`);
+  const fps = Math.max(1, Math.round(Number(result.fps || options.fps || 30)));
+  const duration = Number.isFinite(Number(result.duration))
+    ? Number(result.duration)
+    : (joints.length - 1) / fps;
+  const id = String(options.id || result.id || `motion_panel_${String(result.prompt || 'generated').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 48) || 'clip'}_temporal_v0`);
+  const label = String(options.label || result.label || result.prompt || 'Motion Panel Generated Clip');
+  const sourceRoute = String(options.sourceRoute || result.sourceRoute || 'motion-server:unknown/generate');
+  const sourceModel = String(options.sourceModel || result.model || 'kimodo');
+  const rawSamples = joints.map((frame, frameIndex) => {
+    const root = motionServerRootForFrame(result, frameIndex, frame);
+    const head = motionServerJoint(frame, 'Head', root);
+    const chest = motionServerJoint(frame, 'Chest', root);
+    const leftHand = motionServerJoint(frame, 'LeftHand', root);
+    const rightHand = motionServerJoint(frame, 'RightHand', root);
+    const leftFoot = motionServerJoint(frame, 'LeftFoot', root);
+    const rightFoot = motionServerJoint(frame, 'RightFoot', root);
+    const xs = [];
+    const ys = [];
+    const zs = [];
+    for (const joint of frame) {
+      const point = vec3(joint, root);
+      xs.push(point[0]);
+      ys.push(point[1]);
+      zs.push(point[2]);
+    }
+    const extent = [
+      Math.max(...xs) - Math.min(...xs),
+      Math.max(...ys) - Math.min(...ys),
+      Math.max(...zs) - Math.min(...zs),
+    ];
+    const headRoot = subVec3(head, root);
+    return {
+      frame: frameIndex,
+      sourceFrame: frameIndex,
+      time: Number((frameIndex / fps).toFixed(5)),
+      root,
+      head,
+      chest,
+      leftHand,
+      rightHand,
+      leftFoot,
+      rightFoot,
+      headRoot,
+      chestRoot: subVec3(chest, root),
+      handSpan: lengthVec3(subVec3(rightHand, leftHand)),
+      stanceWidth: lengthVec3(subVec3(rightFoot, leftFoot)),
+      bboxVolume: Math.max(0, extent[0] * extent[1] * extent[2]),
+    };
+  });
+  const headRootYValues = rawSamples.map(sample => sample.headRoot[1]);
+  const maxHeadRootY = Math.max(...headRootYValues);
+  const minHeadRootY = Math.min(...headRootYValues);
+  const headRootRange = Math.max(1e-6, maxHeadRootY - minHeadRootY);
+  const temporalSamples = rawSamples.map(sample => {
+    const bowCompression = clamp((maxHeadRootY - sample.headRoot[1]) / headRootRange, 0, 1);
+    const rounded = {
+      ...sample,
+      phaseLabel: motionServerPhaseLabel(sample.frame, rawSamples.length, { bowCompression }),
+      root: sample.root.map(value => Number(value.toFixed(5))),
+      head: sample.head.map(value => Number(value.toFixed(5))),
+      chest: sample.chest.map(value => Number(value.toFixed(5))),
+      leftHand: sample.leftHand.map(value => Number(value.toFixed(5))),
+      rightHand: sample.rightHand.map(value => Number(value.toFixed(5))),
+      leftFoot: sample.leftFoot.map(value => Number(value.toFixed(5))),
+      rightFoot: sample.rightFoot.map(value => Number(value.toFixed(5))),
+      headRoot: sample.headRoot.map(value => Number(value.toFixed(5))),
+      chestRoot: sample.chestRoot.map(value => Number(value.toFixed(5))),
+      handSpan: Number(sample.handSpan.toFixed(5)),
+      stanceWidth: Number(sample.stanceWidth.toFixed(5)),
+      bboxVolume: Number(sample.bboxVolume.toFixed(5)),
+      bowCompression: Number(bowCompression.toFixed(5)),
+    };
+    return rounded;
+  });
+  return {
+    schema: 'kaminos.generated-pose-temporal.v0',
+    id,
+    label,
+    intent: String(result.prompt || label),
+    sourceKind: 'motion-panel-generated-pose-temporal',
+    sourceStatus: 'live-generated',
+    sourceModel,
+    sourceFormat: MOTION_SERVER_TEMPORAL_SOURCE_FORMAT,
+    sourceRoute,
+    registrySource: 'motion-panel-memory',
+    inputSha256: options.inputSha256 || null,
+    rawFrameCount: Number(result.num_frames || joints.length),
+    fps,
+    duration,
+    sourceFrameStride: 1,
+    jointMapping: { ...SOMA77_TEMPORAL_JOINT },
+    extractionAssumptions: [
+      'input is motion server JSON shaped frames x SOMA77 joints x xyz',
+      'all source frames are preserved for live panel preview; no temporal cap is applied',
+      'root_positions drive root when present, otherwise SOMA77 Hips is used',
+      'head/chest/hand/foot channels drive orb attention, effort, envelope, and behavior evidence',
+    ],
+    generatedFrom: {
+      schema: 'kaminos.motion-server-result.v0',
+      prompt: result.prompt || null,
+      model: result.model || null,
+      skeletonType: result.skeleton_type || null,
+      genTime: Number.isFinite(Number(result.gen_time)) ? Number(result.gen_time) : null,
+      sourceRoute,
+    },
+    temporalSamples,
   };
 }
 

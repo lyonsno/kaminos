@@ -489,6 +489,26 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" data-motion-temporal-clip="kimodo_curious_walk_look_temporal_v0">Curious</button>
       </div>
     </div>
+    <div class="panel" id="motion-panel-orb-preview">
+      <div class="field"><span class="field-key">Panel Bridge</span><span class="route-chip">kaminos_motion_panel_temporal_fixture=1</span></div>
+      <input class="gen-input" id="motion-panel-server-url" value="http://localhost:8098" aria-label="Motion server URL">
+      <textarea class="gen-input" id="motion-panel-prompt" rows="2" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
+      <div class="slider-row">
+        <span class="slider-label">Duration</span>
+        <input type="range" id="motion-panel-duration" min="1" max="18" step="1" value="6">
+        <span class="slider-val" id="motion-panel-duration-val">6s</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Steps</span>
+        <input type="range" id="motion-panel-steps" min="10" max="200" step="10" value="100">
+        <span class="slider-val" id="motion-panel-steps-val">100</span>
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="motion-panel-generate-preview">Generate + Preview</button>
+        <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
+      </div>
+      <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
+    </div>
     <div class="panel">
       <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
       <div class="volume-actions" id="motion-control-presets"></div>
@@ -807,8 +827,10 @@ import {
   DEFAULT_DIP_WAVE_GENERATED_MOTION_FIXTURE,
   DEFAULT_GENERATED_POSE_OUTPUT_MAP_FIXTURE,
   DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  DEFAULT_MOTION_SERVER_RESULT_FIXTURE,
   DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL,
   MOTION_ROUTE_IDENTITY,
+  adaptMotionServerResultToGeneratedPoseTemporalClip,
   applyMotionPhraseControls,
   buildMotionActorFixture,
   buildMotionDecisionComparison,
@@ -4107,7 +4129,7 @@ function updateWorldSpaceBehaviorReadout(readout, behaviorState, rootPosition, d
   return readout.debug;
 }
 
-async function createGeneratedPoseTemporalScene({ force = false, clipId = null, registryUrl = null } = {}) {
+async function createGeneratedPoseTemporalScene({ force = false, clipId = null, registryUrl = null, generatedInput = null } = {}) {
   if (motionTemporalState?.active && !force) return motionTemporalState;
   disposeMotionAgencyScene();
   disposeMotionDecisionScene();
@@ -4116,12 +4138,16 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   disposeMotionOutputMapScene();
   disposeMotionTemporalScene();
   const params = new URLSearchParams(window.location.search);
-  const requestedRegistryUrl = registryUrl || params.get('kaminos_generated_pose_temporal_registry') || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL;
-  const requestedClipId = clipId || params.get('kaminos_generated_pose_temporal_clip') || DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE.id;
-  const registry = await loadGeneratedPoseTemporalRegistry(requestedRegistryUrl);
-  const generatedInput = generatedPoseTemporalClipById(requestedClipId, registry);
+  const requestedRegistryUrl = generatedInput
+    ? (generatedInput.registrySource || 'motion-panel-memory')
+    : registryUrl || params.get('kaminos_generated_pose_temporal_registry') || DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL;
+  const requestedClipId = generatedInput?.id || clipId || params.get('kaminos_generated_pose_temporal_clip') || DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE.id;
+  const selectedGeneratedInput = generatedInput || generatedPoseTemporalClipById(
+    requestedClipId,
+    await loadGeneratedPoseTemporalRegistry(requestedRegistryUrl),
+  );
   const harness = buildGeneratedPoseTemporalHarness({
-    generatedInput,
+    generatedInput: selectedGeneratedInput,
     fps: 12,
     filmstripFrames: 7,
   });
@@ -4595,9 +4621,93 @@ function updateMotionTrackFrame(nowSeconds = performance.now() / 1000) {
   return true;
 }
 
+function setMotionPanelTemporalStatus(message, color = '#777') {
+  const status = document.getElementById('motion-panel-temporal-status');
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = color;
+}
+
+function wireMotionPanelSlider(id, suffix = '') {
+  const input = document.getElementById(id);
+  const label = document.getElementById(`${id}-val`);
+  if (!input || !label) return;
+  const update = () => { label.textContent = `${input.value}${suffix}`; };
+  input.addEventListener('input', update);
+  update();
+}
+
+window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
+  const clip = adaptMotionServerResultToGeneratedPoseTemporalClip(result, {
+    id: options.id,
+    label: options.label,
+    sourceRoute: options.sourceRoute || 'motion-server:panel-memory',
+    sourceModel: options.sourceModel,
+  });
+  const state = await createGeneratedPoseTemporalScene({
+    force: true,
+    generatedInput: clip,
+  });
+  setMotionPanelTemporalStatus(`Previewing ${clip.id} (${clip.temporalSamples.length} frames)`, '#66bb6a');
+  return {
+    schema: 'kaminos.motion-panel-temporal-preview.v0',
+    clip,
+    state: state?.schema || null,
+  };
+};
+
+async function previewMotionPanelTemporalFixture() {
+  const result = await window.kaminosPreviewMotionServerResult(DEFAULT_MOTION_SERVER_RESULT_FIXTURE, {
+    id: 'panel_lerm_creep_temporal_v0',
+    label: 'Panel Lerm Creep',
+    sourceRoute: 'motion-server:fixture/kaminos_motion_panel_temporal_fixture',
+  });
+  setInfo('Motion panel fixture previewed on temporal orb');
+  return result;
+}
+
+async function generateMotionPanelTemporalPreview() {
+  const serverUrl = String(document.getElementById('motion-panel-server-url')?.value || 'http://localhost:8098').replace(/\/+$/, '');
+  const prompt = String(document.getElementById('motion-panel-prompt')?.value || '').trim();
+  if (!prompt) {
+    setMotionPanelTemporalStatus('Prompt required', '#ef5350');
+    return null;
+  }
+  const duration = Number(document.getElementById('motion-panel-duration')?.value || 6);
+  const steps = Number(document.getElementById('motion-panel-steps')?.value || 100);
+  const button = document.getElementById('motion-panel-generate-preview');
+  if (button) button.disabled = true;
+  setMotionPanelTemporalStatus('Generating motion...', '#42a5f5');
+  try {
+    const response = await fetch(`${serverUrl}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, duration, steps }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `motion server returned ${response.status}`);
+    const id = `panel_${prompt.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 42) || 'generated'}_temporal_v0`;
+    const result = await window.kaminosPreviewMotionServerResult(data, {
+      id,
+      label: prompt,
+      sourceRoute: `motion-server:${serverUrl}/generate`,
+      sourceModel: data.model || 'kimodo',
+    });
+    setInfo(`Motion panel generated clip previewed: ${prompt.slice(0, 48)}`);
+    return result;
+  } catch (error) {
+    setMotionPanelTemporalStatus(`Motion bridge failed: ${error.message}`, '#ef5350');
+    throw error;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function initKaminosMotionAgencyRoute() {
   renderMotionClipList();
   renderMotionPhraseControlPresets();
+  wireMotionPanelSlider('motion-panel-duration', 's');
+  wireMotionPanelSlider('motion-panel-steps');
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
   document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
@@ -4605,6 +4715,8 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-generated-enable')?.addEventListener('click', () => createGeneratedMotionTrackHarnessScene({ force: true }));
   document.getElementById('motion-output-map-enable')?.addEventListener('click', () => createGeneratedPoseOutputMapScene({ force: true }));
   document.getElementById('motion-temporal-enable')?.addEventListener('click', () => void createGeneratedPoseTemporalScene({ force: true }));
+  document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
+  document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
     button.addEventListener('click', () => void createGeneratedPoseTemporalScene({
       force: true,
@@ -4619,10 +4731,11 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal')) {
+  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
-    if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
+    if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();
+    else if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
     else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
     else if (params.has('kaminos_generated_motion_track')) createGeneratedMotionTrackHarnessScene();
     else if (params.has('kaminos_motion_tracks')) createMotionTrackHarnessScene();
