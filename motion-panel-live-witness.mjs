@@ -265,6 +265,7 @@ async function captureFrame(ws, index) {
       actorRoot: actor?.root || null,
       behaviorState: actor?.behaviorState || null,
       sourceFrame: actor?.sourceFrame ?? null,
+      sourceFrameTotal: sourceGhost?.sourceFrameTotal ?? null,
       sourceInterpolation: actor?.sourceInterpolation ?? null,
       sourceGhost,
     };
@@ -279,6 +280,11 @@ async function captureFrame(ws, index) {
     index,
     path,
     bytes: png.length,
+    sheetFrameLabel: 'sheet ' + String(index + 1).padStart(2, '0') + '/' + frameTotal,
+    sourceFrameLabel: 'source '
+      + (Number.isFinite(Number(debug.sourceFrame)) ? Number(debug.sourceFrame).toFixed(1) : 'n/a')
+      + '/'
+      + (Number.isFinite(Number(debug.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(debug.sourceFrameTotal)))) : '?'),
     screenshotDataUrl: `data:image/png;base64,${shot.data}`,
     debug,
   };
@@ -296,6 +302,9 @@ async function composeFilmstrip(ws, frames) {
       behaviorState: frame.debug?.behaviorState?.state || null,
       behaviorPhase: frame.debug?.behaviorState?.phase || null,
       sourceFrame: frame.debug?.sourceFrame ?? null,
+      sourceFrameTotal: frame.debug?.sourceFrameTotal ?? null,
+      sheetFrameLabel: frame.sheetFrameLabel,
+      sourceFrameLabel: frame.sourceFrameLabel,
       canvasRect: frame.debug?.canvasRect || null,
       viewport: frame.debug?.viewport || null,
     })),
@@ -347,7 +356,10 @@ async function composeFilmstrip(ws, frames) {
       ctx.fillStyle = 'rgba(240, 210, 138, 0.96)';
       const frame = payload.frames[i];
       const sourceFrame = Number.isFinite(Number(frame.sourceFrame)) ? Number(frame.sourceFrame).toFixed(1) : 'n/a';
-      ctx.fillText('frame ' + String(frame.index).padStart(2, '0') + '  source ' + sourceFrame, x + 10, y + 7);
+      const sourceFrameTotal = Number.isFinite(Number(frame.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(frame.sourceFrameTotal)))) : '?';
+      const sheetFrameLabel = frame.sheetFrameLabel || ('sheet ' + String(frame.index + 1).padStart(2, '0') + '/' + payload.frames.length);
+      const sourceFrameLabel = frame.sourceFrameLabel || ('source ' + sourceFrame + '/' + sourceFrameTotal);
+      ctx.fillText(sheetFrameLabel + ' · ' + sourceFrameLabel, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
       const state = [frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
@@ -430,6 +442,7 @@ async function exportCurrentViewFilmstrip(ws) {
       width: exported.width || null,
       height: exported.height || null,
       frameCount: exported.frameCount || null,
+      frames: exported.frames || [],
       columns: exported.columns || null,
       rows: exported.rows || null,
       downloadName: exported.downloadName || null,

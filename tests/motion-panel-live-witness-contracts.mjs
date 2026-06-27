@@ -26,6 +26,9 @@ assert.match(witness, /source mode overlay did not produce x-ray source ghost ev
 assert.match(witness, /source ghost overlay display bounds are not credible/, 'live witness rejects overlay ghosts that collapse into an illegible display span');
 assert.match(witness, /--overlay-size/, 'live witness can drive the overlay-size control');
 assert.match(witness, /source ghost overlay size did not reach requested multiplier/, 'live witness rejects stale or ignored overlay size controls');
+assert.match(witness, /sourceFrameTotal/, 'live witness records original source animation frame totals in frame evidence');
+assert.match(witness, /sheetFrameLabel/, 'live witness contact-sheet labels expose sheet frame denominator');
+assert.match(witness, /sourceFrameLabel/, 'live witness contact-sheet labels expose source frame denominator');
 assert.match(witness, /exportTray/, 'live witness records the motion panel export tray after current-view export');
 assert.match(witness, /Page\.captureScreenshot/, 'live witness captures the operator-facing browser viewport');
 assert.match(witness, /writeReport\(\{\s*ok: false/s, 'live witness writes a durable failure report');

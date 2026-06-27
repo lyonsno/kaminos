@@ -35,6 +35,10 @@ assert.match(exportBlock, /effectiveReferenceMode: referenceRestore\.effectiveMo
 assert.match(exportBlock, /selectedTake: motionPanelSelectedTakeEvidence\(\)/, 'export records the currently selected motion take');
 assert.match(exportBlock, /sourceGhostAtExportStart/, 'export records source-ghost visibility at capture start');
 assert.match(exportBlock, /sourceGhostAtExportEnd/, 'export records source-ghost visibility at capture end');
+assert.match(exportBlock, /sourceFrameTotal/, 'export frames record original animation frame total');
+assert.match(exportBlock, /sheet \${String\(frame\.index \+ 1\)\.padStart\(2, '0'\)}\/\${frames\.length}/, 'contact sheet labels sheet frame index with denominator');
+assert.match(exportBlock, /source \${sourceFrame}\/\${sourceFrameTotal}/, 'contact sheet labels source frame with original animation denominator');
+assert.match(exportBlock, /frames: frames\.map\(\(\{ dataUrl: _dataUrl, \.\.\.frame \}\) => frame\)/, 'export result carries machine-readable frame labels without embedding per-frame PNG data');
 assert.doesNotMatch(exportBlock, /frameMotionAgencyCamera\(/, 'current-view export must not reset or frame the camera');
 assert.doesNotMatch(exportBlock, /createGeneratedPoseTemporalScene\(/, 'current-view export must not recreate the motion scene');
 assert.doesNotMatch(index, /createImageBitmap\(/, 'current-view export must not use createImageBitmap on the WebGPU renderer canvas');

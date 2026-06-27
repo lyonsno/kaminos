@@ -506,7 +506,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-val" id="motion-panel-source-opacity-val">0.38</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Overlay Size</span>
+        <span class="slider-label">Source Size</span>
         <input type="range" id="motion-panel-source-overlay-size" min="0.75" max="5" step="0.05" value="3">
         <span class="slider-val" id="motion-panel-source-overlay-size-val">3.00x</span>
       </div>
@@ -4452,6 +4452,12 @@ function motionPanelSourceGhostOverlaySizeFromInputs() {
   return Math.max(0.75, Math.min(5, Number.isFinite(size) ? size : 3));
 }
 
+function motionPanelSourceFrameTotal(result = motionTemporalState?.sourceResult) {
+  const joints = Array.isArray(result?.joints) ? result.joints : [];
+  const total = Number(result?.num_frames) || joints.length || Number(motionTemporalState?.track?.rawFrameCount) || Number(motionTemporalState?.track?.sourceFrameCount) || 0;
+  return Number.isFinite(total) && total > 0 ? Math.round(total) : null;
+}
+
 function motionPanelSpeedFromInputs() {
   const speed = Number(document.getElementById('motion-panel-speed')?.value || 1);
   return Math.max(0.05, Math.min(5, Number.isFinite(speed) ? speed : 1));
@@ -4679,7 +4685,8 @@ function createMotionSourceGhostVisual(result, options = {}) {
   const bounds = motionServerJointBounds(result);
   const displayBasis = inferMotionSourceGhostAxes(result, bounds);
   const sourceRoot = motionServerSourceRoot(result);
-  const sidecarScale = targetSourceGhostHeight(displayBasis, bounds);
+  const baseSourceScale = targetSourceGhostHeight(displayBasis, bounds);
+  const sourceSizeMultiplier = motionPanelSourceGhostOverlaySizeFromInputs();
   const sourceGhost = {
     schema: 'kaminos.motion-source-ghost.v0',
     group,
@@ -4692,9 +4699,10 @@ function createMotionSourceGhostVisual(result, options = {}) {
     bounds,
     displayBasis,
     sourceRoot,
-    sidecarScale,
-    overlaySizeMultiplier: motionPanelSourceGhostOverlaySizeFromInputs(),
-    overlayScale: sidecarScale * motionPanelSourceGhostOverlaySizeFromInputs(),
+    baseSourceScale,
+    sourceSizeMultiplier: motionPanelSourceGhostOverlaySizeFromInputs(),
+    sidecarScale: baseSourceScale * sourceSizeMultiplier,
+    overlayScale: baseSourceScale * sourceSizeMultiplier,
     sidecarOffset: [-1.18, 0.015, 0.05],
     mode: options.mode || motionPanelSourceGhostModeFromInputs(),
     opacity: options.opacity ?? motionPanelSourceGhostOpacityFromInputs(),
@@ -4716,11 +4724,15 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
       mode,
       opacity,
       sourceFrame: Number((Number(sourceFrame) || 0).toFixed(5)),
+      sourceFrameTotal: motionPanelSourceFrameTotal(result),
       sourceFrameSharedWithOrb: false,
     };
     if (sourceGhost) sourceGhost.lastDebug = hiddenDebug;
     return hiddenDebug;
   }
+  sourceGhost.sourceSizeMultiplier = motionPanelSourceGhostOverlaySizeFromInputs();
+  sourceGhost.sidecarScale = sourceGhost.baseSourceScale * sourceGhost.sourceSizeMultiplier;
+  sourceGhost.overlayScale = sourceGhost.baseSourceScale * sourceGhost.sourceSizeMultiplier;
   const frame = sampleMotionServerJointFrame(result, sourceFrame);
   const jointCount = Math.min(sourceGhost.jointCount, frame.length);
   const rootPosition = options.rootPosition || null;
@@ -4776,6 +4788,7 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     opacity: Number(opacity.toFixed(5)),
     sourceFormat: 'motion-server-soma77-json',
     skeletonType: result.skeleton_type || null,
+    sourceFrameTotal: motionPanelSourceFrameTotal(result),
     upAxis: sourceGhost.displayBasis.upAxis,
     rightAxis: sourceGhost.displayBasis.rightAxis,
     depthAxis: sourceGhost.displayBasis.depthAxis,
@@ -4791,8 +4804,10 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     rootObjectName: sourceGhost.group.name,
     lineObjectName: sourceGhost.lines.name,
     pointsObjectName: sourceGhost.points.name,
+    baseSourceScale: Number(sourceGhost.baseSourceScale.toFixed(5)),
     sidecarScale: Number(sourceGhost.sidecarScale.toFixed(5)),
-    overlaySizeMultiplier: Number(sourceGhost.overlaySizeMultiplier.toFixed(5)),
+    sourceSizeMultiplier: Number(sourceGhost.sourceSizeMultiplier.toFixed(5)),
+    overlaySizeMultiplier: Number(sourceGhost.sourceSizeMultiplier.toFixed(5)),
     overlayScale: Number(sourceGhost.overlayScale.toFixed(5)),
     overlayBase: sourceGhost.lastOverlayBase,
     overlayOcclusionMode: mode === 'overlay' ? 'xray-over-body' : 'sidecar-scene-depth',
@@ -5420,8 +5435,13 @@ function motionPanelSourceGhostExportEvidence() {
     visible: !!sourceGhost.visible,
     mode: sourceGhost.mode || motionPanelSourceGhostModeFromInputs(),
     sourceFrame: sourceGhost.sourceFrame ?? null,
+    sourceFrameTotal: sourceGhost.sourceFrameTotal ?? motionPanelSourceFrameTotal(),
     sourceFrameSharedWithOrb: !!sourceGhost.sourceFrameSharedWithOrb,
     renderedBoneCount: sourceGhost.renderedBoneCount ?? null,
+    sourceSizeMultiplier: sourceGhost.sourceSizeMultiplier ?? null,
+    sidecarScale: sourceGhost.sidecarScale ?? null,
+    overlayScale: sourceGhost.overlayScale ?? null,
+    displayBounds: sourceGhost.displayBounds ?? null,
   };
 }
 
@@ -5770,6 +5790,7 @@ async function captureMotionPanelRendererFrame(label, index) {
     behaviorState: motionTemporalState?.lastBehaviorState?.state || null,
     behaviorPhase: motionTemporalState?.lastBehaviorState?.phase || null,
     sourceFrame: motionTemporalState?.lastActors?.[0]?.sourceFrame ?? null,
+    sourceFrameTotal: motionPanelSourceFrameTotal(),
   };
 }
 
@@ -5824,8 +5845,13 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
       ctx.fillRect(x, y, tileWidth, labelHeight);
       ctx.fillStyle = 'rgba(240, 210, 138, 0.96)';
+      const sheetFrameLabel = `sheet ${String(frame.index + 1).padStart(2, '0')}/${frames.length}`;
       const sourceFrame = Number.isFinite(Number(frame.sourceFrame)) ? Number(frame.sourceFrame).toFixed(1) : 'live';
-      ctx.fillText(`frame ${String(frame.index).padStart(2, '0')}  source ${sourceFrame}`, x + 10, y + 7);
+      const sourceFrameTotal = Number.isFinite(Number(frame.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(frame.sourceFrameTotal)))) : '?';
+      const sourceFrameLabel = `source ${sourceFrame}/${sourceFrameTotal}`;
+      frame.sheetFrameLabel = sheetFrameLabel;
+      frame.sourceFrameLabel = sourceFrameLabel;
+      ctx.fillText(`${sheetFrameLabel} · ${sourceFrameLabel}`, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
       const state = [frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'current view';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
@@ -5853,6 +5879,7 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       width: filmstrip.width,
       height: filmstrip.height,
       frameCount: frames.length,
+      frames: frames.map(({ dataUrl: _dataUrl, ...frame }) => frame),
       columns,
       rows,
       dataUrl,
