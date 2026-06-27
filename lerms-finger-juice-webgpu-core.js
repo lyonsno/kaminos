@@ -7,6 +7,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-resp
 export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT = 'wgsl-spatial-cell-pressure-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT = 'wgsl-spatial-viscosity-pressure-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT = 'wgsl-same-chemistry-surface-cohesion-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -575,6 +576,68 @@ function fluidDepthStats(particles) {
   };
 }
 
+function surfaceCohesionStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT,
+      cohesionRadius: round(SURFACE_VISCOSITY_RADIUS * 1.7, 4),
+      cohesionNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+      surfaceParticleCount: 0,
+      cohesionAffectedCount: 0,
+      cohesionNeighborCount: 0,
+      averageCohesionNeighbors: 0,
+      ribbonAlignment: 0,
+    };
+  }
+
+  const cohesionRadius = SURFACE_VISCOSITY_RADIUS * 1.7;
+  let cohesionAffectedCount = 0;
+  let cohesionNeighborCount = 0;
+  let totalAlignment = 0;
+  for (let index = 0; index < surfaceParticles.length; index += 1) {
+    const particle = surfaceParticles[index];
+    const particleSpeed = length3(particle.velocity);
+    let localNeighborCount = 0;
+    let localAlignment = 0;
+    for (let offset = 1; offset <= PRESSURE_NEIGHBOR_WINDOW; offset += 1) {
+      for (const neighbor of [
+        surfaceParticles[(index + offset) % surfaceParticles.length],
+        surfaceParticles[(index + surfaceParticles.length - offset) % surfaceParticles.length],
+      ]) {
+        if (!neighbor || neighbor.id === particle.id || neighbor.chemistry !== particle.chemistry) continue;
+        const distance = length3(sub(particle.position, neighbor.position));
+        if (distance <= 0.0001 || distance >= cohesionRadius) continue;
+        localNeighborCount += 1;
+        const neighborSpeed = length3(neighbor.velocity);
+        if (particleSpeed > 0.0001 && neighborSpeed > 0.0001) {
+          const dot =
+            particle.velocity[0] * neighbor.velocity[0] +
+            particle.velocity[1] * neighbor.velocity[1] +
+            particle.velocity[2] * neighbor.velocity[2];
+          localAlignment += Math.max(0, dot / (particleSpeed * neighborSpeed));
+        }
+      }
+    }
+    if (localNeighborCount > 0) {
+      cohesionAffectedCount += 1;
+      cohesionNeighborCount += localNeighborCount;
+      totalAlignment += localAlignment / localNeighborCount;
+    }
+  }
+
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT,
+    cohesionRadius: round(cohesionRadius, 4),
+    cohesionNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+    surfaceParticleCount: surfaceParticles.length,
+    cohesionAffectedCount,
+    cohesionNeighborCount,
+    averageCohesionNeighbors: cohesionAffectedCount ? round(cohesionNeighborCount / cohesionAffectedCount, 4) : 0,
+    ribbonAlignment: cohesionAffectedCount ? round(totalAlignment / cohesionAffectedCount, 4) : 0,
+  };
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
@@ -677,6 +740,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const pressureStats = pressureDensityStats(particles);
   const spatialStats = spatialPressureStats(particles);
   const depthStats = fluidDepthStats(particles);
+  const cohesionStats = surfaceCohesionStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -695,6 +759,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     pressureDensityStats: pressureStats,
     spatialPressureStats: spatialStats,
     fluidDepthStats: depthStats,
+    surfaceCohesionStats: cohesionStats,
     juiceHitEvents,
     juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
@@ -920,6 +985,54 @@ fn applySurfaceViscosity(index: u32, position: vec3f, velocity: vec3f, radius: f
   return vec3f(horizontal.x, velocity.y, horizontal.y);
 }
 
+fn applySameChemistrySurfaceCohesion(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
+  var neighborPosition = vec3f(0.0, 0.0, 0.0);
+  var neighborVelocity = vec3f(0.0, 0.0, 0.0);
+  var weightTotal = 0.0;
+  let cohesionRadius = max(${(SURFACE_VISCOSITY_RADIUS * 1.7).toFixed(4)}, radius * 4.8);
+  for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
+    let forwardIndex = (index + offset) % params.particleCount;
+    let backIndex = (index + params.particleCount - offset) % params.particleCount;
+    let forward = particles[forwardIndex];
+    let back = particles[backIndex];
+    if (forward.flags.y > 0.5 && forward.posPhase.w >= 0.5 && forward.misc.z >= 0.0 && forward.misc.z < forward.misc.w && abs(forward.velChem.w - chemistry) < 0.25) {
+      let delta = forward.posPhase.xyz - position;
+      let distance = length(delta);
+      if (distance > radius * 0.9 && distance < cohesionRadius) {
+        let weight = (cohesionRadius - distance) / cohesionRadius;
+        neighborPosition = neighborPosition + forward.posPhase.xyz * weight;
+        neighborVelocity = neighborVelocity + forward.velChem.xyz * weight;
+        weightTotal = weightTotal + weight;
+      }
+    }
+    if (back.flags.y > 0.5 && back.posPhase.w >= 0.5 && back.misc.z >= 0.0 && back.misc.z < back.misc.w && abs(back.velChem.w - chemistry) < 0.25) {
+      let delta = back.posPhase.xyz - position;
+      let distance = length(delta);
+      if (distance > radius * 0.9 && distance < cohesionRadius) {
+        let weight = (cohesionRadius - distance) / cohesionRadius;
+        neighborPosition = neighborPosition + back.posPhase.xyz * weight;
+        neighborVelocity = neighborVelocity + back.velChem.xyz * weight;
+        weightTotal = weightTotal + weight;
+      }
+    }
+  }
+  if (weightTotal <= 0.0001) {
+    return velocity;
+  }
+  let averagePosition = neighborPosition / weightTotal;
+  let averageVelocity = neighborVelocity / weightTotal;
+  let toward = averagePosition - position;
+  let towardHorizontal = vec3f(toward.x, 0.0, toward.z);
+  let towardLength = length(towardHorizontal);
+  let cohesionDirection = select(vec3f(0.0, 0.0, 0.0), towardHorizontal / towardLength, towardLength > 0.0001);
+  let velocityHorizontal = vec3f(velocity.x, 0.0, velocity.z);
+  let averageHorizontal = vec3f(averageVelocity.x, 0.0, averageVelocity.z);
+  let ribbonBlend = min(0.22, 0.026 * weightTotal);
+  let cohesionStrength = select(select(0.012, 0.016, chemistry > 2.5), 0.019, chemistry > 1.5 && chemistry < 2.5);
+  let ribbonVelocity = velocityHorizontal + (averageHorizontal - velocityHorizontal) * ribbonBlend + cohesionDirection * cohesionStrength * min(weightTotal, 8.0);
+  return vec3f(ribbonVelocity.x, velocity.y, ribbonVelocity.z);
+}
+
 fn hash01(seed: u32) -> f32 {
   var value = seed;
   value = value ^ (value >> 16u);
@@ -1038,6 +1151,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = applyLocalDensityPressure(index, position, velocity, radius, chemistry);
       velocity = applySpatialCellPressure(position, velocity, chemistry);
       velocity = applySurfaceViscosity(index, position, velocity, radius, chemistry);
+      velocity = applySameChemistrySurfaceCohesion(index, position, velocity, radius, chemistry);
       velocity = applySpatialCellPressure(position + velocity * params.dt * 0.5, velocity, chemistry);
       position = position + velocity * params.dt;
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
