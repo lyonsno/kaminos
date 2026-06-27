@@ -803,6 +803,8 @@ assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE\s*=\s*'bo
 assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-symmetric-force-bypass-v0'/, 'volume core names the non-bonfire symmetric-force bypass strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE\s*=\s*'bonfire-non-wind-force-active-v0'/, 'volume core names the active bonfire non-wind force strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-non-wind-force-bypass-v0'/, 'volume core names the non-bonfire non-wind force bypass strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE\s*=\s*'bonfire-scalar-neighborhood-active-v0'/, 'volume core names the active bonfire scalar-neighborhood strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-scalar-neighborhood-bypass-v0'/, 'volume core names the non-bonfire scalar-neighborhood bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -839,6 +841,9 @@ assert.match(core, /var bonfirePlumeRoll = vec3<f32>\(0\.0\)/, 'main-fluid shade
 assert.match(core, /var bonfireCellRoll = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire cell roll to a bypassed neutral value');
 assert.match(core, /var bonfireLayeredPlumeShear = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire layered plume shear to a bypassed neutral value');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,700}bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow[\s\S]{0,700}bonfirePlumeRoll = bonfireZeroMeanPlumeRoll[\s\S]{0,700}bonfireCellRoll = bonfireConvectiveCellRoll[\s\S]{0,1600}bonfireLayeredPlumeShear = vec3<f32>/, 'main-fluid shader evaluates bonfire non-wind roll and shear forces only for the bonfire scene');
+assert.match(core, /mainFluidBonfireScalarNeighborhoodStrategy/, 'sim-cost ledger records the bonfire scalar-neighborhood strategy');
+assert.match(core, /bonfireScalarNeighborhoodReadsPerCell/, 'sim-cost ledger records bonfire scalar-neighborhood reads per cell');
+assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,500}let bonfireTurbulentDiffusionMix[\s\S]{0,1300}let diffuseMaterial[\s\S]{0,2200}let diffuseFrontTopology[\s\S]{0,1000}material = mix\(material, diffuseMaterial[\s\S]{0,1400}let symmetricMaterial[\s\S]{0,1400}let symmetricFrontTopology[\s\S]{0,1000}combustionFrontTopology = mix\(combustionFrontTopology, symmetricFrontTopology/, 'main-fluid shader evaluates bonfire scalar diffusion/symmetry neighborhood reads only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');

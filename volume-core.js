@@ -188,6 +188,8 @@ const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-fo
 const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
 const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
+const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
+const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -1571,55 +1573,57 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection);
   var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalLateralSlipGain, microdetailRiseDirection);
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
-  let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
-  let diffuseMaterial = (
-    readSlot(cellI + vec3<i32>(-1, 0, 0), 1u) +
-    readSlot(cellI + vec3<i32>( 1, 0, 0), 1u) +
-    readSlot(cellI + vec3<i32>(0, -1, 0), 1u) +
-    readSlot(cellI + vec3<i32>(0,  1, 0), 1u) +
-    readSlot(cellI + vec3<i32>(0, 0, -1), 1u) +
-    readSlot(cellI + vec3<i32>(0, 0,  1), 1u)
-  ) * (1.0 / 6.0);
-  let diffuseFireLayer = (
-    readSlot(cellI + vec3<i32>(-1, 0, 0), 2u) +
-    readSlot(cellI + vec3<i32>( 1, 0, 0), 2u) +
-    readSlot(cellI + vec3<i32>(0, -1, 0), 2u) +
-    readSlot(cellI + vec3<i32>(0,  1, 0), 2u) +
-    readSlot(cellI + vec3<i32>(0, 0, -1), 2u) +
-    readSlot(cellI + vec3<i32>(0, 0,  1), 2u)
-  ) * (1.0 / 6.0);
-  let diffuseMicroLayer = (
-    readSlot(cellI + vec3<i32>(-1, 0, 0), 3u) +
-    readSlot(cellI + vec3<i32>( 1, 0, 0), 3u) +
-    readSlot(cellI + vec3<i32>(0, -1, 0), 3u) +
-    readSlot(cellI + vec3<i32>(0,  1, 0), 3u) +
-    readSlot(cellI + vec3<i32>(0, 0, -1), 3u) +
-    readSlot(cellI + vec3<i32>(0, 0,  1), 3u)
-  ) * (1.0 / 6.0);
-  let diffuseFrontTopology = (
-    readFrontField(cellI + vec3<i32>(-1, 0, 0)) +
-    readFrontField(cellI + vec3<i32>( 1, 0, 0)) +
-    readFrontField(cellI + vec3<i32>(0, -1, 0)) +
-    readFrontField(cellI + vec3<i32>(0,  1, 0)) +
-    readFrontField(cellI + vec3<i32>(0, 0, -1)) +
-    readFrontField(cellI + vec3<i32>(0, 0,  1))
-  ) * (1.0 / 6.0);
-  material = mix(material, diffuseMaterial, bonfireTurbulentDiffusionMix);
-  fireLayer = mix(fireLayer, diffuseFireLayer, bonfireTurbulentDiffusionMix * 0.55);
-  microLayer = mix(microLayer, diffuseMicroLayer, bonfireTurbulentDiffusionMix * 0.90);
-  combustionFrontTopology = mix(combustionFrontTopology, diffuseFrontTopology, bonfireTurbulentDiffusionMix * 0.42);
-  let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
-  let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
-  let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
-  let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.020 * bonfireRecenterAblation;
-  let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
-  let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
-  let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
-  let symmetricFrontTopology = (combustionFrontTopology + readFrontField(mirrorXCell) + readFrontField(mirrorZCell) + readFrontField(mirrorXZCell)) * 0.25;
-  material = mix(material, symmetricMaterial, bonfireScalarSymmetryBlend);
-  fireLayer = mix(fireLayer, symmetricFireLayer, bonfireScalarSymmetryBlend * 0.70);
-  microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
-  combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
+  if (bonfireScene > 0.5) {
+    let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
+    let diffuseMaterial = (
+      readSlot(cellI + vec3<i32>(-1, 0, 0), 1u) +
+      readSlot(cellI + vec3<i32>( 1, 0, 0), 1u) +
+      readSlot(cellI + vec3<i32>(0, -1, 0), 1u) +
+      readSlot(cellI + vec3<i32>(0,  1, 0), 1u) +
+      readSlot(cellI + vec3<i32>(0, 0, -1), 1u) +
+      readSlot(cellI + vec3<i32>(0, 0,  1), 1u)
+    ) * (1.0 / 6.0);
+    let diffuseFireLayer = (
+      readSlot(cellI + vec3<i32>(-1, 0, 0), 2u) +
+      readSlot(cellI + vec3<i32>( 1, 0, 0), 2u) +
+      readSlot(cellI + vec3<i32>(0, -1, 0), 2u) +
+      readSlot(cellI + vec3<i32>(0,  1, 0), 2u) +
+      readSlot(cellI + vec3<i32>(0, 0, -1), 2u) +
+      readSlot(cellI + vec3<i32>(0, 0,  1), 2u)
+    ) * (1.0 / 6.0);
+    let diffuseMicroLayer = (
+      readSlot(cellI + vec3<i32>(-1, 0, 0), 3u) +
+      readSlot(cellI + vec3<i32>( 1, 0, 0), 3u) +
+      readSlot(cellI + vec3<i32>(0, -1, 0), 3u) +
+      readSlot(cellI + vec3<i32>(0,  1, 0), 3u) +
+      readSlot(cellI + vec3<i32>(0, 0, -1), 3u) +
+      readSlot(cellI + vec3<i32>(0, 0,  1), 3u)
+    ) * (1.0 / 6.0);
+    let diffuseFrontTopology = (
+      readFrontField(cellI + vec3<i32>(-1, 0, 0)) +
+      readFrontField(cellI + vec3<i32>( 1, 0, 0)) +
+      readFrontField(cellI + vec3<i32>(0, -1, 0)) +
+      readFrontField(cellI + vec3<i32>(0,  1, 0)) +
+      readFrontField(cellI + vec3<i32>(0, 0, -1)) +
+      readFrontField(cellI + vec3<i32>(0, 0,  1))
+    ) * (1.0 / 6.0);
+    material = mix(material, diffuseMaterial, bonfireTurbulentDiffusionMix);
+    fireLayer = mix(fireLayer, diffuseFireLayer, bonfireTurbulentDiffusionMix * 0.55);
+    microLayer = mix(microLayer, diffuseMicroLayer, bonfireTurbulentDiffusionMix * 0.90);
+    combustionFrontTopology = mix(combustionFrontTopology, diffuseFrontTopology, bonfireTurbulentDiffusionMix * 0.42);
+    let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
+    let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
+    let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
+    let bonfireScalarSymmetryBlend = bonfireScene * (1.0 - explicitWindAuthority) * 0.020 * bonfireRecenterAblation;
+    let symmetricMaterial = (material + readSlot(mirrorXCell, 1u) + readSlot(mirrorZCell, 1u) + readSlot(mirrorXZCell, 1u)) * 0.25;
+    let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
+    let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
+    let symmetricFrontTopology = (combustionFrontTopology + readFrontField(mirrorXCell) + readFrontField(mirrorZCell) + readFrontField(mirrorXZCell)) * 0.25;
+    material = mix(material, symmetricMaterial, bonfireScalarSymmetryBlend);
+    fireLayer = mix(fireLayer, symmetricFireLayer, bonfireScalarSymmetryBlend * 0.70);
+    microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
+    combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
+  }
   var vel = advected.xyz * 0.982;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
@@ -4030,6 +4034,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireNonWindForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
+      ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
+      : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
+    const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4070,6 +4078,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireSymmetricForceEvaluationsPerCell = bonfireSymmetricForceEvaluationsPerCell;
     state.mainFluidBonfireNonWindForceStrategy = mainFluidBonfireNonWindForceStrategy;
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
+    state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
+    state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4102,6 +4112,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell,
+      mainFluidBonfireScalarNeighborhoodStrategy,
+      bonfireScalarNeighborhoodReadsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5265,6 +5277,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
         mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+        mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
+        bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5553,6 +5567,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+      mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
+      bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,
