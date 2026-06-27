@@ -23,6 +23,7 @@ const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--sour
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
+const exportReferenceMode = exportReferenceModeFromArgs(args.get('--export-reference-mode'));
 const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
 const port = positiveInt(args.get('--debug-port'), 9670, '--debug-port');
@@ -59,6 +60,15 @@ function nonnegativeNumber(value, fallback, name) {
   return parsed;
 }
 
+function exportReferenceModeFromArgs(value) {
+  if (value == null || value === '') return 'current';
+  const mode = String(value);
+  if (!['current', 'hidden', 'overlay', 'sidecar'].includes(mode)) {
+    throw new Error('--export-reference-mode must be current, hidden, overlay, or sidecar');
+  }
+  return mode;
+}
+
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
 }
@@ -81,6 +91,7 @@ function writeReport(report) {
     tileWidth,
     columns,
     exportCurrentView,
+    exportReferenceMode,
     cameraPosition,
     cameraTarget,
     debugPort: port,
@@ -197,8 +208,9 @@ async function configureMotionPanel(ws) {
       frames: setSelectValue('motion-panel-export-frames', ${JSON.stringify(String(frameTotal))}),
       columns: setSelectValue('motion-panel-export-columns', ${JSON.stringify(String(columns))}),
       tileWidth: setSelectValue('motion-panel-export-resolution', ${JSON.stringify(String(tileWidth))}),
+      referenceMode: setSelectValue('motion-panel-export-reference', ${JSON.stringify(exportReferenceMode)}),
     } : null;
-    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-duration', 'motion-panel-steps']) {
+    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
       document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -382,14 +394,23 @@ async function exportCurrentViewFilmstrip(ws) {
     const cameraBefore = typeof window.motionPanelCurrentViewCameraEvidence === 'function'
       ? window.motionPanelCurrentViewCameraEvidence()
       : null;
+    const sourceModeBeforeExport = document.getElementById('motion-panel-source-ghost-mode')?.value || null;
     if (typeof window.exportMotionPanelCurrentViewFilmstrip !== 'function') throw new Error('current-view export function unavailable');
     const exported = await window.exportMotionPanelCurrentViewFilmstrip();
     if (!exported?.dataUrl?.startsWith('data:image/png;base64,')) throw new Error('current-view export did not return a PNG data URL');
+    const sourceModeAfterExport = document.getElementById('motion-panel-source-ghost-mode')?.value || null;
     return {
       schema: 'kaminos.motion-panel-live-current-view-export.v0',
       status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
       cameraBefore,
       cameraAfter: exported.camera || null,
+      requestedExportReferenceMode: ${JSON.stringify(exportReferenceMode)},
+      sourceModeBeforeExport,
+      sourceModeAfterExport,
+      referenceMode: exported.referenceMode || null,
+      effectiveReferenceMode: exported.effectiveReferenceMode || null,
+      previousReferenceMode: exported.previousReferenceMode || null,
+      referenceOverrideApplied: !!exported.referenceOverrideApplied,
       prompt: exported.prompt || null,
       settings: exported.settings || null,
       width: exported.width || null,

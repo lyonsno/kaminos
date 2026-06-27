@@ -551,6 +551,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <option value="10">10</option>
         </select>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Reference</span>
+        <select id="motion-panel-export-reference" class="select-input">
+          <option value="current" selected>Current</option>
+          <option value="hidden">Hidden</option>
+          <option value="overlay">Overlay</option>
+          <option value="sidecar">Sidecar</option>
+        </select>
+      </div>
       <div class="volume-actions">
         <button class="btn" id="motion-panel-export-view">Export Current View</button>
       </div>
@@ -5157,6 +5166,40 @@ function motionPanelExportSettingsFromInputs() {
   };
 }
 
+function motionPanelExportReferenceModeFromInputs() {
+  const mode = String(document.getElementById('motion-panel-export-reference')?.value || 'current');
+  return mode === 'hidden' || mode === 'overlay' || mode === 'sidecar' ? mode : 'current';
+}
+
+function setMotionPanelSourceGhostModeValue(mode) {
+  const select = document.getElementById('motion-panel-source-ghost-mode');
+  if (!select) return null;
+  select.value = mode === 'overlay' || mode === 'hidden' ? mode : 'sidecar';
+  select.dispatchEvent(new Event('input', { bubbles: true }));
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return select.value;
+}
+
+function applyMotionPanelExportReferenceOverride() {
+  const requestedMode = motionPanelExportReferenceModeFromInputs();
+  const previousMode = motionPanelSourceGhostModeFromInputs();
+  const effectiveMode = requestedMode === 'current'
+    ? previousMode
+    : setMotionPanelSourceGhostModeValue(requestedMode);
+  return {
+    schema: 'kaminos.motion-panel-export-reference-override.v0',
+    requestedMode,
+    previousMode,
+    effectiveMode: effectiveMode || previousMode,
+    applied: requestedMode !== 'current' && !!effectiveMode,
+  };
+}
+
+function restoreMotionPanelExportReferenceOverride(referenceRestore) {
+  if (!referenceRestore?.applied) return motionPanelSourceGhostModeFromInputs();
+  return setMotionPanelSourceGhostModeValue(referenceRestore.previousMode) || motionPanelSourceGhostModeFromInputs();
+}
+
 function motionPanelCurrentViewCameraEvidence() {
   camera?.updateMatrixWorld?.();
   return {
@@ -5212,8 +5255,10 @@ async function exportMotionPanelCurrentViewFilmstrip() {
   const settings = motionPanelExportSettingsFromInputs();
   const button = document.getElementById('motion-panel-export-view');
   const prompt = motionPromptValueForPreview();
+  const referenceRestore = applyMotionPanelExportReferenceOverride();
   if (button) button.disabled = true;
-  setMotionPanelTemporalStatus('Exporting current view...', '#42a5f5');
+  const referenceLabel = referenceRestore.requestedMode === 'current' ? 'current reference' : `${referenceRestore.effectiveMode} reference`;
+  setMotionPanelTemporalStatus(`Exporting current view (${referenceLabel})...`, '#42a5f5');
   try {
     const frames = [];
     for (let index = 0; index < settings.frames; index++) {
@@ -5263,6 +5308,10 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       schema: 'kaminos.motion-panel-current-view-filmstrip.v0',
       prompt,
       settings,
+      referenceMode: referenceRestore.requestedMode,
+      effectiveReferenceMode: referenceRestore.effectiveMode,
+      previousReferenceMode: referenceRestore.previousMode,
+      referenceOverrideApplied: referenceRestore.applied,
       camera: motionPanelCurrentViewCameraEvidence(),
       width: filmstrip.width,
       height: filmstrip.height,
@@ -5279,6 +5328,7 @@ async function exportMotionPanelCurrentViewFilmstrip() {
     setMotionPanelTemporalStatus(`Export failed: ${error.message}`, '#ef5350');
     throw error;
   } finally {
+    restoreMotionPanelExportReferenceOverride(referenceRestore);
     if (button) button.disabled = false;
   }
 }

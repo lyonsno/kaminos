@@ -7,7 +7,15 @@ assert.match(index, /id="motion-panel-export-view"/, 'motion panel exposes a cur
 assert.match(index, /id="motion-panel-export-resolution"/, 'motion panel exposes an export resolution selector');
 assert.match(index, /id="motion-panel-export-frames"/, 'motion panel exposes an export frame-count selector');
 assert.match(index, /id="motion-panel-export-columns"/, 'motion panel exposes an export columns selector');
+assert.match(index, /id="motion-panel-export-reference"/, 'motion panel exposes an export reference skeleton selector');
+assert.match(index, /<option value="current" selected>Current<\/option>/, 'export reference selector defaults to honest current viewport mode');
+assert.match(index, /<option value="hidden">Hidden<\/option>/, 'export reference selector can hide the source skeleton during export');
+assert.match(index, /<option value="overlay">Overlay<\/option>/, 'export reference selector can force overlay source skeleton during export');
+assert.match(index, /<option value="sidecar">Sidecar<\/option>/, 'export reference selector can force sidecar source skeleton during export');
 assert.match(index, /function motionPanelExportSettingsFromInputs/, 'motion panel reads export controls through a stable settings helper');
+assert.match(index, /function motionPanelExportReferenceModeFromInputs/, 'motion panel reads export reference mode through a stable helper');
+assert.match(index, /function applyMotionPanelExportReferenceOverride/, 'motion panel has an export-only reference override helper');
+assert.match(index, /function restoreMotionPanelExportReferenceOverride/, 'motion panel restores the live source-ghost mode after export');
 assert.match(index, /async function exportMotionPanelCurrentViewFilmstrip/, 'motion panel implements current-view filmstrip export');
 assert.match(index, /window\.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilmstrip/, 'current-view export is scriptable for smoke automation');
 assert.match(index, /renderer\.domElement/, 'current-view export captures the existing renderer canvas');
@@ -20,6 +28,10 @@ assert.match(index, /document\.getElementById\('motion-panel-export-view'\)\?\.a
 
 const exportBlock = index.match(/async function exportMotionPanelCurrentViewFilmstrip[\s\S]*?window\.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilmstrip;/)?.[0] || '';
 assert.ok(exportBlock, 'export function block is discoverable');
+assert.match(exportBlock, /const referenceRestore = applyMotionPanelExportReferenceOverride\(\)/, 'export applies reference override before frame capture');
+assert.match(exportBlock, /restoreMotionPanelExportReferenceOverride\(referenceRestore\)/, 'export restores the live source-ghost setting in finally');
+assert.match(exportBlock, /referenceMode: referenceRestore\.requestedMode/, 'export records requested reference mode in evidence');
+assert.match(exportBlock, /effectiveReferenceMode: referenceRestore\.effectiveMode/, 'export records effective reference mode in evidence');
 assert.doesNotMatch(exportBlock, /frameMotionAgencyCamera\(/, 'current-view export must not reset or frame the camera');
 assert.doesNotMatch(exportBlock, /createGeneratedPoseTemporalScene\(/, 'current-view export must not recreate the motion scene');
 assert.doesNotMatch(index, /createImageBitmap\(/, 'current-view export must not use createImageBitmap on the WebGPU renderer canvas');
