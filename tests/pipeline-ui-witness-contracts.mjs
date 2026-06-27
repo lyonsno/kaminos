@@ -18,9 +18,12 @@ assert.match(witness, /sharp-image-to-splat-live-v0/, 'Pipeline UI witness must 
 assert.match(witness, /expectsFixture/, 'Pipeline UI witness must distinguish live SHARP expectations from fixture SHARP expectations');
 assert.match(witness, /adapter fixture \/ point-cloud preview/, 'Pipeline UI witness must distinguish mock adapter output from real SHARP output');
 assert.match(witness, /mock-adapter/, 'Pipeline UI witness must assert mock adapter outputs carry fixture provenance');
-assert.match(witness, /splat\?\.status === 'real' && !splat\?\.fixtureSource/, 'Pipeline UI witness must assert non-mock live SHARP output is real and non-fixture');
+assert.match(witness, /primaryArtifact\?\.status === 'real' && !primaryArtifact\?\.fixtureSource/, 'Pipeline UI witness must assert non-mock live SHARP output is real and non-fixture');
 assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline UI witness must assert fixture-backed SHARP warns that connected images are provenance-only');
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
+assert.match(witness, /graph-execute-artifact/, 'Pipeline UI witness must include a generic non-splat artifact graph Execute scenario');
+assert.match(witness, /expectedArtifactRole/, 'Pipeline UI witness must assert generated output artifact roles');
+assert.match(witness, /open-artifact/, 'Pipeline UI witness must verify non-splat generated outputs expose Open Artifact instead of Load Output');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
 assert.match(witness, /data-pipeline-graph-node-action="execute"/, 'Pipeline UI witness must activate Execute from the in-canvas route node');
 assert.match(witness, /real SHARP \/ point-cloud preview/, 'Pipeline UI witness must assert the generated node exposes the live SHARP preview truth boundary');

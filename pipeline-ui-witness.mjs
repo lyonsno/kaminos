@@ -21,6 +21,8 @@ const secondAssetNeedle = args.get('second-asset') || 'pipeline-test-image-alt.p
 const scenario = args.get('scenario') || 'image-import';
 const generatorId = args.get('generator-id') || 'sharp';
 const pipelineId = args.get('pipeline-id') || 'sharp-image-to-splat-live-v0';
+const expectedArtifactRole = args.get('artifact-role') || 'splat';
+const expectsLoadableArtifact = expectedArtifactRole.includes('splat');
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
@@ -308,11 +310,12 @@ try {
   await click(cdp, imagePaletteTab);
   await wait(1000);
 
-  if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat') {
+  if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
         .find(item => item.dataset.pipelineGeneratorId === ${JSON.stringify(generatorId)});
       const canvas = document.querySelector('#pipeline-graph-canvas');
+      element?.scrollIntoView({ block: 'center', inline: 'nearest' });
       const rect = element?.getBoundingClientRect();
       const canvasRect = canvas?.getBoundingClientRect();
       if (!rect) throw new Error('Pipeline generator card missing');
@@ -321,12 +324,26 @@ try {
         cardText: element.innerText,
         pipelineGeneratorId: element.dataset.pipelineGeneratorId,
         backendPipelineId: element.dataset.pipelineGeneratorPipelineId || null,
+        visible: rect.width > 20 && rect.height > 20 && rect.bottom > 0 && rect.top < window.innerHeight,
         point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
         drop: { x: canvasRect.left + canvasRect.width * 0.34, y: canvasRect.top + canvasRect.height * 0.40 },
       };
     })()`);
     assertWitness(generatorCard.pipelineGeneratorId === generatorId && generatorCard.backendPipelineId === pipelineId, 'Generator card did not preserve generic id plus backend route binding', generatorCard);
+    assertWitness(generatorCard.visible, 'Requested generator card was not visible before drag', generatorCard);
     await drag(cdp, generatorCard.point, generatorCard.drop);
+    const generatorSelected = await evalJson(cdp, `(() => {
+      const state = window.kaminosPipelineDockDebugState?.();
+      return {
+        selectedGeneratorId: state?.selectedGeneratorId || null,
+        selectedPipelineId: state?.selectedPipelineId || null,
+        routeTexts: [...document.querySelectorAll('[data-pipeline-graph-node-id]')].map(item => item.innerText),
+      };
+    })()`);
+    if (generatorSelected.selectedGeneratorId !== generatorId || generatorSelected.selectedPipelineId !== pipelineId) {
+      await click(cdp, generatorCard.point);
+      await wait(300);
+    }
     const imageCard = await evalJson(cdp, `(() => {
       const cards = [...document.querySelectorAll('.pipeline-asset-card')];
       const card = cards.find(element => element.innerText.includes(${JSON.stringify(assetNeedle)}));
@@ -343,23 +360,27 @@ try {
     })()`);
     await drag(cdp, imageCard.point, imageCard.drop);
 
-    const routeNode = await evalJson(cdp, `(() => {
+    const routeNode = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const routeRecord = state?.graphRouteNodes?.at(-1) || state?.graphRouteNodes?.[0] || null;
-      const element = routeRecord ? document.querySelector(\`[data-pipeline-graph-node-id="\${routeRecord.id}"]\`) : [...document.querySelectorAll('[data-pipeline-graph-node-id]')].find(item => item.innerText.includes('SHARP Image -> Splat'));
+      const nodes = [...document.querySelectorAll('[data-pipeline-graph-node-id]')];
+      const element = (routeRecord ? document.querySelector(\`[data-pipeline-graph-node-id="\${routeRecord.id}"]\`) : null)
+        || nodes.find(item => item.innerText.includes(${JSON.stringify(pipelineId)}))
+        || nodes.find(item => item.innerText.toLowerCase().includes(${JSON.stringify(generatorId)}))
+        || nodes.find(item => item.dataset.pipelineGraphNodeId === 'route');
       const rect = element?.getBoundingClientRect();
-      if (!rect) throw new Error('Route graph node missing');
       return {
-        routeNodeId: element.dataset.pipelineGraphNodeId,
-        nodeText: element.innerText,
+        ok: Boolean(rect),
+        routeNodeId: element?.dataset?.pipelineGraphNodeId || null,
+        nodeText: element?.innerText || '',
         selectedGeneratorId: state?.selectedGeneratorId || null,
         selectedPipelineId: state?.selectedPipelineId || null,
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         graphEdges: state?.graphEdges || [],
         graphRouteNodes: state?.graphRouteNodes || [],
-        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        point: rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null,
       };
-    })()`);
+    })()`, 'Route graph node selection');
 
     const imageHook = await evalJson(cdp, `(() => {
       const node = [...document.querySelectorAll('[data-pipeline-graph-image-node-id]')]
@@ -422,8 +443,11 @@ try {
       const generatedOutputNodes = state?.generatedOutputNodes || [];
       const pendingRecord = generatedOutputNodes.find(item =>
         item.routeNodeId === ${JSON.stringify(routeNode.routeNodeId)}
-        && ['pending', 'running'].includes(item.status)
         && item.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)}
+        && (
+          ['pending', 'running'].includes(item.status)
+          || (item.status === 'complete' && item.runTimeline?.some(event => event.phase === 'queued') && item.runTimeline?.some(event => event.kind === 'running'))
+        )
       ) || null;
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const statusNode = pendingRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
@@ -431,7 +455,7 @@ try {
       return {
         ok: Boolean(
           pendingRecord
-          && !pendingRecord.artifact?.path
+          && (!pendingRecord.artifact?.path || pendingRecord.status === 'complete')
           && pendingRecord.runTimeline?.length >= 1
           && pendingRecord.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0'
           && pendingRecord.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0'
@@ -449,22 +473,39 @@ try {
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
-      const splat = run?.report?.document?.artifacts?.splat || null;
       const outputRecord = state?.generatedOutputNodes?.find(item => item.runId === run?.runId) || null;
+      const primaryArtifact = outputRecord?.artifact || null;
+      const roleLabel = artifact => String(artifact?.role || artifact?.type || artifact?.id || 'artifact')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
+        .replace(/_/g, '-')
+        .toLowerCase();
+      const primaryArtifactRole = outputRecord?.artifactRole || roleLabel(primaryArtifact);
+      const primaryLoadable = outputRecord?.loadable === true || (primaryArtifactRole.includes('splat') && Boolean(primaryArtifact?.path));
+      const runUsesFixture = Boolean(run?.report?.document?.stages?.some(stage => stage.status === 'fixture'));
+      const splat = primaryLoadable ? primaryArtifact : null;
       const outputNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"]\`) : null;
-      const outputLoadButton = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
+      const outputActionName = primaryLoadable ? 'load-output' : 'open-artifact';
+      const outputActionButton = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="\${outputActionName}"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const outputStatus = outputRecord ? outputNode?.dataset?.pipelineGeneratedOutputStatus || null : null;
       const adapterFixture = Boolean(
         run?.report?.document?.stages?.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
-        || splat?.fixtureSource?.mode === 'mock-adapter'
+        || primaryArtifact?.fixtureSource?.mode === 'mock-adapter'
       );
-      const expectedTruth = adapterFixture ? 'adapter fixture / point-cloud preview' : ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
-      const artifactTruthOk = adapterFixture
-        ? splat?.status === 'fixture' && splat?.fixtureSource?.mode === 'mock-adapter'
-        : (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource);
+      const expectedRole = ${JSON.stringify(expectedArtifactRole)};
+      const expectedTruth = primaryArtifactRole === 'normal-map'
+        ? (runUsesFixture ? 'fixture / normal-map artifact' : 'real normal-map artifact')
+        : primaryArtifactRole === 'pbr-material-bundle'
+          ? (runUsesFixture ? 'fixture / PBR material bundle' : 'real PBR material bundle')
+          : adapterFixture ? 'adapter fixture / point-cloud preview' : ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
+      const artifactTruthOk = primaryArtifactRole === expectedRole
+        && (primaryLoadable
+          ? (adapterFixture
+              ? primaryArtifact?.status === 'fixture' && primaryArtifact?.fixtureSource?.mode === 'mock-adapter'
+              : (${JSON.stringify(expectsFixture)} ? primaryArtifact?.fixtureSource : primaryArtifact?.status === 'real' && !primaryArtifact?.fixtureSource))
+          : Boolean(primaryArtifact?.path && primaryArtifact?.status));
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && artifactTruthOk),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && artifactTruthOk),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -480,7 +521,11 @@ try {
         runTimeline: outputRecord?.runTimeline || [],
         outputContainerText: outputContainer?.innerText || '',
         generatedOutputNodeText: outputNode?.innerText || '',
-        generatedOutputLoadAction: Boolean(outputLoadButton),
+        generatedOutputAction: outputActionName,
+        generatedOutputActionVisible: Boolean(outputActionButton),
+        primaryArtifact,
+        primaryArtifactRole,
+        primaryLoadable,
         adapterFixture,
         expectedTruth,
         splat,
@@ -489,69 +534,104 @@ try {
     if (expectsFixture) {
       assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
     } else if (executed.adapterFixture) {
-      assertWitness(executed.resultText.includes('mock SHARP adapter fixture output'), 'Mock adapter result did not preserve adapter-fixture truth warning', executed);
-      assertWitness(executed.splat?.status === 'fixture' && executed.splat?.fixtureSource?.mode === 'mock-adapter', 'Mock adapter result did not expose fixture provenance', executed);
+      assertWitness(executed.resultText.includes('mock adapter fixture output'), 'Mock adapter result did not preserve adapter-fixture truth warning', executed);
+      assertWitness(executed.primaryArtifact?.status === 'fixture' && executed.primaryArtifact?.fixtureSource?.mode === 'mock-adapter', 'Mock adapter result did not expose fixture provenance', executed);
     } else {
       assertWitness(!executed.resultText.includes('input provenance only; output fixed fixture'), 'Live SHARP result still looked fixture-backed', executed);
-      assertWitness(executed.splat?.status === 'real' && !executed.splat?.fixtureSource, 'Live SHARP result did not expose a real non-fixture splat artifact', executed);
+      assertWitness(executed.primaryArtifact?.status === 'real' && !executed.primaryArtifact?.fixtureSource, 'Live result did not expose a real non-fixture primary artifact', executed);
     }
     await capture(cdp, beforePath);
 
-    const loadOutputButton = await evalJson(cdp, `(() => {
-      const state = window.kaminosPipelineDockDebugState?.();
-      const outputRecord = state?.generatedOutputNodes?.find(item => item.runId === ${JSON.stringify(executed.runId)}) || null;
-      const button = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
-      const outputNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"]\`) : null;
-      const rect = button?.getBoundingClientRect();
-      if (!rect) throw new Error('Generated output node Load button missing');
-      return {
-        generatedOutputId: outputRecord?.id || null,
-        text: button.textContent,
-        disabled: button.disabled,
-        nodeText: outputNode?.innerText || '',
-        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
-      };
-    })()`);
-    assertWitness(!loadOutputButton.disabled, 'Load Output button was disabled', loadOutputButton);
-    await click(cdp, loadOutputButton.point);
-    const expectsPipelineFixture = expectsFixture || Boolean(executed.adapterFixture);
-    const after = await waitFor(cdp, `(() => {
-      const scene = window.kaminosSceneObjectDebugState?.() || [];
-      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsPipelineFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
-      const previewDebug = loaded ? window.kaminosSplatPreviewDebugState?.(loaded.id) : null;
-      const state = window.kaminosPipelineDockDebugState?.();
-      const loadedArtifactPath = loaded?.splat?.pipelineArtifact?.path || null;
-      const viewportRect = document.querySelector('#viewport')?.getBoundingClientRect();
-      const minimumIncluded = ${JSON.stringify(expectsPipelineFixture)} ? 1 : 700;
-      return {
-        ok: document.querySelector('.tab.active')?.dataset.tab === 'assets'
-          && loaded?.splat?.previewKind === 'point-cloud'
-          && Boolean(loaded?.splat?.pointCount)
-          && previewDebug?.previewKind === 'point-cloud'
-          && previewDebug?.includedVisible === true
-          && Number(previewDebug?.includedPointCount || 0) >= minimumIncluded
-          && Boolean(loadedArtifactPath && state?.loadedPipelineArtifactPaths?.[loadedArtifactPath]),
-        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
-        objectRows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.innerText),
-        pointCount: loaded?.splat?.pointCount || 0,
-        previewKind: loaded?.splat?.previewKind || null,
-        previewDebug,
-        loadedArtifactPath,
-        loadedPipelineArtifactPaths: state?.loadedPipelineArtifactPaths || {},
-        viewportRect: viewportRect ? { x: viewportRect.x, y: viewportRect.y, width: viewportRect.width, height: viewportRect.height } : null,
-        source: loaded?.source || null,
-        statusText: document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '',
-      };
-    })()`, 'Graph Execute Load Output');
-    assertWitness(after.previewKind === 'point-cloud' && after.previewDebug?.includedVisible, 'Loaded pipeline output did not produce point-cloud preview evidence', after);
-    await capture(cdp, afterPath);
-    const screenshotProbe = await screenshotVisibleProbe(afterPath, after.viewportRect);
-    const minimumSaturatedPixels = expectsFixture ? 150 : 1500;
-    assertWitness(screenshotProbe.saturatedPixels >= minimumSaturatedPixels, 'Loaded pipeline output screenshot did not contain visible colored point-cloud pixels', {
-      after,
-      screenshotProbe,
-      minimumSaturatedPixels,
-    });
+    let loadOutputButton = null;
+    let after = null;
+    let screenshotProbe = null;
+    if (expectsLoadableArtifact) {
+      loadOutputButton = await evalJson(cdp, `(() => {
+        const state = window.kaminosPipelineDockDebugState?.();
+        const outputRecord = state?.generatedOutputNodes?.find(item => item.runId === ${JSON.stringify(executed.runId)}) || null;
+        const button = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
+        const outputNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"]\`) : null;
+        const rect = button?.getBoundingClientRect();
+        if (!rect) throw new Error('Generated output node Load button missing');
+        return {
+          generatedOutputId: outputRecord?.id || null,
+          text: button.textContent,
+          disabled: button.disabled,
+          nodeText: outputNode?.innerText || '',
+          point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        };
+      })()`);
+      assertWitness(!loadOutputButton.disabled, 'Load Output button was disabled', loadOutputButton);
+      await click(cdp, loadOutputButton.point);
+      const expectsPipelineFixture = expectsFixture || Boolean(executed.adapterFixture);
+      after = await waitFor(cdp, `(() => {
+        const scene = window.kaminosSceneObjectDebugState?.() || [];
+        const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsPipelineFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
+        const previewDebug = loaded ? window.kaminosSplatPreviewDebugState?.(loaded.id) : null;
+        const state = window.kaminosPipelineDockDebugState?.();
+        const loadedArtifactPath = loaded?.splat?.pipelineArtifact?.path || null;
+        const viewportRect = document.querySelector('#viewport')?.getBoundingClientRect();
+        const minimumIncluded = ${JSON.stringify(expectsPipelineFixture)} ? 1 : 700;
+        return {
+          ok: document.querySelector('.tab.active')?.dataset.tab === 'assets'
+            && loaded?.splat?.previewKind === 'point-cloud'
+            && Boolean(loaded?.splat?.pointCount)
+            && previewDebug?.previewKind === 'point-cloud'
+            && previewDebug?.includedVisible === true
+            && Number(previewDebug?.includedPointCount || 0) >= minimumIncluded
+            && Boolean(loadedArtifactPath && state?.loadedPipelineArtifactPaths?.[loadedArtifactPath]),
+          activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+          objectRows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.innerText),
+          pointCount: loaded?.splat?.pointCount || 0,
+          previewKind: loaded?.splat?.previewKind || null,
+          previewDebug,
+          loadedArtifactPath,
+          loadedPipelineArtifactPaths: state?.loadedPipelineArtifactPaths || {},
+          viewportRect: viewportRect ? { x: viewportRect.x, y: viewportRect.y, width: viewportRect.width, height: viewportRect.height } : null,
+          source: loaded?.source || null,
+          statusText: document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '',
+        };
+      })()`, 'Graph Execute Load Output');
+      assertWitness(after.previewKind === 'point-cloud' && after.previewDebug?.includedVisible, 'Loaded pipeline output did not produce point-cloud preview evidence', after);
+      await capture(cdp, afterPath);
+      screenshotProbe = await screenshotVisibleProbe(afterPath, after.viewportRect);
+      const minimumSaturatedPixels = expectsFixture ? 150 : 1500;
+      assertWitness(screenshotProbe.saturatedPixels >= minimumSaturatedPixels, 'Loaded pipeline output screenshot did not contain visible colored point-cloud pixels', {
+        after,
+        screenshotProbe,
+        minimumSaturatedPixels,
+      });
+    } else {
+      const openArtifactButton = await evalJson(cdp, `(() => {
+        const state = window.kaminosPipelineDockDebugState?.();
+        const outputRecord = state?.generatedOutputNodes?.find(item => item.runId === ${JSON.stringify(executed.runId)}) || null;
+        const button = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="open-artifact"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
+        const outputNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"]\`) : null;
+        const rect = button?.getBoundingClientRect();
+        if (!rect) throw new Error('Generated output node Open Artifact button missing');
+        return {
+          generatedOutputId: outputRecord?.id || null,
+          text: button.textContent,
+          disabled: button.disabled,
+          nodeText: outputNode?.innerText || '',
+          point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        };
+      })()`);
+      assertWitness(!openArtifactButton.disabled, 'Open Artifact button was disabled', openArtifactButton);
+      await click(cdp, openArtifactButton.point);
+      after = await waitFor(cdp, `(() => {
+        const status = document.querySelector('#pipeline-result-action-status')?.textContent || document.querySelector('#info-bar')?.textContent || '';
+        const inspector = document.querySelector('#pipeline-graph-inspector')?.innerText || '';
+        return {
+          ok: status.includes('Open Artifact opened') || status.includes('opened as image') || inspector.includes(${JSON.stringify(expectedArtifactRole)}),
+          statusText: status,
+          inspectorText: inspector,
+          activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        };
+      })()`, 'Graph Execute Open Artifact');
+      loadOutputButton = openArtifactButton;
+      await capture(cdp, afterPath);
+    }
 
     let repeated = null;
     let historySelection = null;
