@@ -206,7 +206,8 @@ assert.match(index, /real SHARP \/ point-cloud preview/, 'Generated SHARP output
 assert.match(index, /adapter fixture \/ point-cloud preview/, 'Generated SHARP output nodes must label mock adapter outputs as fixtures, not real SHARP');
 assert.match(index, /pipelineDockState\.loadedPipelineArtifactPaths/, 'Pipeline graph tracks whether a generated artifact has been loaded into the scene');
 assert.match(index, /data-pipeline-generated-output-node-id/, 'Generated output nodes expose stable DOM ids for browser smokes');
-assert.match(index, /data-pipeline-graph-node-action="load-output"/, 'Generated output nodes expose Load as an in-canvas node action');
+assert.match(index, /loadable \? 'load-output' : 'open-artifact'/, 'Generated output nodes choose typed in-canvas actions by artifact loadability');
+assert.match(index, /data-pipeline-graph-node-action="\$\{loadable \? 'load-output' : 'open-artifact'\}"/, 'Generated output node DOM exposes the typed output action');
 assert.match(index, /pipelineSetGraphInspectorStatus\(`Queued \$\{/, 'Graph execution must visibly report which route node has been queued');
 assert.match(index, /running inference/, 'Graph execution must visibly distinguish backend inference from queued status');
 assert.match(index, /pipelineDockState\.selectedGraphNodeId = pendingRecord\?\.id/, 'Graph execution should move selection to the pending generated-output node before backend completion');
@@ -242,7 +243,7 @@ assert.match(index, /Open Sidecar/, 'Pipeline result panel exposes the written s
 assert.match(index, /async function pipelineOpenRunDocument\(/, 'Open Sidecar/Open Bundle fetch documents into an in-app result panel');
 assert.match(index, /async function pipelineLoadRunSplatArtifact\(/, 'Generated splat outputs load through an explicit result action');
 assert.match(index, /setActiveTab\('assets'\)/, 'Load result actions must switch away from the Pipeline overlay after loading a scene source');
-assert.match(index, /does not generate a new splat/, 'Pipeline UI tells the operator when a route only writes metadata/sidecars');
+assert.match(index, /Run evidence written without a primary output artifact/, 'Pipeline UI tells the operator when a route only writes metadata/sidecars');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
 assert.match(index, /async function ingestDroppedSplatFile\(/, 'loose PLY/SPZ drops ingest into the experimental splat inbox before import');

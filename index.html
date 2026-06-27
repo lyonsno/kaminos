@@ -4622,7 +4622,83 @@ function pipelineRememberRun(result, source, pipeline) {
 }
 
 function pipelineRunArtifact(result, id) {
-  return result?.bundle?.document?.artifacts?.find(artifact => artifact.id === id) || null;
+  return pipelineRunArtifactRecords(result).find(artifact => artifact.id === id) || null;
+}
+
+function pipelineNormalizeArtifactCollection(collection) {
+  if (!collection) return [];
+  if (Array.isArray(collection)) return collection.filter(Boolean);
+  if (typeof collection === 'object') {
+    return Object.entries(collection)
+      .filter(([, artifact]) => artifact && typeof artifact === 'object')
+      .map(([id, artifact]) => ({ id: artifact.id || id, ...artifact }));
+  }
+  return [];
+}
+
+function pipelineRunArtifactRecords(result) {
+  const artifacts = [
+    ...pipelineNormalizeArtifactCollection(result?.bundle?.document?.artifacts),
+    ...pipelineNormalizeArtifactCollection(result?.report?.document?.artifacts),
+  ];
+  const byId = new Map();
+  for (const artifact of artifacts) {
+    const key = artifact.id || artifact.path || JSON.stringify(artifact);
+    if (!byId.has(key)) byId.set(key, artifact);
+  }
+  return [...byId.values()];
+}
+
+function pipelineRunOutputArtifacts(result) {
+  return pipelineRunArtifactRecords(result).filter(artifact => {
+    const role = (artifact.role || artifact.type || '').toString().toLowerCase();
+    const id = (artifact.id || '').toString().toLowerCase();
+    if (!artifact?.path) return false;
+    if (id === 'input' || id === 'source') return false;
+    if (id === 'sidecar' || role.includes('sidecar')) return false;
+    if (role === 'input' || role === 'source') return false;
+    return true;
+  });
+}
+
+function pipelineArtifactRole(artifact) {
+  return (artifact?.role || artifact?.type || artifact?.id || 'artifact').toString();
+}
+
+function pipelineArtifactRoleLabel(artifact) {
+  const role = pipelineArtifactRole(artifact);
+  return role
+    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase();
+}
+
+function pipelineArtifactTitle(artifact) {
+  const role = pipelineArtifactRoleLabel(artifact);
+  if (role === 'normal-map') return 'Normal map output';
+  if (role === 'pbr-material-bundle') return 'PBR material bundle';
+  if (pipelineArtifactIsLoadableSplat(artifact)) return 'Generated splat output';
+  return `${role || 'artifact'} output`;
+}
+
+function pipelineArtifactIsLoadableSplat(artifact) {
+  const role = pipelineArtifactRoleLabel(artifact);
+  const id = (artifact?.id || '').toString().toLowerCase();
+  const path = (artifact?.path || '').toString().toLowerCase();
+  if (!artifact?.path) return false;
+  if (role.includes('normal') || role.includes('material') || role.includes('bundle')) return false;
+  return id === 'splat' || role.includes('splat') || path.endsWith('.ply') || path.endsWith('.spz');
+}
+
+function pipelinePrimaryRunArtifact(result) {
+  const outputs = pipelineRunOutputArtifacts(result);
+  if (!outputs.length) return null;
+  const preferredIds = ['splat', 'normalMap', 'materialBundle'];
+  for (const id of preferredIds) {
+    const artifact = outputs.find(candidate => candidate.id === id);
+    if (artifact) return artifact;
+  }
+  return outputs[0];
 }
 
 function pipelineGraphNodeForId(graph, nodeId) {
@@ -4666,7 +4742,7 @@ function pipelineRunUsesFixture(result) {
 
 function pipelineRunUsesAdapterFixture(result) {
   const stages = result?.report?.document?.stages || [];
-  const artifacts = result?.report?.document?.artifacts || [];
+  const artifacts = pipelineRunArtifactRecords(result);
   const routeText = stages.map(stage => [
     stage.effectiveRoute?.fixtureMode,
     stage.effectiveRoute?.adapterReport?.schema,
@@ -4774,6 +4850,10 @@ function normalizePipelineGeneratedOutputNode(value) {
   const runId = String(value.runId || '').trim();
   const routeNodeId = String(value.routeNodeId || '').trim();
   const artifact = value.artifact && typeof value.artifact === 'object' ? value.artifact : null;
+  const artifacts = Array.isArray(value.artifacts)
+    ? value.artifacts.filter(item => item && typeof item === 'object')
+    : (artifact ? [artifact] : []);
+  const artifactRole = value.artifactRole || pipelineArtifactRoleLabel(artifact);
   const status = ['pending', 'running', 'complete', 'failed'].includes(value.status) ? value.status : (artifact?.path ? 'complete' : 'pending');
   if (!id || !runId || !routeNodeId) return null;
   if (status === 'complete' && !artifact?.path) return null;
@@ -4788,6 +4868,9 @@ function normalizePipelineGeneratedOutputNode(value) {
     sourceGraphNodeId: value.sourceGraphNodeId || null,
     sourceLabel: value.sourceLabel || null,
     artifact,
+    artifacts,
+    artifactRole,
+    loadable: value.loadable === true || pipelineArtifactIsLoadableSplat(artifact),
     sidecar: value.sidecar && typeof value.sidecar === 'object' ? value.sidecar : null,
     outputRoot: value.outputRoot || null,
     reportPath: value.reportPath || null,
@@ -5047,6 +5130,9 @@ function createPipelineGraphImageNode(asset, position = null) {
 
 function pipelineRunPreviewTruthLabel(result, artifact = null) {
   if (!artifact?.path) return 'no generated preview';
+  const role = pipelineArtifactRoleLabel(artifact);
+  if (role === 'normal-map') return pipelineRunUsesFixture(result) ? 'fixture / normal-map artifact' : 'real normal-map artifact';
+  if (role === 'pbr-material-bundle') return pipelineRunUsesFixture(result) ? 'fixture / PBR material bundle' : 'real PBR material bundle';
   if (pipelineRunUsesAdapterFixture(result)) return 'adapter fixture / point-cloud preview';
   if (pipelineRunUsesFixture(result)) return 'fixture / point-cloud preview';
   if ((result?.generatorId || result?.generatorLabel || result?.pipelineId || '').toString().toLowerCase().includes('sharp')) {
@@ -5204,7 +5290,7 @@ function pipelineGeneratedOutputRunRecord(node) {
     report: {
       path: node.reportPath || null,
       document: {
-        artifacts: [node.artifact, node.sidecar].filter(Boolean),
+        artifacts: node.artifacts?.length ? node.artifacts : [node.artifact, node.sidecar].filter(Boolean),
         stages: node.fixtureBacked ? [{ status: 'fixture' }] : [],
       },
     },
@@ -5212,7 +5298,7 @@ function pipelineGeneratedOutputRunRecord(node) {
       path: node.bundlePath || null,
       document: {
         outputRoot: node.outputRoot || '',
-        artifacts: [node.artifact, node.sidecar].filter(Boolean),
+        artifacts: node.artifacts?.length ? node.artifacts : [node.artifact, node.sidecar].filter(Boolean),
       },
     },
     error: node.error || null,
@@ -5221,25 +5307,32 @@ function pipelineGeneratedOutputRunRecord(node) {
 
 function pipelineGeneratedOutputGraphNode(record) {
   const run = pipelineGeneratedOutputRunRecord(record);
-  const artifact = pipelineRunArtifact(run, 'splat') || record.artifact;
+  const artifacts = pipelineRunOutputArtifacts(run);
+  const artifact = pipelinePrimaryRunArtifact(run) || record.artifact;
   const sidecar = pipelineRunArtifact(run, 'sidecar') || record.sidecar || null;
-  const loadedArtifact = pipelineArtifactLoadedRecord(artifact);
+  const loadable = pipelineArtifactIsLoadableSplat(artifact);
+  const loadedArtifact = loadable ? pipelineArtifactLoadedRecord(artifact) : null;
   const fixtureBacked = pipelineRunUsesFixture(run) || Boolean(record.fixtureBacked);
   const computedPreviewTruth = pipelineRunPreviewTruthLabel(run, artifact);
   const previewTruth = pipelineRunUsesAdapterFixture(run) ? computedPreviewTruth : (record.previewTruth || computedPreviewTruth);
+  const artifactRole = pipelineArtifactRoleLabel(artifact);
+  const artifactTitle = artifact ? pipelineArtifactTitle(artifact) : 'Generated artifact';
   return {
     id: record.id,
     kind: 'generated-output',
     status: record.status || 'complete',
     phase: record.phase || record.status || 'complete',
     statusMessage: record.statusMessage || null,
-    title: record.status === 'failed' ? 'Failed SHARP Run' : record.status === 'pending' || record.status === 'running' ? 'Pending SHARP Run' : `${fixtureBacked ? 'Fixture' : 'Generated'} SHARP Splat`,
+    title: record.status === 'failed' ? 'Failed Pipeline Run' : record.status === 'pending' || record.status === 'running' ? 'Pending Pipeline Run' : `${fixtureBacked ? 'Fixture' : 'Generated'} ${artifactTitle}`,
     detail: record.status === 'complete' ? previewTruth : (record.statusMessage || pipelineGeneratedOutputStatusLabel(record)),
     runId: record.runId,
     routeNodeId: record.routeNodeId,
     sourceGraphNodeId: record.sourceGraphNodeId || null,
     sourceLabel: record.sourceLabel || run?.source?.label || null,
     artifact,
+    artifacts,
+    artifactRole,
+    loadable,
     sidecar,
     runRecord: run,
     fixtureBacked,
@@ -5688,6 +5781,8 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     }
   }
   if (node.kind === 'output' || node.kind === 'generated-output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
+  if (node.kind === 'generated-output') rows.push({ key: 'artifact role', value: node.artifactRole || pipelineArtifactRoleLabel(node.artifact) || 'artifact' });
+  if (node.kind === 'generated-output') rows.push({ key: 'artifact count', value: String(node.artifacts?.length || (node.artifact ? 1 : 0)) });
   if (node.kind === 'generated-output') rows.push({ key: 'status', value: node.status || 'complete' });
   if (node.kind === 'generated-output') rows.push({ key: 'phase', value: node.phase || 'complete' });
   if (node.kind === 'generated-output') rows.push({ key: 'timeline', value: `${node.runTimeline?.length || 0} event${node.runTimeline?.length === 1 ? '' : 's'}` });
@@ -5695,6 +5790,7 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'generated-output') rows.push({ key: 'graph snapshot', value: node.graphSnapshot?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'graph relation', value: pipelineGeneratedOutputGraphRelation(node) });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
+  if (node.kind === 'generated-output') rows.push({ key: 'loadable', value: node.loadable ? 'yes' : 'no; open artifact evidence instead' });
   if (node.kind === 'generated-output') rows.push({ key: 'loaded', value: node.loaded ? `yes${node.loadedSceneObjectId ? ` (${node.loadedSceneObjectId})` : ''}` : 'not loaded' });
   if (node.kind === 'generated-output') rows.push({ key: 'route node', value: node.routeNodeId || 'unknown' });
   if (node.kind === 'generated-output') rows.push({ key: 'source node', value: node.sourceGraphNodeId || 'unknown' });
@@ -5721,7 +5817,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const bodyText = node?.kind === 'image'
     ? 'Select another image card below to replace this node, or import this image into the scene.'
     : node?.kind === 'generated-output'
-      ? 'Generated artifact node. Load appends this run-local output to the scene; renderer quality depends on the current preview/baking route.'
+      ? (node.loadable ? 'Generated splat artifact node. Load appends this run-local output to the scene; renderer quality depends on the current preview/baking route.' : 'Generated artifact node. This output is not a loadable splat; open the artifact or bundle evidence and route it into a later preview/baking node.')
     : node?.kind === 'route' && pipelineRouteUsesFixture(node)
       ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
       : node?.kind === 'route'
@@ -5738,7 +5834,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
     actions.push({
       label: 'Execute',
       runningMessage: `Executing ${node.title || 'pipeline route'}...`,
-      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelineRunArtifact(result, 'splat')?.path ? 'output node selected' : 'evidence node selected'}`,
+      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelinePrimaryRunArtifact(result)?.path ? 'generated output node selected' : 'evidence node selected'}`,
       action: () => pipelineExecuteGraphRouteNode(node),
     });
   }
@@ -5758,7 +5854,12 @@ function renderPipelineGraphInspector(node, selectedRun) {
   }
   const nodeRun = node?.kind === 'generated-output' ? (node.runRecord || pipelineGeneratedOutputRunRecord(node)) : selectedRun;
   if ((node?.kind === 'output' || node?.kind === 'generated-output') && nodeRun && node.artifact?.path) {
-    actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(nodeRun, node.artifact) });
+    if (pipelineArtifactIsLoadableSplat(node.artifact)) {
+      actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(nodeRun, node.artifact) });
+    } else {
+      const artifactUrl = pipelineRunReadUrlForPath(nodeRun, node.artifact.path);
+      actions.push({ label: 'Open Artifact', disabled: !artifactUrl, action: () => pipelineOpenRunArtifact('Open Artifact', artifactUrl, nodeRun, node.artifact) });
+    }
   }
   if (node?.kind === 'evidence' && selectedRun) {
     const sidecarUrl = pipelineRunReadUrlForPath(selectedRun, node.sidecar?.path);
@@ -5784,7 +5885,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
         >
           <span class="pipeline-output-history-main">#${escapeHtml(row.number)} ${escapeHtml(row.record.sourceLabel || row.record.runId)}</span>
           <span class="pipeline-status-chip ${escapeHtml(row.record.status || 'complete')}">${escapeHtml(row.record.status || 'complete')}</span>
-          <span class="pipeline-output-history-meta">${escapeHtml(row.relation)} / ${escapeHtml(row.record.phase || 'complete')} / ${escapeHtml(row.record.artifact?.path?.split('/').pop() || 'no artifact yet')}</span>
+          <span class="pipeline-output-history-meta">${escapeHtml(row.relation)} / ${escapeHtml(row.record.phase || 'complete')} / ${escapeHtml(row.record.artifactRole || pipelineArtifactRoleLabel(row.record.artifact))} / ${escapeHtml(row.record.artifact?.path?.split('/').pop() || 'no artifact yet')}</span>
         </button>
       `).join('') : '<div class="pipeline-output-history-empty">No outputs yet.</div>'}
     </div>
@@ -5905,7 +6006,7 @@ async function pipelineExecuteGraphRouteNode(node) {
       pipelineFailGeneratedOutputNode(pendingRecord.id, run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`, run);
       throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
     }
-    if (pipelineRunArtifact(run, 'splat')?.path) {
+    if (pipelinePrimaryRunArtifact(run)?.path) {
       const outputNode = pipelineCompleteGeneratedOutputNode(pendingRecord.id, run, node);
       pipelineDockState.selectedGraphNodeId = outputNode?.id || pendingRecord.id;
     } else {
@@ -5963,6 +6064,9 @@ function pipelineCreatePendingGeneratedOutputNode({ routeNode, source, requested
     sourceGraphNodeId: graphExecution?.sourceGraphNodeId || source?.graphNodeId || null,
     sourceLabel: source?.label || null,
     artifact: null,
+    artifacts: [],
+    artifactRole: null,
+    loadable: false,
     sidecar: null,
     outputRoot: null,
     reportPath: null,
@@ -6025,9 +6129,12 @@ function pipelineUpdateGeneratedOutputStatus(outputNodeId, status, phase, messag
 }
 
 function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
-  const artifact = pipelineRunArtifact(run, 'splat');
+  const artifact = pipelinePrimaryRunArtifact(run);
   if (!run?.runId || !routeNode?.id || !outputNodeId) return null;
+  const artifacts = pipelineRunOutputArtifacts(run);
   const sidecar = pipelineRunArtifact(run, 'sidecar');
+  const artifactRole = pipelineArtifactRoleLabel(artifact);
+  const loadable = pipelineArtifactIsLoadableSplat(artifact);
   const now = new Date().toISOString();
   let completed = null;
   pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
@@ -6036,12 +6143,15 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
       ...record,
       status: 'complete',
       phase: artifact?.path ? 'complete' : 'evidence-written',
-      statusMessage: artifact?.path ? 'Output artifact written' : 'Run evidence written without a loadable splat',
+      statusMessage: artifact?.path ? `${artifactRole || 'output'} artifact written` : 'Run evidence written without an output artifact',
       runId: run.runId,
       routeNodeId: routeNode.id,
       sourceGraphNodeId: run.graphExecution?.sourceGraphNodeId || run.source?.graphNodeId || record.sourceGraphNodeId || null,
       sourceLabel: run.source?.label || record.sourceLabel || null,
       artifact: artifact || null,
+      artifacts,
+      artifactRole,
+      loadable,
       sidecar,
       outputRoot: run.bundle?.document?.outputRoot || null,
       reportPath: run.report?.path || null,
@@ -6057,7 +6167,7 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
       runTimeline: [
         ...(record.runTimeline || []),
         pipelineRunTimelineEvent('writing artifacts', 'Backend returned; run evidence is being indexed', 'running'),
-        pipelineRunTimelineEvent(artifact?.path ? 'complete' : 'evidence-written', artifact?.path ? 'Output artifact written' : 'Run evidence written without a loadable splat', 'complete'),
+        pipelineRunTimelineEvent(artifact?.path ? 'complete' : 'evidence-written', artifact?.path ? `${artifactRole || 'output'} artifact written` : 'Run evidence written without an output artifact', 'complete'),
       ],
     };
     return completed;
@@ -6260,16 +6370,18 @@ function pipelineGraphNodeActionsMarkup(node) {
   if (node.kind === 'generated-output') {
     const loaded = Boolean(node.loaded);
     const status = node.status || 'complete';
+    const artifactRole = node.artifactRole || pipelineArtifactRoleLabel(node.artifact);
+    const loadable = pipelineArtifactIsLoadableSplat(node.artifact);
     return `
-      <span class="pipeline-graph-node-status ${escapeHtml(status)}" data-pipeline-generated-output-status="${escapeHtml(status)}">${escapeHtml(pipelineGeneratedOutputStatusLabel(node))}</span>
+      <span class="pipeline-graph-node-status ${escapeHtml(status)}" data-pipeline-generated-output-status="${escapeHtml(status)}" data-pipeline-artifact-role="${escapeHtml(artifactRole)}">${escapeHtml(pipelineGeneratedOutputStatusLabel(node))}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
-          class="pipeline-graph-node-action${loaded ? '' : ' primary'}"
-          data-pipeline-graph-node-action="load-output"
+          class="pipeline-graph-node-action${loaded || !loadable ? '' : ' primary'}"
+          data-pipeline-graph-node-action="${loadable ? 'load-output' : 'open-artifact'}"
           data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
           ${loaded || !node.artifact?.path || status !== 'complete' ? 'disabled' : ''}
-        >${loaded ? 'Loaded' : 'Load'}</button>
+        >${loaded ? 'Loaded' : loadable ? 'Load' : 'Open Artifact'}</button>
       </span>
     `;
   }
@@ -6281,7 +6393,7 @@ function pipelineGraphNodeActionItem(node, action) {
     return {
       label: 'Execute',
       runningMessage: `Executing ${node.title || 'pipeline route'}...`,
-      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelineRunArtifact(result, 'splat')?.path ? 'generated output node selected' : 'evidence node selected'}`,
+      successMessage: result => `Executed ${pipelineRunDisplayId(result)}; ${pipelinePrimaryRunArtifact(result)?.path ? 'generated output node selected' : 'evidence node selected'}`,
       action: () => pipelineExecuteGraphRouteNode(node),
     };
   }
@@ -6292,7 +6404,18 @@ function pipelineGraphNodeActionItem(node, action) {
       runningMessage: 'Loading generated output into the scene...',
       successMessage: record => `Loaded generated output${record?.id ? ` as ${record.id}` : ''}`,
       action: () => pipelineLoadRunSplatArtifact(run, node.artifact),
-      disabled: !run || !node.artifact?.path || node.loaded,
+      disabled: !run || !node.artifact?.path || node.loaded || !pipelineArtifactIsLoadableSplat(node.artifact),
+    };
+  }
+  if (action === 'open-artifact' && node?.kind === 'generated-output') {
+    const run = node.runRecord || pipelineGeneratedOutputRunRecord(node);
+    const artifactUrl = pipelineRunReadUrlForPath(run, node.artifact?.path);
+    return {
+      label: 'Open Artifact',
+      runningMessage: 'Opening generated artifact evidence...',
+      successMessage: () => 'Generated artifact opened below',
+      action: () => pipelineOpenRunArtifact('Open Artifact', artifactUrl, run, node.artifact),
+      disabled: !run || !artifactUrl || pipelineArtifactIsLoadableSplat(node.artifact),
     };
   }
   return null;
@@ -6491,17 +6614,20 @@ function pipelineRunReadUrlForPath(result, artifactPath) {
 function pipelineRunResultRows(result) {
   if (!result) return [];
   const sidecar = pipelineRunArtifact(result, 'sidecar');
-  const splat = pipelineRunArtifact(result, 'splat');
+  const primaryArtifact = pipelinePrimaryRunArtifact(result);
+  const artifactRole = pipelineArtifactRoleLabel(primaryArtifact);
+  const loadable = pipelineArtifactIsLoadableSplat(primaryArtifact);
   const fixtureBacked = pipelineRunUsesFixture(result);
   const adapterFixture = pipelineRunUsesAdapterFixture(result);
   return [
     { key: 'generator', value: result.generatorLabel || 'unknown' },
     { key: 'backend', value: result.backendPipelineId || result.pipelineId || 'unknown' },
-    { key: 'effect', value: splat ? 'Splat output artifact written; preview still must be loaded explicitly.' : 'Sidecar metadata written; no new splat generated.' },
-    ...(adapterFixture ? [{ key: 'truth', value: 'mock SHARP adapter fixture output; not real SHARP inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
+    { key: 'effect', value: primaryArtifact ? `${artifactRole || 'output'} artifact written${loadable ? '; preview still must be loaded explicitly.' : '; open artifact evidence or route into a later preview/baking node.'}` : 'Run evidence written without a primary output artifact.' },
+    ...(adapterFixture ? [{ key: 'truth', value: 'mock adapter fixture output; not real model inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
-    { key: 'splat', value: splat?.path || 'not generated' },
+    { key: 'artifact role', value: artifactRole || 'none' },
+    { key: 'artifact', value: primaryArtifact?.path || 'not generated' },
     { key: 'sidecar', value: sidecar?.path || 'not written' },
     { key: 'source', value: result.source?.source || result.source?.path || 'unknown' },
   ];
@@ -6558,7 +6684,26 @@ async function pipelineOpenRunDocument(label, url, result = null) {
   }
 }
 
+async function pipelineOpenRunArtifact(label, url, result = null, artifact = null) {
+  if (!url) {
+    pipelineSetActionStatus(`${label} is not available for this run`);
+    return null;
+  }
+  const path = artifact?.path || '';
+  const extension = path.split('.').pop()?.toLowerCase() || '';
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(extension)) {
+    window.open(url, '_blank', 'noopener');
+    pipelineSetActionStatus(`${label} opened as image: ${path.split('/').pop() || extension}`);
+    return url;
+  }
+  return pipelineOpenRunDocument(label, url, result);
+}
+
 async function pipelineLoadRunSplatArtifact(result, artifact) {
+  if (!pipelineArtifactIsLoadableSplat(artifact)) {
+    pipelineSetActionStatus('Generated artifact is not a loadable splat; open the artifact evidence instead');
+    return null;
+  }
   const url = pipelineRunReadUrlForPath(result, artifact?.path);
   if (!url) {
     pipelineSetActionStatus('No generated splat output is available for this run');
@@ -6732,7 +6877,8 @@ function renderPipelineRunShelf() {
   list.innerHTML = '';
   for (const run of runs) {
     const sidecar = pipelineRunArtifact(run, 'sidecar');
-    const splat = pipelineRunArtifact(run, 'splat');
+    const primaryArtifact = pipelinePrimaryRunArtifact(run);
+    const artifactRole = pipelineArtifactRoleLabel(primaryArtifact);
     const card = document.createElement('button');
     card.type = 'button';
     card.className = `pipeline-run-card${run.runId === pipelineDockState.selectedRunId ? ' selected' : ''}`;
@@ -6747,7 +6893,7 @@ function renderPipelineRunShelf() {
         <span class="pipeline-status-chip ${run.ok ? 'real' : 'failed'}">${run.ok ? 'written' : 'failed'}</span>
       </div>
       <div class="pipeline-run-card-meta">${escapeHtml(pipelineRunDisplayId(run))}</div>
-      <div class="pipeline-run-card-flow">${escapeHtml(run.source?.label || run.source?.source || 'source')} -> ${escapeHtml(splat?.path ? 'splat output' : sidecar?.path ? 'sidecar' : 'no artifact')}</div>
+      <div class="pipeline-run-card-flow">${escapeHtml(run.source?.label || run.source?.source || 'source')} -> ${escapeHtml(primaryArtifact?.path ? `${artifactRole || 'artifact'} output` : sidecar?.path ? 'sidecar evidence' : 'no artifact')}</div>
     `;
     list.appendChild(card);
   }
@@ -6766,7 +6912,9 @@ function renderPipelineRunResultPanel() {
     pipelineDockState.renderedRunId = runId;
   }
   const sidecar = pipelineRunArtifact(result, 'sidecar');
-  const splat = pipelineRunArtifact(result, 'splat');
+  const primaryArtifact = pipelinePrimaryRunArtifact(result);
+  const artifactRole = pipelineArtifactRoleLabel(primaryArtifact);
+  const loadable = pipelineArtifactIsLoadableSplat(primaryArtifact);
   const title = document.getElementById('pipeline-run-result-title');
   const body = document.getElementById('pipeline-run-result-body');
   const grid = document.getElementById('pipeline-run-result-grid');
@@ -6776,7 +6924,7 @@ function renderPipelineRunResultPanel() {
     const fixtureBacked = pipelineRunUsesFixture(result);
     const adapterFixture = pipelineRunUsesAdapterFixture(result);
     body.textContent = result.ok
-      ? (adapterFixture ? 'This route used a mock SHARP adapter fixture. The command ran and produced a visible test splat, but this is not real SHARP inference.' : fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live SHARP is configured.' : splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
+      ? (adapterFixture ? 'This route used a mock adapter fixture. The command ran and produced visible test evidence, but this is not real model inference.' : fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live compute is configured.' : primaryArtifact?.path ? `This route wrote a ${artifactRole || 'generated'} artifact.${loadable ? ' Use Load Output to append that output to the scene.' : ' It is not a loadable splat yet; open the artifact or route it into a later preview/baking node.'}` : 'This route wrote evidence without a primary output artifact; inspect the report/bundle for failure or metadata.')
       : (result.pipelineDescription || 'This run failed before producing trustworthy output.');
   }
   if (grid) {
@@ -6787,13 +6935,22 @@ function renderPipelineRunResultPanel() {
   }
   if (actions) {
     actions.innerHTML = '';
-    if (splat?.path) {
+    if (primaryArtifact?.path && loadable) {
       const loadOutputBtn = document.createElement('button');
       loadOutputBtn.type = 'button';
       loadOutputBtn.className = 'btn';
       loadOutputBtn.textContent = 'Load Output';
-      loadOutputBtn.onclick = () => pipelineLoadRunSplatArtifact(result, splat).catch(() => {});
+      loadOutputBtn.onclick = () => pipelineLoadRunSplatArtifact(result, primaryArtifact).catch(() => {});
       actions.appendChild(loadOutputBtn);
+    } else if (primaryArtifact?.path) {
+      const artifactUrl = pipelineRunReadUrlForPath(result, primaryArtifact.path);
+      const openArtifactBtn = document.createElement('button');
+      openArtifactBtn.type = 'button';
+      openArtifactBtn.className = 'btn';
+      openArtifactBtn.textContent = 'Open Artifact';
+      openArtifactBtn.disabled = !artifactUrl;
+      openArtifactBtn.onclick = () => pipelineOpenRunArtifact('Open Artifact', artifactUrl, result, primaryArtifact).catch(() => {});
+      actions.appendChild(openArtifactBtn);
     } else {
       const loadBtn = document.createElement('button');
       loadBtn.type = 'button';
