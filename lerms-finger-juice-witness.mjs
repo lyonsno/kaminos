@@ -431,6 +431,10 @@ async function run() {
     assert.equal(state.fluidDepthStats?.pressureContract, 'wgsl-spatial-viscosity-pressure-v0', 'fluid depth stats do not identify contract');
     assert.ok(state.fluidDepthStats?.spatialPressureIterations >= 2, 'route did not expose multiple pressure iterations');
     assert.ok(state.fluidDepthStats?.viscosityAffectedCount > 0, 'route did not expose viscosity affected particles');
+    assert.equal(state.surfaceCohesionStats?.pressureContract, 'wgsl-same-chemistry-surface-cohesion-v0', 'surface cohesion stats do not identify contract');
+    assert.ok(state.surfaceCohesionStats?.cohesionAffectedCount > 0, 'route did not expose cohesion affected particles');
+    assert.ok(state.surfaceCohesionStats?.cohesionNeighborCount > 0, 'route did not expose same-chemistry cohesion neighbors');
+    assert.ok(state.surfaceCohesionStats?.ribbonAlignment > 0.05, 'route did not expose directional ribbon alignment');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -470,9 +474,13 @@ async function run() {
         spatialOccupiedCells: stress?.spatialPressureStats?.occupiedCellCount || 0,
         maxCellOccupancy: stress?.spatialPressureStats?.maxCellOccupancy || 0,
         viscosityAffectedCount: stress?.fluidDepthStats?.viscosityAffectedCount || 0,
+        cohesionAffectedCount: stress?.surfaceCohesionStats?.cohesionAffectedCount || 0,
+        cohesionNeighborCount: stress?.surfaceCohesionStats?.cohesionNeighborCount || 0,
+        ribbonAlignment: stress?.surfaceCohesionStats?.ribbonAlignment || 0,
         pressureContract: stress?.pressureContract || null,
         spatialPressureContract: stress?.spatialPressureContract || null,
         fluidDepthContract: stress?.fluidDepthContract || null,
+        surfaceCohesionContract: stress?.surfaceCohesionStats?.pressureContract || null,
       };
     })()`);
     assert.ok(extendedFlowProbe, 'route did not expose expanded witness stress hook');
@@ -486,6 +494,10 @@ async function run() {
     assert.ok(extendedFlowProbe.flowExtentZ > 1.0, 'expanded witness phase did not preserve enough forward flow extent');
     assert.ok(extendedFlowProbe.spatialOccupiedCells >= 8, 'expanded witness phase did not occupy enough pressure cells');
     assert.ok(extendedFlowProbe.viscosityAffectedCount > 0, 'expanded witness phase did not exercise viscosity');
+    assert.equal(extendedFlowProbe.surfaceCohesionContract, 'wgsl-same-chemistry-surface-cohesion-v0', 'expanded witness phase lost surface cohesion contract');
+    assert.ok(extendedFlowProbe.cohesionAffectedCount >= 240, 'expanded witness phase did not exercise enough surface cohesion');
+    assert.ok(extendedFlowProbe.cohesionNeighborCount >= 360, 'expanded witness phase did not retain enough same-chemistry cohesion neighbors');
+    assert.ok(extendedFlowProbe.ribbonAlignment > 0.08, 'expanded witness phase did not form directional ribbon alignment');
     state = extendedFlowProbe.state;
     lastTrustworthyState = state;
 
@@ -629,6 +641,7 @@ async function run() {
       pressureDensityStats: state.pressureDensityStats,
       spatialPressureStats: state.spatialPressureStats,
       fluidDepthStats: state.fluidDepthStats,
+      surfaceCohesionStats: state.surfaceCohesionStats,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
