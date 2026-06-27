@@ -169,6 +169,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-browser-subtitle { color: #777; font: 11px 'SF Mono', monospace; margin-top: 4px; }
 .pipeline-browser-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pipeline-browser-selected { color: #999; font: 10px 'SF Mono', monospace; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-workspace-summary { border: 1px solid #292929; background: #151515; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(240px, 0.9fr); gap: 12px; align-items: start; }
+.pipeline-graph-workspace-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+.pipeline-graph-workspace-title { color: #e8e8e8; font-size: 12px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-workspace-kicker { color: #8fc7d6; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.pipeline-graph-workspace-body { color: #858585; font-size: 11px; line-height: 1.35; }
+.pipeline-graph-workspace-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.pipeline-graph-workspace-stat { border: 1px solid #252525; background: #121212; border-radius: 6px; padding: 6px 7px; min-width: 0; }
+.pipeline-graph-workspace-stat-key { color: #555; font: 8px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+.pipeline-graph-workspace-stat-val { color: #bbb; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-workspace-history { border-left: 1px solid #252525; padding-left: 12px; min-width: 0; }
+.pipeline-graph-workspace-history-title { color: #777; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
+.pipeline-graph-workspace-history-row { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 7px; padding: 4px 0; border-top: 1px solid #202020; }
+.pipeline-graph-workspace-history-kind { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-workspace-history-label { color: #aaa; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-workspace-empty { color: #555; font: 10px 'SF Mono', monospace; }
 .pipeline-asset-palette-tabs { display: flex; gap: 6px; align-items: center; margin: 12px 0; border-bottom: 1px solid #262626; padding-bottom: 8px; }
 .pipeline-asset-palette-tab { border: 1px solid #303030; background: #1b1b1b; color: #888; border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer; }
 .pipeline-asset-palette-tab.active { border-color: #1976d2; background: #172235; color: #fff; }
@@ -851,6 +866,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="pipeline-browser-actions">
           <div class="pipeline-browser-selected" id="pipeline-browser-selected">No asset selected</div>
           <button type="button" class="btn" id="pipeline-browser-refresh">Refresh</button>
+        </div>
+      </div>
+      <div
+        class="pipeline-graph-workspace-summary"
+        id="pipeline-graph-workspace-summary"
+        data-pipeline-graph-workspace-scope="browser-local"
+      >
+        <div class="pipeline-graph-workspace-body">Browser-local scratch workspace; scene/library promotion required for asset truth.</div>
+        <div class="pipeline-graph-workspace-history">
+          <div class="pipeline-graph-workspace-history-title">Workspace History</div>
+          <div class="pipeline-graph-workspace-empty">No graph workspace history yet.</div>
         </div>
       </div>
       <div class="pipeline-graph-workbench" id="pipeline-graph-workbench">
@@ -4337,6 +4363,7 @@ let pipelineDockState = {
 	  generatorCardDrag: null,
 	  graphInspectorStatus: null,
 	  graphCleanupUndo: null,
+	  graphWorkspace: null,
 	  loadedPipelineArtifactPaths: {},
 	  renderedRunId: null,
 	  lastRun: null,
@@ -4836,7 +4863,94 @@ const pipelineGraphDefaultEdges = [
   { id: 'route-to-evidence', from: 'route', to: 'evidence' },
 ];
 const pipelineGraphStorageKey = 'kaminos.pipeline.graph.local.v0';
+const pipelineGraphWorkspaceSchema = 'kaminos.pipeline-graph-workspace.v0';
+const graphWorkspaceHistoryLimit = 80;
 const pipelineGraphEditableNodeKinds = new Set(['image', 'route', 'generated-output']);
+
+function pipelineDefaultGraphWorkspace() {
+  const now = new Date().toISOString();
+  return {
+    schema: pipelineGraphWorkspaceSchema,
+    id: 'browser-local-default',
+    title: 'Local Pipeline Graph',
+    scope: 'browser-local',
+    durability: 'localStorage-only',
+    boundary: 'Browser-local scratch workspace; scene/library promotion required for asset truth.',
+    revision: 0,
+    createdAt: now,
+    updatedAt: now,
+    savedAt: null,
+    history: [],
+  };
+}
+
+function normalizePipelineGraphWorkspace(value) {
+  const fallback = pipelineDefaultGraphWorkspace();
+  if (!value || typeof value !== 'object') return fallback;
+  const revision = Number(value.revision);
+  const history = Array.isArray(value.history)
+    ? value.history
+        .filter(event => event && typeof event === 'object')
+        .map((event, index) => ({
+          id: String(event.id || `workspace-history-${index}`),
+          kind: String(event.kind || 'graph-edit'),
+          label: String(event.label || 'Graph workspace changed'),
+          groupId: String(event.groupId || event.runId || event.nodeId || event.id || `workspace-group-${index}`),
+          at: event.at || event.createdAt || fallback.updatedAt,
+          revision: Number.isFinite(Number(event.revision)) ? Number(event.revision) : 0,
+          status: event.status || null,
+          runId: event.runId || null,
+          routeNodeId: event.routeNodeId || null,
+          nodeId: event.nodeId || null,
+          scope: 'browser-local',
+          durability: 'localStorage-only',
+        }))
+        .slice(0, graphWorkspaceHistoryLimit)
+    : [];
+  return {
+    ...fallback,
+    ...value,
+    schema: pipelineGraphWorkspaceSchema,
+    id: String(value.id || fallback.id),
+    title: String(value.title || fallback.title),
+    scope: 'browser-local',
+    durability: 'localStorage-only',
+    boundary: 'Browser-local scratch workspace; scene/library promotion required for asset truth.',
+    revision: Number.isFinite(revision) ? revision : 0,
+    history,
+  };
+}
+
+function pipelineEnsureGraphWorkspace() {
+  pipelineDockState.graphWorkspace = normalizePipelineGraphWorkspace(pipelineDockState.graphWorkspace);
+  return pipelineDockState.graphWorkspace;
+}
+
+function pipelineRecordGraphWorkspaceEvent(kind, label, details = {}) {
+  const workspace = pipelineEnsureGraphWorkspace();
+  const now = new Date().toISOString();
+  const revision = (Number(workspace.revision) || 0) + 1;
+  const event = {
+    id: `workspace-history-${revision}-${Math.random().toString(36).slice(2, 7)}`,
+    kind: kind || 'graph-edit',
+    label: label || 'Graph workspace changed',
+    groupId: details.groupId || details.runId || details.routeNodeId || details.nodeId || `${kind || 'graph'}-${revision}`,
+    at: now,
+    revision,
+    status: details.status || null,
+    runId: details.runId || null,
+    routeNodeId: details.routeNodeId || null,
+    nodeId: details.nodeId || null,
+    scope: 'browser-local',
+    durability: 'localStorage-only',
+  };
+  workspace.revision = revision;
+  workspace.updatedAt = now;
+  workspace.savedAt = now;
+  workspace.history = [event, ...(workspace.history || [])].slice(0, graphWorkspaceHistoryLimit);
+  pipelineDockState.graphWorkspace = workspace;
+  return event;
+}
 
 function pipelineGraphDefaultEdgeState() {
   return pipelineGraphDefaultEdges.map(edge => ({ ...edge }));
@@ -4946,6 +5060,7 @@ function loadPipelineGraphLocalState() {
     if (!raw) return null;
     const document = JSON.parse(raw);
     if (document?.schema !== 'kaminos.pipeline-graph-local.v0') return null;
+    pipelineDockState.graphWorkspace = normalizePipelineGraphWorkspace(document.graphWorkspace);
     const nextPositions = {};
     for (const [nodeId, value] of Object.entries(document.graphNodePositions || {})) {
       const position = normalizePipelineGraphPosition(value);
@@ -4979,6 +5094,9 @@ function loadPipelineGraphLocalState() {
     if (document.graphCleanupUndo?.schema === 'kaminos.pipeline-graph-cleanup-undo.v0') {
       pipelineDockState.graphCleanupUndo = document.graphCleanupUndo;
     }
+    if (document.graphInspectorStatus?.message) {
+      pipelineDockState.graphInspectorStatus = document.graphInspectorStatus;
+    }
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state ignored:', error);
@@ -4988,10 +5106,13 @@ function loadPipelineGraphLocalState() {
 
 function savePipelineGraphLocalState() {
   try {
+    const workspace = pipelineEnsureGraphWorkspace();
+    workspace.savedAt = workspace.savedAt || new Date().toISOString();
     const document = {
       schema: 'kaminos.pipeline-graph-local.v0',
       scope: 'browser-local',
       updatedAt: new Date().toISOString(),
+      graphWorkspace: pipelineEnsureGraphWorkspace(),
       graphNodePositions: pipelineDockState.graphNodePositions || {},
       graphEdges: pipelineGraphEdges(),
       graphRouteNodes: pipelineDockState.graphRouteNodes || [],
@@ -4999,8 +5120,10 @@ function savePipelineGraphLocalState() {
       selectedOutputIdByRouteId: pipelineDockState.selectedOutputIdByRouteId || {},
       graphImageNodes: pipelineDockState.graphImageNodes || [],
       graphCleanupUndo: pipelineDockState.graphCleanupUndo || null,
+      graphInspectorStatus: pipelineDockState.graphInspectorStatus || null,
     };
     localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
+    if (globalThis.document?.getElementById?.('pipeline-graph-workspace-summary')) pipelineRenderGraphWorkspaceSummary();
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state not saved:', error);
@@ -5076,6 +5199,7 @@ function pipelineUndoGraphCleanup() {
   if (!undo?.workspace) return null;
   pipelineDockState.graphCleanupUndo = null;
   const restored = pipelineRestoreGraphWorkspaceState(undo.workspace);
+  pipelineRecordGraphWorkspaceEvent('undo', `Undo ${undo.label || 'graph cleanup'}`, { status: 'restored' });
   savePipelineGraphLocalState();
   pipelineSetGraphInspectorStatus(`Undo Graph Cleanup restored ${undo.label || 'previous graph state'}`, 'success');
   return restored;
@@ -5120,6 +5244,7 @@ function pipelineDeleteGraphNode(nodeId) {
   }
   pipelineDockState.selectedGraphEdgeId = null;
   pipelineDockState.selectedGraphNodeId = 'output-stack';
+  pipelineRecordGraphWorkspaceEvent('cleanup', `Deleted ${editable.kind} ${nodeId}`, { nodeId, status: 'deleted' });
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   pipelineSetGraphInspectorStatus(`Deleted graph node ${nodeId}; run evidence and loaded scene objects were left intact`, 'success');
@@ -5143,6 +5268,7 @@ function pipelineClearFailedGeneratedOutputs() {
   }
   if (failedIds.has(pipelineDockState.selectedGraphNodeId)) pipelineDockState.selectedGraphNodeId = 'output-stack';
   pipelineDockState.selectedGraphEdgeId = null;
+  pipelineRecordGraphWorkspaceEvent('cleanup', `Cleared ${failed.length} failed output${failed.length === 1 ? '' : 's'}`, { status: 'cleared' });
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   pipelineSetGraphInspectorStatus(`Clear Failed Outputs removed ${failed.length} failed graph node${failed.length === 1 ? '' : 's'}; run history stayed in the run shelf`, 'success');
@@ -5280,6 +5406,7 @@ function updateSelectedPipelineGraphImageNodeAsset(asset) {
   if (!next) return null;
   pipelineDockState.graphImageNodes = (pipelineDockState.graphImageNodes || []).map(node => node.id === selectedId ? next : node);
   pipelineDockState.browserSelectedAssetIds.image = asset.id;
+  pipelineRecordGraphWorkspaceEvent('graph-edit', `Changed image node ${selectedId}`, { nodeId: selectedId, status: 'updated' });
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   setInfo(`Image node updated: ${pipelineBrowserAssetLabel(asset)}`);
@@ -5299,6 +5426,7 @@ function createPipelineGraphImageNode(asset, position = null) {
   pipelineDockState.selectedGraphEdgeId = null;
   pipelineDockState.activeAssetPalette = 'image';
   pipelineDockState.browserSelectedAssetIds.image = asset.id;
+  pipelineRecordGraphWorkspaceEvent('graph-edit', `Added image node ${node.title || id}`, { nodeId: id, status: 'created' });
   savePipelineGraphLocalState();
   renderPipelineAssetBrowser();
   renderPipelineGraphWorkbench();
@@ -5667,6 +5795,7 @@ function pipelineCreateGraphEdge(fromNodeId, toNodeId) {
   pipelineDockState.graphConnectionPreview = null;
   pipelineDockState.selectedGraphEdgeId = id;
   pipelineDockState.selectedGraphNodeId = null;
+  pipelineRecordGraphWorkspaceEvent('graph-edit', `Connected ${fromNodeId} -> ${toNodeId}`, { nodeId: toNodeId, status: 'connected' });
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   return pipelineGraphEdgeForId(id);
@@ -5678,6 +5807,7 @@ function pipelineRemoveGraphEdge(edgeId) {
   pipelinePushGraphCleanupUndo(`remove hook ${edge.id}`);
   pipelineDockState.graphEdges = pipelineGraphEdges().filter(candidate => candidate.id !== edge.id);
   if (pipelineDockState.selectedGraphEdgeId === edge.id) pipelineDockState.selectedGraphEdgeId = null;
+  pipelineRecordGraphWorkspaceEvent('cleanup', `Removed hook ${edge.from} -> ${edge.to}`, { nodeId: edge.to, status: 'removed' });
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   pipelineSetGraphInspectorStatus(`Removed hook ${edge.from} -> ${edge.to}`, 'success');
@@ -5927,6 +6057,9 @@ function endPipelineGraphNodeDrag(event) {
   document.removeEventListener('pointermove', updatePipelineGraphNodeDrag);
   document.removeEventListener('pointerup', endPipelineGraphNodeDrag);
   document.removeEventListener('pointercancel', endPipelineGraphNodeDrag);
+  if (drag.moved) {
+    pipelineRecordGraphWorkspaceEvent('graph-edit', `Moved graph node ${drag.nodeId}`, { nodeId: drag.nodeId, status: 'moved' });
+  }
   savePipelineGraphLocalState();
 }
 
@@ -6333,6 +6466,13 @@ function pipelineCreatePendingGeneratedOutputNode({ routeNode, source, requested
     y: routePosition.y + Math.min(180, 8 + routeOutputCount * 92),
   }, document.getElementById('pipeline-graph-canvas'));
   window.kaminosPipelineLastPendingGeneratedOutput = record;
+  pipelineRecordGraphWorkspaceEvent('route-execution', `Queued ${routeNode.title || requestedPipelineId || 'pipeline route'}`, {
+    groupId: outputRunId,
+    runId: outputRunId,
+    routeNodeId: routeNode.id,
+    nodeId: outputNodeId,
+    status: 'queued',
+  });
   savePipelineGraphLocalState();
   return record;
 }
@@ -6357,6 +6497,15 @@ function pipelineUpdateGeneratedOutputStatus(outputNodeId, status, phase, messag
     };
     return updated;
   });
+  if (updated) {
+    pipelineRecordGraphWorkspaceEvent('route-execution', message || phase || `Updated ${outputNodeId}`, {
+      groupId: updated.runId || outputNodeId,
+      runId: updated.runId || null,
+      routeNodeId: updated.routeNodeId || null,
+      nodeId: outputNodeId,
+      status,
+    });
+  }
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
   return updated;
@@ -6408,6 +6557,15 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
   });
   pipelineDockState.selectedOutputIdByRouteId ||= {};
   pipelineDockState.selectedOutputIdByRouteId[routeNode.id] = outputNodeId;
+  if (completed) {
+    pipelineRecordGraphWorkspaceEvent('route-execution', `Completed ${pipelineRunTitle(run)}`, {
+      groupId: run.runId || outputNodeId,
+      runId: run.runId || null,
+      routeNodeId: routeNode.id,
+      nodeId: outputNodeId,
+      status: 'complete',
+    });
+  }
   savePipelineGraphLocalState();
   return completed ? pipelineGeneratedOutputGraphNode(completed) : null;
 }
@@ -6442,6 +6600,15 @@ function pipelineFailGeneratedOutputNode(outputNodeId, errorMessage, run = null)
     };
     return failed;
   });
+  if (failed) {
+    pipelineRecordGraphWorkspaceEvent('route-execution', `Failed ${failed.pipelineId || failed.runId || outputNodeId}`, {
+      groupId: failed.runId || outputNodeId,
+      runId: failed.runId || null,
+      routeNodeId: failed.routeNodeId || null,
+      nodeId: outputNodeId,
+      status: 'failed',
+    });
+  }
   savePipelineGraphLocalState();
   return failed ? pipelineGeneratedOutputGraphNode(failed) : null;
 }
@@ -6485,9 +6652,54 @@ function pipelineSetGraphInspectorStatus(message, kind = 'idle') {
     subjectId: pipelineGraphInspectorSubjectId(),
     at: new Date().toISOString(),
   };
+  savePipelineGraphLocalState();
   const status = document.getElementById('pipeline-graph-inspector-status');
   if (status) pipelineRenderGraphInspectorStatus();
   if (message) setInfo(message);
+}
+
+function pipelineRenderGraphWorkspaceSummary() {
+  const host = document.getElementById('pipeline-graph-workspace-summary');
+  if (!host) return;
+  const workspace = pipelineEnsureGraphWorkspace();
+  const history = Array.isArray(workspace.history) ? workspace.history : [];
+  const latest = history[0] || null;
+  host.dataset.pipelineGraphWorkspaceScope = workspace.scope || 'browser-local';
+  host.innerHTML = `
+    <div>
+      <div class="pipeline-graph-workspace-head">
+        <div>
+          <div class="pipeline-graph-workspace-kicker">Browser-local scratch workspace</div>
+          <div class="pipeline-graph-workspace-title">${escapeHtml(workspace.title || 'Local Pipeline Graph')}</div>
+        </div>
+        <span class="pipeline-status-chip cached">${escapeHtml(workspace.scope || 'browser-local')}</span>
+      </div>
+      <div class="pipeline-graph-workspace-body">${escapeHtml(workspace.boundary || 'Browser-local scratch workspace; scene/library promotion required for asset truth.')}</div>
+      <div class="pipeline-graph-workspace-meta">
+        <div class="pipeline-graph-workspace-stat">
+          <div class="pipeline-graph-workspace-stat-key">Revision</div>
+          <div class="pipeline-graph-workspace-stat-val" data-pipeline-graph-workspace-revision="${escapeHtml(String(workspace.revision || 0))}">${escapeHtml(String(workspace.revision || 0))}</div>
+        </div>
+        <div class="pipeline-graph-workspace-stat">
+          <div class="pipeline-graph-workspace-stat-key">History</div>
+          <div class="pipeline-graph-workspace-stat-val">${escapeHtml(String(history.length))} events</div>
+        </div>
+        <div class="pipeline-graph-workspace-stat">
+          <div class="pipeline-graph-workspace-stat-key">Latest</div>
+          <div class="pipeline-graph-workspace-stat-val">${escapeHtml(latest?.kind || 'none')}</div>
+        </div>
+      </div>
+    </div>
+    <div class="pipeline-graph-workspace-history">
+      <div class="pipeline-graph-workspace-history-title">Workspace History</div>
+      ${history.length ? history.slice(0, 4).map(event => `
+        <div class="pipeline-graph-workspace-history-row" data-pipeline-workspace-history-id="${escapeHtml(event.id || '')}">
+          <div class="pipeline-graph-workspace-history-kind">${escapeHtml(event.kind || 'event')}</div>
+          <div class="pipeline-graph-workspace-history-label">${escapeHtml(event.label || 'Graph workspace changed')}</div>
+        </div>
+      `).join('') : '<div class="pipeline-graph-workspace-empty">No graph workspace history yet.</div>'}
+    </div>
+  `;
 }
 
 async function pipelineRunGraphInspectorAction(item, button) {
@@ -6561,6 +6773,7 @@ function placePipelineGeneratorRouteNode(generatorId, position) {
   pipelineCreateGraphEdge(routeId, 'evidence');
   pipelineDockState.selectedGraphNodeId = routeId;
   pipelineDockState.selectedGraphEdgeId = null;
+  pipelineRecordGraphWorkspaceEvent('graph-edit', `Placed generator ${generator?.title || pipeline.label || pipeline.id}`, { nodeId: routeId, routeNodeId: routeId, status: 'created' });
   savePipelineGraphLocalState();
   renderPipelineDock();
   document.getElementById('viewport')?.classList.remove('dragover');
@@ -7574,6 +7787,7 @@ function renderPipelineDock() {
       </div>
 	    `).join('');
 	  }
+	  pipelineRenderGraphWorkspaceSummary();
 	  renderPipelineGraphWorkbench();
 	  renderPipelineRunShelf();
 	  renderPipelineRunResultPanel();
@@ -7659,6 +7873,8 @@ window.selectPipelineGraphNode = selectPipelineGraphNode;
 window.kaminosPipelineSelectAsset = selectPipelineBrowserAsset;
 window.kaminosPipelineSelectAssetPalette = selectPipelineAssetPalette;
 window.kaminosPipelineCreateGraphImageNode = createPipelineGraphImageNode;
+window.kaminosPipelineRecordGraphWorkspaceEvent = pipelineRecordGraphWorkspaceEvent;
+window.kaminosPipelineSaveGraphLocalState = savePipelineGraphLocalState;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;
 
 function readVolumeControls() {
