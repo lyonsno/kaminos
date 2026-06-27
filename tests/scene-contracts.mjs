@@ -215,6 +215,10 @@ assert.match(index, /pipelineDockState\.selectedGraphNodeId = outputNode\?\.id \
 assert.match(index, /graphExecution/, 'Pipeline run records must preserve graph execution provenance');
 assert.match(index, /function pipelineGraphRouteInputSource\(/, 'Graph execution must resolve route input from graph-connected upstream nodes, not ambient selected browser state');
 assert.match(index, /sourceOverride/, 'Graph route execution must pass the graph-connected source into the pipeline runner');
+assert.match(index, /pipelineId:\s*requestedPipelineId/, 'Graph route execution must pass the route-node pipeline id into the pipeline runner instead of relying on global sidebar selection');
+assert.match(index, /generator,\s*\n\s*clientRunId:\s*pendingRecord\.runId/, 'Graph route execution must pass the route-node generator identity into run records');
+assert.match(index, /const requestedPipelineId = options\.pipelineId \|\| pipelineDockState\.selectedPipelineId/, 'Pipeline runner must accept an invocation-scoped pipeline id');
+assert.match(index, /pipelineId:\s*requestedPipelineId,\s*\n\s*source:/, 'Pipeline runner POST body must use the invocation-scoped pipeline id');
 assert.match(index, /input provenance only; output fixed fixture/, 'Fixture-backed SHARP must label connected images as provenance-only, not live compute input');
 assert.match(index, /pipeline-graph-inspector-status-kicker/, 'Pipeline graph inspector status must have a visible label, not an empty low-contrast line');
 assert.match(index, /Action Status/, 'Pipeline graph inspector status must name itself as action status');

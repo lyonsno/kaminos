@@ -4585,9 +4585,9 @@ function pipelineRunTitle(result) {
   return result?.generatorOperationTitle || result?.generatorLabel || result?.pipelineLabel || result?.pipelineId || 'Pipeline run';
 }
 
-function pipelineRememberRun(result, source, pipeline) {
+function pipelineRememberRun(result, source, pipeline, options = {}) {
   const stamp = new Date().toISOString();
-  const generator = selectedPipelineGeneratorRecord();
+  const generator = options.generator || pipelineGeneratorForPipelineId(pipeline?.id || result?.pipelineId) || selectedPipelineGeneratorRecord();
   const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const runId = result?.clientRunId || [
     'pipeline-run',
@@ -5962,6 +5962,7 @@ async function pipelineActivateGraphInspectorAction(item, button, source = 'clic
 async function pipelineExecuteGraphRouteNode(node) {
   const pipeline = node?.pipeline || selectedPipelineRecord();
   const requestedPipelineId = pipeline?.id || pipelineDockState.selectedPipelineId;
+  const generator = node?.generator || pipelineGeneratorForPipelineId(requestedPipelineId) || selectedPipelineGeneratorRecord();
   const source = pipelineGraphRouteInputSource(node?.id || 'route');
   if (!source?.source) {
     pipelineSetGraphInspectorStatus('Pipeline source required before graph execution', 'error');
@@ -5972,6 +5973,7 @@ async function pipelineExecuteGraphRouteNode(node) {
     throw new Error('Pipeline route required before graph execution');
   }
   pipelineDockState.selectedPipelineId = requestedPipelineId;
+  if (generator?.id) pipelineDockState.selectedGeneratorId = generator.id;
   renderPipelineGeneratorLibrary();
   const graphExecution = {
     schema: 'kaminos.pipeline-graph-execution.v0',
@@ -5999,6 +6001,9 @@ async function pipelineExecuteGraphRouteNode(node) {
     pipelineUpdateGeneratedOutputStatus(pendingRecord.id, 'running', 'running inference', 'Backend request is in flight');
     const run = await runSelectedPipeline({
       sourceOverride: source,
+      pipelineId: requestedPipelineId,
+      pipeline,
+      generator,
       clientRunId: pendingRecord.runId,
       graphExecution,
     });
@@ -7322,11 +7327,14 @@ async function runSelectedPipeline(options = {}) {
     return null;
   }
   if (!pipelineManifest) await loadPipelineManifest();
+  const requestedPipelineId = options.pipelineId || pipelineDockState.selectedPipelineId;
+  const pipeline = options.pipeline || pipelineManifest?.pipelines?.find(route => route.id === requestedPipelineId) || selectedPipelineRecord();
+  const generator = options.generator || pipelineGeneratorForPipelineId(requestedPipelineId) || selectedPipelineGeneratorRecord();
   const response = await fetch('/api/run-pipeline', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      pipelineId: pipelineDockState.selectedPipelineId,
+      pipelineId: requestedPipelineId,
       source: source.source,
       clientRunId: options.clientRunId || null,
     }),
@@ -7336,7 +7344,7 @@ async function runSelectedPipeline(options = {}) {
     ...result,
     clientRunId: options.clientRunId || result.clientRunId || null,
     graphExecution: options.graphExecution || result.graphExecution || null,
-  }, source, selectedPipelineRecord());
+  }, source, pipeline, { generator });
   renderPipelineDock();
   setInfo(remembered.ok ? `Pipeline witness written: ${remembered.pipelineId}` : `Pipeline witness failed: ${remembered.pipelineId}`);
   return remembered;
