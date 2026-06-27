@@ -199,11 +199,18 @@ async function run() {
         deltaSteps: (after?.stepCount ?? 0) - (before?.stepCount ?? 0),
         beforeCadence: before?.webgpu_cadence || null,
         afterCadence: after?.webgpu_cadence || null,
+        deltaSubmittedSteps: (after?.webgpu_cadence?.submitted_steps_total ?? 0) - (before?.webgpu_cadence?.submitted_steps_total ?? 0),
+        deltaRenderFrames: (after?.webgpu_cadence?.render_frame_count ?? 0) - (before?.webgpu_cadence?.render_frame_count ?? 0),
+        readbackCadence: after?.webgpu_cadence?.readback_period ?? null,
         solver_backend: after?.solver_backend || null,
+        render_backend: after?.render_backend || null,
       };
     })()`);
     assert.ok(cadenceProbe.solver_backend === 'webgpu_compute', 'cadence probe did not reach WebGPU compute state');
-    assert.ok(cadenceProbe.deltaSteps >= 40, 'WebGPU frame loop dropped elapsed simulation time while readback was pending');
+    assert.equal(cadenceProbe.render_backend, 'webgpu_direct_render', 'cadence probe did not reach direct WebGPU render state');
+    assert.ok(cadenceProbe.deltaSubmittedSteps >= 40, 'WebGPU frame loop dropped elapsed simulation time while readback was pending');
+    assert.ok(cadenceProbe.deltaRenderFrames > 0, 'direct WebGPU renderer did not produce frames during cadence probe');
+    assert.ok(cadenceProbe.readbackCadence >= 0.5, 'readback cadence is not throttled away from the render frame loop');
 
     phase = 'read_debug_state';
     const state = await evaluate(ws, `(async () => {
@@ -228,6 +235,8 @@ async function run() {
     assert.equal(state.solver_backend, 'webgpu_compute', 'finger-juice route must use WebGPU compute backend');
     assert.equal(state.solverRoute, 'webgpu_particle_solver_v0', 'wrong WebGPU solver route');
     assert.equal(state.shaderRoute, 'wgsl-ballistic-heightfield-surface-v0', 'wrong WebGPU shader route');
+    assert.equal(state.render_backend, 'webgpu_direct_render', 'finger-juice route must use direct WebGPU render backend');
+    assert.equal(state.renderRoute, 'webgpu_particle_splat_renderer_v0', 'wrong WebGPU render route');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -270,6 +279,9 @@ async function run() {
       solver_backend: state.solver_backend,
       solverRoute: state.solverRoute,
       shaderRoute: state.shaderRoute,
+      render_backend: state.render_backend,
+      renderRoute: state.renderRoute,
+      renderShaderRoute: state.renderShaderRoute,
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,

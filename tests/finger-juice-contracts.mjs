@@ -50,12 +50,19 @@ assert.match(coreSource, /export function createWorldFingerJuiceTransportPrototy
 
 assert.match(webgpuCoreSource, /webgpu_particle_solver_v0/, 'WebGPU solver route identity is explicit');
 assert.match(webgpuCoreSource, /wgsl-ballistic-heightfield-surface-v0/, 'WebGPU shader route identity is explicit');
+assert.match(webgpuCoreSource, /webgpu_particle_splat_renderer_v0/, 'WebGPU render route identity is explicit');
+assert.match(webgpuCoreSource, /wgsl-particle-splat-renderer-v0/, 'WebGPU render shader identity is explicit');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
 assert.match(webgpuCoreSource, /webgpu_compute/, 'WebGPU solver can report compute backend');
+assert.match(webgpuCoreSource, /render_backend/, 'WebGPU solver reports effective render backend');
+assert.match(webgpuCoreSource, /webgpu_direct_render/, 'WebGPU solver can report direct render backend');
 assert.match(webgpuCoreSource, /webgpu_unavailable/, 'WebGPU solver can report unavailable backend');
 assert.match(webgpuCoreSource, /GPUBufferUsage\.STORAGE/, 'WebGPU solver uses storage buffers');
 assert.match(webgpuCoreSource, /GPUBufferUsage\.COPY_SRC/, 'WebGPU solver exposes readback from GPU-owned state');
 assert.match(webgpuCoreSource, /createComputePipeline/, 'WebGPU solver advances through a compute pipeline');
+assert.match(webgpuCoreSource, /createRenderPipeline/, 'WebGPU solver renders particles through a render pipeline');
+assert.match(webgpuCoreSource, /GPUCanvasContext/, 'WebGPU renderer configures a canvas context');
+assert.match(webgpuCoreSource, /createRenderer/, 'WebGPU solver exposes a direct renderer');
 assert.match(webgpuCoreSource, /@compute\s+@workgroup_size/, 'WebGPU solver shader contains compute entry point');
 assert.match(webgpuCoreSource, /runCpuFingerJuiceOracle/, 'WebGPU route keeps CPU oracle comparison');
 assert.match(webgpuCoreSource, /adapterInfo/, 'WebGPU route records adapter identity');
@@ -64,7 +71,9 @@ assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares 
 assert.match(pageSource, /window\.__lermsFingerJuiceDebug/, 'prototype exposes route debug state for witnesses');
 assert.match(pageSource, /window\.__lermsFingerJuiceStepForWitness/, 'prototype exposes deterministic witness stepping');
 assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates WebGPU finger-juice solver');
+assert.match(pageSource, /juice-gpu-layer/, 'prototype includes a WebGPU juice overlay canvas');
 assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
+assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
 assert.match(pageSource, /hill-of-hills-heightfield-collision-v0/, 'prototype page displays terrain contract');
 assert.match(pageSource, /drawJuiceTrails/, 'prototype page draws persistent juice trails');
@@ -80,6 +89,9 @@ assert.match(witnessSource, /__lermsFingerJuiceStepForWitness/, 'witness advance
 assert.match(witnessSource, /solver_backend/, 'witness records effective solver backend');
 assert.match(witnessSource, /webgpu_compute/, 'witness requires WebGPU compute backend');
 assert.match(witnessSource, /webgpu_particle_solver_v0/, 'witness records WebGPU solver route');
+assert.match(witnessSource, /webgpu_direct_render/, 'witness requires direct WebGPU render backend');
+assert.match(witnessSource, /webgpu_particle_splat_renderer_v0/, 'witness records WebGPU render route');
+assert.match(witnessSource, /readbackCadence/, 'witness records throttled readback cadence');
 assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
 assert.match(witnessSource, /cpuOracle/, 'witness records CPU oracle comparison');
 assert.match(witnessSource, /world-space-ballistic-surface-flow-particles-v0/, 'witness requires the world-space transport route');
@@ -100,6 +112,8 @@ assert.equal(mod.LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT, 'hill-of-hills-heigh
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT, 'finger-aim-ballistic-arc-range-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE, 'webgpu_particle_solver_v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE, 'wgsl-ballistic-heightfield-surface-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE, 'webgpu_particle_splat_renderer_v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE, 'wgsl-particle-splat-renderer-v0');
 
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
   packet_id: 'test-live-packet-1',
