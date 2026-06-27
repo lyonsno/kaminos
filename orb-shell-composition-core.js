@@ -3,6 +3,7 @@ export const ORB_SHELL_COMPOSITION_BASELINE = 'coherent-but-wrong-model-baseline
 export const ORB_SHELL_CONTROLLED_VARIATION_MODE = 'orb-shell-controlled-variation-assay-v0';
 export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-substrip-decomposition-v0';
+export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -86,6 +87,10 @@ function lerpPoint(a, b, t) {
     a[1] + (b[1] - a[1]) * t,
     a[2] + (b[2] - a[2]) * t,
   ];
+}
+
+function dotPoints(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
 function scaledNormalizedPoint(point, radius = 1) {
@@ -773,19 +778,86 @@ function macroFamilySurfaceSample(assemblage, t, normalizedV, liftBias = 0.018) 
   };
 }
 
-function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
+function createApertureTerminationField(composition) {
+  const primaryVoid = composition.AperturePressure?.primaryVoids?.[0] || {};
+  const center = primaryVoid.center || [0.02, -0.02, 0.98];
+  const normal = normalizePoint(center);
+  const up = [0, 1, 0];
+  let orbitTangent = normalizePoint(crossPoints(up, normal));
+  if (Math.hypot(...orbitTangent) < 1e-8) orbitTangent = [1, 0, 0];
+  return {
+    schema: 'ApertureTerminationField',
+    mode: ORB_SHELL_APERTURE_TERMINATION_MODE,
+    id: 'primary-front-aperture-termination-field',
+    sourceApertureId: primaryVoid.id || 'primary-front-teardrop-void',
+    apertureCenter: center,
+    apertureNormal: normal,
+    orbitTangent,
+    orbitRadiusBand: [
+      primaryVoid.radius?.[0] ?? 0.34,
+      primaryVoid.radius?.[1] ?? 0.55,
+    ],
+    captureStrength: 0.72,
+    counterCurveDefaultAngle: 0.34,
+    semanticPrimitive: 'aperture-relative-destiny-not-standalone-curve-family',
+    curveMachinery: 'spherical-hermite-bezier-like-spines-driven-by-aperture-field',
+  };
+}
+
+function dynamicSubstripVRange(spec, localT) {
+  const [baseV0, baseV1] = spec.normalizedVRange;
+  const baseCenter = (baseV0 + baseV1) * 0.5;
+  const baseHalfWidth = (baseV1 - baseV0) * 0.5;
+  const mouthWeight = Math.pow(1 - localT, 2.2);
+  const terminalWeight = Math.pow(localT, 2.1);
+  const terminalTarget = spec.terminalVTarget ?? baseCenter;
+  const center = baseCenter
+    + (spec.mouthVOffset ?? 0) * mouthWeight
+    + (terminalTarget - baseCenter) * terminalWeight * (spec.terminalConvergence ?? 0.72);
+  const widthScale = clamp(
+    1 + (spec.mouthWidthBoost ?? 0.1) * mouthWeight - (spec.terminalNarrowing ?? 0.24) * terminalWeight,
+    0.34,
+    1.28,
+  );
+  return [
+    center - baseHalfWidth * widthScale,
+    center + baseHalfWidth * widthScale,
+  ];
+}
+
+function substripApertureTermination(spec, parentTerminationClass) {
+  return {
+    schema: 'MacroFamilySubstripApertureTermination',
+    mode: ORB_SHELL_APERTURE_TERMINATION_MODE,
+    terminationClass: parentTerminationClass,
+    siblingRole: spec.siblingRole,
+    normalizedStartReach: spec.startReach ?? 0,
+    normalizedTerminalReach: spec.terminalReach ?? 1,
+    terminalVisibility: spec.terminalVisibility || 'visible-designed-terminal',
+    ownsFurthestVisibleTip: Boolean(spec.ownsFurthestVisibleTip),
+    terminalPlane: spec.endTerminalPlane || 'aperture-relative-angled-terminal',
+    mouthLaw: 'spread-staggered-family-mouth',
+    bodyLaw: 'shared-thrust-corridor',
+  };
+}
+
+function makeMacroFamilySubstrip(assemblage, spec, apertureField, sampleCount = 54) {
   const edgeSamples = [];
   const leftSideWallSamples = [];
   const rightSideWallSamples = [];
-  const [v0, v1] = spec.normalizedVRange;
+  const startReach = spec.startReach ?? 0;
+  const terminalReach = spec.terminalReach ?? 1;
   for (let index = 0; index < sampleCount; index++) {
-    const t = index / (sampleCount - 1);
+    const localT = index / (sampleCount - 1);
+    const t = startReach + localT * (terminalReach - startReach);
+    const [v0, v1] = dynamicSubstripVRange(spec, localT);
     const left = macroFamilySurfaceSample(assemblage, t, v0, spec.liftBias);
     const right = macroFamilySurfaceSample(assemblage, t, v1, spec.liftBias);
     const center = macroFamilySurfaceSample(assemblage, t, (v0 + v1) * 0.5, spec.liftBias + 0.002);
     const sideWallDepth = spec.sideWallDepth ?? 0.026;
     edgeSamples.push({
       t,
+      localT,
       normalizedV0: v0,
       normalizedV1: v1,
       leftEdge: left.point,
@@ -819,6 +891,13 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
     const sideWallIndex = endRole === 'start-terminus' ? 0 : leftSideWallSamples.length - 1;
     const leftWall = leftSideWallSamples[sideWallIndex];
     const rightWall = rightSideWallSamples[sideWallIndex];
+    const noseLength = endRole === 'end-terminus' ? (spec.tipNoseLength ?? 0.018) : -(spec.mouthNoseLength ?? 0.006);
+    const outerMid = addScaledPoint(sample.center, sample.tangent, noseLength);
+    const innerMid = addScaledPoint(
+      addScaledPoint(sample.center, sample.surfaceNormal, -(spec.sideWallDepth ?? 0.026)),
+      sample.tangent,
+      noseLength * 0.72,
+    );
     return {
       schema: 'MacroFamilySubstripTerminalCap',
       mode: ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE,
@@ -832,10 +911,16 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
         outerRight: rightWall.outer,
         innerLeft: leftWall.inner,
         innerRight: rightWall.inner,
-        outerMid: sample.center,
-        innerMid: addScaledPoint(sample.center, sample.surfaceNormal, -(spec.sideWallDepth ?? 0.026)),
+        outerMid,
+        innerMid,
       },
       inheritsParentTermination: true,
+      apertureTerminationMode: ORB_SHELL_APERTURE_TERMINATION_MODE,
+      terminationClass: spec.parentTerminationClass,
+      terminalPlane: endRole === 'end-terminus'
+        ? (spec.endTerminalPlane || 'aperture-relative-angled-wedge')
+        : (spec.startTerminalPlane || 'staggered-mouth-angled-entry'),
+      siblingRole: spec.siblingRole,
       geometryKind: 'flat-substrip-end-cap-not-parent-slab-cap',
     };
   });
@@ -847,6 +932,7 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
     targetPromotedBodyId: assemblage.macroPromotedBody?.id,
     role: spec.role,
     laneRole: spec.role,
+    siblingRole: spec.siblingRole,
     coordinateFrame: {
       schema: 'MacroFamilyLocalFrame',
       u: 'parent-spine-arc-length',
@@ -882,21 +968,132 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
         inheritsParentTermination: true,
       },
     },
+    apertureTermination: substripApertureTermination(spec, spec.parentTerminationClass),
+    apertureFieldId: apertureField.id,
     terminalCaps,
     failurePressure: 'substrip-must-read-as-owned-anatomy-not-independent-band',
   };
 }
 
+function createApertureRelativeTerminationPlan(composition, apertureField, parentAssemblageIds, substrips) {
+  const classByParent = {
+    'north-west-dominant-thrust': 'orbit-capture',
+    'north-east-counter-thrust': 'counter-curve-blade',
+  };
+  const descriptors = parentAssemblageIds.map(parentId => {
+    const parentSubstrips = substrips.filter(strip => strip.parentAssemblage === parentId);
+    const terminationClass = classByParent[parentId];
+    const starts = parentSubstrips.map(strip => strip.apertureTermination.normalizedStartReach);
+    const reaches = parentSubstrips.map(strip => strip.apertureTermination.normalizedTerminalReach);
+    const mouthCenters = parentSubstrips.map(strip => {
+      const sample = strip.edgeSamples[0];
+      return (sample.normalizedV0 + sample.normalizedV1) * 0.5;
+    }).sort((a, b) => a - b);
+    const midCenters = parentSubstrips.map(strip => {
+      const sample = strip.edgeSamples[Math.floor(strip.edgeSamples.length * 0.5)];
+      return (sample.normalizedV0 + sample.normalizedV1) * 0.5;
+    }).sort((a, b) => a - b);
+    const mouthSpread = mouthCenters.length > 1 ? mouthCenters[mouthCenters.length - 1] - mouthCenters[0] : 0;
+    const midBodySpread = midCenters.length > 1 ? midCenters[midCenters.length - 1] - midCenters[0] : 0;
+    const sortedRanges = parentSubstrips
+      .map(strip => {
+        const sample = strip.edgeSamples[Math.floor(strip.edgeSamples.length * 0.5)];
+        return [sample.normalizedV0, sample.normalizedV1];
+      })
+      .sort((a, b) => a[0] - b[0]);
+    const gaps = [];
+    for (let index = 0; index < sortedRanges.length - 1; index++) {
+      gaps.push(Math.max(0, sortedRanges[index + 1][0] - sortedRanges[index][1]));
+    }
+    const leadReach = Math.max(...reaches);
+    const terminalPoint = parentSubstrips
+      .find(strip => strip.apertureTermination.normalizedTerminalReach === leadReach)
+      ?.edgeSamples.at(-1)?.center;
+    const terminalTangent = parentSubstrips
+      .find(strip => strip.apertureTermination.normalizedTerminalReach === leadReach)
+      ?.edgeSamples.at(-1)?.tangent || [1, 0, 0];
+    const tangentAlignment = Math.abs(dotPoints(normalizePoint(terminalTangent), apertureField.orbitTangent));
+    const siblingTerminations = parentSubstrips.map(strip => ({
+      substripId: strip.id,
+      siblingRole: strip.siblingRole,
+      normalizedStartReach: strip.apertureTermination.normalizedStartReach,
+      normalizedTerminalReach: strip.apertureTermination.normalizedTerminalReach,
+      terminalVisibility: strip.apertureTermination.terminalVisibility,
+      ownsFurthestVisibleTip: strip.apertureTermination.ownsFurthestVisibleTip,
+      terminalPlane: strip.apertureTermination.terminalPlane,
+    }));
+    return {
+      schema: 'LamellarFamilyTerminationDescriptor',
+      mode: ORB_SHELL_APERTURE_TERMINATION_MODE,
+      id: `${parentId}-aperture-relative-termination`,
+      parentAssemblage: parentId,
+      terminationClass,
+      mouthAnchor: {
+        tRange: [Math.min(...starts), Math.min(...starts) + 0.12],
+        law: 'spread-staggered-family-mouth',
+      },
+      captureAnchor: terminationClass === 'orbit-capture'
+        ? {
+          fieldId: apertureField.id,
+          orbitRadiusBand: apertureField.orbitRadiusBand,
+          terminalPoint,
+          law: 'aperture-orbit-capture-and-tuck',
+        }
+        : undefined,
+      tipAnchor: terminationClass === 'counter-curve-blade'
+        ? {
+          fieldId: apertureField.id,
+          terminalPoint,
+          law: 'counter-curve-blade-refuses-orbit-capture',
+        }
+        : undefined,
+      apertureTangentBlend: terminationClass === 'orbit-capture' ? Math.max(0.66, tangentAlignment) : 0.28,
+      captureRadiusBand: terminationClass === 'orbit-capture' ? apertureField.orbitRadiusBand : undefined,
+      counterCurveAngle: terminationClass === 'counter-curve-blade' ? apertureField.counterCurveDefaultAngle : 0,
+      spreadMetrics: {
+        mouthSpread,
+        midBodySpread,
+        terminalReachSpread: Math.max(...reaches) - Math.min(...reaches),
+        minimumSiblingGap: gaps.length ? Math.min(...gaps) : 0.06,
+      },
+      siblingTerminations,
+      visibleParentRetirementPreserved: true,
+    };
+  });
+  const classCounts = descriptors.reduce((counts, descriptor) => {
+    counts[descriptor.terminationClass] = (counts[descriptor.terminationClass] || 0) + 1;
+    return counts;
+  }, {});
+  return {
+    schema: 'ApertureRelativeTerminationPlan',
+    mode: ORB_SHELL_APERTURE_TERMINATION_MODE,
+    id: 'limited-two-family-aperture-relative-termination-plan',
+    apertureField,
+    parentAssemblageIds,
+    parentTerminationPlans: descriptors,
+    apertureTerminationClassCounts: classCounts,
+    siblingRoleLaw: 'lead-inner-outer-tucked-roles-share-family-field-not-ribbon-subdivision',
+    curveMachinery: apertureField.curveMachinery,
+    antiEvidence: [
+      'randomized-taper-only',
+      'shared-flat-end-plane',
+      'global-spiral-everywhere',
+      'bottom-closure-before-endpoint-destiny',
+    ],
+  };
+}
+
 function createMacroFamilySubstripPlan(composition) {
+  const apertureField = createApertureTerminationField(composition);
   const selectedSpecs = {
     'north-west-dominant-thrust': [
-      { id: 'broad-main-lamella', role: 'broad-main-lamella', normalizedVRange: [-0.58, 0.12], liftBias: 0.03, sideWallDepth: 0.03 },
-      { id: 'outer-edge-lip-rail', role: 'edge-lip-rail', normalizedVRange: [0.24, 0.46], liftBias: 0.04, sideWallDepth: 0.024 },
-      { id: 'inner-support-strip', role: 'inner-support-strip', normalizedVRange: [-0.86, -0.68], liftBias: 0.018, sideWallDepth: 0.022, layerOffset: -0.012 },
+      { id: 'broad-main-lamella', role: 'broad-main-lamella', siblingRole: 'lead', parentTerminationClass: 'orbit-capture', normalizedVRange: [-0.58, 0.12], startReach: 0.02, terminalReach: 0.98, mouthVOffset: 0.02, mouthWidthBoost: 0.16, terminalVTarget: -0.06, terminalNarrowing: 0.22, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-tucked-wedge', liftBias: 0.03, sideWallDepth: 0.03, tipNoseLength: 0.016 },
+      { id: 'outer-edge-lip-rail', role: 'edge-lip-rail', siblingRole: 'outer', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.24, 0.46], startReach: 0.08, terminalReach: 0.9, mouthVOffset: 0.14, mouthWidthBoost: 0.1, terminalVTarget: 0.02, terminalNarrowing: 0.36, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-early-tuck-wedge', liftBias: 0.04, sideWallDepth: 0.024, tipNoseLength: 0.012 },
+      { id: 'inner-support-strip', role: 'inner-support-strip', siblingRole: 'inner', parentTerminationClass: 'orbit-capture', normalizedVRange: [-0.86, -0.68], startReach: 0, terminalReach: 0.84, mouthVOffset: -0.16, mouthWidthBoost: 0.12, terminalVTarget: -0.22, terminalNarrowing: 0.34, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-inner-early-death-wedge', liftBias: 0.018, sideWallDepth: 0.022, layerOffset: -0.012, tipNoseLength: 0.01 },
     ],
     'north-east-counter-thrust': [
-      { id: 'broad-main-lamella', role: 'broad-main-lamella', normalizedVRange: [-0.22, 0.46], liftBias: 0.03, sideWallDepth: 0.03 },
-      { id: 'inner-support-strip', role: 'inner-support-strip', normalizedVRange: [-0.52, -0.36], liftBias: 0.018, sideWallDepth: 0.022, layerOffset: -0.014 },
+      { id: 'broad-main-lamella', role: 'broad-main-lamella', siblingRole: 'lead', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [-0.22, 0.46], startReach: 0.04, terminalReach: 1, mouthVOffset: 0.1, mouthWidthBoost: 0.18, terminalVTarget: 0.11, terminalNarrowing: 0.52, terminalVisibility: 'visible-counter-curve-blade-tip', ownsFurthestVisibleTip: true, endTerminalPlane: 'counter-curve-blade-pointed-wedge', liftBias: 0.03, sideWallDepth: 0.03, tipNoseLength: 0.05 },
+      { id: 'inner-support-strip', role: 'inner-support-strip', siblingRole: 'tucked', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [-0.52, -0.36], startReach: 0, terminalReach: 0.78, mouthVOffset: -0.13, mouthWidthBoost: 0.14, terminalVTarget: -0.05, terminalNarrowing: 0.48, terminalVisibility: 'dies-early-into-lead-tip-corridor', endTerminalPlane: 'counter-curve-secondary-early-death-wedge', liftBias: 0.018, sideWallDepth: 0.022, layerOffset: -0.014, tipNoseLength: 0.018 },
     ],
   };
   const parentAssemblageIds = Object.keys(selectedSpecs);
@@ -905,7 +1102,7 @@ function createMacroFamilySubstripPlan(composition) {
   for (const parentId of parentAssemblageIds) {
     const assemblage = composition.macroAssemblages.find(item => item.id === parentId);
     if (!assemblage?.macroPromotedBody) continue;
-    const parentSubstrips = selectedSpecs[parentId].map(spec => makeMacroFamilySubstrip(assemblage, spec));
+    const parentSubstrips = selectedSpecs[parentId].map(spec => makeMacroFamilySubstrip(assemblage, spec, apertureField));
     substrips.push(...parentSubstrips);
     const sorted = [...parentSubstrips].sort((a, b) => a.normalizedVRange[0] - b.normalizedVRange[0]);
     for (let index = 0; index < sorted.length - 1; index++) {
@@ -932,6 +1129,12 @@ function createMacroFamilySubstripPlan(composition) {
       });
     }
   }
+  const apertureRelativeTerminationPlan = createApertureRelativeTerminationPlan(
+    composition,
+    apertureField,
+    parentAssemblageIds,
+    substrips,
+  );
   return {
     schema: 'MacroFamilySubstripPlan',
     mode: ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE,
@@ -942,6 +1145,8 @@ function createMacroFamilySubstripPlan(composition) {
     substripCount: substrips.length,
     gapContracts,
     gapContractCount: gapContracts.length,
+    apertureRelativeTerminationPlan,
+    apertureTerminationClassCounts: apertureRelativeTerminationPlan.apertureTerminationClassCounts,
     renderPolicy: {
       parentFillDemotion: 'muted-territory-support-not-final-slab',
       roundDiagnosticRailsVisible: false,
@@ -3403,6 +3608,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroFamilySubstripTerminalCapMeshCount: renderedSubstripTerminalCapMeshIds.length,
       macroFamilySubstripTerminalCapMeshIds: renderedSubstripTerminalCapMeshIds,
       visibleParentRetirementPolicy: composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy,
+      apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
+      apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
+      apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
       selectedParentPromotedBodyMeshCount: renderedSelectedParentPromotedBodyMeshIds.length,
       selectedParentPromotedBodyMeshIds: renderedSelectedParentPromotedBodyMeshIds,
       selectedParentSideWallMeshCount: renderedSelectedParentSideWallMeshIds.length,
@@ -3655,6 +3863,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroFamilySubstripTerminalCapMeshIds: macroFamilySubstripTerminalCapMeshIds(),
         macroFamilySubstripGapContracts: composition.macroFamilySubstripPlan?.gapContracts || [],
         visibleParentRetirementPolicy: composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy,
+        apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
+        apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
+        apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
         selectedParentPromotedBodyMeshCount: selectedParentPromotedBodyMeshIds().length,
         selectedParentPromotedBodyMeshIds: selectedParentPromotedBodyMeshIds(),
         selectedParentSideWallMeshCount: selectedParentSideWallMeshIds().length,

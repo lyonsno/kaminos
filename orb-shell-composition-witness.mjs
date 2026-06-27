@@ -215,6 +215,10 @@ async function main() {
     assert.equal(state?.macroFamilySubstripSideWallMeshCount, state.macroFamilySubstripCount * 2, 'rendered parent-owned substrip sidewall mesh count must match plan sidewalls');
     assert.equal(state?.macroFamilySubstripTerminalCapMeshCount, state.macroFamilySubstripCount * 2, 'rendered parent-owned substrip terminal cap mesh count must match plan terminal caps');
     assert.equal(state?.visibleParentRetirementPolicy?.schema, 'VisibleParentRetirementPolicy', 'visible parent retirement policy missing from debug state');
+    assert.equal(state?.apertureRelativeTerminationPlan?.schema, 'ApertureRelativeTerminationPlan', 'aperture-relative termination plan missing from debug state');
+    assert.equal(state?.apertureTerminationField?.schema, 'ApertureTerminationField', 'aperture termination field missing from debug state');
+    assert.ok(state?.apertureTerminationClassCounts?.['orbit-capture'] >= 1, 'orbit-capture termination class missing from debug state');
+    assert.ok(state?.apertureTerminationClassCounts?.['counter-curve-blade'] >= 1, 'counter-curve blade termination class missing from debug state');
     assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
     assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
     assert.equal(state?.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps must be absent from normal render');
@@ -356,6 +360,9 @@ async function main() {
       macroFamilySubstripTerminalCapMeshIds: state.macroFamilySubstripTerminalCapMeshIds,
       macroFamilySubstripGapContracts: state.macroFamilySubstripGapContracts,
       visibleParentRetirementPolicy: state.visibleParentRetirementPolicy,
+      apertureRelativeTerminationPlan: state.apertureRelativeTerminationPlan,
+      apertureTerminationField: state.apertureTerminationField,
+      apertureTerminationClassCounts: state.apertureTerminationClassCounts,
       selectedParentPromotedBodyMeshCount: state.selectedParentPromotedBodyMeshCount,
       selectedParentPromotedBodyMeshIds: state.selectedParentPromotedBodyMeshIds,
       selectedParentSideWallMeshCount: state.selectedParentSideWallMeshCount,
