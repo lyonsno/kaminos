@@ -437,6 +437,14 @@ function createMacroPromotedBodyDescriptor(assemblage) {
     promotedFromVisibleBandIds: assemblage.childBandPlan.map(member => member.id),
     primarySpineFamily: assemblage.spine.proceduralFamily,
     promotedBodyScale: assemblage.role === 'crown-lock' ? 1.22 : assemblage.role === 'supporting-whorl' ? 1.34 : 1.28,
+    sideSilhouettePolicy: {
+      schema: 'PromotedBodySideSilhouettePolicy',
+      mode: 'smooth-promoted-body-sides-v0',
+      boundaryCutProfileVisible: false,
+      sideScale: 1,
+      preservesTopologyRelief: true,
+      reason: 'truth-smoke needs clean macro side curves before reintroducing earned boundary articulation',
+    },
     subordinateAnatomy: [
       'internal-rail-ridge',
       'edge-lip-channel',
@@ -508,6 +516,16 @@ function nearestCutProfileSample(cutProfile, t) {
   ), (cutProfile || [])[0] || { leftScale: 1, rightScale: 1, t: 0 });
 }
 
+function promotedBodySideScale(promoted, side, cutSample) {
+  const policy = promoted?.sideSilhouettePolicy;
+  if (policy?.boundaryCutProfileVisible === false) {
+    return policy.sideScale ?? 1;
+  }
+  return side === 'left'
+    ? cutSample?.leftScale ?? 1
+    : cutSample?.rightScale ?? 1;
+}
+
 function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
   const body = assemblage.territoryBodyOccupancy;
   const promoted = assemblage.macroPromotedBody;
@@ -538,8 +556,8 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     const nearestCut = nearestCutProfileSample(cutProfile, t);
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut);
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut);
     const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
     const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
     const crown = 0.82;
@@ -1988,8 +2006,8 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     ), cutProfile[0] || { leftScale: 1, rightScale: 1, t: 0 });
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut);
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut);
     const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
     const topologyDip = topologyReliefStrength(assemblage, t);
     for (let col = 0; col < columnCount; col++) {
