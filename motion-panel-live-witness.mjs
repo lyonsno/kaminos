@@ -22,6 +22,9 @@ const sourceMode = args.get('--source-mode') || 'sidecar';
 const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--source-opacity');
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
+const exportCurrentView = args.has('--export-current-view');
+const cameraPosition = args.get('--camera-position') || '';
+const cameraTarget = args.get('--camera-target') || '';
 const port = positiveInt(args.get('--debug-port'), 9670, '--debug-port');
 const chrome = process.env.KAMINOS_CHROME || args.get('--chrome') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-motion-panel-live-witness-${timestamp}`);
@@ -77,6 +80,9 @@ function writeReport(report) {
     sourceOpacity,
     tileWidth,
     columns,
+    exportCurrentView,
+    cameraPosition,
+    cameraTarget,
     debugPort: port,
     chrome,
     userDataDir,
@@ -145,6 +151,23 @@ async function evaluate(ws, expression, options = {}) {
   return result.result.value;
 }
 
+async function closeBrowser(ws) {
+  try {
+    await wsRequest(ws, 'Browser.close', {}, { timeoutMs: 2000 });
+  } catch {
+    try { ws.close(); } catch {}
+  }
+  if (!chromeProcess) return;
+  await delay(250);
+  if (chromeProcess.exitCode === null && chromeProcess.signalCode === null) {
+    chromeProcess.kill('SIGTERM');
+    await delay(250);
+  }
+  if (chromeProcess.exitCode === null && chromeProcess.signalCode === null) {
+    chromeProcess.kill('SIGKILL');
+  }
+}
+
 function assertPng(buffer, label) {
   assert.ok(buffer.length > 1024, `${label} PNG is too small to be credible visual evidence`);
   assert.equal(buffer.readUInt32BE(0), 0x89504e47, `${label} is not a PNG`);
@@ -157,12 +180,24 @@ async function configureMotionPanel(ws) {
       if (!el) throw new Error('missing motion panel control #' + id);
       return el;
     };
+    const setSelectValue = (id, value) => {
+      const el = requireEl(id);
+      const next = String(value);
+      if (![...el.options].some(option => option.value === next)) throw new Error('#' + id + ' has no option ' + next);
+      el.value = next;
+      return el.value;
+    };
     requireEl('motion-panel-prompt').value = ${JSON.stringify(prompt)};
     requireEl('motion-panel-server-url').value = ${JSON.stringify(serverUrl)};
     requireEl('motion-panel-source-ghost-mode').value = ${JSON.stringify(sourceMode)};
     requireEl('motion-panel-source-opacity').value = ${JSON.stringify(String(sourceOpacity))};
     requireEl('motion-panel-duration').value = ${JSON.stringify(String(duration))};
     requireEl('motion-panel-steps').value = ${JSON.stringify(String(steps))};
+    const exportValues = ${JSON.stringify(exportCurrentView)} ? {
+      frames: setSelectValue('motion-panel-export-frames', ${JSON.stringify(String(frameTotal))}),
+      columns: setSelectValue('motion-panel-export-columns', ${JSON.stringify(String(columns))}),
+      tileWidth: setSelectValue('motion-panel-export-resolution', ${JSON.stringify(String(tileWidth))}),
+    } : null;
     for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-duration', 'motion-panel-steps']) {
       document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
@@ -174,6 +209,7 @@ async function configureMotionPanel(ws) {
       sourceOpacity: requireEl('motion-panel-source-opacity').value,
       duration: requireEl('motion-panel-duration').value,
       steps: requireEl('motion-panel-steps').value,
+      exportValues,
     };
   })()`);
 }
@@ -327,6 +363,57 @@ async function composeFilmstrip(ws, frames) {
   };
 }
 
+async function exportCurrentViewFilmstrip(ws) {
+  const result = await evaluate(ws, `(async () => {
+    const parseVec = value => String(value || '')
+      .split(',')
+      .map(part => Number(part.trim()))
+      .filter(number => Number.isFinite(number));
+    const cameraPosition = parseVec(${JSON.stringify(cameraPosition)});
+    const cameraTarget = parseVec(${JSON.stringify(cameraTarget)});
+    if (cameraPosition.length || cameraTarget.length) {
+      if (typeof window.kaminosSetCameraDebugPose !== 'function') throw new Error('camera debug pose setter unavailable');
+      window.kaminosSetCameraDebugPose({
+        position: cameraPosition.length === 3 ? cameraPosition : undefined,
+        target: cameraTarget.length === 3 ? cameraTarget : undefined,
+      });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    const cameraBefore = typeof window.motionPanelCurrentViewCameraEvidence === 'function'
+      ? window.motionPanelCurrentViewCameraEvidence()
+      : null;
+    if (typeof window.exportMotionPanelCurrentViewFilmstrip !== 'function') throw new Error('current-view export function unavailable');
+    const exported = await window.exportMotionPanelCurrentViewFilmstrip();
+    if (!exported?.dataUrl?.startsWith('data:image/png;base64,')) throw new Error('current-view export did not return a PNG data URL');
+    return {
+      schema: 'kaminos.motion-panel-live-current-view-export.v0',
+      status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
+      cameraBefore,
+      cameraAfter: exported.camera || null,
+      prompt: exported.prompt || null,
+      settings: exported.settings || null,
+      width: exported.width || null,
+      height: exported.height || null,
+      frameCount: exported.frameCount || null,
+      columns: exported.columns || null,
+      rows: exported.rows || null,
+      downloadName: exported.downloadName || null,
+      dataUrl: exported.dataUrl,
+    };
+  })()`, { timeoutMs: 240000 });
+  const base64 = String(result.dataUrl || '').replace(/^data:image\/png;base64,/, '');
+  const png = Buffer.from(base64, 'base64');
+  assertPng(png, 'current-view export filmstrip');
+  mkdirSync(dirname(filmstripPath), { recursive: true });
+  writeFileSync(filmstripPath, png);
+  const { dataUrl, ...reportable } = result;
+  return {
+    ...reportable,
+    path: filmstripPath,
+    bytes: png.length,
+  };
+}
+
 try {
   mkdirSync(outDir, { recursive: true });
   mkdirSync(userDataDir, { recursive: true });
@@ -376,16 +463,23 @@ try {
   if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
   await delay(settleMs);
 
-  phase = 'capturing-frames';
-  const capturedFrames = [];
-  for (let index = 0; index < frameTotal; index++) {
-    capturedFrames.push(await captureFrame(ws, index));
-    if (index < frameTotal - 1) await delay(intervalMs);
-  }
+  let filmstrip = null;
+  let frames = [];
+  if (exportCurrentView) {
+    phase = 'exporting-current-view-filmstrip';
+    filmstrip = await exportCurrentViewFilmstrip(ws);
+  } else {
+    phase = 'capturing-frames';
+    const capturedFrames = [];
+    for (let index = 0; index < frameTotal; index++) {
+      capturedFrames.push(await captureFrame(ws, index));
+      if (index < frameTotal - 1) await delay(intervalMs);
+    }
 
-  phase = 'composing-filmstrip';
-  const filmstrip = await composeFilmstrip(ws, capturedFrames);
-  const frames = capturedFrames.map(({ screenshotDataUrl, ...frame }) => frame);
+    phase = 'composing-filmstrip';
+    filmstrip = await composeFilmstrip(ws, capturedFrames);
+    frames = capturedFrames.map(({ screenshotDataUrl, ...frame }) => frame);
+  }
 
   phase = 'writing-report';
   writeReport({
@@ -396,8 +490,7 @@ try {
     frames,
     filmstrip,
   });
-  ws.close();
-  chromeProcess.kill('SIGTERM');
+  await closeBrowser(ws);
 } catch (error) {
   writeReport({
     ok: false,
