@@ -183,7 +183,7 @@
     let witnessCaptureFrozen = false;
     let witnessFrozenCaptureState = null;
     const orbitCameraControlContract = 'orbit-camera-controls-v0';
-    const defaultFingerJuiceCamera = Object.freeze({ yaw: 0, pitch: 0, zoom: 1 });
+    const defaultFingerJuiceCamera = Object.freeze({ yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 });
     let fingerJuiceCamera = { ...defaultFingerJuiceCamera };
     let cameraDrag = null;
     const webgpuFrameStepDt = 1 / 120;
@@ -193,8 +193,21 @@
     function clampCamera(camera = fingerJuiceCamera) {
       camera.yaw = Math.max(-0.92, Math.min(0.92, Number(camera.yaw) || 0));
       camera.pitch = Math.max(-0.52, Math.min(0.62, Number(camera.pitch) || 0));
-      camera.zoom = Math.max(0.62, Math.min(1.85, Number(camera.zoom) || 1));
+      camera.zoom = Math.max(0.28, Math.min(2.4, Number(camera.zoom) || 1));
+      camera.panX = Math.max(-0.72, Math.min(0.72, Number(camera.panX) || 0));
+      camera.panY = Math.max(-0.56, Math.min(0.56, Number(camera.panY) || 0));
       return camera;
+    }
+
+    function panCamera(deltaX = 0, deltaY = 0) {
+      fingerJuiceCamera.panX += deltaX / Math.max(1, window.innerWidth);
+      fingerJuiceCamera.panY += deltaY / Math.max(1, window.innerHeight);
+      const cameraPan = {
+        x: fingerJuiceCamera.panX,
+        y: fingerJuiceCamera.panY,
+      };
+      clampCamera();
+      return cameraPan;
     }
 
     function cameraSnapshot() {
@@ -204,6 +217,8 @@
         yaw: Number(camera.yaw.toFixed(4)),
         pitch: Number(camera.pitch.toFixed(4)),
         zoom: Number(camera.zoom.toFixed(4)),
+        panX: Number(camera.panX.toFixed(4)),
+        panY: Number(camera.panY.toFixed(4)),
       };
     }
 
@@ -396,8 +411,8 @@
       return {
         projectionScale,
         zScale: height * 0.23 * camera.zoom,
-        centerX: width * 0.5,
-        centerY: height * 0.74,
+        centerX: width * (0.5 + camera.panX),
+        centerY: height * (0.74 + camera.panY),
       };
     }
 
@@ -429,12 +444,16 @@
     }
 
     stage.addEventListener('pointerdown', event => {
+      const mode = event.shiftKey || event.button === 1 || event.button === 2 ? 'pan' : 'orbit';
       cameraDrag = {
         pointerId: event.pointerId,
+        mode,
         x: event.clientX,
         y: event.clientY,
         yaw: fingerJuiceCamera.yaw,
         pitch: fingerJuiceCamera.pitch,
+        panX: fingerJuiceCamera.panX,
+        panY: fingerJuiceCamera.panY,
       };
       stage.classList.add('orbiting');
       stage.setPointerCapture?.(event.pointerId);
@@ -442,8 +461,14 @@
     });
     stage.addEventListener('pointermove', event => {
       if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
-      fingerJuiceCamera.yaw = cameraDrag.yaw + (event.clientX - cameraDrag.x) * 0.0042;
-      fingerJuiceCamera.pitch = cameraDrag.pitch + (event.clientY - cameraDrag.y) * 0.0032;
+      if (cameraDrag.mode === 'pan') {
+        fingerJuiceCamera.panX = cameraDrag.panX;
+        fingerJuiceCamera.panY = cameraDrag.panY;
+        panCamera(event.clientX - cameraDrag.x, event.clientY - cameraDrag.y);
+      } else {
+        fingerJuiceCamera.yaw = cameraDrag.yaw + (event.clientX - cameraDrag.x) * 0.0042;
+        fingerJuiceCamera.pitch = cameraDrag.pitch + (event.clientY - cameraDrag.y) * 0.0032;
+      }
       clampCamera();
       event.preventDefault();
     });
@@ -456,6 +481,7 @@
     }
     stage.addEventListener('pointerup', endCameraDrag);
     stage.addEventListener('pointercancel', endCameraDrag);
+    stage.addEventListener('contextmenu', event => event.preventDefault());
     stage.addEventListener('wheel', event => {
       fingerJuiceCamera.zoom *= Math.exp(-event.deltaY * 0.001);
       clampCamera();
@@ -805,7 +831,7 @@
           width: window.innerWidth,
           height: window.innerHeight,
           pixelRatio: window.devicePixelRatio || 1,
-          camera: fingerJuiceCamera,
+          camera: cameraSnapshot(),
         });
         webgpuRenderFrameCount = renderState.renderFrameCount;
         webgpuState = { ...webgpuState, ...renderState };
@@ -847,6 +873,7 @@
       const densityPositionSolveStats = state.densityPositionSolveStats || {};
       const densityContinuityProjectionStats = state.densityContinuityProjectionStats || {};
       const sampledNeighborhoodDensityStats = state.sampledNeighborhoodDensityStats || {};
+      const deepDensityContinuityStats = state.deepDensityContinuityStats || {};
       const particleSupportBudgetStats = state.particleSupportBudgetStats || {};
       const settleRestEnergyStats = state.settleRestEnergyStats || {};
       const stabilityStats = state.stabilityStats || {};
@@ -856,7 +883,7 @@
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
       const camera = cameraSnapshot();
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom} pan ${camera.panX},${camera.panY}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>deep project ${deepDensityContinuityStats.deepContinuityProjectionCandidateCount ?? 0} peak ${deepDensityContinuityStats.deepContinuityPeakOccupancyRatio ?? 0} dense ${deepDensityContinuityStats.deepContinuityDenseCellCount ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());
@@ -904,7 +931,7 @@
                   width: window.innerWidth,
                   height: window.innerHeight,
                   pixelRatio: window.devicePixelRatio || 1,
-                  camera: fingerJuiceCamera,
+                  camera: cameraSnapshot(),
                 });
                 webgpuRenderFrameCount = renderState.renderFrameCount;
                 webgpuState = { ...webgpuState, ...renderState };
