@@ -14,6 +14,8 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-orb-shell-composition-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const focus = args.get('--focus') || 'wide';
+const forceAoRaw = args.get('--force-ao');
+const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
 
 let phase = 'init';
 let browser = null;
@@ -73,6 +75,46 @@ async function evaluate(ws, expression) {
   return result.result.value;
 }
 
+async function forceAmbientOcclusion(ws, enabled) {
+  if (enabled === null) return null;
+  return evaluate(ws, `
+    (() => {
+      const toggle = document.getElementById('ao-toggle');
+      if (!toggle) return { applied: false, reason: 'ao-toggle-missing' };
+      toggle.checked = ${JSON.stringify(enabled)};
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      window._kaminosDirty?.();
+      return {
+        applied: true,
+        requestedEnabled: ${JSON.stringify(enabled)},
+        effectiveEnabled: toggle.checked,
+        aoDebugState: window.kaminosAODebugState?.() || null,
+      };
+    })()
+  `);
+}
+
+async function readRenderEffectPolicy(ws, forcedAoState) {
+  return evaluate(ws, `
+    (() => {
+      const aoToggle = document.getElementById('ao-toggle');
+      const dofToggle = document.getElementById('dof-toggle');
+      const aoDebugState = window.kaminosAODebugState?.() || null;
+      return {
+        schema: 'OrbShellRenderEffectPolicy',
+        mode: 'material-truth-smoke-render-effects-v0',
+        routePolicy: window.__kaminosOrbShellRenderEffectPolicy || null,
+        forcedAmbientOcclusion: ${JSON.stringify(forcedAoState)},
+        ambientOcclusionEnabled: !!aoToggle?.checked,
+        effectiveAoIntensity: aoDebugState?.intensity ?? null,
+        gtaoState: aoDebugState,
+        depthOfFieldEnabled: !!dofToggle?.checked,
+        diagnosisRole: 'separate-pbr-material-read-from-screen-space-ao-ghosting',
+      };
+    })()
+  `);
+}
+
 async function main() {
   const report = {
     requestedUrl: url,
@@ -122,6 +164,8 @@ async function main() {
     await send(ws, 'Runtime.enable');
     await send(ws, 'Page.enable');
     await delay(settleMs);
+    const forcedAoState = await forceAmbientOcclusion(ws, forceAo);
+    if (forcedAoState) await delay(300);
     if (focus === 'side-rim-return') {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameSideRimReturn?.()');
       await delay(500);
@@ -141,6 +185,11 @@ async function main() {
     }
 
     phase = 'state';
+    const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
+    assert.equal(renderEffectPolicy?.schema, 'OrbShellRenderEffectPolicy', 'render-effect policy missing from witness');
+    if (forceAo !== null) {
+      assert.equal(renderEffectPolicy?.ambientOcclusionEnabled, forceAo, 'forced AO state did not take effect');
+    }
     const state = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.debugState?.()');
     assert.equal(state?.identity, 'orb-shell-macro-grammar-grounding-v0', 'wrong composition witness identity');
     assert.equal(state?.active, true, 'composition witness inactive');
@@ -315,6 +364,7 @@ async function main() {
       terminalCapClosureVerdict: state.terminalCapClosureVerdict,
       liveTerminalCapWitness,
       normalWitnessMaterialPolicy: state.normalWitnessMaterialPolicy,
+      renderEffectPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
       suppressedLegacyTerminationSocketIds: state.suppressedLegacyTerminationSocketIds,
