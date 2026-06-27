@@ -395,24 +395,26 @@ function adapterReportSummary(report) {
   };
 }
 
-function classifyLiveAdapterOutput(effectiveRoute) {
+function classifyLiveAdapterOutput(effectiveRoute, stage, artifactId) {
   const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
   effectiveRoute.adapterReport = adapterReportSummary(adapterReport);
   const schema = String(adapterReport?.schema || '').toLowerCase();
+  const modelFamily = stage.route?.modelFamily || effectiveRoute.tool || 'model';
+  const artifactRole = pipeline.artifacts?.[artifactId]?.role || artifactId || 'artifact';
   const commandText = [
     effectiveRoute.availability?.configuredCommand,
     effectiveRoute.availability?.resolvedCommand,
     ...(effectiveRoute.executedCommand || []),
   ].filter(Boolean).join(' ').toLowerCase();
-  const isMockAdapter = schema.includes('mock') || commandText.includes('mock-sharp-command');
+  const isMockAdapter = schema.includes('mock') || commandText.includes('mock-sharp-command') || commandText.includes('mock-greenroom') || commandText.includes('mock-');
   if (!isMockAdapter) {
-    effectiveRoute.truthBoundary = 'live SHARP adapter output; external command produced the splat artifact';
+    effectiveRoute.truthBoundary = `live ${modelFamily} adapter output; external command produced the ${artifactRole} artifact`;
     return { status: 'real', fixtureSource: null };
   }
   const reportEvidence = existsSync(effectiveRoute.adapterReportPath)
     ? fileEvidence(effectiveRoute.adapterReportPath)
     : { path: effectiveRoute.adapterReportPath, bytes: null, sha256: null };
-  const truthBoundary = 'mock SHARP adapter fixture output; adapter command is a test fixture and not real SHARP inference';
+  const truthBoundary = `mock ${modelFamily} adapter fixture output; adapter command is a test fixture and not real model inference`;
   effectiveRoute.realModel = false;
   effectiveRoute.fixtureMode = 'mock-adapter';
   effectiveRoute.truthBoundary = truthBoundary;
@@ -502,7 +504,7 @@ function runLiveModelAdapter(outputPath, stage) {
   const outputEvidence = fileEvidence(outputPath);
   effectiveRoute.outputSha256 = outputEvidence.sha256;
   effectiveRoute.outputBytes = outputEvidence.bytes;
-  const classification = classifyLiveAdapterOutput(effectiveRoute);
+  const classification = classifyLiveAdapterOutput(effectiveRoute, stage, stage.outputArtifact);
   effectiveRoute.stageStatus = classification.status;
   if (classification.fixtureSource) effectiveRoute.fixtureSource = classification.fixtureSource;
   return effectiveRoute;
@@ -530,7 +532,7 @@ function runStage(stage) {
     makeAdapterAvailabilityReport(outputPath, stage, availability);
   } else if (existsSync(outputPath)) {
     status = 'cached';
-  } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'splat') {
+  } else if (stage.statusMode === 'model-adapter' && stage.route?.executesModel === true) {
     Object.assign(effectiveRoute, runLiveModelAdapter(outputPath, stage));
     status = effectiveRoute.stageStatus || 'real';
     fixtureSource = effectiveRoute.fixtureSource || null;
