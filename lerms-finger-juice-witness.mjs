@@ -12,6 +12,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 
 const url = args.get('--url') || 'http://127.0.0.1:8096/lerms-finger-juice.html?lerms_world_finger_juice=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-lerms-finger-juice-witness.png');
+const denseDiagnosticOut = resolve(args.get('--dense-out') || out.replace(/\.png$/i, '.dense-crop.png'));
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9446);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -260,6 +261,12 @@ function measureVisualActivity(buffer) {
   };
 }
 
+function classifyFullViewportLegibility(metrics) {
+  if (metrics.filledActivityRatio >= 0.22 && metrics.dilatedActivityRatio >= 0.45) return 'dense_full_viewport';
+  if (metrics.filledActivityRatio >= 0.08 && metrics.dilatedActivityRatio >= 0.14) return 'sparse_but_visible_full_viewport';
+  return 'too_sparse_full_viewport';
+}
+
 async function waitForRouteHooks(ws) {
   for (let i = 0; i < 80; i += 1) {
     const pageState = await evaluate(ws, `({
@@ -476,6 +483,30 @@ async function run() {
     assert.equal(visualFrame?.visualActivityFrame, 'dense-fluid-activity-clip-v0', 'route did not expose dense fluid visual frame');
     assert.ok(visualFrame.clip?.width > 0 && visualFrame.clip?.height > 0, 'focused visual frame missing valid clip');
     await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
+    const fullViewportCapture = await evaluate(ws, `(() => {
+      const hud = document.getElementById('hud');
+      document.documentElement.dataset.witnessCapture = 'full-viewport-smoke-v0';
+      return {
+        witnessCapture: document.documentElement.dataset.witnessCapture,
+        diagnostic_role: 'operator_viewport_primary',
+        hudHidden: Boolean(hud?.hidden),
+        clip: null,
+      };
+    })()`);
+    assert.equal(fullViewportCapture.witnessCapture, 'full-viewport-smoke-v0', 'witness did not mark full viewport capture as primary smoke evidence');
+    const fullViewportShot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+    });
+    const fullViewportPng = Buffer.from(fullViewportShot.data, 'base64');
+    assert.ok(fullViewportPng.length > 4096, 'full viewport screenshot is too small to be credible visual evidence');
+    assert.equal(fullViewportPng.readUInt32BE(0), 0x89504e47, 'full viewport screenshot is not PNG');
+    const fullViewportVisualActivityMetrics = measureVisualActivity(fullViewportPng);
+    const fullViewportLegibilityStatus = classifyFullViewportLegibility(fullViewportVisualActivityMetrics);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, fullViewportPng);
+    primaryOutputWritten = true;
+
     const captureSurface = await evaluate(ws, `(() => {
       const hud = document.getElementById('hud');
       if (hud) hud.hidden = true;
@@ -486,35 +517,56 @@ async function run() {
       };
     })()`);
     assert.equal(captureSurface.witnessCapture, 'focused-activity-no-hud-v0', 'witness capture surface did not hide HUD occlusion');
-    const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+    const denseDiagnosticCapture = {
+      witnessCapture: 'dense-fluid-activity-clip-v0',
+      diagnostic_role: 'diagnostic_crop_secondary',
+      clip: visualFrame.clip,
+    };
+    const denseDiagnosticShot = await wsRequest(ws, 'Page.captureScreenshot', {
       format: 'png',
       fromSurface: true,
       clip: visualFrame.clip,
     });
-    const png = Buffer.from(shot.data, 'base64');
-    assert.ok(png.length > 4096, 'screenshot is too small to be credible visual evidence');
-    assert.equal(png.readUInt32BE(0), 0x89504e47, 'screenshot is not PNG');
-    const visualActivityMetrics = measureVisualActivity(png);
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, png);
-    primaryOutputWritten = true;
+    const denseDiagnosticPng = Buffer.from(denseDiagnosticShot.data, 'base64');
+    assert.ok(denseDiagnosticPng.length > 4096, 'dense diagnostic screenshot is too small to be credible visual evidence');
+    assert.equal(denseDiagnosticPng.readUInt32BE(0), 0x89504e47, 'dense diagnostic screenshot is not PNG');
+    const denseDiagnosticVisualActivityMetrics = measureVisualActivity(denseDiagnosticPng);
+    mkdirSync(dirname(denseDiagnosticOut), { recursive: true });
+    writeFileSync(denseDiagnosticOut, denseDiagnosticPng);
+
     lastVisualEvidence = {
       screenshot: out,
-      visualFrame,
+      fullViewportScreenshot: out,
+      fullViewportCapture,
+      fullViewportVisualActivityMetrics,
+      fullViewportLegibilityStatus,
+      denseDiagnosticScreenshot: denseDiagnosticOut,
+      denseDiagnosticFrame: visualFrame,
+      denseDiagnosticCapture,
+      denseDiagnosticVisualActivityMetrics,
       captureSurface,
-      visualActivityMetrics,
     };
-    assert.ok(visualActivityMetrics.interestingPixelCount > 256, 'focused screenshot lacks measurable juice activity');
-    assert.ok(visualActivityMetrics.filledActivityRatio >= 0.22, 'focused screenshot is still mostly empty colored-fluid space');
-    assert.ok(visualActivityMetrics.dilatedActivityRatio >= 0.48, 'focused screenshot does not have enough local fluid occupancy after dilation');
-    assert.ok(visualActivityMetrics.activityBoundsAreaRatio >= 0.42, 'focused screenshot still frames activity too small');
-    assert.ok(visualActivityMetrics.activityBoundsWidthRatio >= 0.68, 'focused screenshot does not use enough width for activity');
-    assert.ok(visualActivityMetrics.activityBoundsHeightRatio >= 0.48, 'focused screenshot does not use enough height for activity');
+    assert.ok(fullViewportVisualActivityMetrics.interestingPixelCount > 256, 'full viewport screenshot lacks measurable juice activity');
+    assert.notEqual(fullViewportLegibilityStatus, 'too_sparse_full_viewport', 'full viewport screenshot is too sparse to be useful smoke evidence');
+    assert.ok(denseDiagnosticVisualActivityMetrics.interestingPixelCount > 256, 'dense diagnostic screenshot lacks measurable juice activity');
+    assert.ok(denseDiagnosticVisualActivityMetrics.filledActivityRatio >= 0.22, 'dense diagnostic screenshot is still mostly empty colored-fluid space');
+    assert.ok(denseDiagnosticVisualActivityMetrics.dilatedActivityRatio >= 0.45, 'dense diagnostic screenshot does not have enough local fluid occupancy after dilation');
+    assert.ok(denseDiagnosticVisualActivityMetrics.activityBoundsAreaRatio >= 0.42, 'dense diagnostic screenshot still frames activity too small');
+    assert.ok(denseDiagnosticVisualActivityMetrics.activityBoundsWidthRatio >= 0.68, 'dense diagnostic screenshot does not use enough width for activity');
+    assert.ok(denseDiagnosticVisualActivityMetrics.activityBoundsHeightRatio >= 0.48, 'dense diagnostic screenshot does not use enough height for activity');
 
     phase = 'complete';
     writeReport({
       failure_phase: null,
       screenshot: out,
+      fullViewportScreenshot: out,
+      fullViewportCapture,
+      fullViewportVisualActivityMetrics,
+      fullViewportLegibilityStatus,
+      denseDiagnosticScreenshot: denseDiagnosticOut,
+      denseDiagnosticFrame: visualFrame,
+      denseDiagnosticCapture,
+      denseDiagnosticVisualActivityMetrics,
       effectiveRoute: state.effectiveRoute,
       solver_backend: state.solver_backend,
       solverRoute: state.solverRoute,
@@ -534,9 +586,9 @@ async function run() {
       cadenceProbe,
       preRespawnState,
       respawnProbeSteps,
-      visualFrame,
       captureSurface,
-      visualActivityMetrics,
+      visualFrame,
+      visualActivityMetrics: denseDiagnosticVisualActivityMetrics,
       extendedFlowProbe: {
         ...extendedFlowProbe,
         before: undefined,

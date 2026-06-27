@@ -160,6 +160,9 @@ assert.match(witnessSource, /parsePngRgba/, 'witness parses PNG screenshots for 
 assert.match(witnessSource, /activityBoundsAreaRatio/, 'witness rejects visually tiny activity bounding boxes');
 assert.match(witnessSource, /filledActivityRatio/, 'witness rejects mostly empty captures even when sparse activity bounds are large');
 assert.match(witnessSource, /dilatedActivityRatio/, 'witness measures visual activity occupancy after local dilation, not just raw colored pixels');
+assert.match(witnessSource, /fullViewportVisualActivityMetrics/, 'witness records the full operator viewport as primary smoke evidence');
+assert.match(witnessSource, /denseDiagnosticScreenshot/, 'witness labels the dense crop as a secondary diagnostic artifact');
+assert.match(witnessSource, /diagnostic_crop_secondary/, 'witness must not present the dense crop as the full smoke viewport');
 assert.match(witnessSource, /Page\.captureScreenshot[^]*clip/, 'witness captures a focused clip instead of only the whole distant viewport');
 assert.match(witnessSource, /sourceDiagnostics/, 'witness requires source diagnostics');
 assert.match(witnessSource, /emitterDiagnostics/, 'witness requires emitter diagnostics');
