@@ -105,6 +105,11 @@ canvas { display: block; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
+input[type="range"]:disabled { background: #262626; opacity: 0.45; cursor: not-allowed; }
+input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: not-allowed; }
+.slider-row.control-inactive { opacity: 0.45; }
+.slider-row.control-inactive .slider-label, .slider-row.control-inactive .slider-val { color: #555; }
+.motion-control-panel[data-motion-controls-applicable="false"] .btn { opacity: 0.45; cursor: not-allowed; }
 .select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
 .select-input:focus { border-color: #1976d2; }
 
@@ -501,6 +506,30 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         </select>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Source Up</span>
+        <select id="motion-panel-source-up-axis" class="select-input">
+          <option value="auto" selected>Auto</option>
+          <option value="+x">+X</option>
+          <option value="-x">-X</option>
+          <option value="+y">+Y</option>
+          <option value="-y">-Y</option>
+          <option value="+z">+Z</option>
+          <option value="-z">-Z</option>
+        </select>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Source Forward</span>
+        <select id="motion-panel-source-forward-axis" class="select-input">
+          <option value="auto" selected>Auto</option>
+          <option value="+x">+X</option>
+          <option value="-x">-X</option>
+          <option value="+y">+Y</option>
+          <option value="-y">-Y</option>
+          <option value="+z">+Z</option>
+          <option value="-z">-Z</option>
+        </select>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Ghost</span>
         <input type="range" id="motion-panel-source-opacity" min="0.08" max="0.9" step="0.01" value="0.38">
         <span class="slider-val" id="motion-panel-source-opacity-val">0.38</span>
@@ -574,8 +603,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field" style="margin-top: 8px;"><span class="field-key">Exports</span><span class="field-val" id="motion-panel-export-count">0</span></div>
       <div id="motion-panel-export-tray" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;"></div>
     </div>
-    <div class="panel">
+    <div class="panel motion-control-panel" id="motion-phrase-control-panel" data-motion-controls-applicable="false">
       <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
+      <div class="field"><span class="field-key">Applies</span><span class="field-val" id="motion-control-applicability">inactive</span></div>
       <div class="volume-actions" id="motion-control-presets"></div>
       <div class="slider-row">
         <span class="slider-label">Mass</span>
@@ -909,6 +939,7 @@ import {
   interpolateGeneratedPoseTemporalSample,
   motionClipById,
   motionPhraseBodyScale,
+  normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
   sampleGeneratedPoseTemporalMotion,
   sampleMotionClip,
@@ -3651,7 +3682,10 @@ function disposeMotionDecisionScene() {
 }
 
 function disposeMotionPhraseControlScene() {
-  if (!motionPhraseControlState?.root) return;
+  if (!motionPhraseControlState?.root) {
+    updateMotionPhraseControlApplicability?.();
+    return;
+  }
   scene.remove(motionPhraseControlState.root);
   motionPhraseControlState.root.traverse(object => {
     if (object.geometry) object.geometry.dispose?.();
@@ -3661,6 +3695,7 @@ function disposeMotionPhraseControlScene() {
     }
   });
   motionPhraseControlState.active = false;
+  updateMotionPhraseControlApplicability();
 }
 
 function disposeMotionTrackScene() {
@@ -3928,6 +3963,47 @@ function createMotionDecisionComparisonScene({ force = false } = {}) {
 
 const MOTION_PHRASE_CONTROL_KEYS = ['mass', 'commitment', 'anticipation', 'hold', 'effort', 'overshoot', 'recovery', 'tempo'];
 
+function motionPhraseControlApplicabilityDebugState() {
+  const applicable = !!motionPhraseControlState?.active && !motionTemporalState?.active;
+  const reason = applicable
+    ? 'phrase controls drive the active phrase-control harness'
+    : (motionTemporalState?.active
+      ? 'inactive for generated temporal motion; use source orientation/speed controls'
+      : 'inactive until the Controls route is active');
+  return {
+    schema: 'kaminos.motion-phrase-control-applicability.v0',
+    applicable,
+    reason,
+    currentPath: motionTemporalState?.active
+      ? 'generated-temporal'
+      : (motionPhraseControlState?.active ? 'phrase-control' : 'none'),
+    disabledControlIds: applicable ? [] : MOTION_PHRASE_CONTROL_KEYS.map(key => `motion-control-${key}`),
+  };
+}
+
+function updateMotionPhraseControlApplicability() {
+  const evidence = motionPhraseControlApplicabilityDebugState();
+  const applicable = evidence.applicable;
+  const panel = document.getElementById('motion-phrase-control-panel');
+  if (panel) panel.dataset.motionControlsApplicable = String(applicable);
+  const label = document.getElementById('motion-control-applicability');
+  if (label) label.textContent = applicable ? 'active' : 'inactive';
+  for (const key of MOTION_PHRASE_CONTROL_KEYS) {
+    const input = document.getElementById(`motion-control-${key}`);
+    const row = input?.closest?.('.slider-row');
+    if (input) {
+      input.disabled = !applicable;
+      input.title = evidence.reason;
+    }
+    row?.classList.toggle('control-inactive', !applicable);
+  }
+  document.querySelectorAll('#motion-control-presets .btn').forEach(button => {
+    button.disabled = !applicable;
+    button.title = evidence.reason;
+  });
+  return evidence;
+}
+
 function motionPhraseControlsFromInputs(source = 'ui') {
   const controls = { source };
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
@@ -3965,12 +4041,14 @@ function renderMotionPhraseControlPresets() {
     button.className = 'btn';
     button.textContent = preset.label;
     button.addEventListener('click', () => {
+      if (!motionPhraseControlApplicabilityDebugState().applicable) return;
       setMotionPhraseControlInputs(preset.controls);
       refreshMotionPhraseControlledPlan(preset.controls);
       createMotionPhraseControlHarnessScene({ force: true });
     });
     host.appendChild(button);
   }
+  updateMotionPhraseControlApplicability();
 }
 
 function currentMotionPhraseControlledPlan(controls = motionPhraseControlsFromInputs()) {
@@ -4054,6 +4132,7 @@ function createMotionPhraseControlHarnessScene({ force = false } = {}) {
     lastActors: [],
   };
   refreshMotionPhraseControlledPlan(effectiveControls);
+  updateMotionPhraseControlApplicability();
   updateMotionPhraseControlFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -4452,6 +4531,14 @@ function motionPanelSourceGhostOverlaySizeFromInputs() {
   return Math.max(0.75, Math.min(5, Number.isFinite(size) ? size : 3));
 }
 
+function motionPanelSourceOrientationRemapFromInputs() {
+  return normalizeMotionSourceOrientationRemap({
+    sourceUpAxis: String(document.getElementById('motion-panel-source-up-axis')?.value || 'auto'),
+    sourceForwardAxis: String(document.getElementById('motion-panel-source-forward-axis')?.value || 'auto'),
+    source: 'motion-panel-ui',
+  });
+}
+
 function motionPanelSourceFrameTotal(result = motionTemporalState?.sourceResult) {
   const joints = Array.isArray(result?.joints) ? result.joints : [];
   const total = Number(result?.num_frames) || joints.length || Number(motionTemporalState?.track?.rawFrameCount) || Number(motionTemporalState?.track?.sourceFrameCount) || 0;
@@ -4532,6 +4619,60 @@ function inferMotionSourceGhostAxes(result, bounds = motionServerJointBounds(res
       y: axisNames[upAxis],
       z: axisNames[depthAxis],
     },
+  };
+}
+
+function motionSourceGhostDisplayBasisForRemap(result, bounds, remapInput) {
+  const remap = normalizeMotionSourceOrientationRemap(remapInput || {});
+  if (remap.mode !== 'explicit') return inferMotionSourceGhostAxes(result, bounds);
+  return {
+    schema: 'kaminos.motion-source-ghost-display-basis.v0',
+    mode: 'explicit-remap',
+    upAxis: remap.upAxis,
+    rightAxis: remap.rightAxis,
+    depthAxis: remap.forwardAxis,
+    upSign: remap.upSign,
+    rightSign: remap.rightSign,
+    depthSign: remap.forwardSign,
+    upAxisName: remap.upAxisName,
+    rightAxisName: remap.rightAxisName,
+    depthAxisName: remap.forwardAxisName,
+    sourceConvention: 'operator-source-orientation-remap',
+    displayMapping: {
+      x: remap.displayMapping.x,
+      y: remap.displayMapping.y,
+      z: remap.displayMapping.z,
+    },
+    sourceOrientationRemap: remap,
+  };
+}
+
+function motionSourceGhostBasisValue(point, basis, lane) {
+  const axis = lane === 'up' ? basis.upAxis : (lane === 'right' ? basis.rightAxis : basis.depthAxis);
+  const sign = lane === 'up' ? (basis.upSign ?? 1) : (lane === 'right' ? (basis.rightSign ?? 1) : (basis.depthSign ?? 1));
+  return (Number(point?.[axis]) || 0) * sign;
+}
+
+function motionSourceGhostOrientedBounds(result, basis) {
+  const joints = Array.isArray(result?.joints) ? result.joints : [];
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  const lanes = ['right', 'up', 'depth'];
+  for (const frame of joints) {
+    if (!Array.isArray(frame)) continue;
+    for (const joint of frame) {
+      if (!Array.isArray(joint)) continue;
+      for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+        const value = motionSourceGhostBasisValue(joint, basis, lanes[laneIndex]);
+        if (!Number.isFinite(value)) continue;
+        min[laneIndex] = Math.min(min[laneIndex], value);
+        max[laneIndex] = Math.max(max[laneIndex], value);
+      }
+    }
+  }
+  return {
+    min: min.map(value => Number.isFinite(value) ? value : 0),
+    max: max.map(value => Number.isFinite(value) ? value : 1),
   };
 }
 
@@ -4630,14 +4771,15 @@ function motionSourceGhostOverlayBase(sourceGhost, rootPosition = null) {
 function transformSourceGhostJoint(joint, sourceGhost, mode, rootPosition = null) {
   const sourceRoot = sourceGhost.sourceRoot;
   const basis = sourceGhost.displayBasis;
+  const sourceOrientationRemap = sourceGhost.sourceOrientationRemap;
   const scale = mode === 'overlay' ? sourceGhost.overlayScale : sourceGhost.sidecarScale;
   const base = mode === 'overlay'
     ? motionSourceGhostOverlayBase(sourceGhost, rootPosition)
     : sourceGhost.sidecarOffset;
   return [
-    base[0] + ((Number(joint?.[basis.rightAxis]) || 0) - sourceRoot[basis.rightAxis]) * scale,
-    base[1] + ((Number(joint?.[basis.upAxis]) || 0) - sourceGhost.bounds.min[basis.upAxis]) * scale,
-    base[2] + ((Number(joint?.[basis.depthAxis]) || 0) - sourceRoot[basis.depthAxis]) * scale,
+    base[0] + (motionSourceGhostBasisValue(joint, basis, 'right') - motionSourceGhostBasisValue(sourceRoot, basis, 'right')) * scale,
+    base[1] + (motionSourceGhostBasisValue(joint, basis, 'up') - sourceGhost.orientedBounds.min[1]) * scale,
+    base[2] + (motionSourceGhostBasisValue(joint, basis, 'depth') - motionSourceGhostBasisValue(sourceRoot, basis, 'depth')) * scale,
   ];
 }
 
@@ -4683,7 +4825,9 @@ function createMotionSourceGhostVisual(result, options = {}) {
   group.add(points);
 
   const bounds = motionServerJointBounds(result);
-  const displayBasis = inferMotionSourceGhostAxes(result, bounds);
+  const sourceOrientationRemap = normalizeMotionSourceOrientationRemap(options.sourceOrientationRemap || motionPanelSourceOrientationRemapFromInputs());
+  const displayBasis = motionSourceGhostDisplayBasisForRemap(result, bounds, sourceOrientationRemap);
+  const orientedBounds = motionSourceGhostOrientedBounds(result, displayBasis);
   const sourceRoot = motionServerSourceRoot(result);
   const baseSourceScale = targetSourceGhostHeight(displayBasis, bounds);
   const sourceSizeMultiplier = motionPanelSourceGhostOverlaySizeFromInputs();
@@ -4697,7 +4841,9 @@ function createMotionSourceGhostVisual(result, options = {}) {
     rawBoneCount: rawBones.length,
     jointCount,
     bounds,
+    orientedBounds,
     displayBasis,
+    sourceOrientationRemap: normalizeMotionSourceOrientationRemap(sourceOrientationRemap),
     sourceRoot,
     baseSourceScale,
     sourceSizeMultiplier: motionPanelSourceGhostOverlaySizeFromInputs(),
@@ -4725,6 +4871,7 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
       opacity,
       sourceFrame: Number((Number(sourceFrame) || 0).toFixed(5)),
       sourceFrameTotal: motionPanelSourceFrameTotal(result),
+      sourceOrientationRemap: sourceGhost?.sourceOrientationRemap || motionPanelSourceOrientationRemapFromInputs(),
       sourceFrameSharedWithOrb: false,
     };
     if (sourceGhost) sourceGhost.lastDebug = hiddenDebug;
@@ -4789,6 +4936,7 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     sourceFormat: 'motion-server-soma77-json',
     skeletonType: result.skeleton_type || null,
     sourceFrameTotal: motionPanelSourceFrameTotal(result),
+    sourceOrientationRemap: sourceGhost.sourceOrientationRemap,
     upAxis: sourceGhost.displayBasis.upAxis,
     rightAxis: sourceGhost.displayBasis.rightAxis,
     depthAxis: sourceGhost.displayBasis.depthAxis,
@@ -4835,6 +4983,9 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   const selectedGeneratedInput = generatedInput || generatedPoseTemporalClipById(
     requestedClipId,
     await loadGeneratedPoseTemporalRegistry(requestedRegistryUrl),
+  );
+  const sourceOrientationRemap = normalizeMotionSourceOrientationRemap(
+    selectedGeneratedInput?.sourceOrientationRemap || motionPanelSourceOrientationRemapFromInputs(),
   );
   const harness = buildGeneratedPoseTemporalHarness({
     generatedInput: selectedGeneratedInput,
@@ -4887,6 +5038,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     ? createMotionSourceGhostVisual(sourceResult, {
       mode: motionPanelSourceGhostModeFromInputs(),
       opacity: motionPanelSourceGhostOpacityFromInputs(),
+      sourceOrientationRemap,
     })
     : null;
   if (sourceGhost) root.add(sourceGhost.group);
@@ -4899,11 +5051,13 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     root,
     harness,
     track: harness.track,
+    generatedInput: selectedGeneratedInput,
     requestedClipId,
     registryClipId: harness.registryClipId,
     registrySource: harness.registrySource,
     visual,
     sourceResult,
+    sourceOrientationRemap,
     sourceGhost,
     duration: harness.duration,
     startedAt: performance.now() / 1000,
@@ -4922,6 +5076,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     lastBehaviorReadout: null,
     lastSourceGhost: null,
   };
+  updateMotionPhraseControlApplicability();
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
   updateMotionAgencyReadout();
   frameMotionAgencyCamera();
@@ -5226,6 +5381,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       mode: motionPanelSourceGhostModeFromInputs(),
       opacity: motionPanelSourceGhostOpacityFromInputs(),
       sourceFrame: temporalSample?.sourceFrame ?? null,
+      sourceOrientationRemap: state.sourceOrientationRemap,
       sourceFrameSharedWithOrb: false,
     };
   state.lastSourceGhost = sourceGhost;
@@ -5436,6 +5592,7 @@ function motionPanelSourceGhostExportEvidence() {
     mode: sourceGhost.mode || motionPanelSourceGhostModeFromInputs(),
     sourceFrame: sourceGhost.sourceFrame ?? null,
     sourceFrameTotal: sourceGhost.sourceFrameTotal ?? motionPanelSourceFrameTotal(),
+    sourceOrientationRemap: sourceGhost.sourceOrientationRemap || null,
     sourceFrameSharedWithOrb: !!sourceGhost.sourceFrameSharedWithOrb,
     renderedBoneCount: sourceGhost.renderedBoneCount ?? null,
     sourceSizeMultiplier: sourceGhost.sourceSizeMultiplier ?? null,
@@ -5628,12 +5785,15 @@ window.kaminosMotionPanelExportTrayDebugState = function() {
   };
 };
 
+window.motionPhraseControlApplicabilityDebugState = motionPhraseControlApplicabilityDebugState;
+
 window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
   const clip = adaptMotionServerResultToGeneratedPoseTemporalClip(result, {
     id: options.id,
     label: options.label,
     sourceRoute: options.sourceRoute || 'motion-server:panel-memory',
     sourceModel: options.sourceModel,
+    sourceOrientationRemap: options.sourceOrientationRemap || motionPanelSourceOrientationRemapFromInputs(),
   });
   const state = await createGeneratedPoseTemporalScene({
     force: true,
@@ -5691,6 +5851,7 @@ async function generateMotionPanelTemporalPreview() {
       label: prompt,
       sourceRoute: `motion-server:${serverUrl}/generate`,
       sourceModel: data.model || 'kimodo',
+      sourceOrientationRemap: motionPanelSourceOrientationRemapFromInputs(),
     });
     setInfo(`Motion panel generated clip previewed: ${prompt.slice(0, 48)}`);
     return result;
@@ -5907,6 +6068,7 @@ function initKaminosMotionAgencyRoute() {
   wireMotionPanelSlider('motion-panel-source-opacity', value => `${Math.max(0.02, Math.min(0.95, value || 0)).toFixed(2)}`);
   wireMotionPanelSlider('motion-panel-source-overlay-size', value => `${Math.max(0.75, Math.min(5, value || 3)).toFixed(2)}x`);
   wireMotionPanelSlider('motion-panel-speed', value => `${Math.max(0.05, Math.min(5, value || 1)).toFixed(2)}x`);
+  updateMotionPhraseControlApplicability();
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
   document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
@@ -5925,6 +6087,20 @@ function initKaminosMotionAgencyRoute() {
     }));
   });
   document.getElementById('motion-frame-camera')?.addEventListener('click', frameMotionAgencyCamera);
+  for (const id of ['motion-panel-source-up-axis', 'motion-panel-source-forward-axis']) {
+    document.getElementById(id)?.addEventListener('change', () => {
+      if (motionTemporalState?.active && motionTemporalState.sourceResult) {
+        void window.kaminosPreviewMotionServerResult(motionTemporalState.sourceResult, {
+          id: motionTemporalState.track?.id,
+          label: motionTemporalState.track?.label,
+          sourceRoute: motionTemporalState.track?.sourceRoute,
+          sourceModel: motionTemporalState.track?.sourceModel,
+          sourceOrientationRemap: motionPanelSourceOrientationRemapFromInputs(),
+          recordTake: false,
+        });
+      }
+    });
+  }
   for (const key of MOTION_PHRASE_CONTROL_KEYS) {
     document.getElementById(`motion-control-${key}`)?.addEventListener('input', () => {
       updateMotionPhraseControlLabels();
@@ -6210,6 +6386,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     registrySource: harness.registrySource || null,
     sampleCount: harness.sampleCount,
     sourceFrameStride: harness.sourceFrameStride,
+    sourceOrientationRemap: state?.sourceOrientationRemap || harness.track.sourceOrientationRemap || null,
     phaseLabels: harness.metrics.phaseLabels,
     lastTemporalSample: state?.lastTemporalSample || null,
     behaviorState: state?.lastBehaviorState || null,
@@ -6220,6 +6397,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
       visible: false,
       mode: motionPanelSourceGhostModeFromInputs(),
       opacity: motionPanelSourceGhostOpacityFromInputs(),
+      sourceOrientationRemap: state?.sourceOrientationRemap || null,
       sourceFrameSharedWithOrb: false,
     },
     timeScale: Number(state?.timeScale || 1),
@@ -6237,6 +6415,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
       registrySource: harness.registrySource || null,
       sampleCount: harness.sampleCount,
       sourceFrameStride: harness.sourceFrameStride,
+      sourceOrientationRemap: harness.track.sourceOrientationRemap || state?.sourceOrientationRemap || null,
       track: {
         schema: harness.track.schema,
         id: harness.track.id,
@@ -6244,6 +6423,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
         sourceStatus: harness.track.sourceStatus,
         sourceModel: harness.track.sourceModel,
         sourceRoute: harness.track.sourceRoute,
+        sourceOrientationRemap: harness.track.sourceOrientationRemap || null,
         rawFrameCount: harness.track.rawFrameCount,
         fps: harness.track.fps,
         duration: harness.track.duration,

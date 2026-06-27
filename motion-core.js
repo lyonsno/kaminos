@@ -10,6 +10,7 @@ export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
+export const MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA = 'kaminos.motion-source-orientation-remap.v0';
 
 const SOMA77_TEMPORAL_JOINT = {
   Hips: 0,
@@ -58,6 +59,88 @@ function normalizeVec3(a, fallback = [0, 0, 1]) {
 
 function mixVec3(a, b, t) {
   return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+}
+
+const SOURCE_AXIS_NAMES = ['x', 'y', 'z'];
+
+function parseSourceAxis(value, fallback = '+y') {
+  const raw = String(value || fallback).trim().toLowerCase();
+  const match = raw.match(/^([+-]?)([xyz])$/);
+  if (!match) return parseSourceAxis(fallback, '+y');
+  const sign = match[1] === '-' ? -1 : 1;
+  const axis = SOURCE_AXIS_NAMES.indexOf(match[2]);
+  return {
+    raw: `${sign < 0 ? '-' : '+'}${match[2]}`,
+    axis,
+    axisName: match[2],
+    sign,
+  };
+}
+
+function sourceAxisVector(axis) {
+  const vector = [0, 0, 0];
+  vector[axis.axis] = axis.sign;
+  return vector;
+}
+
+export function normalizeMotionSourceOrientationRemap(input = {}) {
+  if (input?.schema === MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA) {
+    return {
+      ...input,
+      mode: input.mode === 'explicit' ? 'explicit' : 'inferred',
+    };
+  }
+  const requestedUp = String(input?.sourceUpAxis || input?.upAxis || 'auto');
+  const requestedForward = String(input?.sourceForwardAxis || input?.forwardAxis || 'auto');
+  let up = parseSourceAxis(requestedUp === 'auto' ? '+y' : requestedUp, '+y');
+  let forward = parseSourceAxis(requestedForward === 'auto' ? '+z' : requestedForward, '+z');
+  if (up.axis === forward.axis) {
+    if (requestedUp === 'auto' && requestedForward !== 'auto') {
+      up = parseSourceAxis(forward.axis === 2 ? '+y' : '+z', '+y');
+    } else {
+      forward = parseSourceAxis(up.axis === 2 ? '+y' : '+z', '+z');
+    }
+  }
+  const rightAxis = [0, 1, 2].find(axis => axis !== up.axis && axis !== forward.axis) ?? 0;
+  const right = { raw: `+${SOURCE_AXIS_NAMES[rightAxis]}`, axis: rightAxis, axisName: SOURCE_AXIS_NAMES[rightAxis], sign: 1 };
+  const mode = requestedUp === 'auto' && requestedForward === 'auto' ? 'inferred' : 'explicit';
+  return {
+    schema: MOTION_SOURCE_ORIENTATION_REMAP_SCHEMA,
+    mode,
+    source: String(input?.source || (mode === 'explicit' ? 'operator' : 'auto-inferred')),
+    requestedUpAxis: requestedUp,
+    requestedForwardAxis: requestedForward,
+    upAxis: up.axis,
+    upAxisName: up.axisName,
+    upSign: up.sign,
+    upAxisToken: up.raw,
+    forwardAxis: forward.axis,
+    forwardAxisName: forward.axisName,
+    forwardSign: forward.sign,
+    forwardAxisToken: forward.raw,
+    rightAxis: right.axis,
+    rightAxisName: right.axisName,
+    rightSign: right.sign,
+    rightAxisToken: right.raw,
+    displayMapping: {
+      x: right.raw,
+      y: up.raw,
+      z: forward.raw,
+    },
+    upVector: sourceAxisVector(up),
+    forwardVector: sourceAxisVector(forward),
+    rightVector: sourceAxisVector(right),
+  };
+}
+
+export function applyMotionSourceOrientationRemap(point, remapInput = {}) {
+  const remap = normalizeMotionSourceOrientationRemap(remapInput);
+  const source = vec3(point);
+  return [
+    source[remap.rightAxis] * remap.rightSign,
+    source[remap.upAxis] * remap.upSign,
+    source[remap.forwardAxis] * remap.forwardSign,
+  ];
 }
 
 function smooth01(t) {
@@ -1629,6 +1712,7 @@ function normalizeGeneratedPoseTemporalInput(generatedInput = DEFAULT_KIMODO_BOW
   if (samples.length < 2) throw new Error(`Generated pose temporal input ${generatedInput.id || 'unknown'} needs at least two temporal samples`);
   return {
     ...generatedInput,
+    sourceOrientationRemap: normalizeMotionSourceOrientationRemap(generatedInput.sourceOrientationRemap || {}),
     temporalSamples: samples.map((sample, index) => ({
       frame: Math.round(Number(sample.frame) || index),
       time: Number.isFinite(Number(sample.time)) ? Number(sample.time) : index / Math.max(1, Number(generatedInput.fps) || 30),
@@ -1691,6 +1775,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
   if (joints.length < 2) throw new Error('Motion server result needs at least two joint frames');
   const jointCount = Array.isArray(joints[0]) ? joints[0].length : 0;
   if (jointCount < 77) throw new Error(`Motion server result needs SOMA77 joints; got ${jointCount}`);
+  const sourceOrientationRemap = normalizeMotionSourceOrientationRemap(options.sourceOrientationRemap || result.sourceOrientationRemap || {});
   const fps = Math.max(1, Math.round(Number(result.fps || options.fps || 30)));
   const duration = Number.isFinite(Number(result.duration))
     ? Number(result.duration)
@@ -1700,18 +1785,20 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
   const sourceRoute = String(options.sourceRoute || result.sourceRoute || 'motion-server:unknown/generate');
   const sourceModel = String(options.sourceModel || result.model || 'kimodo');
   const rawSamples = joints.map((frame, frameIndex) => {
-    const root = motionServerRootForFrame(result, frameIndex, frame);
-    const head = motionServerJoint(frame, 'Head', root);
-    const chest = motionServerJoint(frame, 'Chest', root);
-    const leftHand = motionServerJoint(frame, 'LeftHand', root);
-    const rightHand = motionServerJoint(frame, 'RightHand', root);
-    const leftFoot = motionServerJoint(frame, 'LeftFoot', root);
-    const rightFoot = motionServerJoint(frame, 'RightFoot', root);
+    const rawRoot = motionServerRootForFrame(result, frameIndex, frame);
+    const root = applyMotionSourceOrientationRemap(rawRoot, sourceOrientationRemap);
+    const sourceJoint = jointName => applyMotionSourceOrientationRemap(motionServerJoint(frame, jointName, rawRoot), sourceOrientationRemap);
+    const head = sourceJoint('Head');
+    const chest = sourceJoint('Chest');
+    const leftHand = sourceJoint('LeftHand');
+    const rightHand = sourceJoint('RightHand');
+    const leftFoot = sourceJoint('LeftFoot');
+    const rightFoot = sourceJoint('RightFoot');
     const xs = [];
     const ys = [];
     const zs = [];
     for (const joint of frame) {
-      const point = vec3(joint, root);
+      const point = applyMotionSourceOrientationRemap(vec3(joint, rawRoot), sourceOrientationRemap);
       xs.push(point[0]);
       ys.push(point[1]);
       zs.push(point[2]);
@@ -1780,6 +1867,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
     rawFrameCount: Number(result.num_frames || joints.length),
     fps,
     duration,
+    sourceOrientationRemap,
     sourceFrameStride: 1,
     jointMapping: { ...SOMA77_TEMPORAL_JOINT },
     extractionAssumptions: [
@@ -1787,6 +1875,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
       'all source frames are preserved for live panel preview; no temporal cap is applied',
       'root_positions drive root when present, otherwise SOMA77 Hips is used',
       'head/chest/hand/foot channels drive orb attention, effort, envelope, and behavior evidence',
+      `source orientation remap ${sourceOrientationRemap.displayMapping.x},${sourceOrientationRemap.displayMapping.y},${sourceOrientationRemap.displayMapping.z} maps raw source axes into Kaminos display/adaptation axes`,
     ],
     generatedFrom: {
       schema: 'kaminos.motion-server-result.v0',
@@ -1795,6 +1884,7 @@ export function adaptMotionServerResultToGeneratedPoseTemporalClip(result = DEFA
       skeletonType: result.skeleton_type || null,
       genTime: Number.isFinite(Number(result.gen_time)) ? Number(result.gen_time) : null,
       sourceRoute,
+      sourceOrientationRemap,
     },
     temporalSamples,
   };
@@ -2059,6 +2149,7 @@ export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMOD
     rawFrameCount: input.rawFrameCount || input.temporalSamples.length,
     jointMapping: input.jointMapping || null,
     extractionAssumptions: input.extractionAssumptions || [],
+    sourceOrientationRemap: input.sourceOrientationRemap,
     fps,
     duration,
     units: 'meters',
@@ -2081,6 +2172,7 @@ export function adaptGeneratedPoseTemporalToTrack(generatedInput = DEFAULT_KIMOD
     registryClipId: input.id,
     registrySource: input.registrySource || null,
     sourceFrameStride: input.sourceFrameStride || 1,
+    sourceOrientationRemap: input.sourceOrientationRemap,
     temporalSamples: input.temporalSamples,
     temporalMetrics: temporalFixtureMetrics(input),
   };

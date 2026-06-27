@@ -21,6 +21,8 @@ const steps = positiveInt(args.get('--steps'), 20, '--steps');
 const sourceMode = args.get('--source-mode') || 'sidecar';
 const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--source-opacity');
 const overlaySize = positiveNumber(args.get('--overlay-size'), 3, '--overlay-size');
+const sourceUpAxis = args.get('--source-up-axis') || 'auto';
+const sourceForwardAxis = args.get('--source-forward-axis') || 'auto';
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
@@ -90,6 +92,8 @@ function writeReport(report) {
     sourceMode,
     sourceOpacity,
     overlaySize,
+    sourceUpAxis,
+    sourceForwardAxis,
     tileWidth,
     columns,
     exportCurrentView,
@@ -203,6 +207,8 @@ async function configureMotionPanel(ws) {
     requireEl('motion-panel-prompt').value = ${JSON.stringify(prompt)};
     requireEl('motion-panel-server-url').value = ${JSON.stringify(serverUrl)};
     requireEl('motion-panel-source-ghost-mode').value = ${JSON.stringify(sourceMode)};
+    setSelectValue('motion-panel-source-up-axis', ${JSON.stringify(sourceUpAxis)});
+    setSelectValue('motion-panel-source-forward-axis', ${JSON.stringify(sourceForwardAxis)});
     requireEl('motion-panel-source-opacity').value = ${JSON.stringify(String(sourceOpacity))};
     requireEl('motion-panel-source-overlay-size').value = ${JSON.stringify(String(overlaySize))};
     requireEl('motion-panel-duration').value = ${JSON.stringify(String(duration))};
@@ -213,7 +219,7 @@ async function configureMotionPanel(ws) {
       tileWidth: setSelectValue('motion-panel-export-resolution', ${JSON.stringify(String(tileWidth))}),
       referenceMode: setSelectValue('motion-panel-export-reference', ${JSON.stringify(exportReferenceMode)}),
     } : null;
-    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-source-overlay-size', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
+    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-up-axis', 'motion-panel-source-forward-axis', 'motion-panel-source-opacity', 'motion-panel-source-overlay-size', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
       document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -221,6 +227,8 @@ async function configureMotionPanel(ws) {
       prompt: requireEl('motion-panel-prompt').value,
       serverUrl: requireEl('motion-panel-server-url').value,
       sourceMode: requireEl('motion-panel-source-ghost-mode').value,
+      sourceUpAxis: requireEl('motion-panel-source-up-axis').value,
+      sourceForwardAxis: requireEl('motion-panel-source-forward-axis').value,
       sourceOpacity: requireEl('motion-panel-source-opacity').value,
       overlaySize: requireEl('motion-panel-source-overlay-size').value,
       duration: requireEl('motion-panel-duration').value,
@@ -266,6 +274,8 @@ async function captureFrame(ws, index) {
       behaviorState: actor?.behaviorState || null,
       sourceFrame: actor?.sourceFrame ?? null,
       sourceFrameTotal: sourceGhost?.sourceFrameTotal ?? null,
+      sourceOrientationRemap: sourceGhost?.sourceOrientationRemap || state?.sourceOrientationRemap || null,
+      phraseControlApplicability: window.motionPhraseControlApplicabilityDebugState?.() || null,
       sourceInterpolation: actor?.sourceInterpolation ?? null,
       sourceGhost,
     };
@@ -422,6 +432,12 @@ async function exportCurrentViewFilmstrip(ws) {
     const exportTray = typeof window.kaminosMotionPanelExportTrayDebugState === 'function'
       ? window.kaminosMotionPanelExportTrayDebugState()
       : null;
+    const temporalDebug = typeof window.kaminosGeneratedPoseTemporalDebugState === 'function'
+      ? window.kaminosGeneratedPoseTemporalDebugState()
+      : null;
+    const phraseControlApplicability = typeof window.motionPhraseControlApplicabilityDebugState === 'function'
+      ? window.motionPhraseControlApplicabilityDebugState()
+      : null;
     return {
       schema: 'kaminos.motion-panel-live-current-view-export.v0',
       status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
@@ -437,6 +453,8 @@ async function exportCurrentViewFilmstrip(ws) {
       selectedTake: exported.selectedTake || null,
       sourceGhostAtExportStart: exported.sourceGhostAtExportStart || null,
       sourceGhostAtExportEnd: exported.sourceGhostAtExportEnd || null,
+      sourceOrientationRemap: temporalDebug?.sourceOrientationRemap || exported.sourceGhostAtExportStart?.sourceOrientationRemap || null,
+      phraseControlApplicability,
       prompt: exported.prompt || null,
       settings: exported.settings || null,
       width: exported.width || null,
