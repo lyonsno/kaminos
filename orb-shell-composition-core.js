@@ -598,17 +598,28 @@ function createLiveMacroSideWallPlan(composition) {
         createLiveMacroSideWall(target, 'right-promoted-body-edge'),
       ]
     : [];
+  const suppressedLegacyRoundBandIds = target?.childBandPlan?.map(member => member.id) || [];
   return {
     schema: 'LiveMacroSideWallPlan',
     mode: 'live-promoted-body-sidewall-v0',
-    targetAssemblageIds: sideWalls.map(wall => wall.parentAssemblage),
+    targetAssemblageIds: [...new Set(sideWalls.map(wall => wall.parentAssemblage))],
     sideWalls,
     sideWallCount: sideWalls.length,
+    suppressedLegacyRoundBandIds,
+    suppressedLegacyTerminationSocketIds: suppressedLegacyRoundBandIds.flatMap(id => [
+      `${id}-start-termination-socket`,
+      `${id}-end-termination-socket`,
+    ]),
+    legacyScaffoldSuppressionVerdict: suppressedLegacyRoundBandIds.length
+      ? 'target-promoted-body-legacy-round-bands-suppressed'
+      : 'no-target-legacy-round-bands-suppressed',
     liveRenderMaterialPolicy: {
       materialMode: 'flat-low-shader-topology',
       metalShaderVisible: false,
       surfaceDetailMode: 'disabled',
       territoryProxyUnderlayVisible: false,
+      legacyRoundTargetBandTubesVisible: false,
+      legacyTargetTerminationSocketsVisible: false,
       reason: 'live sidewall topology smoke must not depend on shiny material or overlapping proxy underlay',
     },
     liveMacroSideWallVisibilityVerdict: sideWalls.length >= 2
@@ -2558,6 +2569,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     return railMaterial;
   }
 
+  function legacyTargetBandTubeSuppressed(assemblage, bandMember) {
+    const plan = composition.liveMacroSideWallPlan;
+    return plan?.liveRenderMaterialPolicy?.legacyRoundTargetBandTubesVisible === false
+      && plan.targetAssemblageIds?.includes(assemblage.id)
+      && plan.suppressedLegacyRoundBandIds?.includes(bandMember.id);
+  }
+
   function disposeGroup() {
     if (!group) return;
     scene.remove(group);
@@ -2606,6 +2624,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroGroup.add(territoryMesh);
       }
       for (const bandMember of assemblage.childBandPlan) {
+        if (legacyTargetBandTubeSuppressed(assemblage, bandMember)) continue;
         const replacementStrip = composition.lamellarChannelMeshPlan?.stripMeshes?.find(strip => (
           strip.parentAssemblage === assemblage.id
           && strip.replacesRoundBandId === bandMember.id
@@ -2735,6 +2754,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
       liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
+      suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
+      suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
+      legacyScaffoldSuppressionVerdict: composition.liveMacroSideWallPlan?.legacyScaffoldSuppressionVerdict,
       targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
       declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
@@ -2924,6 +2946,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
         targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
         liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
+        suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
+        suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
+        legacyScaffoldSuppressionVerdict: composition.liveMacroSideWallPlan?.legacyScaffoldSuppressionVerdict,
         targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
         declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
