@@ -24,6 +24,7 @@ const pipelineId = args.get('pipeline-id') || 'sharp-image-to-splat-live-v0';
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
+const historyPath = args.get('history') || '/tmp/kaminos-pipeline-ui-witness-history.png';
 const userDataDir = await mkdtemp(join(tmpdir(), 'kaminos-pipeline-ui-witness-'));
 let stderr = '';
 
@@ -540,42 +541,65 @@ try {
     });
 
     let repeated = null;
+    let historySelection = null;
     if (scenario === 'graph-execute-sharp-repeat') {
       await click(cdp, pipelineTab);
       await wait(500);
       await click(cdp, imagePaletteTab);
       await wait(500);
+      await evalJson(cdp, `(() => {
+        document.querySelector('#pipeline-main-browser')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        return true;
+      })()`);
+      await wait(250);
+      const firstImageNode = await evalJson(cdp, `(() => {
+        const node = document.querySelector(\`[data-pipeline-graph-image-node-id="${imageHook.graphImageNodeId}"]\`);
+        const rect = node?.getBoundingClientRect();
+        if (!rect) throw new Error('Existing graph image node missing before second input selection');
+        return {
+          nodeText: node.innerText,
+          point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        };
+      })()`);
+      await click(cdp, firstImageNode.point);
+      await wait(250);
       const secondImageCard = await evalJson(cdp, `(() => {
         const cards = [...document.querySelectorAll('.pipeline-asset-card')];
         const card = cards.find(element => element.innerText.includes(${JSON.stringify(secondAssetNeedle)}));
-        const canvas = document.querySelector('#pipeline-graph-canvas');
         if (!card) throw new Error('Requested second visible image asset card missing');
-        if (!canvas) throw new Error('Pipeline graph canvas missing for second image drop');
         const rect = card.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
         return {
           cardText: card.innerText,
           point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
-          drop: { x: canvasRect.left + canvasRect.width * 0.80, y: canvasRect.top + canvasRect.height * 0.60 },
+          visible: rect.width > 20 && rect.height > 20 && rect.bottom > 0 && rect.top < window.innerHeight,
         };
       })()`);
-      await drag(cdp, secondImageCard.point, secondImageCard.drop);
-      const secondImageHook = await evalJson(cdp, `(() => {
-        const node = [...document.querySelectorAll('[data-pipeline-graph-image-node-id]')]
-          .find(element => element.innerText.includes(${JSON.stringify(secondAssetNeedle)}));
+      assertWitness(secondImageCard.visible, 'Second visible image asset card was not clickable', secondImageCard);
+      await click(cdp, secondImageCard.point);
+      await wait(500);
+      const secondImageHook = await waitFor(cdp, `(() => {
+        const state = window.kaminosPipelineDockDebugState?.();
+        const imageNode = (state?.graphImageNodes || []).find(item => item.id === ${JSON.stringify(imageHook.graphImageNodeId)});
+        const routeInputEdge = (state?.graphEdges || [])
+          .find(edge => edge.to === ${JSON.stringify(routeNode.routeNodeId)} && edge.from === ${JSON.stringify(imageHook.graphImageNodeId)});
+        const graphImageNodes = [...document.querySelectorAll('[data-pipeline-graph-image-node-id]')];
+        const node = document.querySelector(\`[data-pipeline-graph-image-node-id="${imageHook.graphImageNodeId}"]\`);
         const routeInput = document.querySelector(\`[data-pipeline-graph-port-node-id="${routeNode.routeNodeId}"][data-pipeline-graph-port="input"]\`);
         const output = node?.querySelector('[data-pipeline-graph-port="output"]');
         const outputRect = output?.getBoundingClientRect();
         const routeRect = routeInput?.getBoundingClientRect();
-        if (!outputRect || !routeRect) throw new Error('Second graph image hook ports missing');
         return {
-          graphImageNodeId: node.dataset.pipelineGraphImageNodeId,
-          nodeText: node.innerText,
-          outputPoint: { x: outputRect.left + outputRect.width / 2, y: outputRect.top + outputRect.height / 2 },
-          routeInputPoint: { x: routeRect.left + routeRect.width / 2, y: routeRect.top + routeRect.height / 2 },
+          ok: Boolean(routeInputEdge && imageNode?.source?.includes(${JSON.stringify(secondAssetNeedle)}) && outputRect && routeRect),
+          graphImageNodeId: node?.dataset?.pipelineGraphImageNodeId || null,
+          nodeText: node?.innerText || '',
+          source: imageNode?.source || null,
+          routeInputEdge,
+          graphImageNodeTexts: graphImageNodes.map(element => element.innerText),
+          activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+          outputPoint: outputRect ? { x: outputRect.left + outputRect.width / 2, y: outputRect.top + outputRect.height / 2 } : null,
+          routeInputPoint: routeRect ? { x: routeRect.left + routeRect.width / 2, y: routeRect.top + routeRect.height / 2 } : null,
         };
-      })()`);
-      await drag(cdp, secondImageHook.outputPoint, secondImageHook.routeInputPoint);
+      })()`, 'Existing graph image node source replacement');
       const secondExecuteButton = await evalJson(cdp, `(() => {
         const button = document.querySelector(\`[data-pipeline-graph-node-action="execute"][data-pipeline-graph-node-action-node-id="${routeNode.routeNodeId}"]\`);
         const rect = button?.getBoundingClientRect();
@@ -602,6 +626,7 @@ try {
             && routeOutputs.every(item => item.status === 'complete' && item.runTimeline?.length >= 3 && item.routeSnapshot?.schema && item.graphSnapshot?.schema)
             && latestOutput?.status === 'complete'
             && latestRun?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(secondImageHook.graphImageNodeId)}
+            && latestRun?.graphExecution?.source?.includes(${JSON.stringify(secondAssetNeedle)})
             && latestRun?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)},
           runIds: runs.map(run => run.runId),
           generatedOutputNodes,
@@ -617,6 +642,73 @@ try {
           secondImageHook: ${JSON.stringify(secondImageHook)},
         };
       })()`, 'Graph Execute repeated SHARP route');
+
+      await click(cdp, hookedRouteNode.point);
+      const historyButtons = await evalJson(cdp, `(() => {
+        const routeInputEdge = (window.kaminosPipelineDockDebugState?.()?.graphEdges || [])
+          .find(edge => edge.to === ${JSON.stringify(routeNode.routeNodeId)} && edge.from === ${JSON.stringify(secondImageHook.graphImageNodeId)});
+        const buttons = [...document.querySelectorAll('[data-pipeline-output-history-id]')].map(button => {
+          const rect = button.getBoundingClientRect();
+          return {
+            id: button.dataset.pipelineOutputHistoryId,
+            routeId: button.dataset.pipelineOutputHistoryRouteId,
+            text: button.innerText,
+            point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+          };
+        });
+        const inspectorText = document.querySelector('#pipeline-graph-inspector')?.innerText || '';
+        return {
+          ok: Boolean(routeInputEdge && buttons.length >= 2 && inspectorText.includes('produced from current graph') && inspectorText.includes('produced from previous graph state')),
+          buttons,
+          inspectorText,
+          routeInputEdge,
+        };
+      })()`);
+      const olderHistoryButton = historyButtons.buttons.find(button => button.id === executed.generatedOutputId);
+      const latestHistoryButton = historyButtons.buttons.find(button => button.id === repeated.latestOutput?.id);
+      assertWitness(historyButtons.ok && olderHistoryButton && latestHistoryButton, 'Route inspector output history did not expose both current and prior outputs', historyButtons);
+      await capture(cdp, historyPath);
+      await click(cdp, olderHistoryButton.point);
+      const olderSelection = await waitFor(cdp, `(() => {
+        const state = window.kaminosPipelineDockDebugState?.();
+        const inspectorText = document.querySelector('#pipeline-graph-inspector')?.innerText || '';
+        const routeInputEdge = (state?.graphEdges || [])
+          .find(edge => edge.to === ${JSON.stringify(routeNode.routeNodeId)} && edge.from === ${JSON.stringify(secondImageHook.graphImageNodeId)});
+        return {
+          ok: state?.selectedGraphNodeId === ${JSON.stringify(executed.generatedOutputId)}
+            && Boolean(routeInputEdge)
+            && inspectorText.includes('produced from previous graph state')
+            && !inspectorText.includes('Restore This Run'),
+          selectedGraphNodeId: state?.selectedGraphNodeId || null,
+          graphEdges: state?.graphEdges || [],
+          inspectorText,
+          routeInputEdge,
+        };
+      })()`, 'Output history older selection');
+      await click(cdp, hookedRouteNode.point);
+      await click(cdp, latestHistoryButton.point);
+      const latestSelection = await waitFor(cdp, `(() => {
+        const state = window.kaminosPipelineDockDebugState?.();
+        const inspectorText = document.querySelector('#pipeline-graph-inspector')?.innerText || '';
+        const routeInputEdge = (state?.graphEdges || [])
+          .find(edge => edge.to === ${JSON.stringify(routeNode.routeNodeId)} && edge.from === ${JSON.stringify(secondImageHook.graphImageNodeId)});
+        return {
+          ok: state?.selectedGraphNodeId === ${JSON.stringify(repeated.latestOutput?.id)}
+            && Boolean(routeInputEdge)
+            && inspectorText.includes('produced from current graph')
+            && !inspectorText.includes('Restore This Run'),
+          selectedGraphNodeId: state?.selectedGraphNodeId || null,
+          graphEdges: state?.graphEdges || [],
+          inspectorText,
+          routeInputEdge,
+        };
+      })()`, 'Output history latest selection');
+      historySelection = {
+        ok: true,
+        historyButtons,
+        olderSelection,
+        latestSelection,
+      };
     }
 
     console.log(JSON.stringify({
@@ -626,6 +718,7 @@ try {
       url: appUrl,
       beforePath,
       afterPath,
+      historyPath: scenario === 'graph-execute-sharp-repeat' ? historyPath : null,
       imageCard,
       routeNode: hookedRouteNode,
       executeButton,
@@ -634,6 +727,7 @@ try {
       loadOutputButton,
       after,
       repeated,
+      historySelection,
       screenshotProbe,
     }, null, 2));
   } else {
@@ -718,6 +812,7 @@ try {
     url: appUrl,
     beforePath,
     afterPath,
+    historyPath: scenario === 'graph-execute-sharp-repeat' ? historyPath : null,
     error: error.message,
     detail: error.detail || null,
   }, null, 2));
