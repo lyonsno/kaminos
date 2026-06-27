@@ -110,6 +110,8 @@ assert.ok(standalone.metrics.occluderPixels > 700, 'standalone core must contain
 assert.ok(standalone.metrics.orangeChannelPixels > 1600, 'standalone core must contain bounded orange emissive channels');
 assert.ok(standalone.metrics.darkRimContrast > 0.16, 'standalone core must have a darker occluded outer rim');
 assert.ok(standalone.metrics.flatGlowScore < 0.58, 'standalone core must not collapse into a flat glow disk');
+assert.ok(Number.isFinite(standalone.metrics.radialDialBiasScore), 'standalone metrics must record radial/dial bias score');
+assert.ok(Number.isFinite(standalone.metrics.angularAsymmetryScore), 'standalone metrics must record angular asymmetry score');
 
 const guideDriven = renderOrbInnerEngineFrame({
   width: 256,
@@ -140,6 +142,8 @@ assert.ok(generatedDriven.metrics.underlightChannelPixels > 700, 'generated fram
 assert.ok(generatedDriven.metrics.occluderPixels > guideDriven.metrics.occluderPixels * 1.4, 'generated substrate must materially increase occluding machinery');
 assert.ok(generatedDriven.metrics.flatGlowScore <= guideDriven.metrics.flatGlowScore, 'generated substrate must not increase flat-glow risk versus guide-only render');
 assert.ok(generatedDriven.metrics.darkRimContrast >= guideDriven.metrics.darkRimContrast, 'generated substrate must preserve or improve dark rim contrast');
+assert.ok(generatedDriven.metrics.angularAsymmetryScore > guideDriven.metrics.angularAsymmetryScore, 'generated substrate must move the core away from rotational dial symmetry');
+assert.ok(generatedDriven.metrics.radialDialBiasScore < guideDriven.metrics.radialDialBiasScore, 'generated substrate must reduce radial/dial bias versus guide-only render');
 
 const aperture = renderOrbApertureProxyFrame({
   width: 256,
@@ -155,6 +159,8 @@ assert.ok(aperture.metrics.visibleCorePixels > 1200, 'aperture proxy must reveal
 assert.ok(aperture.metrics.shellOccludedPixels > 8000, 'aperture proxy must hide core behind shell matter');
 assert.ok(aperture.metrics.rimLightCatchPixels > 600, 'aperture proxy must expose rim light-spill affordance');
 assert.ok(aperture.metrics.flatGlowScore < 0.62, 'aperture proxy must preserve structure rather than pasted glow');
+assert.ok(aperture.metrics.angularAsymmetryScore > standalone.metrics.angularAsymmetryScore, 'aperture proxy must introduce asymmetric containment rather than a centered dial view');
+assert.ok(aperture.metrics.radialDialBiasScore < standalone.metrics.radialDialBiasScore, 'aperture proxy must reduce radial/dial bias versus standalone core');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /coreIdentity/, 'witness receipt records core identity');
@@ -166,6 +172,8 @@ assert.match(witnessSource, /standalonePng/, 'witness receipt records standalone
 assert.match(witnessSource, /apertureProxyPng/, 'witness receipt records aperture-proxy witness image');
 assert.match(witnessSource, /guideSubstratePng/, 'witness receipt records guide-substrate witness image');
 assert.match(witnessSource, /generatedSubstratePng/, 'witness receipt records generated-substrate witness image');
+assert.match(witnessSource, /trajectoryReportPath/, 'witness receipt records compressed visual trajectory report');
+assert.match(witnessSource, /trajectoryContactSheetPng/, 'witness receipt records visual trajectory contact sheet');
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-orb-inner-engine-contract-'));
 try {
@@ -182,15 +190,20 @@ try {
   const aperturePng = join(outDir, 'orb-inner-engine-aperture-proxy.png');
   const guideSubstratePng = join(outDir, 'orb-inner-engine-guide-substrate.png');
   const generatedSubstratePng = join(outDir, 'orb-inner-engine-generated-substrate.png');
+  const trajectoryReportPath = join(outDir, 'orb-inner-engine-trajectory-report.json');
+  const trajectoryContactSheetPng = join(outDir, 'orb-inner-engine-trajectory-contact-sheet.png');
   assert.ok(existsSync(reportPath), 'witness writes a JSON receipt');
   assert.ok(existsSync(standalonePng), 'witness writes standalone PNG');
   assert.ok(existsSync(aperturePng), 'witness writes aperture-proxy PNG');
   assert.ok(existsSync(guideSubstratePng), 'witness writes guide-substrate PNG');
   assert.ok(existsSync(generatedSubstratePng), 'witness writes generated-substrate PNG');
+  assert.ok(existsSync(trajectoryReportPath), 'witness writes compressed visual trajectory report');
+  assert.ok(existsSync(trajectoryContactSheetPng), 'witness writes visual trajectory contact sheet');
   assert.equal(readFileSync(standalonePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'standalone image is a PNG');
   assert.equal(readFileSync(aperturePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'aperture proxy image is a PNG');
   assert.equal(readFileSync(guideSubstratePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'guide-substrate image is a PNG');
   assert.equal(readFileSync(generatedSubstratePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'generated-substrate image is a PNG');
+  assert.equal(readFileSync(trajectoryContactSheetPng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'trajectory contact sheet is a PNG');
 
   const report = JSON.parse(readFileSync(reportPath, 'utf8'));
   assert.equal(report.ok, true);
@@ -200,18 +213,29 @@ try {
   assert.equal(report.outputs.apertureProxyPng, aperturePng);
   assert.equal(report.outputs.guideSubstratePng, guideSubstratePng);
   assert.equal(report.outputs.generatedSubstratePng, generatedSubstratePng);
+  assert.equal(report.outputs.trajectoryReportPath, trajectoryReportPath);
+  assert.equal(report.outputs.trajectoryContactSheetPng, trajectoryContactSheetPng);
   assert.ok(report.metrics.standalone.radialRibPixels > 900);
   assert.ok(report.metrics.standalone.nestedRingPixels > 1200);
   assert.ok(report.metrics.guideSubstrate.guideSubstratePixels > 2200);
   assert.ok(report.metrics.generatedSubstrate.generatedSubstratePixels > 2600);
   assert.ok(report.metrics.generatedSubstrate.occluderPixels > report.metrics.guideSubstrate.occluderPixels * 1.4);
   assert.ok(report.metrics.generatedSubstrate.flatGlowScore <= report.metrics.guideSubstrate.flatGlowScore);
+  assert.ok(report.metrics.generatedSubstrate.radialDialBiasScore < report.metrics.guideSubstrate.radialDialBiasScore);
   assert.ok(report.metrics.guideSubstrate.guideChannelPixels > 900);
   assert.ok(report.metrics.apertureProxy.shellOccludedPixels > 8000);
+  assert.ok(report.metrics.apertureProxy.radialDialBiasScore < report.metrics.standalone.radialDialBiasScore);
   assert.ok(report.handoff.socket.radius > 0);
   assert.ok(report.handoff.emissiveField.hotCenterGain > 0);
   assert.ok(report.handoff.occlusion.shellOcclusion > 0);
   assert.ok(report.handoff.lightSpill.apertureTransmission > 0);
+
+  const trajectoryReport = JSON.parse(readFileSync(trajectoryReportPath, 'utf8'));
+  assert.equal(trajectoryReport.identity, 'orb-inner-engine-trajectory-report-v0');
+  assert.equal(trajectoryReport.visualOutputsInspected, true);
+  assert.ok(trajectoryReport.frames.length >= 4, 'trajectory report records the witness frame sequence');
+  assert.ok(trajectoryReport.compressedVerdict, 'trajectory report carries a compressed verdict');
+  assert.match(trajectoryReport.compressedVerdict, /not final|not operator-smoke|partial/i, 'trajectory report must not overclaim final convergence');
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }

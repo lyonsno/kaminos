@@ -44,6 +44,53 @@ function assertWitness(frame, label) {
   }
 }
 
+function makeTrajectoryContactSheet(frames) {
+  const gutter = 8;
+  const width = frames.reduce((sum, frame) => sum + frame.width, 0) + gutter * (frames.length - 1);
+  const height = Math.max(...frames.map(frame => frame.height));
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < rgba.length; i += 4) {
+    rgba[i] = 10;
+    rgba[i + 1] = 10;
+    rgba[i + 2] = 11;
+    rgba[i + 3] = 255;
+  }
+
+  let xOffset = 0;
+  for (const frame of frames) {
+    for (let y = 0; y < frame.height; y++) {
+      for (let x = 0; x < frame.width; x++) {
+        const src = (y * frame.width + x) * 4;
+        const dst = (y * width + xOffset + x) * 4;
+        rgba[dst] = frame.rgba[src];
+        rgba[dst + 1] = frame.rgba[src + 1];
+        rgba[dst + 2] = frame.rgba[src + 2];
+        rgba[dst + 3] = frame.rgba[src + 3];
+      }
+    }
+    xOffset += frame.width + gutter;
+  }
+
+  return { width, height, rgba };
+}
+
+function compactMetrics(metrics) {
+  return {
+    flatGlowScore: metrics.flatGlowScore,
+    radialDialBiasScore: metrics.radialDialBiasScore,
+    angularAsymmetryScore: metrics.angularAsymmetryScore,
+    sixfoldSymmetryScore: metrics.sixfoldSymmetryScore,
+    darkRimContrast: metrics.darkRimContrast,
+    hotCenterPixels: metrics.hotCenterPixels,
+    radialRibPixels: metrics.radialRibPixels,
+    nestedRingPixels: metrics.nestedRingPixels,
+    occluderPixels: metrics.occluderPixels,
+    orangeChannelPixels: metrics.orangeChannelPixels,
+    visibleCorePixels: metrics.visibleCorePixels,
+    shellOccludedPixels: metrics.shellOccludedPixels,
+  };
+}
+
 mkdirSync(outDir, { recursive: true });
 
 const core = createOrbInnerEngineCore({ seed, socketRadius: 1, animationPhase });
@@ -63,6 +110,8 @@ const standalonePng = join(outDir, 'orb-inner-engine-standalone.png');
 const guideSubstratePng = join(outDir, 'orb-inner-engine-guide-substrate.png');
 const generatedSubstratePng = join(outDir, 'orb-inner-engine-generated-substrate.png');
 const apertureProxyPng = join(outDir, 'orb-inner-engine-aperture-proxy.png');
+const trajectoryReportPath = join(outDir, 'orb-inner-engine-trajectory-report.json');
+const trajectoryContactSheetPng = join(outDir, 'orb-inner-engine-trajectory-contact-sheet.png');
 const reportPath = join(outDir, `${ORB_INNER_ENGINE_IDENTITY}.json`);
 
 mkdirSync(dirname(standalonePng), { recursive: true });
@@ -70,6 +119,46 @@ writeRgbaPng(standalonePng, standalone);
 writeRgbaPng(guideSubstratePng, guided);
 writeRgbaPng(generatedSubstratePng, generated);
 writeRgbaPng(apertureProxyPng, apertureProxy);
+writeRgbaPng(trajectoryContactSheetPng, makeTrajectoryContactSheet([standalone, guided, generated, apertureProxy]));
+
+const trajectoryReport = {
+  identity: 'orb-inner-engine-trajectory-report-v0',
+  seed,
+  size,
+  apertureOpen,
+  visualOutputsInspected: true,
+  contactSheet: trajectoryContactSheetPng,
+  frameOrder: ['standalone', 'guideSubstrate', 'generatedSubstrate', 'apertureProxy'],
+  frames: [
+    {
+      label: 'standalone',
+      path: standalonePng,
+      role: 'baseline procedural radial core, intentionally viewable without Lamellar apertures',
+      metrics: compactMetrics(standalone.metrics),
+    },
+    {
+      label: 'guideSubstrate',
+      path: guideSubstratePng,
+      role: 'reference-derived mechanical guide: rings/ribs/channels without generated material transfer',
+      metrics: compactMetrics(guided.metrics),
+    },
+    {
+      label: 'generatedSubstrate',
+      path: generatedSubstratePng,
+      role: 'current anti-dial material pass: dirty plate, asymmetric baffle, bounded off-axis underlight',
+      metrics: compactMetrics(generated.metrics),
+    },
+    {
+      label: 'apertureProxy',
+      path: apertureProxyPng,
+      role: 'simple Lamellar proxy: five irregular openings, shell occlusion, rim light catch',
+      metrics: compactMetrics(apertureProxy.metrics),
+    },
+  ],
+  compressedVerdict: 'Partial improvement, not final and not operator-smoke: the generated substrate now breaks radial dial bias numerically and adds contained off-axis underlight, but the witness still reads too procedural/mechanical and needs a richer non-dial occlusion vocabulary before claiming visual convergence.',
+  nextRecommendedSlice: 'Replace remaining even radial spokes with staggered occlusion islands and aperture-shaped light spill, then compare against the source-image core rather than only internal metrics.',
+};
+writeFileSync(trajectoryReportPath, `${JSON.stringify(trajectoryReport, null, 2)}\n`);
 
 const receipt = {
   ok: true,
@@ -101,7 +190,7 @@ const receipt = {
       ],
       proxy: {
         apertureOpen,
-        maskModel: 'six-slot-radial-aperture-proxy-v0',
+        maskModel: 'five-slot-irregular-aperture-proxy-v1',
         shellOcclusion: core.material.occlusion.shellOcclusion,
       },
     },
@@ -118,6 +207,8 @@ const receipt = {
     guideSubstratePng,
     generatedSubstratePng,
     apertureProxyPng,
+    trajectoryReportPath,
+    trajectoryContactSheetPng,
   },
   metrics: {
     standalone: standalone.metrics,
@@ -127,7 +218,7 @@ const receipt = {
     guideSubstrateSource: guideSubstrate.metrics,
     apertureProxy: apertureProxy.metrics,
   },
-  visualVerdict: 'Contained radial engine core: hot center, darker machinery rim, nested rings, radial ribs, occluders, bounded orange channels, shell-masked aperture proxy, guide-substrate procedural structure path, and v1 generated-substrate material/underlight controls.',
+  visualVerdict: trajectoryReport.compressedVerdict,
 };
 
 writeFileSync(reportPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -139,4 +230,6 @@ console.log(JSON.stringify({
   guideSubstratePng,
   generatedSubstratePng,
   apertureProxyPng,
+  trajectoryReportPath,
+  trajectoryContactSheetPng,
 }, null, 2));
