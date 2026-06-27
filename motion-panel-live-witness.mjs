@@ -20,6 +20,7 @@ const duration = positiveNumber(args.get('--duration'), 6, '--duration');
 const steps = positiveInt(args.get('--steps'), 20, '--steps');
 const sourceMode = args.get('--source-mode') || 'sidecar';
 const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--source-opacity');
+const overlaySize = positiveNumber(args.get('--overlay-size'), 3, '--overlay-size');
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
@@ -88,6 +89,7 @@ function writeReport(report) {
     steps,
     sourceMode,
     sourceOpacity,
+    overlaySize,
     tileWidth,
     columns,
     exportCurrentView,
@@ -202,6 +204,7 @@ async function configureMotionPanel(ws) {
     requireEl('motion-panel-server-url').value = ${JSON.stringify(serverUrl)};
     requireEl('motion-panel-source-ghost-mode').value = ${JSON.stringify(sourceMode)};
     requireEl('motion-panel-source-opacity').value = ${JSON.stringify(String(sourceOpacity))};
+    requireEl('motion-panel-source-overlay-size').value = ${JSON.stringify(String(overlaySize))};
     requireEl('motion-panel-duration').value = ${JSON.stringify(String(duration))};
     requireEl('motion-panel-steps').value = ${JSON.stringify(String(steps))};
     const exportValues = ${JSON.stringify(exportCurrentView)} ? {
@@ -210,7 +213,7 @@ async function configureMotionPanel(ws) {
       tileWidth: setSelectValue('motion-panel-export-resolution', ${JSON.stringify(String(tileWidth))}),
       referenceMode: setSelectValue('motion-panel-export-reference', ${JSON.stringify(exportReferenceMode)}),
     } : null;
-    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
+    for (const id of ['motion-panel-source-ghost-mode', 'motion-panel-source-opacity', 'motion-panel-source-overlay-size', 'motion-panel-duration', 'motion-panel-steps', 'motion-panel-export-reference']) {
       document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById(id)?.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -219,6 +222,7 @@ async function configureMotionPanel(ws) {
       serverUrl: requireEl('motion-panel-server-url').value,
       sourceMode: requireEl('motion-panel-source-ghost-mode').value,
       sourceOpacity: requireEl('motion-panel-source-opacity').value,
+      overlaySize: requireEl('motion-panel-source-overlay-size').value,
       duration: requireEl('motion-panel-duration').value,
       steps: requireEl('motion-panel-steps').value,
       exportValues,
@@ -516,6 +520,9 @@ try {
         .filter(sourceGhost => sourceGhost?.mode === 'overlay');
       if (!overlayFrames.some(sourceGhost => sourceGhost.visible && sourceGhost.overlayOcclusionMode === 'xray-over-body')) {
         throw new Error(`source mode overlay did not produce x-ray source ghost evidence: ${JSON.stringify(overlayFrames[0] || null)}`);
+      }
+      if (!overlayFrames.some(sourceGhost => Number(sourceGhost.overlaySizeMultiplier) >= overlaySize - 0.01)) {
+        throw new Error(`source ghost overlay size did not reach requested multiplier: ${JSON.stringify(overlayFrames[0] || null)}`);
       }
       if (!overlayFrames.some(sourceGhost => {
         const span = sourceGhost.displayBounds?.span || [];

@@ -506,6 +506,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <span class="slider-val" id="motion-panel-source-opacity-val">0.38</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Overlay Size</span>
+        <input type="range" id="motion-panel-source-overlay-size" min="0.75" max="5" step="0.05" value="3">
+        <span class="slider-val" id="motion-panel-source-overlay-size-val">3.00x</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Speed</span>
         <input type="range" id="motion-panel-speed" min="0.25" max="3" step="0.05" value="1">
         <span class="slider-val" id="motion-panel-speed-val">1.00x</span>
@@ -4442,6 +4447,11 @@ function motionPanelSourceGhostOpacityFromInputs() {
   return Math.max(0.02, Math.min(0.95, Number.isFinite(opacity) ? opacity : 0.38));
 }
 
+function motionPanelSourceGhostOverlaySizeFromInputs() {
+  const size = Number(document.getElementById('motion-panel-source-overlay-size')?.value || 3);
+  return Math.max(0.75, Math.min(5, Number.isFinite(size) ? size : 3));
+}
+
 function motionPanelSpeedFromInputs() {
   const speed = Number(document.getElementById('motion-panel-speed')?.value || 1);
   return Math.max(0.05, Math.min(5, Number.isFinite(speed) ? speed : 1));
@@ -4683,7 +4693,8 @@ function createMotionSourceGhostVisual(result, options = {}) {
     displayBasis,
     sourceRoot,
     sidecarScale,
-    overlayScale: sidecarScale * 0.66,
+    overlaySizeMultiplier: motionPanelSourceGhostOverlaySizeFromInputs(),
+    overlayScale: sidecarScale * motionPanelSourceGhostOverlaySizeFromInputs(),
     sidecarOffset: [-1.18, 0.015, 0.05],
     mode: options.mode || motionPanelSourceGhostModeFromInputs(),
     opacity: options.opacity ?? motionPanelSourceGhostOpacityFromInputs(),
@@ -4781,6 +4792,7 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     lineObjectName: sourceGhost.lines.name,
     pointsObjectName: sourceGhost.points.name,
     sidecarScale: Number(sourceGhost.sidecarScale.toFixed(5)),
+    overlaySizeMultiplier: Number(sourceGhost.overlaySizeMultiplier.toFixed(5)),
     overlayScale: Number(sourceGhost.overlayScale.toFixed(5)),
     overlayBase: sourceGhost.lastOverlayBase,
     overlayOcclusionMode: mode === 'overlay' ? 'xray-over-body' : 'sidecar-scene-depth',
@@ -5866,6 +5878,7 @@ function initKaminosMotionAgencyRoute() {
   wireMotionPanelSlider('motion-panel-duration', 's');
   wireMotionPanelSlider('motion-panel-steps');
   wireMotionPanelSlider('motion-panel-source-opacity', value => `${Math.max(0.02, Math.min(0.95, value || 0)).toFixed(2)}`);
+  wireMotionPanelSlider('motion-panel-source-overlay-size', value => `${Math.max(0.75, Math.min(5, value || 3)).toFixed(2)}x`);
   wireMotionPanelSlider('motion-panel-speed', value => `${Math.max(0.05, Math.min(5, value || 1)).toFixed(2)}x`);
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
