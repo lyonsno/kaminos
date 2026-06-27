@@ -41,6 +41,8 @@ const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-forc
 const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function fireLickOperatorGainFromAmount(value) {
@@ -107,6 +109,16 @@ function expectedBonfireScalarNeighborhoodStrategy(volumeScene) {
 
 function expectedBonfireScalarNeighborhoodReadsPerCell(volumeScene) {
   return volumeScene === 'bonfire_plume' ? 36 : 0;
+}
+
+function expectedTallPlumeDetailCoherenceStrategy(volumeScene) {
+  return volumeScene === 'tall_plume'
+    ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
+    : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
+}
+
+function expectedTallPlumeDetailCoherenceExtraReadsPerCell() {
+  return 0;
 }
 const routeParams = new URL(url).searchParams;
 const VOLUME_SCENE_PRESETS = {
@@ -889,6 +901,8 @@ async function main() {
     const expectedBonfireNonWindForceEvaluations = expectedBonfireNonWindForceEvaluationsPerCell(expectedVolumeScene);
     const expectedBonfireScalarNeighborhoodStrategyValue = expectedBonfireScalarNeighborhoodStrategy(expectedVolumeScene);
     const expectedBonfireScalarNeighborhoodReads = expectedBonfireScalarNeighborhoodReadsPerCell(expectedVolumeScene);
+    const expectedDetailCoherenceStrategy = expectedTallPlumeDetailCoherenceStrategy(expectedVolumeScene);
+    const expectedDetailCoherenceExtraReads = expectedTallPlumeDetailCoherenceExtraReadsPerCell(expectedVolumeScene);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -911,6 +925,8 @@ async function main() {
     assert.equal(Number(stateLedger.bonfireNonWindForceEvaluationsPerCell), expectedBonfireNonWindForceEvaluations, 'sim cost ledger bonfire non-wind force evaluation count does not match effective scene');
     assert.equal(stateLedger.mainFluidBonfireScalarNeighborhoodStrategy, expectedBonfireScalarNeighborhoodStrategyValue, 'sim cost ledger bonfire scalar-neighborhood strategy does not match effective scene');
     assert.equal(Number(stateLedger.bonfireScalarNeighborhoodReadsPerCell), expectedBonfireScalarNeighborhoodReads, 'sim cost ledger bonfire scalar-neighborhood read count does not match effective scene');
+    assert.equal(stateLedger.tallPlumeDetailCoherenceStrategy, expectedDetailCoherenceStrategy, 'sim cost ledger detail coherence strategy does not match effective scene');
+    assert.equal(Number(stateLedger.tallPlumeDetailCoherenceExtraReadsPerCell), expectedDetailCoherenceExtraReads, 'sim cost ledger detail coherence should not restore scalar neighborhood reads');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
@@ -951,6 +967,8 @@ async function main() {
     const sampleBonfireNonWindForceEvaluations = expectedBonfireNonWindForceEvaluationsPerCell(sampleVolumeScene);
     const sampleBonfireScalarNeighborhoodStrategyValue = expectedBonfireScalarNeighborhoodStrategy(sampleVolumeScene);
     const sampleBonfireScalarNeighborhoodReads = expectedBonfireScalarNeighborhoodReadsPerCell(sampleVolumeScene);
+    const sampleDetailCoherenceStrategy = expectedTallPlumeDetailCoherenceStrategy(sampleVolumeScene);
+    const sampleDetailCoherenceExtraReads = expectedTallPlumeDetailCoherenceExtraReadsPerCell(sampleVolumeScene);
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
@@ -970,6 +988,8 @@ async function main() {
       Number(sampleLedger?.bonfireNonWindForceEvaluationsPerCell) !== sampleBonfireNonWindForceEvaluations ||
       sampleLedger?.mainFluidBonfireScalarNeighborhoodStrategy !== sampleBonfireScalarNeighborhoodStrategyValue ||
       Number(sampleLedger?.bonfireScalarNeighborhoodReadsPerCell) !== sampleBonfireScalarNeighborhoodReads ||
+      sampleLedger?.tallPlumeDetailCoherenceStrategy !== sampleDetailCoherenceStrategy ||
+      Number(sampleLedger?.tallPlumeDetailCoherenceExtraReadsPerCell) !== sampleDetailCoherenceExtraReads ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||

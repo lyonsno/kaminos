@@ -385,6 +385,12 @@ assert.match(core, /fireLickBreakup/, 'fluid compute shader creates short-lived 
 assert.match(core, /detailScaleArtifactQuarantine/, 'tall-plume fire foothold names the legacy detail-scale artifact quarantine');
 assert.match(core, /visibleDetailOverlayGain/, 'tall-plume fire foothold exposes a physical-detail overlay gain instead of letting detail scale imply realism');
 assert.doesNotMatch(core, /rawDetailForce = turbulentDetailForce\(p \* \(0\.82 \+ detailScale \* 0\.30\)/, 'legacy detail scale must not directly inject a source/smoke/heat turbulent force into the tall-plume foothold');
+assert.match(core, /transportedDetailPhaseAnchor/, 'tall-plume detail recovery names a transported phase anchor instead of restoring louder procedural detail');
+assert.match(core, /let\s+tallPlumeDetailPhaseAnchor\s*=\s*transportedDetailPhaseAnchor\(/, 'main fluid shader derives tall-plume detail phase from transported plume state');
+assert.match(core, /rawDetailForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume detail force is phase-anchored before turbulence sampling');
+assert.match(core, /rawMicroForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume micro force is phase-anchored before turbulence sampling');
+assert.match(core, /rawFineBreakup\s*=\s*fineScaleBreakup\(cellI,\s*tallPlumeDetailP,\s*tallPlumeDetailTime/, 'fine breakup samples the anchored tall-plume detail phase');
+assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
 assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
@@ -805,6 +811,8 @@ assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE\s*=\s*'bon
 assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-non-wind-force-bypass-v0'/, 'volume core names the non-bonfire non-wind force bypass strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE\s*=\s*'bonfire-scalar-neighborhood-active-v0'/, 'volume core names the active bonfire scalar-neighborhood strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-scalar-neighborhood-bypass-v0'/, 'volume core names the non-bonfire scalar-neighborhood bypass strategy');
+assert.match(core, /TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR\s*=\s*'transported-detail-phase-anchor-v0'/, 'volume core names the tall-plume transported detail coherence strategy');
+assert.match(core, /TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE\s*=\s*'inactive'/, 'volume core names the non-tall-plume detail coherence bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -843,6 +851,8 @@ assert.match(core, /var bonfireLayeredPlumeShear = vec3<f32>\(0\.0\)/, 'main-flu
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,700}bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow[\s\S]{0,700}bonfirePlumeRoll = bonfireZeroMeanPlumeRoll[\s\S]{0,700}bonfireCellRoll = bonfireConvectiveCellRoll[\s\S]{0,1600}bonfireLayeredPlumeShear = vec3<f32>/, 'main-fluid shader evaluates bonfire non-wind roll and shear forces only for the bonfire scene');
 assert.match(core, /mainFluidBonfireScalarNeighborhoodStrategy/, 'sim-cost ledger records the bonfire scalar-neighborhood strategy');
 assert.match(core, /bonfireScalarNeighborhoodReadsPerCell/, 'sim-cost ledger records bonfire scalar-neighborhood reads per cell');
+assert.match(core, /tallPlumeDetailCoherenceStrategy/, 'sim-cost ledger records the tall-plume detail coherence strategy');
+assert.match(core, /tallPlumeDetailCoherenceExtraReadsPerCell/, 'sim-cost ledger records that transported detail coherence does not restore neighborhood reads');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,500}let bonfireTurbulentDiffusionMix[\s\S]{0,1300}let diffuseMaterial[\s\S]{0,2200}let diffuseFrontTopology[\s\S]{0,1000}material = mix\(material, diffuseMaterial[\s\S]{0,1400}let symmetricMaterial[\s\S]{0,1400}let symmetricFrontTopology[\s\S]{0,1000}combustionFrontTopology = mix\(combustionFrontTopology, symmetricFrontTopology/, 'main-fluid shader evaluates bonfire scalar diffusion/symmetry neighborhood reads only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');

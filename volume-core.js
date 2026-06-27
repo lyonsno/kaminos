@@ -190,6 +190,8 @@ const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-forc
 const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -867,6 +869,26 @@ fn fineScaleBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, curl: f32, heat: f32,
   return shear * activeFlow * (0.006 + curl * 0.010);
 }
 
+fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, velocity: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+  let carrier = clamp(
+    material.x * 0.34
+      + material.w * 0.52
+      + microLayer.x * 0.42
+      + microLayer.y * 0.36
+      + fireLayer.z * 0.30
+      + frontTopology * 0.70,
+    0.0,
+    2.4
+  );
+  let scalarPhase = vec3<f32>(
+    material.w - microLayer.x * 0.45 + frontTopology * 0.32,
+    fireLayer.z * 0.58 + microLayer.y * 0.28 - material.x * 0.22,
+    microLayer.x * 0.46 + material.y * 0.18 - fireLayer.x * 0.16
+  );
+  let flow = normalize(velocity + vec3<f32>(0.012, 0.019, -0.014));
+  return (scalarPhase * 0.075 + flow * carrier * 0.040 + p.yzx * carrier * 0.012) * carrier;
+}
+
 fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
   let q = p * vec3<f32>(9.0, 13.0, 11.0) + vec3<f32>(time * 1.7, -time * 2.1, time * 1.3);
   let a = vec3<f32>(
@@ -1442,7 +1464,7 @@ fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
 }
 
-fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32) -> vec3<f32> {
+fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32, detailCoherenceGain: f32) -> vec3<f32> {
   let carrier = clamp(
     microLayer.x * 0.62
       + microLayer.y * 1.08
@@ -1453,9 +1475,12 @@ fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f3
     0.0,
     2.6
   );
-  let flow = normalize(velocity + turbulentDetailForce(p * 1.31 + vec3<f32>(0.17, -0.11, 0.23), time * 0.47) * 0.16 + vec3<f32>(0.012, 0.019, -0.014));
-  let foldA = turbulentDetailForce(p * 2.17 + flow * (0.42 + carrier * 0.34), time * 0.83);
-  let foldB = turbulentDetailForce(p.yzx * 2.91 + vec3<f32>(carrier * 0.19, -carrier * 0.13, carrier * 0.17), time * 1.19);
+  let detailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, 0.0, velocity, p) * clamp(detailCoherenceGain, 0.0, 1.0);
+  let coherentP = p + detailPhaseAnchor * 0.65;
+  let coherentTime = mix(time, time * 0.72 + dot(detailPhaseAnchor, vec3<f32>(1.1, -0.7, 0.9)), clamp(detailCoherenceGain, 0.0, 1.0));
+  let flow = normalize(velocity + turbulentDetailForce(coherentP * 1.31 + vec3<f32>(0.17, -0.11, 0.23), coherentTime * 0.47) * 0.16 + vec3<f32>(0.012, 0.019, -0.014));
+  let foldA = turbulentDetailForce(coherentP * 2.17 + flow * (0.42 + carrier * 0.34), coherentTime * 0.83);
+  let foldB = turbulentDetailForce(coherentP.yzx * 2.91 + vec3<f32>(carrier * 0.19, -carrier * 0.13, carrier * 0.17), coherentTime * 1.19);
   return (foldA * 0.70 + foldB * 0.36 + flow * 0.24) * carrier * 0.038;
 }
 
@@ -2092,10 +2117,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
   let detailForceArtifactGain = 1.0 - detailScaleArtifactQuarantine;
-  let rawDetailForce = turbulentDetailForce(p * (0.82 + physicalDetailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
-  let rawMicroForce = turbulentDetailForce(p * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
-  let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
+  let tallPlumeDetailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz, p) * tallPlumeScene;
+  let tallPlumeDetailTime = mix(time, time * 0.72 + dot(tallPlumeDetailPhaseAnchor, vec3<f32>(1.7, -1.1, 1.3)), tallPlumeScene);
+  let tallPlumeDetailP = p + tallPlumeDetailPhaseAnchor;
+  let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
+  let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
+  let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
+  let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source);
   var symmetricDetailForce = vec2<f32>(0.0);
   var symmetricMicroForce = vec2<f32>(0.0);
   var symmetricShredForce = vec2<f32>(0.0);
@@ -2756,7 +2784,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       continue;
     }
     let detailP = p * scaleDomain;
-    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w);
+    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
     let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
     let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
@@ -4038,6 +4066,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
+    const tallPlumeDetailCoherenceStrategy = scene === 'tall_plume'
+      ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
+      : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
+    const tallPlumeDetailCoherenceExtraReadsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4080,6 +4112,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
+    state.tallPlumeDetailCoherenceStrategy = tallPlumeDetailCoherenceStrategy;
+    state.tallPlumeDetailCoherenceExtraReadsPerCell = tallPlumeDetailCoherenceExtraReadsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4114,6 +4148,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireNonWindForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
+      tallPlumeDetailCoherenceStrategy,
+      tallPlumeDetailCoherenceExtraReadsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5279,6 +5315,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+        tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
+        tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5569,6 +5607,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+      tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
+      tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,
