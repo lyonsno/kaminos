@@ -62,6 +62,17 @@ function makeRoutes() {
       notes: 'Local image route is described here but not executed by this manifest-only loop.',
     },
     {
+      id: 'openrouter-image.flux2-klein-4b',
+      status: 'planned',
+      role: 'cheap-api-image-scout',
+      consumes: ['structured prompt', 'seed', 'size', 'OpenRouter API key'],
+      produces: ['source concept scout image', 'route/cost/effective-model receipt'],
+      liveGeneratorInvoked: false,
+      requiredForBaseRead: false,
+      localOwnershipRoute: 'local/public FLUX replay before promotion',
+      notes: 'Cheap scout route for prompt-shape discovery; output is concept evidence only until replayed locally or otherwise promoted with source truth.',
+    },
+    {
       id: 'local-video.cosmos3-mlx.t2v',
       status: 'planned',
       role: 'text-to-video-view-sequence-candidate',

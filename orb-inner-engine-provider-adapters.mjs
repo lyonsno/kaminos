@@ -16,6 +16,8 @@ const DEFAULT_DIFFUSION_ROOTS = [
   '/Users/noahlyons/dev/llama.cpp/examples/diffusion',
   '/Users/noahlyons/dev/mflux',
 ];
+const DEFAULT_OPENROUTER_IMAGE_MODEL = 'black-forest-labs/flux.2-klein-4b';
+const DEFAULT_OPENROUTER_API_BASE_URL = 'https://openrouter.ai/api/v1';
 
 function pathExists(path) {
   return typeof path === 'string' && path.length > 0 && existsSync(path);
@@ -103,10 +105,13 @@ export function createOrbInnerEngineProviderRegistry({
   cosmosRoot = process.env.KAMINOS_COSMOS3_MLX_ROOT || DEFAULT_COSMOS_ROOT,
   pythonCommand = 'python',
   diffusionRoots = DEFAULT_DIFFUSION_ROOTS,
+  openRouterApiKey = process.env.KAMINOS_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '',
+  openRouterApiBaseUrl = process.env.KAMINOS_OPENROUTER_API_BASE_URL || DEFAULT_OPENROUTER_API_BASE_URL,
 } = {}) {
   const resolvedIdeogramRoot = ideogramRoot ? resolve(ideogramRoot) : null;
   const resolvedCosmosRoot = cosmosRoot ? resolve(cosmosRoot) : null;
   const diffusionRoot = diffusionRoots.map(path => resolve(path)).find(pathExists) || null;
+  const openRouterConfigured = typeof openRouterApiKey === 'string' && openRouterApiKey.length > 0;
   return {
     identity: ORB_INNER_ENGINE_PROVIDER_ADAPTERS_IDENTITY,
     providers: [
@@ -168,6 +173,29 @@ export function createOrbInnerEngineProviderRegistry({
         notes: 'Can later turn a generated core source image into a short view/motion sequence if quality is coherent.',
       }),
       {
+        id: 'openrouter-image.flux2-klein-4b',
+        label: 'OpenRouter FLUX.2 Klein 4B Image Scout',
+        kind: 'text-to-image-api',
+        mediaKind: 'image',
+        outputExtension: 'png',
+        root: null,
+        nativeEntrypoint: MODULE_PATH,
+        adapter: 'openrouter-image',
+        status: openRouterConfigured ? 'configured' : 'unconfigured',
+        capability: ['text-to-image-api-scout', 'cheap-square-core-concept-source'],
+        defaultArgs: {
+          model: DEFAULT_OPENROUTER_IMAGE_MODEL,
+          size: '512x512',
+          outputFormat: 'png',
+          timeoutMs: 180000,
+          priceHint: '$0.014 for one 512x512 live smoke on 2026-06-27; confirm current OpenRouter metadata before larger batches',
+        },
+        apiBaseUrl: openRouterApiBaseUrl,
+        pythonCommand,
+        shell: false,
+        notes: 'Cheap API scout route for prompt-shape discovery; concept evidence only until replayed locally or otherwise promoted with source truth.',
+      },
+      {
         id: 'local-image.diffusion-fallback',
         label: 'Local Diffusion Fallback',
         kind: 'text-to-image',
@@ -217,22 +245,8 @@ export function resolveOrbInnerEngineProviderCommand({
       failureReason: `Provider ${providerId} is not configured.`,
     };
   }
-  const args = [
-    MODULE_PATH,
-    '--adapter', provider.adapter,
-    '--provider-root', provider.root,
-    '--provider-python', provider.pythonCommand || 'python',
-    '--prompt', '{prompt}',
-    '--negative', '{negative}',
-    '--seed', '{seed}',
-    '--out', '{output}',
-  ];
-  if (provider.defaultArgs?.frames) args.push('--frames', String(provider.defaultArgs.frames));
-  if (provider.defaultArgs?.steps) args.push('--steps', String(provider.defaultArgs.steps));
-  if (provider.defaultArgs?.size) args.push('--size', provider.defaultArgs.size);
-  if (provider.defaultArgs?.quantize) args.push('--quantize', String(provider.defaultArgs.quantize));
-  if (provider.defaultArgs?.preset) args.push('--preset', String(provider.defaultArgs.preset));
-
+  const args = providerCommandArgs(provider);
+  const cwd = provider.root || dirname(MODULE_PATH);
   return {
     ok: true,
     status: 'configured',
@@ -242,10 +256,39 @@ export function resolveOrbInnerEngineProviderCommand({
     outputExtension: provider.outputExtension,
     command: process.execPath,
     args,
-    cwd: provider.root,
+    cwd,
     timeoutMs: provider.defaultArgs?.timeoutMs || 120000,
     shell: false,
   };
+}
+
+function providerCommandArgs(provider) {
+  const args = [
+    MODULE_PATH,
+    '--adapter', provider.adapter,
+    '--prompt', '{prompt}',
+    '--negative', '{negative}',
+    '--seed', '{seed}',
+    '--out', '{output}',
+  ];
+  if (provider.adapter !== 'openrouter-image') {
+    args.splice(3, 0, '--provider-root', provider.root, '--provider-python', provider.pythonCommand || 'python');
+  } else {
+    args.push(
+      '--openrouter-model', provider.defaultArgs?.model || DEFAULT_OPENROUTER_IMAGE_MODEL,
+      '--size', provider.defaultArgs?.size || '512x512',
+      '--output-format', provider.defaultArgs?.outputFormat || 'png',
+    );
+    if (provider.apiBaseUrl) args.push('--api-base-url', provider.apiBaseUrl);
+  }
+  if (provider.adapter !== 'openrouter-image') {
+    if (provider.defaultArgs?.frames) args.push('--frames', String(provider.defaultArgs.frames));
+    if (provider.defaultArgs?.steps) args.push('--steps', String(provider.defaultArgs.steps));
+    if (provider.defaultArgs?.size) args.push('--size', provider.defaultArgs.size);
+    if (provider.defaultArgs?.quantize) args.push('--quantize', String(provider.defaultArgs.quantize));
+    if (provider.defaultArgs?.preset) args.push('--preset', String(provider.defaultArgs.preset));
+  }
+  return args;
 }
 
 function providerRecordsFile(providerId) {
@@ -279,6 +322,8 @@ export function runOrbInnerEngineProviderRoute({
       provider,
       mediaKind: provider.mediaKind || 'image',
       outputExtension: provider.outputExtension || 'png',
+      failurePhase: resolved.failurePhase,
+      failureReason: resolved.failureReason,
     });
     return {
       ok: false,
@@ -315,7 +360,7 @@ export function runOrbInnerEngineProviderRoute({
   };
 }
 
-function rewriteProviderRecordEnvelope(recordsPath, { providerId, provider, mediaKind, outputExtension }) {
+function rewriteProviderRecordEnvelope(recordsPath, { providerId, provider, mediaKind, outputExtension, failurePhase = null, failureReason = null }) {
   const data = JSON.parse(readFileSync(recordsPath, 'utf8'));
   data.providerId = providerId;
   data.provider = provider;
@@ -343,6 +388,8 @@ function rewriteProviderRecordEnvelope(recordsPath, { providerId, provider, medi
       providerId,
       mediaKind,
       outputExtension,
+      failurePhase: record.status === 'unconfigured' && failurePhase ? failurePhase : (failedRecord.failurePhase || record.failurePhase),
+      failureReason: record.status === 'unconfigured' && failureReason ? failureReason : (failedRecord.failureReason || record.failureReason),
       providerReceiptPath: providerReceiptPath && existsSync(providerReceiptPath) ? providerReceiptPath : providerReceiptPath,
     };
   });
@@ -523,6 +570,13 @@ function combinedPrompt(prompt, negative) {
   return JSON.stringify(payload);
 }
 
+function openRouterPrompt(prompt, negative) {
+  const cleanPrompt = String(prompt || '').trim();
+  const cleanNegative = String(negative || '').trim();
+  if (!cleanNegative) return cleanPrompt;
+  return `${cleanPrompt}\n\nExcluded visual failures: ${cleanNegative}`;
+}
+
 function runNative(command, argv, cwd) {
   return spawnSync(command, argv, {
     cwd,
@@ -541,6 +595,156 @@ function ensureOutput(path) {
 function writeAdapterReceipt(path, data) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function openRouterApiKey() {
+  return process.env.KAMINOS_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '';
+}
+
+function normalizeOpenRouterBaseUrl(value) {
+  return String(value || DEFAULT_OPENROUTER_API_BASE_URL).replace(/\/+$/, '');
+}
+
+function decodeDataUrlOrBase64(value) {
+  const text = String(value || '');
+  const comma = text.indexOf(',');
+  const payload = text.startsWith('data:') && comma >= 0 ? text.slice(comma + 1) : text;
+  return Buffer.from(payload, 'base64');
+}
+
+async function fetchOpenRouterImageUrl(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`OpenRouter image URL fetch failed with HTTP ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function openRouterImagePayload(data) {
+  const item = Array.isArray(data?.data) ? data.data[0] : null;
+  if (!item) {
+    throw new Error('OpenRouter image response did not include data[0]');
+  }
+  if (item.b64_json) {
+    return decodeDataUrlOrBase64(item.b64_json);
+  }
+  if (item.image_url?.url) {
+    return fetchOpenRouterImageUrl(item.image_url.url);
+  }
+  if (item.url) {
+    return fetchOpenRouterImageUrl(item.url);
+  }
+  throw new Error('OpenRouter image response did not include b64_json or image URL');
+}
+
+async function runOpenRouterImageAdapter(args) {
+  const out = resolve(args.get('--out'));
+  const receipt = `${out}.provider-receipt.json`;
+  const requestedModel = args.get('--openrouter-model') || DEFAULT_OPENROUTER_IMAGE_MODEL;
+  const requestedSize = args.get('--size') || '512x512';
+  const outputFormat = args.get('--output-format') || 'png';
+  const baseUrl = normalizeOpenRouterBaseUrl(args.get('--api-base-url'));
+  const apiKey = openRouterApiKey();
+  const prompt = openRouterPrompt(args.get('--prompt'), args.get('--negative'));
+  const promptSha256 = sha256Text(prompt);
+  if (!apiKey) {
+    writeAdapterReceipt(receipt, {
+      ok: false,
+      adapter: 'openrouter-image',
+      failurePhase: 'configuration',
+      failureReason: 'OpenRouter image adapter requires KAMINOS_OPENROUTER_API_KEY or OPENROUTER_API_KEY.',
+      endpoint: '/images',
+      requestedModel,
+      requestedSize,
+      output: out,
+      promptSha256,
+    });
+    process.stderr.write('OpenRouter image adapter missing API key\n');
+    process.exit(2);
+  }
+  const body = {
+    model: requestedModel,
+    prompt,
+    size: requestedSize,
+    output_format: outputFormat,
+  };
+  try {
+    const response = await fetch(`${baseUrl}/images`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const responseText = await response.text();
+    let parsed = null;
+    try {
+      parsed = responseText ? JSON.parse(responseText) : null;
+    } catch (error) {
+      throw new Error(`OpenRouter image response was not JSON: ${error.message}`);
+    }
+    if (!response.ok) {
+      writeAdapterReceipt(receipt, {
+        ok: false,
+        adapter: 'openrouter-image',
+        failurePhase: 'provider-http',
+        failureReason: `OpenRouter image request failed with HTTP ${response.status}`,
+        endpoint: '/images',
+        requestedModel,
+        effectiveModel: parsed?.model || requestedModel,
+        requestedSize,
+        outputFormat,
+        output: out,
+        promptSha256,
+        responseStatus: response.status,
+        response: parsed,
+      });
+      process.stderr.write(`OpenRouter image request failed with HTTP ${response.status}\n`);
+      process.exit(1);
+    }
+    const payload = await openRouterImagePayload(parsed);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, payload);
+    ensureOutput(out);
+    writeAdapterReceipt(receipt, {
+      ok: true,
+      adapter: 'openrouter-image',
+      endpoint: '/images',
+      requestedModel,
+      effectiveModel: parsed?.model || requestedModel,
+      requestedSize,
+      outputFormat,
+      output: out,
+      promptSha256,
+      created: parsed?.created ?? null,
+      usage: parsed?.usage || null,
+      responseImageCount: Array.isArray(parsed?.data) ? parsed.data.length : 0,
+    });
+    process.stdout.write(JSON.stringify({
+      ok: true,
+      adapter: 'openrouter-image',
+      requestedModel,
+      effectiveModel: parsed?.model || requestedModel,
+      output: out,
+      receipt,
+    }) + '\n');
+  } catch (error) {
+    writeAdapterReceipt(receipt, {
+      ok: false,
+      adapter: 'openrouter-image',
+      failurePhase: 'provider-response',
+      failureReason: error.message,
+      endpoint: '/images',
+      requestedModel,
+      requestedSize,
+      outputFormat,
+      output: out,
+      promptSha256,
+    });
+    process.stderr.write(`${error.message}\n`);
+    process.exit(1);
+  }
 }
 
 function runIdeogramAdapter(args) {
@@ -675,6 +879,8 @@ if (invokedAsScript) {
     runCosmosAdapter(args, 't2v');
   } else if (adapter === 'cosmos3-img2video') {
     runCosmosAdapter(args, 'i2v');
+  } else if (adapter === 'openrouter-image') {
+    await runOpenRouterImageAdapter(args);
   } else {
     process.stderr.write(`Unknown provider adapter: ${adapter}\n`);
     process.exit(2);

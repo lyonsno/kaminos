@@ -14,6 +14,7 @@ assert.match(source, /orb-inner-engine-concept-loop-v0/, 'concept loop names its
 assert.match(source, /createOrbInnerEngineConceptManifest/, 'concept loop exports deterministic manifest construction');
 assert.match(source, /writeOrbInnerEngineConceptBundle/, 'concept loop exports caller-rooted bundle writing');
 assert.match(source, /runOrbInnerEngineImageRoute/, 'concept loop exports image route execution');
+assert.match(source, /openrouter-image\.flux2-klein-4b/, 'concept loop names the OpenRouter FLUX.2 Klein 4B scout route');
 assert.match(source, /sharp\.splat/, 'concept loop names the SHARP splat route');
 assert.match(source, /starcraft-view-bank/, 'concept loop names the 2.5D view-bank fakery affordance');
 assert.match(source, /beaming\.volume-accent/, 'concept loop preserves Beaming volumetric accent as optional, not core');
@@ -51,6 +52,9 @@ assert.ok(manifest.failureTaxonomy.includes('volume-dependency-too-high'), 'volu
 
 const routes = new Map(manifest.routes.map(route => [route.id, route]));
 assert.equal(routes.get('local-image.ideogram4').status, 'unconfigured');
+assert.equal(routes.get('openrouter-image.flux2-klein-4b').status, 'planned');
+assert.equal(routes.get('openrouter-image.flux2-klein-4b').role, 'cheap-api-image-scout');
+assert.equal(routes.get('openrouter-image.flux2-klein-4b').requiredForBaseRead, false);
 assert.equal(routes.get('local-video.cosmos3-mlx.t2v').status, 'planned');
 assert.equal(routes.get('local-video.cosmos3-mlx.i2v').status, 'planned');
 assert.equal(routes.get('local-image.diffusion-fallback').status, 'unconfigured');
