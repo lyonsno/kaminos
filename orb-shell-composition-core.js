@@ -31,6 +31,11 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function smoothStep(edge0, edge1, value) {
+  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function pointDistance(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
@@ -837,6 +842,80 @@ function nearestAperturePressureRingSample(voidRecord, point, steps = 180) {
   return nearest;
 }
 
+function visibleApertureOrbitRecord(apertureField) {
+  return {
+    center: apertureField.apertureCenter,
+    radius: apertureField.orbitRadiusBand,
+  };
+}
+
+function orbitCaptureTerminalPhase(spec) {
+  const offsets = {
+    lead: -0.04,
+    outer: 0.18,
+    inner: -0.2,
+  };
+  return 0.75 * TAU + (offsets[spec.siblingRole] || 0);
+}
+
+function blendOrbitCaptureTerminalSample(spec, apertureField, localT, left, right, center) {
+  const blend = smoothStep(0.58, 1, localT);
+  if (blend <= 0) return { left, right, center };
+  const apertureOrbit = visibleApertureOrbitRecord(apertureField);
+  const terminalOrbit = aperturePressureRingPointAndTangent(apertureOrbit, orbitCaptureTerminalPhase(spec));
+  const targetNormal = normalizePoint(terminalOrbit.point);
+  let targetSideAxis = normalizePoint(crossPoints(targetNormal, terminalOrbit.tangent));
+  if (dotPoints(targetSideAxis, center.sideAxis) < 0) targetSideAxis = scalePoint(targetSideAxis, -1);
+  const width = pointDistance(left.point, right.point);
+  const terminalCenterPoint = lerpPoint(center.point, terminalOrbit.point, blend);
+  const terminalTangent = normalizePoint(lerpPoint(center.tangent, terminalOrbit.tangent, blend));
+  const terminalNormal = normalizePoint(lerpPoint(center.normalAxis, targetNormal, blend));
+  const terminalSideAxis = normalizePoint(lerpPoint(center.sideAxis, targetSideAxis, blend));
+  const nextCenter = {
+    ...center,
+    point: terminalCenterPoint,
+    normalAxis: terminalNormal,
+    sideAxis: terminalSideAxis,
+    tangent: terminalTangent,
+  };
+  const halfWidth = width * 0.5;
+  return {
+    center: nextCenter,
+    left: {
+      ...left,
+      point: addScaledPoint(terminalCenterPoint, terminalSideAxis, -halfWidth),
+      normalAxis: terminalNormal,
+      sideAxis: terminalSideAxis,
+      tangent: terminalTangent,
+    },
+    right: {
+      ...right,
+      point: addScaledPoint(terminalCenterPoint, terminalSideAxis, halfWidth),
+      normalAxis: terminalNormal,
+      sideAxis: terminalSideAxis,
+      tangent: terminalTangent,
+    },
+  };
+}
+
+function blendCounterCurveSecondaryRefusal(spec, apertureField, localT, left, right, center) {
+  if (spec.parentTerminationClass !== 'counter-curve-blade' || spec.ownsFurthestVisibleTip || spec.siblingRole !== 'tucked') {
+    return { left, right, center };
+  }
+  const blend = smoothStep(0.62, 1, localT);
+  if (blend <= 0) return { left, right, center };
+  const nearest = nearestAperturePressureRingSample(visibleApertureOrbitRecord(apertureField), center.point);
+  let refusalTangent = normalizePoint(crossPoints(normalizePoint(center.point), nearest.tangent));
+  if (dotPoints(refusalTangent, center.tangent) < 0) refusalTangent = scalePoint(refusalTangent, -1);
+  const terminalTangent = normalizePoint(lerpPoint(center.tangent, refusalTangent, blend));
+  const nextCenter = { ...center, tangent: terminalTangent };
+  return {
+    center: nextCenter,
+    left: { ...left, tangent: terminalTangent },
+    right: { ...right, tangent: terminalTangent },
+  };
+}
+
 function createApertureTangencyWitnessPlan(composition, apertureRelativeTerminationPlan, substrips) {
   const primaryVoid = composition.AperturePressure?.primaryVoids?.[0];
   const apertureField = apertureRelativeTerminationPlan?.apertureField;
@@ -973,9 +1052,13 @@ function makeMacroFamilySubstrip(assemblage, spec, apertureField, sampleCount = 
     const localT = index / (sampleCount - 1);
     const t = startReach + localT * (terminalReach - startReach);
     const [v0, v1] = dynamicSubstripVRange(spec, localT);
-    const left = macroFamilySurfaceSample(assemblage, t, v0, spec.liftBias);
-    const right = macroFamilySurfaceSample(assemblage, t, v1, spec.liftBias);
-    const center = macroFamilySurfaceSample(assemblage, t, (v0 + v1) * 0.5, spec.liftBias + 0.002);
+    let left = macroFamilySurfaceSample(assemblage, t, v0, spec.liftBias);
+    let right = macroFamilySurfaceSample(assemblage, t, v1, spec.liftBias);
+    let center = macroFamilySurfaceSample(assemblage, t, (v0 + v1) * 0.5, spec.liftBias + 0.002);
+    if (spec.parentTerminationClass === 'orbit-capture') {
+      ({ left, right, center } = blendOrbitCaptureTerminalSample(spec, apertureField, localT, left, right, center));
+    }
+    ({ left, right, center } = blendCounterCurveSecondaryRefusal(spec, apertureField, localT, left, right, center));
     const sideWallDepth = spec.sideWallDepth ?? 0.026;
     edgeSamples.push({
       t,
