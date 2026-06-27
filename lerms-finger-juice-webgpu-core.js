@@ -4,10 +4,15 @@ export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_r
 export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-splat-renderer-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_buffer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
+export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
+export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
 const PARTICLE_FLOATS = 16;
 const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
+const PRESSURE_NEIGHBOR_WINDOW = 6;
+const PRESSURE_RADIUS = 0.105;
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 
 function finite(value, fallback = 0) {
@@ -91,6 +96,12 @@ function chemistryName(code) {
   return 'knockback';
 }
 
+function lermsChemistryName(code) {
+  if (code === 2) return 'middle_adhesive_gunk';
+  if (code === 3) return 'ring_fertilizer';
+  return 'index_knockback';
+}
+
 function emitterLife(chemistry) {
   return chemistry === 'pooling' ? 8.0 : 7.2;
 }
@@ -127,6 +138,55 @@ function spawnJitter(index, emitterIndex, respawnCount, stepSeed, radius) {
     (hash01(base + 0x9e3779b9) - 0.5) * radius * 0.55,
     (hash01(base + 0x85ebca6b) - 0.5) * radius,
   ];
+}
+
+export function createLermsSourceTruth(emitterPacket = {}, options = {}) {
+  const authority = ['live_simulation', 'synthetic_fixture', 'visual_only', 'stale_hold', 'invalid', 'fallback']
+    .includes(emitterPacket.simulation_authority)
+    ? emitterPacket.simulation_authority
+    : 'synthetic_fixture';
+  return {
+    schema: LERMS_SOURCE_TRUTH_SCHEMA,
+    authority,
+    route: emitterPacket.source_route || 'kaminos.lerms-finger-juice.synthetic-caster',
+    frameId: emitterPacket.source_frame_id || emitterPacket.packet_id || options.frameId || 'kaminos-finger-juice-frame',
+    timestampMs: finite(options.timestampMs, 0),
+    sampleAgeMs: finite(emitterPacket.sample_age_ms, 0),
+    backend: emitterPacket.source_backend || 'kaminos.webgpu-finger-juice',
+    configId: emitterPacket.route_identity || emitterPacket.lerms_world_frame?.id || 'kaminos-finger-juice-webgpu-v0',
+  };
+}
+
+function createSourceDiagnostics(emitterPacket = {}, sourceTruth, sources = []) {
+  return {
+    sourceTruthSchema: sourceTruth.schema,
+    authority: sourceTruth.authority,
+    route: sourceTruth.route,
+    frameId: sourceTruth.frameId,
+    sampleAgeMs: sourceTruth.sampleAgeMs,
+    backend: sourceTruth.backend || null,
+    configId: sourceTruth.configId || null,
+    sourcePacketId: emitterPacket.packet_id || sourceTruth.frameId,
+    emitterCount: sources.length,
+    terrainFrameId: emitterPacket.terrain_frame?.id || emitterPacket.lerms_world_frame?.terrain_frame_id || emitterPacket.lerms_world_frame?.id || null,
+    worldFromHandSample: emitterPacket.lerms_world_frame?.world_from_hand_sample || null,
+  };
+}
+
+function createEmitterDiagnostics(sources = [], particlesPerEmitter = {}, ringEmitterLateralDrift = null) {
+  return sources.map(source => ({
+    emitter_id: source.emitter_id,
+    emitterIndex: source.emitterIndex,
+    chemistry: source.chemistry,
+    lermsChemistry: lermsChemistryName(source.chemistryCode),
+    origin: source.origin.map(value => round(value, 4)),
+    aim: source.aim.map(value => round(value, 4)),
+    motion: source.motion.map(value => round(value, 4)),
+    radius: round(source.radius, 4),
+    strength: round(source.strength, 4),
+    activeParticleCount: particlesPerEmitter[source.emitter_id] || 0,
+    lateralDrift: ringEmitterLateralDrift?.emitter_id === source.emitter_id ? ringEmitterLateralDrift : null,
+  }));
 }
 
 function writeParticle(buffer, index, particle) {
@@ -315,31 +375,93 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
   }
   return summarizeWebGPUParticles(data, {
     sources: options.sources || [],
+    emitterPacket: options.emitterPacket || {},
+    stepCount: steps,
     lerms: options.lerms || [],
     goins: options.goins || [],
     solver_backend: 'cpu_oracle',
   });
 }
 
-function targetHits(particles, targets, kind) {
+function targetHits(particles, targets, kind, options = {}) {
   let count = 0;
   const out = targets.map(target => ({ ...target, hits: 0, impulse: [0, 0, 0] }));
+  const hitEvents = [];
   for (const particle of particles) {
     for (const target of out) {
       const delta = sub(vec3(target.position), particle.position);
       const distance = length3(delta);
       if (distance <= finite(target.radius, kind === 'goin' ? 0.13 : 0.16) + particle.radius) {
+        const impulseScale = particle.strength * (kind === 'goin' ? 0.16 : 0.22);
+        const impulse = particle.velocity.map(value => round(value * impulseScale, 4));
         target.hits += 1;
+        target.impulse = target.impulse.map((value, index) => round(value + impulse[index], 4));
         count += 1;
+        hitEvents.push({
+          schema: LERMS_JUICE_HIT_EVENT_SCHEMA,
+          id: `juice-hit-${kind}-${target.id}-${particle.id}`,
+          source: options.sourceTruth,
+          chemistry: lermsChemistryName(particle.chemistry),
+          targetKind: kind,
+          targetId: target.id,
+          contactWorld: particle.position.map(value => round(value, 4)),
+          impulse,
+          sourcePacketId: options.sourcePacketId,
+          strength: round(particle.strength, 4),
+        });
       }
     }
   }
-  return { count, targets: out };
+  return { count, targets: out, hitEvents };
+}
+
+function pressureDensityStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+      pressureNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+      pressureRadius: PRESSURE_RADIUS,
+      surfaceParticleCount: 0,
+      averageNeighborDensity: 0,
+      maxNeighborDensity: 0,
+      pressureAffectedCount: 0,
+    };
+  }
+  const densities = surfaceParticles.map((particle, index) => {
+    let density = 0;
+    for (let offset = 1; offset <= PRESSURE_NEIGHBOR_WINDOW; offset += 1) {
+      for (const neighbor of [
+        surfaceParticles[(index + offset) % surfaceParticles.length],
+        surfaceParticles[(index + surfaceParticles.length - offset) % surfaceParticles.length],
+      ]) {
+        if (!neighbor || neighbor.id === particle.id) continue;
+        const distance = length3(sub(particle.position, neighbor.position));
+        if (distance > 0.0001 && distance < PRESSURE_RADIUS) density += (PRESSURE_RADIUS - distance) / PRESSURE_RADIUS;
+      }
+    }
+    return density;
+  });
+  const totalDensity = densities.reduce((sum, value) => sum + value, 0);
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+    pressureNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+    pressureRadius: PRESSURE_RADIUS,
+    surfaceParticleCount: surfaceParticles.length,
+    averageNeighborDensity: round(totalDensity / surfaceParticles.length, 4),
+    maxNeighborDensity: round(Math.max(...densities), 4),
+    pressureAffectedCount: densities.filter(value => value > 0).length,
+  };
 }
 
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
+  const sourceTruth = createLermsSourceTruth(options.emitterPacket || {}, {
+    frameId: options.frameId || `kaminos-finger-juice-step-${Math.max(0, Math.floor(options.stepCount || 0))}`,
+    timestampMs: options.timestampMs || 0,
+  });
+  const sourcePacketId = options.emitterPacket?.packet_id || sourceTruth.frameId;
   for (let i = 0; i < buffer.length / PARTICLE_FLOATS; i += 1) {
     const particle = readParticle(buffer, i);
     rawParticles.push(particle);
@@ -361,8 +483,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       respawnCount: Math.floor(finite(particle.respawnCount, 0)),
     });
   }
-  const lermHits = targetHits(particles, options.lerms || [], 'lerm');
-  const goinHits = targetHits(particles, options.goins || [], 'goin');
+  const lermHits = targetHits(particles, options.lerms || [], 'lerm', { sourceTruth, sourcePacketId });
+  const goinHits = targetHits(particles, options.goins || [], 'goin', { sourceTruth, sourcePacketId });
   const trailsByEmitter = new Map();
   for (const particle of particles.slice(-162)) {
     const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex);
@@ -431,12 +553,23 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     min_x_delta: ringDeltas.length ? round(Math.min(...ringDeltas), 4) : 0,
     max_x_delta: ringDeltas.length ? round(Math.max(...ringDeltas), 4) : 0,
   } : null;
+  const pressureStats = pressureDensityStats(particles);
+  const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
+  const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
+  const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
   return {
     solver_backend: options.solver_backend || 'webgpu_compute',
     solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
     shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
     emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
     respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+    sourceTruth,
+    sourceDiagnostics,
+    emitterDiagnostics,
+    pressureDensityStats: pressureStats,
+    juiceHitEvents,
+    juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
     maxParticleAge: rawParticles.length ? round(Math.max(...rawParticles.map(particle => finite(particle.age, 0))), 4) : 0,
     gpuRespawnCount: Math.floor(rawParticles.reduce((sum, particle) => sum + finite(particle.respawnCount, 0), 0)),
@@ -532,6 +665,33 @@ fn slideVelocityOnTerrain(velocity: vec3f, normal: vec3f, chemistry: f32) -> vec
   return tangent * viscosity + downhill * slide;
 }
 
+fn applyLocalDensityPressure(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
+  var correction = vec3f(0.0, 0.0, 0.0);
+  let pressureRadius = max(${PRESSURE_RADIUS.toFixed(4)}, radius * 2.35);
+  for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
+    let forwardIndex = (index + offset) % params.particleCount;
+    let backIndex = (index + params.particleCount - offset) % params.particleCount;
+    let forward = particles[forwardIndex];
+    let back = particles[backIndex];
+    if (forward.flags.y > 0.5 && forward.posPhase.w >= 0.5 && forward.misc.z >= 0.0 && forward.misc.z < forward.misc.w) {
+      let delta = position - forward.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < pressureRadius) {
+        correction = correction + normalize(delta) * ((pressureRadius - distance) / pressureRadius);
+      }
+    }
+    if (back.flags.y > 0.5 && back.posPhase.w >= 0.5 && back.misc.z >= 0.0 && back.misc.z < back.misc.w) {
+      let delta = position - back.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < pressureRadius) {
+        correction = correction + normalize(delta) * ((pressureRadius - distance) / pressureRadius);
+      }
+    }
+  }
+  let pressureScale = select(0.021, 0.033, chemistry > 1.5 && chemistry < 2.5);
+  return velocity + vec3f(correction.x, 0.0, correction.z) * pressureScale;
+}
+
 fn hash01(seed: u32) -> f32 {
   var value = seed;
   value = value ^ (value >> 16u);
@@ -625,6 +785,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       }
     } else {
       velocity = slideVelocityOnTerrain(velocity, terrainNormalAt(position.x, position.z), chemistry);
+      velocity = applyLocalDensityPressure(index, position, velocity, radius, chemistry);
       position = position + velocity * params.dt;
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
     }
@@ -750,6 +911,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     steps: options.oracleSteps || 180,
     dt: options.oracleDt || 1 / 60,
     sources,
+    emitterPacket: options.emitterPacket || {},
     lerms: options.lerms || [],
     goins: options.goins || [],
   });
@@ -878,11 +1040,14 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       steps: stepCount,
       dt: safeDt,
       sources,
+      emitterPacket: options.emitterPacket || {},
       lerms: options.lerms || [],
       goins: options.goins || [],
     });
     const summary = summarizeWebGPUParticles(result, {
       sources,
+      emitterPacket: options.emitterPacket || {},
+      stepCount,
       lerms: options.lerms || [],
       goins: options.goins || [],
       solver_backend: 'webgpu_compute',

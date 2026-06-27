@@ -248,6 +248,7 @@ async function run() {
     assert.equal(state.renderRoute, 'webgpu_particle_splat_renderer_v0', 'wrong WebGPU render route');
     assert.equal(state.emitterBufferRoute, 'webgpu_emitter_buffer_v0', 'wrong WebGPU emitter buffer route');
     assert.equal(state.respawnContract, 'wgsl-gpu-emitter-respawn-v0', 'wrong WebGPU respawn contract');
+    assert.equal(state.pressureContract, 'wgsl-local-density-pressure-v0', 'wrong WebGPU pressure contract');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -264,6 +265,18 @@ async function run() {
     assert.ok(state.particlesPerEmitter && Object.keys(state.particlesPerEmitter).length >= 3, 'route did not report all emitter particle buckets');
     assert.ok(Number.isFinite(state.ringEmitterLateralDrift?.average_x_delta), 'route did not attribute ring emitter lateral drift');
     assert.ok(Math.abs(state.ringEmitterLateralDrift.average_x_delta) < 0.8, 'ring emitter lateral drift is unbounded');
+    assert.equal(state.sourceTruth?.schema, 'lerms.source-truth.v0', 'route did not emit LERMS source truth');
+    assert.equal(state.sourceDiagnostics?.sourceTruthSchema, 'lerms.source-truth.v0', 'route did not expose source diagnostics');
+    assert.ok(Array.isArray(state.emitterDiagnostics) && state.emitterDiagnostics.length >= 3, 'route did not expose emitter diagnostics');
+    assert.ok(state.pressureDensityStats?.pressureNeighborWindow > 0, 'route did not expose pressure neighbor window');
+    assert.equal(state.pressureDensityStats?.pressureContract, 'wgsl-local-density-pressure-v0', 'pressure stats do not identify contract');
+    assert.ok(state.pressureDensityStats?.surfaceParticleCount > 0, 'pressure stats did not see surface particles');
+    assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
+    assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
+    assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
+    assert.ok(['lerm', 'goin'].includes(state.juiceHitEvents[0].targetKind), 'juice-hit event target kind is not composer-compatible');
+    assert.ok(Array.isArray(state.juiceHitEvents[0].contactWorld), 'juice-hit event missing contact world');
+    assert.ok(Array.isArray(state.juiceHitEvents[0].impulse), 'juice-hit event missing impulse');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
     assert.ok(state.trailSampleCount >= 180, 'route did not retain enough visual trail samples');
     assert.ok(state.trailEmitterCount >= 3, 'route did not retain trails from all synthetic emitters');
@@ -300,6 +313,7 @@ async function run() {
       renderShaderRoute: state.renderShaderRoute,
       emitterBufferRoute: state.emitterBufferRoute,
       respawnContract: state.respawnContract,
+      pressureContract: state.pressureContract,
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
@@ -313,6 +327,12 @@ async function run() {
       evidence_kind: state.evidence_kind,
       hand_sample_space: state.hand_sample_space,
       lerms_world_frame: state.lerms_world_frame,
+      sourceTruth: state.sourceTruth,
+      sourceDiagnostics: state.sourceDiagnostics,
+      emitterDiagnostics: state.emitterDiagnostics,
+      pressureDensityStats: state.pressureDensityStats,
+      juiceHitEventCount: state.juiceHitEventCount,
+      juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
       gpuRespawnCount: state.gpuRespawnCount,
       maxParticleAge: state.maxParticleAge,
