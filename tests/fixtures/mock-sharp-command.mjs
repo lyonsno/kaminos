@@ -13,6 +13,11 @@ if (!input || !output || !report) {
   throw new Error('mock SHARP expected --input, --output, and --report');
 }
 
+const delayMs = Number(process.env.KAMINOS_MOCK_SHARP_DELAY_MS || 0);
+if (Number.isFinite(delayMs) && delayMs > 0) {
+  await new Promise(resolve => setTimeout(resolve, delayMs));
+}
+
 const inputBytes = readFileSync(input);
 const inputSha256 = createHash('sha256').update(inputBytes).digest('hex');
 const points = [];

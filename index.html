@@ -209,6 +209,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node.image.selected { border-color: #77a651; background: #1f3219; }
 .pipeline-graph-node.generated-output { border-color: #45623a; background: #172118; }
 .pipeline-graph-node.generated-output.selected { border-color: #7fb35b; background: #1e321a; }
+.pipeline-graph-node.generated-output.pending,
+.pipeline-graph-node.generated-output.running { border-color: #5d4822; background: #251f13; }
+.pipeline-graph-node.generated-output.failed { border-color: #5a3030; background: #241818; }
 .pipeline-graph-node.connecting { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-node.port-target { border-color: #f0b85a; box-shadow: 0 0 0 1px rgba(240,184,90,0.45), 0 12px 26px rgba(0,0,0,0.2); }
 .pipeline-graph-port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #141414; background: #555; padding: 0; z-index: 3; cursor: crosshair; }
@@ -219,11 +222,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node-kicker { font: 9px 'SF Mono', monospace; color: #777; text-transform: uppercase; letter-spacing: 0.7px; }
 .pipeline-graph-node-title { font-size: 12px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-graph-node-detail { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-node-status { border: 1px solid #303030; background: #171717; color: #999; border-radius: 5px; padding: 4px 5px; font: 8px 'SF Mono', monospace; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-graph-node-status.pending,
+.pipeline-graph-node-status.running { border-color: #5d4822; background: #241d11; color: #f0b85a; }
+.pipeline-graph-node-status.complete { border-color: #45623a; background: #142214; color: #9ad18a; }
+.pipeline-graph-node-status.failed { border-color: #5a3030; background: #241818; color: #e6a0a0; }
 .pipeline-graph-node-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
 .pipeline-graph-node-action { border: 1px solid #3a3a3a; background: #242424; color: #d8d8d8; border-radius: 5px; padding: 4px 8px; font-size: 10px; cursor: pointer; }
 .pipeline-graph-node-action:hover { background: #303030; border-color: #555; color: #fff; }
 .pipeline-graph-node-action.primary { background: #1e3c27; border-color: #45623a; color: #bfe7a4; }
 .pipeline-graph-node-action[disabled] { opacity: 0.45; cursor: default; }
+.pipeline-output-container { border-top: 1px solid #2c2c2c; margin-top: 2px; padding-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
+.pipeline-output-container-empty { color: #555; font: 8px 'SF Mono', monospace; }
+.pipeline-output-pill { min-width: 0; max-width: 58px; border: 1px solid #303030; background: #202020; color: #999; border-radius: 4px; padding: 2px 4px; font: 8px 'SF Mono', monospace; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-output-pill:hover { border-color: #555; color: #ddd; }
+.pipeline-output-pill.selected { border-color: #7fb35b; color: #d8f0cb; background: #1e321a; }
+.pipeline-output-pill.pending,
+.pipeline-output-pill.running { border-color: #5d4822; background: #241d11; color: #f0b85a; }
+.pipeline-output-pill.failed { border-color: #5a3030; background: #241818; color: #e6a0a0; }
 .pipeline-graph-node.source { left: 18px; top: 92px; }
 .pipeline-graph-node.route { left: 180px; top: 92px; }
 .pipeline-graph-node.output { left: 342px; top: 44px; }
@@ -4305,6 +4321,7 @@ let pipelineDockState = {
 	  ],
 	  graphRouteNodes: [],
 	  generatedOutputNodes: [],
+	  selectedOutputIdByRouteId: {},
 	  graphImageNodes: [],
 	  graphDrag: null,
 	  assetCardDrag: null,
@@ -4564,7 +4581,7 @@ function pipelineRememberRun(result, source, pipeline) {
   const stamp = new Date().toISOString();
   const generator = selectedPipelineGeneratorRecord();
   const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
-  const runId = [
+  const runId = result?.clientRunId || [
     'pipeline-run',
     stamp.replace(/[-:.TZ]/g, '').slice(0, 14),
     Math.random().toString(36).slice(2, 7),
@@ -4730,10 +4747,15 @@ function normalizePipelineGeneratedOutputNode(value) {
   const runId = String(value.runId || '').trim();
   const routeNodeId = String(value.routeNodeId || '').trim();
   const artifact = value.artifact && typeof value.artifact === 'object' ? value.artifact : null;
-  if (!id || !runId || !routeNodeId || !artifact?.path) return null;
+  const status = ['pending', 'running', 'complete', 'failed'].includes(value.status) ? value.status : (artifact?.path ? 'complete' : 'pending');
+  if (!id || !runId || !routeNodeId) return null;
+  if (status === 'complete' && !artifact?.path) return null;
   return {
     id,
     kind: 'generated-output',
+    status,
+    phase: value.phase || status,
+    statusMessage: value.statusMessage || null,
     runId,
     routeNodeId,
     sourceGraphNodeId: value.sourceGraphNodeId || null,
@@ -4748,7 +4770,14 @@ function normalizePipelineGeneratedOutputNode(value) {
     generatorLabel: value.generatorLabel || null,
     fixtureBacked: Boolean(value.fixtureBacked),
     previewTruth: value.previewTruth || null,
+    routeSnapshot: value.routeSnapshot && typeof value.routeSnapshot === 'object' ? value.routeSnapshot : null,
+    graphSnapshot: value.graphSnapshot && typeof value.graphSnapshot === 'object' ? value.graphSnapshot : null,
+    runTimeline: Array.isArray(value.runTimeline) ? value.runTimeline : [],
     createdAt: value.createdAt || null,
+    updatedAt: value.updatedAt || null,
+    completedAt: value.completedAt || null,
+    failedAt: value.failedAt || null,
+    error: value.error || null,
   };
 }
 
@@ -4785,6 +4814,9 @@ function loadPipelineGraphLocalState() {
     if (nextImageNodes) pipelineDockState.graphImageNodes = nextImageNodes;
     if (nextRouteNodes) pipelineDockState.graphRouteNodes = nextRouteNodes;
     if (nextGeneratedOutputNodes) pipelineDockState.generatedOutputNodes = nextGeneratedOutputNodes;
+    if (document.selectedOutputIdByRouteId && typeof document.selectedOutputIdByRouteId === 'object') {
+      pipelineDockState.selectedOutputIdByRouteId = document.selectedOutputIdByRouteId;
+    }
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state ignored:', error);
@@ -4802,6 +4834,7 @@ function savePipelineGraphLocalState() {
       graphEdges: pipelineGraphEdges(),
       graphRouteNodes: pipelineDockState.graphRouteNodes || [],
       generatedOutputNodes: pipelineDockState.generatedOutputNodes || [],
+      selectedOutputIdByRouteId: pipelineDockState.selectedOutputIdByRouteId || {},
       graphImageNodes: pipelineDockState.graphImageNodes || [],
     };
     localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
@@ -4933,6 +4966,8 @@ function pipelineRouteGraphNodeFromRecord(record) {
   const generator = pipelineGeneratorById(record.generatorId) || pipelineGeneratorForPipelineId(record.pipelineId) || selectedPipelineGeneratorRecord();
   const generatorRecord = generator ? pipelineGeneratorCardRecord(generator) : null;
   const fixtureBacked = pipelineRouteUsesFixture({ pipeline, generator });
+  const outputRecords = pipelineRouteGeneratedOutputRecords(record.id);
+  const selectedOutput = pipelineSelectedRouteOutputRecord(record.id);
   return {
     id: record.id,
     kind: 'route',
@@ -4943,6 +4978,9 @@ function pipelineRouteGraphNodeFromRecord(record) {
     backendPipelineId: record.pipelineId,
     pipeline,
     fixtureBacked,
+    outputRecords,
+    selectedOutputId: selectedOutput?.id || null,
+    runStatus: selectedOutput || outputRecords[0] || null,
   };
 }
 
@@ -4995,16 +5033,115 @@ function pipelineArtifactLoadedRecord(artifact) {
   return pipelineDockState.loadedPipelineArtifactPaths?.[path] || null;
 }
 
+function pipelineRunTimelineEvent(phase, message, kind = 'running') {
+  return {
+    phase,
+    message,
+    kind,
+    at: new Date().toISOString(),
+  };
+}
+
+function pipelineGeneratedOutputStatusLabel(record) {
+  if (!record) return 'idle';
+  const phase = record.phase || record.status || 'pending';
+  const elapsed = record.createdAt ? Math.max(0, Math.round((Date.now() - Date.parse(record.createdAt)) / 1000)) : 0;
+  const suffix = ['pending', 'running'].includes(record.status) && elapsed ? ` / ${elapsed}s` : '';
+  return `${phase}${suffix}`;
+}
+
+function pipelineRouteGeneratedOutputRecords(routeNodeId) {
+  return pipelineGeneratedOutputNodes().filter(record => record.routeNodeId === routeNodeId);
+}
+
+function pipelineSelectedRouteOutputRecord(routeNodeId) {
+  const outputs = pipelineRouteGeneratedOutputRecords(routeNodeId);
+  if (!outputs.length) return null;
+  const selectedId = pipelineDockState.selectedOutputIdByRouteId?.[routeNodeId] || null;
+  return outputs.find(record => record.id === selectedId) || outputs[0];
+}
+
+function pipelineSetSelectedRouteOutput(routeNodeId, outputId) {
+  if (!routeNodeId || !outputId) return null;
+  const record = pipelineRouteGeneratedOutputRecords(routeNodeId).find(item => item.id === outputId) || null;
+  if (!record) return null;
+  pipelineDockState.selectedOutputIdByRouteId ||= {};
+  pipelineDockState.selectedOutputIdByRouteId[routeNodeId] = outputId;
+  pipelineDockState.selectedGraphNodeId = outputId;
+  pipelineDockState.selectedGraphEdgeId = null;
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  return record;
+}
+
+function pipelineGraphRouteSnapshot(routeNode, source, requestedPipelineId) {
+  const generator = routeNode?.generator || selectedPipelineGeneratorRecord();
+  const pipeline = routeNode?.pipeline || selectedPipelineRecord();
+  return {
+    schema: 'kaminos.pipeline-route-snapshot.v0',
+    routeNodeId: routeNode?.id || null,
+    routeTitle: routeNode?.title || null,
+    generatorId: generator?.id || routeNode?.generatorId || pipelineDockState.selectedGeneratorId || null,
+    generatorTitle: generator?.title || routeNode?.generatorLabel || null,
+    requestedPipelineId,
+    effectivePipelineId: pipeline?.id || requestedPipelineId || null,
+    backendPipelineId: routeNode?.backendPipelineId || pipeline?.id || requestedPipelineId || null,
+    fixtureBacked: pipelineRouteUsesFixture(routeNode || pipeline),
+    source: source ? {
+      kind: source.kind || null,
+      label: source.label || null,
+      source: source.source || null,
+      assetId: source.assetId || null,
+      graphNodeId: source.graphNodeId || null,
+      path: source.path || null,
+      rootId: source.rootId || null,
+    } : null,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function pipelineGraphSnapshotForRun(routeNode, source, requestedPipelineId) {
+  const graph = pipelineDockState.pipelineGraph || buildPipelineGraphModel(pipelineSelectedSource(), selectedPipelineRun());
+  return {
+    schema: 'kaminos.pipeline-graph-run-snapshot.v0',
+    capturedAt: new Date().toISOString(),
+    selectedGraphNodeId: pipelineDockState.selectedGraphNodeId || null,
+    selectedGraphEdgeId: pipelineDockState.selectedGraphEdgeId || null,
+    routeNodeId: routeNode?.id || null,
+    requestedPipelineId,
+    sourceGraphNodeId: source?.graphNodeId || null,
+    nodes: (graph?.nodes || []).map(node => ({
+      id: node.id,
+      kind: node.kind,
+      title: node.title || null,
+      detail: node.detail || null,
+      assetId: node.assetId || null,
+      pipelineId: node.pipeline?.id || node.backendPipelineId || node.pipelineId || null,
+      generatorId: node.generator?.id || node.generatorId || null,
+    })),
+    edges: (graph?.edges || []).map(edge => ({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      generated: Boolean(edge.generated),
+    })),
+  };
+}
+
 function pipelineGeneratedOutputRunRecord(node) {
   if (!node?.runId) return null;
   const run = (pipelineDockState.runHistory || []).find(candidate => candidate.runId === node.runId);
   if (run) return run;
   return {
-    ok: true,
+    ok: node.status === 'complete',
     runId: node.runId,
     pipelineId: node.pipelineId || null,
     generatorId: node.generatorId || null,
     generatorLabel: node.generatorLabel || null,
+    graphExecution: {
+      nodeId: node.routeNodeId || null,
+      sourceGraphNodeId: node.sourceGraphNodeId || null,
+    },
     source: {
       label: node.sourceLabel || 'Generated output source',
       graphNodeId: node.sourceGraphNodeId || null,
@@ -5023,6 +5160,7 @@ function pipelineGeneratedOutputRunRecord(node) {
         artifacts: [node.artifact, node.sidecar].filter(Boolean),
       },
     },
+    error: node.error || null,
   };
 }
 
@@ -5036,8 +5174,11 @@ function pipelineGeneratedOutputGraphNode(record) {
   return {
     id: record.id,
     kind: 'generated-output',
-    title: `${fixtureBacked ? 'Fixture' : 'Generated'} SHARP Splat`,
-    detail: previewTruth,
+    status: record.status || 'complete',
+    phase: record.phase || record.status || 'complete',
+    statusMessage: record.statusMessage || null,
+    title: record.status === 'failed' ? 'Failed SHARP Run' : record.status === 'pending' || record.status === 'running' ? 'Pending SHARP Run' : `${fixtureBacked ? 'Fixture' : 'Generated'} SHARP Splat`,
+    detail: record.status === 'complete' ? previewTruth : (record.statusMessage || pipelineGeneratedOutputStatusLabel(record)),
     runId: record.runId,
     routeNodeId: record.routeNodeId,
     sourceGraphNodeId: record.sourceGraphNodeId || null,
@@ -5049,11 +5190,19 @@ function pipelineGeneratedOutputGraphNode(record) {
     previewTruth,
     loaded: Boolean(loadedArtifact),
     loadedSceneObjectId: loadedArtifact?.sceneObjectId || null,
+    routeSnapshot: record.routeSnapshot || null,
+    graphSnapshot: record.graphSnapshot || null,
+    runTimeline: record.runTimeline || [],
+    createdAt: record.createdAt || null,
+    updatedAt: record.updatedAt || null,
+    completedAt: record.completedAt || null,
+    failedAt: record.failedAt || null,
+    error: record.error || null,
   };
 }
 
 function pipelineGraphGeneratedOutputNodes() {
-  return pipelineGeneratedOutputNodes().map(pipelineGeneratedOutputGraphNode).filter(node => node.artifact?.path);
+  return pipelineGeneratedOutputNodes().map(pipelineGeneratedOutputGraphNode);
 }
 
 function buildPipelineGraphModel(source, selectedRun) {
@@ -5483,10 +5632,16 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     }
   }
   if (node.kind === 'output' || node.kind === 'generated-output') rows.push({ key: 'artifact', value: node.artifact?.path || 'none' });
+  if (node.kind === 'generated-output') rows.push({ key: 'status', value: node.status || 'complete' });
+  if (node.kind === 'generated-output') rows.push({ key: 'phase', value: node.phase || 'complete' });
+  if (node.kind === 'generated-output') rows.push({ key: 'timeline', value: `${node.runTimeline?.length || 0} event${node.runTimeline?.length === 1 ? '' : 's'}` });
+  if (node.kind === 'generated-output') rows.push({ key: 'route snapshot', value: node.routeSnapshot?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'graph snapshot', value: node.graphSnapshot?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loaded', value: node.loaded ? `yes${node.loadedSceneObjectId ? ` (${node.loadedSceneObjectId})` : ''}` : 'not loaded' });
   if (node.kind === 'generated-output') rows.push({ key: 'route node', value: node.routeNodeId || 'unknown' });
   if (node.kind === 'generated-output') rows.push({ key: 'source node', value: node.sourceGraphNodeId || 'unknown' });
+  if (node.kind === 'generated-output' && node.error) rows.push({ key: 'error', value: node.error });
   if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'proof', value: 'fixture output; not real model compute' });
   if ((node.kind === 'output' || node.kind === 'generated-output') && node.fixtureBacked) rows.push({ key: 'input', value: pipelineFixtureInputBoundaryText(node) });
   if (node.kind === 'image') {
@@ -5625,71 +5780,234 @@ async function pipelineExecuteGraphRouteNode(node) {
   }
   pipelineDockState.selectedPipelineId = requestedPipelineId;
   renderPipelineGeneratorLibrary();
-  pipelineSetGraphInspectorStatus(`Executing ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'} with ${source.label || source.source}...`, 'running');
-  const run = await runSelectedPipeline({
-    sourceOverride: source,
-    graphExecution: {
-      schema: 'kaminos.pipeline-graph-execution.v0',
-      nodeId: node?.id || 'route',
-      nodeKind: node?.kind || 'route',
-      requestedPipelineId,
-      source: source.source,
-      sourceLabel: source.label || null,
-      sourceKind: source.kind || null,
-      sourceGraphNodeId: source.graphNodeId || null,
-      at: new Date().toISOString(),
-    },
+  const graphExecution = {
+    schema: 'kaminos.pipeline-graph-execution.v0',
+    nodeId: node?.id || 'route',
+    nodeKind: node?.kind || 'route',
+    requestedPipelineId,
+    source: source.source,
+    sourceLabel: source.label || null,
+    sourceKind: source.kind || null,
+    sourceGraphNodeId: source.graphNodeId || null,
+    at: new Date().toISOString(),
+  };
+  const pendingRecord = pipelineCreatePendingGeneratedOutputNode({
+    routeNode: node,
+    source,
+    requestedPipelineId,
+    pipeline,
+    graphExecution,
   });
-  if (!run?.ok) {
-    throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
-  }
   pipelineDockState.selectedGraphEdgeId = null;
-  if (pipelineRunArtifact(run, 'splat')?.path) {
-    const outputNode = pipelineAppendGeneratedOutputNode(run, node);
-    pipelineDockState.selectedGraphNodeId = outputNode?.id || node?.id || 'source';
-  } else {
-    pipelineDockState.selectedGraphNodeId = 'evidence';
-  }
+  pipelineDockState.selectedGraphNodeId = pendingRecord?.id || node?.id || 'source';
+  pipelineSetGraphInspectorStatus(`Queued ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'} with ${source.label || source.source}...`, 'running');
   renderPipelineDock();
-  return run;
+  try {
+    pipelineUpdateGeneratedOutputStatus(pendingRecord.id, 'running', 'running inference', 'Backend request is in flight');
+    const run = await runSelectedPipeline({
+      sourceOverride: source,
+      clientRunId: pendingRecord.runId,
+      graphExecution,
+    });
+    if (!run?.ok) {
+      pipelineFailGeneratedOutputNode(pendingRecord.id, run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`, run);
+      throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
+    }
+    if (pipelineRunArtifact(run, 'splat')?.path) {
+      const outputNode = pipelineCompleteGeneratedOutputNode(pendingRecord.id, run, node);
+      pipelineDockState.selectedGraphNodeId = outputNode?.id || pendingRecord.id;
+    } else {
+      pipelineCompleteGeneratedOutputNode(pendingRecord.id, run, node);
+      pipelineDockState.selectedGraphNodeId = 'evidence';
+    }
+    renderPipelineDock();
+    return run;
+  } catch (err) {
+    pipelineFailGeneratedOutputNode(pendingRecord?.id, err.message || String(err), null);
+    renderPipelineDock();
+    throw err;
+  }
 }
 
 function pipelineAppendGeneratedOutputNode(run, routeNode) {
-  const artifact = pipelineRunArtifact(run, 'splat');
-  if (!run?.runId || !artifact?.path || !routeNode?.id) return null;
-  const sidecar = pipelineRunArtifact(run, 'sidecar');
-  const outputNodeId = `generated-output-${run.runId}`;
+  const existingId = run?.runId ? `generated-output-${run.runId}` : null;
+  if (existingId && pipelineGeneratedOutputNodes().some(record => record.id === existingId)) {
+    return pipelineCompleteGeneratedOutputNode(existingId, run, routeNode);
+  }
+  const source = run?.source || pipelineGraphRouteInputSource(routeNode?.id || 'route');
+  const graphExecution = run?.graphExecution || null;
+  const pending = pipelineCreatePendingGeneratedOutputNode({
+    routeNode,
+    source,
+    requestedPipelineId: run?.pipelineId || routeNode?.pipeline?.id || pipelineDockState.selectedPipelineId,
+    pipeline: routeNode?.pipeline || selectedPipelineRecord(),
+    graphExecution,
+    runId: run?.runId || null,
+  });
+  return pipelineCompleteGeneratedOutputNode(pending.id, run, routeNode);
+}
+
+function pipelineCreatePendingGeneratedOutputNode({ routeNode, source, requestedPipelineId, pipeline, graphExecution, runId = null }) {
+  if (!routeNode?.id) return null;
+  const stamp = new Date().toISOString();
+  const outputRunId = runId || [
+    'pipeline-run',
+    stamp.replace(/[-:.TZ]/g, '').slice(0, 14),
+    Math.random().toString(36).slice(2, 7),
+  ].join('-');
+  const outputNodeId = `generated-output-${outputRunId}`;
   const routePosition = pipelineGraphNodePosition(routeNode.id);
   const routeOutputCount = pipelineGeneratedOutputNodes().filter(node => node.routeNodeId === routeNode.id).length;
+  const routeSnapshot = pipelineGraphRouteSnapshot(routeNode, source, requestedPipelineId);
+  const graphSnapshot = pipelineGraphSnapshotForRun(routeNode, source, requestedPipelineId);
   const record = {
     id: outputNodeId,
     kind: 'generated-output',
-    runId: run.runId,
+    status: 'pending',
+    phase: 'queued',
+    statusMessage: `Queued ${routeNode.title || requestedPipelineId || 'pipeline route'}`,
+    runId: outputRunId,
     routeNodeId: routeNode.id,
-    sourceGraphNodeId: run.graphExecution?.sourceGraphNodeId || run.source?.graphNodeId || null,
-    sourceLabel: run.source?.label || null,
-    artifact,
-    sidecar,
-    outputRoot: run.bundle?.document?.outputRoot || null,
-    reportPath: run.report?.path || null,
-    bundlePath: run.bundle?.path || null,
-    pipelineId: run.pipelineId || null,
-    generatorId: run.generatorId || routeNode.generator?.id || null,
-    generatorLabel: run.generatorLabel || routeNode.generator?.title || null,
-    fixtureBacked: pipelineRunUsesFixture(run),
-    previewTruth: pipelineRunPreviewTruthLabel(run, artifact),
-    createdAt: new Date().toISOString(),
+    sourceGraphNodeId: graphExecution?.sourceGraphNodeId || source?.graphNodeId || null,
+    sourceLabel: source?.label || null,
+    artifact: null,
+    sidecar: null,
+    outputRoot: null,
+    reportPath: null,
+    bundlePath: null,
+    pipelineId: requestedPipelineId || pipeline?.id || null,
+    generatorId: routeNode.generator?.id || routeNode.generatorId || pipelineDockState.selectedGeneratorId || null,
+    generatorLabel: routeNode.generator?.title || routeNode.generatorLabel || null,
+    fixtureBacked: pipelineRouteUsesFixture(routeNode || pipeline),
+    previewTruth: 'pending model output',
+    routeSnapshot,
+    graphSnapshot,
+    graphExecution,
+    runTimeline: [
+      pipelineRunTimelineEvent('queued', 'Run record created before backend execution', 'pending'),
+    ],
+    createdAt: stamp,
+    updatedAt: stamp,
+    completedAt: null,
+    failedAt: null,
+    error: null,
   };
   pipelineDockState.generatedOutputNodes = [
     record,
     ...pipelineGeneratedOutputNodes().filter(node => node.id !== outputNodeId),
   ];
+  pipelineDockState.selectedOutputIdByRouteId ||= {};
+  pipelineDockState.selectedOutputIdByRouteId[routeNode.id] = outputNodeId;
   pipelineDockState.graphNodePositions[outputNodeId] = pipelineClampGraphNodePosition({
     x: routePosition.x + 190,
     y: routePosition.y + Math.min(180, 8 + routeOutputCount * 92),
   }, document.getElementById('pipeline-graph-canvas'));
+  window.kaminosPipelineLastPendingGeneratedOutput = record;
   savePipelineGraphLocalState();
-  return pipelineGeneratedOutputGraphNode(record);
+  return record;
+}
+
+function pipelineUpdateGeneratedOutputStatus(outputNodeId, status, phase, message, extra = {}) {
+  if (!outputNodeId) return null;
+  const now = new Date().toISOString();
+  let updated = null;
+  pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
+    if (record.id !== outputNodeId) return record;
+    updated = {
+      ...record,
+      ...extra,
+      status,
+      phase,
+      statusMessage: message || phase,
+      updatedAt: now,
+      runTimeline: [
+        ...(record.runTimeline || []),
+        pipelineRunTimelineEvent(phase, message || phase, status),
+      ],
+    };
+    return updated;
+  });
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  return updated;
+}
+
+function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
+  const artifact = pipelineRunArtifact(run, 'splat');
+  if (!run?.runId || !routeNode?.id || !outputNodeId) return null;
+  const sidecar = pipelineRunArtifact(run, 'sidecar');
+  const now = new Date().toISOString();
+  let completed = null;
+  pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
+    if (record.id !== outputNodeId) return record;
+    completed = {
+      ...record,
+      status: 'complete',
+      phase: artifact?.path ? 'complete' : 'evidence-written',
+      statusMessage: artifact?.path ? 'Output artifact written' : 'Run evidence written without a loadable splat',
+      runId: run.runId,
+      routeNodeId: routeNode.id,
+      sourceGraphNodeId: run.graphExecution?.sourceGraphNodeId || run.source?.graphNodeId || record.sourceGraphNodeId || null,
+      sourceLabel: run.source?.label || record.sourceLabel || null,
+      artifact: artifact || null,
+      sidecar,
+      outputRoot: run.bundle?.document?.outputRoot || null,
+      reportPath: run.report?.path || null,
+      bundlePath: run.bundle?.path || null,
+      pipelineId: run.pipelineId || record.pipelineId || null,
+      generatorId: run.generatorId || record.generatorId || routeNode.generator?.id || null,
+      generatorLabel: run.generatorLabel || record.generatorLabel || routeNode.generator?.title || null,
+      fixtureBacked: pipelineRunUsesFixture(run),
+      previewTruth: pipelineRunPreviewTruthLabel(run, artifact),
+      updatedAt: now,
+      completedAt: now,
+      error: null,
+      runTimeline: [
+        ...(record.runTimeline || []),
+        pipelineRunTimelineEvent('writing artifacts', 'Backend returned; run evidence is being indexed', 'running'),
+        pipelineRunTimelineEvent(artifact?.path ? 'complete' : 'evidence-written', artifact?.path ? 'Output artifact written' : 'Run evidence written without a loadable splat', 'complete'),
+      ],
+    };
+    return completed;
+  });
+  pipelineDockState.selectedOutputIdByRouteId ||= {};
+  pipelineDockState.selectedOutputIdByRouteId[routeNode.id] = outputNodeId;
+  savePipelineGraphLocalState();
+  return completed ? pipelineGeneratedOutputGraphNode(completed) : null;
+}
+
+function pipelineFailGeneratedOutputNode(outputNodeId, errorMessage, run = null) {
+  if (!outputNodeId) return null;
+  const now = new Date().toISOString();
+  let failed = null;
+  pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().map(record => {
+    if (record.id !== outputNodeId) return record;
+    if (record.status === 'failed') {
+      failed = record;
+      return record;
+    }
+    failed = {
+      ...record,
+      status: 'failed',
+      phase: 'failed',
+      statusMessage: errorMessage || 'Pipeline execution failed',
+      artifact: null,
+      sidecar: pipelineRunArtifact(run, 'sidecar') || record.sidecar || null,
+      reportPath: run?.report?.path || record.reportPath || null,
+      bundlePath: run?.bundle?.path || record.bundlePath || null,
+      outputRoot: run?.bundle?.document?.outputRoot || record.outputRoot || null,
+      updatedAt: now,
+      failedAt: now,
+      error: errorMessage || run?.error || 'Pipeline execution failed',
+      runTimeline: [
+        ...(record.runTimeline || []),
+        pipelineRunTimelineEvent('failed', errorMessage || 'Pipeline execution failed', 'failed'),
+      ],
+    };
+    return failed;
+  });
+  savePipelineGraphLocalState();
+  return failed ? pipelineGeneratedOutputGraphNode(failed) : null;
 }
 
 function pipelineGraphInspectorSubjectId() {
@@ -5816,7 +6134,11 @@ function handlePipelineGraphGeneratorDrop(event) {
 
 function pipelineGraphNodeActionsMarkup(node) {
   if (node.kind === 'route') {
+    const outputs = pipelineRouteGeneratedOutputRecords(node.id);
+    const selectedOutput = pipelineSelectedRouteOutputRecord(node.id);
+    const latestStatus = node.runStatus ? pipelineGeneratedOutputStatusLabel(node.runStatus) : 'idle';
     return `
+      <span class="pipeline-graph-node-status ${escapeHtml(node.runStatus?.status || 'idle')}" data-pipeline-route-status-node-id="${escapeHtml(node.id)}">${escapeHtml(latestStatus)}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
@@ -5825,18 +6147,36 @@ function pipelineGraphNodeActionsMarkup(node) {
           data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
         >Execute</button>
       </span>
+      <span
+        class="pipeline-output-container"
+        data-pipeline-output-container-route-id="${escapeHtml(node.id)}"
+        aria-label="Generated outputs for ${escapeHtml(node.title)}"
+      >
+        ${outputs.length ? outputs.slice(0, 5).map((output, index) => `
+          <button
+            type="button"
+            class="pipeline-output-pill ${escapeHtml(output.status || 'complete')}${output.id === selectedOutput?.id ? ' selected' : ''}"
+            data-pipeline-route-output-id="${escapeHtml(output.id)}"
+            data-pipeline-route-output-route-id="${escapeHtml(node.id)}"
+            data-pipeline-generated-output-status="${escapeHtml(output.status || 'complete')}"
+            title="${escapeHtml(`${output.status || 'complete'} ${output.sourceLabel || output.runId}`)}"
+          >${escapeHtml(output.status === 'failed' ? 'fail' : output.status === 'pending' || output.status === 'running' ? 'run' : `#${outputs.length - index}`)}</button>
+        `).join('') : '<span class="pipeline-output-container-empty">no outputs</span>'}
+      </span>
     `;
   }
   if (node.kind === 'generated-output') {
     const loaded = Boolean(node.loaded);
+    const status = node.status || 'complete';
     return `
+      <span class="pipeline-graph-node-status ${escapeHtml(status)}" data-pipeline-generated-output-status="${escapeHtml(status)}">${escapeHtml(pipelineGeneratedOutputStatusLabel(node))}</span>
       <span class="pipeline-graph-node-actions">
         <button
           type="button"
           class="pipeline-graph-node-action${loaded ? '' : ' primary'}"
           data-pipeline-graph-node-action="load-output"
           data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
-          ${loaded ? 'disabled' : ''}
+          ${loaded || !node.artifact?.path || status !== 'complete' ? 'disabled' : ''}
         >${loaded ? 'Loaded' : 'Load'}</button>
       </span>
     `;
@@ -5893,10 +6233,11 @@ function renderPipelineGraphWorkbench() {
     <div
       role="button"
       tabindex="0"
-      class="pipeline-graph-node ${escapeHtml(node.kind)}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}${node.id === pipelineDockState.graphConnectionStartId ? ' connecting' : ''}${isTarget ? ' port-target' : ''}"
+      class="pipeline-graph-node ${escapeHtml(node.kind)}${node.status ? ` ${escapeHtml(node.status)}` : ''}${node.id === pipelineDockState.selectedGraphNodeId ? ' selected' : ''}${node.id === pipelineDockState.graphConnectionStartId ? ' connecting' : ''}${isTarget ? ' port-target' : ''}"
       data-pipeline-graph-node-id="${escapeHtml(node.id)}"
       ${node.kind === 'image' ? `data-pipeline-graph-image-node-id="${escapeHtml(node.id)}"` : ''}
       ${node.kind === 'generated-output' ? `data-pipeline-generated-output-node-id="${escapeHtml(node.id)}"` : ''}
+      ${node.kind === 'generated-output' ? `data-pipeline-generated-output-status="${escapeHtml(node.status || 'complete')}"` : ''}
       aria-pressed="${node.id === pipelineDockState.selectedGraphNodeId ? 'true' : 'false'}"
       style="left: ${position.x}px; top: ${position.y}px;"
     >
@@ -6016,6 +6357,21 @@ function renderPipelineGraphWorkbench() {
       });
     });
     actionEl.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  });
+  canvas.querySelectorAll('[data-pipeline-route-output-id]').forEach(outputEl => {
+    outputEl.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    outputEl.addEventListener('pointerup', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      pipelineSetSelectedRouteOutput(outputEl.dataset.pipelineRouteOutputRouteId, outputEl.dataset.pipelineRouteOutputId);
+    });
+    outputEl.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
     });
@@ -6699,11 +7055,13 @@ async function runSelectedPipeline(options = {}) {
     body: JSON.stringify({
       pipelineId: pipelineDockState.selectedPipelineId,
       source: source.source,
+      clientRunId: options.clientRunId || null,
     }),
   });
   const result = await response.json();
   const remembered = pipelineRememberRun({
     ...result,
+    clientRunId: options.clientRunId || result.clientRunId || null,
     graphExecution: options.graphExecution || result.graphExecution || null,
   }, source, selectedPipelineRecord());
   renderPipelineDock();
