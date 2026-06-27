@@ -23,6 +23,7 @@
       height: 100vh;
       transform: scale(1.42);
       transform-origin: 50% 45%;
+      touch-action: none;
     }
     #juice-gpu-layer {
       pointer-events: none;
@@ -30,6 +31,10 @@
     }
     #stage {
       z-index: 0;
+      cursor: grab;
+    }
+    #stage.orbiting {
+      cursor: grabbing;
     }
     .hud {
       position: fixed;
@@ -146,9 +151,9 @@
       hand_sample_space: emitterPacket.hand_sample_space,
       lerms_world_frame: emitterPacket.lerms_world_frame,
       emitters: [
-        { id: 'index', tip_index: 8, origin_world: [-0.50, 0.46, -1.02], aim_world: [0.42, 0.14, 1.0], motion_world: [0.06, -0.04, 0.07], extension: 1.0, chemistry: 'knockback', radius: 0.112, strength: 1.18, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'index', tip_index: 8, origin_world: [-0.44, 0.46, -1.02], aim_world: [0.28, 0.15, 1.0], motion_world: [0.035, -0.04, 0.075], extension: 1.0, chemistry: 'knockback', radius: 0.112, strength: 1.14, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
         { id: 'middle', tip_index: 12, origin_world: [0.0, 0.44, -1.04], aim_world: [0.0, 0.16, 1.0], motion_world: [0.0, -0.03, 0.08], extension: 1.0, chemistry: 'pooling', radius: 0.112, strength: 1.32, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
-        { id: 'ring', tip_index: 16, origin_world: [0.34, 0.42, -1.02], aim_world: [-0.34, 0.12, 1.0], motion_world: [-0.06, -0.04, 0.06], extension: 1.0, chemistry: 'weird', radius: 0.122, strength: 0.94, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.28, 0.42, -1.02], aim_world: [-0.22, 0.13, 1.0], motion_world: [-0.035, -0.04, 0.065], extension: 1.0, chemistry: 'weird', radius: 0.122, strength: 0.9, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
     prototype.setEmitters(emitterPacket);
@@ -177,9 +182,35 @@
     let liveReadbackCpuOracleMode = null;
     let witnessCaptureFrozen = false;
     let witnessFrozenCaptureState = null;
+    const orbitCameraControlContract = 'orbit-camera-controls-v0';
+    const defaultFingerJuiceCamera = Object.freeze({ yaw: 0, pitch: 0, zoom: 1 });
+    let fingerJuiceCamera = { ...defaultFingerJuiceCamera };
+    let cameraDrag = null;
     const webgpuFrameStepDt = 1 / 120;
     const webgpuReadbackPeriod = 0.55;
     const liveReadbackContract = 'live_readback_decoupled_v0';
+
+    function clampCamera(camera = fingerJuiceCamera) {
+      camera.yaw = Math.max(-0.92, Math.min(0.92, Number(camera.yaw) || 0));
+      camera.pitch = Math.max(-0.52, Math.min(0.62, Number(camera.pitch) || 0));
+      camera.zoom = Math.max(0.62, Math.min(1.85, Number(camera.zoom) || 1));
+      return camera;
+    }
+
+    function cameraSnapshot() {
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      return {
+        cameraControlContract: orbitCameraControlContract,
+        yaw: Number(camera.yaw.toFixed(4)),
+        pitch: Number(camera.pitch.toFixed(4)),
+        zoom: Number(camera.zoom.toFixed(4)),
+      };
+    }
+
+    function resetFingerJuiceCamera() {
+      fingerJuiceCamera = { ...defaultFingerJuiceCamera };
+      return cameraSnapshot();
+    }
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
@@ -267,6 +298,7 @@
         emitterBufferRoute: webgpuState?.emitterBufferRoute || LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
         respawnContract: webgpuState?.respawnContract || LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         visualRenderer,
+        fingerJuiceCamera: cameraSnapshot(),
         terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
         emitterPacket,
         ...solverState,
@@ -359,27 +391,81 @@
     }
 
     function responsiveSmokeProjection(width = window.innerWidth, height = window.innerHeight) {
-      const projectionScale = Math.min(width * 0.64, height * 0.96);
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      const projectionScale = Math.min(width * 0.64, height * 0.96) * camera.zoom;
       return {
         projectionScale,
-        zScale: height * 0.23,
+        zScale: height * 0.23 * camera.zoom,
         centerX: width * 0.5,
         centerY: height * 0.74,
       };
+    }
+
+    function cameraSpacePoint(point) {
+      const camera = clampCamera({ ...fingerJuiceCamera });
+      const yawSin = Math.sin(camera.yaw);
+      const yawCos = Math.cos(camera.yaw);
+      const pitchSin = Math.sin(camera.pitch);
+      const pitchCos = Math.cos(camera.pitch);
+      const yawedX = point[0] * yawCos - point[2] * yawSin;
+      const yawedZ = point[0] * yawSin + point[2] * yawCos;
+      const pitchedY = point[1] * pitchCos - yawedZ * pitchSin;
+      const pitchedZ = point[1] * pitchSin + yawedZ * pitchCos;
+      return [yawedX, pitchedY, pitchedZ];
     }
 
     function project(point) {
       const width = window.innerWidth;
       const height = window.innerHeight;
       const projection = responsiveSmokeProjection(width, height);
-      const depth = 1.45 + point[2];
+      const cameraPoint = cameraSpacePoint(point);
+      const depth = 1.45 + cameraPoint[2];
       const scale = projection.projectionScale / Math.max(0.42, depth);
       return {
-        x: projection.centerX + point[0] * scale,
-        y: projection.centerY - point[2] * projection.zScale - point[1] * scale * 0.52,
+        x: projection.centerX + cameraPoint[0] * scale,
+        y: projection.centerY - cameraPoint[2] * projection.zScale - cameraPoint[1] * scale * 0.52,
         scale,
       };
     }
+
+    stage.addEventListener('pointerdown', event => {
+      cameraDrag = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        yaw: fingerJuiceCamera.yaw,
+        pitch: fingerJuiceCamera.pitch,
+      };
+      stage.classList.add('orbiting');
+      stage.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    stage.addEventListener('pointermove', event => {
+      if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+      fingerJuiceCamera.yaw = cameraDrag.yaw + (event.clientX - cameraDrag.x) * 0.0042;
+      fingerJuiceCamera.pitch = cameraDrag.pitch + (event.clientY - cameraDrag.y) * 0.0032;
+      clampCamera();
+      event.preventDefault();
+    });
+    function endCameraDrag(event) {
+      if (cameraDrag && cameraDrag.pointerId === event.pointerId) {
+        stage.releasePointerCapture?.(event.pointerId);
+        cameraDrag = null;
+        stage.classList.remove('orbiting');
+      }
+    }
+    stage.addEventListener('pointerup', endCameraDrag);
+    stage.addEventListener('pointercancel', endCameraDrag);
+    stage.addEventListener('wheel', event => {
+      fingerJuiceCamera.zoom *= Math.exp(-event.deltaY * 0.001);
+      clampCamera();
+      event.preventDefault();
+    }, { passive: false });
+    stage.addEventListener('dblclick', event => {
+      resetFingerJuiceCamera();
+      event.preventDefault();
+    });
+    window.__lermsFingerJuiceCameraForWitness = () => cameraSnapshot();
 
     function visualActivityFrame(state = readDebugState()) {
       const points = [];
@@ -719,6 +805,7 @@
           width: window.innerWidth,
           height: window.innerHeight,
           pixelRatio: window.devicePixelRatio || 1,
+          camera: fingerJuiceCamera,
         });
         webgpuRenderFrameCount = renderState.renderFrameCount;
         webgpuState = { ...webgpuState, ...renderState };
@@ -759,6 +846,7 @@
       const spatialSurfaceRelaxationStats = state.spatialSurfaceRelaxationStats || {};
       const densityPositionSolveStats = state.densityPositionSolveStats || {};
       const densityContinuityProjectionStats = state.densityContinuityProjectionStats || {};
+      const sampledNeighborhoodDensityStats = state.sampledNeighborhoodDensityStats || {};
       const particleSupportBudgetStats = state.particleSupportBudgetStats || {};
       const settleRestEnergyStats = state.settleRestEnergyStats || {};
       const stabilityStats = state.stabilityStats || {};
@@ -767,7 +855,8 @@
       const emitterSummary = emitterDiagnostics
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      const camera = cameraSnapshot();
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());
@@ -815,6 +904,7 @@
                   width: window.innerWidth,
                   height: window.innerHeight,
                   pixelRatio: window.devicePixelRatio || 1,
+                  camera: fingerJuiceCamera,
                 });
                 webgpuRenderFrameCount = renderState.renderFrameCount;
                 webgpuState = { ...webgpuState, ...renderState };
