@@ -261,6 +261,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-output-pill.pending,
 .pipeline-output-pill.running { border-color: #5d4822; background: #241d11; color: #f0b85a; }
 .pipeline-output-pill.failed { border-color: #5a3030; background: #241818; color: #e6a0a0; }
+.pipeline-output-history { border-top: 1px solid #282828; margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.pipeline-output-history-title { color: #888; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.pipeline-output-history-row { width: 100%; min-width: 0; border: 1px solid #2f2f2f; background: #181818; color: #bbb; border-radius: 6px; padding: 7px 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; text-align: left; cursor: pointer; }
+.pipeline-output-history-row:hover { border-color: #4a4a4a; background: #202020; color: #eee; }
+.pipeline-output-history-row.selected { border-color: #7fb35b; background: #1e321a; color: #fff; }
+.pipeline-output-history-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }
+.pipeline-output-history-meta { grid-column: 1 / -1; color: #777; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-output-history-empty { color: #555; font-size: 10px; }
 .pipeline-graph-node.source { left: 18px; top: 92px; }
 .pipeline-graph-node.route { left: 180px; top: 92px; }
 .pipeline-graph-node.output { left: 342px; top: 44px; }
@@ -11051,6 +11059,33 @@ function pipelineSetSelectedRouteOutput(routeNodeId, outputId) {
   return record;
 }
 
+function pipelineSelectOutputHistoryRecord(routeNodeId, outputId) {
+  return pipelineSetSelectedRouteOutput(routeNodeId, outputId);
+}
+
+function pipelineGeneratedOutputGraphRelation(record) {
+  if (!record?.routeNodeId) return 'produced from previous graph state';
+  const currentInput = pipelineGraphRouteInputSource(record.routeNodeId);
+  const snapshotSource = record.routeSnapshot?.source?.source || null;
+  if (snapshotSource && currentInput?.source === snapshotSource) {
+    return 'produced from current graph';
+  }
+  if (!snapshotSource && currentInput?.graphNodeId && currentInput.graphNodeId === record.sourceGraphNodeId) {
+    return 'produced from current graph';
+  }
+  return 'produced from previous graph state';
+}
+
+function pipelineOutputHistoryRowsForRoute(routeNodeId) {
+  return pipelineRouteGeneratedOutputRecords(routeNodeId).map((record, index, records) => ({
+    record,
+    index,
+    number: records.length - index,
+    selected: pipelineDockState.selectedOutputIdByRouteId?.[routeNodeId] === record.id,
+    relation: pipelineGeneratedOutputGraphRelation(record),
+  }));
+}
+
 function pipelineGraphRouteSnapshot(routeNode, source, requestedPipelineId) {
   const generator = routeNode?.generator || selectedPipelineGeneratorRecord();
   const pipeline = routeNode?.pipeline || selectedPipelineRecord();
@@ -11614,6 +11649,7 @@ function pipelineGraphInspectorRows(node, selectedRun) {
   if (node.kind === 'generated-output') rows.push({ key: 'timeline', value: `${node.runTimeline?.length || 0} event${node.runTimeline?.length === 1 ? '' : 's'}` });
   if (node.kind === 'generated-output') rows.push({ key: 'route snapshot', value: node.routeSnapshot?.schema || 'missing' });
   if (node.kind === 'generated-output') rows.push({ key: 'graph snapshot', value: node.graphSnapshot?.schema || 'missing' });
+  if (node.kind === 'generated-output') rows.push({ key: 'graph relation', value: pipelineGeneratedOutputGraphRelation(node) });
   if (node.kind === 'generated-output') rows.push({ key: 'preview', value: node.previewTruth || 'point-cloud preview' });
   if (node.kind === 'generated-output') rows.push({ key: 'loaded', value: node.loaded ? `yes${node.loadedSceneObjectId ? ` (${node.loadedSceneObjectId})` : ''}` : 'not loaded' });
   if (node.kind === 'generated-output') rows.push({ key: 'route node', value: node.routeNodeId || 'unknown' });
@@ -11690,6 +11726,25 @@ function renderPipelineGraphInspector(node, selectedRun) {
     actions.push({ label: 'Remove Hook', action: () => pipelineRemoveGraphEdge(selectedEdge.id) });
   }
   const statusRecord = pipelineGraphInspectorStatusRecord();
+  const historyRows = node?.kind === 'route' ? pipelineOutputHistoryRowsForRoute(node.id) : [];
+  const historyMarkup = node?.kind === 'route' ? `
+    <div class="pipeline-output-history" data-pipeline-output-history-route="${escapeHtml(node.id)}">
+      <div class="pipeline-output-history-title">Output History</div>
+      ${historyRows.length ? historyRows.map(row => `
+        <button
+          type="button"
+          class="pipeline-output-history-row${row.selected ? ' selected' : ''}"
+          data-pipeline-output-history-id="${escapeHtml(row.record.id)}"
+          data-pipeline-output-history-route-id="${escapeHtml(node.id)}"
+          data-pipeline-generated-output-status="${escapeHtml(row.record.status || 'complete')}"
+        >
+          <span class="pipeline-output-history-main">#${escapeHtml(row.number)} ${escapeHtml(row.record.sourceLabel || row.record.runId)}</span>
+          <span class="pipeline-status-chip ${escapeHtml(row.record.status || 'complete')}">${escapeHtml(row.record.status || 'complete')}</span>
+          <span class="pipeline-output-history-meta">${escapeHtml(row.relation)} / ${escapeHtml(row.record.phase || 'complete')} / ${escapeHtml(row.record.artifact?.path?.split('/').pop() || 'no artifact yet')}</span>
+        </button>
+      `).join('') : '<div class="pipeline-output-history-empty">No outputs yet.</div>'}
+    </div>
+  ` : '';
   inspector.innerHTML = `
     <div class="pipeline-graph-inspector-title">${escapeHtml(node?.title || (selectedEdge ? `${selectedEdge.from} -> ${selectedEdge.to}` : 'Select a graph node'))}</div>
     <div class="pipeline-graph-inspector-body">${escapeHtml(bodyText)}</div>
@@ -11704,6 +11759,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
         <div class="pipeline-graph-inspector-val">${escapeHtml(row.value)}</div>
       `).join('')}
     </div>
+    ${historyMarkup}
   `;
   const actionHost = document.getElementById('pipeline-graph-inspector-actions');
   if (!actionHost) return;
@@ -11732,6 +11788,21 @@ function renderPipelineGraphInspector(node, selectedRun) {
     });
     actionHost.appendChild(button);
   }
+  inspector.querySelectorAll('[data-pipeline-output-history-id]').forEach(historyButton => {
+    historyButton.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    historyButton.addEventListener('pointerup', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      pipelineSelectOutputHistoryRecord(historyButton.dataset.pipelineOutputHistoryRouteId, historyButton.dataset.pipelineOutputHistoryId);
+    });
+    historyButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+  });
 }
 
 async function pipelineActivateGraphInspectorAction(item, button, source = 'click') {

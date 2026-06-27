@@ -210,6 +210,12 @@ assert.match(index, /data-pipeline-output-container-route-id/, 'Route-local outp
 assert.match(index, /data-pipeline-generated-output-status/, 'Generated output nodes must expose pending/complete/failed status for browser smokes');
 assert.match(index, /selectedOutputIdByRouteId/, 'Output selection must be route-local instead of mutating the live graph configuration');
 assert.doesNotMatch(index, /Restore This Run/, 'Run history selection must not expose graph-mutating restore semantics before an explicit restore\/fork contract exists');
+assert.match(index, /function pipelineOutputHistoryRowsForRoute\(/, 'Route inspector must expose output history rows for the selected route');
+assert.match(index, /data-pipeline-output-history-id/, 'Route inspector output history rows need stable DOM ids for browser smokes');
+assert.match(index, /function pipelineGeneratedOutputGraphRelation\(/, 'Generated output inspection must label whether a run matches the current live graph input');
+assert.match(index, /produced from current graph/, 'Generated output history must say when an output matches the current route input');
+assert.match(index, /produced from previous graph state/, 'Generated output history must say when an output came from older graph state');
+assert.match(index, /pipelineSelectOutputHistoryRecord/, 'Selecting output history must be a selection operation, not graph restoration');
 assert.match(index, /real SHARP \/ point-cloud preview/, 'Generated SHARP output nodes must label the current preview truth boundary');
 assert.match(index, /pipelineDockState\.loadedPipelineArtifactPaths/, 'Pipeline graph tracks whether a generated artifact has been loaded into the scene');
 assert.match(index, /data-pipeline-generated-output-node-id/, 'Generated output nodes expose stable DOM ids for browser smokes');

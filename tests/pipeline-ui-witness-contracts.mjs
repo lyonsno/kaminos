@@ -34,6 +34,10 @@ assert.match(witness, /routeSnapshot/, 'Pipeline UI witness must assert generate
 assert.match(witness, /graphSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable graph snapshots');
 assert.match(witness, /data-pipeline-output-container-route-id/, 'Pipeline UI witness must assert route-local output container porcelain is visible');
 assert.match(witness, /data-pipeline-generated-output-status/, 'Pipeline UI witness must assert output status is visible in the graph DOM');
+assert.match(witness, /data-pipeline-output-history-id/, 'Pipeline UI witness must select generated outputs from the route inspector history');
+assert.match(witness, /historySelection/, 'Pipeline UI witness must prove output history selection does not mutate route input wiring');
+assert.match(witness, /produced from previous graph state/, 'Pipeline UI witness must assert older outputs are labeled as prior graph state');
+assert.match(witness, /produced from current graph/, 'Pipeline UI witness must assert latest outputs can be labeled as current graph state');
 assert.doesNotMatch(witness, /data-pipeline-graph-node-id="route"/, 'Pipeline UI witness must not depend on singleton route node ids');
 assert.doesNotMatch(witness, /data-pipeline-generated-output-node-id="output"/, 'Pipeline UI witness must not depend on singleton output node ids');
 assert.match(witness, /graphExecution/, 'Pipeline UI witness must assert graph execution provenance on the selected run');
