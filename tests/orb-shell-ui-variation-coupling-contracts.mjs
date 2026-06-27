@@ -12,7 +12,9 @@ assert.match(index, /function readOrbShellCompositionControls\(\)/, 'index must 
 assert.match(index, /orb-shell-ui-seed-leaves-coupled-to-composition-variation/, 'composition control reader must stamp a stable UI coupling source');
 assert.match(index, /orbShellCompositionWitness\.setVariation\(readOrbShellCompositionControls\(\)\)/, 'UI seed/leaves changes must update composition variation');
 assert.match(index, /params\.has\('orb_shell_variation_seed'\)[\s\S]+orb-shell-seed/, 'variation seed URL param must hydrate the visible seed control');
-assert.match(index, /orb-shell-composition-variant[\s\S]+variationLeafCount/, 'visible composition readout must expose seed plus leaf pressure');
+assert.match(index, /orb-shell-composition-variant[\s\S]+pressure-\$\{state\?\.variationLeafCount/, 'visible composition readout must expose seed plus density pressure');
+assert.match(index, /function orbShellCompositionStatusText\(state\)[\s\S]+density pressure \$\{state\?\.variationLeafCount/, 'Macro Grounding status must describe UI leaves as density pressure');
+assert.doesNotMatch(index, /orb-shell-composition-variant'\)\.textContent = `\$\{state\?\.variantId \|\| 'baseline'\}:\$\{state\?\.variationSeed \?\? 0\}\/leaves-/, 'Macro Grounding readout must not imply literal leaves');
 
 assert.match(core, /variationLeafCount/, 'composition core must carry variation leaf count through the descriptor');
 assert.match(core, /uiControlSource/, 'composition core must preserve UI control source identity');
