@@ -8,6 +8,16 @@ are both smaller than the thing. Kaminos is a meta-place: a forge where world
 pieces are made, a workbench where they are tested, and a set of chambers where
 finished or half-finished worlds can be entered on their own terms.
 
+The most legible public frame is:
+
+> Kaminos is a spatial studio for generated worlds: build assets on the bench,
+> stage them in controlled rigs, enter world chambers, and preserve the
+> provenance and witness truth needed to keep generated work usable.
+
+That frame is intentionally narrower than the full internal ambition. It gives
+the project a coherent public front door while leaving room for the deeper
+inhabited forge to become visible through prototypes instead of explanation.
+
 The current architecture has three primary spatial modes:
 
 - **Forge Floor:** the operational habitat where embodied workers, tools,
@@ -129,6 +139,13 @@ This is a cleaner model than multiplying tabs for every use. The operator does
 not merely open a different page. The operator changes how much world-pressure
 the object is under.
 
+The posture model is also the public-story escape hatch. Kaminos does not need
+to explain every private operational ambition at once. It can first teach the
+external audience that a generated object moves through meaningful postures:
+bench, rig, chamber, and provenance. Once that is legible, the Forge Floor reads
+as the natural place where the production and stewardship of those objects
+becomes spatial too.
+
 ## Worked Example: LERMS
 
 LERMS is a useful first worked example because it is not naturally reducible to
@@ -211,7 +228,7 @@ World Chambers should therefore report:
 Kaminos can be explained publicly without requiring every private ambition to
 be public on day one.
 
-The public-legible core is:
+The public-legible core is still:
 
 > Kaminos is a spatial studio for generated worlds: build assets on the bench,
 > stage them in controlled rigs, enter world chambers, and preserve the
@@ -233,6 +250,22 @@ right order is:
 In other words, do not hide the Forge Floor from the architecture. Do not lead
 with it as the public proof until the prototype makes it feel inevitable.
 
+A useful staging split:
+
+- **README/front door:** lead with generated-world studio, Workbench/Kiln, World
+  Chambers, source truth, and the idea that generated assets can move between
+  bench, rig, and world without losing identity.
+- **Architecture docs:** explain the full Forge Floor / Workbench-Kiln / World
+  Chambers model, including the Forge Rail and LERMS worked example.
+- **Internal coordination:** keep project-specific operator workflow, private
+  agent culture, correction rituals, and detailed embodied-agent social texture
+  out of the public pitch until the artifact can carry them.
+
+As a rough rule, about two-thirds of the abstract architecture is public-legible
+now, but less than half belongs in the README before coherent prototypes exist.
+The rest should stay modular: real in the architecture, available to implement,
+but not required for an outsider to understand why Kaminos matters.
+
 ## First Coherent Slice
 
 The first slice that expresses this north star does not need to be huge.
@@ -247,6 +280,13 @@ It should create:
 - a compact forge rail or placeholder bridge that proves the Forge Floor remains
   reachable without taking over the chamber;
 - route truth in the witness output.
+
+For public-facing demos, this slice should prove the generated-world studio
+story first. The Forge Rail can be present, but the demo should not depend on a
+viewer already caring about embodied operational agents. The viewer should be
+able to understand the loop as: generated matter is built, staged, inhabited,
+and witnessed. The operator can understand the deeper loop as: the same world is
+also being forged by persistent workers who remain spatially reachable.
 
 That would show the real Kaminos shape: not a generic 3D viewer, not a game
 launcher, not an agent dashboard, but a spatial forge where generated matter,
