@@ -52,6 +52,8 @@ assert.match(webgpuCoreSource, /webgpu_particle_solver_v0/, 'WebGPU solver route
 assert.match(webgpuCoreSource, /wgsl-ballistic-heightfield-surface-v0/, 'WebGPU shader route identity is explicit');
 assert.match(webgpuCoreSource, /webgpu_particle_splat_renderer_v0/, 'WebGPU render route identity is explicit');
 assert.match(webgpuCoreSource, /wgsl-particle-splat-renderer-v0/, 'WebGPU render shader identity is explicit');
+assert.match(webgpuCoreSource, /webgpu_emitter_buffer_v0/, 'WebGPU emitter buffer route identity is explicit');
+assert.match(webgpuCoreSource, /wgsl-gpu-emitter-respawn-v0/, 'WebGPU respawn contract identity is explicit');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
 assert.match(webgpuCoreSource, /webgpu_compute/, 'WebGPU solver can report compute backend');
 assert.match(webgpuCoreSource, /render_backend/, 'WebGPU solver reports effective render backend');
@@ -63,6 +65,13 @@ assert.match(webgpuCoreSource, /createComputePipeline/, 'WebGPU solver advances 
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'WebGPU solver renders particles through a render pipeline');
 assert.match(webgpuCoreSource, /GPUCanvasContext/, 'WebGPU renderer configures a canvas context');
 assert.match(webgpuCoreSource, /createRenderer/, 'WebGPU solver exposes a direct renderer');
+assert.match(webgpuCoreSource, /createWebGPUEmitterBufferData/, 'WebGPU solver serializes emitters into a GPU buffer');
+assert.match(webgpuCoreSource, /@binding\(2\)\s+var<storage,\s*read>\s+emitters/, 'WebGPU solver shader reads a storage emitter buffer');
+assert.match(webgpuCoreSource, /spawn_jitter_hash_v0/, 'WebGPU respawn path uses deterministic spawn jitter');
+assert.match(webgpuCoreSource, /respawnCount/, 'WebGPU solver exposes particle respawn counts');
+assert.match(webgpuCoreSource, /particlesPerEmitter/, 'WebGPU solver reports per-emitter active particle counts');
+assert.match(webgpuCoreSource, /ringEmitterLateralDrift/, 'WebGPU solver attributes ring emitter lateral drift');
+assert.match(webgpuCoreSource, /emitterBufferRoute/, 'WebGPU solver reports effective emitter buffer route');
 assert.match(webgpuCoreSource, /@compute\s+@workgroup_size/, 'WebGPU solver shader contains compute entry point');
 assert.match(webgpuCoreSource, /runCpuFingerJuiceOracle/, 'WebGPU route keeps CPU oracle comparison');
 assert.match(webgpuCoreSource, /adapterInfo/, 'WebGPU route records adapter identity');
@@ -91,9 +100,15 @@ assert.match(witnessSource, /webgpu_compute/, 'witness requires WebGPU compute b
 assert.match(witnessSource, /webgpu_particle_solver_v0/, 'witness records WebGPU solver route');
 assert.match(witnessSource, /webgpu_direct_render/, 'witness requires direct WebGPU render backend');
 assert.match(witnessSource, /webgpu_particle_splat_renderer_v0/, 'witness records WebGPU render route');
+assert.match(witnessSource, /webgpu_emitter_buffer_v0/, 'witness records WebGPU emitter buffer route');
+assert.match(witnessSource, /wgsl-gpu-emitter-respawn-v0/, 'witness records GPU respawn contract');
 assert.match(witnessSource, /readbackCadence/, 'witness records throttled readback cadence');
 assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
 assert.match(witnessSource, /cpuOracle/, 'witness records CPU oracle comparison');
+assert.match(witnessSource, /respawnProbeSteps/, 'witness forces a bounded respawn probe');
+assert.match(witnessSource, /gpuRespawnCount/, 'witness requires GPU respawn evidence');
+assert.match(witnessSource, /particlesPerEmitter/, 'witness records per-emitter particle counts');
+assert.match(witnessSource, /ringEmitterLateralDrift/, 'witness records ring emitter lateral drift attribution');
 assert.match(witnessSource, /world-space-ballistic-surface-flow-particles-v0/, 'witness requires the world-space transport route');
 assert.match(witnessSource, /trailSampleCount/, 'witness requires trail sample evidence');
 assert.match(witnessSource, /trailEmitterCount/, 'witness requires multi-emitter trail evidence');
@@ -114,6 +129,8 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE, 'webgpu_particle_
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE, 'wgsl-ballistic-heightfield-surface-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE, 'webgpu_particle_splat_renderer_v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE, 'wgsl-particle-splat-renderer-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE, 'webgpu_emitter_buffer_v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT, 'wgsl-gpu-emitter-respawn-v0');
 
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
   packet_id: 'test-live-packet-1',

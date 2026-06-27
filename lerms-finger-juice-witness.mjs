@@ -17,6 +17,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lerms-finger-juice-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 1700);
 const witnessSteps = Number(args.get('--witness-steps') || 180);
+const respawnProbeSteps = Number(args.get('--respawn-steps') || 620);
 
 let phase = 'initializing';
 let stderr = '';
@@ -213,7 +214,7 @@ async function run() {
     assert.ok(cadenceProbe.readbackCadence >= 0.5, 'readback cadence is not throttled away from the render frame loop');
 
     phase = 'read_debug_state';
-    const state = await evaluate(ws, `(async () => {
+    let state = await evaluate(ws, `(async () => {
       if (window.__lermsFingerJuiceStepForWitness) {
         const [primary, overlap] = await Promise.all([
           window.__lermsFingerJuiceStepForWitness({ steps: ${JSON.stringify(witnessSteps)}, dt: 1 / 60 }),
@@ -224,8 +225,16 @@ async function run() {
       }
       return window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
     })()`);
-    lastTrustworthyState = state;
     const overlapState = await evaluate(ws, `window.__lermsFingerJuiceOverlapWitness || null`);
+    const preRespawnState = state;
+    const respawnState = await evaluate(ws, `(async () => {
+      if (window.__lermsFingerJuiceStepForWitness) {
+        return window.__lermsFingerJuiceStepForWitness({ steps: ${JSON.stringify(respawnProbeSteps)}, dt: 1 / 60 });
+      }
+      return window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+    })()`);
+    if (respawnState) state = respawnState;
+    lastTrustworthyState = state;
     const webgpuConsoleFailures = consoleEvents.map(summarizeConsoleEvent)
       .filter(event => event.method === 'Runtime.exceptionThrown' || /WebGPU|GPUDevice|MapAsync|already mapped|readback/i.test(event.text));
     assert.deepEqual(webgpuConsoleFailures, [], 'WebGPU route emitted console/runtime errors');
@@ -237,6 +246,8 @@ async function run() {
     assert.equal(state.shaderRoute, 'wgsl-ballistic-heightfield-surface-v0', 'wrong WebGPU shader route');
     assert.equal(state.render_backend, 'webgpu_direct_render', 'finger-juice route must use direct WebGPU render backend');
     assert.equal(state.renderRoute, 'webgpu_particle_splat_renderer_v0', 'wrong WebGPU render route');
+    assert.equal(state.emitterBufferRoute, 'webgpu_emitter_buffer_v0', 'wrong WebGPU emitter buffer route');
+    assert.equal(state.respawnContract, 'wgsl-gpu-emitter-respawn-v0', 'wrong WebGPU respawn contract');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -248,6 +259,11 @@ async function run() {
     assert.ok(state.lerms_world_frame?.world_from_hand_sample, 'missing world_from_hand_sample transform identity');
     assert.equal(state.visualRenderer, 'source-legible-phase-breadcrumbs-v2', 'wrong visual renderer');
     assert.ok(state.particleCount > 0, 'route did not spawn particles');
+    assert.ok(state.gpuRespawnCount > 0, 'GPU route did not recycle expired particles from emitters');
+    assert.ok(state.maxParticleAge < 8.2, 'GPU route is still pinning expired particles instead of respawning');
+    assert.ok(state.particlesPerEmitter && Object.keys(state.particlesPerEmitter).length >= 3, 'route did not report all emitter particle buckets');
+    assert.ok(Number.isFinite(state.ringEmitterLateralDrift?.average_x_delta), 'route did not attribute ring emitter lateral drift');
+    assert.ok(Math.abs(state.ringEmitterLateralDrift.average_x_delta) < 0.8, 'ring emitter lateral drift is unbounded');
     assert.ok(state.surfaceFlowCount > 0, 'route did not produce surface-flow particles');
     assert.ok(state.trailSampleCount >= 180, 'route did not retain enough visual trail samples');
     assert.ok(state.trailEmitterCount >= 3, 'route did not retain trails from all synthetic emitters');
@@ -282,11 +298,15 @@ async function run() {
       render_backend: state.render_backend,
       renderRoute: state.renderRoute,
       renderShaderRoute: state.renderShaderRoute,
+      emitterBufferRoute: state.emitterBufferRoute,
+      respawnContract: state.respawnContract,
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
       overlapState,
       cadenceProbe,
+      preRespawnState,
+      respawnProbeSteps,
       terrainContract: state.terrainContract,
       visualRenderer: state.visualRenderer,
       simulation_authority: state.simulation_authority,
@@ -294,6 +314,10 @@ async function run() {
       hand_sample_space: state.hand_sample_space,
       lerms_world_frame: state.lerms_world_frame,
       particleCount: state.particleCount,
+      gpuRespawnCount: state.gpuRespawnCount,
+      maxParticleAge: state.maxParticleAge,
+      particlesPerEmitter: state.particlesPerEmitter,
+      ringEmitterLateralDrift: state.ringEmitterLateralDrift,
       surfaceFlowCount: state.surfaceFlowCount,
       trailSampleCount: state.trailSampleCount,
       trailEmitterCount: state.trailEmitterCount,

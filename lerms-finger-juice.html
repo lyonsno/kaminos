@@ -69,6 +69,8 @@
     import {
       LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
       LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       createWebGPUFingerJuiceSolver,
     } from './lerms-finger-juice-webgpu-core.js';
 
@@ -132,6 +134,8 @@
     let webgpuState = {
       solver_backend: 'initializing',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       render_backend: 'initializing',
       renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     };
@@ -160,6 +164,8 @@
         solver_backend: solver.solver_backend,
         solverRoute: solver.solverRoute,
         shaderRoute: solver.shaderRoute,
+        emitterBufferRoute: solver.emitterBufferRoute,
+        respawnContract: solver.respawnContract,
         render_backend: solver.render_backend,
         renderRoute: solver.renderRoute,
         renderShaderRoute: solver.renderShaderRoute,
@@ -195,6 +201,8 @@
       webgpuState = {
         solver_backend: 'webgpu_unavailable',
         solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         render_backend: 'webgpu_render_unavailable',
         renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
         error: error.message,
@@ -212,6 +220,8 @@
         solver_backend: webgpuState?.solver_backend === 'webgpu_compute' ? 'webgpu_initializing' : webgpuState?.solver_backend || 'cpu_fallback',
         solverRoute: webgpuState?.solverRoute || LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
         shaderRoute: webgpuState?.shaderRoute || null,
+        emitterBufferRoute: webgpuState?.emitterBufferRoute || LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: webgpuState?.respawnContract || LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         adapterInfo: webgpuState?.adapterInfo || null,
         reason: webgpuState?.reason || webgpuState?.error || null,
         render_backend: webgpuState?.render_backend || 'cpu_canvas_render',
@@ -224,6 +234,8 @@
         routeActive,
         effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
         solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        emitterBufferRoute: webgpuState?.emitterBufferRoute || LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: webgpuState?.respawnContract || LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         visualRenderer,
         terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
         emitterPacket,
@@ -251,7 +263,7 @@
     }
 
     window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60 } = {}) => {
-      const safeSteps = Math.max(0, Math.min(360, Math.floor(Number(steps) || 0)));
+      const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
       if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
         const state = await webgpuSolver.stepAndRead(safeSteps, safeDt);
