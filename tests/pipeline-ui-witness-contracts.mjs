@@ -23,6 +23,7 @@ assert.match(witness, /input provenance only; output fixed fixture/, 'Pipeline U
 assert.match(witness, /graph-execute-sharp/, 'Pipeline UI witness must include a reusable graph Execute scenario');
 assert.match(witness, /graph-execute-artifact/, 'Pipeline UI witness must include a generic non-splat artifact graph Execute scenario');
 assert.match(witness, /expectedArtifactRole/, 'Pipeline UI witness must assert generated output artifact roles');
+assert.match(witness, /splat-candidate/, 'Pipeline UI witness must default native SHARP to the manifest splat-candidate role');
 assert.match(witness, /open-artifact/, 'Pipeline UI witness must verify non-splat generated outputs expose Open Artifact instead of Load Output');
 assert.match(witness, /Execute/, 'Pipeline UI witness must activate the visible graph route Execute button');
 assert.match(witness, /data-pipeline-graph-node-action="execute"/, 'Pipeline UI witness must activate Execute from the in-canvas route node');
@@ -34,6 +35,9 @@ assert.match(witness, /secondAssetNeedle/, 'Pipeline UI witness must support a t
 assert.match(witness, /generatedOutputNodes/, 'Pipeline UI witness must inspect generated-output records, not only singleton DOM nodes');
 assert.match(witness, /distinctGeneratedOutputs/, 'Pipeline UI witness must assert repeated generation preserves distinct output identities');
 assert.match(witness, /pendingGeneratedOutput/, 'Pipeline UI witness must observe a pending generated-output record before completion');
+assert.match(witness, /graphExecuteTimeoutMs/, 'Pipeline UI witness must expose a configurable graph execution timeout for native model routes');
+assert.match(witness, /graph-execute-timeout-ms/, 'Pipeline UI witness must accept a CLI timeout override for slow native model routes');
+assert.match(witness, /240000/, 'Pipeline UI witness must give native SHARP longer than the generic 90s graph execution window');
 assert.match(witness, /runTimeline/, 'Pipeline UI witness must assert generated output records carry status timeline evidence');
 assert.match(witness, /routeSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable route snapshots');
 assert.match(witness, /graphSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable graph snapshots');

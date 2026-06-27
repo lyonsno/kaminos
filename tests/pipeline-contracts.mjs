@@ -236,19 +236,23 @@ try {
     env: {
       ...process.env,
       KAMINOS_SHARP_COMMAND: '',
+      KAMINOS_SHARP_WEBGPU_REPO: join(tempRoot, 'missing-sharp-webgpu'),
     },
   });
 
-  assert.notEqual(liveMissing.status, 0, 'live SHARP route must fail when KAMINOS_SHARP_COMMAND is unconfigured');
-  assert.ok(existsSync(liveMissingReportPath), 'unavailable live SHARP must still write a failure report');
+  assert.notEqual(liveMissing.status, 0, 'live SHARP route must fail when the native SHARP-WebGPU substrate is unavailable');
+  assert.ok(existsSync(liveMissingReportPath), 'unavailable native SHARP must still write a failure report');
   const liveMissingReport = JSON.parse(readFileSync(liveMissingReportPath, 'utf8'));
   assert.equal(liveMissingReport.ok, false);
   assert.equal(liveMissingReport.requestedPipelineId, 'sharp-image-to-splat-live-v0');
   assert.equal(liveMissingReport.effectiveRouteConfig.routeId, 'adapter.sharp-image-to-splat-live.v0');
-  assert.match(liveMissingReport.error, /KAMINOS_SHARP_COMMAND/, 'live SHARP failure must name the missing command env');
+  assert.match(liveMissingReport.error, /live model adapter exited 1/, 'live SHARP failure must name the adapter execution failure');
   assert.equal(liveMissingReport.stages[0].status, 'failed');
   assert.equal(liveMissingReport.stages[0].effectiveRoute.realModel, true, 'failed live SHARP stage must still record the requested real backend identity');
-  assert.equal(liveMissingReport.stages[0].effectiveRoute.availability.status, 'unconfigured');
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.availability.status, 'available');
+  assert.equal(liveMissingReport.stages[0].effectiveRoute.availability.source, 'default');
+  assert.match(liveMissingReport.stages[0].effectiveRoute.stderrTail, /SHARP-WebGPU repo does not exist/, 'adapter stderr must name the missing native substrate');
+  assert.equal(existsSync(join(liveMissingOutDir, 'artifacts', 'sharp-output.ply')), false, 'failed native SHARP must not write a placeholder PLY');
 
   const mockSharpCommand = join(tempRoot, 'mock-sharp-command.mjs');
   writeFileSync(mockSharpCommand, `#!/usr/bin/env node
@@ -331,7 +335,7 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.requestedRealModel, true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schema, 'mock.sharp-adapter-report.v0');
   assert.equal(liveReport.stages[0].effectiveRoute.fixtureMode, 'mock-adapter');
-  assert.match(liveReport.stages[0].effectiveRoute.truthBoundary, /mock SHARP adapter fixture output/);
+  assert.match(liveReport.stages[0].effectiveRoute.truthBoundary, /mock SHARP(?:-WebGPU)? adapter fixture output/);
   assert.equal(liveReport.stages[0].effectiveRoute.availability.status, 'available');
   assert.equal(liveReport.stages[0].effectiveRoute.commandEnv, 'KAMINOS_SHARP_COMMAND');
   assert.equal(liveReport.stages[0].effectiveRoute.executedCommand[0], mockSharpCommand);
@@ -340,7 +344,7 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.artifacts.splat.status, 'fixture');
   assert.equal(liveReport.artifacts.sidecar.status, 'fixture');
   assert.equal(liveReport.artifacts.splat.fixtureSource?.mode, 'mock-adapter');
-  assert.match(liveReport.artifacts.splat.fixtureSource?.truthBoundary || '', /mock SHARP adapter fixture output/);
+  assert.match(liveReport.artifacts.splat.fixtureSource?.truthBoundary || '', /mock SHARP(?:-WebGPU)? adapter fixture output/);
   const liveSplat = readFileSync(liveReport.artifacts.splat.path, 'utf8');
   assert.match(liveSplat, /element vertex 729/, 'configured live SHARP mock route must emit enough points to be visibly inspectable');
   assert.match(liveSplat, /property uchar red/, 'configured live SHARP mock route must emit RGB colors for the Kaminos point-cloud preview');
@@ -350,7 +354,7 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveSidecar.asset.type, 'splat');
   assert.equal(liveSidecar.asset.path, liveReport.artifacts.splat.path);
   assert.equal(liveSidecar.status.stageMode, 'fixture');
-  assert.match(liveSidecar.status.truthBoundary, /mock SHARP adapter fixture output/);
+  assert.match(liveSidecar.status.truthBoundary, /mock SHARP(?:-WebGPU)? adapter fixture output/);
   assert.equal(liveSidecar.asset.renderCapabilities.realHybridRender, false);
 
   const adapterOutDir = join(tempRoot, 'adapter-out');

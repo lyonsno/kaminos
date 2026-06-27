@@ -21,9 +21,10 @@ const secondAssetNeedle = args.get('second-asset') || 'pipeline-test-image-alt.p
 const scenario = args.get('scenario') || 'image-import';
 const generatorId = args.get('generator-id') || 'sharp';
 const pipelineId = args.get('pipeline-id') || 'sharp-image-to-splat-live-v0';
-const expectedArtifactRole = args.get('artifact-role') || 'splat';
+const expectedArtifactRole = args.get('artifact-role') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 'splat-candidate' : 'splat');
 const expectsLoadableArtifact = expectedArtifactRole.includes('splat');
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
+const graphExecuteTimeoutMs = Number(args.get('graph-execute-timeout-ms') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 240000 : 90000));
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
 const historyPath = args.get('history') || '/tmp/kaminos-pipeline-ui-witness-history.png';
@@ -530,7 +531,7 @@ try {
         expectedTruth,
         splat,
       };
-    })()`, 'Graph Execute SHARP route');
+    })()`, 'Graph Execute SHARP route', graphExecuteTimeoutMs);
     if (expectsFixture) {
       assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
     } else if (executed.adapterFixture) {

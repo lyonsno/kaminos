@@ -10654,7 +10654,7 @@ function pipelineArtifactTitle(artifact) {
   const role = pipelineArtifactRoleLabel(artifact);
   if (role === 'normal-map') return 'Normal map output';
   if (role === 'pbr-material-bundle') return 'PBR material bundle';
-  if (pipelineArtifactIsLoadableSplat(artifact)) return 'Generated splat output';
+  if (pipelineArtifactIsLoadableSplat(artifact)) return 'splat output';
   return `${role || 'artifact'} output`;
 }
 
