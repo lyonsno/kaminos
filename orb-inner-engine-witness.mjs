@@ -88,6 +88,10 @@ function compactMetrics(metrics) {
     orangeChannelPixels: metrics.orangeChannelPixels,
     visibleCorePixels: metrics.visibleCorePixels,
     shellOccludedPixels: metrics.shellOccludedPixels,
+    occlusionIslandPixels: metrics.occlusionIslandPixels,
+    occlusionIslandSpreadScore: metrics.occlusionIslandSpreadScore,
+    apertureShapedSpillPixels: metrics.apertureShapedSpillPixels,
+    apertureSpillContainmentScore: metrics.apertureSpillContainmentScore,
   };
 }
 
@@ -145,18 +149,37 @@ const trajectoryReport = {
     {
       label: 'generatedSubstrate',
       path: generatedSubstratePng,
-      role: 'current anti-dial material pass: dirty plate, asymmetric baffle, bounded off-axis underlight',
+      role: 'current anti-dial material pass: dirty plate, asymmetric baffle, occlusion islands, bounded off-axis underlight',
       metrics: compactMetrics(generated.metrics),
     },
     {
       label: 'apertureProxy',
       path: apertureProxyPng,
-      role: 'simple Lamellar proxy: five irregular openings, shell occlusion, rim light catch',
+      role: 'simple Lamellar proxy: five irregular openings, shell occlusion, aperture-shaped spill, rim light catch',
       metrics: compactMetrics(apertureProxy.metrics),
     },
   ],
-  compressedVerdict: 'Partial improvement, not final and not operator-smoke: the generated substrate now breaks radial dial bias numerically and adds contained off-axis underlight, but the witness still reads too procedural/mechanical and needs a richer non-dial occlusion vocabulary before claiming visual convergence.',
-  nextRecommendedSlice: 'Replace remaining even radial spokes with staggered occlusion islands and aperture-shaped light spill, then compare against the source-image core rather than only internal metrics.',
+  sourceReferenceComparison: {
+    comparisonMode: 'reference-pinned visual checklist v0',
+    references: referencePaths.map((path, index) => ({
+      role: index === 0 ? 'inner-core-target' : index === 1 ? 'whole-orb-context' : 'sharp-splat-context',
+      path,
+      present: existsSync(path),
+      sha256: sha256(path),
+    })),
+    observedImprovements: [
+      'generated substrate adds staggered dark occlusion islands over the prior ring/spoke lattice',
+      'aperture proxy emits orange spill from opening and rim geometry instead of only a uniform rim wash',
+      'central spoke/star dominance remains suppressed relative to the first anti-dial witness',
+    ],
+    remainingGaps: [
+      'still too much visible procedural dial/ring structure compared with the source-image core',
+      'remaining spoke/fan cadence is visible in the aperture proxy',
+      'source target has richer nested machinery and occluder layering than this procedural witness',
+    ],
+  },
+  compressedVerdict: 'Partial improvement, not final and not operator-smoke: the generated substrate now adds staggered occlusion islands and aperture-shaped spill metrics, with stronger bounded off-axis underlight, but the visible witness still reads too procedural because clean rings, residual spokes, and fan-shaped aperture exposure remain dominant.',
+  nextRecommendedSlice: 'Push the island/spill vocabulary harder against the source-image core: make occluder layering less blob-like, reduce residual fan cadence, and add denser nested machinery between the rings.',
 };
 writeFileSync(trajectoryReportPath, `${JSON.stringify(trajectoryReport, null, 2)}\n`);
 

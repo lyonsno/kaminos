@@ -45,6 +45,17 @@ function ringBand(radius, center, width) {
   return 1 - smoothstep(width * 0.45, width, Math.abs(radius - center));
 }
 
+function orientedBlob(nx, ny, cx, cy, rx, ry, rotation) {
+  const dx = nx - cx;
+  const dy = ny - cy;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const x = dx * cos + dy * sin;
+  const y = -dx * sin + dy * cos;
+  const d = (x * x) / Math.max(1e-6, rx * rx) + (y * y) / Math.max(1e-6, ry * ry);
+  return 1 - smoothstep(0.64, 1.08, d);
+}
+
 function makeSeedProfile(seed) {
   const seedHash = hashString(seed);
   const random = mulberry32(seedHash);
@@ -112,6 +123,7 @@ function sampleGeneratedSubstrate(nx, ny, profile) {
       underlightChannel: 0,
       apertureWindow: 0,
       asymmetricBaffle: 0,
+      occlusionIsland: 0,
       materialPitting: 0,
       rimLip: 0,
       strength: 0,
@@ -148,7 +160,7 @@ function sampleGeneratedSubstrate(nx, ny, profile) {
     * smoothstep(-0.42, 0.58, nx * 0.84 + ny * 0.42 + 0.16)
     * (1 - smoothstep(0.54, 0.92, -nx * 0.2 + ny * 0.98));
   const underlightContainment = 1 - smoothstep(0.68, 0.84, r);
-  const underlightChannel = clamp(Math.max(radialSlot, plateEdgeSlot * 0.7, lopsidedChannelWindow * 0.9) * (0.36 + 0.64 * offAxisWindow) * (1 - dirtyPlate * 0.3) * underlightContainment);
+  const underlightChannel = clamp(Math.max(radialSlot, plateEdgeSlot * 0.7, lopsidedChannelWindow * 1.08) * (0.36 + 0.64 * offAxisWindow) * (1 - dirtyPlate * 0.3) * underlightContainment);
 
   const pittingNoise = 0.5 + 0.5 * Math.sin(nx * 83 + Math.sin(ny * 31 + profile.heatPhase) * 3.4 + profile.seedHash * 0.00007);
   const pittingBreakup = 0.5 + 0.5 * Math.sin(nx * 37 - ny * 59 + profile.occluderPhase);
@@ -161,15 +173,28 @@ function sampleGeneratedSubstrate(nx, ny, profile) {
     * smoothstep(-0.72, 0.42, -nx * 0.28 - ny * 0.96 + 0.38)
     * (0.28 + dirtyPlate * 0.46),
   );
+  const islandA = orientedBlob(nx, ny, -0.42, -0.18, 0.21, 0.105, profile.ribPhase * 0.3 + 0.45);
+  const islandB = orientedBlob(nx, ny, 0.26, -0.46, 0.18, 0.09, profile.occluderPhase * 0.24 - 0.85);
+  const islandC = orientedBlob(nx, ny, 0.54, 0.18, 0.23, 0.115, profile.heatPhase * 0.2 + 1.1);
+  const islandD = orientedBlob(nx, ny, -0.1, 0.55, 0.17, 0.085, profile.ribPhase * 0.18 - 1.35);
+  const islandBreakup = 0.72 + 0.28 * Math.sin(theta * 11.0 - r * 15.5 + profile.heatPhase);
+  const occlusionIsland = clamp(
+    Math.max(islandA, islandB * 0.95, islandC * 0.88, islandD * 0.72)
+    * smoothstep(0.24, 0.38, r)
+    * (1 - smoothstep(0.78, 0.96, r))
+    * islandBreakup
+    * (0.62 + dirtyPlate * 0.34 + asymmetricBaffle * 0.18),
+  );
   const rimLip = clamp(lipShadow);
   return {
     dirtyPlate,
     underlightChannel,
     apertureWindow,
     asymmetricBaffle,
+    occlusionIsland,
     materialPitting,
     rimLip,
-    strength: Math.max(dirtyPlate, underlightChannel, apertureWindow * 0.72, asymmetricBaffle),
+    strength: Math.max(dirtyPlate, underlightChannel, apertureWindow * 0.72, asymmetricBaffle, occlusionIsland),
   };
 }
 
@@ -225,6 +250,7 @@ export function createOrbInnerEngineGeneratedSubstrate({
     apertureWindowPixels: 0,
     materialPittingPixels: 0,
     asymmetricBafflePixels: 0,
+    occlusionIslandPixels: 0,
   };
   const scale = 2 / Math.min(width, height);
   for (let y = 0; y < height; y++) {
@@ -237,6 +263,7 @@ export function createOrbInnerEngineGeneratedSubstrate({
       if (generated.apertureWindow > 0.32) counts.apertureWindowPixels++;
       if (generated.materialPitting > 0.18) counts.materialPittingPixels++;
       if (generated.asymmetricBaffle > 0.34) counts.asymmetricBafflePixels++;
+      if (generated.occlusionIsland > 0.34) counts.occlusionIslandPixels++;
     }
   }
   return {
@@ -246,7 +273,7 @@ export function createOrbInnerEngineGeneratedSubstrate({
     height,
     profile: substrateProfile,
     metrics: counts,
-    fields: ['dirtyPlate', 'underlightChannel', 'apertureWindow', 'asymmetricBaffle', 'materialPitting', 'rimLip'],
+    fields: ['dirtyPlate', 'underlightChannel', 'apertureWindow', 'asymmetricBaffle', 'occlusionIsland', 'materialPitting', 'rimLip'],
     references: [
       {
         role: 'best composition substrate',
@@ -349,6 +376,7 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
         underlightChannel: 0,
         apertureWindow: 0,
         asymmetricBaffle: 0,
+        occlusionIsland: 0,
       },
       luma: 4,
     };
@@ -356,7 +384,7 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
 
   const radialVoid = smoothstep(0.18, 0.72, r);
   const guide = guideSample || { ring: 0, rib: 0, occluder: 0, channel: 0, hotCenter: 0, darkRim: 0, strength: 0 };
-  const generated = generatedSample || { dirtyPlate: 0, underlightChannel: 0, apertureWindow: 0, asymmetricBaffle: 0, materialPitting: 0, rimLip: 0, strength: 0 };
+  const generated = generatedSample || { dirtyPlate: 0, underlightChannel: 0, apertureWindow: 0, asymmetricBaffle: 0, occlusionIsland: 0, materialPitting: 0, rimLip: 0, strength: 0 };
   let darkRim = smoothstep(0.58, 0.98, r);
   let centerHeat = Math.exp(-Math.pow(r / 0.112, 2.45));
   const innerCore = Math.exp(-Math.pow(r / 0.24, 3.0)) * (1 - generated.dirtyPlate * 0.32);
@@ -395,6 +423,12 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
   occluder = Math.max(occluder, guide.occluder * 1.05, generated.dirtyPlate * 1.06);
   centerHeat = Math.max(centerHeat, guide.hotCenter * 0.28);
   darkRim = Math.max(darkRim, guide.darkRim * 0.96, generated.rimLip * 0.8);
+  const islandCut = generated.occlusionIsland * (0.74 + 0.22 * smoothstep(0.32, 0.7, r));
+  const islandEdgeGlow = generated.occlusionIsland * (1 - generated.occlusionIsland) * smoothstep(0.26, 0.5, r) * (1 - smoothstep(0.82, 0.94, r));
+  nestedRing *= 1 - islandCut * 0.88;
+  radialRib *= 1 - islandCut * 0.74;
+  orangeChannel = Math.max(orangeChannel * (1 - islandCut * 0.42), islandEdgeGlow * 0.72);
+  occluder = Math.max(occluder, generated.occlusionIsland * 1.18);
 
   const diagonalBrace = Math.max(
     0,
@@ -407,9 +441,9 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
 
   const materialScratch = generated.materialPitting * (0.44 + 0.56 * generated.dirtyPlate);
   const centralOccluder = centerIrisSpoke * 0.28 + ringBand(r, 0.212, 0.01) * 0.58 + ringBand(r, 0.142, 0.018) * 0.46;
-  const mechanicalDark = clamp(0.92 * occluder + 0.54 * radialRib + 0.44 * diagonalBrace + 0.82 * darkRim + 0.38 * sootPocket + centralOccluder + generated.dirtyPlate * 0.46 + generated.asymmetricBaffle * 0.62 + materialScratch * 0.28);
+  const mechanicalDark = clamp(0.92 * occluder + 0.54 * radialRib + 0.44 * diagonalBrace + 0.82 * darkRim + 0.38 * sootPocket + centralOccluder + generated.dirtyPlate * 0.46 + generated.asymmetricBaffle * 0.62 + generated.occlusionIsland * 0.98 + materialScratch * 0.28);
   const ringEmission = (nestedRing + centerIrisRing * 0.42) * (0.12 + 0.24 * orangeChannel) * (1 - generated.dirtyPlate * 0.42);
-  const channelEmission = clamp(orangeChannel * (0.42 + 0.18 * Math.sin(animationPhase * TAU + r * 17)) + generated.underlightChannel * 0.38);
+  const channelEmission = clamp(orangeChannel * (0.42 + 0.18 * Math.sin(animationPhase * TAU + r * 17)) + generated.underlightChannel * 0.38 + islandEdgeGlow * 0.2);
   const heat = clamp((centerHeat * 2.9 + innerCore * 0.48 + ringEmission + channelEmission * 0.82) * heatBeat);
   const ember = clamp(Math.sin(theta * 26 + r * 41 + profile.seedHash * 0.00003) * 0.5 + 0.5) * orangeChannel * radialVoid;
 
@@ -422,7 +456,7 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
   green += metal * 0.72;
   blue += metal * 0.52;
 
-  const occlusion = clamp(0.3 + mechanicalDark * 1.18 + generated.rimLip * 0.2 + generated.asymmetricBaffle * 0.34);
+  const occlusion = clamp(0.3 + mechanicalDark * 1.18 + generated.rimLip * 0.2 + generated.asymmetricBaffle * 0.34 + generated.occlusionIsland * 0.22);
   red *= 1 - occlusion * (0.55 + 0.2 * darkRim);
   green *= 1 - occlusion * (0.64 + 0.18 * darkRim);
   blue *= 1 - occlusion * (0.72 + 0.16 * darkRim);
@@ -430,7 +464,7 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
   red *= outerRimAttenuation;
   green *= outerRimAttenuation;
   blue *= outerRimAttenuation;
-  const generatedOuterOcclusion = smoothstep(0.68, 0.94, r) * (generated.rimLip * 0.36 + generated.dirtyPlate * 0.18 + generated.asymmetricBaffle * 0.12);
+  const generatedOuterOcclusion = smoothstep(0.68, 0.94, r) * (generated.rimLip * 0.36 + generated.dirtyPlate * 0.18 + generated.asymmetricBaffle * 0.12 + generated.occlusionIsland * 0.16);
   red *= 1 - generatedOuterOcclusion * 0.5;
   green *= 1 - generatedOuterOcclusion * 0.58;
   blue *= 1 - generatedOuterOcclusion * 0.64;
@@ -462,6 +496,7 @@ function renderCorePixel(nx, ny, profile, animationPhase, apertureMode = false, 
       underlightChannel: generated.underlightChannel > 0.18 ? 1 : 0,
       apertureWindow: generated.apertureWindow > 0.32 ? 1 : 0,
       asymmetricBaffle: generated.asymmetricBaffle > 0.34 ? 1 : 0,
+      occlusionIsland: generated.occlusionIsland > 0.34 ? 1 : 0,
     },
     luma,
     radius: r,
@@ -508,17 +543,41 @@ function makeAngularAccumulator(binCount = 48) {
   };
 }
 
-function finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular = null) {
-  const apertureContainmentStructure = (counts.rimLightCatchPixels || 0) * 0.04 + (counts.visibleCorePixels || 0) * 0.08;
+function makeBinaryAngularAccumulator(binCount = 48) {
+  const bins = Array.from({ length: binCount }, () => 0);
+  let total = 0;
+  return {
+    add(theta, radius, active) {
+      if (!active || radius < 0.18 || radius > 0.94) return;
+      const normalized = (theta + Math.PI) / TAU;
+      const index = Math.max(0, Math.min(binCount - 1, Math.floor(normalized * binCount)));
+      bins[index]++;
+      total++;
+    },
+    summarize() {
+      const occupied = bins.filter(value => value > 0).length;
+      const maxBin = bins.reduce((max, value) => Math.max(max, value), 0);
+      return {
+        spreadScore: total ? clamp((occupied / binCount) * (1 - maxBin / Math.max(1, total)) * 2.2) : 0,
+        occupiedBins: occupied,
+      };
+    },
+  };
+}
+
+function finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular = null, featureAngular = {}) {
+  const apertureContainmentStructure = (counts.rimLightCatchPixels || 0) * 0.04 + (counts.visibleCorePixels || 0) * 0.08 + (counts.apertureShapedSpillPixels || 0) * 0.045;
   const structure = (counts.radialRibPixels + counts.nestedRingPixels + counts.occluderPixels + apertureContainmentStructure) / Math.max(1, diskPixels);
   const angularMetrics = angular?.summarize?.() || {
     sixfoldSymmetryScore: 0,
     angularAsymmetryScore: 0,
   };
+  const islandAngularMetrics = featureAngular.occlusionIsland?.summarize?.() || { spreadScore: 0, occupiedBins: 0 };
   const dirtyPlateRatio = (counts.dirtyPlatePixels || 0) / Math.max(1, diskPixels);
   const underlightRatio = (counts.underlightChannelPixels || 0) / Math.max(1, diskPixels);
   const apertureVisibleRatio = (counts.visibleCorePixels || 0) / Math.max(1, diskPixels);
   const rimLightRatio = (counts.rimLightCatchPixels || 0) / Math.max(1, diskPixels);
+  const apertureSpillRatio = (counts.apertureShapedSpillPixels || 0) / Math.max(1, diskPixels);
   const centerHeatRatio = counts.hotCenterPixels / Math.max(1, diskPixels);
   const darkRimContrast = clamp((lumaCenter.mean - lumaRim.mean) / 255, 0, 1);
   const radialDialBiasScore = clamp(
@@ -540,6 +599,9 @@ function finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, an
     sixfoldSymmetryScore: angularMetrics.sixfoldSymmetryScore,
     angularAsymmetryScore: angularMetrics.angularAsymmetryScore,
     radialDialBiasScore,
+    occlusionIslandSpreadScore: islandAngularMetrics.spreadScore,
+    occlusionIslandOccupiedBins: islandAngularMetrics.occupiedBins,
+    apertureSpillContainmentScore: clamp(apertureSpillRatio * 7.5 * (1 - Math.min(0.72, apertureVisibleRatio))),
     diskPixels,
     width,
     height,
@@ -584,10 +646,12 @@ export function renderOrbInnerEngineFrame({
     underlightChannelPixels: 0,
     apertureWindowPixels: 0,
     asymmetricBafflePixels: 0,
+    occlusionIslandPixels: 0,
   };
   const lumaCenter = makeLumaAccumulator();
   const lumaRim = makeLumaAccumulator();
   const angular = makeAngularAccumulator();
+  const occlusionIslandAngular = makeBinaryAngularAccumulator();
   let diskPixels = 0;
   const scale = 2 / Math.min(width, height);
   for (let y = 0; y < height; y++) {
@@ -613,6 +677,7 @@ export function renderOrbInnerEngineFrame({
         if (sample.radius < 0.28) lumaCenter.add(sample.luma);
         if (sample.radius > 0.72 && sample.radius < 0.95) lumaRim.add(sample.luma);
         angular.add(Math.atan2(ny, nx), sample.radius, sample.luma);
+        occlusionIslandAngular.add(Math.atan2(ny, nx), sample.radius, sample.feature.occlusionIsland);
       }
       if (sample.feature.hotCenter) counts.hotCenterPixels++;
       if (sample.feature.radialRib) counts.radialRibPixels++;
@@ -627,6 +692,7 @@ export function renderOrbInnerEngineFrame({
       if (sample.feature.underlightChannel) counts.underlightChannelPixels++;
       if (sample.feature.apertureWindow) counts.apertureWindowPixels++;
       if (sample.feature.asymmetricBaffle) counts.asymmetricBafflePixels++;
+      if (sample.feature.occlusionIsland) counts.occlusionIslandPixels++;
     }
   }
   return {
@@ -635,7 +701,9 @@ export function renderOrbInnerEngineFrame({
     height,
     seed,
     rgba,
-    metrics: finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular),
+    metrics: finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular, {
+      occlusionIsland: occlusionIslandAngular,
+    }),
   };
 }
 
@@ -693,10 +761,13 @@ export function renderOrbApertureProxyFrame({
     underlightChannelPixels: 0,
     apertureWindowPixels: 0,
     asymmetricBafflePixels: 0,
+    occlusionIslandPixels: 0,
+    apertureShapedSpillPixels: 0,
   };
   const lumaCenter = makeLumaAccumulator();
   const lumaRim = makeLumaAccumulator();
   const angular = makeAngularAccumulator();
+  const occlusionIslandAngular = makeBinaryAngularAccumulator();
   let diskPixels = 0;
   const scale = 2 / Math.min(width, height);
   for (let y = 0; y < height; y++) {
@@ -708,9 +779,24 @@ export function renderOrbApertureProxyFrame({
       const mask = apertureMask(nx, ny, profile, apertureOpen);
       const r = Math.hypot(nx, ny);
       const apertureBias = generatedSample?.apertureWindow || 0;
-      const biasedOpen = clamp(mask.open * (0.62 + apertureBias * 0.24));
+      const slotBreakup = clamp(
+        0.74
+        + (generatedSample?.apertureWindow || 0) * 0.16
+        - (generatedSample?.occlusionIsland || 0) * 0.34
+        - (generatedSample?.dirtyPlate || 0) * 0.08
+        + (generatedSample?.materialPitting || 0) * 0.12,
+        0.36,
+        0.94,
+      );
+      const biasedOpen = clamp(mask.open * (0.54 + apertureBias * 0.2) * slotBreakup);
       const shellMatter = clamp(mask.shell * (1 - biasedOpen));
       const rimLight = Math.max(mask.rim, (generatedSample?.rimLip || 0) * 0.28) * mask.shell * (0.2 + 0.8 * apertureOpen);
+      const apertureShapedSpill = clamp(
+        mask.shell
+        * (mask.rim * 0.82 + mask.open * (generatedSample?.underlightChannel || 0) * 0.22 + mask.rim * (generatedSample?.occlusionIsland || 0) * 0.24)
+        * (0.34 + 0.66 * apertureOpen)
+        * (1 - smoothstep(0.92, 1.02, r)),
+      );
       const shellShade = 7 + 9 * (1 - smoothstep(0.45, 1.0, r));
       const i = (y * width + x) * 4;
 
@@ -720,6 +806,9 @@ export function renderOrbApertureProxyFrame({
       red += rimLight * 54;
       green += rimLight * 21;
       blue += rimLight * 5;
+      red += apertureShapedSpill * 72;
+      green += apertureShapedSpill * 30;
+      blue += apertureShapedSpill * 7;
 
       if (r > 1.02) {
         red = 3;
@@ -737,6 +826,7 @@ export function renderOrbApertureProxyFrame({
         if (r < 0.28) lumaCenter.add(luma);
         if (r > 0.72 && r < 0.95) lumaRim.add(luma);
         angular.add(Math.atan2(ny, nx), r, luma);
+        occlusionIslandAngular.add(Math.atan2(ny, nx), r, core.feature.occlusionIsland);
       }
       if (biasedOpen > 0.32 && core.feature.hotCenter) counts.hotCenterPixels++;
       if (biasedOpen > 0.22 && (core.feature.radialRib || core.feature.dirtyPlate)) counts.radialRibPixels++;
@@ -751,6 +841,8 @@ export function renderOrbApertureProxyFrame({
       if (biasedOpen > 0.18 && core.feature.underlightChannel) counts.underlightChannelPixels++;
       if (biasedOpen > 0.18 && core.feature.apertureWindow) counts.apertureWindowPixels++;
       if (biasedOpen > 0.18 && core.feature.asymmetricBaffle) counts.asymmetricBafflePixels++;
+      if (biasedOpen > 0.18 && core.feature.occlusionIsland) counts.occlusionIslandPixels++;
+      if (apertureShapedSpill > 0.2 && r < 0.98) counts.apertureShapedSpillPixels++;
     }
   }
   return {
@@ -760,7 +852,9 @@ export function renderOrbApertureProxyFrame({
     seed,
     apertureOpen,
     rgba,
-    metrics: finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular),
+    metrics: finalMetrics(width, height, counts, lumaCenter, lumaRim, diskPixels, angular, {
+      occlusionIsland: occlusionIslandAngular,
+    }),
   };
 }
 

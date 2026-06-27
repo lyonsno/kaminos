@@ -21,6 +21,8 @@ assert.match(coreSource, /createOrbInnerEngineGeneratedSubstrate/, 'core module 
 assert.match(coreSource, /dirtyPlate/, 'generated substrate carries dirty black plate material fields');
 assert.match(coreSource, /underlightChannel/, 'generated substrate carries bounded underlight channel fields');
 assert.match(coreSource, /apertureWindow/, 'generated substrate carries aperture-window composition fields');
+assert.match(coreSource, /occlusionIsland/, 'generated substrate carries staggered non-dial occlusion islands');
+assert.match(coreSource, /apertureShapedSpill/, 'aperture proxy records opening-shaped light spill');
 assert.match(coreSource, /radialRib/, 'core renderer has explicit radial rib structure');
 assert.match(coreSource, /nestedRing/, 'core renderer has explicit nested ring structure');
 assert.match(coreSource, /occluder/, 'core renderer has explicit inner occluders');
@@ -89,6 +91,7 @@ assert.ok(generatedSubstrate.references.some(reference => reference.role === 'be
 assert.ok(generatedSubstrate.metrics.dirtyPlatePixels > 2500, 'generated substrate has dirty black plate fields');
 assert.ok(generatedSubstrate.metrics.underlightChannelPixels > 900, 'generated substrate has bounded underlight channel fields');
 assert.ok(generatedSubstrate.metrics.apertureWindowPixels > 5000, 'generated substrate has aperture-window composition fields');
+assert.ok(generatedSubstrate.metrics.occlusionIslandPixels > 2200, 'generated substrate has staggered occlusion-island fields');
 assert.ok(generatedSubstrate.sample(0.52, -0.12).underlightChannel > 0.12, 'generated substrate exposes off-axis underlight channel samples');
 
 const standalone = renderOrbInnerEngineFrame({
@@ -144,6 +147,9 @@ assert.ok(generatedDriven.metrics.flatGlowScore <= guideDriven.metrics.flatGlowS
 assert.ok(generatedDriven.metrics.darkRimContrast >= guideDriven.metrics.darkRimContrast, 'generated substrate must preserve or improve dark rim contrast');
 assert.ok(generatedDriven.metrics.angularAsymmetryScore > guideDriven.metrics.angularAsymmetryScore, 'generated substrate must move the core away from rotational dial symmetry');
 assert.ok(generatedDriven.metrics.radialDialBiasScore < guideDriven.metrics.radialDialBiasScore, 'generated substrate must reduce radial/dial bias versus guide-only render');
+assert.ok(generatedDriven.metrics.occlusionIslandPixels > 1000, 'generated frame must render staggered occlusion islands');
+assert.ok(generatedDriven.metrics.occlusionIslandSpreadScore > 0.18, 'occlusion islands must be angularly staggered rather than a single broad mud patch');
+assert.ok(generatedDriven.metrics.radialDialBiasScore < standalone.metrics.radialDialBiasScore * 0.72, 'generated islands must materially reduce dial bias versus standalone');
 
 const aperture = renderOrbApertureProxyFrame({
   width: 256,
@@ -161,6 +167,8 @@ assert.ok(aperture.metrics.rimLightCatchPixels > 600, 'aperture proxy must expos
 assert.ok(aperture.metrics.flatGlowScore < 0.62, 'aperture proxy must preserve structure rather than pasted glow');
 assert.ok(aperture.metrics.angularAsymmetryScore > standalone.metrics.angularAsymmetryScore, 'aperture proxy must introduce asymmetric containment rather than a centered dial view');
 assert.ok(aperture.metrics.radialDialBiasScore < standalone.metrics.radialDialBiasScore, 'aperture proxy must reduce radial/dial bias versus standalone core');
+assert.ok(aperture.metrics.apertureShapedSpillPixels > 700, 'aperture proxy must expose light spill shaped by apertures');
+assert.ok(aperture.metrics.apertureSpillContainmentScore > 0.12, 'aperture spill must be concentrated on openings/rims rather than a uniform orange wash');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
 assert.match(witnessSource, /coreIdentity/, 'witness receipt records core identity');
@@ -174,6 +182,7 @@ assert.match(witnessSource, /guideSubstratePng/, 'witness receipt records guide-
 assert.match(witnessSource, /generatedSubstratePng/, 'witness receipt records generated-substrate witness image');
 assert.match(witnessSource, /trajectoryReportPath/, 'witness receipt records compressed visual trajectory report');
 assert.match(witnessSource, /trajectoryContactSheetPng/, 'witness receipt records visual trajectory contact sheet');
+assert.match(witnessSource, /sourceReferenceComparison/, 'witness trajectory records source-reference comparison pointers');
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-orb-inner-engine-contract-'));
 try {
@@ -222,9 +231,13 @@ try {
   assert.ok(report.metrics.generatedSubstrate.occluderPixels > report.metrics.guideSubstrate.occluderPixels * 1.4);
   assert.ok(report.metrics.generatedSubstrate.flatGlowScore <= report.metrics.guideSubstrate.flatGlowScore);
   assert.ok(report.metrics.generatedSubstrate.radialDialBiasScore < report.metrics.guideSubstrate.radialDialBiasScore);
+  assert.ok(report.metrics.generatedSubstrate.occlusionIslandPixels > 1000);
+  assert.ok(report.metrics.generatedSubstrate.occlusionIslandSpreadScore > 0.18);
   assert.ok(report.metrics.guideSubstrate.guideChannelPixels > 900);
   assert.ok(report.metrics.apertureProxy.shellOccludedPixels > 8000);
   assert.ok(report.metrics.apertureProxy.radialDialBiasScore < report.metrics.standalone.radialDialBiasScore);
+  assert.ok(report.metrics.apertureProxy.apertureShapedSpillPixels > 700);
+  assert.ok(report.metrics.apertureProxy.apertureSpillContainmentScore > 0.12);
   assert.ok(report.handoff.socket.radius > 0);
   assert.ok(report.handoff.emissiveField.hotCenterGain > 0);
   assert.ok(report.handoff.occlusion.shellOcclusion > 0);
@@ -236,6 +249,9 @@ try {
   assert.ok(trajectoryReport.frames.length >= 4, 'trajectory report records the witness frame sequence');
   assert.ok(trajectoryReport.compressedVerdict, 'trajectory report carries a compressed verdict');
   assert.match(trajectoryReport.compressedVerdict, /not final|not operator-smoke|partial/i, 'trajectory report must not overclaim final convergence');
+  assert.ok(trajectoryReport.sourceReferenceComparison, 'trajectory report carries source-reference comparison data');
+  assert.ok(trajectoryReport.sourceReferenceComparison.references.some(reference => reference.role === 'inner-core-target'), 'trajectory report names the inner-core source target');
+  assert.ok(trajectoryReport.sourceReferenceComparison.remainingGaps.some(gap => /dial|spoke|fan|procedural/i.test(gap)), 'trajectory report names remaining visual gaps against source references');
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }
