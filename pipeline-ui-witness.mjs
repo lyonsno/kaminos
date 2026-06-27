@@ -378,6 +378,83 @@ try {
       specimen,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'first-vertical-specimens') {
+    const specimenButtons = await evalJson(cdp, `(() => {
+      const ids = ['pipeline-specimen-goin-button', 'pipeline-specimen-glove-wealth-button'];
+      return ids.map(id => {
+        const button = document.querySelector(\`#\${id}\`);
+        const rect = button?.getBoundingClientRect();
+        if (!rect) throw new Error(\`Specimen button missing: \${id}\`);
+        return {
+          id,
+          text: button.textContent,
+          disabled: button.disabled,
+          point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        };
+      });
+    })()`);
+    assertWitness(specimenButtons.every(button => !button.disabled), 'First-vertical specimen buttons were not all clickable', specimenButtons);
+    await capture(cdp, beforePath);
+    for (const button of specimenButtons) {
+      await click(cdp, button.point);
+    }
+    const specimens = await waitFor(cdp, `(() => {
+      const debug = window.kaminosPipelineSpecimenIntakeDebugState?.();
+      const state = window.kaminosPipelineDockDebugState?.();
+      const roles = [...document.querySelectorAll('[data-pipeline-specimen-role]')].map(item => item.dataset.pipelineSpecimenRole);
+      const roleChip = document.querySelector('[data-pipeline-specimen-role="theft_object"]');
+      const warning = document.querySelector('[data-pipeline-source-warning="fallback_artifact_not_requested_route_truth"]');
+      const goin = debug?.artifacts?.find(item => item.firstVerticalRole === 'theft_object') || null;
+      const hoard = debug?.artifacts?.find(item => item.firstVerticalRole === 'hoard_source') || null;
+      const goinNode = state?.graphImageNodes?.find(node => node.firstVerticalRole === 'theft_object') || null;
+      const hoardNode = state?.graphImageNodes?.find(node => node.firstVerticalRole === 'hoard_source') || null;
+      const graphTexts = [...document.querySelectorAll('[data-pipeline-graph-image-node-id]')].map(node => node.innerText);
+      const roleRect = roleChip?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          debug?.artifactSchema === 'kaminos.kiln.image-artifact.v0'
+          && goin?.specimenKind === 'goin'
+          && goin?.firstVerticalRole === 'theft_object'
+          && goin?.conditioningRoles?.includes('mask')
+          && goin?.sourceKind === 'fallback'
+          && hoard?.specimenKind === 'glove_wealth'
+          && hoard?.firstVerticalRole === 'hoard_source'
+          && hoard?.conditioningRoles?.includes('layout_anchor')
+          && hoard?.sourceKind === 'fallback'
+          && goinNode?.artifactId === 'fixture-goin-object-of-desire-001'
+          && hoardNode?.artifactId === 'fixture-glove-wealth-hoard-001'
+          && roles.includes('theft_object')
+          && roles.includes('hoard_source')
+          && warning
+        ),
+        debug,
+        graphImageNodes: state?.graphImageNodes || [],
+        roles,
+        graphTexts,
+        goin,
+        hoard,
+        goinNode,
+        hoardNode,
+        roleRect: roleRect ? { x: roleRect.x, y: roleRect.y, width: roleRect.width, height: roleRect.height } : null,
+      };
+    })()`, 'First vertical specimen role imports', 12000);
+    await capture(cdp, afterPath);
+    const screenshotProbe = await screenshotVisibleProbe(afterPath, specimens.roleRect);
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'First-vertical specimen role chip was not visibly inspectable', {
+      specimens,
+      screenshotProbe,
+    });
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      specimenButtons,
+      specimens,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]

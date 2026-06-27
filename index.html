@@ -173,6 +173,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-specimen-intake-title { color: #ddd; font-size: 12px; font-weight: 750; }
 .pipeline-specimen-intake-body { color: #777; font-size: 10px; line-height: 1.35; margin-top: 3px; }
 .pipeline-specimen-intake-state { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; margin-top: 5px; }
+.pipeline-specimen-intake-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pipeline-specimen-role-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.pipeline-specimen-role { color: #b9d5ff; border: 1px solid #26384f; background: #101a2a; border-radius: 4px; padding: 2px 5px; font: 8px 'SF Mono', monospace; overflow-wrap: anywhere; }
 .pipeline-source-warning-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .pipeline-source-warning { color: #e4b365; border: 1px solid #4d3820; background: #241b10; border-radius: 4px; padding: 2px 5px; font: 8px 'SF Mono', monospace; overflow-wrap: anywhere; }
 .pipeline-graph-workspace-summary { border: 1px solid #292929; background: #151515; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(240px, 0.9fr); gap: 12px; align-items: start; }
@@ -880,7 +883,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="pipeline-specimen-intake-body">Browser-local image artifacts can enter the graph as specimen nodes with source-truth warnings intact.</div>
           <div class="pipeline-specimen-intake-state" id="pipeline-specimen-intake-state">No specimen artifact imported this session.</div>
         </div>
-        <button type="button" class="btn" id="pipeline-specimen-fixture-button">Fixture Specimen</button>
+        <div class="pipeline-specimen-intake-actions">
+          <button type="button" class="btn" id="pipeline-specimen-fixture-button">Red Lerm</button>
+          <button type="button" class="btn" id="pipeline-specimen-goin-button">Goin</button>
+          <button type="button" class="btn" id="pipeline-specimen-glove-wealth-button">Glove Wealth</button>
+        </div>
       </div>
       <div
         class="pipeline-graph-workspace-summary"
@@ -4475,6 +4482,9 @@ function buildPipelineSpecimenArtifact({
   width = 96,
   height = 64,
   sourceKind = 'operator_import',
+  specimenKind = 'unknown_specimen',
+  firstVerticalRole = 'conditioning_reference',
+  conditioningRoles = ['reference'],
   promotionState = 'bench_evidence',
   routeReceipt = null,
   sourceTruthWarnings = [],
@@ -4491,6 +4501,9 @@ function buildPipelineSpecimenArtifact({
     width,
     height,
     sourceKind,
+    specimenKind,
+    firstVerticalRole,
+    conditioningRoles: Array.isArray(conditioningRoles) ? [...new Set(conditioningRoles)] : [],
     assetRole: 'candidate',
     promotionState,
     routeReceipt: receipt,
@@ -4520,6 +4533,9 @@ function pipelineSpecimenArtifactAsAsset(artifact) {
     sourceArtifact: artifact,
     artifactId: artifact.artifactId,
     sourceKind: artifact.sourceKind,
+    specimenKind: artifact.specimenKind,
+    firstVerticalRole: artifact.firstVerticalRole,
+    conditioningRoles: artifact.conditioningRoles || [],
     sourceTruthWarnings: artifact.sourceTruthWarnings || [],
     routeReceipt: artifact.routeReceipt || null,
     promotionState: artifact.promotionState || null,
@@ -4531,7 +4547,7 @@ function renderPipelineSpecimenIntake() {
   if (!state) return;
   const latest = pipelineDockState.specimenArtifacts?.[0] || null;
   state.textContent = latest
-    ? `${latest.artifactId} / ${latest.sourceKind} / ${(latest.sourceTruthWarnings || []).join(', ') || 'no warnings'}`
+    ? `${latest.artifactId} / ${latest.firstVerticalRole || latest.specimenKind || 'specimen'} / ${latest.sourceKind} / ${(latest.sourceTruthWarnings || []).join(', ') || 'no warnings'}`
     : 'No specimen artifact imported this session.';
 }
 
@@ -4557,6 +4573,64 @@ function pipelineFixtureSpecimenSource() {
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
+function pipelineFixtureGoinSpecimenSource() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64" viewBox="0 0 96 64">
+    <rect width="96" height="64" fill="#151515"/>
+    <ellipse cx="48" cy="35" rx="22" ry="13" fill="#d9b44c"/>
+    <ellipse cx="48" cy="32" rx="17" ry="9" fill="#f2cf66"/>
+    <path d="M30 37 C42 43 56 43 67 37" fill="none" stroke="#8d6b1f" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="60" cy="27" r="4" fill="#fff1a2" opacity=".42"/>
+    <text x="8" y="58" fill="#f0c36b" font-family="monospace" font-size="7">goin fixture</text>
+  </svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+function pipelineFixtureGloveWealthSpecimenSource() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64" viewBox="0 0 96 64">
+    <rect width="96" height="64" fill="#151515"/>
+    <ellipse cx="48" cy="45" rx="31" ry="10" fill="#806018"/>
+    <circle cx="36" cy="35" r="11" fill="#d5ad3d"/>
+    <circle cx="50" cy="30" r="13" fill="#edc85e"/>
+    <circle cx="62" cy="39" r="9" fill="#c99a2f"/>
+    <path d="M21 45 C36 25 60 23 77 45" fill="none" stroke="#f4d679" stroke-width="3" opacity=".65"/>
+    <text x="7" y="58" fill="#f0c36b" font-family="monospace" font-size="7">hoard fixture</text>
+  </svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+function pipelineBuildFirstVerticalFixtureSpecimen({
+  artifactId,
+  title,
+  source,
+  specimenKind,
+  firstVerticalRole,
+  conditioningRoles,
+  position,
+}) {
+  const routeReceipt = buildPipelineSpecimenRouteReceipt({
+    requestedRoute: 'first_vertical_asset_route',
+    effectiveRoute: 'fixture',
+    fallbackReason: 'first_vertical_fixture_pending_live_asset_route',
+    size: '96x64',
+    sourceTruthWarnings: ['fallback_artifact_not_requested_route_truth'],
+  });
+  const artifact = buildPipelineSpecimenArtifact({
+    artifactId,
+    title,
+    source,
+    sourceKind: 'fallback',
+    specimenKind,
+    firstVerticalRole,
+    conditioningRoles,
+    promotionState: 'bench_evidence',
+    routeReceipt,
+    sourceTruthWarnings: ['fallback_artifact_not_requested_route_truth'],
+  });
+  const node = createPipelineGraphImageNodeFromSpecimenArtifact(artifact, position);
+  setInfo(`Specimen graph node created: ${artifact.artifactId}`);
+  return { artifact, node };
+}
+
 function kaminosPipelineImportFixtureSpecimen() {
   const routeReceipt = buildPipelineSpecimenRouteReceipt({
     requestedRoute: 'openai_api',
@@ -4570,6 +4644,9 @@ function kaminosPipelineImportFixtureSpecimen() {
     title: 'Fixture red lerm specimen',
     source: pipelineFixtureSpecimenSource(),
     sourceKind: 'fallback',
+    specimenKind: 'red_lerm',
+    firstVerticalRole: 'carrier_actor',
+    conditioningRoles: ['reference', 'silhouette', 'motion_proxy'],
     promotionState: 'bench_evidence',
     routeReceipt,
     sourceTruthWarnings: ['fallback_artifact_not_requested_route_truth'],
@@ -4577,6 +4654,30 @@ function kaminosPipelineImportFixtureSpecimen() {
   const node = createPipelineGraphImageNodeFromSpecimenArtifact(artifact, { x: 30, y: 258 });
   setInfo(`Specimen graph node created: ${artifact.artifactId}`);
   return { artifact, node };
+}
+
+function kaminosPipelineImportFixtureGoinSpecimen() {
+  return pipelineBuildFirstVerticalFixtureSpecimen({
+    artifactId: 'fixture-goin-object-of-desire-001',
+    title: 'Fixture goin specimen',
+    source: pipelineFixtureGoinSpecimenSource(),
+    specimenKind: 'goin',
+    firstVerticalRole: 'theft_object',
+    conditioningRoles: ['reference', 'mask', 'material_swatch'],
+    position: { x: 30, y: 350 },
+  });
+}
+
+function kaminosPipelineImportFixtureGloveWealthSpecimen() {
+  return pipelineBuildFirstVerticalFixtureSpecimen({
+    artifactId: 'fixture-glove-wealth-hoard-001',
+    title: 'Fixture glove wealth specimen',
+    source: pipelineFixtureGloveWealthSpecimenSource(),
+    specimenKind: 'glove_wealth',
+    firstVerticalRole: 'hoard_source',
+    conditioningRoles: ['reference', 'layout_anchor', 'material_swatch'],
+    position: { x: 190, y: 350 },
+  });
 }
 
 function pipelineSpecimenIntakeDebugState() {
@@ -4914,6 +5015,9 @@ function pipelineGraphImageNodeSource(node, routeNodeId = 'route') {
     artifactId: node.artifactId || null,
     sourceArtifact: node.sourceArtifact || null,
     sourceKind: node.sourceKind || null,
+    specimenKind: node.specimenKind || null,
+    firstVerticalRole: node.firstVerticalRole || null,
+    conditioningRoles: node.conditioningRoles || [],
     sourceTruthWarnings: node.sourceTruthWarnings || [],
     routeReceipt: node.routeReceipt || null,
     promotionState: node.promotionState || null,
@@ -5166,6 +5270,9 @@ function normalizePipelineGraphImageNode(value) {
     stage: value.stage || null,
     artifactId: value.artifactId || value.sourceArtifact?.artifactId || null,
     sourceKind: value.sourceKind || value.sourceArtifact?.sourceKind || null,
+    specimenKind: value.specimenKind || value.sourceArtifact?.specimenKind || null,
+    firstVerticalRole: value.firstVerticalRole || value.sourceArtifact?.firstVerticalRole || null,
+    conditioningRoles: Array.isArray(value.conditioningRoles) ? value.conditioningRoles : (value.sourceArtifact?.conditioningRoles || []),
     promotionState: value.promotionState || value.sourceArtifact?.promotionState || null,
     routeReceipt: value.routeReceipt && typeof value.routeReceipt === 'object' ? value.routeReceipt : (value.sourceArtifact?.routeReceipt || null),
     sourceTruthWarnings: Array.isArray(value.sourceTruthWarnings) ? value.sourceTruthWarnings : (value.sourceArtifact?.sourceTruthWarnings || []),
@@ -5535,6 +5642,9 @@ function pipelineGraphImageNodeRecord(id, asset) {
     stage: asset.stage || null,
     artifactId: asset.artifactId || asset.sourceArtifact?.artifactId || null,
     sourceKind: asset.sourceKind || asset.sourceArtifact?.sourceKind || null,
+    specimenKind: asset.specimenKind || asset.sourceArtifact?.specimenKind || null,
+    firstVerticalRole: asset.firstVerticalRole || asset.sourceArtifact?.firstVerticalRole || null,
+    conditioningRoles: asset.conditioningRoles || asset.sourceArtifact?.conditioningRoles || [],
     promotionState: asset.promotionState || asset.sourceArtifact?.promotionState || null,
     routeReceipt: asset.routeReceipt || asset.sourceArtifact?.routeReceipt || null,
     sourceTruthWarnings: asset.sourceTruthWarnings || asset.sourceArtifact?.sourceTruthWarnings || [],
@@ -5731,6 +5841,9 @@ function pipelineGraphRouteSnapshot(routeNode, source, requestedPipelineId) {
       sourceArtifactId: source.artifactId || null,
       sourceArtifact: source.sourceArtifact || null,
       sourceKind: source.sourceKind || null,
+      sourceSpecimenKind: source.specimenKind || null,
+      sourceFirstVerticalRole: source.firstVerticalRole || null,
+      sourceConditioningRoles: source.conditioningRoles || [],
       sourceTruthWarnings: source.sourceTruthWarnings || [],
       routeReceipt: source.routeReceipt || null,
       promotionState: source.promotionState || null,
@@ -5760,6 +5873,9 @@ function pipelineGraphSnapshotForRun(routeNode, source, requestedPipelineId) {
       assetId: node.assetId || null,
       sourceArtifactId: node.artifactId || null,
       sourceArtifact: node.sourceArtifact || null,
+      sourceSpecimenKind: node.specimenKind || null,
+      sourceFirstVerticalRole: node.firstVerticalRole || null,
+      sourceConditioningRoles: node.conditioningRoles || [],
       sourceTruthWarnings: node.sourceTruthWarnings || [],
       pipelineId: node.pipeline?.id || node.backendPipelineId || node.pipelineId || null,
       generatorId: node.generator?.id || node.generatorId || null,
@@ -6320,6 +6436,9 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     rows.push({ key: 'stage', value: node.stage || 'working' });
     if (node.artifactId) rows.push({ key: 'artifact', value: node.artifactId });
     if (node.sourceKind) rows.push({ key: 'source kind', value: node.sourceKind });
+    if (node.specimenKind) rows.push({ key: 'specimen', value: node.specimenKind });
+    if (node.firstVerticalRole) rows.push({ key: 'vertical role', value: node.firstVerticalRole });
+    if (node.conditioningRoles?.length) rows.push({ key: 'conditioning', value: node.conditioningRoles.join(', ') });
     if (node.routeReceipt?.requestedRoute || node.routeReceipt?.effectiveRoute) {
       rows.push({ key: 'route receipt', value: `${node.routeReceipt.requestedRoute || 'unknown'} -> ${node.routeReceipt.effectiveRoute || 'unknown'}` });
     }
@@ -7173,6 +7292,11 @@ function renderPipelineGraphWorkbench() {
       <span class="pipeline-graph-node-kicker">${escapeHtml(node.kind)}</span>
       <span class="pipeline-graph-node-title">${escapeHtml(node.title)}</span>
       <span class="pipeline-graph-node-detail">${escapeHtml(node.detail || '')}</span>
+      ${node.firstVerticalRole || node.specimenKind ? `
+        <span class="pipeline-specimen-role-row">
+          ${[node.specimenKind, node.firstVerticalRole, ...(node.conditioningRoles || [])].filter(Boolean).map(role => `<span class="pipeline-specimen-role" data-pipeline-specimen-role="${escapeHtml(role)}">${escapeHtml(role)}</span>`).join('')}
+        </span>
+      ` : ''}
       ${node.sourceTruthWarnings?.length ? `
         <span class="pipeline-source-warning-row">
           ${node.sourceTruthWarnings.map(warning => `<span class="pipeline-source-warning" data-pipeline-source-warning="${escapeHtml(warning)}">${escapeHtml(warning)}</span>`).join('')}
@@ -8070,6 +8194,8 @@ function initPipelineDock() {
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-specimen-fixture-button')?.addEventListener('click', () => kaminosPipelineImportFixtureSpecimen());
+  document.getElementById('pipeline-specimen-goin-button')?.addEventListener('click', () => kaminosPipelineImportFixtureGoinSpecimen());
+  document.getElementById('pipeline-specimen-glove-wealth-button')?.addEventListener('click', () => kaminosPipelineImportFixtureGloveWealthSpecimen());
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {
     button.addEventListener('click', () => selectPipelineAssetPalette(button.dataset.pipelineAssetPalette));
   });
@@ -8099,6 +8225,8 @@ window.kaminosPipelineRecordGraphWorkspaceEvent = pipelineRecordGraphWorkspaceEv
 window.kaminosPipelineSaveGraphLocalState = savePipelineGraphLocalState;
 window.kaminosPipelineDockDebugState = () => pipelineDockState;
 window.kaminosPipelineImportFixtureSpecimen = kaminosPipelineImportFixtureSpecimen;
+window.kaminosPipelineImportFixtureGoinSpecimen = kaminosPipelineImportFixtureGoinSpecimen;
+window.kaminosPipelineImportFixtureGloveWealthSpecimen = kaminosPipelineImportFixtureGloveWealthSpecimen;
 window.kaminosPipelineSpecimenIntakeDebugState = pipelineSpecimenIntakeDebugState;
 window.createPipelineGraphImageNodeFromSpecimenArtifact = createPipelineGraphImageNodeFromSpecimenArtifact;
 
