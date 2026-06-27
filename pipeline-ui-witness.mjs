@@ -455,6 +455,72 @@ try {
       specimens,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'specimen-checkpoint') {
+    const checkpointButton = await evalJson(cdp, `(() => {
+      const button = document.querySelector('#pipeline-specimen-checkpoint-button');
+      const rect = button?.getBoundingClientRect();
+      if (!rect) throw new Error('Primitive checkpoint button missing');
+      return {
+        text: button.textContent,
+        disabled: button.disabled,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    assertWitness(!checkpointButton.disabled, 'Primitive checkpoint button was disabled', checkpointButton);
+    await capture(cdp, beforePath);
+    await click(cdp, checkpointButton.point);
+    const checkpoint = await waitFor(cdp, `(() => {
+      const debug = window.kaminosPipelineSpecimenIntakeDebugState?.();
+      const state = window.kaminosPipelineDockDebugState?.();
+      const roles = [...document.querySelectorAll('[data-pipeline-specimen-role]')].map(item => item.dataset.pipelineSpecimenRole);
+      const normalChip = document.querySelector('[data-pipeline-specimen-role="normal_source"]');
+      const normalRect = normalChip?.getBoundingClientRect();
+      const checkpointRecord = debug?.specimenCheckpoints?.find(item => item.schema === 'kaminos.specimen-checkpoint.v0') || null;
+      const viewArtifacts = (debug?.artifacts || []).filter(item => item.specimenCheckpointId === checkpointRecord?.specimenId);
+      const graphImageNodes = (state?.graphImageNodes || []).filter(node => node.specimenCheckpointId === checkpointRecord?.specimenId);
+      const viewKinds = viewArtifacts.map(item => item.viewKind).sort();
+      return {
+        ok: Boolean(
+          debug?.checkpointSchema === 'kaminos.specimen-checkpoint.v0'
+          && debug?.viewArtifactSchema === 'kaminos.specimen-view-artifact.v0'
+          && checkpointRecord?.specimenId === 'fixture-red-lerm-primitive-001'
+          && checkpointRecord?.negativeLaw?.includes('no_visible_eyes')
+          && viewArtifacts.length === 5
+          && graphImageNodes.length === 5
+          && viewKinds.join(',') === 'beauty,depth,mask,normal,silhouette'
+          && viewArtifacts.some(item => item.viewKind === 'depth' && item.conditioningRoles?.includes('depth_source'))
+          && viewArtifacts.some(item => item.viewKind === 'normal' && item.conditioningRoles?.includes('normal_source'))
+          && viewArtifacts.every(item => item.routeReceipt?.requestedRoute === 'primitive_specimen_export')
+          && viewArtifacts.every(item => item.routeReceipt?.effectiveRoute === 'fixture_primitive_export')
+          && roles.includes('depth_source')
+          && roles.includes('normal_source')
+          && roles.includes('mask_source')
+        ),
+        debug,
+        checkpointRecord,
+        viewArtifacts,
+        graphImageNodes,
+        roles,
+        normalRect: normalRect ? { x: normalRect.x, y: normalRect.y, width: normalRect.width, height: normalRect.height } : null,
+      };
+    })()`, 'Specimen checkpoint primitive export', 12000);
+    await capture(cdp, afterPath);
+    const screenshotProbe = await screenshotVisibleProbe(afterPath, checkpoint.normalRect);
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'Specimen checkpoint normal-source chip was not visibly inspectable', {
+      checkpoint,
+      screenshotProbe,
+    });
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      checkpointButton,
+      checkpoint,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
