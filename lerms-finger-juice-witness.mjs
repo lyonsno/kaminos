@@ -249,6 +249,7 @@ async function run() {
     assert.equal(state.emitterBufferRoute, 'webgpu_emitter_buffer_v0', 'wrong WebGPU emitter buffer route');
     assert.equal(state.respawnContract, 'wgsl-gpu-emitter-respawn-v0', 'wrong WebGPU respawn contract');
     assert.equal(state.pressureContract, 'wgsl-local-density-pressure-v0', 'wrong WebGPU pressure contract');
+    assert.equal(state.spatialPressureContract, 'wgsl-spatial-cell-pressure-v0', 'wrong WebGPU spatial pressure contract');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -271,6 +272,10 @@ async function run() {
     assert.ok(state.pressureDensityStats?.pressureNeighborWindow > 0, 'route did not expose pressure neighbor window');
     assert.equal(state.pressureDensityStats?.pressureContract, 'wgsl-local-density-pressure-v0', 'pressure stats do not identify contract');
     assert.ok(state.pressureDensityStats?.surfaceParticleCount > 0, 'pressure stats did not see surface particles');
+    assert.equal(state.spatialPressureStats?.pressureContract, 'wgsl-spatial-cell-pressure-v0', 'spatial pressure stats do not identify contract');
+    assert.ok(state.spatialPressureStats?.spatialCellCount > 0, 'route did not expose pressure cell count');
+    assert.ok(state.spatialPressureStats?.occupiedCellCount > 0, 'route did not expose occupied pressure cells');
+    assert.ok(state.spatialPressureStats?.maxCellOccupancy > 0, 'route did not expose pressure cell occupancy');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -314,6 +319,7 @@ async function run() {
       emitterBufferRoute: state.emitterBufferRoute,
       respawnContract: state.respawnContract,
       pressureContract: state.pressureContract,
+      spatialPressureContract: state.spatialPressureContract,
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
@@ -331,6 +337,7 @@ async function run() {
       sourceDiagnostics: state.sourceDiagnostics,
       emitterDiagnostics: state.emitterDiagnostics,
       pressureDensityStats: state.pressureDensityStats,
+      spatialPressureStats: state.spatialPressureStats,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
