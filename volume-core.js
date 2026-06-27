@@ -182,6 +182,8 @@ const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-l
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-field-active-v0';
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
+const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
+const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -1643,8 +1645,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.16,
     1.22
   );
-  let bonfireSourceBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time, 0.0);
-  let bonfireDetailBreakup = mix(breakup, bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time * 1.07, 1.4), bonfireScene);
+  var bonfireSourceBreakup = 0.0;
+  var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * breakup * inputFlow;
@@ -1693,8 +1695,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
-  let bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
   let bonfireVisualAboveSource = bonfireSourceY - p.y;
+  var bonfireEdgeBreakup = 1.0;
+  var bonfireLayeredBreakup = 1.0;
+  if (bonfireScene > 0.5) {
+    bonfireSourceBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time, 0.0);
+    bonfireDetailBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time * 1.07, 1.4);
+    bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
+    bonfireLayeredBreakup = clamp(
+      0.68
+        + (bonfireMirrorBalancedBreakup(vec3<f32>(
+          p.x * 0.94 + sin(bonfireVisualAboveSource * 7.0 + time * 0.81) * 0.025,
+          p.y * 1.31 + sourceRadial * 0.28,
+          p.z * 1.08 + cos(bonfireVisualAboveSource * 6.0 - time * 0.67) * 0.025
+        ), scaledDetailFrequency * 1.18, time * 1.19, 6.4) - 0.72) * 0.58
+        + sin(bonfireVisualAboveSource * 18.0 + sourceRadial * 13.0 - time * 1.33) * 0.16
+        + cos(bonfireVisualAboveSource * 11.0 - sourceRadial * 17.0 + time * 1.06) * 0.12,
+      0.30,
+      1.34
+    );
+  }
   let bonfireSourcePlugSuppressor = mix(0.14, 1.0, smoothstep(0.018, bonfireCoreRadius * 0.82, sourceRadial));
   let bonfireCentralFireRelief = bonfireSourcePlugSuppressor;
   let bonfireSupportHeat = smoothBonfireFireball * bonfireSourcePlugSuppressor * (0.42 + bonfireEdgeBreakup * 0.08);
@@ -1715,18 +1735,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireLiftedFireBand
     * (0.20 + bonfireInterfaceBirth * 0.52 + bonfireCombustion.z * 0.20 + bonfireTongues * 0.16)
     * bonfireEdgeBreakup;
-  let bonfireLayeredBreakup = clamp(
-    0.68
-      + (bonfireMirrorBalancedBreakup(vec3<f32>(
-        p.x * 0.94 + sin(bonfireVisualAboveSource * 7.0 + time * 0.81) * 0.025,
-        p.y * 1.31 + sourceRadial * 0.28,
-        p.z * 1.08 + cos(bonfireVisualAboveSource * 6.0 - time * 0.67) * 0.025
-      ), scaledDetailFrequency * 1.18, time * 1.19, 6.4) - 0.72) * 0.58
-      + sin(bonfireVisualAboveSource * 18.0 + sourceRadial * 13.0 - time * 1.33) * 0.16
-      + cos(bonfireVisualAboveSource * 11.0 - sourceRadial * 17.0 + time * 1.06) * 0.12,
-    0.30,
-    1.34
-  );
   let bonfireLayeredSmokeBand = smoothstep(0.08, 0.26, bonfireVisualAboveSource) * (1.0 - smoothstep(1.10, 1.58, bonfireVisualAboveSource));
   let bonfireLayeredSmokeBreakup = mix(1.0, bonfireLayeredBreakup, bonfireLayeredSmokeBand);
   let bonfireFrontLiftGate = smoothstep(0.075, 0.24, bonfireVisualAboveSource) * (1.0 - smoothstep(0.74, 1.14, bonfireVisualAboveSource));
@@ -3994,6 +4002,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 2 : 0;
+    const mainFluidBonfireProceduralBreakupStrategy = bonfireCombustionFieldActive
+      ? MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE
+      : MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS;
+    const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4028,6 +4040,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
     state.mainFluidBonfireCombustionFieldStrategy = mainFluidBonfireCombustionFieldStrategy;
     state.bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldEvaluationsPerCell;
+    state.mainFluidBonfireProceduralBreakupStrategy = mainFluidBonfireProceduralBreakupStrategy;
+    state.bonfireProceduralBreakupEvaluationsPerCell = bonfireProceduralBreakupEvaluationsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4054,6 +4068,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       mainFluidLocalProjectionDivergenceEvaluationsPerCell,
       mainFluidBonfireCombustionFieldStrategy,
       bonfireCombustionFieldEvaluationsPerCell,
+      mainFluidBonfireProceduralBreakupStrategy,
+      bonfireProceduralBreakupEvaluationsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5211,6 +5227,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
         mainFluidBonfireCombustionFieldStrategy: state.mainFluidBonfireCombustionFieldStrategy,
         bonfireCombustionFieldEvaluationsPerCell: state.bonfireCombustionFieldEvaluationsPerCell,
+        mainFluidBonfireProceduralBreakupStrategy: state.mainFluidBonfireProceduralBreakupStrategy,
+        bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5493,6 +5511,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
       mainFluidBonfireCombustionFieldStrategy: state.mainFluidBonfireCombustionFieldStrategy,
       bonfireCombustionFieldEvaluationsPerCell: state.bonfireCombustionFieldEvaluationsPerCell,
+      mainFluidBonfireProceduralBreakupStrategy: state.mainFluidBonfireProceduralBreakupStrategy,
+      bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,

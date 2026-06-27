@@ -797,6 +797,8 @@ assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS\s*=\s*'main
 assert.match(core, /MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY\s*=\s*'main-fluid-local-projection-staged-pressure-only-v0'/, 'volume core names staged-only main-fluid local projection strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE\s*=\s*'bonfire-combustion-field-active-v0'/, 'volume core names the active bonfire combustion-field kernel strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-combustion-field-bypass-v0'/, 'volume core names the non-bonfire combustion-field bypass strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE\s*=\s*'bonfire-procedural-breakup-active-v0'/, 'volume core names the active bonfire procedural-breakup strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-procedural-breakup-bypass-v0'/, 'volume core names the non-bonfire procedural-breakup bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -812,6 +814,13 @@ assert.match(core, /bonfireCombustionFieldEvaluationsPerCell/, 'sim-cost ledger 
 assert.match(core, /var bonfireSmoothCombustion = vec4<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire smooth-combustion field to a bypassed neutral value');
 assert.match(core, /var bonfirePacketCombustion = vec4<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire packet-combustion field to a bypassed neutral value');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,320}bonfireCombustionCellField[\s\S]{0,320}bonfireCombustionPacketField[\s\S]{0,120}\}/, 'main-fluid shader evaluates expensive bonfire combustion fields only for the bonfire scene');
+assert.match(core, /mainFluidBonfireProceduralBreakupStrategy/, 'sim-cost ledger records the bonfire procedural-breakup strategy');
+assert.match(core, /bonfireProceduralBreakupEvaluationsPerCell/, 'sim-cost ledger records bonfire procedural-breakup evaluations per cell');
+assert.match(core, /var bonfireSourceBreakup = 0\.0/, 'main-fluid shader initializes bonfire source breakup to a bypassed neutral value');
+assert.match(core, /var bonfireDetailBreakup = breakup/, 'main-fluid shader preserves the non-bonfire detail-breakup fallback without evaluating bonfire breakup');
+assert.match(core, /var bonfireEdgeBreakup = 1\.0/, 'main-fluid shader initializes bonfire edge breakup to a neutral bypass value');
+assert.match(core, /var bonfireLayeredBreakup = 1\.0/, 'main-fluid shader initializes bonfire layered breakup to a neutral bypass value');
+assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,700}bonfireSourceBreakup = bonfireMirrorBalancedBreakup[\s\S]{0,700}bonfireDetailBreakup = bonfireMirrorBalancedBreakup[\s\S]{0,700}bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup[\s\S]{0,900}bonfireLayeredBreakup = clamp/, 'main-fluid shader evaluates expensive bonfire procedural breakup only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');
