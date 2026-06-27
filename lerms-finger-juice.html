@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>LERMS Finger Juice Prototype</title>
   <style>
     html, body {
@@ -151,9 +152,13 @@
 
     function readDebugState() {
       const cpuState = prototype.debugState();
-      const solverState = webgpuState?.solver_backend === 'webgpu_compute' ? webgpuState : {
+      const hasWebgpuReadback = webgpuState?.solver_backend === 'webgpu_compute'
+        && webgpuState?.targets
+        && Array.isArray(webgpuState?.particles)
+        && Array.isArray(webgpuState?.trails);
+      const solverState = hasWebgpuReadback ? webgpuState : {
         ...cpuState,
-        solver_backend: webgpuState?.solver_backend || 'cpu_fallback',
+        solver_backend: webgpuState?.solver_backend === 'webgpu_compute' ? 'webgpu_initializing' : webgpuState?.solver_backend || 'cpu_fallback',
         solverRoute: webgpuState?.solverRoute || LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
         shaderRoute: webgpuState?.shaderRoute || null,
         adapterInfo: webgpuState?.adapterInfo || null,

@@ -23,6 +23,29 @@ let stderr = '';
 let primaryOutputWritten = false;
 let browserVersion = null;
 let lastTrustworthyState = null;
+const consoleEvents = [];
+
+function summarizeConsoleEvent(event) {
+  if (event.method === 'Runtime.consoleAPICalled') {
+    return {
+      method: event.method,
+      type: event.params.type,
+      text: (event.params.args || []).map(arg => arg.value || arg.description || arg.unserializableValue || '').join(' '),
+    };
+  }
+  if (event.method === 'Runtime.exceptionThrown') {
+    return {
+      method: event.method,
+      type: 'exception',
+      text: event.params.exceptionDetails?.exception?.description || event.params.exceptionDetails?.text || 'Runtime exception',
+    };
+  }
+  return {
+    method: event.method,
+    type: event.params.entry?.level || 'log',
+    text: event.params.entry?.text || '',
+  };
+}
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -42,6 +65,7 @@ function writeReport(report) {
     primary_output_written: primaryOutputWritten,
     browserVersion,
     stderrTail: stderr.slice(-2000),
+    consoleEvents: consoleEvents.map(summarizeConsoleEvent),
     ...report,
   }, null, 2));
 }
@@ -102,6 +126,22 @@ async function evaluate(ws, expression) {
   return result.result.value;
 }
 
+async function waitForRouteHooks(ws) {
+  for (let i = 0; i < 80; i += 1) {
+    const pageState = await evaluate(ws, `({
+      url: document.URL,
+      readyState: document.readyState,
+      hasHooks: Boolean(window.__lermsFingerJuiceStepForWitness || window.__lermsFingerJuiceDebug)
+    })`);
+    if (pageState.url?.startsWith('chrome-error://')) {
+      throw new Error(`route document did not load: ${pageState.url}`);
+    }
+    if (pageState.hasHooks) return;
+    await delay(125);
+  }
+  throw new Error('lerms finger-juice route hooks did not install');
+}
+
 async function run() {
   let browser = null;
   let ws = null;
@@ -113,6 +153,8 @@ async function run() {
       '--headless=new',
       '--enable-unsafe-webgpu',
       '--disable-gpu-sandbox',
+      '--disable-extensions',
+      '--disable-component-extensions-with-background-pages',
       '--no-first-run',
       '--no-default-browser-check',
       url,
@@ -127,18 +169,39 @@ async function run() {
     assert.ok(page?.webSocketDebuggerUrl, 'no debuggable page target');
     ws = new WebSocket(page.webSocketDebuggerUrl);
     await waitForWebSocketOpen(ws);
+    ws.addEventListener('message', event => {
+      const msg = JSON.parse(String(event.data));
+      if (['Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Log.entryAdded'].includes(msg.method)) {
+        consoleEvents.push({ method: msg.method, params: msg.params });
+      }
+    });
 
     phase = 'settle_route';
     await wsRequest(ws, 'Page.enable');
     await wsRequest(ws, 'Runtime.enable');
+    await wsRequest(ws, 'Log.enable');
     await delay(settleMs);
+    await waitForRouteHooks(ws);
 
     phase = 'read_debug_state';
-    const state = await evaluate(ws, `window.__lermsFingerJuiceStepForWitness
-      ? window.__lermsFingerJuiceStepForWitness({ steps: ${JSON.stringify(witnessSteps)}, dt: 1 / 60 })
-      : window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug()`);
+    const state = await evaluate(ws, `(async () => {
+      if (window.__lermsFingerJuiceStepForWitness) {
+        const [primary, overlap] = await Promise.all([
+          window.__lermsFingerJuiceStepForWitness({ steps: ${JSON.stringify(witnessSteps)}, dt: 1 / 60 }),
+          window.__lermsFingerJuiceStepForWitness({ steps: 6, dt: 1 / 60 })
+        ]);
+        window.__lermsFingerJuiceOverlapWitness = { primary, overlap };
+        return primary;
+      }
+      return window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+    })()`);
     lastTrustworthyState = state;
+    const overlapState = await evaluate(ws, `window.__lermsFingerJuiceOverlapWitness || null`);
+    const webgpuConsoleFailures = consoleEvents.map(summarizeConsoleEvent)
+      .filter(event => event.method === 'Runtime.exceptionThrown' || /WebGPU|GPUDevice|MapAsync|already mapped|readback/i.test(event.text));
+    assert.deepEqual(webgpuConsoleFailures, [], 'WebGPU route emitted console/runtime errors');
     assert.ok(state, 'missing lerms finger-juice debug state');
+    assert.ok(!overlapState || overlapState.overlap?.solver_backend === 'webgpu_compute', 'overlap step did not return WebGPU state');
     assert.equal(state.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0', 'wrong effectiveRoute');
     assert.equal(state.solver_backend, 'webgpu_compute', 'finger-juice route must use WebGPU compute backend');
     assert.equal(state.solverRoute, 'webgpu_particle_solver_v0', 'wrong WebGPU solver route');
@@ -188,6 +251,7 @@ async function run() {
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
+      overlapState,
       terrainContract: state.terrainContract,
       visualRenderer: state.visualRenderer,
       simulation_authority: state.simulation_authority,

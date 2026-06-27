@@ -505,7 +505,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     ],
   });
   let stepCount = 0;
-  async function stepAndRead(steps = 1, dt = 1 / 60) {
+  let readbackQueue = Promise.resolve();
+  async function runStepAndRead(steps = 1, dt = 1 / 60) {
     const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
     const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
     const params = new ArrayBuffer(16);
@@ -558,6 +559,11 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         maxRangeZ: cpuOracle.maxRangeZ,
       },
     };
+  }
+  function stepAndRead(steps = 1, dt = 1 / 60) {
+    const run = () => runStepAndRead(steps, dt);
+    readbackQueue = readbackQueue.then(run, run);
+    return readbackQueue;
   }
   return {
     solver_backend: 'webgpu_compute',
