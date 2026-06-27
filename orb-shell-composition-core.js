@@ -71,6 +71,14 @@ function crossPoints(a, b) {
   ];
 }
 
+function scalePoint(point, amount) {
+  return [point[0] * amount, point[1] * amount, point[2] * amount];
+}
+
+function addPoints(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
 function lerpPoint(a, b, t) {
   return [
     a[0] + (b[0] - a[0]) * t,
@@ -474,6 +482,142 @@ function createMacroBodyPromotionPlan(composition) {
       'lower-cup-socket-contiguous',
       'crossing-tuck-macro-body',
       'forbid-accidental-triangle-bottom-gap',
+    ],
+  };
+}
+
+function torsionSurfaceFramePoints(assemblage, side, normal, t, strength = 1) {
+  const field = assemblage.macroTorsionField;
+  if (!field) return { side, normal };
+  const roll = (
+    field.surfaceRoll * Math.sin(Math.PI * t)
+    + field.torsionGradient * Math.sin(TAU * t + field.phaseLag) * 0.35
+  ) * strength;
+  if (Math.abs(roll) < 1e-5) return { side, normal };
+  const sideAxis = normalizePoint(addPoints(scalePoint(side, Math.cos(roll)), scalePoint(normal, Math.sin(roll))));
+  const normalAxis = normalizePoint(addPoints(scalePoint(normal, Math.cos(roll * 0.42)), scalePoint(side, -Math.sin(roll * 0.42))));
+  return {
+    side: Math.hypot(...sideAxis) > 1e-8 ? sideAxis : [1, 0, 0],
+    normal: Math.hypot(...normalAxis) > 1e-8 ? normalAxis : normal,
+  };
+}
+
+function nearestCutProfileSample(cutProfile, t) {
+  return (cutProfile || []).reduce((best, item) => (
+    Math.abs(item.t - t) < Math.abs(best.t - t) ? item : best
+  ), (cutProfile || [])[0] || { leftScale: 1, rightScale: 1, t: 0 });
+}
+
+function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
+  const body = assemblage.territoryBodyOccupancy;
+  const promoted = assemblage.macroPromotedBody;
+  const cutProfile = body.boundaryCutProfile || [];
+  const sideSign = targetEdge === 'right-promoted-body-edge' ? 1 : -1;
+  const centerline = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    centerline.push(sampleSpinePoint(assemblage, {
+      siblingOffset: 0,
+      layerIntervals: assemblage.layerItinerary.intervals,
+    }, t, 1.045));
+  }
+
+  return centerline.map((center, row) => {
+    const t = row / (rowCount - 1);
+    const prev = centerline[Math.max(0, row - 1)];
+    const next = centerline[Math.min(rowCount - 1, row + 1)];
+    const normal = normalizePoint(center);
+    const tangent = normalizePoint(subtractPoints(next, prev));
+    let side = normalizePoint(crossPoints(normal, tangent));
+    if (Math.hypot(...side) < 1e-8) side = [1, 0, 0];
+    const frame = torsionSurfaceFramePoints(assemblage, side, normal, t, 1);
+    const sideAxis = frame.side;
+    const normalAxis = frame.normal;
+    const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
+    const terminalScale = 0.52 + 0.48 * profile;
+    const nearestCut = nearestCutProfileSample(cutProfile, t);
+    const expanded = assemblage.expandedRegionProxy;
+    const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.leftScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * nearestCut.rightScale;
+    const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
+    const crown = 0.82;
+    const outer = addScaledPoint(
+      addScaledPoint(center, sideAxis, sideSign * sideWidth),
+      normalAxis,
+      lift * crown,
+    );
+    const inner = addScaledPoint(outer, normalAxis, -0.052);
+    return {
+      t,
+      outer,
+      inner,
+      normalAxis,
+      sideAxis,
+      tangent,
+      thickness: pointDistance(outer, inner),
+    };
+  });
+}
+
+function createLiveMacroSideWall(assemblage, targetEdge = 'left-promoted-body-edge') {
+  const samples = macroPromotedBodyEdgeSamples(assemblage, targetEdge, 72);
+  const thicknessStats = summarizeDistances(samples.map(sample => ({
+    t: sample.t,
+    distance: sample.thickness,
+  })));
+  return {
+    schema: 'LiveMacroSideWall',
+    mode: 'live-promoted-body-sidewall-v0',
+    id: `${assemblage.id}-${targetEdge}-live-sidewall`,
+    parentAssemblage: assemblage.id,
+    targetPromotedBodyId: assemblage.macroPromotedBody?.id,
+    targetEdge,
+    materialMode: 'flat-low-shader-readable-thickness',
+    surfaceDetailMode: 'disabled',
+    outerSurfaceEdge: samples.map(sample => ({ t: sample.t, point: sample.outer })),
+    innerThicknessEdge: samples.map(sample => ({ t: sample.t, point: sample.inner })),
+    sideWallSamples: samples,
+    sideWallThicknessStats: thicknessStats,
+    polygonFaceCount: (samples.length - 1) * 2,
+    couplingContract: {
+      outerEdgeShared: true,
+      innerEdgeGenerated: true,
+      couplingVerdict: 'live-sidewall-strip-spans-promoted-body-edge-to-inner-thickness-edge',
+    },
+    visualContract: 'normal live render shows a flat readable polygon sidewall on a promoted body edge',
+  };
+}
+
+function createLiveMacroSideWallPlan(composition) {
+  const target = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-west-dominant-thrust');
+  const sideWalls = target
+    ? [
+        createLiveMacroSideWall(target, 'left-promoted-body-edge'),
+        createLiveMacroSideWall(target, 'right-promoted-body-edge'),
+      ]
+    : [];
+  return {
+    schema: 'LiveMacroSideWallPlan',
+    mode: 'live-promoted-body-sidewall-v0',
+    targetAssemblageIds: sideWalls.map(wall => wall.parentAssemblage),
+    sideWalls,
+    sideWallCount: sideWalls.length,
+    liveRenderMaterialPolicy: {
+      materialMode: 'flat-low-shader-topology',
+      metalShaderVisible: false,
+      surfaceDetailMode: 'disabled',
+      territoryProxyUnderlayVisible: false,
+      reason: 'live sidewall topology smoke must not depend on shiny material or overlapping proxy underlay',
+    },
+    liveMacroSideWallVisibilityVerdict: sideWalls.length >= 2
+      ? 'visible-promoted-body-edge-sidewalls-rendered'
+      : 'no-live-promoted-body-sidewall-rendered',
+    nonGoals: [
+      'do-not-solve-all-carapace-edges-in-this-slice',
+      'do-not-use-metal-shader-as-sidewall-evidence',
+      'do-not-treat-clean-diagnostic-witness-as-live-render-closure',
     ],
   };
 }
@@ -1347,6 +1491,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
     assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
   }
+  next.liveMacroSideWallPlan = createLiveMacroSideWallPlan(next);
   next.channelThroughLineAudit = createChannelThroughLineAudit(next);
   next.channelThroughLinePlan = createChannelThroughLinePlan(next, next.channelThroughLineAudit);
   next.lamellarChannelMeshPlan = createLamellarChannelMeshPlan(next.channelThroughLinePlan);
@@ -1799,6 +1944,56 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
   geometry.userData.MacroPromotedBody = promoted;
   geometry.userData.ExpandedMacroRegionProxy = assemblage.expandedRegionProxy;
   geometry.userData.MacroTorsionField = assemblage.macroTorsionField;
+  return geometry;
+}
+
+function makeMacroPromotedBodySideWallGeometry(THREE, sideWall) {
+  const rowCount = sideWall.sideWallSamples.length;
+  const columnCount = 3;
+  const vertices = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+
+  for (let row = 0; row < rowCount; row++) {
+    const sample = sideWall.sideWallSamples[row];
+    const outer = new THREE.Vector3(...sample.outer);
+    const inner = new THREE.Vector3(...sample.inner);
+    const tangent = new THREE.Vector3(...sample.tangent).normalize();
+    const thicknessAxis = inner.clone().sub(outer).normalize();
+    let faceNormal = new THREE.Vector3().crossVectors(tangent, thicknessAxis).normalize();
+    if (faceNormal.lengthSq() < 1e-8) faceNormal = new THREE.Vector3(...sample.sideAxis).normalize();
+    const points = [
+      outer,
+      outer.clone().lerp(inner, 0.5),
+      inner,
+    ];
+    for (let col = 0; col < columnCount; col++) {
+      const point = points[col];
+      vertices.push(point.x, point.y, point.z);
+      normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+      uvs.push(col / (columnCount - 1), sample.t);
+    }
+  }
+
+  for (let row = 0; row < rowCount - 1; row++) {
+    for (let col = 0; col < columnCount - 1; col++) {
+      const a = row * columnCount + col;
+      const b = a + 1;
+      const c = (row + 1) * columnCount + col + 1;
+      const d = (row + 1) * columnCount + col;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LiveMacroSideWall = sideWall;
   return geometry;
 }
 
@@ -2284,59 +2479,43 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   let composition = createTargetOrbShellCompositionFixture(variationOptions);
 
   const sharedMaterials = new Set();
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x252c30, roughness: 0.24, metalness: 0.92, envMapIntensity: 2.4 });
-  const territoryMaterial = new THREE.MeshStandardMaterial({
+  const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x252c30 });
+  const territoryMaterial = new THREE.MeshBasicMaterial({
     color: 0x1b2225,
-    roughness: 0.3,
-    metalness: 0.88,
-    envMapIntensity: 1.9,
     side: THREE.DoubleSide,
   });
-  const railMaterial = new THREE.MeshStandardMaterial({ color: 0x6b777b, roughness: 0.2, metalness: 0.9, envMapIntensity: 2.8 });
-  const hopMaterial = new THREE.MeshStandardMaterial({ color: 0x42302a, roughness: 0.28, metalness: 0.86, envMapIntensity: 2.2 });
+  const railMaterial = new THREE.MeshBasicMaterial({ color: 0x6b777b });
+  const hopMaterial = new THREE.MeshBasicMaterial({ color: 0x42302a });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.42 });
-  const apertureOwnerBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x20272a, roughness: 0.25, metalness: 0.9, envMapIntensity: 2.2, side: THREE.DoubleSide });
-  const apertureOwnerRailMaterial = new THREE.MeshStandardMaterial({ color: 0x71828a, roughness: 0.18, metalness: 0.92, envMapIntensity: 3 });
-  const crossingSubSurgeRailMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2a2f, roughness: 0.44, metalness: 0.74, envMapIntensity: 0.9 });
-  const promotedBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.24, metalness: 0.93, envMapIntensity: 2.5, side: THREE.DoubleSide });
-  const crossingTuckBodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1d2529, roughness: 0.22, metalness: 0.91, envMapIntensity: 2.6, side: THREE.DoubleSide });
+  const apertureOwnerBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x20272a, side: THREE.DoubleSide });
+  const apertureOwnerRailMaterial = new THREE.MeshBasicMaterial({ color: 0x71828a });
+  const crossingSubSurgeRailMaterial = new THREE.MeshBasicMaterial({ color: 0x1d2a2f });
+  const promotedBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x12171a, side: THREE.DoubleSide });
+  const liveMacroSideWallMaterial = new THREE.MeshBasicMaterial({
+    color: 0xaab5b8,
+    side: THREE.DoubleSide,
+  });
+  const crossingTuckBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x1d2529, side: THREE.DoubleSide });
   const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
-  const lamellarChannelStripMaterial = new THREE.MeshStandardMaterial({
+  const lamellarChannelStripMaterial = new THREE.MeshBasicMaterial({
     color: 0x233036,
-    roughness: 0.28,
-    metalness: 0.94,
-    envMapIntensity: 3.4,
     side: THREE.DoubleSide,
   });
-  const lamellarPlateLipMaterial = new THREE.MeshStandardMaterial({
+  const lamellarPlateLipMaterial = new THREE.MeshBasicMaterial({
     color: 0xaec2cb,
-    roughness: 0.16,
-    metalness: 0.96,
-    envMapIntensity: 5.2,
     side: THREE.DoubleSide,
   });
-  const lamellarPlateBoundaryMaterial = new THREE.MeshStandardMaterial({
+  const lamellarPlateBoundaryMaterial = new THREE.MeshBasicMaterial({
     color: 0x151d20,
-    roughness: 0.22,
-    metalness: 0.94,
-    envMapIntensity: 3.2,
     side: THREE.DoubleSide,
   });
-  const lamellarInnerReturnMaterial = new THREE.MeshStandardMaterial({
+  const lamellarInnerReturnMaterial = new THREE.MeshBasicMaterial({
     color: 0x263238,
-    roughness: 0.24,
-    metalness: 0.92,
-    envMapIntensity: 3.6,
     side: THREE.DoubleSide,
   });
-  const lamellarInnerReturnSideWallMaterial = new THREE.MeshStandardMaterial({
+  const lamellarInnerReturnSideWallMaterial = new THREE.MeshBasicMaterial({
     color: 0x9eb0b7,
-    emissive: 0x273940,
-    emissiveIntensity: 0.48,
-    roughness: 0.34,
-    metalness: 0.72,
-    envMapIntensity: 3.4,
     side: THREE.DoubleSide,
   });
   const cleanSideWallMaterial = new THREE.MeshBasicMaterial({
@@ -2359,6 +2538,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
+    liveMacroSideWallMaterial,
     crossingTuckBodyMaterial,
     seamGapHintMaterial,
     lamellarChannelStripMaterial,
@@ -2410,11 +2590,21 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       promotedMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
       promotedMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
       macroGroup.add(promotedMesh);
-      const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
-      territoryMesh.name = `${assemblage.id}-macro-territory-body`;
-      territoryMesh.userData.MacroTerritoryBody = assemblage.territoryBodyOccupancy;
-      territoryMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
-      macroGroup.add(territoryMesh);
+      for (const sideWall of composition.liveMacroSideWallPlan?.sideWalls?.filter(wall => wall.parentAssemblage === assemblage.id) || []) {
+        const sideWallMesh = new THREE.Mesh(makeMacroPromotedBodySideWallGeometry(THREE, sideWall), liveMacroSideWallMaterial);
+        sideWallMesh.name = sideWall.id;
+        sideWallMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
+        sideWallMesh.userData.LiveMacroSideWall = sideWall;
+        sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+        macroGroup.add(sideWallMesh);
+      }
+      if (composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy?.territoryProxyUnderlayVisible !== false) {
+        const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
+        territoryMesh.name = `${assemblage.id}-macro-territory-body`;
+        territoryMesh.userData.MacroTerritoryBody = assemblage.territoryBodyOccupancy;
+        territoryMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
+        macroGroup.add(territoryMesh);
+      }
       for (const bandMember of assemblage.childBandPlan) {
         const replacementStrip = composition.lamellarChannelMeshPlan?.stripMeshes?.find(strip => (
           strip.parentAssemblage === assemblage.id
@@ -2541,6 +2731,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
       cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
       cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
+      liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
+      liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
+      targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
+      liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
       targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
       declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
       crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
@@ -2591,6 +2785,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     frameSideRimReturn() {
       camera.position.set(2.18, 0.08, -1.08);
       controls.target.set(0.89, 0.02, 0.6);
+      controls.update();
+      onDirty?.();
+    },
+    frameLiveMacroSideWall() {
+      camera.position.set(-0.05, 0.62, 1.85);
+      controls.target.set(-0.82, 0.08, 0.64);
       controls.update();
       onDirty?.();
     },
@@ -2720,6 +2920,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         visibleSideWallSurfaceCount: composition.lamellarInnerReturnPlan?.visibleSideWallSurfaceCount || 0,
         cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
         cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
+        liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
+        liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
+        targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
+        liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
         targetInnerReturnBoundaryIds: composition.lamellarInnerReturnPlan?.targetBoundaryIds || [],
         declaredSecondLayer: composition.lamellarInnerReturnPlan?.declaredSecondLayer,
         crossingSubSurgeCount: composition.crossingSubSurgePlan?.subSurges?.length || 0,
@@ -2771,6 +2975,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         MacroBodyPromotionPlan: composition.macroBodyPromotion,
         macroBodyPromotion: composition.macroBodyPromotion,
         MacroPromotedBody: composition.macroBodyPromotion?.promotedBodies || [],
+        LiveMacroSideWallPlan: composition.liveMacroSideWallPlan,
+        liveMacroSideWallPlan: composition.liveMacroSideWallPlan,
+        LiveMacroSideWall: composition.liveMacroSideWallPlan?.sideWalls || [],
         lowerCupClosure: composition.macroBodyPromotion?.lowerCupClosure,
         crossingTuckIntegration: composition.macroBodyPromotion?.crossingTuckIntegration,
         ExpandedMacroRegionProxyPlan: composition.expandedMacroRegionProxyPlan,

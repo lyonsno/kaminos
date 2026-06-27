@@ -125,6 +125,10 @@ async function main() {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameSideRimReturn?.()');
       await delay(500);
     }
+    if (focus === 'live-macro-sidewall') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLiveMacroSideWall?.()');
+      await delay(500);
+    }
     if (focus === 'side-rim-clean-topology') {
       cleanSidewallTopologyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableCleanSidewallTopologyWitness?.()');
       await delay(500);
@@ -215,6 +219,11 @@ async function main() {
     assert.equal(state?.MacroBodyPromotionPlan?.schema, 'MacroBodyPromotionPlan', 'MacroBodyPromotionPlan missing from debug state');
     assert.equal(state?.promotedBodyCount, state.macroAssemblageCount, 'composition must expose one MacroPromotedBody per macro assemblage');
     assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
+    assert.equal(state?.LiveMacroSideWallPlan?.schema, 'LiveMacroSideWallPlan', 'LiveMacroSideWallPlan missing from debug state');
+    assert.ok(state?.liveMacroSideWallCount >= 1, 'live macro sidewall missing from debug state');
+    assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
+    assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
+    assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
     assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
     assert.equal(state?.crossingTuckIntegration?.mode, 'crossing-tuck-macro-body', 'crossing tuck integration descriptor missing from debug state');
     assert.equal(state?.ExpandedMacroRegionProxyPlan?.schema, 'ExpandedMacroRegionProxyPlan', 'ExpandedMacroRegionProxyPlan missing from debug state');
@@ -280,6 +289,10 @@ async function main() {
       cleanTopologyProxyClutterVisible: state.cleanTopologyProxyClutterVisible,
       cleanSidewallTopologyWitness,
       sideWallVisibilityProbe,
+      liveMacroSideWallCount: state.liveMacroSideWallCount,
+      liveMacroSideWallVisibilityVerdict: state.liveMacroSideWallVisibilityVerdict,
+      targetLiveMacroSideWallIds: state.targetLiveMacroSideWallIds,
+      liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       targetInnerReturnBoundaryIds: state.targetInnerReturnBoundaryIds,
       declaredSecondLayer: state.declaredSecondLayer,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
@@ -325,6 +338,9 @@ async function main() {
       MacroBodyPromotionPlan: state.MacroBodyPromotionPlan,
       macroBodyPromotion: state.macroBodyPromotion,
       MacroPromotedBody: state.MacroPromotedBody,
+      LiveMacroSideWallPlan: state.LiveMacroSideWallPlan,
+      liveMacroSideWallPlan: state.liveMacroSideWallPlan,
+      LiveMacroSideWall: state.LiveMacroSideWall,
       lowerCupClosure: state.lowerCupClosure,
       crossingTuckIntegration: state.crossingTuckIntegration,
       ExpandedMacroRegionProxyPlan: state.ExpandedMacroRegionProxyPlan,
