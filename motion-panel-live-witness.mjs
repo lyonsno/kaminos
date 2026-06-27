@@ -41,6 +41,7 @@ let stderr = '';
 let chromeProcess = null;
 let effectiveUrl = null;
 let browserVersion = null;
+let consoleEvents = [];
 
 function positiveInt(value, fallback, name) {
   if (value == null || value === '') return fallback;
@@ -107,9 +108,44 @@ function writeReport(report) {
     filmstripPath,
     phase,
     browserVersion,
+    consoleEvents,
     stderrTail: stderr.slice(-3000),
     ...report,
   }, null, 2));
+}
+
+function recordConsoleEvent(event) {
+  const msg = JSON.parse(String(event.data));
+  if (msg.method === 'Runtime.consoleAPICalled') {
+    consoleEvents.push({
+      kind: 'console',
+      type: msg.params.type,
+      args: (msg.params.args || []).map(arg => arg.value ?? arg.description ?? arg.unserializableValue ?? null),
+      stack: (msg.params.stackTrace?.callFrames || []).slice(0, 5).map(frame => ({
+        functionName: frame.functionName,
+        url: frame.url,
+        lineNumber: frame.lineNumber,
+        columnNumber: frame.columnNumber,
+      })),
+    });
+  } else if (msg.method === 'Runtime.exceptionThrown') {
+    consoleEvents.push({
+      kind: 'exception',
+      text: msg.params.exceptionDetails?.text || null,
+      description: msg.params.exceptionDetails?.exception?.description || null,
+      url: msg.params.exceptionDetails?.url || null,
+      lineNumber: msg.params.exceptionDetails?.lineNumber ?? null,
+      columnNumber: msg.params.exceptionDetails?.columnNumber ?? null,
+    });
+  } else if (msg.method === 'Log.entryAdded') {
+    consoleEvents.push({
+      kind: 'log',
+      level: msg.params.entry?.level || null,
+      text: msg.params.entry?.text || null,
+      source: msg.params.entry?.source || null,
+      url: msg.params.entry?.url || null,
+    });
+  }
 }
 
 async function cdpFetch(path, options) {
@@ -493,7 +529,7 @@ try {
     '--disable-background-networking',
     '--disable-default-apps',
     '--window-size=1400,900',
-    url,
+    'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   chromeProcess.once('error', error => { stderr += `\nChrome launch failed: ${error.message}`; });
@@ -506,9 +542,12 @@ try {
   if (!page?.webSocketDebuggerUrl) throw new Error('No debuggable Chrome page found');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
+  ws.addEventListener('message', recordConsoleEvent);
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Runtime.enable');
+  await wsRequest(ws, 'Log.enable');
   await wsRequest(ws, 'Page.bringToFront').catch(() => null);
+  await wsRequest(ws, 'Page.navigate', { url });
 
   phase = 'settling-route';
   await delay(settleMs);

@@ -31,5 +31,10 @@ assert.match(witness, /sheetFrameLabel/, 'live witness contact-sheet labels expo
 assert.match(witness, /sourceFrameLabel/, 'live witness contact-sheet labels expose source frame denominator');
 assert.match(witness, /exportTray/, 'live witness records the motion panel export tray after current-view export');
 assert.match(witness, /Page\.captureScreenshot/, 'live witness captures the operator-facing browser viewport');
+assert.match(witness, /'about:blank'/, 'live witness starts from about:blank so console capture is enabled before app navigation');
+assert.match(witness, /Page\.navigate/, 'live witness navigates after CDP Runtime and Log capture are enabled');
+assert.match(witness, /Runtime\.exceptionThrown/, 'live witness records early runtime exceptions such as module import failures');
+assert.match(witness, /Runtime\.consoleAPICalled/, 'live witness records early console calls before route preflight');
+assert.match(witness, /consoleEvents/, 'live witness includes captured console events in durable reports');
 assert.match(witness, /writeReport\(\{\s*ok: false/s, 'live witness writes a durable failure report');
 assert.doesNotMatch(witness, /Math\.min\([^)]*frameCount/, 'live witness must not silently cap requested frame count');
