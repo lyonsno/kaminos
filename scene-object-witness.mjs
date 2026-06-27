@@ -1492,6 +1492,56 @@ async function runStartupEmptyScenario(ws) {
   }
 }
 
+async function runWorldChambersLermsUnderhillScenario(ws) {
+  phase = 'scenario-world-chambers-lerms-underhill';
+  lastEvidence.worldChambersLermsUnderhill = await evaluate(ws, `
+    (() => {
+      if (typeof window.kaminosWorldChambersDebugState !== 'function') {
+        throw new Error('world chambers witness missing kaminosWorldChambersDebugState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      const debug = window.kaminosWorldChambersDebugState();
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        debug,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('world-chamber-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('world-chamber-route')?.textContent?.trim() || null,
+        authorityText: document.getElementById('world-chamber-authority')?.textContent?.trim() || null,
+        evidenceText: document.getElementById('world-chamber-evidence')?.textContent?.trim() || null,
+        absenceRows: [...document.querySelectorAll('#world-chamber-absence-list .world-chamber-row')].map(row => row.textContent.trim()),
+      };
+    })()
+  `);
+  const evidence = lastEvidence.worldChambersLermsUnderhill;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`world chambers tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.activeChamberId !== 'lerms-underhill') {
+    throw new Error(`world chambers active chamber mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.route !== 'first-vertical-composer/witness-file') {
+    throw new Error(`world chambers route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authority !== 'synthetic_fixture') {
+    throw new Error(`world chambers authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authorityNote !== 'integrated fixture evidence; not a live first vertical') {
+    throw new Error(`world chambers authority note mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.falseLiveClaim !== false) {
+    throw new Error(`world chambers false-live guard did not report false: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.lerms !== 8 || evidence.debug?.summary?.goins !== 2) {
+    throw new Error(`world chambers summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.absenceRows.some(row => row.includes('liveFingerJuicePackets'))) {
+    throw new Error(`world chambers absence rows did not include liveFingerJuicePackets: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4114,6 +4164,8 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
+  } else if (scenario === 'world-chambers-lerms-underhill') {
+    await runWorldChambersLermsUnderhillScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

@@ -109,8 +109,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
-.tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
-.tab { padding: 8px 14px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+.tab { padding: 8px 12px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
 .tab:hover { color: #999; }
 .tab.active { color: #fff; border-bottom-color: #1976d2; }
 .tab-content { display: none; }
@@ -189,6 +189,21 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field { margin: 0; padding: 0; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
+
+/* World chambers */
+.world-chamber-card { border-color: #3d3320; background: #211e18; }
+.world-chamber-title { color: #f0d89a; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.world-chamber-subtitle { color: #8d7953; font: 10px 'SF Mono', monospace; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.world-chamber-badges { display: flex; gap: 5px; flex-wrap: wrap; margin: 8px 0; }
+.world-chamber-badge { border: 1px solid #4b3a24; border-radius: 5px; padding: 3px 7px; color: #d4b36c; background: #18150f; font: 10px 'SF Mono', monospace; }
+.world-chamber-badge.alert { color: #e6a864; border-color: #5b3b21; background: #24170f; }
+.world-chamber-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; min-width: 0; }
+.world-chamber-readout .field { margin: 0; padding: 0; }
+.world-chamber-readout .field:first-child,
+.world-chamber-readout .field:last-child { grid-column: 1 / -1; }
+.world-chamber-readout .field-val { max-width: 225px; white-space: normal; overflow-wrap: anywhere; text-align: right; }
+.world-chamber-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.world-chamber-row { display: flex; justify-content: space-between; gap: 8px; color: #8d7f66; font: 10px 'SF Mono', monospace; border-top: 1px solid #30291c; padding-top: 5px; }
 </style>
 </head>
 <body>
@@ -200,6 +215,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
     <div class="tab" data-tab="volume">Volume</div>
+    <div class="tab" data-tab="worlds">Worlds</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -564,6 +580,37 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Worlds Tab -->
+  <div class="tab-content" id="tab-worlds">
+    <h2>World Chambers</h2>
+    <div class="panel world-chamber-card" data-world-chamber-id="lerms-underhill" data-world-chamber-route="first-vertical-composer/witness-file" data-world-chamber-authority="synthetic_fixture" data-world-chamber-authority-note="integrated fixture evidence; not a live first vertical">
+      <div class="world-chamber-title" id="world-chamber-title">LERMS / Underhill</div>
+      <div class="world-chamber-subtitle" id="world-chamber-source">cc/palm-daddy-first-vertical-composer-0627@98a100f</div>
+      <div class="world-chamber-badges">
+        <span class="world-chamber-badge" id="world-chamber-route">first-vertical-composer/witness-file</span>
+        <span class="world-chamber-badge alert" id="world-chamber-authority">synthetic_fixture</span>
+        <span class="world-chamber-badge" id="world-chamber-forge-rail">Forge Rail</span>
+      </div>
+      <div class="world-chamber-readout">
+        <div class="field"><span class="field-key">Evidence</span><span class="field-val" id="world-chamber-evidence">integrated fixture evidence; not a live first vertical</span></div>
+        <div class="field"><span class="field-key">Lerms</span><span class="field-val" id="world-chamber-lerms">0</span></div>
+        <div class="field"><span class="field-key">Goins</span><span class="field-val" id="world-chamber-goins">0</span></div>
+        <div class="field"><span class="field-key">Hits</span><span class="field-val" id="world-chamber-juice-hits">0</span></div>
+        <div class="field"><span class="field-key">Drops</span><span class="field-val" id="world-chamber-carrier-drops">0</span></div>
+        <div class="field"><span class="field-key">Schema</span><span class="field-val" id="world-chamber-schema">lerms.first-vertical-frame.v0</span></div>
+      </div>
+      <div class="world-chamber-list" id="world-chamber-absence-list">
+        <div class="world-chamber-row"><span>liveFingerJuicePackets</span><span>empty</span></div>
+        <div class="world-chamber-row"><span>liveGoinPhysics</span><span>empty</span></div>
+        <div class="world-chamber-row"><span>liveCrowdAi</span><span>empty</span></div>
+        <div class="world-chamber-row"><span>generatedLermMotion</span><span>empty</span></div>
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="world-chamber-focus">Focus</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -697,6 +744,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
+  LERMS_UNDERHILL_CHAMBER_ID,
+  createDefaultWorldChambersRegistry,
+  worldChamberDebugState,
+} from './world-chambers-core.js';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -738,6 +790,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let worldChambersRegistry = createDefaultWorldChambersRegistry();
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -4209,6 +4262,59 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
 }
 
+function currentWorldChambersDebugState() {
+  return worldChamberDebugState(worldChambersRegistry);
+}
+
+window.kaminosWorldChambersDebugState = currentWorldChambersDebugState;
+
+function renderWorldChambersPanel() {
+  const debug = currentWorldChambersDebugState();
+  const chamber = debug.activeChamber;
+  const summary = debug.summary || {};
+  document.getElementById('world-chamber-title').textContent = chamber?.title || 'Unknown chamber';
+  document.getElementById('world-chamber-source').textContent = chamber?.source?.branch || 'source unavailable';
+  document.getElementById('world-chamber-route').textContent = debug.route || 'route unavailable';
+  document.getElementById('world-chamber-authority').textContent = debug.authority || 'authority unavailable';
+  document.getElementById('world-chamber-forge-rail').textContent = chamber?.forgeRail?.label || 'Forge Rail';
+  document.getElementById('world-chamber-evidence').textContent = debug.authorityNote || 'evidence unavailable';
+  document.getElementById('world-chamber-lerms').textContent = String(summary.lerms ?? 0);
+  document.getElementById('world-chamber-goins').textContent = String(summary.goins ?? 0);
+  document.getElementById('world-chamber-juice-hits').textContent = String(summary.juiceHits ?? 0);
+  document.getElementById('world-chamber-carrier-drops').textContent = String(summary.carrierDrops ?? 0);
+  document.getElementById('world-chamber-schema').textContent = chamber?.frameSchema || 'schema unavailable';
+  const absenceList = document.getElementById('world-chamber-absence-list');
+  absenceList.innerHTML = '';
+  for (const [key, isEmpty] of Object.entries(debug.intentionallyAbsent || {})) {
+    const row = document.createElement('div');
+    row.className = 'world-chamber-row';
+    const name = document.createElement('span');
+    name.textContent = key;
+    const status = document.createElement('span');
+    status.textContent = isEmpty ? 'empty' : 'present';
+    row.append(name, status);
+    absenceList.append(row);
+  }
+}
+
+function initWorldChambersRoute() {
+  renderWorldChambersPanel();
+  document.getElementById('world-chamber-focus')?.addEventListener('click', () => {
+    setActiveTab('worlds');
+    const debug = currentWorldChambersDebugState();
+    setInfo(`World Chamber: ${debug.activeChamber?.title || debug.activeChamberId} - ${debug.authorityNote}`);
+  });
+  const params = new URLSearchParams(window.location.search);
+  const requestedChamber = params.get('world_chamber');
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID) {
+    worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
+    renderWorldChambersPanel();
+    setActiveTab('worlds');
+    const debug = currentWorldChambersDebugState();
+    setInfo(`World Chamber: ${debug.activeChamber.title} - ${debug.authorityNote}`);
+  }
+}
+
 function readVolumeControls() {
   return {
     density: parseFloat(document.getElementById('volume-density').value),
@@ -7268,6 +7374,7 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  initWorldChambersRoute();
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -7311,6 +7418,7 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  initWorldChambersRoute();
 });
 </script>
 </body>
