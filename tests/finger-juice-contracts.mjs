@@ -7,16 +7,22 @@ const corePath = join(root, 'lerms-finger-juice-core.js');
 const webgpuCorePath = join(root, 'lerms-finger-juice-webgpu-core.js');
 const pagePath = join(root, 'lerms-finger-juice.html');
 const witnessPath = join(root, 'lerms-finger-juice-witness.mjs');
+const tabWitnessPath = join(root, 'kaminos-finger-juice-tab-witness.mjs');
+const indexPath = join(root, 'index.html');
 
 assert.ok(existsSync(corePath), 'world finger-juice core module exists');
 assert.ok(existsSync(webgpuCorePath), 'WebGPU finger-juice core module exists');
 assert.ok(existsSync(pagePath), 'world finger-juice prototype page exists');
 assert.ok(existsSync(witnessPath), 'world finger-juice route witness exists');
+assert.ok(existsSync(tabWitnessPath), 'Kaminos Finger Juice tab witness exists');
+assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
 
 const coreSource = readFileSync(corePath, 'utf8');
 const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
 const pageSource = readFileSync(pagePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
+const tabWitnessSource = existsSync(tabWitnessPath) ? readFileSync(tabWitnessPath, 'utf8') : '';
+const indexSource = readFileSync(indexPath, 'utf8');
 
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_EMITTERS_SCHEMA\s*=\s*'lerms\.world-finger-juice-emitters\.v0'/, 'emitter packet schema is explicit');
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_ROUTE\s*=\s*'world-space-ballistic-surface-flow-particles-v0'/, 'transport route identity is explicit');
@@ -207,6 +213,17 @@ assert.match(pageSource, /drawImpactRing/, 'prototype page draws contact/impact 
 assert.match(pageSource, /drawSurfaceSmear/, 'prototype page draws surface-flow smears');
 assert.doesNotMatch(pageSource, /globalCompositeOperation\s*=\s*['"]lighter['"]/, 'trail renderer must not use additive lighter compositing');
 
+assert.match(indexSource, /data-tab="finger-juice"/, 'Kaminos sidebar exposes a Finger Juice primitive tab');
+assert.match(indexSource, /id="tab-finger-juice"/, 'Kaminos app shell contains Finger Juice tab content');
+assert.match(indexSource, /kaminos_lerms_finger_juice=1/, 'Kaminos route can open directly into the Finger Juice primitive tab');
+assert.match(indexSource, /id="finger-juice-viewport-frame"/, 'Finger Juice tab embeds the existing smoke route in an inspectable viewport frame');
+assert.match(indexSource, /lerms-finger-juice\.html\?lerms_world_finger_juice=1/, 'Finger Juice tab embeds the source-honest standalone smoke route instead of duplicating solver code');
+assert.match(indexSource, /kaminos-finger-juice-tab-embed-v0/, 'Finger Juice tab names its Kaminos embed route identity');
+assert.match(indexSource, /window\.kaminosFingerJuiceTabDebugState/, 'Kaminos exposes Finger Juice tab state for browser witnesses');
+assert.match(indexSource, /fingerJuiceFrame\.contentWindow\.__lermsFingerJuiceDebug/, 'Kaminos tab reads child smoke debug state through a same-origin debug bridge');
+assert.match(indexSource, /finger-juice-source-authority/, 'Finger Juice tab surfaces synthetic_fixture\/live authority instead of hiding source truth in the child frame');
+assert.match(indexSource, /finger-juice-open-direct/, 'Finger Juice tab keeps a direct smoke link for isolated solver witnessing');
+
 assert.match(witnessSource, /lerms_world_finger_juice=1/, 'witness captures the explicit LERMS finger-juice route');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
 assert.match(witnessSource, /__lermsFingerJuiceStepForWitness/, 'witness advances simulation through explicit route hook');
@@ -301,6 +318,12 @@ assert.match(witnessSource, /impactRingCount/, 'witness requires impact/contact 
 assert.match(witnessSource, /surfaceSmearCount/, 'witness requires surface smear evidence');
 assert.match(witnessSource, /primary_output_written/, 'witness records primary output durability');
 assert.match(witnessSource, /failure_phase/, 'witness records failure phase before throwing');
+assert.match(tabWitnessSource, /kaminos_lerms_finger_juice=1/, 'Kaminos tab witness opens the app-level Finger Juice route');
+assert.match(tabWitnessSource, /kaminosFingerJuiceTabDebugState/, 'Kaminos tab witness reads the app-level debug bridge');
+assert.match(tabWitnessSource, /kaminos-finger-juice-tab-embed-v0/, 'Kaminos tab witness requires the tab embed route identity');
+assert.match(tabWitnessSource, /fullViewportActivityMetrics/, 'Kaminos tab witness records full-viewport activity metrics');
+assert.match(tabWitnessSource, /blank frame/i, 'Kaminos tab witness fails loudly on blank visual output');
+assert.match(tabWitnessSource, /childReady/, 'Kaminos tab witness refuses to pass before the child smoke route is live');
 
 const mod = await import(corePath);
 const webgpuMod = await import(webgpuCorePath);
