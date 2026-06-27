@@ -435,6 +435,10 @@ async function run() {
     assert.ok(state.surfaceCohesionStats?.cohesionAffectedCount > 0, 'route did not expose cohesion affected particles');
     assert.ok(state.surfaceCohesionStats?.cohesionNeighborCount > 0, 'route did not expose same-chemistry cohesion neighbors');
     assert.ok(state.surfaceCohesionStats?.ribbonAlignment > 0.05, 'route did not expose directional ribbon alignment');
+    assert.equal(state.spatialSurfaceRelaxationStats?.pressureContract, 'wgsl-spatial-surface-relaxation-v0', 'surface relaxation stats do not identify contract');
+    assert.ok(state.spatialSurfaceRelaxationStats?.relaxedParticleCount > 0, 'route did not expose relaxed surface particles');
+    assert.ok(state.spatialSurfaceRelaxationStats?.denseCellCount > 0, 'route did not expose dense relaxation cells');
+    assert.ok(state.spatialSurfaceRelaxationStats?.sheetContinuityRatio > 0.2, 'route did not expose spatial sheet continuity');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -477,10 +481,14 @@ async function run() {
         cohesionAffectedCount: stress?.surfaceCohesionStats?.cohesionAffectedCount || 0,
         cohesionNeighborCount: stress?.surfaceCohesionStats?.cohesionNeighborCount || 0,
         ribbonAlignment: stress?.surfaceCohesionStats?.ribbonAlignment || 0,
+        relaxedParticleCount: stress?.spatialSurfaceRelaxationStats?.relaxedParticleCount || 0,
+        denseCellCount: stress?.spatialSurfaceRelaxationStats?.denseCellCount || 0,
+        sheetContinuityRatio: stress?.spatialSurfaceRelaxationStats?.sheetContinuityRatio || 0,
         pressureContract: stress?.pressureContract || null,
         spatialPressureContract: stress?.spatialPressureContract || null,
         fluidDepthContract: stress?.fluidDepthContract || null,
         surfaceCohesionContract: stress?.surfaceCohesionStats?.pressureContract || null,
+        surfaceRelaxationContract: stress?.spatialSurfaceRelaxationStats?.pressureContract || null,
       };
     })()`);
     assert.ok(extendedFlowProbe, 'route did not expose expanded witness stress hook');
@@ -498,6 +506,10 @@ async function run() {
     assert.ok(extendedFlowProbe.cohesionAffectedCount >= 240, 'expanded witness phase did not exercise enough surface cohesion');
     assert.ok(extendedFlowProbe.cohesionNeighborCount >= 360, 'expanded witness phase did not retain enough same-chemistry cohesion neighbors');
     assert.ok(extendedFlowProbe.ribbonAlignment > 0.08, 'expanded witness phase did not form directional ribbon alignment');
+    assert.equal(extendedFlowProbe.surfaceRelaxationContract, 'wgsl-spatial-surface-relaxation-v0', 'expanded witness phase lost surface relaxation contract');
+    assert.ok(extendedFlowProbe.relaxedParticleCount >= 700, 'expanded witness phase did not relax enough surface particles');
+    assert.ok(extendedFlowProbe.denseCellCount >= 8, 'expanded witness phase did not retain enough dense relaxation cells');
+    assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
     state = extendedFlowProbe.state;
     lastTrustworthyState = state;
 
@@ -642,6 +654,7 @@ async function run() {
       spatialPressureStats: state.spatialPressureStats,
       fluidDepthStats: state.fluidDepthStats,
       surfaceCohesionStats: state.surfaceCohesionStats,
+      spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
