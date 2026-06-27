@@ -371,6 +371,63 @@ function liveAdapterReportPath(outputPath, stage) {
   return join(dirname(outputPath), `${safeStage}.adapter-report.json`);
 }
 
+function readJsonIfExists(path) {
+  if (!path || !existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    return {
+      schema: 'unparseable-json',
+      error: error?.message || String(error),
+    };
+  }
+}
+
+function adapterReportSummary(report) {
+  if (!report) return null;
+  return {
+    schema: report.schema || null,
+    ok: report.ok ?? null,
+    phase: report.phase || null,
+    backend: report.backend || null,
+    inputSha256: report.inputSha256 || report.input?.sha256 || null,
+    outputBytes: report.outputBytes || report.output?.bytes || null,
+  };
+}
+
+function classifyLiveAdapterOutput(effectiveRoute) {
+  const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
+  effectiveRoute.adapterReport = adapterReportSummary(adapterReport);
+  const schema = String(adapterReport?.schema || '').toLowerCase();
+  const commandText = [
+    effectiveRoute.availability?.configuredCommand,
+    effectiveRoute.availability?.resolvedCommand,
+    ...(effectiveRoute.executedCommand || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+  const isMockAdapter = schema.includes('mock') || commandText.includes('mock-sharp-command');
+  if (!isMockAdapter) {
+    effectiveRoute.truthBoundary = 'live SHARP adapter output; external command produced the splat artifact';
+    return { status: 'real', fixtureSource: null };
+  }
+  const reportEvidence = existsSync(effectiveRoute.adapterReportPath)
+    ? fileEvidence(effectiveRoute.adapterReportPath)
+    : { path: effectiveRoute.adapterReportPath, bytes: null, sha256: null };
+  const truthBoundary = 'mock SHARP adapter fixture output; adapter command is a test fixture and not real SHARP inference';
+  effectiveRoute.realModel = false;
+  effectiveRoute.fixtureMode = 'mock-adapter';
+  effectiveRoute.truthBoundary = truthBoundary;
+  return {
+    status: 'fixture',
+    fixtureSource: {
+      stageMode: 'fixture',
+      mode: 'mock-adapter',
+      adapterSchema: adapterReport?.schema || null,
+      truthBoundary,
+      ...reportEvidence,
+    },
+  };
+}
+
 function recordFailedStage(stage, outputPath, effectiveRoute, error) {
   stages.push({
     id: stage.id,
@@ -393,6 +450,7 @@ function runLiveModelAdapter(outputPath, stage) {
     tool: stage.route?.tool || 'SHARP',
     effectiveBackend: stage.route?.effectiveBackend || 'external-command',
     realModel: true,
+    requestedRealModel: stage.route?.realModel === true,
     executesModel: stage.route?.executesModel === true,
     commandEnv: stage.route?.commandEnv || null,
     availability,
@@ -444,7 +502,9 @@ function runLiveModelAdapter(outputPath, stage) {
   const outputEvidence = fileEvidence(outputPath);
   effectiveRoute.outputSha256 = outputEvidence.sha256;
   effectiveRoute.outputBytes = outputEvidence.bytes;
-  effectiveRoute.truthBoundary = 'live SHARP adapter output; external command produced the splat artifact';
+  const classification = classifyLiveAdapterOutput(effectiveRoute);
+  effectiveRoute.stageStatus = classification.status;
+  if (classification.fixtureSource) effectiveRoute.fixtureSource = classification.fixtureSource;
   return effectiveRoute;
 }
 
@@ -471,13 +531,14 @@ function runStage(stage) {
   } else if (existsSync(outputPath)) {
     status = 'cached';
   } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'splat') {
-    status = 'real';
     Object.assign(effectiveRoute, runLiveModelAdapter(outputPath, stage));
+    status = effectiveRoute.stageStatus || 'real';
+    fixtureSource = effectiveRoute.fixtureSource || null;
   } else if (stage.statusMode === 'model-adapter' && stage.outputArtifact === 'sidecar') {
-    status = 'real';
+    status = artifacts.splat?.status === 'fixture' ? 'fixture' : 'real';
     makeSidecar(outputPath, {
-      stageMode: 'real',
-      truthBoundary: 'live SHARP adapter output sidecar; splat was produced by the configured external model command',
+      stageMode: status,
+      truthBoundary: artifacts.splat?.fixtureSource?.truthBoundary || 'live SHARP adapter output sidecar; splat was produced by the configured external model command',
     });
   } else if (stage.statusMode === 'prepared-artifact' && stage.outputArtifact === 'inspection') {
     status = 'real';

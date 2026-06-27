@@ -455,9 +455,16 @@ try {
       const outputLoadButton = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
       const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
       const outputStatus = outputRecord ? outputNode?.dataset?.pipelineGeneratedOutputStatus || null : null;
-      const expectedTruth = ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
+      const adapterFixture = Boolean(
+        run?.report?.document?.stages?.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
+        || splat?.fixtureSource?.mode === 'mock-adapter'
+      );
+      const expectedTruth = adapterFixture ? 'adapter fixture / point-cloud preview' : ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
+      const artifactTruthOk = adapterFixture
+        ? splat?.status === 'fixture' && splat?.fixtureSource?.mode === 'mock-adapter'
+        : (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource);
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && artifactTruthOk),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -474,11 +481,16 @@ try {
         outputContainerText: outputContainer?.innerText || '',
         generatedOutputNodeText: outputNode?.innerText || '',
         generatedOutputLoadAction: Boolean(outputLoadButton),
+        adapterFixture,
+        expectedTruth,
         splat,
       };
     })()`, 'Graph Execute SHARP route');
     if (expectsFixture) {
       assertWitness(executed.resultText.includes('input provenance only; output fixed fixture'), 'Run result did not preserve fixture input truth warning', executed);
+    } else if (executed.adapterFixture) {
+      assertWitness(executed.resultText.includes('mock SHARP adapter fixture output'), 'Mock adapter result did not preserve adapter-fixture truth warning', executed);
+      assertWitness(executed.splat?.status === 'fixture' && executed.splat?.fixtureSource?.mode === 'mock-adapter', 'Mock adapter result did not expose fixture provenance', executed);
     } else {
       assertWitness(!executed.resultText.includes('input provenance only; output fixed fixture'), 'Live SHARP result still looked fixture-backed', executed);
       assertWitness(executed.splat?.status === 'real' && !executed.splat?.fixtureSource, 'Live SHARP result did not expose a real non-fixture splat artifact', executed);
@@ -502,14 +514,15 @@ try {
     })()`);
     assertWitness(!loadOutputButton.disabled, 'Load Output button was disabled', loadOutputButton);
     await click(cdp, loadOutputButton.point);
+    const expectsPipelineFixture = expectsFixture || Boolean(executed.adapterFixture);
     const after = await waitFor(cdp, `(() => {
       const scene = window.kaminosSceneObjectDebugState?.() || [];
-      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
+      const loaded = scene.find(entry => entry.type === 'splat' && entry.splat?.pipelineArtifact?.path && (${JSON.stringify(expectsPipelineFixture)} ? entry.splat?.pipelineArtifact?.fixtureSource : !entry.splat?.pipelineArtifact?.fixtureSource));
       const previewDebug = loaded ? window.kaminosSplatPreviewDebugState?.(loaded.id) : null;
       const state = window.kaminosPipelineDockDebugState?.();
       const loadedArtifactPath = loaded?.splat?.pipelineArtifact?.path || null;
       const viewportRect = document.querySelector('#viewport')?.getBoundingClientRect();
-      const minimumIncluded = ${JSON.stringify(expectsFixture)} ? 1 : 700;
+      const minimumIncluded = ${JSON.stringify(expectsPipelineFixture)} ? 1 : 700;
       return {
         ok: document.querySelector('.tab.active')?.dataset.tab === 'assets'
           && loaded?.splat?.previewKind === 'point-cloud'

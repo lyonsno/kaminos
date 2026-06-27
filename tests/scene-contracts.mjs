@@ -203,6 +203,7 @@ assert.match(index, /produced from current graph/, 'Generated output history mus
 assert.match(index, /produced from previous graph state/, 'Generated output history must say when an output came from older graph state');
 assert.match(index, /pipelineSelectOutputHistoryRecord/, 'Selecting output history must be a selection operation, not graph restoration');
 assert.match(index, /real SHARP \/ point-cloud preview/, 'Generated SHARP output nodes must label the current preview truth boundary');
+assert.match(index, /adapter fixture \/ point-cloud preview/, 'Generated SHARP output nodes must label mock adapter outputs as fixtures, not real SHARP');
 assert.match(index, /pipelineDockState\.loadedPipelineArtifactPaths/, 'Pipeline graph tracks whether a generated artifact has been loaded into the scene');
 assert.match(index, /data-pipeline-generated-output-node-id/, 'Generated output nodes expose stable DOM ids for browser smokes');
 assert.match(index, /data-pipeline-graph-node-action="load-output"/, 'Generated output nodes expose Load as an in-canvas node action');
