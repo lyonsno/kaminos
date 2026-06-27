@@ -62,6 +62,10 @@ assert.match(webgpuCoreSource, /wgsl-spatial-surface-relaxation-v0/, 'WebGPU sol
 assert.match(webgpuCoreSource, /wgsl-stability-damped-relaxation-v0/, 'WebGPU solver names the stability damping contract');
 assert.match(webgpuCoreSource, /wgsl-visual-streak-bead-damping-v0/, 'WebGPU solver names the visual streak/bead damping contract');
 assert.match(webgpuCoreSource, /wgsl-density-position-solve-v0/, 'WebGPU solver names the density/position solve contract');
+assert.match(webgpuCoreSource, /wgsl-particle-support-budget-v0/, 'WebGPU solver names the particle support/budget contract');
+assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
+assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
+assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
 assert.match(webgpuCoreSource, /lerms\.source-truth\.v0/, 'WebGPU route emits LERMS source-truth envelopes');
 assert.match(webgpuCoreSource, /lerms\.juice-hit-event\.v0/, 'WebGPU route emits LERMS juice-hit events');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
@@ -94,6 +98,12 @@ assert.match(webgpuCoreSource, /applyDensityPositionSolve/, 'WebGPU solver appli
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
 assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /densityPositionSolveStats/, 'WebGPU solver reports density/position solve diagnostics');
+assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
+assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
+assert.match(webgpuCoreSource, /averageSupportNeighborCount/, 'support diagnostics report average neighbor support');
+assert.match(webgpuCoreSource, /unsupportedCorrectionRatio/, 'support diagnostics report unsupported correction ratio');
+assert.match(webgpuCoreSource, /p95SettledSurfaceSpeed/, 'rest diagnostics report p95 settled surface speed');
+assert.match(webgpuCoreSource, /particle_budget_render_scale_v0/, 'renderer scales splats for the higher particle budget without hiding route identity');
 assert.match(webgpuCoreSource, /correctionCandidateCount/, 'density solve diagnostics report particles eligible for correction');
 assert.match(webgpuCoreSource, /averageConstraintError/, 'density solve diagnostics report average density constraint error');
 assert.match(webgpuCoreSource, /maxConstraintError/, 'density solve diagnostics report maximum density constraint error');
@@ -133,6 +143,7 @@ assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates 
 assert.match(pageSource, /juice-gpu-layer/, 'prototype includes a WebGPU juice overlay canvas');
 assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
 assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
+assert.match(pageSource, /particleSupportBudget\s*=\s*24000/, 'prototype uses the 24k particle support budget');
 assert.match(pageSource, /live_readback_decoupled_v0/, 'prototype names the live readback decoupling contract');
 assert.match(pageSource, /liveReadbackSkippedCount/, 'prototype records skipped live debug readbacks instead of blocking frames');
 assert.match(pageSource, /cpuOracle:\s*false/, 'prototype disables CPU oracle during live animation readbacks');
@@ -144,6 +155,8 @@ assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid dia
 assert.match(pageSource, /surfaceCohesionStats/, 'prototype displays surface cohesion diagnostics');
 assert.match(pageSource, /spatialSurfaceRelaxationStats/, 'prototype displays spatial surface relaxation diagnostics');
 assert.match(pageSource, /densityPositionSolveStats/, 'prototype displays density/position solve diagnostics');
+assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
+assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceFreezeForWitness/, 'prototype exposes a frozen capture hook so screenshot and state cannot drift');
@@ -201,6 +214,12 @@ assert.match(witnessSource, /relaxedParticleCount/, 'witness checks relaxation a
 assert.match(witnessSource, /sheetContinuityRatio/, 'witness checks spatial sheet continuity');
 assert.match(witnessSource, /densityPositionSolveStats/, 'witness requires density/position solve diagnostics');
 assert.match(witnessSource, /wgsl-density-position-solve-v0/, 'witness records density/position solve contract');
+assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
+assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
+assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
+assert.match(witnessSource, /averageSupportNeighborCount/, 'witness records average support neighbor count');
+assert.match(witnessSource, /unsupportedCorrectionRatio/, 'witness records unsupported correction ratio');
+assert.match(witnessSource, /p95SettledSurfaceSpeed/, 'witness records p95 settled surface speed');
 assert.match(witnessSource, /correctionCandidateCount/, 'witness checks density correction coverage');
 assert.match(witnessSource, /averageConstraintError/, 'witness records average density constraint error');
 assert.match(witnessSource, /maxConstraintError/, 'witness records maximum density constraint error');

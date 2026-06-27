@@ -363,7 +363,7 @@ function measureVisualFailures(buffer) {
       && component.dominantColorRatio >= 0.72
   );
   const largestArea = components[0]?.area || 0;
-  const detachedBeadComponents = components.filter(component =>
+  const fineParticleComponents = components.filter(component =>
     component.area >= 90
       && component.area <= Math.max(2600, largestArea * 0.22)
       && component.width >= 8
@@ -371,12 +371,17 @@ function measureVisualFailures(buffer) {
       && component.width <= 95
       && component.height <= 95
   );
+  const detachedBeadComponents = fineParticleComponents.filter(component =>
+    component.area >= Math.max(1200, largestArea * 0.006)
+      || (component.area >= 420 && component.aspect >= 2.6)
+  );
   const detachedBeadChainScore = detachedBeadComponents.reduce((sum, component) => sum + Math.min(1, component.aspect / 3.5), 0);
   return {
     contract: 'visual-attractor-failure-v0',
     componentCount: components.length,
     longThinComponentCount: longThinComponents.length,
     elongatedBandCount: elongatedBandComponents.length,
+    fineParticleComponentCount: fineParticleComponents.length,
     detachedBeadChainCount: detachedBeadComponents.length,
     detachedBeadChainScore: Number(detachedBeadChainScore.toFixed(4)),
     largestComponentArea: largestArea,
@@ -682,6 +687,13 @@ async function run() {
     assert.ok(state.densityPositionSolveStats?.correctionCandidateCount > 0, 'route did not expose density correction candidates');
     assert.ok(Number.isFinite(state.densityPositionSolveStats?.averageConstraintError), 'route did not expose average density constraint error');
     assert.ok(Number.isFinite(state.densityPositionSolveStats?.maxConstraintError), 'route did not expose max density constraint error');
+    assert.equal(state.particleSupportBudgetStats?.pressureContract, 'wgsl-particle-support-budget-v0', 'particle support stats do not identify budget contract');
+    assert.ok(state.particleSupportBudgetStats?.particleBudget >= 24000, 'route did not use the 24k particle support budget');
+    assert.ok(state.particleSupportBudgetStats?.supportGridCellCount >= 4096, 'route did not expose a denser support grid');
+    assert.ok(Number.isFinite(state.particleSupportBudgetStats?.averageSupportNeighborCount), 'route did not expose average support neighbor count');
+    assert.ok(Number.isFinite(state.particleSupportBudgetStats?.unsupportedCorrectionRatio), 'route did not expose unsupported correction ratio');
+    assert.ok(state.settleRestEnergyStats?.pressureContract === 'wgsl-particle-support-budget-v0', 'settle rest stats do not identify support budget contract');
+    assert.ok(Number.isFinite(state.settleRestEnergyStats?.p95SettledSurfaceSpeed), 'route did not expose p95 settled surface speed');
     assert.equal(state.stabilityStats?.pressureContract, 'wgsl-stability-damped-relaxation-v0', 'stability stats do not identify damping contract');
     assert.ok(Number.isFinite(state.stabilityStats?.stabilityRiskScore), 'route did not expose stability risk score');
     assert.ok(Number.isFinite(state.stabilityStats?.highSpeedParticleCount), 'route did not expose high-speed particle count');
@@ -746,6 +758,13 @@ async function run() {
         averageConstraintError: stress?.densityPositionSolveStats?.averageConstraintError || 0,
         maxConstraintError: stress?.densityPositionSolveStats?.maxConstraintError || 0,
         densitySolveCoverageRatio: stress?.densityPositionSolveStats?.densitySolveCoverageRatio || 0,
+        particleSupportBudgetContract: stress?.particleSupportBudgetStats?.pressureContract || null,
+        particleBudget: stress?.particleSupportBudgetStats?.particleBudget || 0,
+        supportGridCellCount: stress?.particleSupportBudgetStats?.supportGridCellCount || 0,
+        averageSupportNeighborCount: stress?.particleSupportBudgetStats?.averageSupportNeighborCount || 0,
+        unsupportedCorrectionRatio: stress?.particleSupportBudgetStats?.unsupportedCorrectionRatio || 0,
+        p95SettledSurfaceSpeed: stress?.settleRestEnergyStats?.p95SettledSurfaceSpeed || 0,
+        restEnergyScore: stress?.settleRestEnergyStats?.restEnergyScore || 0,
         stabilityContract: stress?.stabilityStats?.pressureContract || null,
         visualDampingContract: stress?.visualStreakBeadStats?.pressureContract || null,
         detachedBeadParticleCount: stress?.visualStreakBeadStats?.detachedBeadParticleCount || 0,
@@ -773,6 +792,12 @@ async function run() {
     assert.ok(extendedFlowProbe.denseCellCount >= 8, 'expanded witness phase did not retain enough dense relaxation cells');
     assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
     assert.equal(extendedFlowProbe.densityPositionSolveContract, 'wgsl-density-position-solve-v0', 'expanded witness phase lost density/position solve contract');
+    assert.equal(extendedFlowProbe.particleSupportBudgetContract, 'wgsl-particle-support-budget-v0', 'expanded witness phase lost particle support budget contract');
+    assert.ok(extendedFlowProbe.particleBudget >= 24000, 'expanded witness phase did not use the 24k support budget');
+    assert.ok(extendedFlowProbe.supportGridCellCount >= 4096, 'expanded witness phase did not expose a denser support grid');
+    assert.ok(extendedFlowProbe.averageSupportNeighborCount >= 1.2, 'expanded witness phase has too little measured support');
+    assert.ok(extendedFlowProbe.unsupportedCorrectionRatio < 0.42, 'expanded witness phase has too many unsupported density corrections');
+    assert.ok(extendedFlowProbe.p95SettledSurfaceSpeed < 0.95, 'expanded witness phase has too much rest energy after settle');
     assert.ok(extendedFlowProbe.correctionCandidateCount >= 160, 'expanded witness phase did not exercise enough density correction candidates');
     assert.ok(extendedFlowProbe.densitySolveCoverageRatio > 0.08, 'expanded witness phase density solve coverage is too low');
     assert.ok(extendedFlowProbe.maxConstraintError < 1.8, 'expanded witness phase density constraint error is too high');
@@ -974,6 +999,8 @@ async function run() {
       surfaceCohesionStats: state.surfaceCohesionStats,
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
       densityPositionSolveStats: state.densityPositionSolveStats,
+      particleSupportBudgetStats: state.particleSupportBudgetStats,
+      settleRestEnergyStats: state.settleRestEnergyStats,
       stabilityStats: state.stabilityStats,
       visualStreakBeadStats: state.visualStreakBeadStats,
       visualFailureMetrics,

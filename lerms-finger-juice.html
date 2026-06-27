@@ -84,6 +84,7 @@
     const params = new URLSearchParams(location.search);
     const routeActive = params.get('lerms_world_finger_juice') === '1';
     const visualRenderer = 'source-legible-phase-breadcrumbs-v2';
+    const particleSupportBudget = 24000;
     const lerms = [
       { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
       { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
@@ -94,7 +95,7 @@
     ];
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
-      maxParticles: 2400,
+      maxParticles: particleSupportBudget,
       lerms,
       goins,
     });
@@ -182,7 +183,7 @@
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
-      maxParticles: 2400,
+      maxParticles: particleSupportBudget,
       emitterPacket,
       lerms,
       goins,
@@ -312,13 +313,14 @@
       return readDebugState();
     }
 
-    window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60 } = {}) => {
+    window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60, cpuOracle = false } = {}) => {
       const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
       if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
+        const previousCpuOracle = webgpuState.cpuOracle || null;
         const state = await webgpuSolver.stepAndRead(safeSteps, safeDt, {
-          cpuOracle: true,
-          reason: 'witness_forced_readback',
+          cpuOracle,
+          reason: cpuOracle ? 'witness_forced_oracle_readback' : 'witness_large_budget_readback',
         });
         liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
         webgpuState = {
@@ -326,6 +328,7 @@
           render_backend: webgpuState.render_backend,
           renderRoute: webgpuState.renderRoute,
           renderShaderRoute: webgpuState.renderShaderRoute,
+          cpuOracle: state.cpuOracle || previousCpuOracle,
         };
       } else if (routeActive) {
         for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
@@ -755,13 +758,15 @@
       const surfaceCohesionStats = state.surfaceCohesionStats || {};
       const spatialSurfaceRelaxationStats = state.spatialSurfaceRelaxationStats || {};
       const densityPositionSolveStats = state.densityPositionSolveStats || {};
+      const particleSupportBudgetStats = state.particleSupportBudgetStats || {};
+      const settleRestEnergyStats = state.settleRestEnergyStats || {};
       const stabilityStats = state.stabilityStats || {};
       const visualStreakBeadStats = state.visualStreakBeadStats || {};
       const emitterDiagnostics = Array.isArray(state.emitterDiagnostics) ? state.emitterDiagnostics : [];
       const emitterSummary = emitterDiagnostics
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());

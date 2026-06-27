@@ -12,18 +12,22 @@ export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT = 'wgsl-spati
 export const LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT = 'wgsl-stability-damped-relaxation-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT = 'wgsl-visual-streak-bead-damping-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT = 'wgsl-density-position-solve-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT = 'wgsl-particle-support-budget-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
 const PARTICLE_FLOATS = 16;
 const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
+const DEFAULT_PARTICLE_SUPPORT_BUDGET = 24000;
+const BASELINE_PARTICLE_SUPPORT_BUDGET = 2400;
+const MIN_PARTICLE_SUPPORT_SCALE = 0.32;
 const PRESSURE_NEIGHBOR_WINDOW = 6;
 const PRESSURE_RADIUS = 0.105;
 const SURFACE_VISCOSITY_RADIUS = PRESSURE_RADIUS * 1.35;
 const SPATIAL_PRESSURE_ITERATIONS = 2;
-const SPATIAL_PRESSURE_GRID_X = 24;
-const SPATIAL_PRESSURE_GRID_Z = 32;
+const SPATIAL_PRESSURE_GRID_X = 64;
+const SPATIAL_PRESSURE_GRID_Z = 96;
 const SPATIAL_PRESSURE_CELL_COUNT = SPATIAL_PRESSURE_GRID_X * SPATIAL_PRESSURE_GRID_Z;
 const SPATIAL_PRESSURE_MIN_X = -0.75;
 const SPATIAL_PRESSURE_MAX_X = 0.75;
@@ -31,6 +35,7 @@ const SPATIAL_PRESSURE_MIN_Z = -0.95;
 const SPATIAL_PRESSURE_MAX_Z = 2.25;
 const DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY = 18;
 const DENSITY_POSITION_SOLVE_REST_DISTANCE = PRESSURE_RADIUS * 0.62;
+const PARTICLE_BUDGET_RENDER_SCALE_CONTRACT = 'particle_budget_render_scale_v0';
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 
 function finite(value, fallback = 0) {
@@ -41,6 +46,29 @@ function finite(value, fallback = 0) {
 function round(value, digits = 4) {
   const scale = 10 ** digits;
   return Math.round(finite(value) * scale) / scale;
+}
+
+function particleSupportScale(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
+  return Math.max(
+    MIN_PARTICLE_SUPPORT_SCALE,
+    Math.min(1, Math.sqrt(BASELINE_PARTICLE_SUPPORT_BUDGET / Math.max(1, finite(particleBudget, 1)))),
+  );
+}
+
+function particleRadiusForBudget(sourceRadius, particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
+  return Math.max(0.018, finite(sourceRadius, 0.045) * particleSupportScale(particleBudget));
+}
+
+function pressureRadiusForBudget(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
+  return PRESSURE_RADIUS * particleSupportScale(particleBudget);
+}
+
+function viscosityRadiusForBudget(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
+  return SURFACE_VISCOSITY_RADIUS * particleSupportScale(particleBudget);
+}
+
+function densityRestDistanceForBudget(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
+  return DENSITY_POSITION_SOLVE_REST_DISTANCE * particleSupportScale(particleBudget);
 }
 
 function vec3(value, fallback = [0, 0, 0]) {
@@ -308,12 +336,13 @@ function respawnParticleFromSource(particle, source, index, stepSeed = 0) {
   const respawnCount = finite(particle.respawnCount, 0) + 1;
   const jitter = spawnJitter(index, source.emitterIndex, respawnCount, stepSeed, source.radius);
   const lifeScale = 0.55 + hash01((index + 1) * 2246822519 + (respawnCount + 3) * 3266489917) * 0.45;
+  const particleBudget = Math.max(1, Math.floor(finite(source.particleBudget, DEFAULT_PARTICLE_SUPPORT_BUDGET)));
   return {
     position: add(source.origin || source.position, jitter),
     phase: 0,
     velocity: source.velocity,
     chemistry: source.chemistryCode,
-    radius: source.radius,
+    radius: particleRadiusForBudget(source.radius, particleBudget),
     strength: source.strength,
     age: 0,
     life: source.life * lifeScale,
@@ -325,7 +354,7 @@ function respawnParticleFromSource(particle, source, index, stepSeed = 0) {
 }
 
 export function createInitialWebGPUParticles(emitterPacket, options = {}) {
-  const maxParticles = Math.max(16, Math.floor(options.maxParticles || 900));
+  const maxParticles = Math.max(16, Math.floor(options.maxParticles || DEFAULT_PARTICLE_SUPPORT_BUDGET));
   const seed = options.seed || 11;
   const rng = makeRng(seed);
   const data = new Float32Array(maxParticles * PARTICLE_FLOATS);
@@ -334,7 +363,9 @@ export function createInitialWebGPUParticles(emitterPacket, options = {}) {
   for (let i = 0; i < maxParticles; i += 1) {
     const source = sources[i % Math.max(1, sources.length)];
     if (!source) continue;
+    source.particleBudget = maxParticles;
     const radius = source.radius;
+    const particleRadius = particleRadiusForBudget(radius, maxParticles);
     const jitter = [(rng() - 0.5) * radius, (rng() - 0.5) * radius, (rng() - 0.5) * radius];
     const start = add(source.origin, jitter);
     writeParticle(data, i, {
@@ -342,7 +373,7 @@ export function createInitialWebGPUParticles(emitterPacket, options = {}) {
       phase: 0,
       velocity: source.velocity,
       chemistry: source.chemistryCode,
-      radius,
+      radius: particleRadius,
       strength: source.strength,
       age: (i % 96) * -0.025,
       life: source.life * (0.55 + rng() * 0.45),
@@ -410,7 +441,8 @@ function targetHits(particles, targets, kind, options = {}) {
     for (const target of out) {
       const delta = sub(vec3(target.position), particle.position);
       const distance = length3(delta);
-      if (distance <= finite(target.radius, kind === 'goin' ? 0.13 : 0.16) + particle.radius) {
+      const contactRadius = Math.max(particle.radius, kind === 'goin' ? 0.06 : 0.052);
+      if (distance <= finite(target.radius, kind === 'goin' ? 0.13 : 0.16) + contactRadius) {
         const impulseScale = particle.strength * (kind === 'goin' ? 0.16 : 0.22);
         const impulse = particle.velocity.map(value => round(value * impulseScale, 4));
         target.hits += 1;
@@ -436,11 +468,12 @@ function targetHits(particles, targets, kind, options = {}) {
 
 function pressureDensityStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const pressureRadius = pressureRadiusForBudget(particles.length);
   if (!surfaceParticles.length) {
     return {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
       pressureNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
-      pressureRadius: PRESSURE_RADIUS,
+      pressureRadius,
       surfaceParticleCount: 0,
       averageNeighborDensity: 0,
       maxNeighborDensity: 0,
@@ -456,7 +489,7 @@ function pressureDensityStats(particles) {
       ]) {
         if (!neighbor || neighbor.id === particle.id) continue;
         const distance = length3(sub(particle.position, neighbor.position));
-        if (distance > 0.0001 && distance < PRESSURE_RADIUS) density += (PRESSURE_RADIUS - distance) / PRESSURE_RADIUS;
+        if (distance > 0.0001 && distance < pressureRadius) density += (pressureRadius - distance) / pressureRadius;
       }
     }
     return density;
@@ -465,7 +498,7 @@ function pressureDensityStats(particles) {
   return {
     pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
     pressureNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
-    pressureRadius: PRESSURE_RADIUS,
+    pressureRadius: round(pressureRadius, 4),
     surfaceParticleCount: surfaceParticles.length,
     averageNeighborDensity: round(totalDensity / surfaceParticles.length, 4),
     maxNeighborDensity: round(Math.max(...densities), 4),
@@ -526,11 +559,12 @@ function spatialPressureStats(particles) {
 
 function fluidDepthStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const viscosityRadius = viscosityRadiusForBudget(particles.length);
   if (!surfaceParticles.length) {
     return {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       spatialPressureIterations: SPATIAL_PRESSURE_ITERATIONS,
-      viscosityRadius: SURFACE_VISCOSITY_RADIUS,
+      viscosityRadius: round(viscosityRadius, 4),
       viscosityNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
       surfaceParticleCount: 0,
       viscosityAffectedCount: 0,
@@ -555,8 +589,8 @@ function fluidDepthStats(particles) {
       ]) {
         if (!neighbor || neighbor.id === particle.id) continue;
         const distance = length3(sub(particle.position, neighbor.position));
-        if (distance <= 0.0001 || distance >= SURFACE_VISCOSITY_RADIUS) continue;
-        const weight = (SURFACE_VISCOSITY_RADIUS - distance) / SURFACE_VISCOSITY_RADIUS;
+        if (distance <= 0.0001 || distance >= viscosityRadius) continue;
+        const weight = (viscosityRadius - distance) / viscosityRadius;
         neighborVelocity = add(neighborVelocity, mul(neighbor.velocity, weight));
         weightTotal += weight;
       }
@@ -572,7 +606,7 @@ function fluidDepthStats(particles) {
   return {
     pressureContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     spatialPressureIterations: SPATIAL_PRESSURE_ITERATIONS,
-    viscosityRadius: round(SURFACE_VISCOSITY_RADIUS, 4),
+    viscosityRadius: round(viscosityRadius, 4),
     viscosityNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
     surfaceParticleCount: surfaceParticles.length,
     viscosityAffectedCount,
@@ -584,10 +618,11 @@ function fluidDepthStats(particles) {
 
 function surfaceCohesionStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const cohesionRadius = viscosityRadiusForBudget(particles.length) * 1.7;
   if (!surfaceParticles.length) {
     return {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT,
-      cohesionRadius: round(SURFACE_VISCOSITY_RADIUS * 1.7, 4),
+      cohesionRadius: round(cohesionRadius, 4),
       cohesionNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
       surfaceParticleCount: 0,
       cohesionAffectedCount: 0,
@@ -596,8 +631,6 @@ function surfaceCohesionStats(particles) {
       ribbonAlignment: 0,
     };
   }
-
-  const cohesionRadius = SURFACE_VISCOSITY_RADIUS * 1.7;
   let cohesionAffectedCount = 0;
   let cohesionNeighborCount = 0;
   let totalAlignment = 0;
@@ -721,13 +754,14 @@ function spatialSurfaceRelaxationStats(particles) {
 
 function densityPositionSolveStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const restDistance = densityRestDistanceForBudget(particles.length);
   if (!surfaceParticles.length) {
     return {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
       solveMode: 'bounded_pair_and_cell_position_correction_v0',
       solveIterations: 1,
       targetCellOccupancy: DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY,
-      restDistance: round(DENSITY_POSITION_SOLVE_REST_DISTANCE, 4),
+      restDistance: round(restDistance, 4),
       surfaceParticleCount: 0,
       correctionCandidateCount: 0,
       closePairCount: 0,
@@ -764,10 +798,10 @@ function densityPositionSolveStats(particles) {
       ]) {
         if (!neighbor || neighbor.id === particle.id || neighbor.chemistry !== particle.chemistry) continue;
         const distance = length3(sub(particle.position, neighbor.position));
-        if (distance <= 0.0001 || distance >= DENSITY_POSITION_SOLVE_REST_DISTANCE) continue;
+        if (distance <= 0.0001 || distance >= restDistance) continue;
         closePairCount += 1;
         localClosePairCount += 1;
-        localConstraintErrorSum += (DENSITY_POSITION_SOLVE_REST_DISTANCE - distance) / DENSITY_POSITION_SOLVE_REST_DISTANCE;
+        localConstraintErrorSum += (restDistance - distance) / restDistance;
       }
     }
     const localConstraintError = localClosePairCount ? localConstraintErrorSum / localClosePairCount : 0;
@@ -783,7 +817,7 @@ function densityPositionSolveStats(particles) {
     solveMode: 'bounded_pair_and_cell_position_correction_v0',
     solveIterations: 1,
     targetCellOccupancy: DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY,
-    restDistance: round(DENSITY_POSITION_SOLVE_REST_DISTANCE, 4),
+    restDistance: round(restDistance, 4),
     surfaceParticleCount: surfaceParticles.length,
     correctionCandidateCount,
     closePairCount,
@@ -791,6 +825,121 @@ function densityPositionSolveStats(particles) {
     densitySolveCoverageRatio: round(correctionCandidateCount / surfaceParticles.length, 4),
     averageConstraintError: correctionCandidateCount ? round(totalConstraintError / correctionCandidateCount, 4) : 0,
     maxConstraintError: round(maxConstraintError, 4),
+  };
+}
+
+function particleSupportBudgetStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const supportScale = particleSupportScale(particles.length);
+  const supportRadius = viscosityRadiusForBudget(particles.length);
+  const restDistance = densityRestDistanceForBudget(particles.length);
+  const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
+  for (const particle of surfaceParticles) {
+    bins[spatialCellIndex(particle.position)] += 1;
+  }
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+      particleBudget: particles.length,
+      supportBudgetTarget: DEFAULT_PARTICLE_SUPPORT_BUDGET,
+      supportGridCellCount: SPATIAL_PRESSURE_CELL_COUNT,
+      supportGridX: SPATIAL_PRESSURE_GRID_X,
+      supportGridZ: SPATIAL_PRESSURE_GRID_Z,
+      supportNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+      supportRadius: round(supportRadius, 4),
+      supportScale: round(supportScale, 4),
+      surfaceParticleCount: 0,
+      averageSupportNeighborCount: 0,
+      minSupportNeighborCount: 0,
+      unsupportedParticleCount: 0,
+      unsupportedCorrectionRatio: 0,
+      supportAdequacyRatio: 0,
+    };
+  }
+
+  let supportNeighborTotal = 0;
+  let minSupportNeighborCount = Infinity;
+  let unsupportedParticleCount = 0;
+  let correctionCandidateCount = 0;
+  let unsupportedCorrectionCount = 0;
+  for (let index = 0; index < surfaceParticles.length; index += 1) {
+    const particle = surfaceParticles[index];
+    const occupancy = bins[spatialCellIndex(particle.position)] || 0;
+    let supportNeighborCount = 0;
+    let closePairCandidate = false;
+    for (let offset = 1; offset <= PRESSURE_NEIGHBOR_WINDOW; offset += 1) {
+      for (const neighbor of [
+        surfaceParticles[(index + offset) % surfaceParticles.length],
+        surfaceParticles[(index + surfaceParticles.length - offset) % surfaceParticles.length],
+      ]) {
+        if (!neighbor || neighbor.id === particle.id || neighbor.chemistry !== particle.chemistry) continue;
+        const distance = length3(sub(particle.position, neighbor.position));
+        if (distance > 0.0001 && distance < supportRadius) supportNeighborCount += 1;
+        if (distance > 0.0001 && distance < restDistance) closePairCandidate = true;
+      }
+    }
+    const isCorrectionCandidate = closePairCandidate || occupancy >= DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY;
+    if (isCorrectionCandidate) correctionCandidateCount += 1;
+    if (supportNeighborCount < 2) {
+      unsupportedParticleCount += 1;
+      if (isCorrectionCandidate) unsupportedCorrectionCount += 1;
+    }
+    supportNeighborTotal += supportNeighborCount;
+    minSupportNeighborCount = Math.min(minSupportNeighborCount, supportNeighborCount);
+  }
+
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+    particleBudget: particles.length,
+    supportBudgetTarget: DEFAULT_PARTICLE_SUPPORT_BUDGET,
+    supportGridCellCount: SPATIAL_PRESSURE_CELL_COUNT,
+    supportGridX: SPATIAL_PRESSURE_GRID_X,
+    supportGridZ: SPATIAL_PRESSURE_GRID_Z,
+    supportNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+    supportRadius: round(supportRadius, 4),
+    supportScale: round(supportScale, 4),
+    surfaceParticleCount: surfaceParticles.length,
+    averageSupportNeighborCount: round(supportNeighborTotal / surfaceParticles.length, 4),
+    minSupportNeighborCount: Number.isFinite(minSupportNeighborCount) ? minSupportNeighborCount : 0,
+    unsupportedParticleCount,
+    unsupportedCorrectionRatio: correctionCandidateCount ? round(unsupportedCorrectionCount / correctionCandidateCount, 4) : 0,
+    supportAdequacyRatio: round(1 - unsupportedParticleCount / surfaceParticles.length, 4),
+  };
+}
+
+function percentile(sortedValues, ratio) {
+  if (!sortedValues.length) return 0;
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.floor((sortedValues.length - 1) * ratio)));
+  return sortedValues[index];
+}
+
+function settleRestEnergyStats(particles) {
+  const settledSurfaceSpeeds = particles
+    .filter(particle => particle.surface_flow && particle.age >= 2.5)
+    .map(particle => Math.hypot(particle.velocity[0], particle.velocity[2]))
+    .sort((a, b) => a - b);
+  if (!settledSurfaceSpeeds.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+      restEnergyMode: 'settled_surface_speed_distribution_v0',
+      settledSurfaceParticleCount: 0,
+      averageSettledSurfaceSpeed: 0,
+      p95SettledSurfaceSpeed: 0,
+      maxSettledSurfaceSpeed: 0,
+      restEnergyScore: 0,
+    };
+  }
+  const averageSpeed = settledSurfaceSpeeds.reduce((sum, speed) => sum + speed, 0) / settledSurfaceSpeeds.length;
+  const p95Speed = percentile(settledSurfaceSpeeds, 0.95);
+  const maxSpeed = settledSurfaceSpeeds[settledSurfaceSpeeds.length - 1];
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+    restEnergyMode: 'settled_surface_speed_distribution_v0',
+    settledSurfaceParticleCount: settledSurfaceSpeeds.length,
+    averageSettledSurfaceSpeed: round(averageSpeed, 4),
+    p95SettledSurfaceSpeed: round(p95Speed, 4),
+    maxSettledSurfaceSpeed: round(maxSpeed, 4),
+    restEnergyScore: round(Math.min(1, p95Speed / 0.95), 4),
   };
 }
 
@@ -914,6 +1063,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       velocity: particle.velocity.map(value => round(value, 4)),
       radius: round(particle.radius, 4),
       strength: round(particle.strength, 4),
+      age: round(particle.age, 4),
+      life: round(particle.life, 4),
       emitterIndex: particle.emitterIndex,
       impacted: particle.impacted,
       respawnCount: Math.floor(finite(particle.respawnCount, 0)),
@@ -995,6 +1146,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const cohesionStats = surfaceCohesionStats(particles);
   const relaxationStats = spatialSurfaceRelaxationStats(particles);
   const densitySolveStats = densityPositionSolveStats(particles);
+  const supportBudgetStats = particleSupportBudgetStats(particles);
+  const restEnergyStats = settleRestEnergyStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const visualStats = visualStreakBeadStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
@@ -1011,6 +1164,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     surfaceRelaxationContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT,
     densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+    particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
     sourceTruth,
@@ -1022,6 +1176,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     surfaceCohesionStats: cohesionStats,
     spatialSurfaceRelaxationStats: relaxationStats,
     densityPositionSolveStats: densitySolveStats,
+    particleSupportBudgetStats: supportBudgetStats,
+    settleRestEnergyStats: restEnergyStats,
     stabilityStats: solverStabilityStats,
     visualStreakBeadStats: visualStats,
     juiceHitEvents,
@@ -1109,6 +1265,14 @@ const SPATIAL_PRESSURE_MIN_Z: f32 = ${SPATIAL_PRESSURE_MIN_Z.toFixed(4)};
 const SPATIAL_PRESSURE_MAX_Z: f32 = ${SPATIAL_PRESSURE_MAX_Z.toFixed(4)};
 const DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY: f32 = ${DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY.toFixed(1)};
 const DENSITY_POSITION_SOLVE_REST_DISTANCE: f32 = ${DENSITY_POSITION_SOLVE_REST_DISTANCE.toFixed(4)};
+const BASELINE_PARTICLE_SUPPORT_BUDGET: f32 = ${BASELINE_PARTICLE_SUPPORT_BUDGET.toFixed(1)};
+const MIN_PARTICLE_SUPPORT_SCALE: f32 = ${MIN_PARTICLE_SUPPORT_SCALE.toFixed(4)};
+const PRESSURE_RADIUS_BASE: f32 = ${PRESSURE_RADIUS.toFixed(4)};
+const SURFACE_VISCOSITY_RADIUS_BASE: f32 = ${SURFACE_VISCOSITY_RADIUS.toFixed(4)};
+
+fn particleSupportScale() -> f32 {
+  return clamp(sqrt(BASELINE_PARTICLE_SUPPORT_BUDGET / max(1.0, f32(params.particleCount))), MIN_PARTICLE_SUPPORT_SCALE, 1.0);
+}
 
 fn terrainHeightAt(x: f32, z: f32) -> f32 {
   let bowl = -0.08 + 0.11 * x * x + 0.035 * cos(z * 1.65);
@@ -1136,7 +1300,7 @@ fn slideVelocityOnTerrain(velocity: vec3f, normal: vec3f, chemistry: f32) -> vec
 
 fn applyLocalDensityPressure(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
   var correction = vec3f(0.0, 0.0, 0.0);
-  let pressureRadius = max(${PRESSURE_RADIUS.toFixed(4)}, radius * 2.35);
+  let pressureRadius = max(PRESSURE_RADIUS_BASE * particleSupportScale(), radius * 2.35);
   for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
     let forwardIndex = (index + offset) % params.particleCount;
     let backIndex = (index + params.particleCount - offset) % params.particleCount;
@@ -1216,7 +1380,7 @@ fn applySpatialCellPressure(position: vec3f, velocity: vec3f, chemistry: f32) ->
 fn applySurfaceViscosity(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
   var neighborVelocity = vec3f(0.0, 0.0, 0.0);
   var weightTotal = 0.0;
-  let viscosityRadius = max(${SURFACE_VISCOSITY_RADIUS.toFixed(4)}, radius * 3.0);
+  let viscosityRadius = max(SURFACE_VISCOSITY_RADIUS_BASE * particleSupportScale(), radius * 3.0);
   for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
     let forwardIndex = (index + offset) % params.particleCount;
     let backIndex = (index + params.particleCount - offset) % params.particleCount;
@@ -1255,7 +1419,7 @@ fn applySameChemistrySurfaceCohesion(index: u32, position: vec3f, velocity: vec3
   var neighborPosition = vec3f(0.0, 0.0, 0.0);
   var neighborVelocity = vec3f(0.0, 0.0, 0.0);
   var weightTotal = 0.0;
-  let cohesionRadius = max(${(SURFACE_VISCOSITY_RADIUS * 1.7).toFixed(4)}, radius * 4.8);
+  let cohesionRadius = max(SURFACE_VISCOSITY_RADIUS_BASE * 1.7 * particleSupportScale(), radius * 4.8);
   for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
     let forwardIndex = (index + offset) % params.particleCount;
     let backIndex = (index + params.particleCount - offset) % params.particleCount;
@@ -1332,7 +1496,7 @@ fn applySpatialSurfaceRelaxation(position: vec3f, velocity: vec3f, radius: f32, 
 fn applyDensityPositionSolve(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
   var pairCorrection = vec3f(0.0, 0.0, 0.0);
   var pairWeight = 0.0;
-  let restDistance = max(DENSITY_POSITION_SOLVE_REST_DISTANCE, radius * 0.62);
+  let restDistance = max(DENSITY_POSITION_SOLVE_REST_DISTANCE * particleSupportScale(), radius * 0.62);
   for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
     let forwardIndex = (index + offset) % params.particleCount;
     let backIndex = (index + params.particleCount - offset) % params.particleCount;
@@ -1398,10 +1562,16 @@ fn applySurfaceStabilityDamping(position: vec3f, velocity: vec3f, chemistry: f32
   if (speed <= 0.0001) {
     return velocity;
   }
-  let densityDamping = 1.0 - min(0.22, max(center - 10.0, 0.0) * 0.0065);
-  let chemistryDamping = select(select(0.985, 0.978, chemistry > 2.5), 0.968, chemistry > 1.5 && chemistry < 2.5);
-  let maxSpeed = select(select(0.88, 0.76, chemistry > 2.5), 0.68, chemistry > 1.5 && chemistry < 2.5);
-  let clamped = normalize(horizontal) * min(speed * densityDamping * chemistryDamping, maxSpeed);
+  let densityDamping = 1.0 - min(0.34, max(center - 6.0, 0.0) * 0.011);
+  let chemistryDamping = select(select(0.972, 0.964, chemistry > 2.5), 0.952, chemistry > 1.5 && chemistry < 2.5);
+  let maxSpeed = select(select(0.62, 0.56, chemistry > 2.5), 0.48, chemistry > 1.5 && chemistry < 2.5);
+  var clamped = normalize(horizontal) * min(speed * densityDamping * chemistryDamping, maxSpeed);
+  let lateralExcess = max(0.0, abs(position.x) - 0.46);
+  clamped.x = clamped.x - sign(position.x) * min(0.16, lateralExcess * 0.35);
+  let tetheredSpeed = length(clamped);
+  if (tetheredSpeed > maxSpeed) {
+    clamped = normalize(clamped) * maxSpeed;
+  }
   return vec3f(clamped.x, velocity.y, clamped.y);
 }
 
@@ -1428,9 +1598,9 @@ fn applyVisualStreakBeadDamping(index: u32, position: vec3f, velocity: vec3f, ra
   let neighborOccupied = select(0.0, 1.0, left > 0.0) + select(0.0, 1.0, right > 0.0) + select(0.0, 1.0, back > 0.0) + select(0.0, 1.0, front > 0.0);
   let isolatedBead = center <= 2.0 && neighborOccupied <= 1.0;
   let sparseStreak = center <= 3.0 && neighborOccupied <= 1.0 && speed > 0.42;
-  let beadDrag = select(1.0, select(0.48, 0.30, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
-  let streakDrag = select(1.0, 0.54, sparseStreak);
-  let maximum = select(select(0.42, 0.44, chemistry > 2.5), 0.36, chemistry > 1.5 && chemistry < 2.5);
+  let beadDrag = select(1.0, select(0.36, 0.22, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
+  let streakDrag = select(1.0, 0.42, sparseStreak);
+  let maximum = select(select(0.30, 0.32, chemistry > 2.5), 0.25, chemistry > 1.5 && chemistry < 2.5);
   let dampedSpeed = min(speed * beadDrag * streakDrag, maximum);
   var damped = normalize(horizontal) * dampedSpeed;
   let neighborDirection = vec2f(right - left, front - back);
@@ -1442,7 +1612,7 @@ fn applyVisualStreakBeadDamping(index: u32, position: vec3f, velocity: vec3f, ra
     neighborDirection / neighborLength,
     neighborLength > 0.0001
   );
-  let tetherStrength = select(0.0, select(0.12, 0.20, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
+  let tetherStrength = select(0.0, select(0.20, 0.30, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
   damped = damped + tetherDirection * tetherStrength;
   return vec3f(damped.x, velocity.y, damped.y);
 }
@@ -1472,6 +1642,7 @@ fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
   let chemistry = emitter.aimChem.w;
   let motion = emitter.motionRadius.xyz;
   let radius = emitter.motionRadius.w;
+  let particleRadius = max(0.018, radius * particleSupportScale());
   let strength = emitter.strengthExtensionIndexLife.x;
   let extension = emitter.strengthExtensionIndexLife.y;
   let sourceEmitterIndex = emitter.strengthExtensionIndexLife.z;
@@ -1492,7 +1663,7 @@ fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
   let lifeScale = 0.55 + hash01(seed + 0xc2b2ae35u) * 0.45;
   out.posPhase = vec4f(origin + jitter, 0.0);
   out.velChem = vec4f(aim * speed + motion + vec3f(0.0, arcBoost, 0.0), chemistry);
-  out.misc = vec4f(radius, strength, 0.0, life * lifeScale);
+  out.misc = vec4f(particleRadius, strength, 0.0, life * lifeScale);
   out.flags = vec4f(sourceEmitterIndex, emitter.originActive.w, 0.0, respawnCount);
   return out;
 }
@@ -1647,7 +1818,8 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     width * 0.5 + world.x * scale,
     height * 0.74 - world.z * height * 0.23 - world.y * scale * 0.52
   );
-  let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale;
+  let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.46, 1.0);
+  let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale * particleBudgetScale;
   let finalScreen = screen + corner * radius;
   var out: VertexOut;
   out.position = select(
@@ -1693,7 +1865,7 @@ function unavailableSolver(reason, context = {}) {
 }
 
 export async function createWebGPUFingerJuiceSolver(options = {}) {
-  const maxParticles = Math.max(16, Math.floor(options.maxParticles || 900));
+  const maxParticles = Math.max(16, Math.floor(options.maxParticles || DEFAULT_PARTICLE_SUPPORT_BUDGET));
   const { data, sources, emitterData } = createInitialWebGPUParticles(options.emitterPacket, {
     maxParticles,
     seed: options.seed || 11,
@@ -1840,6 +2012,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
         visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
         densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+        particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
         stepCount,
       };
     }
@@ -1859,6 +2032,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
       densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+      particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       stepCount,
     };
   }
@@ -1910,6 +2084,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
       densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+      particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
@@ -2063,6 +2238,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         render_backend: 'webgpu_direct_render',
         renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
         renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+        renderScaleContract: PARTICLE_BUDGET_RENDER_SCALE_CONTRACT,
         renderFrameCount,
       };
     }
@@ -2084,6 +2260,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
     densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+    particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
