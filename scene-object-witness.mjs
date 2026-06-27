@@ -1542,6 +1542,69 @@ async function runWorldChambersLermsUnderhillScenario(ws) {
   }
 }
 
+async function runWorldChambersLermsUnderhillReceiptUrlScenario(ws) {
+  phase = 'scenario-world-chambers-lerms-underhill-receipt-url';
+  lastEvidence.worldChambersLermsUnderhillReceiptUrl = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (typeof window.kaminosWorldChambersDebugState !== 'function') {
+        throw new Error('world chambers receipt-url witness missing kaminosWorldChambersDebugState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let debug = window.kaminosWorldChambersDebugState();
+      for (let i = 0; i < 80; i++) {
+        debug = window.kaminosWorldChambersDebugState();
+        if (debug.receiptSource?.mode && debug.receiptSource.mode !== 'embedded_fixture') break;
+        if (debug.receiptLoadError) break;
+        await wait(125);
+      }
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        debug,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('world-chamber-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('world-chamber-route')?.textContent?.trim() || null,
+        authorityText: document.getElementById('world-chamber-authority')?.textContent?.trim() || null,
+        receiptSourceText: document.getElementById('world-chamber-receipt-source')?.textContent?.trim() || null,
+        loadErrorText: document.getElementById('world-chamber-load-error')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.worldChambersLermsUnderhillReceiptUrl;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`world chambers receipt-url tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.receiptLoadError) {
+    throw new Error(`world chambers receipt-url load failed: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.activeChamberId !== 'lerms-underhill') {
+    throw new Error(`world chambers receipt-url active chamber mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.route !== 'first-vertical-composer/witness-file') {
+    throw new Error(`world chambers receipt-url route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authority !== 'synthetic_fixture') {
+    throw new Error(`world chambers receipt-url authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.receiptSource?.mode !== 'external_url' && evidence.debug?.receiptSource?.mode !== 'server_file') {
+    throw new Error(`world chambers receiptSource was not external: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.usingFixtureFallback !== false) {
+    throw new Error(`world chambers receipt-url used fixture fallback: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.lerms !== 8 || evidence.debug?.summary?.goins !== 2) {
+    throw new Error(`world chambers receipt-url summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.carrierDrops !== 1 || evidence.debug?.summary?.juiceHits !== 1) {
+    throw new Error(`world chambers receipt-url event summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.receiptSourceText || evidence.receiptSourceText === 'embedded Kaminos fixture receipt') {
+    throw new Error(`world chambers receipt source UI did not show external source: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4166,6 +4229,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'world-chambers-lerms-underhill') {
     await runWorldChambersLermsUnderhillScenario(ws);
+  } else if (scenario === 'world-chambers-lerms-underhill-receipt-url') {
+    await runWorldChambersLermsUnderhillReceiptUrlScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

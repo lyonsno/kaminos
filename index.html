@@ -202,6 +202,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .world-chamber-readout .field:first-child,
 .world-chamber-readout .field:last-child { grid-column: 1 / -1; }
 .world-chamber-readout .field-val { max-width: 225px; white-space: normal; overflow-wrap: anywhere; text-align: right; }
+.world-chamber-error { margin-top: 8px; border: 1px solid #5b2a2a; border-radius: 5px; padding: 7px 8px; color: #d48686; background: #241515; font: 10px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.world-chamber-error[hidden] { display: none; }
 .world-chamber-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .world-chamber-row { display: flex; justify-content: space-between; gap: 8px; color: #8d7f66; font: 10px 'SF Mono', monospace; border-top: 1px solid #30291c; padding-top: 5px; }
 </style>
@@ -598,7 +600,9 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="field"><span class="field-key">Hits</span><span class="field-val" id="world-chamber-juice-hits">0</span></div>
         <div class="field"><span class="field-key">Drops</span><span class="field-val" id="world-chamber-carrier-drops">0</span></div>
         <div class="field"><span class="field-key">Schema</span><span class="field-val" id="world-chamber-schema">lerms.first-vertical-frame.v0</span></div>
+        <div class="field"><span class="field-key">Receipt</span><span class="field-val" id="world-chamber-receipt-source">embedded Kaminos fixture receipt</span></div>
       </div>
+      <div class="world-chamber-error" id="world-chamber-load-error" hidden></div>
       <div class="world-chamber-list" id="world-chamber-absence-list">
         <div class="world-chamber-row"><span>liveFingerJuicePackets</span><span>empty</span></div>
         <div class="world-chamber-row"><span>liveGoinPhysics</span><span>empty</span></div>
@@ -4268,6 +4272,13 @@ function currentWorldChambersDebugState() {
 
 window.kaminosWorldChambersDebugState = currentWorldChambersDebugState;
 
+function worldChamberReceiptSourceLabel(receiptSource) {
+  if (!receiptSource) return 'receipt unavailable';
+  if (receiptSource.label) return receiptSource.label;
+  if (receiptSource.requestedUrl) return receiptSource.requestedUrl;
+  return receiptSource.mode || 'receipt source unknown';
+}
+
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const chamber = debug.activeChamber;
@@ -4283,6 +4294,15 @@ function renderWorldChambersPanel() {
   document.getElementById('world-chamber-juice-hits').textContent = String(summary.juiceHits ?? 0);
   document.getElementById('world-chamber-carrier-drops').textContent = String(summary.carrierDrops ?? 0);
   document.getElementById('world-chamber-schema').textContent = chamber?.frameSchema || 'schema unavailable';
+  document.getElementById('world-chamber-receipt-source').textContent = worldChamberReceiptSourceLabel(debug.receiptSource);
+  const loadError = document.getElementById('world-chamber-load-error');
+  if (debug.receiptLoadError) {
+    loadError.hidden = false;
+    loadError.textContent = `${debug.receiptLoadError.phase || 'receipt-load-error'}: ${debug.receiptLoadError.message || 'unknown error'} (${debug.receiptLoadError.requestedUrl || 'unknown source'})`;
+  } else {
+    loadError.hidden = true;
+    loadError.textContent = '';
+  }
   const absenceList = document.getElementById('world-chamber-absence-list');
   absenceList.innerHTML = '';
   for (const [key, isEmpty] of Object.entries(debug.intentionallyAbsent || {})) {
@@ -4297,7 +4317,38 @@ function renderWorldChambersPanel() {
   }
 }
 
-function initWorldChambersRoute() {
+function worldChamberReceiptUrlFromRoute(params) {
+  const directUrl = params.get('world_chamber_receipt_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('world_chamber_receipt_root');
+  const path = params.get('world_chamber_receipt_path');
+  if (root && path) {
+    const query = new URLSearchParams({ root, path }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      root,
+      path,
+    };
+  }
+  return null;
+}
+
+async function loadWorldChamberReceiptFromUrl(url) {
+  const resp = await fetch(url);
+  let payload = null;
+  try {
+    payload = await resp.json();
+  } catch (error) {
+    throw new Error(`receipt response was not JSON: ${error.message || error}`);
+  }
+  if (!resp.ok || payload?.error) {
+    throw new Error(payload?.error || `HTTP ${resp.status}`);
+  }
+  return payload;
+}
+
+async function initWorldChambersRoute() {
   renderWorldChambersPanel();
   document.getElementById('world-chamber-focus')?.addEventListener('click', () => {
     setActiveTab('worlds');
@@ -4306,12 +4357,42 @@ function initWorldChambersRoute() {
   });
   const params = new URLSearchParams(window.location.search);
   const requestedChamber = params.get('world_chamber');
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID) {
+  const receiptRoute = worldChamberReceiptUrlFromRoute(params);
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
     const debug = currentWorldChambersDebugState();
-    setInfo(`World Chamber: ${debug.activeChamber.title} - ${debug.authorityNote}`);
+    setInfo(receiptRoute ? `World Chamber: loading receipt ${receiptRoute.url}` : `World Chamber: ${debug.activeChamber.title} - ${debug.authorityNote}`);
+  }
+  if (!receiptRoute) return;
+
+  try {
+    const receipt = await loadWorldChamberReceiptFromUrl(receiptRoute.url);
+    worldChambersRegistry = createDefaultWorldChambersRegistry({
+      lermsUnderhillReceipt: receipt,
+      lermsUnderhillReceiptSource: {
+        mode: receiptRoute.mode,
+        label: receiptRoute.mode === 'server_file' ? `${receiptRoute.root}/${receiptRoute.path}` : receiptRoute.url,
+        requestedUrl: receiptRoute.url,
+        effectiveUrl: new URL(receiptRoute.url, window.location.href).href,
+        root: receiptRoute.root,
+        path: receiptRoute.path,
+      },
+    });
+    renderWorldChambersPanel();
+    const debug = currentWorldChambersDebugState();
+    setInfo(`World Chamber receipt loaded: ${debug.activeChamber.title} - ${debug.authorityNote}`);
+  } catch (error) {
+    worldChambersRegistry = createDefaultWorldChambersRegistry({
+      lermsUnderhillReceiptLoadError: {
+        phase: 'loading-world-chamber-receipt',
+        requestedUrl: receiptRoute.url,
+        message: error.message || String(error),
+      },
+    });
+    renderWorldChambersPanel();
+    setInfo(`World Chamber receipt load failed: ${error.message || error}`);
   }
 }
 

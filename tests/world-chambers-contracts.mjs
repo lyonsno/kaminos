@@ -16,6 +16,11 @@ assert.match(index, /integrated fixture evidence; not a live first vertical/, 'i
 assert.match(index, /liveFingerJuicePackets/, 'index preserves intentionally absent live finger-juice packets');
 assert.match(index, /Forge Rail/, 'index exposes the Forge Rail chamber affordance');
 assert.match(index, /world_chamber/, 'URL route can open a world chamber without manual tab clicking');
+assert.match(index, /world_chamber_receipt_url/, 'URL route can load an external world chamber receipt by URL');
+assert.match(index, /world_chamber_receipt_root/, 'URL route can select a server-backed receipt root');
+assert.match(index, /world_chamber_receipt_path/, 'URL route can select a server-backed receipt path');
+assert.match(index, /world-chamber-receipt-source/, 'Worlds tab displays effective receipt source identity');
+assert.match(index, /world-chamber-load-error/, 'Worlds tab displays receipt load failures instead of silently falling back');
 
 const corePath = join(root, 'world-chambers-core.js');
 assert.ok(existsSync(corePath), 'world-chambers-core.js exists');
@@ -40,6 +45,7 @@ const {
   LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT,
   createDefaultWorldChambersRegistry,
   normalizeWorldChamberReceipt,
+  worldChamberDebugState,
 } = await import('../world-chambers-core.js');
 
 assert.equal(WORLD_CHAMBER_REGISTRY_SCHEMA, 'kaminos.world-chambers.registry.v0');
@@ -69,15 +75,89 @@ assert.equal(normalized.chamberId, 'lerms-underhill');
 assert.equal(normalized.route, 'first-vertical-composer/witness-file');
 assert.equal(normalized.authority, 'synthetic_fixture');
 assert.equal(normalized.authorityNote, 'integrated fixture evidence; not a live first vertical');
+assert.equal(normalized.receiptSource.mode, 'embedded_fixture');
+assert.equal(normalized.receiptSource.label, 'embedded Kaminos fixture receipt');
 assert.equal(normalized.falseLiveClaim, false);
 assert.equal(normalized.summary.lerms, 8);
 assert.equal(normalized.summary.goins, 2);
 assert.equal(normalized.summary.juiceHits, 1);
 assert.equal(normalized.summary.carrierDrops, 1);
+assert.equal(normalized.summary.terrainSamples, 1);
 assert.equal(normalized.intentionallyAbsent.liveFingerJuicePackets, true);
 assert.equal(normalized.intentionallyAbsent.liveGoinPhysics, true);
 assert.equal(normalized.intentionallyAbsent.liveCrowdAi, true);
 assert.equal(normalized.intentionallyAbsent.generatedLermMotion, true);
+
+const palmDaddyComposerReceipt = structuredClone(LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
+palmDaddyComposerReceipt.phase = 'complete';
+palmDaddyComposerReceipt.outputPath = '/tmp/lerms-first-vertical-composer-witness-minion.json';
+palmDaddyComposerReceipt.frame.terrainSamples = [
+  {
+    schema: 'lerms.terrain-sample.v0',
+    id: 'terrain-fixture-crown',
+    source: palmDaddyComposerReceipt.frame.source,
+  },
+];
+delete palmDaddyComposerReceipt.frame.terrain;
+palmDaddyComposerReceipt.frame.carrierDropEvents = palmDaddyComposerReceipt.frame.carrierDrops;
+delete palmDaddyComposerReceipt.frame.carrierDrops;
+palmDaddyComposerReceipt.summary = {
+  schema: 'lerms.first-vertical-summary.v0',
+  frameId: 'minion-kaminos-ingestion-smoke',
+  authority: 'synthetic_fixture',
+  lermCount: 8,
+  goinCount: 2,
+  juiceHitCount: 1,
+  carrierDropCount: 1,
+  lermStateCounts: {
+    tumbling: 1,
+  },
+  goinStateCounts: {
+    rolling: 1,
+  },
+};
+
+const externalNormalized = normalizeWorldChamberReceipt(underhill, palmDaddyComposerReceipt, {
+  receiptSource: {
+    mode: 'external_url',
+    requestedUrl: '/api/read?root=scratch&path=lerms-first-vertical-composer-witness.json',
+    effectiveUrl: 'http://127.0.0.1:8793/api/read?root=scratch&path=lerms-first-vertical-composer-witness.json',
+  },
+});
+assert.equal(externalNormalized.receiptSource.mode, 'external_url');
+assert.equal(externalNormalized.receiptSource.requestedUrl, '/api/read?root=scratch&path=lerms-first-vertical-composer-witness.json');
+assert.equal(externalNormalized.receiptSource.effectiveUrl, 'http://127.0.0.1:8793/api/read?root=scratch&path=lerms-first-vertical-composer-witness.json');
+assert.equal(externalNormalized.summary.lerms, 8);
+assert.equal(externalNormalized.summary.goins, 2);
+assert.equal(externalNormalized.summary.juiceHits, 1);
+assert.equal(externalNormalized.summary.carrierDrops, 1);
+assert.equal(externalNormalized.summary.terrainSamples, 1);
+assert.deepEqual(externalNormalized.summary.lermStateCounts, { tumbling: 1 });
+assert.deepEqual(externalNormalized.summary.goinStateCounts, { rolling: 1 });
+
+const externalRegistry = createDefaultWorldChambersRegistry({
+  lermsUnderhillReceipt: palmDaddyComposerReceipt,
+  lermsUnderhillReceiptSource: {
+    mode: 'external_url',
+    requestedUrl: '/api/read?root=scratch&path=lerms-first-vertical-composer-witness.json',
+  },
+});
+const externalDebug = worldChamberDebugState(externalRegistry);
+assert.equal(externalDebug.receiptSource.mode, 'external_url');
+assert.equal(externalDebug.usingFixtureFallback, false);
+assert.equal(externalDebug.summary.lerms, 8);
+
+const failedRegistry = createDefaultWorldChambersRegistry({
+  lermsUnderhillReceiptLoadError: {
+    phase: 'loading-world-chamber-receipt',
+    requestedUrl: '/api/read?root=scratch&path=missing.json',
+    message: 'HTTP 404',
+  },
+});
+const failedDebug = worldChamberDebugState(failedRegistry);
+assert.equal(failedDebug.receipt, null);
+assert.equal(failedDebug.receiptLoadError.phase, 'loading-world-chamber-receipt');
+assert.equal(failedDebug.usingFixtureFallback, false);
 
 assert.throws(
   () => normalizeWorldChamberReceipt(underhill, {
@@ -122,6 +202,8 @@ assert.throws(
 const witnessPath = join(root, 'scene-object-witness.mjs');
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /world-chambers-lerms-underhill/, 'scene witness exposes the LERMS Underhill world chamber scenario');
+assert.match(witness, /world-chambers-lerms-underhill-receipt-url/, 'scene witness exposes the external receipt URL world chamber scenario');
 assert.match(witness, /kaminosWorldChambersDebugState/, 'scene witness reads the world chamber debug state');
 assert.match(witness, /first-vertical-composer\/witness-file/, 'scene witness verifies the effective composer witness route');
 assert.match(witness, /synthetic_fixture/, 'scene witness verifies the fixture authority');
+assert.match(witness, /receiptSource/, 'scene witness verifies effective receipt source identity');

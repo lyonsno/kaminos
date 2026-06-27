@@ -141,16 +141,46 @@ function countArray(value) {
   return Array.isArray(value) ? value.length : 0;
 }
 
+function normalizeReceiptSource(source) {
+  const fallback = {
+    mode: 'embedded_fixture',
+    label: 'embedded Kaminos fixture receipt',
+  };
+  if (!source || typeof source !== 'object') return fallback;
+  const normalized = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined || value === null) continue;
+    normalized[key] = typeof value === 'string' ? value : clone(value);
+  }
+  if (!normalized.mode) normalized.mode = fallback.mode;
+  if (!normalized.label && normalized.mode === 'embedded_fixture') normalized.label = fallback.label;
+  return normalized;
+}
+
+function terrainSamplesFromFrame(frame) {
+  if (Array.isArray(frame?.terrainSamples)) return frame.terrainSamples;
+  if (frame?.terrain) return [frame.terrain];
+  return [];
+}
+
+function carrierDropsFromFrame(frame) {
+  if (Array.isArray(frame?.carrierDropEvents)) return frame.carrierDropEvents;
+  if (Array.isArray(frame?.carrierDrops)) return frame.carrierDrops;
+  return [];
+}
+
 function assertSchemaList(descriptor, receipt) {
+  const terrainSamples = terrainSamplesFromFrame(receipt.frame);
+  const carrierDrops = carrierDropsFromFrame(receipt.frame);
   const presentSchemas = new Set([
     receipt.frame?.source?.schema,
-    receipt.frame?.terrain?.schema,
     receipt.frame?.schema,
     receipt.summary?.schema,
+    ...terrainSamples.map(item => item?.schema),
     ...((receipt.frame?.lerms || []).map(item => item?.schema)),
     ...((receipt.frame?.goins || []).map(item => item?.schema)),
     ...((receipt.frame?.juiceHits || []).map(item => item?.schema)),
-    ...((receipt.frame?.carrierDrops || []).map(item => item?.schema)),
+    ...carrierDrops.map(item => item?.schema),
   ].filter(Boolean));
   for (const schema of descriptor.acceptedSchemas) {
     if (!presentSchemas.has(schema)) {
@@ -159,7 +189,7 @@ function assertSchemaList(descriptor, receipt) {
   }
 }
 
-export function normalizeWorldChamberReceipt(descriptor, receipt) {
+export function normalizeWorldChamberReceipt(descriptor, receipt, options = {}) {
   assertObject(descriptor, 'world chamber descriptor');
   assertObject(receipt, 'world chamber receipt');
   if (receipt.ok !== true) throw new Error(`world chamber receipt is not ok: ${receipt.phase || 'unknown phase'}`);
@@ -195,12 +225,19 @@ export function normalizeWorldChamberReceipt(descriptor, receipt) {
   }
   assertSchemaList(descriptor, receipt);
 
+  const terrainSamples = terrainSamplesFromFrame(receipt.frame);
+  const carrierDrops = carrierDropsFromFrame(receipt.frame);
   const summary = {
     schema: receipt.summary.schema,
-    lerms: Number(receipt.summary.lerms ?? countArray(receipt.frame.lerms)),
-    goins: Number(receipt.summary.goins ?? countArray(receipt.frame.goins)),
-    juiceHits: Number(receipt.summary.juiceHits ?? countArray(receipt.frame.juiceHits)),
-    carrierDrops: Number(receipt.summary.carrierDrops ?? countArray(receipt.frame.carrierDrops)),
+    frameId: receipt.summary.frameId ?? receipt.frame.source.frameId ?? null,
+    authority: receipt.summary.authority ?? receipt.frame.source.authority,
+    lerms: Number(receipt.summary.lerms ?? receipt.summary.lermCount ?? countArray(receipt.frame.lerms)),
+    goins: Number(receipt.summary.goins ?? receipt.summary.goinCount ?? countArray(receipt.frame.goins)),
+    juiceHits: Number(receipt.summary.juiceHits ?? receipt.summary.juiceHitCount ?? countArray(receipt.frame.juiceHits)),
+    carrierDrops: Number(receipt.summary.carrierDrops ?? receipt.summary.carrierDropCount ?? countArray(carrierDrops)),
+    terrainSamples: Number(receipt.summary.terrainSamples ?? receipt.summary.terrainSampleCount ?? countArray(terrainSamples)),
+    lermStateCounts: clone(receipt.summary.lermStateCounts || {}),
+    goinStateCounts: clone(receipt.summary.goinStateCounts || {}),
   };
 
   return {
@@ -210,6 +247,7 @@ export function normalizeWorldChamberReceipt(descriptor, receipt) {
     route: receipt.route,
     authority: receipt.frame.source.authority,
     authorityNote: receipt.authorityNote || descriptor.authorityNote,
+    receiptSource: normalizeReceiptSource(options.receiptSource),
     source: clone(receipt.frame.source),
     summary,
     intentionallyAbsent: clone(receipt.intentionallyEmpty || {}),
@@ -220,8 +258,25 @@ export function normalizeWorldChamberReceipt(descriptor, receipt) {
 
 export function createDefaultWorldChambersRegistry(options = {}) {
   const descriptor = clone(LERMS_UNDERHILL_DESCRIPTOR);
+  const loadError = options.lermsUnderhillReceiptLoadError || null;
+  if (loadError) {
+    return {
+      schema: WORLD_CHAMBER_REGISTRY_SCHEMA,
+      activeChamberId: descriptor.id,
+      chambers: [descriptor],
+      receipts: {},
+      receiptLoadErrors: {
+        [descriptor.id]: clone(loadError),
+      },
+      usingFixtureFallback: false,
+    };
+  }
+  const usingFixtureFallback = !options.lermsUnderhillReceipt;
   const receipt = options.lermsUnderhillReceipt || LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT;
-  const normalized = normalizeWorldChamberReceipt(descriptor, receipt);
+  const receiptSource = usingFixtureFallback
+    ? { mode: 'embedded_fixture', label: 'embedded Kaminos fixture receipt' }
+    : options.lermsUnderhillReceiptSource || { mode: 'external_unknown', label: 'external composer receipt' };
+  const normalized = normalizeWorldChamberReceipt(descriptor, receipt, { receiptSource });
   return {
     schema: WORLD_CHAMBER_REGISTRY_SCHEMA,
     activeChamberId: descriptor.id,
@@ -229,12 +284,15 @@ export function createDefaultWorldChambersRegistry(options = {}) {
     receipts: {
       [descriptor.id]: normalized,
     },
+    receiptLoadErrors: {},
+    usingFixtureFallback,
   };
 }
 
 export function worldChamberDebugState(registry = createDefaultWorldChambersRegistry()) {
   const active = registry.chambers.find(chamber => chamber.id === registry.activeChamberId) || registry.chambers[0] || null;
   const receipt = active ? registry.receipts?.[active.id] || null : null;
+  const receiptLoadError = active ? registry.receiptLoadErrors?.[active.id] || null : null;
   return {
     schema: registry.schema,
     activeChamberId: registry.activeChamberId,
@@ -242,6 +300,9 @@ export function worldChamberDebugState(registry = createDefaultWorldChambersRegi
     chambers: clone(registry.chambers),
     activeChamber: active ? clone(active) : null,
     receipt: receipt ? clone(receipt) : null,
+    receiptSource: receipt?.receiptSource || null,
+    receiptLoadError: receiptLoadError ? clone(receiptLoadError) : null,
+    usingFixtureFallback: !!registry.usingFixtureFallback,
     route: receipt?.route || active?.route || null,
     authority: receipt?.authority || active?.expectedAuthority || null,
     authorityNote: receipt?.authorityNote || active?.authorityNote || null,
