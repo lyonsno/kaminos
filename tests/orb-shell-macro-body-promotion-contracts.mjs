@@ -56,30 +56,38 @@ assert.ok(plan.promotedBodies.every(body => body.subordinateAnatomy.includes('in
 
 assert.equal(fixture.liveMacroSideWallPlan?.schema, 'LiveMacroSideWallPlan', 'fixture exposes live macro sidewall plan');
 assert.equal(fixture.liveMacroSideWallPlan.mode, 'live-promoted-body-sidewall-v0', 'live sidewall plan uses promoted body sidewall mode');
+assert.deepEqual(
+  fixture.liveMacroSideWallPlan.targetAssemblageIds,
+  fixture.macroAssemblages.map(assemblage => assemblage.id),
+  'live sidewall plan covers every promoted macro assemblage',
+);
+assert.equal(fixture.liveMacroSideWallPlan.sideWallCount, fixture.macroAssemblages.length * 2, 'live sidewall plan creates two sidewalls for every promoted body');
+assert.equal(fixture.liveMacroSideWallPlan.terminalCapCount, fixture.macroAssemblages.length * 2, 'live sidewall plan seals both termini for every promoted body');
 assert.equal(fixture.liveMacroSideWallPlan.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live sidewall plan records rendered visible edge sidewalls');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.materialMode, 'flat-low-shader-topology', 'live sidewall plan requires flat low-shader material mode');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.metalShaderVisible, false, 'live sidewall plan disables fancy metal shader for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.surfaceDetailMode, 'disabled', 'live sidewall plan disables surface detail for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.territoryProxyUnderlayVisible, false, 'live sidewall plan suppresses territory proxy underlay');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.legacyRoundTargetBandTubesVisible, false, 'live sidewall plan suppresses target legacy round band tubes');
-assert.equal(fixture.liveMacroSideWallPlan.legacyScaffoldSuppressionVerdict, 'target-promoted-body-legacy-round-bands-suppressed', 'live sidewall plan records legacy round tube suppression');
+assert.equal(fixture.liveMacroSideWallPlan.legacyScaffoldSuppressionVerdict, 'covered-promoted-body-legacy-round-bands-suppressed', 'live sidewall plan records legacy round tube suppression');
+const allLegacyBandIds = fixture.macroAssemblages.flatMap(assemblage => assemblage.childBandPlan.map(member => member.id));
 assert.deepEqual(
   fixture.liveMacroSideWallPlan.suppressedLegacyRoundBandIds,
-  ['nw-body', 'nw-rail', 'nw-hop'],
-  'live sidewall target suppresses old north-west round body/rail/hop tubes',
+  allLegacyBandIds,
+  'live sidewall topology suppresses old round body/rail/hop tubes for every covered promoted body',
 );
-assert.equal(fixture.liveMacroSideWallPlan.terminalCapCount, 2, 'live sidewall plan seals both promoted shell termini');
 assert.equal(fixture.liveMacroSideWallPlan.terminalCapClosureVerdict, 'live-promoted-body-termini-capped', 'live sidewall plan records closed promoted body termini');
 assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.schema === 'LiveMacroTerminalCap'), 'live sidewall plan carries terminal cap records');
-assert.deepEqual(
-  fixture.liveMacroSideWallPlan.terminalCaps.map(cap => cap.endRole),
-  ['start-terminus', 'end-terminus'],
-  'live terminal caps cover start and end termini',
-);
+for (const assemblage of fixture.macroAssemblages) {
+  const walls = fixture.liveMacroSideWallPlan.sideWalls.filter(wall => wall.parentAssemblage === assemblage.id);
+  const caps = fixture.liveMacroSideWallPlan.terminalCaps.filter(cap => cap.parentAssemblage === assemblage.id);
+  assert.deepEqual(walls.map(wall => wall.targetEdge), ['left-promoted-body-edge', 'right-promoted-body-edge'], `${assemblage.id} has both sidewall edges`);
+  assert.deepEqual(caps.map(cap => cap.endRole), ['start-terminus', 'end-terminus'], `${assemblage.id} has start and end terminal caps`);
+}
 assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.sideWallIds.length === 2), 'terminal caps bridge both sidewall edges');
 assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capFaceCount >= 4), 'terminal caps record polygon cap faces');
 assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capThicknessStats.mean >= 0.035), 'terminal caps retain visible shell thickness');
-assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capWidthStats.mean >= 0.2), 'terminal caps span the promoted shell width');
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capWidthStats.mean >= 0.12), 'terminal caps span each promoted shell width, including the narrower crown lock');
 
 const liveSideWall = fixture.liveMacroSideWallPlan.sideWalls.find(wall => wall.parentAssemblage === 'north-west-dominant-thrust' && wall.targetEdge === 'left-promoted-body-edge');
 assert.equal(liveSideWall?.schema, 'LiveMacroSideWall', 'north-west promoted body has a live sidewall record');
