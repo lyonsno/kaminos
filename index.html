@@ -231,6 +231,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-graph-node-action { border: 1px solid #3a3a3a; background: #242424; color: #d8d8d8; border-radius: 5px; padding: 4px 8px; font-size: 10px; cursor: pointer; }
 .pipeline-graph-node-action:hover { background: #303030; border-color: #555; color: #fff; }
 .pipeline-graph-node-action.primary { background: #1e3c27; border-color: #45623a; color: #bfe7a4; }
+.pipeline-graph-node-action.danger { background: #331a1a; border-color: #643434; color: #ffb4b4; }
 .pipeline-graph-node-action[disabled] { opacity: 0.45; cursor: default; }
 .pipeline-output-container { border-top: 1px solid #2c2c2c; margin-top: 2px; padding-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
 .pipeline-output-container-empty { color: #555; font: 8px 'SF Mono', monospace; }
@@ -4335,6 +4336,7 @@ let pipelineDockState = {
 	  assetCardDrag: null,
 	  generatorCardDrag: null,
 	  graphInspectorStatus: null,
+	  graphCleanupUndo: null,
 	  loadedPipelineArtifactPaths: {},
 	  renderedRunId: null,
 	  lastRun: null,
@@ -4788,6 +4790,7 @@ const pipelineGraphDefaultEdges = [
   { id: 'route-to-evidence', from: 'route', to: 'evidence' },
 ];
 const pipelineGraphStorageKey = 'kaminos.pipeline.graph.local.v0';
+const pipelineGraphEditableNodeKinds = new Set(['image', 'route', 'generated-output']);
 
 function pipelineGraphDefaultEdgeState() {
   return pipelineGraphDefaultEdges.map(edge => ({ ...edge }));
@@ -4927,6 +4930,9 @@ function loadPipelineGraphLocalState() {
     if (document.selectedOutputIdByRouteId && typeof document.selectedOutputIdByRouteId === 'object') {
       pipelineDockState.selectedOutputIdByRouteId = document.selectedOutputIdByRouteId;
     }
+    if (document.graphCleanupUndo?.schema === 'kaminos.pipeline-graph-cleanup-undo.v0') {
+      pipelineDockState.graphCleanupUndo = document.graphCleanupUndo;
+    }
     return document;
   } catch (error) {
     console.warn('Pipeline graph local state ignored:', error);
@@ -4946,6 +4952,7 @@ function savePipelineGraphLocalState() {
       generatedOutputNodes: pipelineDockState.generatedOutputNodes || [],
       selectedOutputIdByRouteId: pipelineDockState.selectedOutputIdByRouteId || {},
       graphImageNodes: pipelineDockState.graphImageNodes || [],
+      graphCleanupUndo: pipelineDockState.graphCleanupUndo || null,
     };
     localStorage.setItem(pipelineGraphStorageKey, JSON.stringify(document));
     return document;
@@ -4978,6 +4985,122 @@ function pipelineGraphEdges() {
     .map(edge => ({ id: edge.id || `${edge.from}-to-${edge.to}`, from: edge.from, to: edge.to }))
     .filter(edge => edge.from && edge.to && edge.from !== edge.to);
   return pipelineDockState.graphEdges;
+}
+
+function pipelineCaptureGraphWorkspaceState() {
+  return JSON.parse(JSON.stringify({
+    graphNodePositions: pipelineDockState.graphNodePositions || {},
+    graphEdges: pipelineGraphEdges(),
+    graphRouteNodes: pipelineDockState.graphRouteNodes || [],
+    generatedOutputNodes: pipelineDockState.generatedOutputNodes || [],
+    selectedOutputIdByRouteId: pipelineDockState.selectedOutputIdByRouteId || {},
+    graphImageNodes: pipelineDockState.graphImageNodes || [],
+    selectedGraphNodeId: pipelineDockState.selectedGraphNodeId || null,
+    selectedGraphEdgeId: pipelineDockState.selectedGraphEdgeId || null,
+  }));
+}
+
+function pipelineRestoreGraphWorkspaceState(snapshot) {
+  if (!snapshot) return null;
+  pipelineDockState.graphNodePositions = snapshot.graphNodePositions || {};
+  pipelineDockState.graphEdges = Array.isArray(snapshot.graphEdges) ? snapshot.graphEdges : pipelineGraphDefaultEdgeState();
+  pipelineDockState.graphRouteNodes = Array.isArray(snapshot.graphRouteNodes) ? snapshot.graphRouteNodes : [];
+  pipelineDockState.generatedOutputNodes = Array.isArray(snapshot.generatedOutputNodes) ? snapshot.generatedOutputNodes : [];
+  pipelineDockState.selectedOutputIdByRouteId = snapshot.selectedOutputIdByRouteId || {};
+  pipelineDockState.graphImageNodes = Array.isArray(snapshot.graphImageNodes) ? snapshot.graphImageNodes : [];
+  pipelineDockState.selectedGraphNodeId = snapshot.selectedGraphNodeId || 'source';
+  pipelineDockState.selectedGraphEdgeId = snapshot.selectedGraphEdgeId || null;
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  return snapshot;
+}
+
+function pipelinePushGraphCleanupUndo(label) {
+  pipelineDockState.graphCleanupUndo = {
+    schema: 'kaminos.pipeline-graph-cleanup-undo.v0',
+    label: label || 'graph cleanup',
+    capturedAt: new Date().toISOString(),
+    workspace: pipelineCaptureGraphWorkspaceState(),
+  };
+  return pipelineDockState.graphCleanupUndo;
+}
+
+function pipelineUndoGraphCleanup() {
+  const undo = pipelineDockState.graphCleanupUndo;
+  if (!undo?.workspace) return null;
+  pipelineDockState.graphCleanupUndo = null;
+  const restored = pipelineRestoreGraphWorkspaceState(undo.workspace);
+  savePipelineGraphLocalState();
+  pipelineSetGraphInspectorStatus(`Undo Graph Cleanup restored ${undo.label || 'previous graph state'}`, 'success');
+  return restored;
+}
+
+function pipelineGraphEditableNodeRecord(nodeId) {
+  if (!nodeId) return null;
+  const imageNode = pipelineGraphImageNodes().find(node => node.id === nodeId);
+  if (imageNode) return { kind: 'image', node: imageNode };
+  const routeNode = pipelineGraphRouteNodes().find(node => node.id === nodeId);
+  if (routeNode) return { kind: 'route', node: routeNode };
+  const outputNode = pipelineGeneratedOutputNodes().find(node => node.id === nodeId);
+  if (outputNode) return { kind: 'generated-output', node: outputNode };
+  return null;
+}
+
+function pipelineDeleteGraphNode(nodeId) {
+  const editable = pipelineGraphEditableNodeRecord(nodeId);
+  if (!editable || !pipelineGraphEditableNodeKinds.has(editable.kind)) return null;
+  pipelinePushGraphCleanupUndo(`delete ${editable.kind} ${nodeId}`);
+  const removedOutputIds = new Set();
+  if (editable.kind === 'image') {
+    pipelineDockState.graphImageNodes = pipelineGraphImageNodes().filter(node => node.id !== nodeId);
+  } else if (editable.kind === 'route') {
+    pipelineDockState.graphRouteNodes = pipelineGraphRouteNodes().filter(node => node.id !== nodeId);
+    pipelineGeneratedOutputNodes()
+      .filter(node => node.routeNodeId === nodeId)
+      .forEach(node => removedOutputIds.add(node.id));
+    pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().filter(node => node.routeNodeId !== nodeId);
+    delete pipelineDockState.selectedOutputIdByRouteId?.[nodeId];
+  } else if (editable.kind === 'generated-output') {
+    removedOutputIds.add(nodeId);
+    pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().filter(node => node.id !== nodeId);
+  }
+  pipelineDockState.graphEdges = pipelineGraphEdges().filter(edge => edge.from !== nodeId && edge.to !== nodeId);
+  delete pipelineDockState.graphNodePositions?.[nodeId];
+  for (const outputId of removedOutputIds) {
+    delete pipelineDockState.graphNodePositions?.[outputId];
+    for (const [routeId, selectedOutputId] of Object.entries(pipelineDockState.selectedOutputIdByRouteId || {})) {
+      if (selectedOutputId === outputId) delete pipelineDockState.selectedOutputIdByRouteId[routeId];
+    }
+  }
+  pipelineDockState.selectedGraphEdgeId = null;
+  pipelineDockState.selectedGraphNodeId = 'output-stack';
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  pipelineSetGraphInspectorStatus(`Deleted graph node ${nodeId}; run evidence and loaded scene objects were left intact`, 'success');
+  return editable.node;
+}
+
+function pipelineClearFailedGeneratedOutputs() {
+  const failed = pipelineGeneratedOutputNodes().filter(node => node.status === 'failed');
+  if (!failed.length) {
+    pipelineSetGraphInspectorStatus('Clear Failed Outputs found no failed generated-output nodes', 'idle');
+    return [];
+  }
+  pipelinePushGraphCleanupUndo(`clear ${failed.length} failed output${failed.length === 1 ? '' : 's'}`);
+  const failedIds = new Set(failed.map(node => node.id));
+  pipelineDockState.generatedOutputNodes = pipelineGeneratedOutputNodes().filter(node => node.status !== 'failed');
+  for (const outputId of failedIds) {
+    delete pipelineDockState.graphNodePositions?.[outputId];
+    for (const [routeId, selectedOutputId] of Object.entries(pipelineDockState.selectedOutputIdByRouteId || {})) {
+      if (selectedOutputId === outputId) delete pipelineDockState.selectedOutputIdByRouteId[routeId];
+    }
+  }
+  if (failedIds.has(pipelineDockState.selectedGraphNodeId)) pipelineDockState.selectedGraphNodeId = 'output-stack';
+  pipelineDockState.selectedGraphEdgeId = null;
+  savePipelineGraphLocalState();
+  renderPipelineGraphWorkbench();
+  pipelineSetGraphInspectorStatus(`Clear Failed Outputs removed ${failed.length} failed graph node${failed.length === 1 ? '' : 's'}; run history stayed in the run shelf`, 'success');
+  return failed;
 }
 
 function pipelineGraphRouteNodes() {
@@ -5498,10 +5621,12 @@ function pipelineCreateGraphEdge(fromNodeId, toNodeId) {
 function pipelineRemoveGraphEdge(edgeId) {
   const edge = pipelineGraphEdgeForId(edgeId);
   if (!edge) return null;
+  pipelinePushGraphCleanupUndo(`remove hook ${edge.id}`);
   pipelineDockState.graphEdges = pipelineGraphEdges().filter(candidate => candidate.id !== edge.id);
   if (pipelineDockState.selectedGraphEdgeId === edge.id) pipelineDockState.selectedGraphEdgeId = null;
   savePipelineGraphLocalState();
   renderPipelineGraphWorkbench();
+  pipelineSetGraphInspectorStatus(`Removed hook ${edge.from} -> ${edge.to}`, 'success');
   return edge;
 }
 
@@ -5852,6 +5977,14 @@ function renderPipelineGraphInspector(node, selectedRun) {
       action: () => pipelineImportGraphImageNodeToScene(node),
     });
   }
+  if (node?.kind === 'output') {
+    actions.push({
+      label: 'Clear Failed Outputs',
+      runningMessage: 'Clearing failed generated-output nodes from this browser-local graph...',
+      successMessage: failed => failed?.length ? `Cleared ${failed.length} failed output${failed.length === 1 ? '' : 's'}` : 'No failed outputs to clear',
+      action: () => pipelineClearFailedGeneratedOutputs(),
+    });
+  }
   const nodeRun = node?.kind === 'generated-output' ? (node.runRecord || pipelineGeneratedOutputRunRecord(node)) : selectedRun;
   if ((node?.kind === 'output' || node?.kind === 'generated-output') && nodeRun && node.artifact?.path) {
     if (pipelineArtifactIsLoadableSplat(node.artifact)) {
@@ -5867,8 +6000,24 @@ function renderPipelineGraphInspector(node, selectedRun) {
 	    actions.push({ label: 'Open Sidecar', disabled: !sidecarUrl, action: () => pipelineOpenRunDocument('Open Sidecar', sidecarUrl, selectedRun) });
 	    actions.push({ label: 'Open Bundle', disabled: !bundleUrl, action: () => pipelineOpenRunDocument('Open Bundle', bundleUrl, selectedRun) });
 	  }
+  if (node && pipelineGraphEditableNodeRecord(node.id)) {
+    actions.push({
+      label: 'Delete Graph Node',
+      runningMessage: `Deleting ${node.title || node.id} from the browser-local graph...`,
+      successMessage: result => result ? `Deleted graph node ${node.id}` : `Graph node ${node.id} is structural and cannot be deleted`,
+      action: () => pipelineDeleteGraphNode(node.id),
+    });
+  }
   if (selectedEdge) {
     actions.push({ label: 'Remove Hook', action: () => pipelineRemoveGraphEdge(selectedEdge.id) });
+  }
+  if (pipelineDockState.graphCleanupUndo?.workspace) {
+    actions.push({
+      label: 'Undo Graph Cleanup',
+      runningMessage: 'Restoring previous browser-local graph projection...',
+      successMessage: () => 'Undo Graph Cleanup restored previous graph projection',
+      action: () => pipelineUndoGraphCleanup(),
+    });
   }
   const statusRecord = pipelineGraphInspectorStatusRecord();
   const historyRows = node?.kind === 'route' ? pipelineOutputHistoryRowsForRoute(node.id) : [];
@@ -6282,11 +6431,17 @@ async function pipelineRunGraphInspectorAction(item, button) {
 
 function handlePipelineGraphKeydown(event) {
   if (!['Delete', 'Backspace'].includes(event.key)) return;
-  if (!pipelineDockState.selectedGraphEdgeId) return;
   if (document.getElementById('pipeline-main-browser')?.hidden) return;
   if (event.target?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+  const deleted = pipelineDeleteSelectedGraphItem();
+  if (!deleted) return;
   event.preventDefault();
-  pipelineRemoveGraphEdge(pipelineDockState.selectedGraphEdgeId);
+}
+
+function pipelineDeleteSelectedGraphItem() {
+  if (pipelineDockState.selectedGraphEdgeId) return pipelineRemoveGraphEdge(pipelineDockState.selectedGraphEdgeId);
+  if (pipelineDockState.selectedGraphNodeId) return pipelineDeleteGraphNode(pipelineDockState.selectedGraphNodeId);
+  return null;
 }
 
 function handlePipelineGraphAssetDrop(event) {
@@ -6340,6 +6495,20 @@ function handlePipelineGraphGeneratorDrop(event) {
 }
 
 function pipelineGraphNodeActionsMarkup(node) {
+  if (node.kind === 'output') {
+    const failedCount = pipelineGeneratedOutputNodes().filter(record => record.status === 'failed').length;
+    return `
+      <span class="pipeline-graph-node-actions">
+        <button
+          type="button"
+          class="pipeline-graph-node-action danger"
+          data-pipeline-graph-node-action="clear-failed-outputs"
+          data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
+          ${failedCount ? '' : 'disabled'}
+        >Clear Failed</button>
+      </span>
+    `;
+  }
   if (node.kind === 'route') {
     const outputs = pipelineRouteGeneratedOutputRecords(node.id);
     const selectedOutput = pipelineSelectedRouteOutputRecord(node.id);
@@ -6387,6 +6556,12 @@ function pipelineGraphNodeActionsMarkup(node) {
           data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
           ${loaded || !node.artifact?.path || status !== 'complete' ? 'disabled' : ''}
         >${loaded ? 'Loaded' : loadable ? 'Load' : 'Open Artifact'}</button>
+        <button
+          type="button"
+          class="pipeline-graph-node-action danger"
+          data-pipeline-graph-node-action="delete-node"
+          data-pipeline-graph-node-action-node-id="${escapeHtml(node.id)}"
+        >Delete</button>
       </span>
     `;
   }
@@ -6394,6 +6569,23 @@ function pipelineGraphNodeActionsMarkup(node) {
 }
 
 function pipelineGraphNodeActionItem(node, action) {
+  if (action === 'clear-failed-outputs' && node?.kind === 'output') {
+    return {
+      label: 'Clear Failed Outputs',
+      runningMessage: 'Clearing failed generated-output nodes from this browser-local graph...',
+      successMessage: failed => failed?.length ? `Cleared ${failed.length} failed output${failed.length === 1 ? '' : 's'}` : 'No failed outputs to clear',
+      action: () => pipelineClearFailedGeneratedOutputs(),
+      disabled: !pipelineGeneratedOutputNodes().some(record => record.status === 'failed'),
+    };
+  }
+  if (action === 'delete-node' && node && pipelineGraphEditableNodeRecord(node.id)) {
+    return {
+      label: 'Delete Graph Node',
+      runningMessage: `Deleting ${node.title || node.id} from the browser-local graph...`,
+      successMessage: result => result ? `Deleted graph node ${node.id}` : `Graph node ${node.id} is structural and cannot be deleted`,
+      action: () => pipelineDeleteGraphNode(node.id),
+    };
+  }
   if (action === 'execute' && node?.kind === 'route') {
     return {
       label: 'Execute',
