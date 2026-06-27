@@ -348,6 +348,113 @@
       };
     }
 
+    function visualActivityFrame(state = readDebugState()) {
+      const points = [];
+      const pushWorldPoint = point => {
+        if (!Array.isArray(point) || point.length < 3) return;
+        const projected = project(point);
+        if (Number.isFinite(projected.x) && Number.isFinite(projected.y)) {
+          points.push(projected);
+        }
+      };
+
+      for (const particle of state.particles || []) {
+        pushWorldPoint(particle.position);
+      }
+      for (const trail of state.trails || []) {
+        pushWorldPoint(trail.source_anchor?.position);
+        for (const marker of trail.phase_markers || []) {
+          pushWorldPoint(marker.position);
+        }
+        for (const sample of trail.samples || []) {
+          pushWorldPoint(sample.position);
+        }
+      }
+
+      if (!points.length) {
+        return {
+          visualActivityFrame: 'expanded-flow-focused-clip-v0',
+          pointCount: 0,
+          rawBounds: null,
+          clip: {
+            x: 0,
+            y: 0,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scale: 1,
+          },
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+          },
+        };
+      }
+
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const point of points) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      }
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const rawWidth = Math.max(1, maxX - minX);
+      const rawHeight = Math.max(1, maxY - minY);
+      const padX = Math.max(44, rawWidth * 0.22);
+      const padY = Math.max(36, rawHeight * 0.28);
+      let clipX = minX - padX;
+      let clipY = minY - padY;
+      let clipWidth = rawWidth + padX * 2;
+      let clipHeight = rawHeight + padY * 2;
+
+      const minClipWidth = Math.min(width, 560);
+      const minClipHeight = Math.min(height, 360);
+      if (clipWidth < minClipWidth) {
+        const delta = minClipWidth - clipWidth;
+        clipX -= delta * 0.5;
+        clipWidth = minClipWidth;
+      }
+      if (clipHeight < minClipHeight) {
+        const delta = minClipHeight - clipHeight;
+        clipY -= delta * 0.5;
+        clipHeight = minClipHeight;
+      }
+
+      clipX = Math.max(0, Math.min(width - 1, clipX));
+      clipY = Math.max(0, Math.min(height - 1, clipY));
+      if (clipX + clipWidth > width) clipX = Math.max(0, width - clipWidth);
+      if (clipY + clipHeight > height) clipY = Math.max(0, height - clipHeight);
+      clipWidth = Math.min(width - clipX, clipWidth);
+      clipHeight = Math.min(height - clipY, clipHeight);
+
+      return {
+        visualActivityFrame: 'expanded-flow-focused-clip-v0',
+        pointCount: points.length,
+        rawBounds: {
+          x: Number(minX.toFixed(2)),
+          y: Number(minY.toFixed(2)),
+          width: Number(rawWidth.toFixed(2)),
+          height: Number(rawHeight.toFixed(2)),
+        },
+        clip: {
+          x: Number(clipX.toFixed(2)),
+          y: Number(clipY.toFixed(2)),
+          width: Number(Math.max(1, clipWidth).toFixed(2)),
+          height: Number(Math.max(1, clipHeight).toFixed(2)),
+          scale: 1,
+        },
+        viewport: {
+          width,
+          height,
+        },
+      };
+    }
+
     function drawTerrain() {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -536,6 +643,7 @@
       hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
+      window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());
       return state;
     }
 

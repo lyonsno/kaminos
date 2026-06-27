@@ -111,6 +111,8 @@ assert.match(pageSource, /pressureDensityStats/, 'prototype displays pressure de
 assert.match(pageSource, /spatialPressureStats/, 'prototype displays spatial pressure diagnostics');
 assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid diagnostics');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
+assert.match(pageSource, /__lermsFingerJuiceVisualFrameForWitness/, 'prototype exposes a focused visual frame for witness capture');
+assert.match(pageSource, /visualActivityFrame/, 'prototype computes projected activity framing for witness capture');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
@@ -152,6 +154,10 @@ assert.match(witnessSource, /expanded-flow-stress-v0/, 'witness requires stress 
 assert.match(witnessSource, /extendedFlowSteps/, 'witness records the requested extended stress duration');
 assert.match(witnessSource, /flowExtentX/, 'witness checks widened horizontal fluid extent');
 assert.match(witnessSource, /flowExtentZ/, 'witness checks widened forward fluid extent');
+assert.match(witnessSource, /visualActivityMetrics/, 'witness records captured pixel activity metrics');
+assert.match(witnessSource, /parsePngRgba/, 'witness parses PNG screenshots for visual activity metrics');
+assert.match(witnessSource, /activityBoundsAreaRatio/, 'witness rejects visually tiny activity bounding boxes');
+assert.match(witnessSource, /Page\.captureScreenshot[^]*clip/, 'witness captures a focused clip instead of only the whole distant viewport');
 assert.match(witnessSource, /sourceDiagnostics/, 'witness requires source diagnostics');
 assert.match(witnessSource, /emitterDiagnostics/, 'witness requires emitter diagnostics');
 assert.match(witnessSource, /juiceHitEvents/, 'witness requires LERMS juice-hit events');
