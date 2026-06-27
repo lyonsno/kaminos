@@ -217,6 +217,16 @@ function makeSidecar(outputPath, options = {}) {
   const splatEvidence = fileEvidence(splatPath);
   const stageMode = options.stageMode || artifacts.splat?.status || 'fixture';
   const truthBoundary = options.truthBoundary || 'fixture-backed pipeline witness; not real SHARP, MoGE, SuperMat, Trellis, or hybrid render proof';
+  const sideArtifacts = Object.entries(artifacts)
+    .filter(([id]) => !['input', 'splat', 'sidecar'].includes(id))
+    .map(([id, artifact]) => ({
+      id,
+      role: artifact.role,
+      status: artifact.status,
+      path: artifact.path,
+      sha256: artifact.sha256,
+      bytes: artifact.bytes,
+    }));
   writeJson(outputPath, {
     schema: 'kaminos.pipeline-import-sidecar.v0',
     pipeline: {
@@ -241,6 +251,7 @@ function makeSidecar(outputPath, options = {}) {
         sharedCanvasComposite: false,
         sharedCommandEncoder: false,
       },
+      sideArtifacts,
     },
     status: {
       stageMode,
@@ -403,6 +414,41 @@ function adapterReportSummary(report) {
     inputSha256: report.inputSha256 || report.input?.sha256 || null,
     outputBytes: report.outputBytes || report.output?.bytes || null,
   };
+}
+
+function adapterSideArtifactEntries(report) {
+  const entries = [];
+  if (Array.isArray(report?.sideArtifacts)) entries.push(...report.sideArtifacts);
+  for (const [key, value] of Object.entries(report?.outputs || {})) {
+    if (!value || typeof value !== 'object') continue;
+    entries.push({
+      id: value.id || key,
+      role: value.role,
+      path: value.path,
+      bytes: value.bytes,
+      sha256: value.sha256,
+    });
+  }
+  return entries;
+}
+
+function recordAdapterSideArtifacts(effectiveRoute, stage) {
+  const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
+  for (const entry of adapterSideArtifactEntries(adapterReport)) {
+    const artifactId = entry.id || entry.artifactId;
+    if (!artifactId || artifactId === stage.outputArtifact) continue;
+    const manifestArtifact = pipeline.artifacts?.[artifactId];
+    if (!manifestArtifact) continue;
+    const outputPath = entry.path || artifactPathFor(artifactId);
+    if (!outputPath || !existsSync(outputPath)) continue;
+    artifacts[artifactId] = {
+      role: manifestArtifact.role || entry.role || artifactId,
+      status: effectiveRoute.stageStatus || 'real',
+      sourceStage: stage.id,
+      adapterReportPath: effectiveRoute.adapterReportPath,
+      ...fileEvidence(outputPath),
+    };
+  }
 }
 
 function classifyLiveAdapterOutput(effectiveRoute, stage, artifactId) {
@@ -578,6 +624,9 @@ function runStage(stage) {
     ...(fixtureSource ? { fixtureSource } : {}),
     ...evidence,
   };
+  if (stage.statusMode === 'model-adapter' && stage.route?.executesModel === true) {
+    recordAdapterSideArtifacts(effectiveRoute, stage);
+  }
   const record = {
     id: stage.id,
     label: stage.label || stage.id,

@@ -104,7 +104,7 @@
       "id": "sharp-image-to-splat-live-v0",
       "label": "SHARP Image To Visible Splat",
       "routeId": "adapter.sharp-image-to-splat-live.v0",
-      "description": "Live source-image to visible splat route. It executes KAMINOS_SHARP_COMMAND with --input, --output, and --report paths. If the adapter is unavailable or fails, the run fails with a durable witness report and does not fall back to the evil-orb fixture.",
+      "description": "Native SHARP-WebGPU source-image to visible splat route. It executes KAMINOS_SHARP_COMMAND or the bundled browser/WebGPU adapter with --input, --output, and --report paths. The adapter drives the SHARP-WebGPU app, writes route-local PLY/depth/metadata evidence, and does not fall back to the evil-orb fixture.",
       "artifacts": {
         "input": {
           "role": "source-image",
@@ -113,6 +113,14 @@
         "splat": {
           "role": "splat-candidate",
           "pathTemplate": "artifacts/sharp-output.ply"
+        },
+        "depthMap": {
+          "role": "depth-map",
+          "pathTemplate": "artifacts/sharp-webgpu-depth.png"
+        },
+        "metadata": {
+          "role": "sharp-webgpu-metadata",
+          "pathTemplate": "artifacts/sharp-webgpu-metadata.json"
         },
         "sidecar": {
           "role": "kaminos-import-sidecar",
@@ -126,12 +134,13 @@
           "statusMode": "model-adapter",
           "route": {
             "id": "adapter.sharp-image-to-splat.v0",
-            "tool": "SHARP",
+            "tool": "SHARP-WebGPU",
             "commandEnv": "KAMINOS_SHARP_COMMAND",
-            "modelFamily": "SHARP",
+            "commandDefault": "scripts/run-sharp-webgpu-adapter.mjs",
+            "modelFamily": "SHARP-WebGPU",
             "realModel": true,
             "executesModel": true,
-            "effectiveBackend": "external-command"
+            "effectiveBackend": "browser-webgpu"
           },
           "inputArtifact": "input",
           "outputArtifact": "splat"
