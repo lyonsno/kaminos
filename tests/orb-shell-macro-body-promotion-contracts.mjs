@@ -19,6 +19,8 @@ assert.match(core, /LiveMacroSideWallPlan/, 'composition names live macro sidewa
 assert.match(core, /makeMacroPromotedBodySideWallGeometry/, 'composition renders live macro sidewall polygon geometry');
 assert.match(core, /liveRenderMaterialPolicy/, 'composition records live render material policy');
 assert.match(core, /territoryProxyUnderlayVisible: false/, 'live sidewall witness suppresses overlapping territory proxy underlay');
+assert.match(core, /legacyRoundTargetBandTubesVisible: false/, 'live sidewall witness suppresses old round target band tubes');
+assert.match(core, /suppressedLegacyRoundBandIds/, 'live sidewall plan records suppressed legacy round bands');
 assert.match(core, /makeLowerCupClosureGeometry/, 'composition renders lower cup closure geometry');
 assert.match(core, /makeCrossingTuckBodyGeometry/, 'composition renders crossing tuck body geometry');
 assert.match(core, /promotedBodyCount/, 'debug state records promoted macro body count');
@@ -32,6 +34,7 @@ assert.match(witness, /LiveMacroSideWall/, 'composition witness reports live mac
 assert.match(witness, /liveMacroSideWallVisibilityVerdict/, 'composition witness reports live macro sidewall visibility verdict');
 assert.match(witness, /live-macro-sidewall/, 'composition witness has a focused live sidewall smoke mode');
 assert.match(core, /frameLiveMacroSideWall/, 'composition module can frame the live macro sidewall target');
+assert.match(witness, /legacyScaffoldSuppressionVerdict/, 'composition witness reports target scaffold suppression verdict');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
 
@@ -52,6 +55,13 @@ assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.materialMode
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.metalShaderVisible, false, 'live sidewall plan disables fancy metal shader for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.surfaceDetailMode, 'disabled', 'live sidewall plan disables surface detail for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.territoryProxyUnderlayVisible, false, 'live sidewall plan suppresses territory proxy underlay');
+assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.legacyRoundTargetBandTubesVisible, false, 'live sidewall plan suppresses target legacy round band tubes');
+assert.equal(fixture.liveMacroSideWallPlan.legacyScaffoldSuppressionVerdict, 'target-promoted-body-legacy-round-bands-suppressed', 'live sidewall plan records legacy round tube suppression');
+assert.deepEqual(
+  fixture.liveMacroSideWallPlan.suppressedLegacyRoundBandIds,
+  ['nw-body', 'nw-rail', 'nw-hop'],
+  'live sidewall target suppresses old north-west round body/rail/hop tubes',
+);
 
 const liveSideWall = fixture.liveMacroSideWallPlan.sideWalls.find(wall => wall.parentAssemblage === 'north-west-dominant-thrust' && wall.targetEdge === 'left-promoted-body-edge');
 assert.equal(liveSideWall?.schema, 'LiveMacroSideWall', 'north-west promoted body has a live sidewall record');

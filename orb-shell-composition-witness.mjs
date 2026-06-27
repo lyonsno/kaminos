@@ -224,6 +224,8 @@ async function main() {
     assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
     assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
     assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
+    assert.equal(state?.legacyScaffoldSuppressionVerdict, 'target-promoted-body-legacy-round-bands-suppressed', 'target legacy round band scaffold suppression missing from debug state');
+    assert.deepEqual(state?.suppressedLegacyRoundBandIds, ['nw-body', 'nw-rail', 'nw-hop'], 'target legacy round band ids missing from debug state');
     assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
     assert.equal(state?.crossingTuckIntegration?.mode, 'crossing-tuck-macro-body', 'crossing tuck integration descriptor missing from debug state');
     assert.equal(state?.ExpandedMacroRegionProxyPlan?.schema, 'ExpandedMacroRegionProxyPlan', 'ExpandedMacroRegionProxyPlan missing from debug state');
@@ -293,6 +295,9 @@ async function main() {
       liveMacroSideWallVisibilityVerdict: state.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: state.targetLiveMacroSideWallIds,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
+      suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
+      suppressedLegacyTerminationSocketIds: state.suppressedLegacyTerminationSocketIds,
+      legacyScaffoldSuppressionVerdict: state.legacyScaffoldSuppressionVerdict,
       targetInnerReturnBoundaryIds: state.targetInnerReturnBoundaryIds,
       declaredSecondLayer: state.declaredSecondLayer,
       ChannelThroughLineAudit: state.ChannelThroughLineAudit,
