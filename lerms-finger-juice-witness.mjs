@@ -691,6 +691,10 @@ async function run() {
     assert.ok(state.densityContinuityProjectionStats?.continuityBinRefreshChunk > 0, 'route did not expose continuity bin refresh chunk');
     assert.ok(state.densityContinuityProjectionStats?.continuityProjectionCandidateCount > 0, 'route did not expose continuity projection candidates');
     assert.ok(Number.isFinite(state.densityContinuityProjectionStats?.continuityPeakOccupancyRatio), 'route did not expose continuity peak occupancy ratio');
+    assert.equal(state.sampledNeighborhoodDensityStats?.pressureContract, 'wgsl-sampled-neighborhood-density-v0', 'sampled neighborhood stats do not identify density contract');
+    assert.ok(Number.isFinite(state.sampledNeighborhoodDensityStats?.averageSampledNeighborCount), 'route did not expose sampled neighborhood density support');
+    assert.ok(state.sampledNeighborhoodDensityStats?.neighborhoodDensityCorrectionCandidateCount > 0, 'route did not expose sampled neighborhood correction candidates');
+    assert.equal(state.fingerJuiceCamera?.cameraControlContract, 'orbit-camera-controls-v0', 'route did not expose orbit camera controls');
     assert.equal(state.particleSupportBudgetStats?.pressureContract, 'wgsl-particle-support-budget-v0', 'particle support stats do not identify budget contract');
     assert.equal(state.particleSupportBudgetStats?.supportMeasurementMode, 'spatial_cell_radius_support_v0', 'particle support stats do not measure spatial radius support');
     assert.ok(state.particleSupportBudgetStats?.particleBudget >= 24000, 'route did not use the 24k particle support budget');
@@ -769,6 +773,9 @@ async function run() {
         continuityPeakOccupancyRatio: stress?.densityContinuityProjectionStats?.continuityPeakOccupancyRatio || 0,
         continuityRedistributionPressure: stress?.densityContinuityProjectionStats?.continuityRedistributionPressure || 0,
         continuityBinRefreshChunk: stress?.densityContinuityProjectionStats?.continuityBinRefreshChunk || 0,
+        sampledNeighborhoodDensityContract: stress?.sampledNeighborhoodDensityStats?.pressureContract || null,
+        averageSampledNeighborCount: stress?.sampledNeighborhoodDensityStats?.averageSampledNeighborCount || 0,
+        neighborhoodDensityCorrectionCandidateCount: stress?.sampledNeighborhoodDensityStats?.neighborhoodDensityCorrectionCandidateCount || 0,
         particleSupportBudgetContract: stress?.particleSupportBudgetStats?.pressureContract || null,
         supportMeasurementMode: stress?.particleSupportBudgetStats?.supportMeasurementMode || null,
         particleBudget: stress?.particleSupportBudgetStats?.particleBudget || 0,
@@ -818,6 +825,9 @@ async function run() {
     assert.ok(extendedFlowProbe.continuityBinRefreshChunk > 0, 'expanded witness phase did not expose continuity bin refresh');
     assert.ok(extendedFlowProbe.continuityProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough continuity projection candidates');
     assert.ok(extendedFlowProbe.continuityPeakOccupancyRatio < 72, 'expanded witness phase peak occupancy remains too high for continuity projection smoke');
+    assert.equal(extendedFlowProbe.sampledNeighborhoodDensityContract, 'wgsl-sampled-neighborhood-density-v0', 'expanded witness phase lost sampled neighborhood density contract');
+    assert.ok(extendedFlowProbe.averageSampledNeighborCount > 0, 'expanded witness phase did not measure sampled neighborhood support');
+    assert.ok(extendedFlowProbe.neighborhoodDensityCorrectionCandidateCount >= 160, 'expanded witness phase did not exercise enough sampled neighborhood correction candidates');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
     assert.equal(extendedFlowProbe.visualDampingContract, 'wgsl-visual-streak-bead-damping-v0', 'expanded witness phase lost visual streak/bead damping contract');
     assert.ok(extendedFlowProbe.highSpeedParticleCount <= 180, 'expanded witness phase has too many high-speed surface outliers');
@@ -1017,12 +1027,14 @@ async function run() {
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
       densityPositionSolveStats: state.densityPositionSolveStats,
       densityContinuityProjectionStats: state.densityContinuityProjectionStats,
+      sampledNeighborhoodDensityStats: state.sampledNeighborhoodDensityStats,
       particleSupportBudgetStats: state.particleSupportBudgetStats,
       settleRestEnergyStats: state.settleRestEnergyStats,
       stabilityStats: state.stabilityStats,
       visualStreakBeadStats: state.visualStreakBeadStats,
       visualFailureMetrics,
       witnessCaptureState: state.witness_capture,
+      fingerJuiceCamera: state.fingerJuiceCamera,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,

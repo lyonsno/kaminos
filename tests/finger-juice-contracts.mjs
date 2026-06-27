@@ -64,6 +64,7 @@ assert.match(webgpuCoreSource, /wgsl-visual-streak-bead-damping-v0/, 'WebGPU sol
 assert.match(webgpuCoreSource, /wgsl-density-position-solve-v0/, 'WebGPU solver names the density/position solve contract');
 assert.match(webgpuCoreSource, /wgsl-particle-support-budget-v0/, 'WebGPU solver names the particle support/budget contract');
 assert.match(webgpuCoreSource, /wgsl-density-continuity-projection-v0/, 'WebGPU solver names the density continuity projection contract');
+assert.match(webgpuCoreSource, /wgsl-sampled-neighborhood-density-v0/, 'WebGPU solver names the sampled particle-neighborhood density contract');
 assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
@@ -97,6 +98,7 @@ assert.match(webgpuCoreSource, /ribbonAlignment/, 'WebGPU cohesion diagnostics r
 assert.match(webgpuCoreSource, /applySpatialSurfaceRelaxation/, 'WebGPU solver applies spatial surface relaxation after cohesion');
 assert.match(webgpuCoreSource, /applyDensityPositionSolve/, 'WebGPU solver applies an explicit density/position correction pass');
 assert.match(webgpuCoreSource, /applyDensityContinuityProjection/, 'WebGPU solver applies a spatial density continuity projection pass');
+assert.match(webgpuCoreSource, /applySampledNeighborhoodDensity/, 'WebGPU solver applies a sampled particle-neighborhood density pass');
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
 assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /densityPositionSolveStats/, 'WebGPU solver reports density/position solve diagnostics');
@@ -104,6 +106,9 @@ assert.match(webgpuCoreSource, /densityContinuityProjectionStats/, 'WebGPU solve
 assert.match(webgpuCoreSource, /continuityPeakOccupancyRatio/, 'continuity diagnostics report peak occupancy pressure');
 assert.match(webgpuCoreSource, /continuityProjectionCandidateCount/, 'continuity diagnostics report projection candidate count');
 assert.match(webgpuCoreSource, /CONTINUITY_BIN_REFRESH_CHUNK/, 'continuity solve refreshes spatial bins across long step batches');
+assert.match(webgpuCoreSource, /sampledNeighborhoodDensityStats/, 'WebGPU solver reports sampled particle-neighborhood density diagnostics');
+assert.match(webgpuCoreSource, /averageSampledNeighborCount/, 'sampled neighborhood diagnostics report average sampled neighbor support');
+assert.match(webgpuCoreSource, /neighborhoodDensityCorrectionCandidateCount/, 'sampled neighborhood diagnostics report correction candidates');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
@@ -163,6 +168,7 @@ assert.match(pageSource, /surfaceCohesionStats/, 'prototype displays surface coh
 assert.match(pageSource, /spatialSurfaceRelaxationStats/, 'prototype displays spatial surface relaxation diagnostics');
 assert.match(pageSource, /densityPositionSolveStats/, 'prototype displays density/position solve diagnostics');
 assert.match(pageSource, /densityContinuityProjectionStats/, 'prototype displays density continuity projection diagnostics');
+assert.match(pageSource, /sampledNeighborhoodDensityStats/, 'prototype displays sampled particle-neighborhood density diagnostics');
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
@@ -173,6 +179,14 @@ assert.match(pageSource, /__lermsFingerJuiceVisualFrameForWitness/, 'prototype e
 assert.match(pageSource, /visualActivityFrame/, 'prototype computes projected activity framing for witness capture');
 assert.match(pageSource, /dense-fluid-activity-clip-v0/, 'prototype can focus witness capture on dense fluid activity instead of sparse outliers');
 assert.match(pageSource, /responsiveSmokeProjection/, 'prototype uses viewport-responsive smoke projection instead of fixed-pixel scale');
+assert.match(pageSource, /orbit-camera-controls-v0/, 'prototype exposes operator orbit camera controls');
+assert.match(pageSource, /fingerJuiceCamera/, 'prototype keeps an explicit mutable orbit camera state');
+assert.match(pageSource, /pointerdown/, 'prototype lets the operator drag to orbit the camera');
+assert.match(pageSource, /wheel/, 'prototype lets the operator zoom the orbit camera');
+assert.match(pageSource, /__lermsFingerJuiceCameraForWitness/, 'prototype exposes camera state for witness/debug inspection');
+assert.match(webgpuCoreSource, /orbitCameraYaw/, 'WebGPU renderer accepts orbit camera yaw');
+assert.match(webgpuCoreSource, /orbitCameraPitch/, 'WebGPU renderer accepts orbit camera pitch');
+assert.match(webgpuCoreSource, /orbitCameraZoom/, 'WebGPU renderer accepts orbit camera zoom');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
@@ -226,6 +240,9 @@ assert.match(witnessSource, /densityContinuityProjectionStats/, 'witness require
 assert.match(witnessSource, /wgsl-density-continuity-projection-v0/, 'witness records density continuity projection contract');
 assert.match(witnessSource, /continuityPeakOccupancyRatio/, 'witness records continuity peak occupancy ratio');
 assert.match(witnessSource, /continuityProjectionCandidateCount/, 'witness records continuity projection candidate count');
+assert.match(witnessSource, /sampledNeighborhoodDensityStats/, 'witness requires sampled particle-neighborhood density diagnostics');
+assert.match(witnessSource, /wgsl-sampled-neighborhood-density-v0/, 'witness records sampled particle-neighborhood density contract');
+assert.match(witnessSource, /averageSampledNeighborCount/, 'witness records sampled neighborhood density support');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
