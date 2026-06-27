@@ -641,19 +641,19 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
 }
 
 function createLiveMacroSideWallPlan(composition) {
-  const target = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-west-dominant-thrust');
-  const sideWalls = target
-    ? [
-        createLiveMacroSideWall(target, 'left-promoted-body-edge'),
-        createLiveMacroSideWall(target, 'right-promoted-body-edge'),
-      ]
-    : [];
-  const terminalCaps = target
-    ? ['start-terminus', 'end-terminus']
-        .map(endRole => createLiveMacroTerminalCap(target, sideWalls, endRole))
-        .filter(Boolean)
-    : [];
-  const suppressedLegacyRoundBandIds = target?.childBandPlan?.map(member => member.id) || [];
+  const expectedTerminalCapCount = composition.macroAssemblages.length * 2;
+  const sideWalls = composition.macroAssemblages.flatMap(assemblage => [
+    createLiveMacroSideWall(assemblage, 'left-promoted-body-edge'),
+    createLiveMacroSideWall(assemblage, 'right-promoted-body-edge'),
+  ]);
+  const terminalCaps = composition.macroAssemblages.flatMap(assemblage => {
+    const assemblageSideWalls = sideWalls.filter(wall => wall.parentAssemblage === assemblage.id);
+    return ['start-terminus', 'end-terminus']
+      .map(endRole => createLiveMacroTerminalCap(assemblage, assemblageSideWalls, endRole))
+      .filter(Boolean);
+  });
+  const suppressedLegacyRoundBandIds = composition.macroAssemblages
+    .flatMap(assemblage => assemblage.childBandPlan.map(member => member.id));
   return {
     schema: 'LiveMacroSideWallPlan',
     mode: 'live-promoted-body-sidewall-v0',
@@ -662,7 +662,7 @@ function createLiveMacroSideWallPlan(composition) {
     sideWallCount: sideWalls.length,
     terminalCaps,
     terminalCapCount: terminalCaps.length,
-    terminalCapClosureVerdict: terminalCaps.length === 2
+    terminalCapClosureVerdict: terminalCaps.length === expectedTerminalCapCount
       ? 'live-promoted-body-termini-capped'
       : 'live-promoted-body-termini-open',
     suppressedLegacyRoundBandIds,
@@ -671,7 +671,7 @@ function createLiveMacroSideWallPlan(composition) {
       `${id}-end-termination-socket`,
     ]),
     legacyScaffoldSuppressionVerdict: suppressedLegacyRoundBandIds.length
-      ? 'target-promoted-body-legacy-round-bands-suppressed'
+      ? 'covered-promoted-body-legacy-round-bands-suppressed'
       : 'no-target-legacy-round-bands-suppressed',
     liveRenderMaterialPolicy: {
       materialMode: 'flat-low-shader-topology',
