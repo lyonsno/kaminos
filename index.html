@@ -465,6 +465,13 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_motion_agency=1</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="motion-route-id">procedural-orb-motion-grammar-v0</span></div>
+      <div class="slider-row">
+        <span class="slider-label">Attention</span>
+        <select id="motion-attention-target-mode" class="select-input">
+          <option value="selected-object" selected>Selected object</option>
+          <option value="sample">Clip sample</option>
+        </select>
+      </div>
       <div class="volume-actions">
         <button class="btn" id="motion-enable">Spawn Orbs</button>
         <button class="btn" id="motion-phrase-enable">Decision</button>
@@ -2656,6 +2663,72 @@ function selectedSceneObjectEntry() {
   return sceneObjects.find(obj => obj.id === activeSceneObjectId) || null;
 }
 
+function motionAttentionTargetModeFromInputs() {
+  return String(document.getElementById('motion-attention-target-mode')?.value || 'selected-object');
+}
+
+function selectedSceneObjectMotionAttentionTarget() {
+  const mode = motionAttentionTargetModeFromInputs();
+  if (mode !== 'selected-object') {
+    return {
+      schema: 'kaminos.motion-attention-target.v0',
+      mode,
+      source: 'clip-sample',
+      active: false,
+      selectedObjectId: null,
+      position: null,
+    };
+  }
+  const entry = selectedSceneObjectEntry();
+  if (!entry?.object) {
+    return {
+      schema: 'kaminos.motion-attention-target.v0',
+      mode,
+      source: 'clip-sample-no-selection',
+      active: false,
+      selectedObjectId: null,
+      position: null,
+    };
+  }
+  const center = new THREE.Vector3();
+  const bounds = new THREE.Box3().setFromObject(entry.object);
+  if (!bounds.isEmpty()) bounds.getCenter(center);
+  else entry.object.getWorldPosition(center);
+  return {
+    schema: 'kaminos.motion-attention-target.v0',
+    mode,
+    source: 'selected-scene-object',
+    active: true,
+    selectedObjectId: entry.id,
+    label: sceneObjectDisplayLabel(entry),
+    type: entry.type || null,
+    position: center.toArray().map(value => Number(value.toFixed(5))),
+  };
+}
+
+function motionAttentionTargetForSample(sampleAttention, fallbackContext = null) {
+  const selectedTarget = selectedSceneObjectMotionAttentionTarget();
+  if (selectedTarget.active && Array.isArray(selectedTarget.position)) {
+    return {
+      position: new THREE.Vector3(...selectedTarget.position),
+      evidence: selectedTarget,
+      context: {
+        id: selectedTarget.selectedObjectId,
+        kind: 'selected-scene-object',
+        label: selectedTarget.label || selectedTarget.selectedObjectId,
+      },
+    };
+  }
+  return {
+    position: sampleAttention.clone(),
+    evidence: {
+      ...selectedTarget,
+      position: sampleAttention.toArray().map(value => Number(value.toFixed(5))),
+    },
+    context: fallbackContext,
+  };
+}
+
 function selectedSceneGroupEntry() {
   return sceneGroups.find(group => group.id === activeSceneGroupId) || null;
 }
@@ -3409,6 +3482,37 @@ window.selectSceneObject = function(id) {
   }
 };
 
+window.kaminosCreateMotionAttentionTargetFixture = function(options = {}) {
+  const id = String(options.id || 'motion-selected-attention-target-fixture');
+  window.removeSceneObject?.(id);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xf0d28a,
+    emissive: 0x332100,
+    roughness: 0.32,
+    metalness: 0.18,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.52, 0.28), material);
+  mesh.name = id;
+  mesh.position.fromArray(Array.isArray(options.position) && options.position.length === 3
+    ? options.position.map(Number)
+    : [-0.58, 0.26, 0.34]);
+  const record = registerSceneObject(mesh, {
+    id,
+    type: 'motion-attention-target',
+    fileName: 'motion-attention-target.fixture',
+    label: String(options.label || 'Motion Attention Target'),
+    source: 'kaminos-motion-attention-fixture',
+  });
+  scene.add(mesh);
+  setActiveSceneObject(record.id);
+  return {
+    schema: 'kaminos.motion-attention-target-fixture.v0',
+    id: record.id,
+    selectedObjectId: activeSceneObjectId,
+    transform: sceneObjectTransformState(mesh),
+  };
+};
+
 window.selectSceneGroup = function(id) {
   setActiveSceneGroup(id);
   const group = selectedSceneGroupEntry();
@@ -3843,6 +3947,7 @@ function createMotionAgencyFixtureScene({ force = false } = {}) {
     route: MOTION_ROUTE_IDENTITY,
     fixture,
     root,
+    target,
     actorVisuals,
     startedAt: performance.now() / 1000,
     frameCount: 0,
@@ -5069,6 +5174,8 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     horizontalDisplayScale: Math.min(2.2, Math.max(0.28, 1.65 / Math.max(0.75, harness.metrics.rootTravel || 1))),
     verticalDisplayScale: 5.0,
     targetContext: { id: 'generated-pose-temporal-attention-target', kind: 'attention-anchor' },
+    lastAttentionTargetContext: { id: 'generated-pose-temporal-attention-target', kind: 'attention-anchor' },
+    lastAttentionTargetEvidence: null,
     anchorContext: { id: 'generated-pose-temporal-stage-anchor', kind: 'spawn-anchor' },
     behaviorVisibility: 'inspectable-not-canvas-label',
     lastActors: [],
@@ -5097,12 +5204,18 @@ function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
       visual.actor.origin[1] + sample.root[1] + 0.16,
       visual.actor.origin[2] + sample.root[2],
     );
-    const attention = new THREE.Vector3(
+    const sampleAttention = new THREE.Vector3(
       visual.actor.origin[0] + sample.attention[0],
       visual.actor.origin[1] + sample.attention[1] + 0.16,
       visual.actor.origin[2] + sample.attention[2],
     );
+    const attentionTarget = motionAttentionTargetForSample(sampleAttention, {
+      id: 'motion-agency-attention-target',
+      kind: 'attention-anchor',
+    });
+    const attention = attentionTarget.position;
     const facing = new THREE.Vector3(...sample.facing).normalize();
+    if (motionAgencyState.target && attentionTarget.evidence.active) motionAgencyState.target.position.copy(attention);
     visual.group.position.copy(rootPosition);
     visual.group.lookAt(attention);
     const effortScale = 0.9 + sample.effort * 0.34;
@@ -5121,6 +5234,8 @@ function updateMotionAgencyFrame(nowSeconds = performance.now() / 1000) {
       root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
       facing: sample.facing.map(value => Number(value.toFixed(5))),
       attention: attention.toArray().map(value => Number(value.toFixed(5))),
+      attentionTargetMode: attentionTarget.evidence.mode,
+      attentionTargetEvidence: attentionTarget.evidence,
       effort: Number(sample.effort.toFixed(5)),
       scale: Number(sample.scale.toFixed(5)),
       color: visual.actor.color,
@@ -5322,7 +5437,11 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const horizontalDisplayScale = Number(state.horizontalDisplayScale || 2.2);
   const verticalDisplayScale = Number(state.verticalDisplayScale || 5.0);
   const rootPosition = new THREE.Vector3(sample.root[0] * horizontalDisplayScale, sample.root[1] * verticalDisplayScale + 0.24, sample.root[2] * horizontalDisplayScale);
-  const attention = new THREE.Vector3(sample.attention[0] * horizontalDisplayScale, sample.attention[1] * Math.min(2.2, verticalDisplayScale) + 0.24, sample.attention[2] * horizontalDisplayScale);
+  const sampleAttention = new THREE.Vector3(sample.attention[0] * horizontalDisplayScale, sample.attention[1] * Math.min(2.2, verticalDisplayScale) + 0.24, sample.attention[2] * horizontalDisplayScale);
+  const attentionTarget = motionAttentionTargetForSample(sampleAttention, state.targetContext);
+  const attention = attentionTarget.position;
+  state.lastAttentionTargetContext = attentionTarget.context || state.targetContext;
+  state.lastAttentionTargetEvidence = attentionTarget.evidence;
   const displayedFacing = attention.clone().sub(rootPosition).normalize();
   visual.group.position.copy(rootPosition);
   visual.group.lookAt(attention);
@@ -5356,7 +5475,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     track: state.track,
     sample,
     temporalSample,
-    target: state.targetContext,
+    target: state.lastAttentionTargetContext,
     anchor: state.anchorContext,
   });
   state.lastBehaviorState = behaviorState;
@@ -5399,6 +5518,8 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     facing: sample.facing.map(value => Number(value.toFixed(5))),
     displayFacing: displayedFacing.toArray().map(value => Number(value.toFixed(5))),
     attention: attention.toArray().map(value => Number(value.toFixed(5))),
+    attentionTargetMode: attentionTarget.evidence.mode,
+    attentionTargetEvidence: attentionTarget.evidence,
     effort: Number(sample.effort.toFixed(5)),
     scale: Number(sample.scale.toFixed(5)),
     bowCompression: Number(compression.toFixed(5)),
@@ -6137,6 +6258,8 @@ window.kaminosMotionAgencyDebugState = function() {
     fallbackCount: resolution?.fallbackCount || 0,
     frameCount: state?.frameCount || 0,
     maxEffort: Number(state?.maxEffort || 0),
+    attentionTargetMode: motionAttentionTargetModeFromInputs(),
+    attentionTargetEvidence: state?.lastActors?.[0]?.attentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     actors: state?.lastActors || [],
   };
 };
@@ -6390,6 +6513,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     sourceOrientationRemap: state?.sourceOrientationRemap || harness.track.sourceOrientationRemap || null,
     phaseLabels: harness.metrics.phaseLabels,
     lastTemporalSample: state?.lastTemporalSample || null,
+    attentionTargetMode: motionAttentionTargetModeFromInputs(),
+    attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     behaviorState: state?.lastBehaviorState || null,
     behaviorReadout: state?.lastBehaviorReadout || null,
     sourceGhost: state?.lastSourceGhost || {
