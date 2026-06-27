@@ -65,6 +65,10 @@ assert.equal(plan.promotedBodies.length, fixture.macroAssemblages.length, 'one p
 assert.ok(plan.promotedBodies.every(body => body.schema === 'MacroPromotedBody'), 'all promoted bodies use MacroPromotedBody schema');
 assert.ok(plan.promotedBodies.every(body => body.objecthood === 'macro-assemblage-body-not-final-band'), 'promoted bodies own macro objecthood');
 assert.ok(plan.promotedBodies.every(body => body.subordinateAnatomy.includes('internal-rail-ridge')), 'promoted bodies carry subordinate rail anatomy');
+assert.ok(plan.promotedBodies.every(body => body.sideSilhouettePolicy?.mode === 'smooth-promoted-body-sides-v0'), 'promoted bodies suppress premature stepped side cuts');
+assert.ok(plan.promotedBodies.every(body => body.sideSilhouettePolicy?.boundaryCutProfileVisible === false), 'promoted body side silhouette hides boundary cut profile for truth-smoke');
+assert.match(core, /promotedBodySideScale/, 'promoted body geometry routes side width through smooth side-scale policy');
+assert.match(core, /smooth-promoted-body-sides-v0/, 'composition names the smooth promoted body side silhouette policy');
 
 assert.equal(fixture.liveMacroSideWallPlan?.schema, 'LiveMacroSideWallPlan', 'fixture exposes live macro sidewall plan');
 assert.equal(fixture.liveMacroSideWallPlan.mode, 'live-promoted-body-sidewall-v0', 'live sidewall plan uses promoted body sidewall mode');
