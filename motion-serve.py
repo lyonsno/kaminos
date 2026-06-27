@@ -312,10 +312,71 @@ class MotionHandler(http.server.BaseHTTPRequestHandler):
             self.handle_embed()
         elif parsed.path == "/decode":
             self.handle_decode()
+        elif parsed.path == "/forward_root":
+            self.handle_forward_root()
         elif parsed.path == "/denoise_step":
             self.handle_denoise_step()
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_forward_root(self):
+        """Run JUST the root model forward pass (no CFG, no TwostageDenoiser)."""
+        global loaded_backend
+        if loaded_backend is None:
+            self.send_json({"error": "No model loaded"}, 503)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+        except (json.JSONDecodeError, ValueError):
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        import torch
+        root_input = body.get("root_input")  # [N, 738]
+        text_emb = body.get("text_emb")       # [4096]
+        timestep = body.get("timestep", 500)
+        if not root_input or not text_emb:
+            self.send_json({"error": "root_input and text_emb required"}, 400)
+            return
+        try:
+            model = loaded_backend.model
+            root_model = model.denoiser.model.root_model
+            device = next(root_model.parameters()).device
+
+            x = torch.tensor(root_input, dtype=torch.float32).unsqueeze(0).to(device)
+            N = x.shape[1]
+            text = torch.tensor(text_emb, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+            pad_mask = torch.ones(1, N, dtype=torch.bool, device=device)
+            text_mask = torch.ones(1, 1, dtype=torch.bool, device=device)
+            ts = torch.tensor([timestep], device=device)
+            heading = torch.tensor([0.0], dtype=torch.float32, device=device)
+
+            # Hook to capture xseq after PE
+            xseq_data = {}
+            def capture(module, input, output):
+                xseq_data['xseq'] = output.detach().cpu().float()
+            hook = root_model.sequence_pos_encoder.register_forward_hook(capture)
+
+            with torch.no_grad():
+                out = root_model(x, pad_mask, text, text_mask, ts, first_heading_angle=heading)
+            hook.remove()
+
+            xseq = xseq_data.get('xseq')
+            xseq_info = None
+            if xseq is not None:
+                xseq_info = {
+                    'shape': list(xseq.shape),
+                    'token0': xseq[0, 0, :10].tolist(),
+                    'token1': xseq[0, 1, :10].tolist(),
+                    'token49': xseq[0, 49, :10].tolist() if xseq.shape[1] > 49 else None,
+                    'token50': xseq[0, 50, :10].tolist() if xseq.shape[1] > 50 else None,
+                    'token51': xseq[0, 51, :10].tolist() if xseq.shape[1] > 51 else None,
+                    'token52': xseq[0, 52, :10].tolist() if xseq.shape[1] > 52 else None,
+                }
+            self.send_json({"output": out.squeeze(0).cpu().float().numpy().tolist(), "xseq": xseq_info})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self.send_json({"error": str(e)}, 500)
 
     def handle_denoise_step(self):
         """Run one denoising step: noisy motion → clean prediction."""
@@ -390,9 +451,17 @@ class MotionHandler(http.server.BaseHTTPRequestHandler):
             model = loaded_backend.model
             motion_rep = model.motion_rep
 
-            # Ensure skeleton is on CPU for decoding
+            # Ensure skeleton is on CPU with float32 for decoding
             skel = motion_rep.skeleton
             skel_device = skel.neutral_joints.device if hasattr(skel, 'neutral_joints') else torch.device('cpu')
+            # Cast any float64 buffers to float32 (MPS doesn't support float64)
+            for name, buf in list(skel._buffers.items()):
+                if buf is not None and buf.dtype == torch.float64:
+                    skel._buffers[name] = buf.float()
+            for mod in skel.modules():
+                for name, buf in list(mod._buffers.items()):
+                    if buf is not None and buf.dtype == torch.float64:
+                        mod._buffers[name] = buf.float()
             if str(skel_device) != 'cpu':
                 skel.cpu()
 
@@ -403,7 +472,7 @@ class MotionHandler(http.server.BaseHTTPRequestHandler):
             combined = torch.cat([root_t, body_t], dim=-1)  # [1, N, 369]
 
             with torch.no_grad():
-                output = motion_rep.inverse(combined, is_normalized=True, posed_joints_from="rotations")
+                output = motion_rep.inverse(combined, is_normalized=True, posed_joints_from="positions")
 
             if str(skel_device) != 'cpu':
                 skel.to(skel_device)
