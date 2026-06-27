@@ -17,6 +17,10 @@ assert.match(coreSource, /createOrbInnerEngineCore/, 'core module exports determ
 assert.match(coreSource, /renderOrbInnerEngineFrame/, 'core module renders the standalone core frame');
 assert.match(coreSource, /renderOrbApertureProxyFrame/, 'core module renders a masked aperture proxy frame');
 assert.match(coreSource, /createOrbInnerEngineGuideSubstrate/, 'core module exposes the radial guide as procedural substrate input');
+assert.match(coreSource, /createOrbInnerEngineGeneratedSubstrate/, 'core module exposes generated-asset campaign substrate input');
+assert.match(coreSource, /dirtyPlate/, 'generated substrate carries dirty black plate material fields');
+assert.match(coreSource, /underlightChannel/, 'generated substrate carries bounded underlight channel fields');
+assert.match(coreSource, /apertureWindow/, 'generated substrate carries aperture-window composition fields');
 assert.match(coreSource, /radialRib/, 'core renderer has explicit radial rib structure');
 assert.match(coreSource, /nestedRing/, 'core renderer has explicit nested ring structure');
 assert.match(coreSource, /occluder/, 'core renderer has explicit inner occluders');
@@ -26,6 +30,7 @@ assert.match(coreSource, /shellOcclusion/, 'core module exposes shell occlusion/
 const {
   ORB_INNER_ENGINE_IDENTITY,
   createOrbInnerEngineCore,
+  createOrbInnerEngineGeneratedSubstrate,
   createOrbInnerEngineGuideSubstrate,
   renderOrbInnerEngineFrame,
   renderOrbApertureProxyFrame,
@@ -68,6 +73,24 @@ assert.ok(guideSubstrate.metrics.guideOccluderPixels > 700, 'guide substrate has
 assert.ok(guideSubstrate.metrics.guideChannelPixels > 1000, 'guide substrate has bounded channel fields');
 assert.ok(guideSubstrate.sample(0, 0).hotCenter > 0.8, 'guide substrate marks the hot center');
 
+const generatedSubstrate = createOrbInnerEngineGeneratedSubstrate({
+  seed: 'molten-heartfucker-core-contract',
+  width: 256,
+  height: 256,
+});
+
+assert.equal(generatedSubstrate.identity, 'orb-inner-engine-generated-substrate-v1');
+assert.equal(generatedSubstrate.profile, 'molten-flux-crop-v1');
+assert.equal(generatedSubstrate.width, 256);
+assert.equal(generatedSubstrate.height, 256);
+assert.equal(typeof generatedSubstrate.sample, 'function', 'generated substrate exposes a shader-like sampler');
+assert.ok(generatedSubstrate.references.some(reference => reference.role === 'best composition substrate'), 'generated substrate records v1 composition source');
+assert.ok(generatedSubstrate.references.some(reference => reference.role === 'best dirty black-plate / underlight material substrate'), 'generated substrate records v1 material source');
+assert.ok(generatedSubstrate.metrics.dirtyPlatePixels > 2500, 'generated substrate has dirty black plate fields');
+assert.ok(generatedSubstrate.metrics.underlightChannelPixels > 900, 'generated substrate has bounded underlight channel fields');
+assert.ok(generatedSubstrate.metrics.apertureWindowPixels > 5000, 'generated substrate has aperture-window composition fields');
+assert.ok(generatedSubstrate.sample(0.52, -0.12).underlightChannel > 0.12, 'generated substrate exposes off-axis underlight channel samples');
+
 const standalone = renderOrbInnerEngineFrame({
   width: 256,
   height: 256,
@@ -102,12 +125,29 @@ assert.ok(guideDriven.metrics.guideOccluderPixels > 650, 'guided frame carries o
 assert.ok(guideDriven.metrics.radialRibPixels >= standalone.metrics.radialRibPixels, 'guide substrate must not weaken radial ribs');
 assert.ok(guideDriven.metrics.flatGlowScore <= standalone.metrics.flatGlowScore, 'guide substrate must not increase flat-glow risk');
 
+const generatedDriven = renderOrbInnerEngineFrame({
+  width: 256,
+  height: 256,
+  seed: 'molten-heartfucker-core-contract',
+  animationPhase: 0.375,
+  guideSubstrate,
+  generatedSubstrate,
+});
+
+assert.ok(generatedDriven.metrics.generatedSubstratePixels > 2600, 'generated frame consumes generated substrate fields');
+assert.ok(generatedDriven.metrics.dirtyPlatePixels > 1800, 'generated frame carries dirty plate occluders into the render');
+assert.ok(generatedDriven.metrics.underlightChannelPixels > 700, 'generated frame carries bounded underlight channels into the render');
+assert.ok(generatedDriven.metrics.occluderPixels > guideDriven.metrics.occluderPixels * 1.4, 'generated substrate must materially increase occluding machinery');
+assert.ok(generatedDriven.metrics.flatGlowScore <= guideDriven.metrics.flatGlowScore, 'generated substrate must not increase flat-glow risk versus guide-only render');
+assert.ok(generatedDriven.metrics.darkRimContrast >= guideDriven.metrics.darkRimContrast, 'generated substrate must preserve or improve dark rim contrast');
+
 const aperture = renderOrbApertureProxyFrame({
   width: 256,
   height: 256,
   seed: 'molten-heartfucker-core-contract',
   animationPhase: 0.375,
   apertureOpen: 0.62,
+  generatedSubstrate,
 });
 
 assert.equal(aperture.identity, 'orb-inner-engine-witness-v0');
@@ -125,6 +165,7 @@ assert.match(witnessSource, /lightSpill/, 'witness receipt records aperture/rim 
 assert.match(witnessSource, /standalonePng/, 'witness receipt records standalone witness image');
 assert.match(witnessSource, /apertureProxyPng/, 'witness receipt records aperture-proxy witness image');
 assert.match(witnessSource, /guideSubstratePng/, 'witness receipt records guide-substrate witness image');
+assert.match(witnessSource, /generatedSubstratePng/, 'witness receipt records generated-substrate witness image');
 
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-orb-inner-engine-contract-'));
 try {
@@ -140,13 +181,16 @@ try {
   const standalonePng = join(outDir, 'orb-inner-engine-standalone.png');
   const aperturePng = join(outDir, 'orb-inner-engine-aperture-proxy.png');
   const guideSubstratePng = join(outDir, 'orb-inner-engine-guide-substrate.png');
+  const generatedSubstratePng = join(outDir, 'orb-inner-engine-generated-substrate.png');
   assert.ok(existsSync(reportPath), 'witness writes a JSON receipt');
   assert.ok(existsSync(standalonePng), 'witness writes standalone PNG');
   assert.ok(existsSync(aperturePng), 'witness writes aperture-proxy PNG');
   assert.ok(existsSync(guideSubstratePng), 'witness writes guide-substrate PNG');
+  assert.ok(existsSync(generatedSubstratePng), 'witness writes generated-substrate PNG');
   assert.equal(readFileSync(standalonePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'standalone image is a PNG');
   assert.equal(readFileSync(aperturePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'aperture proxy image is a PNG');
   assert.equal(readFileSync(guideSubstratePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'guide-substrate image is a PNG');
+  assert.equal(readFileSync(generatedSubstratePng).subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'generated-substrate image is a PNG');
 
   const report = JSON.parse(readFileSync(reportPath, 'utf8'));
   assert.equal(report.ok, true);
@@ -155,9 +199,13 @@ try {
   assert.equal(report.outputs.standalonePng, standalonePng);
   assert.equal(report.outputs.apertureProxyPng, aperturePng);
   assert.equal(report.outputs.guideSubstratePng, guideSubstratePng);
+  assert.equal(report.outputs.generatedSubstratePng, generatedSubstratePng);
   assert.ok(report.metrics.standalone.radialRibPixels > 900);
   assert.ok(report.metrics.standalone.nestedRingPixels > 1200);
   assert.ok(report.metrics.guideSubstrate.guideSubstratePixels > 2200);
+  assert.ok(report.metrics.generatedSubstrate.generatedSubstratePixels > 2600);
+  assert.ok(report.metrics.generatedSubstrate.occluderPixels > report.metrics.guideSubstrate.occluderPixels * 1.4);
+  assert.ok(report.metrics.generatedSubstrate.flatGlowScore <= report.metrics.guideSubstrate.flatGlowScore);
   assert.ok(report.metrics.guideSubstrate.guideChannelPixels > 900);
   assert.ok(report.metrics.apertureProxy.shellOccludedPixels > 8000);
   assert.ok(report.handoff.socket.radius > 0);

@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import {
   ORB_INNER_ENGINE_IDENTITY,
   createOrbInnerEngineCore,
+  createOrbInnerEngineGeneratedSubstrate,
   createOrbInnerEngineGuideSubstrate,
   renderOrbApertureProxyFrame,
   renderOrbInnerEngineFrame,
@@ -47,22 +48,27 @@ mkdirSync(outDir, { recursive: true });
 
 const core = createOrbInnerEngineCore({ seed, socketRadius: 1, animationPhase });
 const guideSubstrate = createOrbInnerEngineGuideSubstrate({ seed, width: size, height: size });
+const generatedSubstrate = createOrbInnerEngineGeneratedSubstrate({ seed, width: size, height: size });
 const standalone = renderOrbInnerEngineFrame({ width: size, height: size, seed, animationPhase });
 const guided = renderOrbInnerEngineFrame({ width: size, height: size, seed, animationPhase, guideSubstrate });
-const apertureProxy = renderOrbApertureProxyFrame({ width: size, height: size, seed, animationPhase, apertureOpen });
+const generated = renderOrbInnerEngineFrame({ width: size, height: size, seed, animationPhase, guideSubstrate, generatedSubstrate });
+const apertureProxy = renderOrbApertureProxyFrame({ width: size, height: size, seed, animationPhase, apertureOpen, generatedSubstrate });
 
 assertWitness(standalone, 'standalone core');
 assertWitness(guided, 'guide-substrate core');
+assertWitness(generated, 'generated-substrate core');
 assertWitness(apertureProxy, 'aperture proxy');
 
 const standalonePng = join(outDir, 'orb-inner-engine-standalone.png');
 const guideSubstratePng = join(outDir, 'orb-inner-engine-guide-substrate.png');
+const generatedSubstratePng = join(outDir, 'orb-inner-engine-generated-substrate.png');
 const apertureProxyPng = join(outDir, 'orb-inner-engine-aperture-proxy.png');
 const reportPath = join(outDir, `${ORB_INNER_ENGINE_IDENTITY}.json`);
 
 mkdirSync(dirname(standalonePng), { recursive: true });
 writeRgbaPng(standalonePng, standalone);
 writeRgbaPng(guideSubstratePng, guided);
+writeRgbaPng(generatedSubstratePng, generated);
 writeRgbaPng(apertureProxyPng, apertureProxy);
 
 const receipt = {
@@ -83,6 +89,7 @@ const receipt = {
     volumetric: core.volumetric,
     occlusion: core.material.occlusion,
     lightSpill: core.lightSpill,
+    generatedSubstrate: core.generatedSubstrate,
     apertureContract: {
       consumes: [
         'core socket transform/radius',
@@ -104,19 +111,23 @@ const receipt = {
     volumetric: core.volumetric,
     occlusion: core.material.occlusion,
     lightSpill: core.lightSpill,
+    generatedSubstrate: core.generatedSubstrate,
   },
   outputs: {
     standalonePng,
     guideSubstratePng,
+    generatedSubstratePng,
     apertureProxyPng,
   },
   metrics: {
     standalone: standalone.metrics,
     guideSubstrate: guided.metrics,
+    generatedSubstrate: generated.metrics,
+    generatedSubstrateSource: generatedSubstrate.metrics,
     guideSubstrateSource: guideSubstrate.metrics,
     apertureProxy: apertureProxy.metrics,
   },
-  visualVerdict: 'Contained radial engine core: hot center, darker machinery rim, nested rings, radial ribs, occluders, bounded orange channels, shell-masked aperture proxy, and guide-substrate procedural structure path.',
+  visualVerdict: 'Contained radial engine core: hot center, darker machinery rim, nested rings, radial ribs, occluders, bounded orange channels, shell-masked aperture proxy, guide-substrate procedural structure path, and v1 generated-substrate material/underlight controls.',
 };
 
 writeFileSync(reportPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -126,5 +137,6 @@ console.log(JSON.stringify({
   reportPath,
   standalonePng,
   guideSubstratePng,
+  generatedSubstratePng,
   apertureProxyPng,
 }, null, 2));
