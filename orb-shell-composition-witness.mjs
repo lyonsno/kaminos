@@ -227,12 +227,17 @@ async function main() {
     assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
     assert.equal(state?.LiveMacroSideWallPlan?.schema, 'LiveMacroSideWallPlan', 'LiveMacroSideWallPlan missing from debug state');
     assert.ok(state?.liveMacroSideWallCount >= 1, 'live macro sidewall missing from debug state');
+    assert.equal(state?.liveMacroSideWallMeshCount, state.liveMacroSideWallCount, 'rendered live macro sidewall mesh count must match live macro sidewall plan count');
+    assert.equal(state?.liveMacroSideWallMeshIds?.length, state.liveMacroSideWallCount, 'rendered live macro sidewall mesh ids must match live macro sidewall plan count');
     assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
     assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
     assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
     assert.equal(state?.liveMacroTerminalCapCount, state.macroAssemblageCount * 2, 'live terminal cap coverage missing from debug state');
     assert.equal(state?.terminalCapClosureVerdict, 'live-promoted-body-termini-capped', 'terminal cap closure verdict missing from debug state');
     assert.ok(state?.LiveMacroTerminalCap?.every(cap => cap?.schema === 'LiveMacroTerminalCap'), 'LiveMacroTerminalCap records missing from debug state');
+    assert.equal(state?.normalWitnessMaterialPolicy?.materialMode, 'neutral-semi-gloss-pbr-v0', 'normal witness material mode missing from debug state');
+    assert.equal(state?.normalWitnessMaterialPolicy?.materialClass, 'MeshStandardMaterial', 'normal witness material must use MeshStandardMaterial');
+    assert.equal(state?.normalWitnessMaterialPolicy?.environmentLit, true, 'normal witness material must use environment lighting');
     assert.equal(state?.legacyScaffoldSuppressionVerdict, 'covered-promoted-body-legacy-round-bands-suppressed', 'covered legacy round band scaffold suppression missing from debug state');
     assert.ok(state?.suppressedLegacyRoundBandIds?.includes('nw-body'), 'covered legacy round band ids missing from debug state');
     assert.ok(state?.suppressedLegacyRoundBandIds?.includes('cr-cover'), 'covered legacy round band ids missing crown cover from debug state');
@@ -302,11 +307,14 @@ async function main() {
       cleanSidewallTopologyWitness,
       sideWallVisibilityProbe,
       liveMacroSideWallCount: state.liveMacroSideWallCount,
+      liveMacroSideWallMeshCount: state.liveMacroSideWallMeshCount,
+      liveMacroSideWallMeshIds: state.liveMacroSideWallMeshIds,
       liveMacroSideWallVisibilityVerdict: state.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: state.targetLiveMacroSideWallIds,
       liveMacroTerminalCapCount: state.liveMacroTerminalCapCount,
       terminalCapClosureVerdict: state.terminalCapClosureVerdict,
       liveTerminalCapWitness,
+      normalWitnessMaterialPolicy: state.normalWitnessMaterialPolicy,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
       suppressedLegacyTerminationSocketIds: state.suppressedLegacyTerminationSocketIds,
