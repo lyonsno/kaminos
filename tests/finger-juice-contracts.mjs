@@ -60,6 +60,7 @@ assert.match(webgpuCoreSource, /wgsl-spatial-viscosity-pressure-v0/, 'WebGPU dee
 assert.match(webgpuCoreSource, /wgsl-same-chemistry-surface-cohesion-v0/, 'WebGPU solver names the same-chemistry surface cohesion contract');
 assert.match(webgpuCoreSource, /wgsl-spatial-surface-relaxation-v0/, 'WebGPU solver names the spatial surface relaxation contract');
 assert.match(webgpuCoreSource, /wgsl-stability-damped-relaxation-v0/, 'WebGPU solver names the stability damping contract');
+assert.match(webgpuCoreSource, /wgsl-visual-streak-bead-damping-v0/, 'WebGPU solver names the visual streak/bead damping contract');
 assert.match(webgpuCoreSource, /lerms\.source-truth\.v0/, 'WebGPU route emits LERMS source-truth envelopes');
 assert.match(webgpuCoreSource, /lerms\.juice-hit-event\.v0/, 'WebGPU route emits LERMS juice-hit events');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
@@ -89,6 +90,7 @@ assert.match(webgpuCoreSource, /cohesionNeighborCount/, 'WebGPU cohesion diagnos
 assert.match(webgpuCoreSource, /ribbonAlignment/, 'WebGPU cohesion diagnostics report ribbon alignment');
 assert.match(webgpuCoreSource, /applySpatialSurfaceRelaxation/, 'WebGPU solver applies spatial surface relaxation after cohesion');
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
+assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /spatialSurfaceRelaxationStats/, 'WebGPU solver reports spatial surface relaxation diagnostics');
 assert.match(webgpuCoreSource, /relaxedParticleCount/, 'WebGPU relaxation diagnostics report affected particle counts');
 assert.match(webgpuCoreSource, /sheetConnectedParticleCount/, 'WebGPU relaxation diagnostics report particles connected to occupied neighbor cells');
@@ -96,6 +98,8 @@ assert.match(webgpuCoreSource, /sheetContinuityRatio/, 'WebGPU relaxation diagno
 assert.match(webgpuCoreSource, /stabilityStats/, 'WebGPU solver reports stability diagnostics before stronger density solving');
 assert.match(webgpuCoreSource, /highSpeedParticleCount/, 'WebGPU stability diagnostics report high-speed outliers');
 assert.match(webgpuCoreSource, /denseCellSaturation/, 'WebGPU stability diagnostics report dense cell saturation');
+assert.match(webgpuCoreSource, /visualStreakBeadStats/, 'WebGPU solver reports visual streak/bead damping diagnostics');
+assert.match(webgpuCoreSource, /detachedBeadParticleCount/, 'WebGPU visual damping diagnostics report detached bead particle counts');
 assert.match(webgpuCoreSource, /fluidDepthStats/, 'WebGPU solver reports deeper fluid diagnostics');
 assert.match(webgpuCoreSource, /spatialPressureIterations/, 'WebGPU deeper fluid diagnostics report pressure iteration count');
 assert.match(webgpuCoreSource, /viscosityAffectedCount/, 'WebGPU deeper fluid diagnostics report viscosity affected particles');
@@ -128,6 +132,7 @@ assert.match(pageSource, /spatialPressureStats/, 'prototype displays spatial pre
 assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid diagnostics');
 assert.match(pageSource, /surfaceCohesionStats/, 'prototype displays surface cohesion diagnostics');
 assert.match(pageSource, /spatialSurfaceRelaxationStats/, 'prototype displays spatial surface relaxation diagnostics');
+assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceFreezeForWitness/, 'prototype exposes a frozen capture hook so screenshot and state cannot drift');
 assert.match(pageSource, /witness-frozen-state-capture-v0/, 'prototype names the frozen witness capture contract');
@@ -179,6 +184,11 @@ assert.match(witnessSource, /relaxedParticleCount/, 'witness checks relaxation a
 assert.match(witnessSource, /sheetContinuityRatio/, 'witness checks spatial sheet continuity');
 assert.match(witnessSource, /stabilityStats/, 'witness requires solver stability diagnostics');
 assert.match(witnessSource, /stabilityGrowthStats/, 'witness records long-run growth diagnostics');
+assert.match(witnessSource, /visualFailureMetrics/, 'witness records visual streak and bead-chain failure metrics');
+assert.match(witnessSource, /longThinComponentCount/, 'witness detects long thin colored streak components');
+assert.match(witnessSource, /elongatedBandCount/, 'witness detects thick elongated colored rail components');
+assert.match(witnessSource, /detachedBeadChainCount/, 'witness detects detached bead-chain components');
+assert.match(witnessSource, /visual-attractor-failure-v0/, 'witness labels visual-attractor failure diagnostics');
 assert.match(witnessSource, /captureStateConsistency/, 'witness records screenshot/state consistency diagnostics');
 assert.match(witnessSource, /witness-frozen-state-capture-v0/, 'witness freezes route state before full viewport capture');
 assert.match(witnessSource, /runawayStreakScore/, 'witness records runaway streak risk from visual spread versus filled activity');
@@ -229,6 +239,7 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT, 'wgsl-spa
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT, 'wgsl-same-chemistry-surface-cohesion-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT, 'wgsl-spatial-surface-relaxation-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT, 'wgsl-stability-damped-relaxation-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT, 'wgsl-visual-streak-bead-damping-v0');
 assert.equal(webgpuMod.LERMS_SOURCE_TRUTH_SCHEMA, 'lerms.source-truth.v0');
 assert.equal(webgpuMod.LERMS_JUICE_HIT_EVENT_SCHEMA, 'lerms.juice-hit-event.v0');
 
