@@ -177,6 +177,8 @@ const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
 const SIM_COST_LEDGER_EVIDENCE_SOURCE = 'cpu-structural-pass-ledger-plus-raf-queue-proxy';
 const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0';
 const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
+const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
+const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
@@ -218,13 +220,19 @@ function normalizeMajorantBuildCadence(value) {
 }
 
 function defaultPressureIterationsForScene(value) {
-  return normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4;
+  return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4);
 }
 
 function normalizePressureIterationCount(value, scene) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return defaultPressureIterationsForScene(scene);
   return Math.max(0, Math.min(12, requested));
+}
+
+function tallPlumePressureIterationStrategy(scene, pressureIterations) {
+  return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
+    ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
+    : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
 }
 
 function normalizeSimProfileFlag(value) {
@@ -3030,6 +3038,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
+    tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
+    tallPlumePressureIterationTarget: 0,
     mainFluidKernelStrategy: MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS,
     mainFluidLocalProjectionStrategy: MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY,
     mainFluidLocalProjectionDivergenceEvaluationsPerCell: 0,
@@ -4085,6 +4095,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
+    const tallPlumePressureStrategy = tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
+    const tallPlumePressureIterationTarget = scene === 'tall_plume' ? 2 : 0;
     const simPassesPerFrame = 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
     const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
@@ -4152,6 +4164,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
+    state.tallPlumePressureIterationStrategy = tallPlumePressureStrategy;
+    state.tallPlumePressureIterationTarget = tallPlumePressureIterationTarget;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
     state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
     state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
@@ -4190,6 +4204,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantWorkgroupsPerPass,
       simPassesPerFrame,
       pressureSourceStrategy,
+      tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
+      tallPlumePressureIterationTarget,
       mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -5359,6 +5375,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureIterationDefault: state.pressureIterationDefault,
         pressureIterationRequested: state.pressureIterationRequested,
         pressureSourceStrategy: state.pressureSourceStrategy,
+        tallPlumePressureIterationStrategy: state.tallPlumePressureIterationStrategy,
+        tallPlumePressureIterationTarget: state.tallPlumePressureIterationTarget,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -5653,6 +5671,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested: state.pressureIterationRequested,
       pressureSourceStrategy: state.pressureSourceStrategy,
+      tallPlumePressureIterationStrategy: state.tallPlumePressureIterationStrategy,
+      tallPlumePressureIterationTarget: state.tallPlumePressureIterationTarget,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,

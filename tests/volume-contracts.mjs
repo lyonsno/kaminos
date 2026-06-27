@@ -801,6 +801,9 @@ assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carr
 assert.match(core, /SIM_COST_LEDGER_IDENTITY\s*=\s*'tall-plume-sim-cost-ledger-v0'/, 'volume core names the tall-plume sim-cost ledger identity');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE/, 'volume core names inline-divergence pressure source strategy');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_DISABLED/, 'volume core names disabled pressure source strategy');
+assert.match(core, /TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2\s*=\s*'tall-plume-pressure2-v0'/, 'volume core names the tall-plume pressure2 strategy');
+assert.match(core, /TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE\s*=\s*'inactive'/, 'volume core names the inactive non-tall pressure2 strategy');
+assert.match(core, /normalizeVolumeScene\(value\) === 'tall_plume' \? 2/, 'tall-plume default pressure iterations use pressure2 before the general non-bonfire default');
 assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP\s*=\s*'main-fluid-fire-lick-breakup-v0'/, 'volume core names the active fire-lick breakup main-kernel strategy');
 assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS\s*=\s*'main-fluid-zero-fire-lick-bypass-v0'/, 'volume core names the zero-fire-lick bypass main-kernel strategy');
 assert.match(core, /MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY\s*=\s*'main-fluid-local-projection-staged-pressure-only-v0'/, 'volume core names staged-only main-fluid local projection strategy');
@@ -860,6 +863,8 @@ assert.match(core, /tallPlumeDetailCoherenceStrategy/, 'sim-cost ledger records 
 assert.match(core, /tallPlumeDetailCoherenceExtraReadsPerCell/, 'sim-cost ledger records that transported detail coherence does not restore neighborhood reads');
 assert.match(core, /tallPlumeTransitionBandStrategy/, 'sim-cost ledger records the tall-plume transition-band strategy');
 assert.match(core, /tallPlumeTransitionBandExtraReadsPerCell/, 'sim-cost ledger records that transition breakup does not restore neighborhood reads');
+assert.match(core, /tallPlumePressureIterationStrategy/, 'sim-cost ledger records tall-plume pressure iteration strategy');
+assert.match(core, /tallPlumePressureIterationTarget/, 'sim-cost ledger records tall-plume pressure iteration target');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,500}let bonfireTurbulentDiffusionMix[\s\S]{0,1300}let diffuseMaterial[\s\S]{0,2200}let diffuseFrontTopology[\s\S]{0,1000}material = mix\(material, diffuseMaterial[\s\S]{0,1400}let symmetricMaterial[\s\S]{0,1400}let symmetricFrontTopology[\s\S]{0,1000}combustionFrontTopology = mix\(combustionFrontTopology, symmetricFrontTopology/, 'main-fluid shader evaluates bonfire scalar diffusion/symmetry neighborhood reads only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
@@ -1031,6 +1036,9 @@ assert.match(witness, /main-fluid-local-projection-staged-pressure-only-v0/, 'wi
 assert.match(witness, /mainFluidLocalProjectionDivergenceEvaluationsPerCell/, 'witness reports main-fluid local projection divergence evaluations per cell');
 assert.match(witness, /fireLickBreakupEvaluationsPerCell/, 'witness reports fire-lick breakup evaluations per cell');
 assert.match(witness, /pressureSourceStrategy/, 'witness reports pressure source strategy');
+assert.match(witness, /tallPlumePressureIterationStrategy/, 'witness reports tall-plume pressure iteration strategy');
+assert.match(witness, /tall-plume-pressure2-v0/, 'witness recognizes the tall-plume pressure2 strategy');
+assert.match(witness, /expectedTallPlumePressureIterationStrategy/, 'witness verifies tall-plume pressure2 route/default identity');
 assert.match(witness, /jacobi-inline-divergence-v0/, 'witness recognizes inline-divergence pressure source identity');
 assert.match(witness, /pressureDivergencePasses/, 'witness reports pressure divergence pass cost');
 assert.match(witness, /pressureJacobiPasses/, 'witness reports pressure Jacobi pass cost');
@@ -1143,6 +1151,9 @@ assert.match(sweep, /volume_input_radius/, 'performance sweep pins source input 
 assert.match(sweep, /volume_majorant_cadence/, 'performance sweep pins majorant rebuild cadence');
 assert.match(sweep, /volume_pressure_iterations/, 'performance sweep pins pressure iteration count');
 assert.match(sweep, /volume_sim_profile/, 'performance sweep requests the simulation cost profile');
+assert.match(sweep, /pressureIterations: 2/, 'performance sweep tall-plume baseline defaults to pressure2');
+assert.match(sweep, /tallPlumePressureIterationStrategy/, 'sweep aggregate preserves tall-plume pressure iteration strategy');
+assert.match(sweep, /tall-plume-pressure2-v0/, 'sweep validation recognizes tall-plume pressure2 strategy');
 assert.match(sweep, /--evidence-mode/, 'performance sweep forwards explicit witness evidence mode');
 assert.match(sweep, /aggregate/, 'sweep harness writes aggregate evidence across runs');
 assert.match(sweep, /effectiveConfig/, 'sweep aggregate records effective renderer configuration, not only requested knobs');
