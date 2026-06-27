@@ -311,7 +311,74 @@ try {
   await click(cdp, imagePaletteTab);
   await wait(1000);
 
-  if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
+  if (scenario === 'specimen-intake') {
+    const fixtureButton = await evalJson(cdp, `(() => {
+      const button = document.querySelector('#pipeline-specimen-fixture-button');
+      const intake = document.querySelector('#pipeline-specimen-intake');
+      const rect = button?.getBoundingClientRect();
+      const intakeRect = intake?.getBoundingClientRect();
+      if (!rect) throw new Error('Specimen Fixture button missing');
+      return {
+        text: button.textContent,
+        disabled: button.disabled,
+        intakeText: intake?.innerText || '',
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        intakeRect: intakeRect ? { x: intakeRect.x, y: intakeRect.y, width: intakeRect.width, height: intakeRect.height } : null,
+      };
+    })()`);
+    assertWitness(!fixtureButton.disabled, 'Specimen fixture button was disabled', fixtureButton);
+    await capture(cdp, beforePath);
+    await click(cdp, fixtureButton.point);
+    const specimen = await waitFor(cdp, `(() => {
+      const debug = window.kaminosPipelineSpecimenIntakeDebugState?.();
+      const state = window.kaminosPipelineDockDebugState?.();
+      const warning = document.querySelector('[data-pipeline-source-warning="fallback_artifact_not_requested_route_truth"]');
+      const graphNode = document.querySelector('[data-pipeline-graph-image-node-id]');
+      const inspector = document.querySelector('#pipeline-graph-inspector')?.innerText || '';
+      const stateLine = document.querySelector('#pipeline-specimen-intake-state')?.textContent || '';
+      const warningRect = warning?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          debug?.artifactSchema === 'kaminos.kiln.image-artifact.v0'
+          && debug?.routeReceiptSchema === 'kaminos.kiln.image-route-receipt.v0'
+          && debug?.artifacts?.[0]?.artifactId === 'fixture-red-lerm-fallback-001'
+          && debug?.artifacts?.[0]?.sourceKind === 'fallback'
+          && debug?.artifacts?.[0]?.routeReceipt?.requestedRoute === 'openai_api'
+          && debug?.artifacts?.[0]?.routeReceipt?.effectiveRoute === 'fixture'
+          && debug?.artifacts?.[0]?.sourceTruthWarnings?.includes('fallback_artifact_not_requested_route_truth')
+          && state?.graphImageNodes?.some(node => node.artifactId === 'fixture-red-lerm-fallback-001')
+          && warning
+          && graphNode
+          && inspector.includes('openai_api -> fixture')
+        ),
+        debug,
+        selectedGraphNodeId: state?.selectedGraphNodeId || null,
+        graphImageNodes: state?.graphImageNodes || [],
+        stateLine,
+        graphNodeText: graphNode?.innerText || '',
+        inspectorText: inspector,
+        warningText: warning?.textContent || '',
+        warningRect: warningRect ? { x: warningRect.x, y: warningRect.y, width: warningRect.width, height: warningRect.height } : null,
+      };
+    })()`, 'Specimen intake fixture import', 12000);
+    await capture(cdp, afterPath);
+    const screenshotProbe = await screenshotVisibleProbe(afterPath, specimen.warningRect);
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'Specimen source warning chip was not visibly inspectable', {
+      specimen,
+      screenshotProbe,
+    });
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      fixtureButton,
+      specimen,
+      screenshotProbe,
+    }, null, 2));
+  } else if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
         .find(item => item.dataset.pipelineGeneratorId === ${JSON.stringify(generatorId)});
