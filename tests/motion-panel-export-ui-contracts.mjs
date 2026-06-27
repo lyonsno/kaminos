@@ -32,6 +32,9 @@ assert.match(exportBlock, /const referenceRestore = applyMotionPanelExportRefere
 assert.match(exportBlock, /restoreMotionPanelExportReferenceOverride\(referenceRestore\)/, 'export restores the live source-ghost setting in finally');
 assert.match(exportBlock, /referenceMode: referenceRestore\.requestedMode/, 'export records requested reference mode in evidence');
 assert.match(exportBlock, /effectiveReferenceMode: referenceRestore\.effectiveMode/, 'export records effective reference mode in evidence');
+assert.match(exportBlock, /selectedTake: motionPanelSelectedTakeEvidence\(\)/, 'export records the currently selected motion take');
+assert.match(exportBlock, /sourceGhostAtExportStart/, 'export records source-ghost visibility at capture start');
+assert.match(exportBlock, /sourceGhostAtExportEnd/, 'export records source-ghost visibility at capture end');
 assert.doesNotMatch(exportBlock, /frameMotionAgencyCamera\(/, 'current-view export must not reset or frame the camera');
 assert.doesNotMatch(exportBlock, /createGeneratedPoseTemporalScene\(/, 'current-view export must not recreate the motion scene');
 assert.doesNotMatch(index, /createImageBitmap\(/, 'current-view export must not use createImageBitmap on the WebGPU renderer canvas');

@@ -232,6 +232,10 @@ async function generateMotion(ws) {
     clipId: result?.clip?.id || null,
     label: result?.clip?.label || null,
     frameCount: result?.clip?.temporalSamples?.length || null,
+    take: result?.take || null,
+    takeShelf: typeof window.kaminosMotionPanelTakeShelfDebugState === 'function'
+      ? window.kaminosMotionPanelTakeShelfDebugState()
+      : null,
     state: result?.state || null,
   })).catch(error => ({
     ok: false,
@@ -411,6 +415,9 @@ async function exportCurrentViewFilmstrip(ws) {
       effectiveReferenceMode: exported.effectiveReferenceMode || null,
       previousReferenceMode: exported.previousReferenceMode || null,
       referenceOverrideApplied: !!exported.referenceOverrideApplied,
+      selectedTake: exported.selectedTake || null,
+      sourceGhostAtExportStart: exported.sourceGhostAtExportStart || null,
+      sourceGhostAtExportEnd: exported.sourceGhostAtExportEnd || null,
       prompt: exported.prompt || null,
       settings: exported.settings || null,
       width: exported.width || null,
@@ -482,6 +489,7 @@ try {
   phase = 'generating-motion';
   const generated = await generateMotion(ws);
   if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
+  if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
   await delay(settleMs);
 
   let filmstrip = null;
@@ -489,6 +497,7 @@ try {
   if (exportCurrentView) {
     phase = 'exporting-current-view-filmstrip';
     filmstrip = await exportCurrentViewFilmstrip(ws);
+    if (!filmstrip?.selectedTake) throw new Error(`current-view export did not record selected take: ${JSON.stringify(filmstrip || null)}`);
   } else {
     phase = 'capturing-frames';
     const capturedFrames = [];
@@ -508,6 +517,7 @@ try {
     preflight,
     configured,
     generated,
+    takeShelf: generated?.takeShelf || null,
     frames,
     filmstrip,
   });

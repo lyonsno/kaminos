@@ -17,6 +17,11 @@ assert.match(witness, /window\.exportMotionPanelCurrentViewFilmstrip/, 'live wit
 assert.match(witness, /kaminos\.motion-panel-live-current-view-export\.v0/, 'live witness records current-view export evidence with a stable schema');
 assert.match(witness, /exportReferenceMode/, 'live witness records requested export reference mode in report evidence');
 assert.match(witness, /sourceModeAfterExport/, 'live witness records source mode after export to catch failed restoration');
+assert.match(witness, /takeShelf/, 'live witness records the motion take shelf after generation');
+assert.match(witness, /selectedTake/, 'live witness records the selected take in current-view export evidence');
+assert.match(witness, /motion take shelf did not select generated take/, 'live witness rejects missing generated-take selection');
+assert.match(witness, /current-view export did not record selected take/, 'live witness rejects exports without selected take evidence');
+assert.match(witness, /sourceGhostAtExportStart/, 'live witness records source ghost visibility at current-view export start');
 assert.match(witness, /Page\.captureScreenshot/, 'live witness captures the operator-facing browser viewport');
 assert.match(witness, /writeReport\(\{\s*ok: false/s, 'live witness writes a durable failure report');
 assert.doesNotMatch(witness, /Math\.min\([^)]*frameCount/, 'live witness must not silently cap requested frame count');
