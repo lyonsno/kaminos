@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { inflateSync as zlibInflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -126,6 +127,116 @@ async function evaluate(ws, expression) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
+}
+
+function parsePngRgba(buffer) {
+  assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'not a PNG screenshot');
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = 0;
+  const idat = [];
+  while (offset < buffer.length) {
+    const len = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = buffer.subarray(offset + 8, offset + 8 + len);
+    offset += 12 + len;
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      colorType = data[9];
+      assert.equal(data[8], 8, 'only 8-bit PNG screenshots are supported');
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 0;
+  assert.ok(channels, `unsupported PNG color type ${colorType}`);
+  const raw = zlibInflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const rows = [];
+  let p = 0;
+  let prev = Buffer.alloc(stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[p++];
+    const row = Buffer.from(raw.subarray(p, p + stride));
+    p += stride;
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= channels ? row[x - channels] : 0;
+      const up = prev[x] || 0;
+      const upLeft = x >= channels ? prev[x - channels] || 0 : 0;
+      if (filter === 1) row[x] = (row[x] + left) & 255;
+      else if (filter === 2) row[x] = (row[x] + up) & 255;
+      else if (filter === 3) row[x] = (row[x] + Math.floor((left + up) / 2)) & 255;
+      else if (filter === 4) {
+        const pa = Math.abs(up - upLeft);
+        const pb = Math.abs(left - upLeft);
+        const pc = Math.abs(left + up - 2 * upLeft);
+        const pr = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+        row[x] = (row[x] + pr) & 255;
+      } else if (filter !== 0) {
+        throw new Error(`unsupported PNG filter ${filter}`);
+      }
+    }
+    rows.push(row);
+    prev = row;
+  }
+  return { width, height, channels, rows };
+}
+
+function isFingerJuicePixel(r, g, b) {
+  const redJuice = r > 120 && r > g * 1.28 && r > b * 1.14;
+  const cyanJuice = g > 125 && b > 105 && g > r * 1.18;
+  const purpleJuice = b > 125 && r > 105 && b > g * 1.04;
+  return redJuice || cyanJuice || purpleJuice;
+}
+
+function measureVisualActivity(buffer) {
+  const png = parsePngRgba(buffer);
+  let interestingPixelCount = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let y = 0; y < png.height; y += 1) {
+    const row = png.rows[y];
+    for (let x = 0; x < png.width; x += 1) {
+      const i = x * png.channels;
+      const r = row[i];
+      const g = row[i + 1];
+      const b = row[i + 2];
+      if (!isFingerJuicePixel(r, g, b)) continue;
+      interestingPixelCount += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  const totalPixels = png.width * png.height;
+  const hasActivity = interestingPixelCount > 0;
+  const activityBounds = hasActivity
+    ? {
+        x: minX,
+        y: minY,
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+      }
+    : null;
+  const activityBoundsArea = activityBounds ? activityBounds.width * activityBounds.height : 0;
+  return {
+    width: png.width,
+    height: png.height,
+    interestingPixelCount,
+    interestingPixelRatio: interestingPixelCount / Math.max(1, totalPixels),
+    activityBounds,
+    activityBoundsAreaRatio: activityBoundsArea / Math.max(1, totalPixels),
+    activityBoundsWidthRatio: (activityBounds?.width || 0) / Math.max(1, png.width),
+    activityBoundsHeightRatio: (activityBounds?.height || 0) / Math.max(1, png.height),
+  };
 }
 
 async function waitForRouteHooks(ws) {
@@ -340,11 +451,33 @@ async function run() {
     lastTrustworthyState = state;
 
     phase = 'capture_screenshot';
+    const visualFrame = await evaluate(ws, `window.__lermsFingerJuiceVisualFrameForWitness && window.__lermsFingerJuiceVisualFrameForWitness()`);
+    assert.equal(visualFrame?.visualActivityFrame, 'expanded-flow-focused-clip-v0', 'route did not expose focused expanded-flow visual frame');
+    assert.ok(visualFrame.clip?.width > 0 && visualFrame.clip?.height > 0, 'focused visual frame missing valid clip');
     await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
-    const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+    const captureSurface = await evaluate(ws, `(() => {
+      const hud = document.getElementById('hud');
+      if (hud) hud.hidden = true;
+      document.documentElement.dataset.witnessCapture = 'focused-activity-no-hud-v0';
+      return {
+        witnessCapture: document.documentElement.dataset.witnessCapture,
+        hudHidden: Boolean(hud?.hidden),
+      };
+    })()`);
+    assert.equal(captureSurface.witnessCapture, 'focused-activity-no-hud-v0', 'witness capture surface did not hide HUD occlusion');
+    const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      clip: visualFrame.clip,
+    });
     const png = Buffer.from(shot.data, 'base64');
     assert.ok(png.length > 4096, 'screenshot is too small to be credible visual evidence');
     assert.equal(png.readUInt32BE(0), 0x89504e47, 'screenshot is not PNG');
+    const visualActivityMetrics = measureVisualActivity(png);
+    assert.ok(visualActivityMetrics.interestingPixelCount > 256, 'focused screenshot lacks measurable juice activity');
+    assert.ok(visualActivityMetrics.activityBoundsAreaRatio >= 0.24, 'focused screenshot still frames activity too small');
+    assert.ok(visualActivityMetrics.activityBoundsWidthRatio >= 0.54, 'focused screenshot does not use enough width for activity');
+    assert.ok(visualActivityMetrics.activityBoundsHeightRatio >= 0.24, 'focused screenshot does not use enough height for activity');
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, png);
     primaryOutputWritten = true;
@@ -372,6 +505,9 @@ async function run() {
       cadenceProbe,
       preRespawnState,
       respawnProbeSteps,
+      visualFrame,
+      captureSurface,
+      visualActivityMetrics,
       extendedFlowProbe: {
         ...extendedFlowProbe,
         before: undefined,
