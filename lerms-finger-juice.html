@@ -170,6 +170,8 @@
     let webgpuLastSubmittedSteps = 0;
     let webgpuSubmittedStepsTotal = 0;
     let webgpuRenderFrameCount = 0;
+    let witnessCaptureFrozen = false;
+    let witnessFrozenCaptureState = null;
     const webgpuFrameStepDt = 1 / 120;
     const webgpuReadbackPeriod = 0.55;
 
@@ -694,8 +696,36 @@
       }
     }
 
+    function renderWebGPUDirectLayer() {
+      if (webgpuRenderer?.render && webgpuState?.render_backend === 'webgpu_direct_render') {
+        const renderState = webgpuRenderer.render({
+          width: window.innerWidth,
+          height: window.innerHeight,
+          pixelRatio: window.devicePixelRatio || 1,
+        });
+        webgpuRenderFrameCount = renderState.renderFrameCount;
+        webgpuState = { ...webgpuState, ...renderState };
+      }
+    }
+
+    function captureStateEnvelope(state, mode = 'live-render') {
+      return {
+        ...state,
+        witness_capture: {
+          contract: witnessCaptureFrozen ? 'witness-frozen-state-capture-v0' : 'live-render-state-v0',
+          mode,
+          frozen: witnessCaptureFrozen,
+          renderFrameCount: webgpuRenderFrameCount,
+          submittedStepsTotal: webgpuSubmittedStepsTotal,
+          readbackPending: webgpuReadbackPending,
+          framePending: webgpuFramePending,
+        },
+      };
+    }
+
     function renderCurrentState() {
-      const state = readDebugState();
+      renderWebGPUDirectLayer();
+      const state = captureStateEnvelope(readDebugState());
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       drawTerrain();
       drawCaster();
@@ -710,23 +740,42 @@
       const fluidDepthStats = state.fluidDepthStats || {};
       const surfaceCohesionStats = state.surfaceCohesionStats || {};
       const spatialSurfaceRelaxationStats = state.spatialSurfaceRelaxationStats || {};
+      const stabilityStats = state.stabilityStats || {};
       const emitterDiagnostics = Array.isArray(state.emitterDiagnostics) ? state.emitterDiagnostics : [];
       const emitterSummary = emitterDiagnostics
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());
       return state;
     }
 
+    window.__lermsFingerJuiceFreezeForWitness = async ({ mode = 'full-viewport-smoke-v0' } = {}) => {
+      witnessCaptureFrozen = true;
+      for (let attempt = 0; attempt < 24 && (webgpuFramePending || webgpuReadbackPending); attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 8));
+      }
+      const state = captureStateEnvelope(renderCurrentState(), mode);
+      witnessFrozenCaptureState = state;
+      window.__lermsFingerJuiceFrozenCaptureState = state;
+      return state;
+    };
+
+    window.__lermsFingerJuiceUnfreezeForWitness = () => {
+      witnessCaptureFrozen = false;
+      witnessFrozenCaptureState = null;
+      window.__lermsFingerJuiceFrozenCaptureState = null;
+      return readDebugState();
+    };
+
     let last = performance.now();
     function frame(now) {
       const rawDt = Math.max(0, (now - last) / 1000);
       const dt = Math.min(1 / 30, Math.max(1 / 120, rawDt));
       last = now;
-      if (routeActive) {
+      if (routeActive && !witnessCaptureFrozen) {
         if (webgpuSolver?.solver_backend === 'webgpu_compute') {
           webgpuAccumulatedSeconds += rawDt;
           webgpuReadbackAccumulatedSeconds += rawDt;

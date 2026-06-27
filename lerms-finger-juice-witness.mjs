@@ -270,6 +270,59 @@ function classifyFullViewportLegibility(metrics) {
   return 'too_sparse_full_viewport';
 }
 
+function numberOrZero(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function createCaptureStateConsistency(frozenState, renderedState, postCaptureState) {
+  const frozenSteps = numberOrZero(frozenState?.webgpu_cadence?.submitted_steps_total);
+  const renderedSteps = numberOrZero(renderedState?.webgpu_cadence?.submitted_steps_total);
+  const postSteps = numberOrZero(postCaptureState?.webgpu_cadence?.submitted_steps_total);
+  const frozenFlowX = numberOrZero(frozenState?.flowExtentX);
+  const postFlowX = numberOrZero(postCaptureState?.flowExtentX);
+  const frozenFlowZ = numberOrZero(frozenState?.flowExtentZ);
+  const postFlowZ = numberOrZero(postCaptureState?.flowExtentZ);
+  return {
+    contract: 'witness-frozen-state-capture-v0',
+    frozen: Boolean(frozenState?.witness_capture?.frozen),
+    frozenSteps,
+    renderedSteps,
+    postSteps,
+    submittedStepDrift: postSteps - frozenSteps,
+    renderStepDrift: renderedSteps - frozenSteps,
+    flowExtentXDrift: Number(Math.abs(postFlowX - frozenFlowX).toFixed(4)),
+    flowExtentZDrift: Number(Math.abs(postFlowZ - frozenFlowZ).toFixed(4)),
+    frozenRenderFrameCount: numberOrZero(frozenState?.witness_capture?.renderFrameCount),
+    postRenderFrameCount: numberOrZero(postCaptureState?.witness_capture?.renderFrameCount),
+  };
+}
+
+function createStabilityGrowthStats(beforeState, afterState, visualMetrics) {
+  const beforeMaxCell = numberOrZero(beforeState?.spatialPressureStats?.maxCellOccupancy);
+  const afterMaxCell = numberOrZero(afterState?.spatialPressureStats?.maxCellOccupancy);
+  const beforeExtentX = numberOrZero(beforeState?.flowExtentX);
+  const afterExtentX = numberOrZero(afterState?.flowExtentX);
+  const beforeExtentZ = numberOrZero(beforeState?.flowExtentZ);
+  const afterExtentZ = numberOrZero(afterState?.flowExtentZ);
+  const afterVelocityDelta = numberOrZero(afterState?.fluidDepthStats?.maxVelocityDelta);
+  const runawayStreakScore = Math.max(
+    0,
+    numberOrZero(visualMetrics?.activityBoundsAreaRatio) - numberOrZero(visualMetrics?.filledActivityRatio) * 1.85
+  );
+  return {
+    contract: 'witness-stability-growth-v0',
+    maxCellOccupancyGrowth: afterMaxCell - beforeMaxCell,
+    flowExtentXGrowth: Number((afterExtentX - beforeExtentX).toFixed(4)),
+    flowExtentZGrowth: Number((afterExtentZ - beforeExtentZ).toFixed(4)),
+    maxVelocityDelta: Number(afterVelocityDelta.toFixed(4)),
+    highSpeedParticleCount: numberOrZero(afterState?.stabilityStats?.highSpeedParticleCount),
+    denseCellSaturation: numberOrZero(afterState?.stabilityStats?.denseCellSaturation),
+    stabilityRiskScore: numberOrZero(afterState?.stabilityStats?.stabilityRiskScore),
+    runawayStreakScore: Number(runawayStreakScore.toFixed(4)),
+  };
+}
+
 async function waitForRouteHooks(ws) {
   for (let i = 0; i < 80; i += 1) {
     const pageState = await evaluate(ws, `({
@@ -439,6 +492,9 @@ async function run() {
     assert.ok(state.spatialSurfaceRelaxationStats?.relaxedParticleCount > 0, 'route did not expose relaxed surface particles');
     assert.ok(state.spatialSurfaceRelaxationStats?.denseCellCount > 0, 'route did not expose dense relaxation cells');
     assert.ok(state.spatialSurfaceRelaxationStats?.sheetContinuityRatio > 0.2, 'route did not expose spatial sheet continuity');
+    assert.equal(state.stabilityStats?.pressureContract, 'wgsl-stability-damped-relaxation-v0', 'stability stats do not identify damping contract');
+    assert.ok(Number.isFinite(state.stabilityStats?.stabilityRiskScore), 'route did not expose stability risk score');
+    assert.ok(Number.isFinite(state.stabilityStats?.highSpeedParticleCount), 'route did not expose high-speed particle count');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -484,11 +540,15 @@ async function run() {
         relaxedParticleCount: stress?.spatialSurfaceRelaxationStats?.relaxedParticleCount || 0,
         denseCellCount: stress?.spatialSurfaceRelaxationStats?.denseCellCount || 0,
         sheetContinuityRatio: stress?.spatialSurfaceRelaxationStats?.sheetContinuityRatio || 0,
+        stabilityRiskScore: stress?.stabilityStats?.stabilityRiskScore || 0,
+        highSpeedParticleCount: stress?.stabilityStats?.highSpeedParticleCount || 0,
+        denseCellSaturation: stress?.stabilityStats?.denseCellSaturation || 0,
         pressureContract: stress?.pressureContract || null,
         spatialPressureContract: stress?.spatialPressureContract || null,
         fluidDepthContract: stress?.fluidDepthContract || null,
         surfaceCohesionContract: stress?.surfaceCohesionStats?.pressureContract || null,
         surfaceRelaxationContract: stress?.spatialSurfaceRelaxationStats?.pressureContract || null,
+        stabilityContract: stress?.stabilityStats?.pressureContract || null,
       };
     })()`);
     assert.ok(extendedFlowProbe, 'route did not expose expanded witness stress hook');
@@ -510,14 +570,27 @@ async function run() {
     assert.ok(extendedFlowProbe.relaxedParticleCount >= 700, 'expanded witness phase did not relax enough surface particles');
     assert.ok(extendedFlowProbe.denseCellCount >= 8, 'expanded witness phase did not retain enough dense relaxation cells');
     assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
+    assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
+    assert.ok(extendedFlowProbe.highSpeedParticleCount <= 180, 'expanded witness phase has too many high-speed surface outliers');
+    assert.ok(extendedFlowProbe.stabilityRiskScore < 0.75, 'expanded witness phase stability risk is too high');
     state = extendedFlowProbe.state;
+    lastTrustworthyState = state;
+
+    phase = 'freeze_capture_state';
+    const frozenCaptureState = await evaluate(ws, `(async () => {
+      if (!window.__lermsFingerJuiceFreezeForWitness) return null;
+      return window.__lermsFingerJuiceFreezeForWitness({ mode: 'full-viewport-smoke-v0' });
+    })()`);
+    assert.equal(frozenCaptureState?.witness_capture?.contract, 'witness-frozen-state-capture-v0', 'route did not freeze state before screenshot capture');
+    assert.equal(frozenCaptureState?.witness_capture?.frozen, true, 'frozen capture state did not mark itself frozen');
+    state = frozenCaptureState;
     lastTrustworthyState = state;
 
     phase = 'capture_screenshot';
     const visualFrame = await evaluate(ws, `window.__lermsFingerJuiceVisualFrameForWitness && window.__lermsFingerJuiceVisualFrameForWitness()`);
     assert.equal(visualFrame?.visualActivityFrame, 'dense-fluid-activity-clip-v0', 'route did not expose dense fluid visual frame');
     assert.ok(visualFrame.clip?.width > 0 && visualFrame.clip?.height > 0, 'focused visual frame missing valid clip');
-    await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
+    const renderedCaptureState = await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
     const fullViewportCapture = await evaluate(ws, `(() => {
       const hud = document.getElementById('hud');
       document.documentElement.dataset.witnessCapture = 'full-viewport-smoke-v0';
@@ -525,10 +598,13 @@ async function run() {
         witnessCapture: document.documentElement.dataset.witnessCapture,
         diagnostic_role: 'operator_viewport_primary',
         hudHidden: Boolean(hud?.hidden),
+        frozen: Boolean(window.__lermsFingerJuiceFrozenCaptureState?.witness_capture?.frozen),
+        captureContract: window.__lermsFingerJuiceFrozenCaptureState?.witness_capture?.contract || null,
         clip: null,
       };
     })()`);
     assert.equal(fullViewportCapture.witnessCapture, 'full-viewport-smoke-v0', 'witness did not mark full viewport capture as primary smoke evidence');
+    assert.equal(fullViewportCapture.captureContract, 'witness-frozen-state-capture-v0', 'full viewport capture did not use frozen state contract');
     const fullViewportShot = await wsRequest(ws, 'Page.captureScreenshot', {
       format: 'png',
       fromSurface: true,
@@ -538,6 +614,15 @@ async function run() {
     assert.equal(fullViewportPng.readUInt32BE(0), 0x89504e47, 'full viewport screenshot is not PNG');
     const fullViewportVisualActivityMetrics = measureVisualActivity(fullViewportPng);
     const fullViewportLegibilityStatus = classifyFullViewportLegibility(fullViewportVisualActivityMetrics);
+    const postFullViewportState = await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
+    const captureStateConsistency = createCaptureStateConsistency(state, renderedCaptureState, postFullViewportState);
+    const stabilityGrowthStats = createStabilityGrowthStats(extendedFlowProbe.before, state, fullViewportVisualActivityMetrics);
+    assert.equal(captureStateConsistency.submittedStepDrift, 0, 'simulation advanced between frozen state and screenshot capture');
+    assert.equal(captureStateConsistency.renderStepDrift, 0, 'render state drifted from frozen capture state');
+    assert.ok(captureStateConsistency.flowExtentXDrift <= 0.0001, 'flow extent X drifted during screenshot capture');
+    assert.ok(captureStateConsistency.flowExtentZDrift <= 0.0001, 'flow extent Z drifted during screenshot capture');
+    assert.ok(stabilityGrowthStats.runawayStreakScore < 0.54, 'full viewport shows too much sparse runaway streak spread');
+    assert.ok(stabilityGrowthStats.stabilityRiskScore < 0.75, 'final frozen state stability risk is too high');
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, fullViewportPng);
     primaryOutputWritten = true;
@@ -575,6 +660,8 @@ async function run() {
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
       fullViewportLegibilityStatus,
+      captureStateConsistency,
+      stabilityGrowthStats,
       largeViewportSmokeWitness,
       viewport: {
         width: viewportWidth,
@@ -603,6 +690,8 @@ async function run() {
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
       fullViewportLegibilityStatus,
+      captureStateConsistency,
+      stabilityGrowthStats,
       largeViewportSmokeWitness,
       viewport: {
         width: viewportWidth,
@@ -655,6 +744,8 @@ async function run() {
       fluidDepthStats: state.fluidDepthStats,
       surfaceCohesionStats: state.surfaceCohesionStats,
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
+      stabilityStats: state.stabilityStats,
+      witnessCaptureState: state.witness_capture,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
