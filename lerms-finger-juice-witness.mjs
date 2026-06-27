@@ -198,6 +198,13 @@ function isFingerJuicePixel(r, g, b) {
   return redJuice || cyanJuice || purpleJuice;
 }
 
+function fingerJuicePixelKind(r, g, b) {
+  if (r > 120 && r > g * 1.28 && r > b * 1.14) return 'red';
+  if (g > 125 && b > 105 && g > r * 1.18) return 'cyan';
+  if (b > 125 && r > 105 && b > g * 1.04) return 'purple';
+  return null;
+}
+
 function measureVisualActivity(buffer) {
   const png = parsePngRgba(buffer);
   let interestingPixelCount = 0;
@@ -264,8 +271,130 @@ function measureVisualActivity(buffer) {
   };
 }
 
+function measureVisualFailures(buffer) {
+  const png = parsePngRgba(buffer);
+  const width = png.width;
+  const height = png.height;
+  const mask = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const row = png.rows[y];
+    for (let x = 0; x < width; x += 1) {
+      const i = x * png.channels;
+      if (isFingerJuicePixel(row[i], row[i + 1], row[i + 2])) {
+        mask[y * width + x] = 1;
+      }
+    }
+  }
+
+  const visited = new Uint8Array(width * height);
+  const components = [];
+  const stack = [];
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+    visited[start] = 1;
+    stack.push(start);
+    let area = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = 0;
+    let maxY = 0;
+    let redPixelCount = 0;
+    let cyanPixelCount = 0;
+    let purplePixelCount = 0;
+    while (stack.length) {
+      const pixel = stack.pop();
+      const x = pixel % width;
+      const y = Math.floor(pixel / width);
+      const row = png.rows[y];
+      const channelIndex = x * png.channels;
+      const kind = fingerJuicePixelKind(row[channelIndex], row[channelIndex + 1], row[channelIndex + 2]);
+      if (kind === 'red') redPixelCount += 1;
+      else if (kind === 'cyan') cyanPixelCount += 1;
+      else if (kind === 'purple') purplePixelCount += 1;
+      area += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+          const next = yy * width + xx;
+          if (!mask[next] || visited[next]) continue;
+          visited[next] = 1;
+          stack.push(next);
+        }
+      }
+    }
+    const componentWidth = maxX - minX + 1;
+    const componentHeight = maxY - minY + 1;
+    const boundsArea = Math.max(1, componentWidth * componentHeight);
+    const aspect = Math.max(componentWidth / Math.max(1, componentHeight), componentHeight / Math.max(1, componentWidth));
+    const dominantColorCount = Math.max(redPixelCount, cyanPixelCount, purplePixelCount);
+    components.push({
+      area,
+      x: minX,
+      y: minY,
+      width: componentWidth,
+      height: componentHeight,
+      aspect: Number(aspect.toFixed(4)),
+      fill: Number((area / boundsArea).toFixed(4)),
+      redPixelCount,
+      cyanPixelCount,
+      purplePixelCount,
+      dominantColorRatio: Number((dominantColorCount / Math.max(1, area)).toFixed(4)),
+    });
+  }
+  components.sort((a, b) => b.area - a.area);
+  const longThinComponents = components.filter(component =>
+    component.area >= 700
+      && Math.max(component.width, component.height) >= 150
+      && component.aspect >= 6.5
+      && component.fill <= 0.72
+  );
+  const elongatedBandComponents = components.filter(component =>
+    component.area >= 5200
+      && Math.max(component.width, component.height) >= 190
+      && component.aspect >= 3.05
+      && component.fill <= 0.82
+      && component.dominantColorRatio >= 0.72
+  );
+  const largestArea = components[0]?.area || 0;
+  const detachedBeadComponents = components.filter(component =>
+    component.area >= 90
+      && component.area <= Math.max(2600, largestArea * 0.22)
+      && component.width >= 8
+      && component.height >= 8
+      && component.width <= 95
+      && component.height <= 95
+  );
+  const detachedBeadChainScore = detachedBeadComponents.reduce((sum, component) => sum + Math.min(1, component.aspect / 3.5), 0);
+  return {
+    contract: 'visual-attractor-failure-v0',
+    componentCount: components.length,
+    longThinComponentCount: longThinComponents.length,
+    elongatedBandCount: elongatedBandComponents.length,
+    detachedBeadChainCount: detachedBeadComponents.length,
+    detachedBeadChainScore: Number(detachedBeadChainScore.toFixed(4)),
+    largestComponentArea: largestArea,
+    topComponents: components.slice(0, 12),
+    longThinComponents: longThinComponents.slice(0, 8),
+    elongatedBandComponents: elongatedBandComponents.slice(0, 8),
+    detachedBeadComponents: detachedBeadComponents.slice(0, 16),
+  };
+}
+
 function classifyFullViewportLegibility(metrics) {
   if (metrics.filledActivityRatio >= 0.22 && metrics.dilatedActivityRatio >= 0.45) return 'dense_full_viewport';
+  if (
+    metrics.filledActivityRatio >= 0.07
+      && metrics.activityBoundsAreaRatio >= 0.42
+      && metrics.activityBoundsWidthRatio >= 0.68
+      && metrics.activityBoundsHeightRatio >= 0.42
+  ) return 'broad_sparse_full_viewport';
   if (metrics.filledActivityRatio >= 0.08 && metrics.dilatedActivityRatio >= 0.14) return 'sparse_but_visible_full_viewport';
   return 'too_sparse_full_viewport';
 }
@@ -455,6 +584,7 @@ async function run() {
     assert.equal(state.pressureContract, 'wgsl-local-density-pressure-v0', 'wrong WebGPU pressure contract');
     assert.equal(state.spatialPressureContract, 'wgsl-spatial-cell-pressure-v0', 'wrong WebGPU spatial pressure contract');
     assert.equal(state.fluidDepthContract, 'wgsl-spatial-viscosity-pressure-v0', 'wrong WebGPU deeper fluid contract');
+    assert.equal(state.visualDampingContract, 'wgsl-visual-streak-bead-damping-v0', 'wrong WebGPU visual damping contract');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -495,6 +625,9 @@ async function run() {
     assert.equal(state.stabilityStats?.pressureContract, 'wgsl-stability-damped-relaxation-v0', 'stability stats do not identify damping contract');
     assert.ok(Number.isFinite(state.stabilityStats?.stabilityRiskScore), 'route did not expose stability risk score');
     assert.ok(Number.isFinite(state.stabilityStats?.highSpeedParticleCount), 'route did not expose high-speed particle count');
+    assert.equal(state.visualStreakBeadStats?.pressureContract, 'wgsl-visual-streak-bead-damping-v0', 'visual streak/bead stats do not identify damping contract');
+    assert.ok(Number.isFinite(state.visualStreakBeadStats?.detachedBeadParticleCount), 'route did not expose detached bead particle count');
+    assert.ok(Number.isFinite(state.visualStreakBeadStats?.longStreakParticleCount), 'route did not expose long streak particle count');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -549,6 +682,10 @@ async function run() {
         surfaceCohesionContract: stress?.surfaceCohesionStats?.pressureContract || null,
         surfaceRelaxationContract: stress?.spatialSurfaceRelaxationStats?.pressureContract || null,
         stabilityContract: stress?.stabilityStats?.pressureContract || null,
+        visualDampingContract: stress?.visualStreakBeadStats?.pressureContract || null,
+        detachedBeadParticleCount: stress?.visualStreakBeadStats?.detachedBeadParticleCount || 0,
+        longStreakParticleCount: stress?.visualStreakBeadStats?.longStreakParticleCount || 0,
+        olderAirborneStreakCount: stress?.visualStreakBeadStats?.olderAirborneStreakCount || 0,
       };
     })()`);
     assert.ok(extendedFlowProbe, 'route did not expose expanded witness stress hook');
@@ -571,6 +708,7 @@ async function run() {
     assert.ok(extendedFlowProbe.denseCellCount >= 8, 'expanded witness phase did not retain enough dense relaxation cells');
     assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
+    assert.equal(extendedFlowProbe.visualDampingContract, 'wgsl-visual-streak-bead-damping-v0', 'expanded witness phase lost visual streak/bead damping contract');
     assert.ok(extendedFlowProbe.highSpeedParticleCount <= 180, 'expanded witness phase has too many high-speed surface outliers');
     assert.ok(extendedFlowProbe.stabilityRiskScore < 0.75, 'expanded witness phase stability risk is too high');
     state = extendedFlowProbe.state;
@@ -613,19 +751,38 @@ async function run() {
     assert.ok(fullViewportPng.length > 4096, 'full viewport screenshot is too small to be credible visual evidence');
     assert.equal(fullViewportPng.readUInt32BE(0), 0x89504e47, 'full viewport screenshot is not PNG');
     const fullViewportVisualActivityMetrics = measureVisualActivity(fullViewportPng);
+    const visualFailureMetrics = measureVisualFailures(fullViewportPng);
     const fullViewportLegibilityStatus = classifyFullViewportLegibility(fullViewportVisualActivityMetrics);
     const postFullViewportState = await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
     const captureStateConsistency = createCaptureStateConsistency(state, renderedCaptureState, postFullViewportState);
     const stabilityGrowthStats = createStabilityGrowthStats(extendedFlowProbe.before, state, fullViewportVisualActivityMetrics);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, fullViewportPng);
+    primaryOutputWritten = true;
+    lastVisualEvidence = {
+      screenshot: out,
+      fullViewportScreenshot: out,
+      fullViewportCapture,
+      fullViewportVisualActivityMetrics,
+      visualFailureMetrics,
+      fullViewportLegibilityStatus,
+      captureStateConsistency,
+      stabilityGrowthStats,
+      largeViewportSmokeWitness,
+      viewport: {
+        width: viewportWidth,
+        height: viewportHeight,
+      },
+    };
     assert.equal(captureStateConsistency.submittedStepDrift, 0, 'simulation advanced between frozen state and screenshot capture');
     assert.equal(captureStateConsistency.renderStepDrift, 0, 'render state drifted from frozen capture state');
     assert.ok(captureStateConsistency.flowExtentXDrift <= 0.0001, 'flow extent X drifted during screenshot capture');
     assert.ok(captureStateConsistency.flowExtentZDrift <= 0.0001, 'flow extent Z drifted during screenshot capture');
     assert.ok(stabilityGrowthStats.runawayStreakScore < 0.54, 'full viewport shows too much sparse runaway streak spread');
     assert.ok(stabilityGrowthStats.stabilityRiskScore < 0.75, 'final frozen state stability risk is too high');
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, fullViewportPng);
-    primaryOutputWritten = true;
+    assert.ok(visualFailureMetrics.longThinComponentCount <= 0, 'full viewport contains long thin colored streak components');
+    assert.ok(visualFailureMetrics.elongatedBandCount <= 0, 'full viewport contains elongated colored rail components');
+    assert.ok(visualFailureMetrics.detachedBeadChainCount <= 18, 'full viewport contains too many detached bead-chain components');
 
     const captureSurface = await evaluate(ws, `(() => {
       const hud = document.getElementById('hud');
@@ -659,6 +816,7 @@ async function run() {
       fullViewportScreenshot: out,
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
+      visualFailureMetrics,
       fullViewportLegibilityStatus,
       captureStateConsistency,
       stabilityGrowthStats,
@@ -689,6 +847,7 @@ async function run() {
       fullViewportScreenshot: out,
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
+      visualFailureMetrics,
       fullViewportLegibilityStatus,
       captureStateConsistency,
       stabilityGrowthStats,
@@ -745,6 +904,8 @@ async function run() {
       surfaceCohesionStats: state.surfaceCohesionStats,
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
       stabilityStats: state.stabilityStats,
+      visualStreakBeadStats: state.visualStreakBeadStats,
+      visualFailureMetrics,
       witnessCaptureState: state.witness_capture,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,

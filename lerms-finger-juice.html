@@ -94,7 +94,7 @@
     ];
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
-      maxParticles: 1500,
+      maxParticles: 2400,
       lerms,
       goins,
     });
@@ -145,9 +145,9 @@
       hand_sample_space: emitterPacket.hand_sample_space,
       lerms_world_frame: emitterPacket.lerms_world_frame,
       emitters: [
-        { id: 'index', tip_index: 8, origin_world: [-0.68, 0.5, -1.02], aim_world: [0.62, 0.3, 1.0], motion_world: [0.42, 0, 0.16], extension: 1.0, chemistry: 'knockback', radius: 0.086, strength: 2.0, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
-        { id: 'middle', tip_index: 12, origin_world: [0.0, 0.46, -1.04], aim_world: [0.0, 0.2, 1.0], motion_world: [0.0, 0, 0.14], extension: 1.0, chemistry: 'pooling', radius: 0.096, strength: 1.68, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
-        { id: 'ring', tip_index: 16, origin_world: [0.68, 0.43, -1.02], aim_world: [-0.6, 0.18, 1.0], motion_world: [-0.38, 0, 0.14], extension: 1.0, chemistry: 'weird', radius: 0.088, strength: 1.54, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+        { id: 'index', tip_index: 8, origin_world: [-0.58, 0.46, -1.02], aim_world: [0.36, 0.14, 1.0], motion_world: [0.10, -0.04, 0.07], extension: 1.0, chemistry: 'knockback', radius: 0.108, strength: 1.24, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.0, 0.44, -1.04], aim_world: [0.0, 0.16, 1.0], motion_world: [0.0, -0.03, 0.08], extension: 1.0, chemistry: 'pooling', radius: 0.112, strength: 1.32, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.42, 0.42, -1.02], aim_world: [-0.18, 0.12, 1.0], motion_world: [-0.03, -0.04, 0.06], extension: 1.0, chemistry: 'weird', radius: 0.118, strength: 1.02, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
     prototype.setEmitters(emitterPacket);
@@ -177,7 +177,7 @@
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
-      maxParticles: 1500,
+      maxParticles: 2400,
       emitterPacket,
       lerms,
       goins,
@@ -741,11 +741,12 @@
       const surfaceCohesionStats = state.surfaceCohesionStats || {};
       const spatialSurfaceRelaxationStats = state.spatialSurfaceRelaxationStats || {};
       const stabilityStats = state.stabilityStats || {};
+      const visualStreakBeadStats = state.visualStreakBeadStats || {};
       const emitterDiagnostics = Array.isArray(state.emitterDiagnostics) ? state.emitterDiagnostics : [];
       const emitterSummary = emitterDiagnostics
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       window.__lermsFingerJuiceVisualFrameForWitness = () => visualActivityFrame(readDebugState());

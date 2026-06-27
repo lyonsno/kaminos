@@ -10,6 +10,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT = 'wgsl-spatial-visc
 export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT = 'wgsl-same-chemistry-surface-cohesion-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT = 'wgsl-spatial-surface-relaxation-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT = 'wgsl-stability-damped-relaxation-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT = 'wgsl-visual-streak-bead-damping-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -759,6 +760,58 @@ function stabilityStats(particles, spatialStats, depthStats) {
   };
 }
 
+function visualStreakBeadStats(particles) {
+  const activeParticles = particles.filter(particle => particle.active !== false);
+  const surfaceParticles = activeParticles.filter(particle => particle.surface_flow);
+  const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
+  for (const particle of surfaceParticles) {
+    bins[spatialCellIndex(particle.position)] += 1;
+  }
+  let sparseSurfaceCellCount = 0;
+  let detachedBeadParticleCount = 0;
+  let longStreakParticleCount = 0;
+  let olderAirborneStreakCount = 0;
+  for (const particle of activeParticles) {
+    const horizontalSpeed = Math.hypot(particle.velocity[0], particle.velocity[2]);
+    if (!particle.surface_flow) {
+      if (particle.age > 1.05 && horizontalSpeed > 0.7) olderAirborneStreakCount += 1;
+      continue;
+    }
+    const cellIndex = spatialCellIndex(particle.position);
+    const cellX = cellIndex % SPATIAL_PRESSURE_GRID_X;
+    const cellZ = Math.floor(cellIndex / SPATIAL_PRESSURE_GRID_X);
+    const center = bins[cellIndex] || 0;
+    const neighborIndices = [
+      [cellX - 1, cellZ],
+      [cellX + 1, cellZ],
+      [cellX, cellZ - 1],
+      [cellX, cellZ + 1],
+    ].filter(([x, z]) => x >= 0 && z >= 0 && x < SPATIAL_PRESSURE_GRID_X && z < SPATIAL_PRESSURE_GRID_Z)
+      .map(([x, z]) => z * SPATIAL_PRESSURE_GRID_X + x);
+    const occupiedNeighborCount = neighborIndices.filter(index => bins[index] > 0).length;
+    if (center > 0 && center <= 2) sparseSurfaceCellCount += 1;
+    if (center <= 2 && occupiedNeighborCount <= 1) detachedBeadParticleCount += 1;
+    if (center <= 3 && occupiedNeighborCount <= 1 && horizontalSpeed > 0.42) longStreakParticleCount += 1;
+  }
+  const visualFailureRiskScore = Math.min(
+    1,
+    detachedBeadParticleCount / Math.max(1, surfaceParticles.length) * 1.8
+      + longStreakParticleCount / Math.max(1, surfaceParticles.length) * 1.2
+      + olderAirborneStreakCount / Math.max(1, activeParticles.length) * 0.8
+  );
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+    visualDampingMode: 'isolated_cell_and_old_airborne_drag_v0',
+    activeParticleCount: activeParticles.length,
+    surfaceParticleCount: surfaceParticles.length,
+    sparseSurfaceCellCount,
+    detachedBeadParticleCount,
+    longStreakParticleCount,
+    olderAirborneStreakCount,
+    visualFailureRiskScore: round(visualFailureRiskScore, 4),
+  };
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
@@ -864,6 +917,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const cohesionStats = surfaceCohesionStats(particles);
   const relaxationStats = spatialSurfaceRelaxationStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
+  const visualStats = visualStreakBeadStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -878,6 +932,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     surfaceRelaxationContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT,
     stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
+    visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
     sourceTruth,
     sourceDiagnostics,
     emitterDiagnostics,
@@ -887,6 +942,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     surfaceCohesionStats: cohesionStats,
     spatialSurfaceRelaxationStats: relaxationStats,
     stabilityStats: solverStabilityStats,
+    visualStreakBeadStats: visualStats,
     juiceHitEvents,
     juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
@@ -1206,6 +1262,48 @@ fn applySurfaceStabilityDamping(position: vec3f, velocity: vec3f, chemistry: f32
   return vec3f(clamped.x, velocity.y, clamped.y);
 }
 
+fn applyVisualStreakBeadDamping(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32, phase: f32, age: f32) -> vec3f {
+  let horizontal = vec2f(velocity.x, velocity.z);
+  let speed = length(horizontal);
+  if (speed <= 0.0001) {
+    return velocity;
+  }
+  if (phase < 0.5) {
+    let oldFastAirborne = age > 1.05 && speed > 0.7;
+    let airborneDrag = select(1.0, 0.72, oldFastAirborne);
+    let airborneHorizontal = horizontal * airborneDrag;
+    let vertical = select(velocity.y, min(velocity.y, -0.38), oldFastAirborne);
+    return vec3f(airborneHorizontal.x, vertical, airborneHorizontal.y);
+  }
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  let left = pressureCellCountAt(cellX - 1, cellZ);
+  let right = pressureCellCountAt(cellX + 1, cellZ);
+  let back = pressureCellCountAt(cellX, cellZ - 1);
+  let front = pressureCellCountAt(cellX, cellZ + 1);
+  let neighborOccupied = select(0.0, 1.0, left > 0.0) + select(0.0, 1.0, right > 0.0) + select(0.0, 1.0, back > 0.0) + select(0.0, 1.0, front > 0.0);
+  let isolatedBead = center <= 2.0 && neighborOccupied <= 1.0;
+  let sparseStreak = center <= 3.0 && neighborOccupied <= 1.0 && speed > 0.42;
+  let beadDrag = select(1.0, select(0.48, 0.30, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
+  let streakDrag = select(1.0, 0.54, sparseStreak);
+  let maximum = select(select(0.42, 0.44, chemistry > 2.5), 0.36, chemistry > 1.5 && chemistry < 2.5);
+  let dampedSpeed = min(speed * beadDrag * streakDrag, maximum);
+  var damped = normalize(horizontal) * dampedSpeed;
+  let neighborDirection = vec2f(right - left, front - back);
+  let neighborLength = length(neighborDirection);
+  let centerDirection = vec2f(-position.x, 0.28 - position.z);
+  let centerLength = length(centerDirection);
+  let tetherDirection = select(
+    select(vec2f(0.0, 0.0), centerDirection / centerLength, centerLength > 0.0001),
+    neighborDirection / neighborLength,
+    neighborLength > 0.0001
+  );
+  let tetherStrength = select(0.0, select(0.12, 0.20, chemistry > 1.5 && chemistry < 2.5), isolatedBead);
+  damped = damped + tetherDirection * tetherStrength;
+  return vec3f(damped.x, velocity.y, damped.y);
+}
+
 fn hash01(seed: u32) -> f32 {
   var value = seed;
   value = value ^ (value >> 16u);
@@ -1311,6 +1409,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
     }
     if (phase < 0.5) {
       velocity.y = velocity.y - 5.2 * params.dt;
+      velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position = position + velocity * params.dt;
       let ground = terrainHeightAt(position.x, position.z) + radius * 0.35;
       if (position.y <= ground) {
@@ -1326,9 +1425,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = applySurfaceViscosity(index, position, velocity, radius, chemistry);
       velocity = applySameChemistrySurfaceCohesion(index, position, velocity, radius, chemistry);
       velocity = applySpatialCellPressure(position + velocity * params.dt * 0.5, velocity, chemistry);
+      velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
+      velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position = position + velocity * params.dt;
       position = applySpatialSurfaceRelaxation(position, velocity, radius, chemistry);
       velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
+      velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
     }
     particle.posPhase = vec4f(position, phase);
@@ -1591,6 +1693,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
         spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
         fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+        visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
         stepCount,
       };
     }
@@ -1608,6 +1711,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+      visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
       stepCount,
     };
   }
@@ -1651,6 +1755,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+      visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
@@ -1821,6 +1926,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
     spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+    visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
