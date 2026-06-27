@@ -5616,15 +5616,18 @@ function createSplatPointCloudObject(pointCloud, { url, fileName, display, metad
   const group = new THREE.Group();
   const visualRoot = new THREE.Group();
   visualRoot.name = 'splat-visual-root';
-  const pointSize = Math.max(0.012, Math.min(0.085, 0.62 / Math.sqrt(pointCloud.pointCount)));
+  const densePreview = pointCloud.pointCount > 120000;
+  const pointSize = densePreview
+    ? Math.max(0.0035, Math.min(0.018, 0.42 / Math.sqrt(pointCloud.pointCount)))
+    : Math.max(0.012, Math.min(0.085, 0.62 / Math.sqrt(pointCloud.pointCount)));
   const includedMaterial = new THREE.PointsMaterial({
     size: pointSize,
     sizeAttenuation: true,
     vertexColors: true,
     transparent: true,
-    opacity: 0.92,
-    depthTest: false,
-    depthWrite: false,
+    opacity: densePreview ? 1.0 : 0.92,
+    depthTest: densePreview,
+    depthWrite: densePreview,
   });
   const excludedMaterial = new THREE.PointsMaterial({
     size: pointSize,
@@ -5632,7 +5635,7 @@ function createSplatPointCloudObject(pointCloud, { url, fileName, display, metad
     vertexColors: true,
     transparent: true,
     opacity: 0.18,
-    depthTest: false,
+    depthTest: densePreview,
     depthWrite: false,
   });
   const includedPoints = new THREE.Points(
@@ -5696,7 +5699,7 @@ async function createSplatSceneObjectPreview({ url, fileName, display, metadata 
           bounds: pointCloud.bounds,
           colorSource: pointCloud.colorSource,
           parser: 'ply-point-cloud-v0',
-          previewDepthTest: false,
+          previewDepthTest: pointCloud.pointCount > 120000,
         },
       };
     } catch (error) {

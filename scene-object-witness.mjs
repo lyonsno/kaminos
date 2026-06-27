@@ -19,6 +19,8 @@ const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
+const greenroomJobId = args.get('--greenroom-job-id') || null;
+const greenroomFile = args.get('--greenroom-file') || null;
 
 let phase = 'initializing';
 let stderr = '';
@@ -39,6 +41,8 @@ function writeReport(report) {
     effectiveServerRoots: effectiveServerRoots,
     expectedServerRoot: expectedServerRoot,
     scenario,
+    greenroomJobId,
+    greenroomFile,
     debugPort: port,
     chrome,
     userDataDir,
@@ -2303,20 +2307,44 @@ async function runGreenroomSplatHandoffScenario(ws) {
 
       document.querySelector('[data-tab="greenroom"]').click();
       const beforeRows = rowState();
+      const targetJobId = ${JSON.stringify(greenroomJobId)};
+      const targetFile = ${JSON.stringify(greenroomFile)};
+      const rawNameFor = row => row.querySelector('.gr-raw')?.textContent?.replace(/^raw\\s+/i, '').trim() || null;
       const greenroomRows = await waitForGreenroomRows();
-      const actionRow = greenroomRows.find(row => [...row.querySelectorAll('button')]
+      const splatRows = greenroomRows.filter(row => [...row.querySelectorAll('button')]
         .some(button => button.textContent.trim() === 'Import Splat'));
+      const actionRow = targetJobId
+        ? splatRows.find(row => rawNameFor(row) === targetJobId)
+        : splatRows[0];
       const actionButton = actionRow ? [...actionRow.querySelectorAll('button')]
         .find(button => button.textContent.trim() === 'Import Splat') : null;
       const title = actionRow?.querySelector('.gr-title')?.textContent?.trim() || null;
-      const raw = actionRow?.querySelector('.gr-raw')?.textContent?.replace(/^raw\\s+/i, '').trim() || null;
+      const raw = actionRow ? rawNameFor(actionRow) : null;
+      if (targetJobId && raw !== targetJobId) {
+        throw new Error('target greenroom splat job row not found: ' + JSON.stringify({
+          targetJobId,
+          availableRaw: splatRows.map(row => rawNameFor(row)),
+        }));
+      }
       let outputProbe = null;
+      let outputEntries = [];
+      let selectedOutput = null;
       if (raw) {
         const outputsResp = await fetch('/api/job-outputs?job_id=' + encodeURIComponent(raw));
         const outputsData = await outputsResp.json().catch(() => ({}));
-        const splat = (outputsData.entries || []).find(entry => /\\.(ply|spz)$/i.test(entry.name));
-        if (splat) {
-          const route = '/api/job-output?job_id=' + encodeURIComponent(raw) + '&file=' + encodeURIComponent(splat.name);
+        outputEntries = outputsData.entries || [];
+        selectedOutput = targetFile
+          ? outputEntries.find(entry => entry.name === targetFile)
+          : outputEntries.find(entry => /\\.(ply|spz)$/i.test(entry.name));
+        if (targetFile && !selectedOutput) {
+          throw new Error('target greenroom splat file not found: ' + JSON.stringify({
+            targetJobId: raw,
+            targetFile,
+            availableFiles: outputEntries.map(entry => entry.name),
+          }));
+        }
+        if (selectedOutput) {
+          const route = '/api/job-output?job_id=' + encodeURIComponent(raw) + '&file=' + encodeURIComponent(selectedOutput.name);
           outputProbe = await fetchRoute(route);
         }
       }
@@ -2376,6 +2404,10 @@ async function runGreenroomSplatHandoffScenario(ws) {
         actionExposed: !!actionButton,
         title,
         raw,
+        targetJobId,
+        targetFile,
+        selectedOutput,
+        outputEntries,
         outputProbe,
         sceneDebug,
         splatObject,

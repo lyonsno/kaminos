@@ -141,6 +141,9 @@ assert.match(index, /function chooseSplatCropFrame\(/, 'PLY point-cloud crop pre
 assert.match(index, /pivot-local-minus-centroid/, 'crop preview debug names the legacy pivot-local sidecar frame when it is used');
 assert.match(index, /new THREE\.Points\(/, 'PLY splat previews render through Three Points, not the placeholder mesh only');
 assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'PLY point-cloud previews use per-point colors when available');
+assert.match(index, /const densePreview = pointCloud\.pointCount > 120000/, 'dense point-cloud previews switch to depth-aware rendering instead of drawing hidden layers as a flat slab');
+assert.match(index, /depthTest:\s*densePreview/, 'dense point-cloud previews can depth-test rather than always overdrawing through themselves');
+assert.match(index, /const pointSize = densePreview[\s\S]*0\.0035/, 'dense point-cloud previews reduce minimum point size so high-count layered assets do not become a gray screen-filling surface');
 assert.match(index, /previewKind:\s*'point-cloud'/, 'splat scene metadata records when the visible preview is a point cloud');
 assert.match(index, /previewKind:\s*'placeholder'/, 'splat scene metadata records placeholder fallback instead of hiding parse failures');
 assert.match(index, /async function greenroomImportSplat\(/, 'Greenroom PLY/SPZ rows expose an explicit Import Splat action');
