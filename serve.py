@@ -210,7 +210,8 @@ def run_pipeline_witness(payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=120)
+    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     report = json.loads(report_path.read_text()) if report_path.exists() else None
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
