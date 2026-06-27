@@ -687,7 +687,12 @@ async function run() {
     assert.ok(state.densityPositionSolveStats?.correctionCandidateCount > 0, 'route did not expose density correction candidates');
     assert.ok(Number.isFinite(state.densityPositionSolveStats?.averageConstraintError), 'route did not expose average density constraint error');
     assert.ok(Number.isFinite(state.densityPositionSolveStats?.maxConstraintError), 'route did not expose max density constraint error');
+    assert.equal(state.densityContinuityProjectionStats?.pressureContract, 'wgsl-density-continuity-projection-v0', 'density continuity stats do not identify projection contract');
+    assert.ok(state.densityContinuityProjectionStats?.continuityBinRefreshChunk > 0, 'route did not expose continuity bin refresh chunk');
+    assert.ok(state.densityContinuityProjectionStats?.continuityProjectionCandidateCount > 0, 'route did not expose continuity projection candidates');
+    assert.ok(Number.isFinite(state.densityContinuityProjectionStats?.continuityPeakOccupancyRatio), 'route did not expose continuity peak occupancy ratio');
     assert.equal(state.particleSupportBudgetStats?.pressureContract, 'wgsl-particle-support-budget-v0', 'particle support stats do not identify budget contract');
+    assert.equal(state.particleSupportBudgetStats?.supportMeasurementMode, 'spatial_cell_radius_support_v0', 'particle support stats do not measure spatial radius support');
     assert.ok(state.particleSupportBudgetStats?.particleBudget >= 24000, 'route did not use the 24k particle support budget');
     assert.ok(state.particleSupportBudgetStats?.supportGridCellCount >= 4096, 'route did not expose a denser support grid');
     assert.ok(Number.isFinite(state.particleSupportBudgetStats?.averageSupportNeighborCount), 'route did not expose average support neighbor count');
@@ -758,7 +763,14 @@ async function run() {
         averageConstraintError: stress?.densityPositionSolveStats?.averageConstraintError || 0,
         maxConstraintError: stress?.densityPositionSolveStats?.maxConstraintError || 0,
         densitySolveCoverageRatio: stress?.densityPositionSolveStats?.densitySolveCoverageRatio || 0,
+        densityContinuityProjectionContract: stress?.densityContinuityProjectionStats?.pressureContract || null,
+        continuityProjectionCandidateCount: stress?.densityContinuityProjectionStats?.continuityProjectionCandidateCount || 0,
+        continuityDenseCellCount: stress?.densityContinuityProjectionStats?.continuityDenseCellCount || 0,
+        continuityPeakOccupancyRatio: stress?.densityContinuityProjectionStats?.continuityPeakOccupancyRatio || 0,
+        continuityRedistributionPressure: stress?.densityContinuityProjectionStats?.continuityRedistributionPressure || 0,
+        continuityBinRefreshChunk: stress?.densityContinuityProjectionStats?.continuityBinRefreshChunk || 0,
         particleSupportBudgetContract: stress?.particleSupportBudgetStats?.pressureContract || null,
+        supportMeasurementMode: stress?.particleSupportBudgetStats?.supportMeasurementMode || null,
         particleBudget: stress?.particleSupportBudgetStats?.particleBudget || 0,
         supportGridCellCount: stress?.particleSupportBudgetStats?.supportGridCellCount || 0,
         averageSupportNeighborCount: stress?.particleSupportBudgetStats?.averageSupportNeighborCount || 0,
@@ -793,6 +805,7 @@ async function run() {
     assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
     assert.equal(extendedFlowProbe.densityPositionSolveContract, 'wgsl-density-position-solve-v0', 'expanded witness phase lost density/position solve contract');
     assert.equal(extendedFlowProbe.particleSupportBudgetContract, 'wgsl-particle-support-budget-v0', 'expanded witness phase lost particle support budget contract');
+    assert.equal(extendedFlowProbe.supportMeasurementMode, 'spatial_cell_radius_support_v0', 'expanded witness phase used non-spatial support measurement');
     assert.ok(extendedFlowProbe.particleBudget >= 24000, 'expanded witness phase did not use the 24k support budget');
     assert.ok(extendedFlowProbe.supportGridCellCount >= 4096, 'expanded witness phase did not expose a denser support grid');
     assert.ok(extendedFlowProbe.averageSupportNeighborCount >= 1.2, 'expanded witness phase has too little measured support');
@@ -801,6 +814,10 @@ async function run() {
     assert.ok(extendedFlowProbe.correctionCandidateCount >= 160, 'expanded witness phase did not exercise enough density correction candidates');
     assert.ok(extendedFlowProbe.densitySolveCoverageRatio > 0.08, 'expanded witness phase density solve coverage is too low');
     assert.ok(extendedFlowProbe.maxConstraintError < 1.8, 'expanded witness phase density constraint error is too high');
+    assert.equal(extendedFlowProbe.densityContinuityProjectionContract, 'wgsl-density-continuity-projection-v0', 'expanded witness phase lost density continuity projection contract');
+    assert.ok(extendedFlowProbe.continuityBinRefreshChunk > 0, 'expanded witness phase did not expose continuity bin refresh');
+    assert.ok(extendedFlowProbe.continuityProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough continuity projection candidates');
+    assert.ok(extendedFlowProbe.continuityPeakOccupancyRatio < 72, 'expanded witness phase peak occupancy remains too high for continuity projection smoke');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
     assert.equal(extendedFlowProbe.visualDampingContract, 'wgsl-visual-streak-bead-damping-v0', 'expanded witness phase lost visual streak/bead damping contract');
     assert.ok(extendedFlowProbe.highSpeedParticleCount <= 180, 'expanded witness phase has too many high-speed surface outliers');
@@ -999,6 +1016,7 @@ async function run() {
       surfaceCohesionStats: state.surfaceCohesionStats,
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
       densityPositionSolveStats: state.densityPositionSolveStats,
+      densityContinuityProjectionStats: state.densityContinuityProjectionStats,
       particleSupportBudgetStats: state.particleSupportBudgetStats,
       settleRestEnergyStats: state.settleRestEnergyStats,
       stabilityStats: state.stabilityStats,
