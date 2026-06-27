@@ -34,6 +34,7 @@ const sourceOpacity = positiveNumber(args.get('--source-opacity'), 0.55, '--sour
 const overlaySize = positiveNumber(args.get('--overlay-size'), 3, '--overlay-size');
 const sourceUpAxis = args.get('--source-up-axis') || 'auto';
 const sourceForwardAxis = args.get('--source-forward-axis') || 'auto';
+const clipletPlayback = String(args.get('--cliplet-playback') || 'full');
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
@@ -106,6 +107,7 @@ function writeReport(report) {
     overlaySize,
     sourceUpAxis,
     sourceForwardAxis,
+    clipletPlayback,
     tileWidth,
     columns,
     exportCurrentView,
@@ -302,6 +304,36 @@ async function generateMotion(ws) {
   }))`, { timeoutMs: 240000 });
 }
 
+async function configureClipletPlayback(ws) {
+  return evaluate(ws, `(() => {
+    const requested = ${JSON.stringify(clipletPlayback)};
+    const select = document.getElementById('motion-panel-cliplet-playback');
+    if (!select) throw new Error('missing motion panel cliplet playback selector');
+    const options = [...select.options].map(option => ({ value: option.value, label: option.textContent || '' }));
+    if (requested === 'full' || requested === '') {
+      select.value = 'full';
+    } else {
+      const lower = requested.toLowerCase();
+      const match = options.find(option => option.value === requested)
+        || options.find(option => option.label.toLowerCase().includes(lower))
+        || (requested === 'first' ? options.find(option => option.value !== 'full') : null);
+      if (!match) throw new Error('cliplet playback option not found for ' + requested + ': ' + JSON.stringify(options));
+      select.value = match.value;
+    }
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const state = window.kaminosGeneratedPoseTemporalDebugState?.();
+    return {
+      schema: 'kaminos.motion-panel-live-cliplet-playback-config.v0',
+      requested,
+      selected: select.value,
+      selectedLabel: options.find(option => option.value === select.value)?.label || null,
+      options,
+      clipletPlayback: state?.clipletPlayback || null,
+      clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
+    };
+  })()`, { timeoutMs: 20000 });
+}
+
 async function captureFrame(ws, index) {
   const debug = await evaluate(ws, `(() => {
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
@@ -322,6 +354,8 @@ async function captureFrame(ws, index) {
       cliplet: actor?.cliplet || state?.activeCliplet || null,
       clipletId: actor?.clipletId || state?.activeCliplet?.id || null,
       clipletLabel: actor?.clipletLabel || state?.activeCliplet?.labelGuess || null,
+      clipletPlayback: actor?.clipletPlayback || state?.clipletPlayback || null,
+      clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
       sourceFrame: actor?.sourceFrame ?? null,
@@ -509,6 +543,8 @@ async function exportCurrentViewFilmstrip(ws) {
       sourceGhostAtExportEnd: exported.sourceGhostAtExportEnd || null,
       attentionTargetEvidence: temporalDebug?.attentionTargetEvidence || temporalDebug?.actors?.[0]?.attentionTargetEvidence || null,
       activeCliplet: temporalDebug?.activeCliplet || temporalDebug?.actors?.[0]?.cliplet || null,
+      clipletPlayback: temporalDebug?.clipletPlayback || temporalDebug?.actors?.[0]?.clipletPlayback || null,
+      clipletPlaybackTimeline: temporalDebug?.clipletPlaybackTimeline || null,
       generatedMotionCliplets: temporalDebug?.generatedMotionCliplets || temporalDebug?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       sourceOrientationRemap: temporalDebug?.sourceOrientationRemap || exported.sourceGhostAtExportStart?.sourceOrientationRemap || null,
       phraseControlApplicability,
@@ -590,6 +626,8 @@ try {
   const generated = await generateMotion(ws);
   if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
   if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
+  phase = 'configuring-cliplet-playback';
+  const configuredClipletPlayback = await configureClipletPlayback(ws);
   await delay(settleMs);
 
   let filmstrip = null;
@@ -633,6 +671,7 @@ try {
     ok: true,
     preflight,
     configured,
+    configuredClipletPlayback,
     generated,
     takeShelf: generated?.takeShelf || null,
     frames,

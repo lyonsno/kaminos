@@ -1938,6 +1938,121 @@ export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMO
   };
 }
 
+export function buildGeneratedPoseClipletPlayback({
+  cliplets,
+  segmentIds = [],
+  mode = 'loop',
+  id = null,
+} = {}) {
+  if (cliplets?.schema !== GENERATED_MOTION_CLIPLETS_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLETS_SCHEMA}, got ${cliplets?.schema || 'missing schema'}`);
+  }
+  const requestedIds = Array.isArray(segmentIds) ? segmentIds.map(value => String(value)) : [];
+  const selected = requestedIds.length
+    ? requestedIds.map(segmentId => {
+      const segment = cliplets.segments.find(candidate => candidate.id === segmentId);
+      if (!segment) throw new Error(`Unknown generated motion cliplet segment id: ${segmentId}`);
+      return segment;
+    })
+    : [...cliplets.segments];
+  if (!selected.length) throw new Error('Generated motion cliplet playback needs at least one segment');
+  const fps = Math.max(1, Number(cliplets.fps) || 30);
+  let cursor = 0;
+  const segments = selected.map((segment, index) => {
+    const rawDuration = Number(segment.duration) || 0;
+    const duration = Math.max(rawDuration, 1 / fps);
+    const playbackSegment = {
+      schema: 'kaminos.generated-motion-cliplet-playback-segment.v0',
+      index,
+      sourceSegmentId: segment.id,
+      labelGuess: segment.labelGuess,
+      playbackStartTime: Number(cursor.toFixed(5)),
+      playbackEndTime: Number((cursor + duration).toFixed(5)),
+      duration: Number(duration.toFixed(5)),
+      sourceStartTime: Number(segment.startTime),
+      sourceEndTime: Number(segment.endTime),
+      startSourceFrame: Number(segment.startSourceFrame),
+      endSourceFrame: Number(segment.endSourceFrame),
+      sourceSegment: segment,
+    };
+    cursor += duration;
+    return playbackSegment;
+  });
+  return {
+    schema: 'kaminos.generated-motion-cliplet-playback.v0',
+    route: MOTION_ROUTE_IDENTITY,
+    id: String(id || `${cliplets.sourceClipId || 'generated'}_cliplet_playback_v0`),
+    sourceClipId: cliplets.sourceClipId,
+    sourceKind: cliplets.sourceKind,
+    sourceStatus: cliplets.sourceStatus,
+    sourceModel: cliplets.sourceModel,
+    sourceRoute: cliplets.sourceRoute,
+    mode: String(mode || (segments.length > 1 ? 'splice' : 'loop')),
+    loop: true,
+    duration: Number(cursor.toFixed(5)),
+    segmentCount: segments.length,
+    segmentIds: segments.map(segment => segment.sourceSegmentId),
+    sourceRanges: segments.map(segment => ({
+      sourceSegmentId: segment.sourceSegmentId,
+      labelGuess: segment.labelGuess,
+      startSourceFrame: segment.startSourceFrame,
+      endSourceFrame: segment.endSourceFrame,
+      sourceStartTime: segment.sourceStartTime,
+      sourceEndTime: segment.sourceEndTime,
+    })),
+    segments,
+  };
+}
+
+function generatedPoseClipletPlaybackSegmentAt(playback, t = 0) {
+  if (!playback?.segments?.length) return null;
+  const duration = Math.max(1e-6, Number(playback.duration) || 0);
+  const wrappedTime = ((Number(t) || 0) % duration + duration) % duration;
+  return playback.segments.find(segment => (
+    wrappedTime >= Number(segment.playbackStartTime) && wrappedTime <= Number(segment.playbackEndTime)
+  )) || playback.segments.at(-1);
+}
+
+export function sampleGeneratedPoseClipletPlayback(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE, playback, t = 0) {
+  if (playback?.schema !== 'kaminos.generated-motion-cliplet-playback.v0') {
+    throw new Error(`Expected kaminos.generated-motion-cliplet-playback.v0, got ${playback?.schema || 'missing schema'}`);
+  }
+  const segment = generatedPoseClipletPlaybackSegmentAt(playback, t);
+  if (!segment) throw new Error('Generated motion cliplet playback has no active segment');
+  const duration = Math.max(1e-6, Number(playback.duration) || 0);
+  const wrappedTime = ((Number(t) || 0) % duration + duration) % duration;
+  const localTime = clamp(wrappedTime - Number(segment.playbackStartTime), 0, Number(segment.duration) || 0);
+  const u = Number(segment.duration) > 1e-6 ? clamp(localTime / Number(segment.duration), 0, 1) : 0;
+  const sourceTime = Number(lerp(Number(segment.sourceStartTime) || 0, Number(segment.sourceEndTime) || 0, u).toFixed(5));
+  const sourceFrame = Number(lerp(Number(segment.startSourceFrame) || 0, Number(segment.endSourceFrame) || 0, u).toFixed(5));
+  const motionSample = sampleGeneratedPoseTemporalMotion(generatedInput, sourceTime);
+  return {
+    schema: 'kaminos.generated-motion-cliplet-playback-sample-envelope.v0',
+    playback: {
+      schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
+      playbackId: playback.id,
+      sourceClipId: playback.sourceClipId,
+      mode: playback.mode,
+      t: Number((Number(t) || 0).toFixed(5)),
+      wrappedTime: Number(wrappedTime.toFixed(5)),
+      localTime: Number(localTime.toFixed(5)),
+      interpolation: Number(u.toFixed(5)),
+      segmentId: segment.sourceSegmentId,
+      segmentIndex: segment.index,
+      labelGuess: segment.labelGuess,
+      sourceTime,
+      sourceFrame,
+      sourceRange: {
+        startSourceFrame: segment.startSourceFrame,
+        endSourceFrame: segment.endSourceFrame,
+        sourceStartTime: segment.sourceStartTime,
+        sourceEndTime: segment.sourceEndTime,
+      },
+    },
+    motionSample,
+  };
+}
+
 function motionServerPhaseLabel(frameIndex, frameCount, sample) {
   const p = frameCount <= 1 ? 0 : frameIndex / (frameCount - 1);
   if (sample?.bowCompression > 0.62) return 'compress';
@@ -2173,7 +2288,7 @@ export function interpolateGeneratedPoseTemporalSample(trackOrInput = DEFAULT_KI
     schema: 'kaminos.generated-pose-temporal-sample.v0',
     sampler: 'catmull-rom-continuous-velocity',
     time: Number(time.toFixed(5)),
-    sourceFrame: Number(lerp(Number(before.frame) || 0, Number(after.frame) || 0, rawU).toFixed(5)),
+    sourceFrame: Number(lerp(clipletSourceFrame(before), clipletSourceFrame(after), rawU).toFixed(5)),
     sourceTime: Number(lerp(Number(before.time) || 0, Number(after.time) || 0, rawU).toFixed(5)),
     phaseLabel: rawU < 0.5 ? before.phaseLabel : after.phaseLabel,
     interpolation: Number(u.toFixed(5)),
