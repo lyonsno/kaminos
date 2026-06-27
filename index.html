@@ -191,8 +191,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .pipeline-renderability-chip.splat-header-like { background: #1b2a3a; color: #42a5f5; }
 .pipeline-renderability-chip.not-splat-like { background: #3a1b1b; color: #ef5350; }
 .pipeline-renderability-chip.unknown { background: #33281b; color: #f0b85a; }
-.pipeline-graph-workbench { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; margin-bottom: 12px; }
-.pipeline-graph-canvas { position: relative; min-height: 270px; border: 1px solid #2b2b2b; border-radius: 8px; background: #141414; overflow: hidden; }
+.pipeline-graph-workbench { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; margin-bottom: 12px; align-items: stretch; }
+.pipeline-graph-canvas { position: relative; min-height: 520px; height: clamp(520px, 58vh, 680px); border: 1px solid #2b2b2b; border-radius: 8px; background: #141414; overflow: hidden; }
 .pipeline-graph-canvas::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(#202020 1px, transparent 1px), linear-gradient(90deg, #202020 1px, transparent 1px); background-size: 32px 32px; opacity: 0.35; pointer-events: none; }
 .pipeline-graph-edge-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: auto; }
 .pipeline-graph-edge { stroke: #3c5664; stroke-width: 2; fill: none; marker-end: url(#pipeline-graph-arrow); pointer-events: stroke; cursor: pointer; }
@@ -4722,6 +4722,52 @@ function pipelineGraphImageNodeSource(node, routeNodeId = 'route') {
   };
 }
 
+function pipelineRouteInputRequirement(pipeline) {
+  const role = pipeline?.artifacts?.input?.role || null;
+  if (role === 'source-image') {
+    return {
+      role,
+      label: 'source image',
+      acceptedKinds: ['image-asset', 'image-graph-node', 'image-plane', 'image'],
+      acceptedExtensions: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
+    };
+  }
+  if (role === 'prepared-splat') {
+    return {
+      role,
+      label: 'prepared splat',
+      acceptedKinds: ['splat-asset', 'splat', 'scene-object', 'manual'],
+      acceptedExtensions: ['.ply', '.spz', '.splat'],
+    };
+  }
+  return {
+    role: role || 'artifact',
+    label: role || 'artifact',
+    acceptedKinds: [],
+    acceptedExtensions: [],
+  };
+}
+
+function pipelineSourceSatisfiesRouteInput(source, requirement) {
+  if (!requirement?.role || requirement.role === 'artifact') return { ok: true, status: 'accepted' };
+  const kind = (source?.kind || '').toString();
+  const path = (source?.path || source?.source || '').toString().toLowerCase();
+  const acceptedKind = requirement.acceptedKinds?.some(candidate => kind === candidate || kind.includes(candidate));
+  const acceptedExtension = requirement.acceptedExtensions?.some(ext => path.endsWith(ext));
+  if (acceptedKind || acceptedExtension) return { ok: true, status: 'accepted' };
+  const got = kind || path || 'unknown source';
+  const hint = requirement.role === 'source-image'
+    ? 'Connect an image node or select an image asset before executing this route.'
+    : requirement.role === 'prepared-splat'
+      ? 'Connect or select a splat asset before executing this route.'
+      : 'Connect a compatible source before executing this route.';
+  return {
+    ok: false,
+    status: 'blocked-input',
+    message: `Pipeline route input mismatch: expected ${requirement.role}, got ${got}. ${hint}`,
+  };
+}
+
 function pipelineGraphRouteInputSource(routeNodeId = 'route') {
   const incoming = pipelineGraphEdges().filter(edge => edge.to === routeNodeId);
   const imageEdge = incoming.find(edge => pipelineGraphImageNodes().some(node => node.id === edge.from));
@@ -5192,6 +5238,14 @@ function pipelineGraphRouteNodeRecord(id, generator, pipeline) {
     detail: `${generatorRecord?.backendLabel || 'Backend route'}: ${pipeline.id}`,
     createdAt: new Date().toISOString(),
   };
+}
+
+function pipelineGraphStructuralNodeReason(node) {
+  if (!node) return '';
+  if (node.id === 'source') return 'Ambient source mirrors the selected asset; change the asset selection or connect an explicit image/splat node instead of deleting it.';
+  if (node.id === 'output-stack') return 'Output stack is the scratch output container; delete individual generated outputs or use Clear Failed Outputs.';
+  if (node.id === 'evidence') return 'Evidence node is the run report/bundle access point; open sidecar/bundle evidence here instead of deleting it.';
+  return '';
 }
 
 function pipelineRouteGraphNodeFromRecord(record) {
@@ -5893,12 +5947,18 @@ function pipelineGraphInspectorRows(node, selectedRun) {
     { key: 'title', value: node.title },
     { key: 'detail', value: node.detail || 'none' },
   ];
+  const structuralReason = pipelineGraphStructuralNodeReason(node);
+  if (structuralReason) rows.push({ key: 'structure', value: structuralReason });
   if (nodeRun) rows.push({ key: 'run', value: pipelineRunDisplayId(nodeRun) });
   if (node.kind === 'route') {
     const inputSource = pipelineGraphRouteInputSource(node.id);
+    const inputRequirement = pipelineRouteInputRequirement(node.pipeline);
+    const inputCheck = pipelineSourceSatisfiesRouteInput(inputSource, inputRequirement);
     rows.push({ key: 'generator', value: node.generator?.title || node.title || 'unknown' });
     rows.push({ key: 'backend', value: node.backendPipelineId || node.pipeline?.id || 'unrouted' });
     rows.push({ key: 'input', value: inputSource?.label || inputSource?.source || 'not connected' });
+    rows.push({ key: 'input contract', value: inputRequirement.role || 'artifact' });
+    rows.push({ key: 'input status', value: inputCheck.ok ? 'accepted' : inputCheck.message });
     if (pipelineRouteUsesFixture(node)) rows.push({ key: 'truth', value: pipelineFixtureInputBoundaryText(node) });
     if (selectedRun) {
       rows.push({ key: 'fixture', value: pipelineRunUsesFixture(selectedRun) ? 'yes' : 'no' });
@@ -5939,6 +5999,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   if (!inspector) return;
   const actions = [];
   const selectedEdge = pipelineGraphEdgeForId(pipelineDockState.selectedGraphEdgeId);
+  const structuralReason = pipelineGraphStructuralNodeReason(node);
   const bodyText = node?.kind === 'image'
     ? 'Select another image card below to replace this node, or import this image into the scene.'
     : node?.kind === 'generated-output'
@@ -5947,6 +6008,8 @@ function renderPipelineGraphInspector(node, selectedRun) {
       ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
       : node?.kind === 'route'
         ? 'Execute uses the graph-connected input record and writes run-local output evidence.'
+      : structuralReason
+        ? structuralReason
       : node
         ? 'Node inspector actions are bound to the selected run record. Drag node ports to edit composition links.'
         : selectedEdge
@@ -6006,6 +6069,12 @@ function renderPipelineGraphInspector(node, selectedRun) {
       runningMessage: `Deleting ${node.title || node.id} from the browser-local graph...`,
       successMessage: result => result ? `Deleted graph node ${node.id}` : `Graph node ${node.id} is structural and cannot be deleted`,
       action: () => pipelineDeleteGraphNode(node.id),
+    });
+  } else if (structuralReason) {
+    actions.push({
+      label: 'Structural Node',
+      disabled: true,
+      action: null,
     });
   }
   if (selectedEdge) {
@@ -6120,6 +6189,17 @@ async function pipelineExecuteGraphRouteNode(node) {
   if (!requestedPipelineId) {
     pipelineSetGraphInspectorStatus('Pipeline route required before graph execution', 'error');
     throw new Error('Pipeline route required before graph execution');
+  }
+  const inputCheck = pipelineSourceSatisfiesRouteInput(source, pipelineRouteInputRequirement(pipeline));
+  if (!inputCheck.ok) {
+    pipelineSetGraphInspectorStatus(inputCheck.message || 'Pipeline route input mismatch', 'error');
+    pipelineDockState.graphInspectorStatus = {
+      ...(pipelineDockState.graphInspectorStatus || {}),
+      status: 'blocked-input',
+    };
+    const error = new Error(inputCheck.message || 'Pipeline route input mismatch');
+    error.status = 'blocked-input';
+    throw error;
   }
   pipelineDockState.selectedPipelineId = requestedPipelineId;
   if (generator?.id) pipelineDockState.selectedGeneratorId = generator.id;
@@ -6422,6 +6502,7 @@ async function pipelineRunGraphInspectorAction(item, button) {
   } catch (err) {
     const message = `${item.label} failed: ${err.message || err}`;
     pipelineSetGraphInspectorStatus(message, 'error');
+    if (err?.status) pipelineDockState.graphInspectorStatus.status = err.status;
     console.error(message, err);
     return null;
   } finally {
