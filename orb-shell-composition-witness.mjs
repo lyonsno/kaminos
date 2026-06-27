@@ -213,6 +213,11 @@ async function main() {
     assert.ok(state?.macroFamilySubstripCount >= 2, 'parent-owned substrips missing from debug state');
     assert.equal(state?.macroFamilySubstripMeshCount, state.macroFamilySubstripCount, 'rendered parent-owned substrip mesh count must match plan count');
     assert.equal(state?.macroFamilySubstripSideWallMeshCount, state.macroFamilySubstripCount * 2, 'rendered parent-owned substrip sidewall mesh count must match plan sidewalls');
+    assert.equal(state?.macroFamilySubstripTerminalCapMeshCount, state.macroFamilySubstripCount * 2, 'rendered parent-owned substrip terminal cap mesh count must match plan terminal caps');
+    assert.equal(state?.visibleParentRetirementPolicy?.schema, 'VisibleParentRetirementPolicy', 'visible parent retirement policy missing from debug state');
+    assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
+    assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
+    assert.equal(state?.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps must be absent from normal render');
     assert.equal(state?.macroFamilyObjecthoodVerdict, 'parent-families-remain-nameable-after-subdivision', 'macro family objecthood verdict missing from debug state');
     assert.ok(state?.MacroFamilySubstrip?.every(strip => strip?.schema === 'MacroFamilySubstrip'), 'MacroFamilySubstrip records missing from debug state');
     assert.equal(state?.ChannelThroughLineAudit?.schema, 'ChannelThroughLineAudit', 'ChannelThroughLineAudit missing from debug state');
@@ -284,8 +289,8 @@ async function main() {
     assert.ok(state?.MacroPromotedBody?.every(body => body?.schema === 'MacroPromotedBody'), 'MacroPromotedBody descriptors missing from debug state');
     assert.equal(state?.LiveMacroSideWallPlan?.schema, 'LiveMacroSideWallPlan', 'LiveMacroSideWallPlan missing from debug state');
     assert.ok(state?.liveMacroSideWallCount >= 1, 'live macro sidewall missing from debug state');
-    assert.equal(state?.liveMacroSideWallMeshCount, state.liveMacroSideWallCount, 'rendered live macro sidewall mesh count must match live macro sidewall plan count');
-    assert.equal(state?.liveMacroSideWallMeshIds?.length, state.liveMacroSideWallCount, 'rendered live macro sidewall mesh ids must match live macro sidewall plan count');
+    assert.ok(state?.liveMacroSideWallMeshCount <= state.liveMacroSideWallCount, 'rendered live macro sidewall mesh count cannot exceed plan count');
+    assert.equal(state?.liveMacroSideWallMeshIds?.length, state.liveMacroSideWallMeshCount, 'rendered live macro sidewall mesh ids must match rendered count');
     assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
     assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
     assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
@@ -347,7 +352,16 @@ async function main() {
       macroFamilySubstripMeshIds: state.macroFamilySubstripMeshIds,
       macroFamilySubstripSideWallMeshCount: state.macroFamilySubstripSideWallMeshCount,
       macroFamilySubstripSideWallMeshIds: state.macroFamilySubstripSideWallMeshIds,
+      macroFamilySubstripTerminalCapMeshCount: state.macroFamilySubstripTerminalCapMeshCount,
+      macroFamilySubstripTerminalCapMeshIds: state.macroFamilySubstripTerminalCapMeshIds,
       macroFamilySubstripGapContracts: state.macroFamilySubstripGapContracts,
+      visibleParentRetirementPolicy: state.visibleParentRetirementPolicy,
+      selectedParentPromotedBodyMeshCount: state.selectedParentPromotedBodyMeshCount,
+      selectedParentPromotedBodyMeshIds: state.selectedParentPromotedBodyMeshIds,
+      selectedParentSideWallMeshCount: state.selectedParentSideWallMeshCount,
+      selectedParentSideWallMeshIds: state.selectedParentSideWallMeshIds,
+      selectedParentTerminalCapMeshCount: state.selectedParentTerminalCapMeshCount,
+      selectedParentTerminalCapMeshIds: state.selectedParentTerminalCapMeshIds,
       macroFamilyObjecthoodVerdict: state.macroFamilyObjecthoodVerdict,
       channelAuditVerdict: state.channelAuditVerdict,
       constantGapVerdict: state.constantGapVerdict,
