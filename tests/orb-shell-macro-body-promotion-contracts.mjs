@@ -20,6 +20,8 @@ assert.match(core, /makeMacroPromotedBodySideWallGeometry/, 'composition renders
 assert.match(core, /LiveMacroTerminalCap/, 'composition names live macro terminal cap records');
 assert.match(core, /makeMacroPromotedBodyTerminalCapGeometry/, 'composition renders terminal cap polygon geometry');
 assert.match(core, /liveRenderMaterialPolicy/, 'composition records live render material policy');
+assert.match(core, /neutral-semi-gloss-pbr-v0/, 'composition records neutral semi-gloss PBR material mode');
+assert.match(core, /MeshStandardMaterial/, 'composition uses MeshStandardMaterial for normal shell truth-smoke');
 assert.match(core, /territoryProxyUnderlayVisible: false/, 'live sidewall witness suppresses overlapping territory proxy underlay');
 assert.match(core, /legacyRoundTargetBandTubesVisible: false/, 'live sidewall witness suppresses old round target band tubes');
 assert.match(core, /suppressedLegacyRoundBandIds/, 'live sidewall plan records suppressed legacy round bands');
@@ -35,7 +37,10 @@ assert.match(witness, /crossingTuckIntegration/, 'composition witness reports cr
 assert.match(witness, /LiveMacroSideWall/, 'composition witness reports live macro sidewall records');
 assert.match(witness, /LiveMacroTerminalCap/, 'composition witness reports live macro terminal cap records');
 assert.match(witness, /liveMacroSideWallVisibilityVerdict/, 'composition witness reports live macro sidewall visibility verdict');
+assert.match(witness, /liveMacroSideWallMeshCount/, 'composition witness reports promoted live sidewall mesh count separately from inner-return side planes');
+assert.match(witness, /liveMacroSideWallMeshIds/, 'composition witness reports promoted live sidewall mesh ids separately from inner-return side planes');
 assert.match(witness, /terminalCapClosureVerdict/, 'composition witness reports terminal cap closure verdict');
+assert.match(witness, /normalWitnessMaterialPolicy/, 'composition witness reports normal material policy');
 assert.match(witness, /live-macro-sidewall/, 'composition witness has a focused live sidewall smoke mode');
 assert.match(witness, /live-terminal-caps/, 'composition witness has a focused terminal cap smoke mode');
 assert.match(core, /frameLiveMacroSideWall/, 'composition module can frame the live macro sidewall target');
@@ -65,6 +70,11 @@ assert.equal(fixture.liveMacroSideWallPlan.sideWallCount, fixture.macroAssemblag
 assert.equal(fixture.liveMacroSideWallPlan.terminalCapCount, fixture.macroAssemblages.length * 2, 'live sidewall plan seals both termini for every promoted body');
 assert.equal(fixture.liveMacroSideWallPlan.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live sidewall plan records rendered visible edge sidewalls');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.materialMode, 'flat-low-shader-topology', 'live sidewall plan requires flat low-shader material mode');
+assert.equal(fixture.liveMacroSideWallPlan.normalWitnessMaterialPolicy.materialMode, 'neutral-semi-gloss-pbr-v0', 'live sidewall normal witness uses neutral PBR material mode');
+assert.equal(fixture.liveMacroSideWallPlan.normalWitnessMaterialPolicy.materialClass, 'MeshStandardMaterial', 'live sidewall normal witness uses MeshStandardMaterial');
+assert.equal(fixture.liveMacroSideWallPlan.normalWitnessMaterialPolicy.environmentLit, true, 'live sidewall normal witness uses scene environment lighting');
+assert.ok(fixture.liveMacroSideWallPlan.normalWitnessMaterialPolicy.roughness >= 0.35, 'neutral PBR material keeps semi-gloss roughness');
+assert.ok(fixture.liveMacroSideWallPlan.normalWitnessMaterialPolicy.metalness <= 0.12, 'neutral PBR material stays mostly non-metal');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.metalShaderVisible, false, 'live sidewall plan disables fancy metal shader for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.surfaceDetailMode, 'disabled', 'live sidewall plan disables surface detail for topology smoke');
 assert.equal(fixture.liveMacroSideWallPlan.liveRenderMaterialPolicy.territoryProxyUnderlayVisible, false, 'live sidewall plan suppresses territory proxy underlay');

@@ -673,6 +673,19 @@ function createLiveMacroSideWallPlan(composition) {
     legacyScaffoldSuppressionVerdict: suppressedLegacyRoundBandIds.length
       ? 'covered-promoted-body-legacy-round-bands-suppressed'
       : 'no-target-legacy-round-bands-suppressed',
+    normalWitnessMaterialPolicy: {
+      materialMode: 'neutral-semi-gloss-pbr-v0',
+      materialClass: 'MeshStandardMaterial',
+      environmentLit: true,
+      toneMappingExpected: 'ACESFilmicToneMapping',
+      bodyColor: 0x10181b,
+      sideWallColor: 0x2d393d,
+      railColor: 0x364449,
+      roughness: 0.46,
+      metalness: 0.06,
+      envMapIntensity: 1.15,
+      reason: 'neutral PBR truth-smoke should prove topology under Kaminos environment lighting without debug-white crutch',
+    },
     liveRenderMaterialPolicy: {
       materialMode: 'flat-low-shader-topology',
       metalShaderVisible: false,
@@ -2590,43 +2603,67 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   let composition = createTargetOrbShellCompositionFixture(variationOptions);
 
   const sharedMaterials = new Set();
-  const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x252c30 });
-  const territoryMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1b2225,
+  const pbrPolicy = composition.liveMacroSideWallPlan.normalWitnessMaterialPolicy;
+  function neutralPbrMaterial({ color, roughness = pbrPolicy.roughness, metalness = pbrPolicy.metalness, envMapIntensity = pbrPolicy.envMapIntensity, side = THREE.FrontSide, transparent = false, opacity = 1 }) {
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness,
+      metalness,
+      envMapIntensity,
+      side,
+      transparent,
+      opacity,
+    });
+  }
+  const bodyMaterial = neutralPbrMaterial({ color: pbrPolicy.bodyColor, side: THREE.DoubleSide });
+  const territoryMaterial = neutralPbrMaterial({
+    color: 0x182428,
     side: THREE.DoubleSide,
   });
-  const railMaterial = new THREE.MeshBasicMaterial({ color: 0x6b777b });
-  const hopMaterial = new THREE.MeshBasicMaterial({ color: 0x42302a });
+  const railMaterial = neutralPbrMaterial({ color: pbrPolicy.railColor, roughness: 0.42, metalness: 0.04 });
+  const hopMaterial = neutralPbrMaterial({ color: 0x3d3530, roughness: 0.5, metalness: 0.04 });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.42 });
-  const apertureOwnerBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x20272a, side: THREE.DoubleSide });
-  const apertureOwnerRailMaterial = new THREE.MeshBasicMaterial({ color: 0x71828a });
-  const crossingSubSurgeRailMaterial = new THREE.MeshBasicMaterial({ color: 0x1d2a2f });
-  const promotedBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x12171a, side: THREE.DoubleSide });
-  const liveMacroSideWallMaterial = new THREE.MeshBasicMaterial({
-    color: 0xaab5b8,
+  const apertureOwnerBodyMaterial = neutralPbrMaterial({ color: 0x1a2427, side: THREE.DoubleSide });
+  const apertureOwnerRailMaterial = neutralPbrMaterial({ color: 0x46565b, roughness: 0.4, metalness: 0.05 });
+  const crossingSubSurgeRailMaterial = neutralPbrMaterial({ color: 0x1d2a2f, roughness: 0.52, metalness: 0.04 });
+  const promotedBodyMaterial = neutralPbrMaterial({ color: pbrPolicy.bodyColor, side: THREE.DoubleSide });
+  const liveMacroSideWallMaterial = neutralPbrMaterial({
+    color: pbrPolicy.sideWallColor,
+    roughness: 0.38,
+    metalness: 0.05,
     side: THREE.DoubleSide,
   });
-  const crossingTuckBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x1d2529, side: THREE.DoubleSide });
+  const crossingTuckBodyMaterial = neutralPbrMaterial({ color: 0x1d2529, side: THREE.DoubleSide });
   const seamGapHintMaterial = new THREE.MeshBasicMaterial({ color: 0x061015, transparent: true, opacity: 0.74, depthWrite: false });
-  const lamellarChannelStripMaterial = new THREE.MeshBasicMaterial({
+  const lamellarChannelStripMaterial = neutralPbrMaterial({
     color: 0x233036,
+    roughness: 0.5,
+    metalness: 0.04,
     side: THREE.DoubleSide,
   });
-  const lamellarPlateLipMaterial = new THREE.MeshBasicMaterial({
-    color: 0xaec2cb,
+  const lamellarPlateLipMaterial = neutralPbrMaterial({
+    color: 0x53646a,
+    roughness: 0.36,
+    metalness: 0.05,
     side: THREE.DoubleSide,
   });
-  const lamellarPlateBoundaryMaterial = new THREE.MeshBasicMaterial({
+  const lamellarPlateBoundaryMaterial = neutralPbrMaterial({
     color: 0x151d20,
+    roughness: 0.58,
+    metalness: 0.03,
     side: THREE.DoubleSide,
   });
-  const lamellarInnerReturnMaterial = new THREE.MeshBasicMaterial({
+  const lamellarInnerReturnMaterial = neutralPbrMaterial({
     color: 0x263238,
+    roughness: 0.48,
+    metalness: 0.04,
     side: THREE.DoubleSide,
   });
-  const lamellarInnerReturnSideWallMaterial = new THREE.MeshBasicMaterial({
-    color: 0x9eb0b7,
+  const lamellarInnerReturnSideWallMaterial = neutralPbrMaterial({
+    color: 0x405056,
+    roughness: 0.38,
+    metalness: 0.05,
     side: THREE.DoubleSide,
   });
   const cleanSideWallMaterial = new THREE.MeshBasicMaterial({
@@ -2681,6 +2718,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     scene.remove(group);
     group.traverse(child => disposeObject(child, sharedMaterials));
     group = null;
+  }
+
+  function liveMacroSideWallMeshIds() {
+    const ids = [];
+    group?.traverse(child => {
+      if (child.userData?.LiveMacroSideWall) ids.push(child.name);
+    });
+    return ids;
   }
 
   function build() {
@@ -2829,6 +2874,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   });
 
     scene.add(group);
+    const renderedLiveMacroSideWallMeshIds = liveMacroSideWallMeshIds();
     onStatus?.({
       phase: 'built',
       identity: ORB_SHELL_COMPOSITION_IDENTITY,
@@ -2859,10 +2905,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
       cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
       liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
+      liveMacroSideWallMeshCount: renderedLiveMacroSideWallMeshIds.length,
+      liveMacroSideWallMeshIds: renderedLiveMacroSideWallMeshIds,
       liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
       liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
       terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
+      normalWitnessMaterialPolicy: composition.liveMacroSideWallPlan?.normalWitnessMaterialPolicy,
       liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
       suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
@@ -3088,10 +3137,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         cleanTopologyWitnessMode: composition.lamellarInnerReturnPlan?.cleanTopologyWitnessMode,
         cleanTopologyProxyClutterVisible: composition.lamellarInnerReturnPlan?.cleanTopologyProxyClutterVisible,
         liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
+        liveMacroSideWallMeshCount: liveMacroSideWallMeshIds().length,
+        liveMacroSideWallMeshIds: liveMacroSideWallMeshIds(),
         liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
         targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
         liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
         terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
+        normalWitnessMaterialPolicy: composition.liveMacroSideWallPlan?.normalWitnessMaterialPolicy,
         liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
         suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
         suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
