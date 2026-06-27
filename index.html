@@ -257,6 +257,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .forge-chamber-kicker { color: #7f9a86; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
 .forge-chamber-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
 .forge-chamber-actions .btn { padding: 4px 8px; margin: 0; font-size: 10px; color: #888; }
+
+/* LERMS finger juice primitive */
+.finger-juice-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.finger-juice-readout .field { margin: 0; padding: 0; }
+#finger-juice-operator-panel { position: absolute; inset: 0; z-index: 4; background: #10120f; }
+#finger-juice-operator-panel[hidden] { display: none; }
+#finger-juice-viewport-frame { width: 100%; height: 100%; border: 0; display: block; background: #10120f; }
 </style>
 </head>
 <body>
@@ -270,6 +277,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="forge">Forge</div>
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
+    <div class="tab" data-tab="finger-juice">Juice</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
@@ -1002,6 +1010,28 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Finger Juice Tab -->
+  <div class="tab-content" id="tab-finger-juice">
+    <h2>Finger Juice</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_lerms_finger_juice=1</span></div>
+      <div class="field"><span class="field-key">Embed</span><span class="field-val" id="finger-juice-embed-route">kaminos-finger-juice-tab-embed-v0</span></div>
+      <div class="field"><span class="field-key">Child</span><span class="field-val" id="finger-juice-child-route">pending</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="finger-juice-reload">Reload</button>
+        <a class="btn" id="finger-juice-open-direct" href="lerms-finger-juice.html?lerms_world_finger_juice=1" target="_blank" rel="noopener">Open Direct</a>
+      </div>
+    </div>
+    <div class="panel finger-juice-readout">
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="finger-juice-source-authority">pending</span></div>
+      <div class="field"><span class="field-key">Solver</span><span class="field-val" id="finger-juice-solver-backend">pending</span></div>
+      <div class="field"><span class="field-key">Render</span><span class="field-val" id="finger-juice-render-backend">pending</span></div>
+      <div class="field"><span class="field-key">Particles</span><span class="field-val" id="finger-juice-particle-count">0</span></div>
+      <div class="field"><span class="field-key">Hits</span><span class="field-val" id="finger-juice-hit-count">0</span></div>
+      <div class="field"><span class="field-key">Camera</span><span class="field-val" id="finger-juice-camera-state">default</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -1131,6 +1161,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         </div>
       </div>
     </div>
+  </div>
+  <div id="finger-juice-operator-panel" hidden>
+    <iframe
+      id="finger-juice-viewport-frame"
+      title="LERMS Finger Juice Primitive"
+      src="lerms-finger-juice.html?lerms_world_finger_juice=1"
+      allow="fullscreen"
+      loading="eager"
+    ></iframe>
   </div>
   <div id="splat-correction-mode-badge" hidden>
     <div class="splat-correction-mode-title">Splat Correction Mode</div>
@@ -1294,6 +1333,8 @@ let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
+const FINGER_JUICE_TAB_EMBED_ROUTE = 'kaminos-finger-juice-tab-embed-v0';
+const FINGER_JUICE_STANDALONE_ROUTE = 'lerms-finger-juice.html?lerms_world_finger_juice=1';
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -7704,6 +7745,101 @@ function setInfo(msg) {
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+  const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
+  if (fingerJuicePanel) {
+    fingerJuicePanel.hidden = tabName !== 'finger-juice';
+  }
+}
+
+function fingerJuiceChildDebugState() {
+  const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  try {
+    const debug = fingerJuiceFrame.contentWindow.__lermsFingerJuiceDebug;
+    return typeof debug === 'function' ? debug() : null;
+  } catch (error) {
+    return {
+      error: String(error?.message || error),
+      sourceDiagnostics: { authority: 'unreadable_child_frame' },
+    };
+  }
+}
+
+function fingerJuiceChildCameraState() {
+  const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  try {
+    const camera = fingerJuiceFrame.contentWindow.__lermsFingerJuiceCameraForWitness;
+    return typeof camera === 'function' ? camera() : null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceAuthorityFromFingerJuiceState(childState) {
+  return childState?.sourceTruth?.authority
+    || childState?.sourceDiagnostics?.authority
+    || childState?.sourceDiagnostics?.sourceTruth?.authority
+    || childState?.source?.authority
+    || childState?.simulation_authority
+    || childState?.emitterPacket?.simulation_authority
+    || 'pending';
+}
+
+function kaminosFingerJuiceTabDebugState() {
+  const childState = fingerJuiceChildDebugState();
+  const cameraState = fingerJuiceChildCameraState();
+  const sourceAuthority = sourceAuthorityFromFingerJuiceState(childState);
+  return {
+    schema: 'kaminos.lerms-finger-juice-tab.v0',
+    embedRoute: FINGER_JUICE_TAB_EMBED_ROUTE,
+    standaloneRoute: FINGER_JUICE_STANDALONE_ROUTE,
+    route: 'kaminos_lerms_finger_juice=1',
+    childReady: !!childState && !childState.error,
+    childRoute: childState?.effectiveRoute || childState?.solverRoute || null,
+    solverBackend: childState?.solver_backend || childState?.solverBackend || null,
+    renderBackend: childState?.render_backend || childState?.renderBackend || null,
+    sourceAuthority,
+    particleCount: childState?.particleCount ?? childState?.particles?.length ?? 0,
+    hitCount: childState?.juiceHitEventCount ?? childState?.lermImpulseCount ?? 0,
+    childState,
+    cameraState,
+  };
+}
+
+function updateFingerJuiceTabReadout() {
+  const state = kaminosFingerJuiceTabDebugState();
+  document.getElementById('finger-juice-embed-route').textContent = state.embedRoute;
+  document.getElementById('finger-juice-child-route').textContent = state.childRoute || 'pending';
+  document.getElementById('finger-juice-source-authority').textContent = state.sourceAuthority || 'pending';
+  document.getElementById('finger-juice-solver-backend').textContent = state.solverBackend || 'pending';
+  document.getElementById('finger-juice-render-backend').textContent = state.renderBackend || 'pending';
+  document.getElementById('finger-juice-particle-count').textContent = String(state.particleCount || 0);
+  document.getElementById('finger-juice-hit-count').textContent = String(state.hitCount || 0);
+  document.getElementById('finger-juice-camera-state').textContent = state.cameraState
+    ? `z ${state.cameraState.zoom} p ${state.cameraState.panX},${state.cameraState.panY}`
+    : 'pending';
+  document.getElementById('finger-juice-source-authority').classList.toggle('present', state.sourceAuthority === 'synthetic_fixture' || state.sourceAuthority === 'live_simulation');
+  document.getElementById('finger-juice-source-authority').classList.toggle('missing', state.sourceAuthority === 'pending' || state.sourceAuthority === 'unreadable_child_frame');
+  return state;
+}
+
+function reloadFingerJuiceTabFrame() {
+  const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
+  fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
+  setInfo('Finger Juice primitive reloaded');
+}
+
+function initKaminosFingerJuiceTabRoute() {
+  document.getElementById('finger-juice-open-direct').href = FINGER_JUICE_STANDALONE_ROUTE;
+  document.getElementById('finger-juice-reload').addEventListener('click', reloadFingerJuiceTabFrame);
+  document.getElementById('finger-juice-viewport-frame').addEventListener('load', updateFingerJuiceTabReadout);
+  window.kaminosFingerJuiceTabDebugState = kaminosFingerJuiceTabDebugState;
+  window.__kaminosFingerJuiceTabDebugState = kaminosFingerJuiceTabDebugState;
+  setInterval(updateFingerJuiceTabReadout, 500);
+  if (new URLSearchParams(window.location.search).get('kaminos_lerms_finger_juice') === '1') {
+    setActiveTab('finger-juice');
+    setInfo('Finger Juice primitive — source-honest LERMS WebGPU smoke');
+  }
+  updateFingerJuiceTabReadout();
 }
 
 const VOLUME_RAY_BUDGET_PRESETS = {
@@ -11757,12 +11893,14 @@ initScene().then(() => {
   });
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
+  initKaminosFingerJuiceTabRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  initKaminosFingerJuiceTabRoute();
 });
 </script>
 </body>
