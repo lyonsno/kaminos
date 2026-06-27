@@ -455,6 +455,11 @@ def _autocrop_evidence_payload(document):
         payload["frame"] = document.get("frame")
     elif crop_hint and crop_hint.get("frame"):
         payload["frame"] = crop_hint.get("frame")
+    if isinstance(document.get("evidenceArtifacts"), list):
+        payload["evidenceArtifacts"] = [
+            artifact for artifact in document.get("evidenceArtifacts")
+            if isinstance(artifact, dict)
+        ]
     return payload
 
 
@@ -503,6 +508,77 @@ def load_splat_autocrop_evidence(root_id, rel_path):
     if evidence_source:
         document["source"] = evidence_source
     document.update(evidence_payload)
+    return document
+
+
+def _normalized_evidence_artifacts(value):
+    if not isinstance(value, list):
+        return []
+    artifacts = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        artifact = {
+            "id": str(item.get("id") or item.get("role") or "artifact"),
+            "role": str(item.get("role") or item.get("id") or "artifact"),
+        }
+        for field in ("path", "sha256", "bytes", "source", "schema"):
+            if item.get(field) is not None:
+                artifact[field] = item.get(field)
+        artifacts.append(artifact)
+    return artifacts
+
+
+def normalize_splat_autocrop_evidence(root_id, rel_path, payload):
+    source = payload if isinstance(payload, dict) else {}
+    crop_hint = _crop_hint_from_value(source.get("cropHint") or source.get("autocrop") or source.get("bounds"))
+    points = source.get("points") if isinstance(source.get("points"), list) else None
+    positions = source.get("positions") if isinstance(source.get("positions"), list) else None
+    if not crop_hint and not points and not positions:
+        raise ValueError("autocrop evidence requires cropHint, points, or positions")
+    document = {
+        "schema": SPLAT_AUTOCROP_EVIDENCE_SCHEMA,
+        "root_id": root_id,
+        "path": rel_path,
+        "source": str(source.get("source") or "kaminos-autocrop-normalizer"),
+        "frame": str(source.get("frame") or (crop_hint or {}).get("frame") or "axis-flipped-asset"),
+        "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    if crop_hint:
+        crop_hint = {
+            "min": crop_hint["min"],
+            "max": crop_hint["max"],
+            "frame": document["frame"],
+            "selectedPointCount": crop_hint.get("selectedPointCount"),
+        }
+        document["cropHint"] = crop_hint
+        if crop_hint.get("selectedPointCount") is not None:
+            document["selectedPointCount"] = crop_hint.get("selectedPointCount")
+    if points:
+        document["points"] = points
+        document.setdefault("selectedPointCount", len(points))
+    if positions:
+        document["positions"] = positions
+        if source.get("pointCount") is not None:
+            document["pointCount"] = source.get("pointCount")
+        document.setdefault("selectedPointCount", source.get("pointCount") or len(positions) // 3)
+    artifacts = _normalized_evidence_artifacts(source.get("evidenceArtifacts"))
+    if artifacts:
+        document["evidenceArtifacts"] = artifacts
+    return document
+
+
+def splat_autocrop_evidence_sidecar_path(asset_path):
+    return asset_path.with_name(asset_path.name + ".kaminos-autocrop.json")
+
+
+def save_splat_autocrop_evidence(root_id, rel_path, payload):
+    root, root_path, asset_path = resolve_splat_asset_path(root_id, rel_path)
+    rel = asset_path.relative_to(root_path).as_posix()
+    document = normalize_splat_autocrop_evidence(root.get("id") or root_id, rel, payload)
+    document["assetSource"] = "/api/read?" + urlencode({"root": root.get("id") or root_id, "path": rel})
+    document["route"] = "/api/splat-autocrop-evidence?" + urlencode({"root": root.get("id") or root_id, "path": rel})
+    splat_autocrop_evidence_sidecar_path(asset_path).write_text(json.dumps(document, indent=2))
     return document
 
 
@@ -662,6 +738,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/splat-autocrop-evidence":
+            self.handle_splat_autocrop_evidence_post(parse_qs(parsed.query))
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -794,6 +872,32 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         rel_path = params.get("path", [""])[0]
         try:
             document = load_splat_autocrop_evidence(root_id, rel_path)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
+
+    def handle_splat_autocrop_evidence_post(self, params):
+        root_id = params.get("root", [""])[0]
+        rel_path = params.get("path", [""])[0]
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            document = save_splat_autocrop_evidence(root_id, rel_path, payload)
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
             return

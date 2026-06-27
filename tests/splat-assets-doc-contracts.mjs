@@ -6,6 +6,11 @@ const docs = readFileSync(new URL('../docs/splat-assets.md', import.meta.url), '
 assert.match(docs, /splat-inbox/, 'Splat asset docs name the experimental inbox root');
 assert.match(docs, /splat-production/, 'Splat asset docs name the production root');
 assert.match(docs, /<asset>\.kaminos-splat\.json/, 'Splat asset docs document the sidecar naming convention');
+assert.match(docs, /<asset>\.kaminos-autocrop\.json/, 'Splat asset docs document the autocrop evidence sidecar naming convention');
+assert.match(docs, /kaminos\.splat-autocrop-evidence\.v0/, 'Splat asset docs document the autocrop evidence schema');
+assert.match(docs, /\/api\/splat-autocrop-evidence/, 'Splat asset docs document the autocrop evidence writer route');
+assert.match(docs, /cropHint/, 'Splat asset docs document cropHint as the minimal producer payload');
+assert.match(docs, /No splat autocrop sidecar evidence/i, 'Splat asset docs preserve the no-silent-point-cloud-fallback behavior');
 assert.match(docs, /corrected splat is not a new/i, 'Splat asset docs clarify corrections do not create a new splat file');
 assert.match(docs, /Greenroom\s*->\s*Splat Assets/, 'Splat asset docs tell operators where corrected splats appear in Kaminos');
 assert.match(docs, /Splat Correction panel/, 'Splat asset docs mention the selected-object correction panel');

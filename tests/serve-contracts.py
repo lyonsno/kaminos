@@ -390,6 +390,73 @@ def test_splat_autocrop_evidence_loads_adjacent_crop_hint_sidecar():
         assert entries[0]["autocropEvidence"]["route"] == "/api/splat-autocrop-evidence?root=splat-inbox&path=plant-shelf.ply"
 
 
+def test_splat_autocrop_evidence_roundtrips_as_pipeline_writer_sidecar():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        experimental.mkdir(parents=True)
+        asset = experimental / "sharp-output.ply"
+        asset.write_bytes(b"ply\n")
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        try:
+            written = serve.save_splat_autocrop_evidence("splat-inbox", "sharp-output.ply", {
+                "source": "sharp-webgpu-depth-normalizer",
+                "frame": "axis-flipped-asset",
+                "cropHint": {
+                    "min": [-0.25, -0.1, -0.8],
+                    "max": [0.45, 0.3, -0.2],
+                    "selectedPointCount": 8192,
+                },
+                "evidenceArtifacts": [
+                    {
+                        "id": "depthMap",
+                        "role": "depth-map",
+                        "path": "/tmp/sharp-webgpu-depth.png",
+                        "sha256": "depth-sha",
+                    },
+                    {
+                        "id": "sourceImage",
+                        "role": "source-image",
+                        "path": "/tmp/source.png",
+                        "sha256": "source-sha",
+                    },
+                ],
+            })
+            loaded = serve.load_splat_autocrop_evidence("splat-inbox", "sharp-output.ply")
+            entries = serve.list_asset_entries(kind="splat")
+            sidecar = experimental / "sharp-output.ply.kaminos-autocrop.json"
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert sidecar.is_file()
+        assert written["schema"] == "kaminos.splat-autocrop-evidence.v0"
+        assert written["source"] == "sharp-webgpu-depth-normalizer"
+        assert written["frame"] == "axis-flipped-asset"
+        assert written["cropHint"]["min"] == [-0.25, -0.1, -0.8]
+        assert written["cropHint"]["max"] == [0.45, 0.3, -0.2]
+        assert written["selectedPointCount"] == 8192
+        assert written["evidenceArtifacts"][0]["role"] == "depth-map"
+        assert loaded["hasAutocropEvidence"] is True
+        assert loaded["source"] == "sharp-webgpu-depth-normalizer"
+        assert loaded["evidenceArtifacts"][1]["role"] == "source-image"
+        assert entries[0]["autocropEvidence"]["status"] == "available"
+        assert entries[0]["autocropEvidence"]["selectedPointCount"] == 8192
+
+
 def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
     os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = "http://127.0.0.1:5174/src/splatOverlay.ts"
@@ -417,4 +484,5 @@ if __name__ == "__main__":
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
     test_splat_autocrop_evidence_loads_adjacent_crop_hint_sidecar()
+    test_splat_autocrop_evidence_roundtrips_as_pipeline_writer_sidecar()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

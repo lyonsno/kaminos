@@ -67,6 +67,77 @@ In normal scene viewing, the point-cloud splat preview hides points outside the 
 
 The current UI does not yet show a dedicated `CORRECTED` chip, reveal-sidecar action, or reveal-asset action. Those should be added as a follow-up because the sidecar convention is otherwise too easy to miss.
 
+## Autocrop Evidence Sidecar
+
+Pipeline producers can give Kaminos an initial crop proposal by writing an
+autocrop evidence sidecar beside the splat asset:
+
+```text
+<asset>.kaminos-autocrop.json
+```
+
+Examples:
+
+```text
+sharp-output.ply
+sharp-output.ply.kaminos-autocrop.json
+```
+
+The sidecar schema is `kaminos.splat-autocrop-evidence.v0`. The minimal useful
+payload is a `cropHint` in Kaminos crop coordinates:
+
+```json
+{
+  "schema": "kaminos.splat-autocrop-evidence.v0",
+  "root_id": "splat-inbox",
+  "path": "sharp-output.ply",
+  "source": "sharp-webgpu-depth-normalizer",
+  "frame": "axis-flipped-asset",
+  "cropHint": {
+    "min": [-0.25, -0.1, -0.8],
+    "max": [0.45, 0.3, -0.2],
+    "selectedPointCount": 8192
+  },
+  "evidenceArtifacts": [
+    {
+      "id": "depthMap",
+      "role": "depth-map",
+      "path": "/path/to/sharp-webgpu-depth.png",
+      "sha256": "..."
+    },
+    {
+      "id": "sourceImage",
+      "role": "source-image",
+      "path": "/path/to/source.png",
+      "sha256": "..."
+    }
+  ]
+}
+```
+
+Kaminos also accepts point evidence (`points` or flat `positions`) in the same
+schema, but `cropHint` is the preferred first producer contract because it lets
+SHARP, MoGE, Greenroom, or a batch normalizer do the model-specific inference
+once and hand Kaminos a stable asset-local proposal.
+
+The dev server exposes the same writer as an API action:
+
+```text
+POST /api/splat-autocrop-evidence?root=splat-inbox&path=sharp-output.ply
+```
+
+The JSON body is the evidence payload above. The server normalizes it, writes
+`<asset>.kaminos-autocrop.json`, and `GET /api/splat-autocrop-evidence` returns
+whether the asset has usable evidence. This is the route Greenroom or external
+pipeline adapters should call; tools should not print JSON for the operator to
+paste by hand.
+
+When the selected-object `Auto Crop` button has usable sidecar evidence, it
+applies the proposal and recenters the corrected pivot to the crop-box center.
+When no sidecar evidence exists, Kaminos reports `No splat autocrop sidecar evidence; keeping current crop` and does not silently expand to the full
+point-cloud preview. Point-cloud fallback is only for explicit debug/witness
+paths.
+
 ## Correction Schema
 
 The correction sidecar currently uses schema `kaminos.splat-correction.v0`.
