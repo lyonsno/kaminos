@@ -43,6 +43,8 @@ const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-n
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FALSE_CLOSURE_LABELS = [
   'wrong-fallback-route',
   'stale-default-config',
@@ -673,7 +675,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'tallPlumeTransitionBandExtraReadsPerCell', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -849,6 +851,30 @@ function validateWitness(run, witness, effective) {
       tallPlumeDetailCoherenceExtraReadsPerCell: ledger.tallPlumeDetailCoherenceExtraReadsPerCell,
       expectedDetailCoherenceStrategy,
       expectedDetailCoherenceExtraReads: 0,
+      ledger,
+    });
+  }
+  if (![TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT, TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE].includes(ledger.tallPlumeTransitionBandStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown tall-plume transition-band strategy', {
+      scenarioId: run.id,
+      tallPlumeTransitionBandStrategy: ledger.tallPlumeTransitionBandStrategy,
+      ledger,
+    });
+  }
+  const expectedTransitionBandStrategy = effective.volumeScene === 'tall_plume'
+    ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
+    : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
+  if (
+    ledger.tallPlumeTransitionBandStrategy !== expectedTransitionBandStrategy ||
+    Number(ledger.tallPlumeTransitionBandExtraReadsPerCell) !== 0
+  ) {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation cost ledger tall-plume transition-band cost does not match the effective scene', {
+      scenarioId: run.id,
+      volumeScene: effective.volumeScene,
+      tallPlumeTransitionBandStrategy: ledger.tallPlumeTransitionBandStrategy,
+      tallPlumeTransitionBandExtraReadsPerCell: ledger.tallPlumeTransitionBandExtraReadsPerCell,
+      expectedTransitionBandStrategy,
+      expectedTransitionBandExtraReads: 0,
       ledger,
     });
   }

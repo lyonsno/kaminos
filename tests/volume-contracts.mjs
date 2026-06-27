@@ -549,6 +549,9 @@ assert.match(core, /tallPlumeFlameHeightSurvival/, 'tall plume visible fire surv
 assert.match(core, /tallPlumeFrontWidthTaper/, 'tall plume upper live fire is tapered by front width instead of filling the source column');
 assert.match(core, /tallPlumeFlameTipTaper/, 'tall plume upper live fire has a named tip taper to prevent square-ended flame shelves');
 assert.match(core, /tallPlumeUpperSlabExtinction/, 'tall plume upper live fire has a named slab extinction term for high-flow filled bodies');
+assert.match(core, /tallPlumeTransitionBandStagger/, 'tall plume fire-to-smoke transition has a named stagger term so it does not retire as one gradient band');
+assert.match(core, /tallPlumeTransitionRetirementBreakup/, 'tall plume visible fire retirement is broken up by transported plume state');
+assert.match(core, /tallPlumeTransitionWisps/, 'raymarch preserves wispy transition occupancy instead of coarsening the fire/smoke boundary away');
 assert.match(core, /tallPlumeLiveFlameTaperedSurvival/, 'tall plume live flame survival must pass through the topology/tip taper before it can render');
 assert.match(core, /tallPlumeMinimalFireBirthSurvival/, 'tall plume minimal fire continuity bridge must be gated by the same live survival law');
 assert.match(core, /tallPlumeHighFlowHeightGate/, 'tall plume high-flow fallback tail is explicitly gated by flame height');
@@ -813,6 +816,8 @@ assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE\s*=\s
 assert.match(core, /MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-scalar-neighborhood-bypass-v0'/, 'volume core names the non-bonfire scalar-neighborhood bypass strategy');
 assert.match(core, /TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR\s*=\s*'transported-detail-phase-anchor-v0'/, 'volume core names the tall-plume transported detail coherence strategy');
 assert.match(core, /TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE\s*=\s*'inactive'/, 'volume core names the non-tall-plume detail coherence bypass strategy');
+assert.match(core, /TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT\s*=\s*'staggered-transition-retirement-v0'/, 'volume core names the tall-plume staggered transition-band strategy');
+assert.match(core, /TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE\s*=\s*'inactive'/, 'volume core names the non-tall-plume transition-band bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -853,6 +858,8 @@ assert.match(core, /mainFluidBonfireScalarNeighborhoodStrategy/, 'sim-cost ledge
 assert.match(core, /bonfireScalarNeighborhoodReadsPerCell/, 'sim-cost ledger records bonfire scalar-neighborhood reads per cell');
 assert.match(core, /tallPlumeDetailCoherenceStrategy/, 'sim-cost ledger records the tall-plume detail coherence strategy');
 assert.match(core, /tallPlumeDetailCoherenceExtraReadsPerCell/, 'sim-cost ledger records that transported detail coherence does not restore neighborhood reads');
+assert.match(core, /tallPlumeTransitionBandStrategy/, 'sim-cost ledger records the tall-plume transition-band strategy');
+assert.match(core, /tallPlumeTransitionBandExtraReadsPerCell/, 'sim-cost ledger records that transition breakup does not restore neighborhood reads');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,500}let bonfireTurbulentDiffusionMix[\s\S]{0,1300}let diffuseMaterial[\s\S]{0,2200}let diffuseFrontTopology[\s\S]{0,1000}material = mix\(material, diffuseMaterial[\s\S]{0,1400}let symmetricMaterial[\s\S]{0,1400}let symmetricFrontTopology[\s\S]{0,1000}combustionFrontTopology = mix\(combustionFrontTopology, symmetricFrontTopology/, 'main-fluid shader evaluates bonfire scalar diffusion/symmetry neighborhood reads only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');

@@ -43,6 +43,8 @@ const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-n
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function fireLickOperatorGainFromAmount(value) {
@@ -118,6 +120,16 @@ function expectedTallPlumeDetailCoherenceStrategy(volumeScene) {
 }
 
 function expectedTallPlumeDetailCoherenceExtraReadsPerCell() {
+  return 0;
+}
+
+function expectedTallPlumeTransitionBandStrategy(volumeScene) {
+  return volumeScene === 'tall_plume'
+    ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
+    : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
+}
+
+function expectedTallPlumeTransitionBandExtraReadsPerCell() {
   return 0;
 }
 const routeParams = new URL(url).searchParams;
@@ -903,6 +915,8 @@ async function main() {
     const expectedBonfireScalarNeighborhoodReads = expectedBonfireScalarNeighborhoodReadsPerCell(expectedVolumeScene);
     const expectedDetailCoherenceStrategy = expectedTallPlumeDetailCoherenceStrategy(expectedVolumeScene);
     const expectedDetailCoherenceExtraReads = expectedTallPlumeDetailCoherenceExtraReadsPerCell(expectedVolumeScene);
+    const expectedTransitionBandStrategy = expectedTallPlumeTransitionBandStrategy(expectedVolumeScene);
+    const expectedTransitionBandExtraReads = expectedTallPlumeTransitionBandExtraReadsPerCell(expectedVolumeScene);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -927,6 +941,8 @@ async function main() {
     assert.equal(Number(stateLedger.bonfireScalarNeighborhoodReadsPerCell), expectedBonfireScalarNeighborhoodReads, 'sim cost ledger bonfire scalar-neighborhood read count does not match effective scene');
     assert.equal(stateLedger.tallPlumeDetailCoherenceStrategy, expectedDetailCoherenceStrategy, 'sim cost ledger detail coherence strategy does not match effective scene');
     assert.equal(Number(stateLedger.tallPlumeDetailCoherenceExtraReadsPerCell), expectedDetailCoherenceExtraReads, 'sim cost ledger detail coherence should not restore scalar neighborhood reads');
+    assert.equal(stateLedger.tallPlumeTransitionBandStrategy, expectedTransitionBandStrategy, 'sim cost ledger transition-band strategy does not match effective scene');
+    assert.equal(Number(stateLedger.tallPlumeTransitionBandExtraReadsPerCell), expectedTransitionBandExtraReads, 'sim cost ledger transition-band breakup should not restore scalar neighborhood reads');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
@@ -969,6 +985,8 @@ async function main() {
     const sampleBonfireScalarNeighborhoodReads = expectedBonfireScalarNeighborhoodReadsPerCell(sampleVolumeScene);
     const sampleDetailCoherenceStrategy = expectedTallPlumeDetailCoherenceStrategy(sampleVolumeScene);
     const sampleDetailCoherenceExtraReads = expectedTallPlumeDetailCoherenceExtraReadsPerCell(sampleVolumeScene);
+    const sampleTransitionBandStrategy = expectedTallPlumeTransitionBandStrategy(sampleVolumeScene);
+    const sampleTransitionBandExtraReads = expectedTallPlumeTransitionBandExtraReadsPerCell(sampleVolumeScene);
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
@@ -990,6 +1008,8 @@ async function main() {
       Number(sampleLedger?.bonfireScalarNeighborhoodReadsPerCell) !== sampleBonfireScalarNeighborhoodReads ||
       sampleLedger?.tallPlumeDetailCoherenceStrategy !== sampleDetailCoherenceStrategy ||
       Number(sampleLedger?.tallPlumeDetailCoherenceExtraReadsPerCell) !== sampleDetailCoherenceExtraReads ||
+      sampleLedger?.tallPlumeTransitionBandStrategy !== sampleTransitionBandStrategy ||
+      Number(sampleLedger?.tallPlumeTransitionBandExtraReadsPerCell) !== sampleTransitionBandExtraReads ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||

@@ -192,6 +192,8 @@ const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-n
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
+const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -887,6 +889,20 @@ fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, micro
   );
   let flow = normalize(velocity + vec3<f32>(0.012, 0.019, -0.014));
   return (scalarPhase * 0.075 + flow * carrier * 0.040 + p.yzx * carrier * 0.012) * carrier;
+}
+
+fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmoke: f32, interfaceShred: f32, flameDetail: f32, frontTopology: f32) -> f32 {
+  return clamp(
+    0.58
+      + contourBreakup * 0.28
+      + materialDetail * 0.08
+      + microSmoke * 0.10
+      + interfaceShred * 0.16
+      + flameDetail * 0.08
+      + frontTopology * 0.12,
+    0.44,
+    1.24
+  );
 }
 
 fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
@@ -2539,21 +2555,39 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.12,
     1.0
   );
+  let tallPlumeTransitionBand = tallPlumeScene
+    * tallPlumeAboveSource
+    * smoothstep(0.22, 0.78, tallPlumeNormalizedFlameHeight)
+    * smoothstep(0.22, 0.62, inputFlow);
+  let tallPlumeTransitionRetirementBreakup = tallPlumeTransitionBandStagger(tallPlumeFireContourBreakup, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
+  let tallPlumeTransitionExtinctionBreakup = mix(
+    1.0,
+    clamp(1.24 - tallPlumeTransitionRetirementBreakup * 0.48, 0.56, 1.12),
+    tallPlumeTransitionBand
+  );
+  let tallPlumeTransitionSurvivalBreakup = mix(
+    1.0,
+    clamp(0.70 + tallPlumeTransitionRetirementBreakup * 0.36, 0.62, 1.18),
+    tallPlumeTransitionBand
+  );
   let tallPlumeHighFlowShelfExtinction = tallPlumeScene
     * tallPlumeAboveSource
     * smoothstep(0.30, 0.58, inputFlow)
-    * (1.0 - smoothstep(0.016, 0.145, tallPlumeFuelHeatReaction + fuelConsumption * 3.2 + tallPlumePilotReaction * 2.0 + tallPlumeBurnoutTail * 3.2));
+    * (1.0 - smoothstep(0.016, 0.145, tallPlumeFuelHeatReaction + fuelConsumption * 3.2 + tallPlumePilotReaction * 2.0 + tallPlumeBurnoutTail * 3.2))
+    * tallPlumeTransitionExtinctionBreakup;
   let tallPlumeUpperFlowExtinction = tallPlumeScene
     * tallPlumeAboveSource
     * smoothstep(0.30, 0.58, inputFlow)
     * smoothstep(0.16, 0.62, tallPlumeNormalizedFlameHeight)
-    * (1.0 - smoothstep(0.030, 0.165, tallPlumeFuelHeatReaction + fuelConsumption * 3.9 + tallPlumePilotReaction * 2.2 + tallPlumeBurnoutTail * 0.65));
+    * (1.0 - smoothstep(0.030, 0.165, tallPlumeFuelHeatReaction + fuelConsumption * 3.9 + tallPlumePilotReaction * 2.2 + tallPlumeBurnoutTail * 0.65))
+    * tallPlumeTransitionExtinctionBreakup;
   let tallPlumeUpperSlabExtinction = tallPlumeScene
     * tallPlumeAboveSource
     * smoothstep(0.32, 0.60, inputFlow)
     * smoothstep(0.20, 0.72, tallPlumeNormalizedFlameHeight)
     * smoothstep(0.22, 0.72, 1.0 - tallPlumeFrontWidthTaper)
-    * (1.0 - smoothstep(0.024, 0.155, tallPlumeFuelHeatReaction + fuelConsumption * 3.4 + tallPlumePilotReaction * 2.0));
+    * (1.0 - smoothstep(0.024, 0.155, tallPlumeFuelHeatReaction + fuelConsumption * 3.4 + tallPlumePilotReaction * 2.0))
+    * tallPlumeTransitionExtinctionBreakup;
   let tallPlumeHighFlowHeightGate = smoothstep(0.28, 0.58, inputFlow) * smoothstep(0.20, 0.72, tallPlumeNormalizedFlameHeight);
   let tallPlumeUntaperedLiveFlameSurvival = tallPlumeReactionSurvival * tallPlumeFuelSurvival * tallPlumeFlameContourSurvival;
   let tallPlumeLiveFlameTaperedSurvival = tallPlumeUntaperedLiveFlameSurvival
@@ -2562,7 +2596,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       tallPlumeFrontWidthTaper * tallPlumeFlameTipTaper,
       tallPlumeScene * tallPlumeAboveSource * smoothstep(0.28, 0.58, inputFlow)
     );
-  let tallPlumeLiveFlameSurvival = tallPlumeLiveFlameTaperedSurvival * (1.0 - tallPlumeUpperSlabExtinction * 0.78);
+  let tallPlumeLiveFlameSurvival = tallPlumeLiveFlameTaperedSurvival * tallPlumeTransitionSurvivalBreakup * (1.0 - tallPlumeUpperSlabExtinction * 0.78);
   let tallPlumeMinimalFireBirthSurvival = mix(
     1.0,
     clamp(tallPlumeLiveFlameSurvival, 0.0, 1.0),
@@ -2776,8 +2810,18 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
     );
-    let extinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
-    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction);
+    let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
+    let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
+    let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
+    let tallPlumeRenderTransitionBand = tallPlumeRenderScene
+      * smoothstep(0.28, 0.82, y)
+      * smoothstep(0.006, 0.18, flame + flameDetail + heat * 0.10)
+      * smoothstep(0.004, 0.24, smoke + rawExtinction + microSmoke * 0.32);
+    let tallPlumeTransitionWisps = tallPlumeRenderTransitionBand
+      * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
+      * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
+    let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
+    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
     if (emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
@@ -2833,8 +2877,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       bonfireVisibleEmission + interfaceShred * 0.16,
       bonfireRenderScene
     );
+    let tallPlumeTransitionAlphaStagger = mix(
+      1.0,
+      clamp(0.70 + tallPlumeRenderTransitionStagger * 0.36, 0.58, 1.18),
+      tallPlumeRenderTransitionBand
+    );
     let fireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
+      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -4070,6 +4119,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
       : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
     const tallPlumeDetailCoherenceExtraReadsPerCell = 0;
+    const tallPlumeTransitionBandStrategy = scene === 'tall_plume'
+      ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
+      : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
+    const tallPlumeTransitionBandExtraReadsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4114,6 +4167,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.tallPlumeDetailCoherenceStrategy = tallPlumeDetailCoherenceStrategy;
     state.tallPlumeDetailCoherenceExtraReadsPerCell = tallPlumeDetailCoherenceExtraReadsPerCell;
+    state.tallPlumeTransitionBandStrategy = tallPlumeTransitionBandStrategy;
+    state.tallPlumeTransitionBandExtraReadsPerCell = tallPlumeTransitionBandExtraReadsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4150,6 +4205,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireScalarNeighborhoodReadsPerCell,
       tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell,
+      tallPlumeTransitionBandStrategy,
+      tallPlumeTransitionBandExtraReadsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5317,6 +5374,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
         tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
+        tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,
+        tallPlumeTransitionBandExtraReadsPerCell: state.tallPlumeTransitionBandExtraReadsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5609,6 +5668,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
+      tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,
+      tallPlumeTransitionBandExtraReadsPerCell: state.tallPlumeTransitionBandExtraReadsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,
