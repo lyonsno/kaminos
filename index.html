@@ -176,6 +176,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .splat-hybrid-renderer-status.error { border-color: #5a3030; background: #221818; color: #e0a0a0; }
 .splat-hybrid-url { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
 .splat-hybrid-url:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.splat-hybrid-renderer-controls { border: 1px solid #2a2a2a; border-radius: 5px; background: #1b1b1b; }
+.splat-hybrid-renderer-controls summary { cursor: pointer; padding: 7px 8px; color: #bbb; font-size: 11px; user-select: none; }
+.splat-hybrid-renderer-control-grid { display: grid; grid-template-columns: 1fr; gap: 5px; padding: 0 8px 8px; }
+.splat-hybrid-renderer-control-row { display: grid; grid-template-columns: 86px minmax(96px, 1fr) 38px; gap: 7px; align-items: center; min-height: 22px; }
+.splat-hybrid-renderer-control-label { color: #777; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.splat-hybrid-renderer-control-value { color: #8fc7d6; font: 9px 'SF Mono', monospace; text-align: right; }
 .transform-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .transform-axis-field { min-width: 0; display: grid; grid-template-columns: 11px minmax(0, 1fr); gap: 4px; align-items: center; }
 .transform-axis { color: #555; font: 9px 'SF Mono', monospace; text-align: center; }
@@ -321,6 +327,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
               <button type="button" class="btn" id="splat-hybrid-renderer-reload-button" onclick="reloadSelectedSplatHybridRenderer()">Reload</button>
               <button type="button" class="btn" id="splat-hybrid-renderer-stop-button" onclick="stopHybridSplatOverlay()">Stop</button>
             </div>
+            <details class="splat-hybrid-renderer-controls" id="splat-hybrid-renderer-controls">
+              <summary>Splat Renderer Controls</summary>
+              <div class="splat-hybrid-renderer-control-grid">
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Metal contrast</span><input type="range" min="0" max="3" step="0.01" data-hybrid-renderer-control="material.metalness.contrast"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.metalness.contrast"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Metal intensity</span><input type="range" min="-1" max="1" step="0.01" data-hybrid-renderer-control="material.metalness.brightness"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.metalness.brightness"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Rough contrast</span><input type="range" min="0" max="3" step="0.01" data-hybrid-renderer-control="material.roughness.contrast"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.roughness.contrast"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Rough intensity</span><input type="range" min="-1" max="1" step="0.01" data-hybrid-renderer-control="material.roughness.brightness"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.roughness.brightness"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Albedo contrast</span><input type="range" min="0" max="3" step="0.01" data-hybrid-renderer-control="material.albedo.contrast"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.albedo.contrast"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Albedo intensity</span><input type="range" min="-1" max="1" step="0.01" data-hybrid-renderer-control="material.albedo.brightness"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.albedo.brightness"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Emissive</span><input type="range" min="0" max="20" step="0.1" data-hybrid-renderer-control="emissive.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="emissive.intensity"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Emissive cut</span><input type="range" min="0" max="1" step="0.005" data-hybrid-renderer-control="emissive.threshold"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="emissive.threshold"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">AO radius</span><input type="range" min="0" max="5" step="0.01" data-hybrid-renderer-control="ao.radius"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="ao.radius"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">AO intensity</span><input type="range" min="0" max="5" step="0.05" data-hybrid-renderer-control="ao.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="ao.intensity"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Bloom</span><input type="range" min="0" max="10" step="0.05" data-hybrid-renderer-control="bloom.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="bloom.intensity"></span></label>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -778,6 +800,19 @@ function initialHybridSplatOverlayModuleUrl() {
     || DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL;
 }
 
+const HYBRID_SPLAT_RENDERER_CONTROL_DEFAULTS = {
+  material: {
+    roughness: { contrast: 1.0, brightness: 0.0, gamma: 1.0 },
+    metalness: { contrast: 1.0, brightness: 0.0, gamma: 1.0 },
+    albedo: { contrast: 1.0, brightness: 0.0, gamma: 1.0 },
+  },
+  emissive: { intensity: 3.0, threshold: 0.05 },
+  ao: { enabled: true, radius: 0.15, intensity: 1.5, falloff: 1.0, thickness: 1.81, slices: 3, steps: 4 },
+  bloom: { threshold: 0.8, softKnee: 0.5, intensity: 0.5 },
+};
+
+let hybridSplatRendererControls = JSON.parse(JSON.stringify(HYBRID_SPLAT_RENDERER_CONTROL_DEFAULTS));
+
 let hybridSplatOverlayState = {
   status: 'idle',
   error: null,
@@ -790,8 +825,10 @@ let hybridSplatOverlayState = {
   loadedAt: null,
   lastFrame: null,
   lastSceneContext: null,
+  lastRendererControls: null,
   sceneContextAccepted: false,
   sceneContextTelemetry: null,
+  rendererControlsTelemetry: null,
   frameCount: 0,
 };
 
@@ -890,8 +927,10 @@ function clearHybridSplatOverlayHandle() {
   hybridSplatOverlayState.handle = null;
   hybridSplatOverlayState.lastFrame = null;
   hybridSplatOverlayState.lastSceneContext = null;
+  hybridSplatOverlayState.lastRendererControls = null;
   hybridSplatOverlayState.sceneContextAccepted = false;
   hybridSplatOverlayState.sceneContextTelemetry = null;
+  hybridSplatOverlayState.rendererControlsTelemetry = null;
   hybridSplatOverlayState.frameCount = 0;
 }
 
@@ -917,7 +956,9 @@ function hybridSplatOverlayDebugState() {
     correctionApplication: handle?.correctionApplication || null,
     sceneContextAccepted: hybridSplatOverlayState.sceneContextAccepted,
     sceneContextTelemetry: hybridSplatOverlayState.sceneContextTelemetry,
+    rendererControlsTelemetry: hybridSplatOverlayState.rendererControlsTelemetry,
     lastSceneContext: hybridSplatOverlayState.lastSceneContext,
+    lastRendererControls: hybridSplatOverlayState.lastRendererControls,
     lastFrame: hybridSplatOverlayState.lastFrame,
   };
 }
@@ -1221,6 +1262,97 @@ function publishHybridSplatOverlaySceneContext(handle, frame = hybridSplatOverla
   return telemetry;
 }
 
+function nestedControlValue(path, source = hybridSplatRendererControls) {
+  return path.split('.').reduce((current, key) => current?.[key], source);
+}
+
+function setNestedControlValue(path, value) {
+  const keys = path.split('.');
+  let target = hybridSplatRendererControls;
+  for (const key of keys.slice(0, -1)) {
+    target = target[key] || (target[key] = {});
+  }
+  target[keys[keys.length - 1]] = value;
+}
+
+function formatHybridSplatRendererControlValue(path, value) {
+  if (!Number.isFinite(value)) return '';
+  if (path.includes('threshold') || path.includes('brightness')) return value.toFixed(3);
+  if (path.includes('contrast') || path.includes('intensity') || path.includes('radius')) return value.toFixed(2);
+  return value.toFixed(1);
+}
+
+function syncHybridSplatRendererControlInputs() {
+  document.querySelectorAll('[data-hybrid-renderer-control]').forEach(input => {
+    const path = input.dataset.hybridRendererControl;
+    const value = Number(nestedControlValue(path));
+    if (Number.isFinite(value) && document.activeElement !== input) input.value = String(value);
+  });
+  document.querySelectorAll('[data-hybrid-renderer-control-value]').forEach(el => {
+    const path = el.dataset.hybridRendererControlValue;
+    const value = Number(nestedControlValue(path));
+    el.textContent = formatHybridSplatRendererControlValue(path, value);
+  });
+}
+
+function buildHybridSplatRendererControlsV0() {
+  return {
+    schema: 'hybrid-render.splat-renderer-controls.v0',
+    material: JSON.parse(JSON.stringify(hybridSplatRendererControls.material)),
+    emissive: { ...hybridSplatRendererControls.emissive },
+    ao: { ...hybridSplatRendererControls.ao },
+    bloom: { ...hybridSplatRendererControls.bloom },
+  };
+}
+
+function normalizeHybridSplatRendererControlsTelemetry(result, controls, options = {}) {
+  const hasTelemetryObject = !!result && typeof result === 'object' && !Array.isArray(result);
+  const resultObject = hasTelemetryObject ? result : {};
+  const accepted = resultObject.accepted === true;
+  return {
+    schema: 'kaminos.hybrid-splat-overlay.renderer-controls-telemetry.v0',
+    rendererSchema: typeof resultObject.schema === 'string' ? resultObject.schema : null,
+    controlsSchema: controls?.schema || null,
+    route: hybridMeshSplatRoute.id,
+    accepted,
+    honoredFields: Array.isArray(resultObject.honoredFields) ? resultObject.honoredFields.slice() : [],
+    unsupportedFields: Array.isArray(resultObject.unsupportedFields)
+      ? resultObject.unsupportedFields.slice()
+      : (options.unsupportedFields || []),
+    missing: options.missing === true || !hasTelemetryObject,
+    failurePhase: resultObject.failurePhase || options.failurePhase || (hasTelemetryObject ? null : 'setRendererControls.telemetry'),
+    message: resultObject.message || options.message || (hasTelemetryObject ? null : 'Renderer setRendererControls did not return structured acceptance telemetry'),
+    controls: resultObject.controls || controls,
+    timestamp: resultObject.timestamp || new Date().toISOString(),
+  };
+}
+
+function publishHybridSplatRendererControls(handle = hybridSplatOverlayState.handle) {
+  const controls = buildHybridSplatRendererControlsV0();
+  hybridSplatOverlayState.lastRendererControls = controls;
+  if (!handle || typeof handle.setRendererControls !== 'function') {
+    hybridSplatOverlayState.rendererControlsTelemetry = normalizeHybridSplatRendererControlsTelemetry(null, controls, {
+      missing: true,
+      failurePhase: 'setRendererControls.api',
+      message: 'Renderer handle does not expose setRendererControls',
+      unsupportedFields: ['handle.setRendererControls'],
+    });
+    return hybridSplatOverlayState.rendererControlsTelemetry;
+  }
+  const result = handle.setRendererControls(controls);
+  hybridSplatOverlayState.rendererControlsTelemetry = normalizeHybridSplatRendererControlsTelemetry(result, controls);
+  return hybridSplatOverlayState.rendererControlsTelemetry;
+}
+
+function setHybridSplatRendererControl(path, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return hybridSplatRendererControls;
+  setNestedControlValue(path, numeric);
+  syncHybridSplatRendererControlInputs();
+  publishHybridSplatRendererControls();
+  return buildHybridSplatRendererControlsV0();
+}
+
 function splatOverlayCorrectionIdentity(record, assetFrame = splatRawAssetToPreviewMatrix(record)) {
   const correction = normalizeSplatCorrection(record?.splat?.correction);
   const identity = {
@@ -1304,6 +1436,7 @@ function updateHybridSplatOverlayPanel(entry) {
   const startButton = document.getElementById('splat-hybrid-renderer-start-button');
   const reloadButton = document.getElementById('splat-hybrid-renderer-reload-button');
   const stopButton = document.getElementById('splat-hybrid-renderer-stop-button');
+  syncHybridSplatRendererControlInputs();
   const busy = hybridSplatOverlayState.status === 'loading';
   const hasSource = !!entry.source;
   if (startButton) startButton.disabled = busy || !hasSource;
@@ -1390,6 +1523,7 @@ function updateHybridSplatOverlayFrame() {
   };
   hybridSplatOverlayState.lastFrame.projectionProbe = hybridSplatOverlayProjectionProbe(hybridSplatOverlayState.lastFrame);
   hybridSplatOverlayState.lastFrame.sceneContextTelemetry = publishHybridSplatOverlaySceneContext(handle, hybridSplatOverlayState.lastFrame);
+  hybridSplatOverlayState.lastFrame.rendererControlsTelemetry = publishHybridSplatRendererControls(handle);
   return hybridSplatOverlayState.lastFrame;
 }
 
@@ -2799,6 +2933,11 @@ function initTransformInspector() {
   });
   const hybridModuleInput = document.getElementById('splat-hybrid-renderer-module-url');
   hybridModuleInput?.addEventListener('change', () => setHybridSplatOverlayModuleUrl(hybridModuleInput.value));
+  document.querySelectorAll('[data-hybrid-renderer-control]').forEach(input => {
+    input.addEventListener('input', () => setHybridSplatRendererControl(input.dataset.hybridRendererControl, input.value));
+    input.addEventListener('change', () => setHybridSplatRendererControl(input.dataset.hybridRendererControl, input.value));
+  });
+  syncHybridSplatRendererControlInputs();
   updateTransformInspector();
 }
 
@@ -2809,6 +2948,7 @@ window.resetSelectedSplatCorrection = resetSelectedSplatCorrection;
 window.kaminosHybridSplatOverlayDebugState = hybridSplatOverlayDebugState;
 window.kaminosHybridSplatOverlayProjectionProbe = () => hybridSplatOverlayProjectionProbe();
 window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
+window.kaminosSetHybridSplatRendererControl = setHybridSplatRendererControl;
 window.startSelectedSplatHybridRenderer = startSelectedSplatHybridRenderer;
 window.reloadSelectedSplatHybridRenderer = reloadSelectedSplatHybridRenderer;
 window.stopHybridSplatOverlay = stopHybridSplatOverlay;

@@ -104,6 +104,16 @@ assert.match(index, /realSplatRendering:\s*false/, 'hybrid splat route stub must
 assert.match(index, /id="splat-hybrid-renderer-panel"/, 'selected splats expose a visible Hybrid Renderer control surface, not only a URL flag');
 assert.match(index, /id="splat-hybrid-renderer-start-button"/, 'Hybrid Renderer UI has an explicit start control');
 assert.match(index, /id="splat-hybrid-renderer-status"/, 'Hybrid Renderer UI surfaces live route/status evidence');
+assert.match(index, /id="splat-hybrid-renderer-controls"/, 'Hybrid Renderer UI has a collapsible renderer controls surface');
+assert.match(index, /data-hybrid-renderer-control="material\.metalness\.contrast"/, 'Hybrid Renderer controls include metalness contrast');
+assert.match(index, /data-hybrid-renderer-control="material\.roughness\.brightness"/, 'Hybrid Renderer controls include roughness intensity/brightness');
+assert.match(index, /data-hybrid-renderer-control="material\.albedo\.contrast"/, 'Hybrid Renderer controls include albedo contrast');
+assert.match(index, /data-hybrid-renderer-control="emissive\.intensity"/, 'Hybrid Renderer controls include emissive intensity');
+assert.match(index, /data-hybrid-renderer-control="ao\.intensity"/, 'Hybrid Renderer controls include renderer AO intensity');
+assert.match(index, /function buildHybridSplatRendererControlsV0\(/, 'Hybrid Renderer controls publish a renderer-owned controls packet');
+assert.match(index, /\.setRendererControls\(/, 'Hybrid Renderer controls call the renderer-owned controls API');
+assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer controls telemetry');
+assert.match(index, /window\.kaminosSetHybridSplatRendererControl/, 'browser witnesses can adjust Hybrid Renderer controls without DOM inference');
 assert.match(index, /id="hybrid-splat-overlay-host"/, 'Hybrid Renderer overlay has a named viewport host for dual-canvas composition');
 assert.match(index, /const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL/, 'Hybrid Renderer overlay route has an inspectable default module URL');
 assert.match(index, /async function initializeHybridSplatOverlayModuleUrl\(/, 'Hybrid Renderer module URL initializes from runtime config before operator smoke');
