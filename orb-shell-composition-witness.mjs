@@ -21,6 +21,7 @@ let stderr = '';
 let counter = 0;
 const browserEvents = [];
 let cleanSidewallTopologyWitness = null;
+let liveTerminalCapWitness = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -129,6 +130,11 @@ async function main() {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLiveMacroSideWall?.()');
       await delay(500);
     }
+    if (focus === 'live-terminal-caps') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLiveMacroTerminalCaps?.()');
+      liveTerminalCapWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableLiveTerminalCapWitness?.()');
+      await delay(500);
+    }
     if (focus === 'side-rim-clean-topology') {
       cleanSidewallTopologyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableCleanSidewallTopologyWitness?.()');
       await delay(500);
@@ -224,6 +230,9 @@ async function main() {
     assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
     assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
     assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
+    assert.equal(state?.liveMacroTerminalCapCount, 2, 'live terminal cap count missing from debug state');
+    assert.equal(state?.terminalCapClosureVerdict, 'live-promoted-body-termini-capped', 'terminal cap closure verdict missing from debug state');
+    assert.ok(state?.LiveMacroTerminalCap?.every(cap => cap?.schema === 'LiveMacroTerminalCap'), 'LiveMacroTerminalCap records missing from debug state');
     assert.equal(state?.legacyScaffoldSuppressionVerdict, 'target-promoted-body-legacy-round-bands-suppressed', 'target legacy round band scaffold suppression missing from debug state');
     assert.deepEqual(state?.suppressedLegacyRoundBandIds, ['nw-body', 'nw-rail', 'nw-hop'], 'target legacy round band ids missing from debug state');
     assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
@@ -239,7 +248,7 @@ async function main() {
 
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (focus === 'side-rim-clean-topology') {
+    if (focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps') {
       const canvasRect = await evaluate(ws, `
         (() => {
           const canvas = document.querySelector('canvas');
@@ -294,6 +303,9 @@ async function main() {
       liveMacroSideWallCount: state.liveMacroSideWallCount,
       liveMacroSideWallVisibilityVerdict: state.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: state.targetLiveMacroSideWallIds,
+      liveMacroTerminalCapCount: state.liveMacroTerminalCapCount,
+      terminalCapClosureVerdict: state.terminalCapClosureVerdict,
+      liveTerminalCapWitness,
       liveRenderMaterialPolicy: state.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: state.suppressedLegacyRoundBandIds,
       suppressedLegacyTerminationSocketIds: state.suppressedLegacyTerminationSocketIds,
@@ -346,6 +358,7 @@ async function main() {
       LiveMacroSideWallPlan: state.LiveMacroSideWallPlan,
       liveMacroSideWallPlan: state.liveMacroSideWallPlan,
       LiveMacroSideWall: state.LiveMacroSideWall,
+      LiveMacroTerminalCap: state.LiveMacroTerminalCap,
       lowerCupClosure: state.lowerCupClosure,
       crossingTuckIntegration: state.crossingTuckIntegration,
       ExpandedMacroRegionProxyPlan: state.ExpandedMacroRegionProxyPlan,
