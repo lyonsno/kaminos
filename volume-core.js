@@ -184,6 +184,8 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -2087,9 +2089,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let rawDetailForce = turbulentDetailForce(p * (0.82 + physicalDetailScale * 0.30), time) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
   let rawMicroForce = turbulentDetailForce(p * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), time * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, p * detailDomain, time, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
-  let symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
-  let symmetricShredForce = bonfireSymmetricLateralForce(p, time * 1.13, length(rawShredForce.xz), 1.0, 3.2);
+  let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
+  var symmetricDetailForce = vec2<f32>(0.0);
+  var symmetricMicroForce = vec2<f32>(0.0);
+  var symmetricShredForce = vec2<f32>(0.0);
+  var symmetricFineBreakup = vec2<f32>(0.0);
+  if (bonfireScene > 0.5) {
+    symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
+    symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
+    symmetricShredForce = bonfireSymmetricLateralForce(p, time * 1.13, length(rawShredForce.xz), 1.0, 3.2);
+    symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
+  }
   let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
   let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
   let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
@@ -2097,8 +2107,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
   let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
-  let rawFineBreakup = fineScaleBreakup(cellI, p, time, curl, heat, smoke, source);
-  let symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
   let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
   let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
   let projectionCorrection = vec3<f32>(0.0);
@@ -4006,6 +4014,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const mainFluidBonfireSymmetricForceStrategy = bonfireCombustionFieldActive
+      ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
+      : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+    const bonfireSymmetricForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4042,6 +4054,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldEvaluationsPerCell;
     state.mainFluidBonfireProceduralBreakupStrategy = mainFluidBonfireProceduralBreakupStrategy;
     state.bonfireProceduralBreakupEvaluationsPerCell = bonfireProceduralBreakupEvaluationsPerCell;
+    state.mainFluidBonfireSymmetricForceStrategy = mainFluidBonfireSymmetricForceStrategy;
+    state.bonfireSymmetricForceEvaluationsPerCell = bonfireSymmetricForceEvaluationsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4070,6 +4084,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireCombustionFieldEvaluationsPerCell,
       mainFluidBonfireProceduralBreakupStrategy,
       bonfireProceduralBreakupEvaluationsPerCell,
+      mainFluidBonfireSymmetricForceStrategy,
+      bonfireSymmetricForceEvaluationsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5229,6 +5245,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireCombustionFieldEvaluationsPerCell: state.bonfireCombustionFieldEvaluationsPerCell,
         mainFluidBonfireProceduralBreakupStrategy: state.mainFluidBonfireProceduralBreakupStrategy,
         bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
+        mainFluidBonfireSymmetricForceStrategy: state.mainFluidBonfireSymmetricForceStrategy,
+        bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5513,6 +5531,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireCombustionFieldEvaluationsPerCell: state.bonfireCombustionFieldEvaluationsPerCell,
       mainFluidBonfireProceduralBreakupStrategy: state.mainFluidBonfireProceduralBreakupStrategy,
       bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
+      mainFluidBonfireSymmetricForceStrategy: state.mainFluidBonfireSymmetricForceStrategy,
+      bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,

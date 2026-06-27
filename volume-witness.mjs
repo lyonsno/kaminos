@@ -35,6 +35,8 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function fireLickOperatorGainFromAmount(value) {
@@ -70,6 +72,16 @@ function expectedBonfireProceduralBreakupStrategy(volumeScene) {
 }
 
 function expectedBonfireProceduralBreakupEvaluationsPerCell(volumeScene) {
+  return volumeScene === 'bonfire_plume' ? 4 : 0;
+}
+
+function expectedBonfireSymmetricForceStrategy(volumeScene) {
+  return volumeScene === 'bonfire_plume'
+    ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
+    : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+}
+
+function expectedBonfireSymmetricForceEvaluationsPerCell(volumeScene) {
   return volumeScene === 'bonfire_plume' ? 4 : 0;
 }
 const routeParams = new URL(url).searchParams;
@@ -847,6 +859,8 @@ async function main() {
     const expectedBonfireCombustionEvaluations = expectedBonfireCombustionFieldEvaluationsPerCell(expectedVolumeScene);
     const expectedBonfireProceduralBreakupStrategyValue = expectedBonfireProceduralBreakupStrategy(expectedVolumeScene);
     const expectedBonfireProceduralBreakupEvaluations = expectedBonfireProceduralBreakupEvaluationsPerCell(expectedVolumeScene);
+    const expectedBonfireSymmetricForceStrategyValue = expectedBonfireSymmetricForceStrategy(expectedVolumeScene);
+    const expectedBonfireSymmetricForceEvaluations = expectedBonfireSymmetricForceEvaluationsPerCell(expectedVolumeScene);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -863,6 +877,8 @@ async function main() {
     assert.equal(Number(stateLedger.bonfireCombustionFieldEvaluationsPerCell), expectedBonfireCombustionEvaluations, 'sim cost ledger bonfire combustion-field evaluation count does not match effective scene');
     assert.equal(stateLedger.mainFluidBonfireProceduralBreakupStrategy, expectedBonfireProceduralBreakupStrategyValue, 'sim cost ledger bonfire procedural-breakup strategy does not match effective scene');
     assert.equal(Number(stateLedger.bonfireProceduralBreakupEvaluationsPerCell), expectedBonfireProceduralBreakupEvaluations, 'sim cost ledger bonfire procedural-breakup evaluation count does not match effective scene');
+    assert.equal(stateLedger.mainFluidBonfireSymmetricForceStrategy, expectedBonfireSymmetricForceStrategyValue, 'sim cost ledger bonfire symmetric-force strategy does not match effective scene');
+    assert.equal(Number(stateLedger.bonfireSymmetricForceEvaluationsPerCell), expectedBonfireSymmetricForceEvaluations, 'sim cost ledger bonfire symmetric-force evaluation count does not match effective scene');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
@@ -897,6 +913,8 @@ async function main() {
     const sampleBonfireCombustionEvaluations = expectedBonfireCombustionFieldEvaluationsPerCell(sampleVolumeScene);
     const sampleBonfireProceduralBreakupStrategyValue = expectedBonfireProceduralBreakupStrategy(sampleVolumeScene);
     const sampleBonfireProceduralBreakupEvaluations = expectedBonfireProceduralBreakupEvaluationsPerCell(sampleVolumeScene);
+    const sampleBonfireSymmetricForceStrategyValue = expectedBonfireSymmetricForceStrategy(sampleVolumeScene);
+    const sampleBonfireSymmetricForceEvaluations = expectedBonfireSymmetricForceEvaluationsPerCell(sampleVolumeScene);
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
@@ -910,6 +928,8 @@ async function main() {
       Number(sampleLedger?.bonfireCombustionFieldEvaluationsPerCell) !== sampleBonfireCombustionEvaluations ||
       sampleLedger?.mainFluidBonfireProceduralBreakupStrategy !== sampleBonfireProceduralBreakupStrategyValue ||
       Number(sampleLedger?.bonfireProceduralBreakupEvaluationsPerCell) !== sampleBonfireProceduralBreakupEvaluations ||
+      sampleLedger?.mainFluidBonfireSymmetricForceStrategy !== sampleBonfireSymmetricForceStrategyValue ||
+      Number(sampleLedger?.bonfireSymmetricForceEvaluationsPerCell) !== sampleBonfireSymmetricForceEvaluations ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
       sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||

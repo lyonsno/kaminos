@@ -799,6 +799,8 @@ assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE\s*=\s*'b
 assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-combustion-field-bypass-v0'/, 'volume core names the non-bonfire combustion-field bypass strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE\s*=\s*'bonfire-procedural-breakup-active-v0'/, 'volume core names the active bonfire procedural-breakup strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-procedural-breakup-bypass-v0'/, 'volume core names the non-bonfire procedural-breakup bypass strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE\s*=\s*'bonfire-symmetric-force-active-v0'/, 'volume core names the active bonfire symmetric-force strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-symmetric-force-bypass-v0'/, 'volume core names the non-bonfire symmetric-force bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -821,6 +823,13 @@ assert.match(core, /var bonfireDetailBreakup = breakup/, 'main-fluid shader pres
 assert.match(core, /var bonfireEdgeBreakup = 1\.0/, 'main-fluid shader initializes bonfire edge breakup to a neutral bypass value');
 assert.match(core, /var bonfireLayeredBreakup = 1\.0/, 'main-fluid shader initializes bonfire layered breakup to a neutral bypass value');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,700}bonfireSourceBreakup = bonfireMirrorBalancedBreakup[\s\S]{0,700}bonfireDetailBreakup = bonfireMirrorBalancedBreakup[\s\S]{0,700}bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup[\s\S]{0,900}bonfireLayeredBreakup = clamp/, 'main-fluid shader evaluates expensive bonfire procedural breakup only for the bonfire scene');
+assert.match(core, /mainFluidBonfireSymmetricForceStrategy/, 'sim-cost ledger records the bonfire symmetric-force strategy');
+assert.match(core, /bonfireSymmetricForceEvaluationsPerCell/, 'sim-cost ledger records bonfire symmetric-force evaluations per cell');
+assert.match(core, /var symmetricDetailForce = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric detail force to a bypassed neutral value');
+assert.match(core, /var symmetricMicroForce = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric micro force to a bypassed neutral value');
+assert.match(core, /var symmetricShredForce = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric shred force to a bypassed neutral value');
+assert.match(core, /var symmetricFineBreakup = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric fine-breakup force to a bypassed neutral value');
+assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,420}symmetricDetailForce = bonfireSymmetricLateralForce[\s\S]{0,420}symmetricMicroForce = bonfireSymmetricLateralForce[\s\S]{0,420}symmetricShredForce = bonfireSymmetricLateralForce[\s\S]{0,900}symmetricFineBreakup = bonfireSymmetricLateralForce/, 'main-fluid shader evaluates expensive bonfire symmetric lateral forces only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');

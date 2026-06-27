@@ -35,6 +35,8 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
+const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
 const FALSE_CLOSURE_LABELS = [
   'wrong-fallback-route',
   'stale-default-config',
@@ -665,7 +667,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -742,6 +744,31 @@ function validateWitness(run, witness, effective) {
       bonfireProceduralBreakupEvaluationsPerCell: ledger.bonfireProceduralBreakupEvaluationsPerCell,
       expectedBonfireProceduralBreakupStrategy,
       expectedBonfireProceduralBreakupEvaluations,
+      ledger,
+    });
+  }
+  if (![MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE, MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS].includes(ledger.mainFluidBonfireSymmetricForceStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown bonfire symmetric-force strategy', {
+      scenarioId: run.id,
+      mainFluidBonfireSymmetricForceStrategy: ledger.mainFluidBonfireSymmetricForceStrategy,
+      ledger,
+    });
+  }
+  const expectedBonfireSymmetricForceStrategy = effective.volumeScene === 'bonfire_plume'
+    ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
+    : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+  const expectedBonfireSymmetricForceEvaluations = effective.volumeScene === 'bonfire_plume' ? 4 : 0;
+  if (
+    ledger.mainFluidBonfireSymmetricForceStrategy !== expectedBonfireSymmetricForceStrategy ||
+    Number(ledger.bonfireSymmetricForceEvaluationsPerCell) !== expectedBonfireSymmetricForceEvaluations
+  ) {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation cost ledger bonfire symmetric-force cost does not match the effective scene', {
+      scenarioId: run.id,
+      volumeScene: effective.volumeScene,
+      mainFluidBonfireSymmetricForceStrategy: ledger.mainFluidBonfireSymmetricForceStrategy,
+      bonfireSymmetricForceEvaluationsPerCell: ledger.bonfireSymmetricForceEvaluationsPerCell,
+      expectedBonfireSymmetricForceStrategy,
+      expectedBonfireSymmetricForceEvaluations,
       ledger,
     });
   }
@@ -927,6 +954,8 @@ for (let i = 0; i < runs.length; i += 1) {
       bonfireCombustionFieldEvaluationsPerCell: simCostLedger?.bonfireCombustionFieldEvaluationsPerCell,
       mainFluidBonfireProceduralBreakupStrategy: simCostLedger?.mainFluidBonfireProceduralBreakupStrategy,
       bonfireProceduralBreakupEvaluationsPerCell: simCostLedger?.bonfireProceduralBreakupEvaluationsPerCell,
+      mainFluidBonfireSymmetricForceStrategy: simCostLedger?.mainFluidBonfireSymmetricForceStrategy,
+      bonfireSymmetricForceEvaluationsPerCell: simCostLedger?.bonfireSymmetricForceEvaluationsPerCell,
       pressureDivergencePasses: simCostLedger?.pressureDivergencePasses,
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
