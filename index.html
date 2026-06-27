@@ -4667,9 +4667,19 @@ function pipelineRunUsesFixture(result) {
 function pipelineRunUsesAdapterFixture(result) {
   const stages = result?.report?.document?.stages || [];
   const artifacts = result?.report?.document?.artifacts || [];
+  const routeText = stages.map(stage => [
+    stage.effectiveRoute?.fixtureMode,
+    stage.effectiveRoute?.adapterReport?.schema,
+    stage.effectiveRoute?.availability?.configuredCommand,
+    stage.effectiveRoute?.availability?.resolvedCommand,
+    ...(stage.effectiveRoute?.executedCommand || []),
+  ].filter(Boolean).join(' ')).join(' ').toLowerCase();
   return Boolean(
     stages.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
     || artifacts.some(artifact => artifact?.fixtureSource?.mode === 'mock-adapter')
+    || routeText.includes('mock-sharp-command')
+    || routeText.includes('mock.sharp-adapter-report')
+    || routeText.includes('kaminos.mock-sharp-adapter-report')
   );
 }
 
@@ -5215,7 +5225,8 @@ function pipelineGeneratedOutputGraphNode(record) {
   const sidecar = pipelineRunArtifact(run, 'sidecar') || record.sidecar || null;
   const loadedArtifact = pipelineArtifactLoadedRecord(artifact);
   const fixtureBacked = pipelineRunUsesFixture(run) || Boolean(record.fixtureBacked);
-  const previewTruth = record.previewTruth || pipelineRunPreviewTruthLabel(run, artifact);
+  const computedPreviewTruth = pipelineRunPreviewTruthLabel(run, artifact);
+  const previewTruth = pipelineRunUsesAdapterFixture(run) ? computedPreviewTruth : (record.previewTruth || computedPreviewTruth);
   return {
     id: record.id,
     kind: 'generated-output',
