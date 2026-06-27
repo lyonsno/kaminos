@@ -21,6 +21,9 @@ const settleMs = Number(args.get('--settle-ms') || 1700);
 const witnessSteps = Number(args.get('--witness-steps') || 180);
 const respawnProbeSteps = Number(args.get('--respawn-steps') || 620);
 const extendedFlowSteps = Number(args.get('--extended-flow-steps') || 420);
+const viewportWidth = Number(args.get('--viewport-width') || 2048);
+const viewportHeight = Number(args.get('--viewport-height') || 1124);
+const largeViewportSmokeWitness = 'large-operator-viewport-2048x1124-v0';
 
 let phase = 'initializing';
 let stderr = '';
@@ -298,6 +301,7 @@ async function run() {
       '--disable-component-extensions-with-background-pages',
       '--no-first-run',
       '--no-default-browser-check',
+      `--window-size=${viewportWidth},${viewportHeight}`,
       url,
     ], { stdio: ['ignore', 'ignore', 'pipe'] });
     browser.stderr.on('data', chunk => { stderr += String(chunk); });
@@ -321,6 +325,13 @@ async function run() {
     await wsRequest(ws, 'Page.enable');
     await wsRequest(ws, 'Runtime.enable');
     await wsRequest(ws, 'Log.enable');
+    await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await wsRequest(ws, 'Page.reload', { ignoreCache: true });
     await delay(settleMs);
     await waitForRouteHooks(ws);
 
@@ -540,6 +551,11 @@ async function run() {
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
       fullViewportLegibilityStatus,
+      largeViewportSmokeWitness,
+      viewport: {
+        width: viewportWidth,
+        height: viewportHeight,
+      },
       denseDiagnosticScreenshot: denseDiagnosticOut,
       denseDiagnosticFrame: visualFrame,
       denseDiagnosticCapture,
@@ -563,6 +579,11 @@ async function run() {
       fullViewportCapture,
       fullViewportVisualActivityMetrics,
       fullViewportLegibilityStatus,
+      largeViewportSmokeWitness,
+      viewport: {
+        width: viewportWidth,
+        height: viewportHeight,
+      },
       denseDiagnosticScreenshot: denseDiagnosticOut,
       denseDiagnosticFrame: visualFrame,
       denseDiagnosticCapture,

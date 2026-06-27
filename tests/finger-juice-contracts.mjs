@@ -114,6 +114,7 @@ assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype expose
 assert.match(pageSource, /__lermsFingerJuiceVisualFrameForWitness/, 'prototype exposes a focused visual frame for witness capture');
 assert.match(pageSource, /visualActivityFrame/, 'prototype computes projected activity framing for witness capture');
 assert.match(pageSource, /dense-fluid-activity-clip-v0/, 'prototype can focus witness capture on dense fluid activity instead of sparse outliers');
+assert.match(pageSource, /responsiveSmokeProjection/, 'prototype uses viewport-responsive smoke projection instead of fixed-pixel scale');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
@@ -163,6 +164,8 @@ assert.match(witnessSource, /dilatedActivityRatio/, 'witness measures visual act
 assert.match(witnessSource, /fullViewportVisualActivityMetrics/, 'witness records the full operator viewport as primary smoke evidence');
 assert.match(witnessSource, /denseDiagnosticScreenshot/, 'witness labels the dense crop as a secondary diagnostic artifact');
 assert.match(witnessSource, /diagnostic_crop_secondary/, 'witness must not present the dense crop as the full smoke viewport');
+assert.match(witnessSource, /largeViewportSmokeWitness/, 'witness exercises a large operator-scale viewport, not only a tiny headless viewport');
+assert.match(witnessSource, /Emulation\.setDeviceMetricsOverride/, 'witness sets explicit viewport dimensions before judging full-screen legibility');
 assert.match(witnessSource, /Page\.captureScreenshot[^]*clip/, 'witness captures a focused clip instead of only the whole distant viewport');
 assert.match(witnessSource, /sourceDiagnostics/, 'witness requires source diagnostics');
 assert.match(witnessSource, /emitterDiagnostics/, 'witness requires emitter diagnostics');

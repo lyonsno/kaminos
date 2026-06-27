@@ -1105,12 +1105,14 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   let width = params.viewport.x;
   let height = params.viewport.y;
   let depth = 1.45 + world.z;
-  let scale = 390.0 / max(0.42, depth);
+  let responsiveProjectionScale = min(width * 0.64, height * 0.96);
+  let scale = responsiveProjectionScale / max(0.42, depth);
+  let responsiveParticleScale = clamp(responsiveProjectionScale / 390.0, 1.0, 2.2);
   let screen = vec2f(
     width * 0.5 + world.x * scale,
-    height * 0.78 - world.z * 122.0 - world.y * scale * 0.52
+    height * 0.74 - world.z * height * 0.23 - world.y * scale * 0.52
   );
-  let radius = select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0;
+  let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale;
   let finalScreen = screen + corner * radius;
   var out: VertexOut;
   out.position = select(
