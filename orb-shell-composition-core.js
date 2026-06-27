@@ -143,14 +143,18 @@ function variantPreset(variantId) {
   return presets[variantId] || { amplitude: 0.7, cupBias: 0, tuckBias: 0, dominanceBias: 0 };
 }
 
-export function createControlledOrbShellVariationDescriptor({ variantId = 'baseline', variationSeed = 0 } = {}) {
+export function createControlledOrbShellVariationDescriptor({ variantId = 'baseline', variationSeed = 0, variationLeafCount = 10, uiControlSource = 'route-or-programmatic' } = {}) {
   const normalizedVariantId = String(variantId || 'baseline');
   const seed = Number.isFinite(Number(variationSeed)) ? Number(variationSeed) : 0;
+  const leafCount = clamp(Math.round(Number.isFinite(Number(variationLeafCount)) ? Number(variationLeafCount) : 10), 8, 14);
+  const leafDensityPressure = clamp((leafCount - 10) / 4, -0.5, 1);
+  const leafAmplitudeScale = clamp(1 + leafDensityPressure * 0.16, 0.9, 1.18);
   const preset = variantPreset(normalizedVariantId);
+  const frontAmplitude = preset.amplitude * leafAmplitudeScale;
   const macroAssemblages = {};
   for (const id of MACRO_VARIATION_IDS) {
-    const base = `${normalizedVariantId}:${seed}:${id}`;
-    const amplitude = preset.amplitude;
+    const base = `${normalizedVariantId}:${seed}:leaf-${leafCount}:${id}`;
+    const amplitude = preset.amplitude * leafAmplitudeScale;
     macroAssemblages[id] = {
       phaseShift: clamp(stableNoise(`${base}:phase`) * 0.2 * amplitude, -0.22, 0.22),
       bowDelta: clamp(stableNoise(`${base}:bow`) * 0.18 * amplitude, -0.2, 0.2),
@@ -170,6 +174,9 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
     generationLaw: 'bounded-semantic-assay-not-free-randomization',
     variantId: normalizedVariantId,
     variationSeed: seed,
+    variationLeafCount: leafCount,
+    uiControlSource,
+    leafDensityPressure,
     boundedParameterFamilies: [
       'macro phase',
       'macro bow',
@@ -182,6 +189,7 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
       'lower cup depth',
       'crossing tuck phase',
       'owner dominance',
+      'ui leaf-count density pressure',
       'compatible termination flavor',
     ],
     forbiddenVariationClasses: [
@@ -202,10 +210,10 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
     effectiveParameters: {
       macroAssemblages,
       frontApertureOwnership: {
-        lowerCupDepth: clamp(1 + preset.cupBias + stableNoise(`${normalizedVariantId}:${seed}:lower-cup`) * 0.12 * preset.amplitude, 0.82, 1.26),
-        crossingTuckPhase: clamp(preset.tuckBias + stableNoise(`${normalizedVariantId}:${seed}:crossing-tuck`) * 0.18 * preset.amplitude, -0.24, 0.26),
-        ownerDominance: clamp(1 + preset.dominanceBias + stableNoise(`${normalizedVariantId}:${seed}:owner-dominance`) * 0.1 * preset.amplitude, 0.84, 1.28),
-        apertureBite: clamp(1 + stableNoise(`${normalizedVariantId}:${seed}:aperture-bite`) * 0.12 * preset.amplitude, 0.84, 1.18),
+        lowerCupDepth: clamp(1 + preset.cupBias + stableNoise(`${normalizedVariantId}:${seed}:leaf-${leafCount}:lower-cup`) * 0.12 * frontAmplitude, 0.82, 1.26),
+        crossingTuckPhase: clamp(preset.tuckBias + stableNoise(`${normalizedVariantId}:${seed}:leaf-${leafCount}:crossing-tuck`) * 0.18 * frontAmplitude, -0.24, 0.26),
+        ownerDominance: clamp(1 + preset.dominanceBias + stableNoise(`${normalizedVariantId}:${seed}:leaf-${leafCount}:owner-dominance`) * 0.1 * frontAmplitude, 0.84, 1.28),
+        apertureBite: clamp(1 + stableNoise(`${normalizedVariantId}:${seed}:leaf-${leafCount}:aperture-bite`) * 0.12 * frontAmplitude, 0.84, 1.18),
       },
     },
   };
@@ -3405,7 +3413,7 @@ function disposeObject(child, sharedMaterials) {
 export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, controls, onStatus, onDirty } = {}) {
   let active = false;
   let group = null;
-  let variationOptions = { variantId: 'baseline', variationSeed: 0 };
+  let variationOptions = { variantId: 'baseline', variationSeed: 0, variationLeafCount: 10, uiControlSource: 'route-or-programmatic' };
   let composition = createTargetOrbShellCompositionFixture(variationOptions);
 
   const sharedMaterials = new Set();
@@ -3935,6 +3943,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variationOptions = {
         variantId: next.variantId ?? variationOptions.variantId,
         variationSeed: next.variationSeed ?? variationOptions.variationSeed,
+        variationLeafCount: next.variationLeafCount ?? variationOptions.variationLeafCount,
+        uiControlSource: next.uiControlSource ?? variationOptions.uiControlSource,
       };
       composition = createTargetOrbShellCompositionFixture(variationOptions);
       if (active) build();
@@ -4144,6 +4154,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         baselineDisposition: ORB_SHELL_COMPOSITION_BASELINE,
         variantId: composition.effectiveVariation.variantId,
         variationSeed: composition.effectiveVariation.variationSeed,
+        variationLeafCount: composition.effectiveVariation.variationLeafCount,
+        uiControlSource: composition.effectiveVariation.uiControlSource,
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,

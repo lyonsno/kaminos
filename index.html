@@ -4336,7 +4336,11 @@ function initOrbShellRoute() {
   const syncControls = () => {
     updateOrbShellReadout();
     orbShellWitness.setControls(readOrbShellControls());
+    if (orbShellCompositionWitness) {
+      orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
+    }
     updateOrbShellReadout();
+    updateOrbShellCompositionReadout();
   };
   for (const id of ['orb-shell-seed', 'orb-shell-leaf-count', 'orb-shell-aperture-count']) {
     document.getElementById(id).addEventListener('input', syncControls);
@@ -4367,7 +4371,7 @@ function updateOrbShellCompositionReadout() {
   document.getElementById('orb-shell-composition-identity').textContent = ORB_SHELL_COMPOSITION_IDENTITY;
   const state = orbShellCompositionWitness?.debugState?.();
   document.getElementById('orb-shell-composition-baseline').textContent = state?.baselineDisposition || 'coherent-but-wrong-model-baseline';
-  document.getElementById('orb-shell-composition-variant').textContent = `${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0}`;
+  document.getElementById('orb-shell-composition-variant').textContent = `${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0}/leaves-${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
   document.getElementById('orb-shell-composition-macros').textContent = String(state?.macroAssemblageCount ?? 0);
   document.getElementById('orb-shell-composition-bands').textContent = String(state?.bandMemberCount ?? 0);
   document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
@@ -4378,6 +4382,24 @@ function updateOrbShellCompositionReadout() {
 
 function frameOrbShellCompositionCamera() {
   orbShellCompositionWitness?.frameCamera?.();
+}
+
+function readOrbShellCompositionControls() {
+  const params = new URLSearchParams(window.location.search);
+  const controlsState = readOrbShellControls();
+  const witnessState = orbShellCompositionWitness?.debugState?.();
+  const variationSeed = Number.isFinite(controlsState.seed)
+    ? controlsState.seed
+    : Number(witnessState?.variationSeed ?? params.get('orb_shell_variation_seed') ?? 0);
+  const variationLeafCount = Number.isFinite(controlsState.leafCount)
+    ? controlsState.leafCount
+    : Number(witnessState?.variationLeafCount ?? params.get('orb_shell_leaf_count') ?? 10);
+  return {
+    variantId: params.get('orb_shell_variant') || witnessState?.variantId || 'baseline',
+    variationSeed,
+    variationLeafCount,
+    uiControlSource: 'orb-shell-ui-seed-leaves-coupled-to-composition-variation',
+  };
 }
 
 function parseBooleanRouteFlag(value, defaultValue = false) {
@@ -4409,6 +4431,14 @@ function applyOrbShellCompositionRenderEffectPolicy(params) {
 
 function initOrbShellCompositionRoute() {
   const params = new URLSearchParams(window.location.search);
+  const requestedVariationSeed = Number(params.get('orb_shell_variation_seed') || 0);
+  if (params.has('orb_shell_variation_seed') && Number.isFinite(requestedVariationSeed)) {
+    document.getElementById('orb-shell-seed').value = String(Math.max(0, Math.min(99999, Math.round(requestedVariationSeed))));
+  }
+  const requestedVariationLeafCount = Number(params.get('orb_shell_variation_leaf_count') || params.get('orb_shell_leaf_count') || 10);
+  if ((params.has('orb_shell_variation_leaf_count') || params.has('orb_shell_leaf_count')) && Number.isFinite(requestedVariationLeafCount)) {
+    document.getElementById('orb-shell-leaf-count').value = String(Math.max(8, Math.min(14, Math.round(requestedVariationLeafCount))));
+  }
   orbShellCompositionWitness = createKaminosOrbShellCompositionWitness({
     THREE,
     scene,
@@ -4419,16 +4449,12 @@ function initOrbShellCompositionRoute() {
     },
     onDirty: () => window._kaminosDirty?.(),
   });
-  const requestedVariantId = params.get('orb_shell_variant') || 'baseline';
-  const requestedVariationSeed = Number(params.get('orb_shell_variation_seed') || 0);
-  orbShellCompositionWitness.setVariation({
-    variantId: requestedVariantId,
-    variationSeed: Number.isFinite(requestedVariationSeed) ? requestedVariationSeed : 0,
-  });
+  orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
   window.__kaminosOrbShellCompositionWitness = orbShellCompositionWitness;
 
   document.getElementById('orb-shell-composition-toggle').addEventListener('click', () => {
     const active = !orbShellCompositionWitness.debugState().active;
+    orbShellCompositionWitness.setVariation(readOrbShellCompositionControls());
     orbShellCompositionWitness.setActive(active);
     if (active) frameOrbShellCompositionCamera();
     updateOrbShellCompositionReadout();
