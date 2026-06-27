@@ -91,12 +91,13 @@
     ];
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
-      maxParticles: 900,
+      maxParticles: 1500,
       lerms,
       goins,
     });
 
-    const emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+    let activeWitnessEmitterConfig = 'short-smoke-v0';
+    let emitterPacket = normalizeWorldFingerJuiceEmitterPacket({
       packet_id: 'kaminos-synthetic-finger-juice-smoke-1',
       source_route: 'kaminos.lerms-finger-juice.synthetic-caster',
       source_backend: 'kaminos.synthetic-caster-hand',
@@ -128,6 +129,24 @@
         { id: 'ring', tip_index: 16, origin_world: [0.18, 0.36, -0.82], aim_world: [-0.08, 0.24, 1], motion_world: [-0.02, 0, 0.03], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
+    const expandedWitnessEmitterPacket = normalizeWorldFingerJuiceEmitterPacket({
+      packet_id: 'kaminos-synthetic-finger-juice-expanded-stress-1',
+      source_route: 'kaminos.lerms-finger-juice.synthetic-caster',
+      source_backend: 'kaminos.synthetic-caster-hand',
+      source_frame_id: 'kaminos-synthetic-caster-expanded-flow-frame-v0',
+      sidecar_sequence: 2,
+      evidence_kind: 'synthetic_fixture',
+      simulation_authority: 'synthetic_fixture',
+      sample_age_ms: 0,
+      route_identity: 'expanded-flow-stress-v0',
+      hand_sample_space: emitterPacket.hand_sample_space,
+      lerms_world_frame: emitterPacket.lerms_world_frame,
+      emitters: [
+        { id: 'index', tip_index: 8, origin_world: [-0.68, 0.5, -1.02], aim_world: [0.62, 0.3, 1.0], motion_world: [0.42, 0, 0.16], extension: 1.0, chemistry: 'knockback', radius: 0.086, strength: 2.0, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.0, 0.46, -1.04], aim_world: [0.0, 0.2, 1.0], motion_world: [0.0, 0, 0.14], extension: 1.0, chemistry: 'pooling', radius: 0.096, strength: 1.68, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.68, 0.43, -1.02], aim_world: [-0.6, 0.18, 1.0], motion_world: [-0.38, 0, 0.14], extension: 1.0, chemistry: 'weird', radius: 0.088, strength: 1.54, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+      ],
+    });
     prototype.setEmitters(emitterPacket);
     let webgpuSolver = null;
     let webgpuRenderer = null;
@@ -153,7 +172,7 @@
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
-      maxParticles: 900,
+      maxParticles: 1500,
       emitterPacket,
       lerms,
       goins,
@@ -240,6 +259,7 @@
         terrainContract: LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
         emitterPacket,
         ...solverState,
+        activeWitnessEmitterConfig,
         evidence_kind: emitterPacket.evidence_kind,
         simulation_authority: emitterPacket.simulation_authority,
         authority: emitterPacket.authority,
@@ -262,6 +282,21 @@
       };
     }
 
+    async function installWitnessEmitterPacket(nextPacket, configId) {
+      emitterPacket = nextPacket;
+      activeWitnessEmitterConfig = configId;
+      prototype.setEmitters(emitterPacket);
+      if (routeActive && webgpuSolver?.setEmitterPacket) {
+        const updateState = await webgpuSolver.setEmitterPacket(emitterPacket);
+        webgpuState = {
+          ...webgpuState,
+          ...updateState,
+          activeWitnessEmitterConfig,
+        };
+      }
+      return readDebugState();
+    }
+
     window.__lermsFingerJuiceStepForWitness = async ({ steps = 150, dt = 1 / 60 } = {}) => {
       const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
@@ -277,6 +312,19 @@
         for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
       }
       return readDebugState();
+    };
+
+    window.__lermsFingerJuiceStressForWitness = async ({ steps = 420, dt = 1 / 60 } = {}) => {
+      const safeSteps = Math.max(240, Math.floor(Number(steps) || 420));
+      const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
+      await installWitnessEmitterPacket(expandedWitnessEmitterPacket, 'expanded-flow-stress-v0');
+      const state = await window.__lermsFingerJuiceStepForWitness({ steps: safeSteps, dt: safeDt });
+      return {
+        ...state,
+        expandedWitnessPhase: 'expanded-flow-stress-v0',
+        extendedFlowSteps: safeSteps,
+        extendedFlowSeconds: Number((safeSteps * safeDt).toFixed(3)),
+      };
     };
 
     function resize() {
@@ -480,11 +528,12 @@
       const sourceDiagnostics = state.sourceDiagnostics || {};
       const pressureDensityStats = state.pressureDensityStats || {};
       const spatialPressureStats = state.spatialPressureStats || {};
+      const fluidDepthStats = state.fluidDepthStats || {};
       const emitterDiagnostics = Array.isArray(state.emitterDiagnostics) ? state.emitterDiagnostics : [];
       const emitterSummary = emitterDiagnostics
         .map(emitter => `${emitter.emitter_id}:${emitter.activeParticleCount}`)
         .join(' ');
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} | ${state.simulation_authority}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | age ${sourceDiagnostics.sampleAgeMs ?? 0}ms<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0}<br>particles ${state.particleCount || 0} | trails ${state.trailSampleCount || 0} / ${state.trailEmitterCount || 0} | surface ${state.surfaceFlowCount || 0} | juice hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       return state;

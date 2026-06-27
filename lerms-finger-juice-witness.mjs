@@ -18,6 +18,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-lerms-finger-ju
 const settleMs = Number(args.get('--settle-ms') || 1700);
 const witnessSteps = Number(args.get('--witness-steps') || 180);
 const respawnProbeSteps = Number(args.get('--respawn-steps') || 620);
+const extendedFlowSteps = Number(args.get('--extended-flow-steps') || 420);
 
 let phase = 'initializing';
 let stderr = '';
@@ -250,6 +251,7 @@ async function run() {
     assert.equal(state.respawnContract, 'wgsl-gpu-emitter-respawn-v0', 'wrong WebGPU respawn contract');
     assert.equal(state.pressureContract, 'wgsl-local-density-pressure-v0', 'wrong WebGPU pressure contract');
     assert.equal(state.spatialPressureContract, 'wgsl-spatial-cell-pressure-v0', 'wrong WebGPU spatial pressure contract');
+    assert.equal(state.fluidDepthContract, 'wgsl-spatial-viscosity-pressure-v0', 'wrong WebGPU deeper fluid contract');
     assert.ok(state.adapterInfo, 'missing WebGPU adapterInfo');
     assert.ok(state.cpuOracle, 'missing CPU oracle comparison');
     assert.equal(state.routeActive, true, 'route did not activate');
@@ -276,6 +278,9 @@ async function run() {
     assert.ok(state.spatialPressureStats?.spatialCellCount > 0, 'route did not expose pressure cell count');
     assert.ok(state.spatialPressureStats?.occupiedCellCount > 0, 'route did not expose occupied pressure cells');
     assert.ok(state.spatialPressureStats?.maxCellOccupancy > 0, 'route did not expose pressure cell occupancy');
+    assert.equal(state.fluidDepthStats?.pressureContract, 'wgsl-spatial-viscosity-pressure-v0', 'fluid depth stats do not identify contract');
+    assert.ok(state.fluidDepthStats?.spatialPressureIterations >= 2, 'route did not expose multiple pressure iterations');
+    assert.ok(state.fluidDepthStats?.viscosityAffectedCount > 0, 'route did not expose viscosity affected particles');
     assert.ok(Array.isArray(state.juiceHitEvents) && state.juiceHitEvents.length > 0, 'route did not emit LERMS juice-hit events');
     assert.equal(state.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'wrong LERMS juice-hit event schema');
     assert.equal(state.juiceHitEvents[0].source?.schema, 'lerms.source-truth.v0', 'juice-hit event missing source truth');
@@ -294,6 +299,45 @@ async function run() {
     assert.ok(state.surfaceSmearCount > 0, 'route did not preserve surface smear evidence');
     assert.ok(state.lermImpulseCount > 0, 'route did not produce lerm impulse evidence');
     assert.ok(state.goinImpulseCount > 0, 'route did not produce goin impulse evidence');
+
+    phase = 'expanded_flow_probe';
+    const extendedFlowProbe = await evaluate(ws, `(async () => {
+      if (!window.__lermsFingerJuiceStressForWitness) return null;
+      const before = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+      const stress = await window.__lermsFingerJuiceStressForWitness({ steps: ${JSON.stringify(extendedFlowSteps)}, dt: 1 / 60 });
+      return {
+        before,
+        state: stress,
+        requestedConfig: 'expanded-flow-stress-v0',
+        effectiveConfig: stress?.activeWitnessEmitterConfig || stress?.emitterPacket?.route_identity || null,
+        sourceFrameId: stress?.sourceDiagnostics?.frameId || null,
+        extendedFlowSteps: stress?.extendedFlowSteps || ${JSON.stringify(extendedFlowSteps)},
+        extendedFlowSeconds: stress?.extendedFlowSeconds || null,
+        particleCount: stress?.particleCount || 0,
+        surfaceFlowCount: stress?.surfaceFlowCount || 0,
+        flowExtentX: stress?.flowExtentX || 0,
+        flowExtentZ: stress?.flowExtentZ || 0,
+        spatialOccupiedCells: stress?.spatialPressureStats?.occupiedCellCount || 0,
+        maxCellOccupancy: stress?.spatialPressureStats?.maxCellOccupancy || 0,
+        viscosityAffectedCount: stress?.fluidDepthStats?.viscosityAffectedCount || 0,
+        pressureContract: stress?.pressureContract || null,
+        spatialPressureContract: stress?.spatialPressureContract || null,
+        fluidDepthContract: stress?.fluidDepthContract || null,
+      };
+    })()`);
+    assert.ok(extendedFlowProbe, 'route did not expose expanded witness stress hook');
+    lastTrustworthyState = extendedFlowProbe.state || lastTrustworthyState;
+    assert.equal(extendedFlowProbe.effectiveConfig, 'expanded-flow-stress-v0', 'expanded witness phase did not install stress emitter config');
+    assert.ok(extendedFlowProbe.extendedFlowSteps >= 360, 'expanded witness phase did not run a long enough stress duration');
+    assert.equal(extendedFlowProbe.fluidDepthContract, 'wgsl-spatial-viscosity-pressure-v0', 'expanded witness phase lost deeper fluid contract');
+    assert.ok(extendedFlowProbe.particleCount >= 1200, 'expanded witness phase did not expose more fluid particles');
+    assert.ok(extendedFlowProbe.surfaceFlowCount >= 750, 'expanded witness phase did not produce enough surface-flow particles');
+    assert.ok(extendedFlowProbe.flowExtentX > 0.55, 'expanded witness phase remains too horizontally crushed');
+    assert.ok(extendedFlowProbe.flowExtentZ > 1.0, 'expanded witness phase did not preserve enough forward flow extent');
+    assert.ok(extendedFlowProbe.spatialOccupiedCells >= 8, 'expanded witness phase did not occupy enough pressure cells');
+    assert.ok(extendedFlowProbe.viscosityAffectedCount > 0, 'expanded witness phase did not exercise viscosity');
+    state = extendedFlowProbe.state;
+    lastTrustworthyState = state;
 
     phase = 'capture_screenshot';
     await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
@@ -320,6 +364,7 @@ async function run() {
       respawnContract: state.respawnContract,
       pressureContract: state.pressureContract,
       spatialPressureContract: state.spatialPressureContract,
+      fluidDepthContract: state.fluidDepthContract,
       adapterInfo: state.adapterInfo,
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
@@ -327,8 +372,15 @@ async function run() {
       cadenceProbe,
       preRespawnState,
       respawnProbeSteps,
+      extendedFlowProbe: {
+        ...extendedFlowProbe,
+        before: undefined,
+        state: undefined,
+      },
+      extendedFlowSteps,
       terrainContract: state.terrainContract,
       visualRenderer: state.visualRenderer,
+      activeWitnessEmitterConfig: state.activeWitnessEmitterConfig || state.sourceDiagnostics?.configId || null,
       simulation_authority: state.simulation_authority,
       evidence_kind: state.evidence_kind,
       hand_sample_space: state.hand_sample_space,
@@ -338,6 +390,7 @@ async function run() {
       emitterDiagnostics: state.emitterDiagnostics,
       pressureDensityStats: state.pressureDensityStats,
       spatialPressureStats: state.spatialPressureStats,
+      fluidDepthStats: state.fluidDepthStats,
       juiceHitEventCount: state.juiceHitEventCount,
       juiceHitEvents: state.juiceHitEvents,
       particleCount: state.particleCount,
@@ -350,6 +403,8 @@ async function run() {
       trailEmitterCount: state.trailEmitterCount,
       surfaceStreakCount: state.surfaceStreakCount,
       trailSpanZ: state.trailSpanZ,
+      flowExtentX: state.flowExtentX,
+      flowExtentZ: state.flowExtentZ,
       sourceAnchorCount: state.sourceAnchorCount,
       maxTrailSegmentLength: state.maxTrailSegmentLength,
       airborneBreadcrumbCount: state.airborneBreadcrumbCount,

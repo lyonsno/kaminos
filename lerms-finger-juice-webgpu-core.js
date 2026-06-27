@@ -6,6 +6,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_bu
 export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT = 'wgsl-spatial-cell-pressure-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT = 'wgsl-spatial-viscosity-pressure-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -14,6 +15,8 @@ const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
 const PRESSURE_NEIGHBOR_WINDOW = 6;
 const PRESSURE_RADIUS = 0.105;
+const SURFACE_VISCOSITY_RADIUS = PRESSURE_RADIUS * 1.35;
+const SPATIAL_PRESSURE_ITERATIONS = 2;
 const SPATIAL_PRESSURE_GRID_X = 24;
 const SPATIAL_PRESSURE_GRID_Z = 32;
 const SPATIAL_PRESSURE_CELL_COUNT = SPATIAL_PRESSURE_GRID_X * SPATIAL_PRESSURE_GRID_Z;
@@ -297,6 +300,7 @@ export function createWebGPUEmitterBufferData(emitterPacket) {
 function respawnParticleFromSource(particle, source, index, stepSeed = 0) {
   const respawnCount = finite(particle.respawnCount, 0) + 1;
   const jitter = spawnJitter(index, source.emitterIndex, respawnCount, stepSeed, source.radius);
+  const lifeScale = 0.55 + hash01((index + 1) * 2246822519 + (respawnCount + 3) * 3266489917) * 0.45;
   return {
     position: add(source.origin || source.position, jitter),
     phase: 0,
@@ -305,7 +309,7 @@ function respawnParticleFromSource(particle, source, index, stepSeed = 0) {
     radius: source.radius,
     strength: source.strength,
     age: 0,
-    life: source.life,
+    life: source.life * lifeScale,
     emitterIndex: source.emitterIndex,
     active: true,
     impacted: false,
@@ -333,8 +337,8 @@ export function createInitialWebGPUParticles(emitterPacket, options = {}) {
       chemistry: source.chemistryCode,
       radius,
       strength: source.strength,
-      age: (i % 18) * -0.012,
-      life: source.life,
+      age: (i % 96) * -0.025,
+      life: source.life * (0.55 + rng() * 0.45),
       emitterIndex: source.emitterIndex,
       impacted: false,
       respawnCount: 0,
@@ -513,6 +517,64 @@ function spatialPressureStats(particles) {
   };
 }
 
+function fluidDepthStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+      spatialPressureIterations: SPATIAL_PRESSURE_ITERATIONS,
+      viscosityRadius: SURFACE_VISCOSITY_RADIUS,
+      viscosityNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+      surfaceParticleCount: 0,
+      viscosityAffectedCount: 0,
+      averageSurfaceSpeed: 0,
+      averageVelocityDelta: 0,
+      maxVelocityDelta: 0,
+    };
+  }
+  let totalSurfaceSpeed = 0;
+  let totalVelocityDelta = 0;
+  let maxVelocityDelta = 0;
+  let viscosityAffectedCount = 0;
+  for (let index = 0; index < surfaceParticles.length; index += 1) {
+    const particle = surfaceParticles[index];
+    totalSurfaceSpeed += length3(particle.velocity);
+    let neighborVelocity = [0, 0, 0];
+    let weightTotal = 0;
+    for (let offset = 1; offset <= PRESSURE_NEIGHBOR_WINDOW; offset += 1) {
+      for (const neighbor of [
+        surfaceParticles[(index + offset) % surfaceParticles.length],
+        surfaceParticles[(index + surfaceParticles.length - offset) % surfaceParticles.length],
+      ]) {
+        if (!neighbor || neighbor.id === particle.id) continue;
+        const distance = length3(sub(particle.position, neighbor.position));
+        if (distance <= 0.0001 || distance >= SURFACE_VISCOSITY_RADIUS) continue;
+        const weight = (SURFACE_VISCOSITY_RADIUS - distance) / SURFACE_VISCOSITY_RADIUS;
+        neighborVelocity = add(neighborVelocity, mul(neighbor.velocity, weight));
+        weightTotal += weight;
+      }
+    }
+    if (weightTotal > 0) {
+      const averageVelocity = mul(neighborVelocity, 1 / weightTotal);
+      const velocityDelta = length3(sub(averageVelocity, particle.velocity));
+      totalVelocityDelta += velocityDelta;
+      maxVelocityDelta = Math.max(maxVelocityDelta, velocityDelta);
+      viscosityAffectedCount += 1;
+    }
+  }
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+    spatialPressureIterations: SPATIAL_PRESSURE_ITERATIONS,
+    viscosityRadius: round(SURFACE_VISCOSITY_RADIUS, 4),
+    viscosityNeighborWindow: PRESSURE_NEIGHBOR_WINDOW,
+    surfaceParticleCount: surfaceParticles.length,
+    viscosityAffectedCount,
+    averageSurfaceSpeed: round(totalSurfaceSpeed / surfaceParticles.length, 4),
+    averageVelocityDelta: viscosityAffectedCount ? round(totalVelocityDelta / viscosityAffectedCount, 4) : 0,
+    maxVelocityDelta: round(maxVelocityDelta, 4),
+  };
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
@@ -614,6 +676,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   } : null;
   const pressureStats = pressureDensityStats(particles);
   const spatialStats = spatialPressureStats(particles);
+  const depthStats = fluidDepthStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -625,11 +688,13 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
     pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
     spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+    fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     sourceTruth,
     sourceDiagnostics,
     emitterDiagnostics,
     pressureDensityStats: pressureStats,
     spatialPressureStats: spatialStats,
+    fluidDepthStats: depthStats,
     juiceHitEvents,
     juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
@@ -644,6 +709,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     trailEmitterCount: new Set(trails.map(trail => trail.emitter_id)).size,
     surfaceStreakCount: trails.filter(trail => trail.surface_flow).length,
     trailSpanZ: zValues.length ? round(Math.max(...zValues) - Math.min(...zValues), 4) : 0,
+    flowExtentX: particles.length ? round(Math.max(...particles.map(particle => particle.position[0])) - Math.min(...particles.map(particle => particle.position[0])), 4) : 0,
+    flowExtentZ: particles.length ? round(Math.max(...particles.map(particle => particle.position[2])) - Math.min(...particles.map(particle => particle.position[2])), 4) : 0,
     sourceAnchorCount: new Set(trails.filter(trail => trail.source_anchor).map(trail => trail.emitter_id)).size,
     maxTrailSegmentLength: segmentLengths.length ? round(Math.max(...segmentLengths), 4) : 0,
     airborneBreadcrumbCount: [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'airborne').length,
@@ -815,6 +882,44 @@ fn applySpatialCellPressure(position: vec3f, velocity: vec3f, chemistry: f32) ->
   return velocity + direction * chemistryScale * occupancyScale;
 }
 
+fn applySurfaceViscosity(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
+  var neighborVelocity = vec3f(0.0, 0.0, 0.0);
+  var weightTotal = 0.0;
+  let viscosityRadius = max(${SURFACE_VISCOSITY_RADIUS.toFixed(4)}, radius * 3.0);
+  for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
+    let forwardIndex = (index + offset) % params.particleCount;
+    let backIndex = (index + params.particleCount - offset) % params.particleCount;
+    let forward = particles[forwardIndex];
+    let back = particles[backIndex];
+    if (forward.flags.y > 0.5 && forward.posPhase.w >= 0.5 && forward.misc.z >= 0.0 && forward.misc.z < forward.misc.w) {
+      let delta = position - forward.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < viscosityRadius) {
+        let weight = (viscosityRadius - distance) / viscosityRadius;
+        neighborVelocity = neighborVelocity + forward.velChem.xyz * weight;
+        weightTotal = weightTotal + weight;
+      }
+    }
+    if (back.flags.y > 0.5 && back.posPhase.w >= 0.5 && back.misc.z >= 0.0 && back.misc.z < back.misc.w) {
+      let delta = position - back.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < viscosityRadius) {
+        let weight = (viscosityRadius - distance) / viscosityRadius;
+        neighborVelocity = neighborVelocity + back.velChem.xyz * weight;
+        weightTotal = weightTotal + weight;
+      }
+    }
+  }
+  if (weightTotal <= 0.0001) {
+    return velocity;
+  }
+  let averageVelocity = neighborVelocity / weightTotal;
+  let viscosityBlend = select(select(0.014, 0.019, chemistry > 2.5), 0.028, chemistry > 1.5 && chemistry < 2.5);
+  let blend = min(viscosityBlend * weightTotal, 0.3);
+  let horizontal = velocity.xz + (averageVelocity.xz - velocity.xz) * blend;
+  return vec3f(horizontal.x, velocity.y, horizontal.y);
+}
+
 fn hash01(seed: u32) -> f32 {
   var value = seed;
   value = value ^ (value >> 16u);
@@ -857,9 +962,10 @@ fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
   let speedBase = select(1.18, 2.15, extension > 0.5);
   let speed = speedBase * (0.35 + strength * 0.65);
   let arcBoost = 0.42 + max(0.0, aim.y) * 1.6;
+  let lifeScale = 0.55 + hash01(seed + 0xc2b2ae35u) * 0.45;
   out.posPhase = vec4f(origin + jitter, 0.0);
   out.velChem = vec4f(aim * speed + motion + vec3f(0.0, arcBoost, 0.0), chemistry);
-  out.misc = vec4f(radius, strength, 0.0, life);
+  out.misc = vec4f(radius, strength, 0.0, life * lifeScale);
   out.flags = vec4f(sourceEmitterIndex, emitter.originActive.w, 0.0, respawnCount);
   return out;
 }
@@ -931,6 +1037,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = slideVelocityOnTerrain(velocity, terrainNormalAt(position.x, position.z), chemistry);
       velocity = applyLocalDensityPressure(index, position, velocity, radius, chemistry);
       velocity = applySpatialCellPressure(position, velocity, chemistry);
+      velocity = applySurfaceViscosity(index, position, velocity, radius, chemistry);
+      velocity = applySpatialCellPressure(position + velocity * params.dt * 0.5, velocity, chemistry);
       position = position + velocity * params.dt;
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
     }
@@ -1052,11 +1160,14 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     maxParticles,
     seed: options.seed || 11,
   });
+  let currentSources = sources;
+  let currentEmitterData = emitterData;
+  let currentEmitterPacket = options.emitterPacket || {};
   const cpuOracleBase = runCpuFingerJuiceOracle(data, {
     steps: options.oracleSteps || 180,
     dt: options.oracleDt || 1 / 60,
-    sources,
-    emitterPacket: options.emitterPacket || {},
+    sources: currentSources,
+    emitterPacket: currentEmitterPacket,
     lerms: options.lerms || [],
     goins: options.goins || [],
   });
@@ -1080,9 +1191,10 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
+  const emitterBufferByteLength = emitterData.data.byteLength;
   const emitterBuffer = device.createBuffer({
     label: 'lerms-finger-juice-emitters',
-    size: emitterData.data.byteLength,
+    size: emitterBufferByteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   const pressureBinBuffer = device.createBuffer({
@@ -1159,7 +1271,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     paramsView.setFloat32(0, safeDt, true);
     paramsView.setUint32(4, maxParticles, true);
     paramsView.setUint32(8, safeSteps, true);
-    paramsView.setUint32(12, emitterData.emitterCount, true);
+    paramsView.setUint32(12, currentEmitterData.emitterCount, true);
     paramsView.setUint32(16, stepCount, true);
     paramsView.setUint32(20, 0, true);
     paramsView.setUint32(24, 0, true);
@@ -1187,6 +1299,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
         spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+        fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
         stepCount,
       };
     }
@@ -1203,6 +1316,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+      fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       stepCount,
     };
   }
@@ -1223,14 +1337,14 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     const cpuOracle = runCpuFingerJuiceOracle(data, {
       steps: stepCount,
       dt: safeDt,
-      sources,
-      emitterPacket: options.emitterPacket || {},
+      sources: currentSources,
+      emitterPacket: currentEmitterPacket,
       lerms: options.lerms || [],
       goins: options.goins || [],
     });
     const summary = summarizeWebGPUParticles(result, {
-      sources,
-      emitterPacket: options.emitterPacket || {},
+      sources: currentSources,
+      emitterPacket: currentEmitterPacket,
       stepCount,
       lerms: options.lerms || [],
       goins: options.goins || [],
@@ -1245,12 +1359,13 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+      fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
       stepCount,
       readbackParticleFloats: result.length,
-      emitterCount: emitterData.emitterCount,
+      emitterCount: currentEmitterData.emitterCount,
       cpuOracle: {
         solver_backend: cpuOracle.solver_backend,
         particleCount: cpuOracle.particleCount,
@@ -1258,6 +1373,22 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         maxRangeZ: cpuOracle.maxRangeZ,
         gpuRespawnCount: cpuOracle.gpuRespawnCount,
       },
+    };
+  }
+  function setEmitterPacket(emitterPacket = {}) {
+    const nextEmitterData = createWebGPUEmitterBufferData(emitterPacket);
+    if (nextEmitterData.data.byteLength > emitterBufferByteLength) {
+      throw new Error(`expanded emitter packet has ${nextEmitterData.data.byteLength} bytes, exceeds allocated ${emitterBufferByteLength}`);
+    }
+    currentEmitterData = nextEmitterData;
+    currentSources = nextEmitterData.sources;
+    currentEmitterPacket = emitterPacket;
+    device.queue.writeBuffer(emitterBuffer, 0, nextEmitterData.data);
+    return {
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      emitterCount: currentEmitterData.emitterCount,
+      sourcePacketId: currentEmitterPacket.packet_id || null,
+      configId: currentEmitterPacket.route_identity || null,
     };
   }
   function step(steps = 1, dt = 1 / 60) {
@@ -1396,15 +1527,19 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
     emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
     respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+    spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+    fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
     adapterInfo,
     workgroupSize: WORKGROUP_SIZE,
     maxParticles,
-    emitterCount: emitterData.emitterCount,
+    emitterCount: currentEmitterData.emitterCount,
     step,
     stepAndRead,
+    setEmitterPacket,
     createRenderer,
   };
 }

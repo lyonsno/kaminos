@@ -56,6 +56,7 @@ assert.match(webgpuCoreSource, /webgpu_emitter_buffer_v0/, 'WebGPU emitter buffe
 assert.match(webgpuCoreSource, /wgsl-gpu-emitter-respawn-v0/, 'WebGPU respawn contract identity is explicit');
 assert.match(webgpuCoreSource, /wgsl-local-density-pressure-v0/, 'WebGPU local-density pressure contract identity is explicit');
 assert.match(webgpuCoreSource, /wgsl-spatial-cell-pressure-v0/, 'WebGPU spatial cell pressure contract identity is explicit');
+assert.match(webgpuCoreSource, /wgsl-spatial-viscosity-pressure-v0/, 'WebGPU deeper fluid pressure/viscosity contract identity is explicit');
 assert.match(webgpuCoreSource, /lerms\.source-truth\.v0/, 'WebGPU route emits LERMS source-truth envelopes');
 assert.match(webgpuCoreSource, /lerms\.juice-hit-event\.v0/, 'WebGPU route emits LERMS juice-hit events');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
@@ -78,6 +79,10 @@ assert.match(webgpuCoreSource, /ringEmitterLateralDrift/, 'WebGPU solver attribu
 assert.match(webgpuCoreSource, /emitterBufferRoute/, 'WebGPU solver reports effective emitter buffer route');
 assert.match(webgpuCoreSource, /applyLocalDensityPressure/, 'WebGPU solver applies a local-density pressure correction');
 assert.match(webgpuCoreSource, /applySpatialCellPressure/, 'WebGPU solver applies spatial cell pressure correction');
+assert.match(webgpuCoreSource, /applySurfaceViscosity/, 'WebGPU solver applies surface viscosity after pressure correction');
+assert.match(webgpuCoreSource, /fluidDepthStats/, 'WebGPU solver reports deeper fluid diagnostics');
+assert.match(webgpuCoreSource, /spatialPressureIterations/, 'WebGPU deeper fluid diagnostics report pressure iteration count');
+assert.match(webgpuCoreSource, /viscosityAffectedCount/, 'WebGPU deeper fluid diagnostics report viscosity affected particles');
 assert.match(webgpuCoreSource, /pressureBins/, 'WebGPU solver owns a pressure bin buffer');
 assert.match(webgpuCoreSource, /clear_pressure_bins/, 'WebGPU solver clears pressure bins before accumulation');
 assert.match(webgpuCoreSource, /accumulate_pressure_bins/, 'WebGPU solver accumulates surface particles into pressure bins');
@@ -104,6 +109,9 @@ assert.match(pageSource, /sourceDiagnostics/, 'prototype displays source diagnos
 assert.match(pageSource, /emitterDiagnostics/, 'prototype displays live emitter diagnostics');
 assert.match(pageSource, /pressureDensityStats/, 'prototype displays pressure density diagnostics');
 assert.match(pageSource, /spatialPressureStats/, 'prototype displays spatial pressure diagnostics');
+assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid diagnostics');
+assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
+assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
 assert.match(pageSource, /hill-of-hills-heightfield-collision-v0/, 'prototype page displays terrain contract');
@@ -126,6 +134,7 @@ assert.match(witnessSource, /webgpu_emitter_buffer_v0/, 'witness records WebGPU 
 assert.match(witnessSource, /wgsl-gpu-emitter-respawn-v0/, 'witness records GPU respawn contract');
 assert.match(witnessSource, /wgsl-local-density-pressure-v0/, 'witness records local-density pressure contract');
 assert.match(witnessSource, /wgsl-spatial-cell-pressure-v0/, 'witness records spatial cell pressure contract');
+assert.match(witnessSource, /wgsl-spatial-viscosity-pressure-v0/, 'witness records deeper fluid pressure/viscosity contract');
 assert.match(witnessSource, /lerms\.juice-hit-event\.v0/, 'witness records LERMS juice-hit-event schema');
 assert.match(witnessSource, /readbackCadence/, 'witness records throttled readback cadence');
 assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
@@ -137,6 +146,12 @@ assert.match(witnessSource, /ringEmitterLateralDrift/, 'witness records ring emi
 assert.match(witnessSource, /pressureDensityStats/, 'witness requires pressure/density diagnostics');
 assert.match(witnessSource, /spatialPressureStats/, 'witness requires spatial pressure diagnostics');
 assert.match(witnessSource, /occupiedCellCount/, 'witness requires occupied spatial pressure cells');
+assert.match(witnessSource, /fluidDepthStats/, 'witness requires deeper fluid diagnostics');
+assert.match(witnessSource, /extendedFlowProbe/, 'witness records the expanded long-flow probe');
+assert.match(witnessSource, /expanded-flow-stress-v0/, 'witness requires stress phase route/config identity');
+assert.match(witnessSource, /extendedFlowSteps/, 'witness records the requested extended stress duration');
+assert.match(witnessSource, /flowExtentX/, 'witness checks widened horizontal fluid extent');
+assert.match(witnessSource, /flowExtentZ/, 'witness checks widened forward fluid extent');
 assert.match(witnessSource, /sourceDiagnostics/, 'witness requires source diagnostics');
 assert.match(witnessSource, /emitterDiagnostics/, 'witness requires emitter diagnostics');
 assert.match(witnessSource, /juiceHitEvents/, 'witness requires LERMS juice-hit events');
@@ -164,6 +179,7 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE, 'webgpu_e
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT, 'wgsl-gpu-emitter-respawn-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT, 'wgsl-local-density-pressure-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT, 'wgsl-spatial-cell-pressure-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT, 'wgsl-spatial-viscosity-pressure-v0');
 assert.equal(webgpuMod.LERMS_SOURCE_TRUTH_SCHEMA, 'lerms.source-truth.v0');
 assert.equal(webgpuMod.LERMS_JUICE_HIT_EVENT_SCHEMA, 'lerms.juice-hit-event.v0');
 
@@ -297,6 +313,9 @@ assert.ok(oracleHitState.pressureDensityStats.pressureNeighborWindow > 0, 'WebGP
 assert.equal(oracleHitState.spatialPressureStats.pressureContract, 'wgsl-spatial-cell-pressure-v0', 'WebGPU summary reports spatial pressure contract');
 assert.ok(oracleHitState.spatialPressureStats.spatialCellCount > 0, 'WebGPU summary reports spatial pressure cell count');
 assert.ok(oracleHitState.spatialPressureStats.occupiedCellCount > 0, 'WebGPU summary reports occupied pressure cells');
+assert.equal(oracleHitState.fluidDepthStats.pressureContract, 'wgsl-spatial-viscosity-pressure-v0', 'WebGPU summary reports deeper fluid contract');
+assert.ok(oracleHitState.fluidDepthStats.spatialPressureIterations >= 2, 'WebGPU summary reports multiple pressure iterations');
+assert.ok(oracleHitState.fluidDepthStats.viscosityAffectedCount > 0, 'WebGPU summary reports viscosity affected particles');
 assert.ok(oracleHitState.juiceHitEvents.length > 0, 'WebGPU summary emits LERMS juice-hit events');
 assert.equal(oracleHitState.juiceHitEvents[0].schema, 'lerms.juice-hit-event.v0', 'juice hit event schema is LERMS compatible');
 assert.ok(['lerm', 'goin'].includes(oracleHitState.juiceHitEvents[0].targetKind), 'juice hit targets LERMS receiver kinds');
