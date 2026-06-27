@@ -9,6 +9,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT = 'wgsl-spatial
 export const LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT = 'wgsl-spatial-viscosity-pressure-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT = 'wgsl-same-chemistry-surface-cohesion-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT = 'wgsl-spatial-surface-relaxation-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT = 'wgsl-stability-damped-relaxation-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -714,6 +715,50 @@ function spatialSurfaceRelaxationStats(particles) {
   };
 }
 
+function stabilityStats(particles, spatialStats, depthStats) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
+      stabilityMode: 'damped_cell_relaxation_velocity_clamp_v0',
+      surfaceParticleCount: 0,
+      highSpeedParticleCount: 0,
+      maxSurfaceSpeed: 0,
+      averageSurfaceSpeed: 0,
+      maxVelocityDelta: 0,
+      denseCellSaturation: 0,
+      maxCellOccupancy: 0,
+      occupiedCellCount: 0,
+      stabilityRiskScore: 0,
+    };
+  }
+
+  const speeds = surfaceParticles.map(particle => Math.hypot(particle.velocity[0], particle.velocity[2]));
+  const highSpeedParticleCount = speeds.filter(speed => speed > 0.92).length;
+  const maxSurfaceSpeed = Math.max(...speeds);
+  const averageSurfaceSpeed = speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length;
+  const maxCellOccupancy = spatialStats?.maxCellOccupancy || 0;
+  const occupiedCellCount = spatialStats?.occupiedCellCount || 0;
+  const denseCellSaturation = surfaceParticles.length ? maxCellOccupancy / surfaceParticles.length : 0;
+  const maxVelocityDelta = depthStats?.maxVelocityDelta || 0;
+  const highSpeedRatio = highSpeedParticleCount / surfaceParticles.length;
+  const saturationRisk = Math.min(1, denseCellSaturation * 3.8);
+  const velocityRisk = Math.min(1, maxVelocityDelta / 1.6);
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
+    stabilityMode: 'damped_cell_relaxation_velocity_clamp_v0',
+    surfaceParticleCount: surfaceParticles.length,
+    highSpeedParticleCount,
+    maxSurfaceSpeed: round(maxSurfaceSpeed, 4),
+    averageSurfaceSpeed: round(averageSurfaceSpeed, 4),
+    maxVelocityDelta: round(maxVelocityDelta, 4),
+    denseCellSaturation: round(denseCellSaturation, 4),
+    maxCellOccupancy,
+    occupiedCellCount,
+    stabilityRiskScore: round(Math.min(1, highSpeedRatio * 2.2 + saturationRisk * 0.35 + velocityRisk * 0.25), 4),
+  };
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
@@ -818,6 +863,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const depthStats = fluidDepthStats(particles);
   const cohesionStats = surfaceCohesionStats(particles);
   const relaxationStats = spatialSurfaceRelaxationStats(particles);
+  const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -831,6 +877,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     surfaceRelaxationContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT,
+    stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
     sourceTruth,
     sourceDiagnostics,
     emitterDiagnostics,
@@ -839,6 +886,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     fluidDepthStats: depthStats,
     surfaceCohesionStats: cohesionStats,
     spatialSurfaceRelaxationStats: relaxationStats,
+    stabilityStats: solverStabilityStats,
     juiceHitEvents,
     juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
@@ -1021,8 +1069,8 @@ fn applySpatialCellPressure(position: vec3f, velocity: vec3f, chemistry: f32) ->
   let gradient = neighborGradient + localOutward * center * 0.35;
   let gradientLength = length(gradient);
   let direction = select(normalize(localOutward + vec3f(0.0007, 0.0, 0.0003)), normalize(gradient), gradientLength >= 0.0001);
-  let chemistryScale = select(select(0.0026, 0.0021, chemistry > 2.5), 0.0032, chemistry > 1.5 && chemistry < 2.5);
-  let occupancyScale = min(center, 12.0);
+  let chemistryScale = select(select(0.0022, 0.0018, chemistry > 2.5), 0.0027, chemistry > 1.5 && chemistry < 2.5);
+  let occupancyScale = min(center, 9.0);
   return velocity + direction * chemistryScale * occupancyScale;
 }
 
@@ -1130,16 +1178,32 @@ fn applySpatialSurfaceRelaxation(position: vec3f, velocity: vec3f, radius: f32, 
   let travel = vec3f(velocity.x, 0.0, velocity.z);
   let travelLength = length(travel);
   let travelDirection = select(vec3f(0.0, 0.0, 0.0), travel / travelLength, travelLength > 0.0001);
-  let spread = densityGradient * 0.58 + localOutward * min(center, 18.0) * 0.18 + travelDirection * neighborOccupied * 0.16;
+  let spread = densityGradient * 0.42 + localOutward * min(center, 12.0) * 0.13 + travelDirection * neighborOccupied * 0.08;
   let spreadLength = length(spread);
   if (spreadLength <= 0.0001) {
     return position;
   }
-  let chemistryScale = select(select(0.0019, 0.0015, chemistry > 2.5), 0.0024, chemistry > 1.5 && chemistry < 2.5);
-  let densityScale = min(max(center - 1.0, 0.0), 18.0);
-  let relaxationStep = min(radius * 0.34, chemistryScale * densityScale * (1.0 + neighborOccupied * 0.18));
+  let chemistryScale = select(select(0.0012, 0.0010, chemistry > 2.5), 0.0015, chemistry > 1.5 && chemistry < 2.5);
+  let densityScale = min(max(center - 1.0, 0.0), 10.0);
+  let relaxationStep = min(radius * 0.2, chemistryScale * densityScale * (1.0 + neighborOccupied * 0.08));
   let relaxed = position + normalize(spread) * relaxationStep;
   return vec3f(relaxed.x, position.y, relaxed.z);
+}
+
+fn applySurfaceStabilityDamping(position: vec3f, velocity: vec3f, chemistry: f32) -> vec3f {
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  let horizontal = vec2f(velocity.x, velocity.z);
+  let speed = length(horizontal);
+  if (speed <= 0.0001) {
+    return velocity;
+  }
+  let densityDamping = 1.0 - min(0.22, max(center - 10.0, 0.0) * 0.0065);
+  let chemistryDamping = select(select(0.985, 0.978, chemistry > 2.5), 0.968, chemistry > 1.5 && chemistry < 2.5);
+  let maxSpeed = select(select(0.88, 0.76, chemistry > 2.5), 0.68, chemistry > 1.5 && chemistry < 2.5);
+  let clamped = normalize(horizontal) * min(speed * densityDamping * chemistryDamping, maxSpeed);
+  return vec3f(clamped.x, velocity.y, clamped.y);
 }
 
 fn hash01(seed: u32) -> f32 {
@@ -1264,6 +1328,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = applySpatialCellPressure(position + velocity * params.dt * 0.5, velocity, chemistry);
       position = position + velocity * params.dt;
       position = applySpatialSurfaceRelaxation(position, velocity, radius, chemistry);
+      velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
     }
     particle.posPhase = vec4f(position, phase);
