@@ -17,11 +17,21 @@
     }
     canvas {
       display: block;
+      position: fixed;
+      inset: 0;
       width: 100vw;
       height: 100vh;
     }
+    #juice-gpu-layer {
+      pointer-events: none;
+      z-index: 1;
+    }
+    #stage {
+      z-index: 0;
+    }
     .hud {
       position: fixed;
+      z-index: 2;
       left: 14px;
       top: 12px;
       max-width: min(520px, calc(100vw - 28px));
@@ -42,10 +52,12 @@
   data-route="lerms_world_finger_juice=1"
   data-effective-route="world-space-ballistic-surface-flow-particles-v0"
   data-solver-route="webgpu_particle_solver_v0"
+  data-render-route="webgpu_particle_splat_renderer_v0"
   data-terrain-contract="hill-of-hills-heightfield-collision-v0"
   data-visual-renderer="source-legible-phase-breadcrumbs-v2"
 >
   <canvas id="stage" width="1280" height="720"></canvas>
+  <canvas id="juice-gpu-layer" width="1280" height="720"></canvas>
   <div class="hud" id="hud"></div>
   <script type="module">
     import {
@@ -56,10 +68,12 @@
     } from './lerms-finger-juice-core.js';
     import {
       LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
       createWebGPUFingerJuiceSolver,
     } from './lerms-finger-juice-webgpu-core.js';
 
     const canvas = document.getElementById('stage');
+    const gpuCanvas = document.getElementById('juice-gpu-layer');
     const ctx = canvas.getContext('2d');
     const hud = document.getElementById('hud');
     const params = new URLSearchParams(location.search);
@@ -114,15 +128,24 @@
     });
     prototype.setEmitters(emitterPacket);
     let webgpuSolver = null;
+    let webgpuRenderer = null;
     let webgpuState = {
       solver_backend: 'initializing',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      render_backend: 'initializing',
+      renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     };
     let webgpuFramePending = false;
+    let webgpuReadbackPending = false;
     let webgpuAccumulatedSeconds = 0;
+    let webgpuReadbackAccumulatedSeconds = 0;
     let webgpuLastReadbackMs = 0;
+    let webgpuLastComputeMs = 0;
     let webgpuLastSubmittedSteps = 0;
+    let webgpuSubmittedStepsTotal = 0;
+    let webgpuRenderFrameCount = 0;
     const webgpuFrameStepDt = 1 / 120;
+    const webgpuReadbackPeriod = 0.55;
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
@@ -137,19 +160,43 @@
         solver_backend: solver.solver_backend,
         solverRoute: solver.solverRoute,
         shaderRoute: solver.shaderRoute,
+        render_backend: solver.render_backend,
+        renderRoute: solver.renderRoute,
+        renderShaderRoute: solver.renderShaderRoute,
         adapterInfo: solver.adapterInfo,
         reason: solver.reason,
         cpuOracle: solver.cpuOracle,
         workgroupSize: solver.workgroupSize,
         maxParticles: solver.maxParticles,
       };
-      return solver.stepAndRead?.(30, 1 / 60);
+      return solver.createRenderer?.(gpuCanvas);
+    }).then(renderer => {
+      if (renderer) {
+        webgpuRenderer = renderer.render_backend === 'webgpu_direct_render' ? renderer : null;
+        webgpuState = {
+          ...webgpuState,
+          render_backend: renderer.render_backend,
+          renderRoute: renderer.renderRoute,
+          renderShaderRoute: renderer.renderShaderRoute,
+          renderReason: renderer.reason || null,
+        };
+      }
+      return webgpuSolver?.stepAndRead?.(30, 1 / 60);
     }).then(state => {
-      if (state) webgpuState = state;
+      if (state) {
+        webgpuState = {
+          ...state,
+          render_backend: webgpuState.render_backend,
+          renderRoute: webgpuState.renderRoute,
+          renderShaderRoute: webgpuState.renderShaderRoute,
+        };
+      }
     }).catch(error => {
       webgpuState = {
         solver_backend: 'webgpu_unavailable',
         solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        render_backend: 'webgpu_render_unavailable',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
         error: error.message,
       };
     });
@@ -167,6 +214,9 @@
         shaderRoute: webgpuState?.shaderRoute || null,
         adapterInfo: webgpuState?.adapterInfo || null,
         reason: webgpuState?.reason || webgpuState?.error || null,
+        render_backend: webgpuState?.render_backend || 'cpu_canvas_render',
+        renderRoute: webgpuState?.renderRoute || null,
+        renderShaderRoute: webgpuState?.renderShaderRoute || null,
         cpuOracle: webgpuState?.cpuOracle || null,
       };
       return {
@@ -186,10 +236,16 @@
         terrain_frame: emitterPacket.terrain_frame,
         webgpu_cadence: {
           pending: webgpuFramePending,
+          readback_pending: webgpuReadbackPending,
           accumulated_seconds: Number(webgpuAccumulatedSeconds.toFixed(4)),
+          readback_accumulated_seconds: Number(webgpuReadbackAccumulatedSeconds.toFixed(4)),
           fixed_step_dt: webgpuFrameStepDt,
+          readback_period: webgpuReadbackPeriod,
           last_readback_ms: Number(webgpuLastReadbackMs.toFixed(2)),
+          last_compute_ms: Number(webgpuLastComputeMs.toFixed(2)),
           last_submitted_steps: webgpuLastSubmittedSteps,
+          submitted_steps_total: webgpuSubmittedStepsTotal,
+          render_frame_count: webgpuRenderFrameCount,
         },
       };
     }
@@ -198,7 +254,13 @@
       const safeSteps = Math.max(0, Math.min(360, Math.floor(Number(steps) || 0)));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
       if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
-        webgpuState = await webgpuSolver.stepAndRead(safeSteps, safeDt);
+        const state = await webgpuSolver.stepAndRead(safeSteps, safeDt);
+        webgpuState = {
+          ...state,
+          render_backend: webgpuState.render_backend,
+          renderRoute: webgpuState.renderRoute,
+          renderShaderRoute: webgpuState.renderShaderRoute,
+        };
       } else if (routeActive) {
         for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
       }
@@ -209,6 +271,8 @@
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.floor(window.innerWidth * ratio);
       canvas.height = Math.floor(window.innerHeight * ratio);
+      gpuCanvas.width = Math.floor(window.innerWidth * ratio);
+      gpuCanvas.height = Math.floor(window.innerHeight * ratio);
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     }
 
@@ -397,9 +461,11 @@
       drawTerrain();
       drawCaster();
       drawTargets(state);
-      drawJuiceTrails(state);
-      drawParticles(state);
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${visualRenderer} | ${state.simulation_authority}<br>particles ${state.particleCount || 0} | trails ${state.trailSampleCount || 0} / ${state.trailEmitterCount || 0} | surface ${state.surfaceFlowCount || 0}`;
+      if (state.render_backend !== 'webgpu_direct_render') {
+        drawJuiceTrails(state);
+        drawParticles(state);
+      }
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer}<br>${visualRenderer} | ${state.simulation_authority}<br>particles ${state.particleCount || 0} | trails ${state.trailSampleCount || 0} / ${state.trailEmitterCount || 0} | surface ${state.surfaceFlowCount || 0}`;
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
       return state;
@@ -413,15 +479,25 @@
       if (routeActive) {
         if (webgpuSolver?.solver_backend === 'webgpu_compute') {
           webgpuAccumulatedSeconds += rawDt;
+          webgpuReadbackAccumulatedSeconds += rawDt;
           if (!webgpuFramePending && webgpuAccumulatedSeconds >= webgpuFrameStepDt) {
             const submittedSteps = Math.max(1, Math.floor(webgpuAccumulatedSeconds / webgpuFrameStepDt));
             webgpuAccumulatedSeconds -= submittedSteps * webgpuFrameStepDt;
             webgpuLastSubmittedSteps = submittedSteps;
+            webgpuSubmittedStepsTotal += submittedSteps;
             webgpuFramePending = true;
             const readbackStartedAt = performance.now();
-            webgpuSolver.stepAndRead(submittedSteps, webgpuFrameStepDt).then(state => {
-              webgpuLastReadbackMs = performance.now() - readbackStartedAt;
-              webgpuState = state;
+            webgpuSolver.step(submittedSteps, webgpuFrameStepDt).then(() => {
+              webgpuLastComputeMs = performance.now() - readbackStartedAt;
+              if (webgpuRenderer?.render) {
+                const renderState = webgpuRenderer.render({
+                  width: window.innerWidth,
+                  height: window.innerHeight,
+                  pixelRatio: window.devicePixelRatio || 1,
+                });
+                webgpuRenderFrameCount = renderState.renderFrameCount;
+                webgpuState = { ...webgpuState, ...renderState };
+              }
             }).catch(error => {
               webgpuState = {
                 ...webgpuState,
@@ -430,6 +506,28 @@
               };
             }).finally(() => {
               webgpuFramePending = false;
+            });
+          }
+          if (!webgpuReadbackPending && webgpuReadbackAccumulatedSeconds >= webgpuReadbackPeriod) {
+            webgpuReadbackAccumulatedSeconds = 0;
+            webgpuReadbackPending = true;
+            const readbackStartedAt = performance.now();
+            webgpuSolver.stepAndRead(0, webgpuFrameStepDt).then(state => {
+              webgpuLastReadbackMs = performance.now() - readbackStartedAt;
+              webgpuState = {
+                ...state,
+                render_backend: webgpuState.render_backend,
+                renderRoute: webgpuState.renderRoute,
+                renderShaderRoute: webgpuState.renderShaderRoute,
+              };
+            }).catch(error => {
+              webgpuState = {
+                ...webgpuState,
+                solver_backend: 'webgpu_unavailable',
+                error: error.message,
+              };
+            }).finally(() => {
+              webgpuReadbackPending = false;
             });
           }
         } else {

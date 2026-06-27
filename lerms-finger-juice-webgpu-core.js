@@ -1,5 +1,7 @@
 export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE = 'wgsl-ballistic-heightfield-surface-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_renderer_v0';
+export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-splat-renderer-v0';
 
 const PARTICLE_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
@@ -418,6 +420,90 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
 }
 `;
 
+const RENDER_SHADER = `
+struct Particle {
+  posPhase: vec4f,
+  velChem: vec4f,
+  misc: vec4f,
+  flags: vec4f,
+};
+
+struct RenderParams {
+  viewport: vec4f,
+};
+
+struct VertexOut {
+  @builtin(position) position: vec4f,
+  @location(0) color: vec4f,
+  @location(1) local: vec2f,
+};
+
+@group(0) @binding(0) var<storage, read> particles: array<Particle>;
+@group(0) @binding(1) var<uniform> params: RenderParams;
+
+fn quadCorner(vertexIndex: u32) -> vec2f {
+  let corner = vertexIndex % 6u;
+  if (corner == 0u) { return vec2f(-1.0, -1.0); }
+  if (corner == 1u) { return vec2f(1.0, -1.0); }
+  if (corner == 2u) { return vec2f(-1.0, 1.0); }
+  if (corner == 3u) { return vec2f(-1.0, 1.0); }
+  if (corner == 4u) { return vec2f(1.0, -1.0); }
+  return vec2f(1.0, 1.0);
+}
+
+fn chemistryColor(chemistry: f32, surface: bool) -> vec4f {
+  let alpha = select(0.72, 0.48, surface);
+  if (chemistry > 2.5) {
+    return vec4f(0.84, 0.62, 1.0, alpha);
+  }
+  if (chemistry > 1.5) {
+    return vec4f(0.28, 0.87, 0.78, alpha);
+  }
+  return vec4f(1.0, 0.4, 0.34, alpha);
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> VertexOut {
+  let particle = particles[instanceIndex];
+  let corner = quadCorner(vertexIndex);
+  let world = particle.posPhase.xyz;
+  let phase = particle.posPhase.w;
+  let chemistry = particle.velChem.w;
+  let age = particle.misc.z;
+  let life = particle.misc.w;
+  let enabled = particle.flags.y > 0.5 && age >= 0.0 && age < life;
+  let width = params.viewport.x;
+  let height = params.viewport.y;
+  let depth = 1.45 + world.z;
+  let scale = 390.0 / max(0.42, depth);
+  let screen = vec2f(
+    width * 0.5 + world.x * scale,
+    height * 0.78 - world.z * 122.0 - world.y * scale * 0.52
+  );
+  let radius = select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0;
+  let finalScreen = screen + corner * radius;
+  var out: VertexOut;
+  out.position = select(
+    vec4f(2.0, 2.0, 0.0, 1.0),
+    vec4f(finalScreen.x / width * 2.0 - 1.0, 1.0 - finalScreen.y / height * 2.0, 0.0, 1.0),
+    enabled
+  );
+  out.color = select(vec4f(0.0, 0.0, 0.0, 0.0), chemistryColor(chemistry, phase >= 0.5), enabled);
+  out.local = corner;
+  return out;
+}
+
+@fragment
+fn fs_main(input: VertexOut) -> @location(0) vec4f {
+  let dist = dot(input.local, input.local);
+  if (dist > 1.0) {
+    discard;
+  }
+  let falloff = 1.0 - smoothstep(0.35, 1.0, dist);
+  return vec4f(input.color.rgb, input.color.a * falloff);
+}
+`;
+
 function unavailableSolver(reason, context = {}) {
   return {
     solver_backend: 'webgpu_unavailable',
@@ -505,10 +591,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     ],
   });
   let stepCount = 0;
-  let readbackQueue = Promise.resolve();
-  async function runStepAndRead(steps = 1, dt = 1 / 60) {
-    const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
-    const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
+  let operationQueue = Promise.resolve();
+  function encodeCompute(encoder, safeSteps, safeDt, label = 'lerms-finger-juice-step') {
     const params = new ArrayBuffer(16);
     const paramsView = new DataView(params);
     paramsView.setFloat32(0, safeDt, true);
@@ -516,12 +600,42 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     paramsView.setUint32(8, safeSteps, true);
     paramsView.setUint32(12, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, params);
-    const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step-readback' });
-    const pass = encoder.beginComputePass({ label: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE });
+    const pass = encoder.beginComputePass({ label });
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
     pass.end();
+  }
+  async function runStep(steps = 1, dt = 1 / 60) {
+    const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
+    const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
+    if (safeSteps <= 0) {
+      return {
+        solver_backend: 'webgpu_compute',
+        solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+        shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+        stepCount,
+      };
+    }
+    const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step' });
+    encodeCompute(encoder, safeSteps, safeDt, LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE);
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    stepCount += safeSteps;
+    return {
+      solver_backend: 'webgpu_compute',
+      solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+      stepCount,
+    };
+  }
+  async function runStepAndRead(steps = 1, dt = 1 / 60) {
+    const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
+    const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
+    const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step-readback' });
+    if (safeSteps > 0) {
+      encodeCompute(encoder, safeSteps, safeDt, LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE);
+    }
     encoder.copyBufferToBuffer(particleBuffer, 0, readbackBuffer, 0, byteLength);
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
@@ -560,18 +674,148 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       },
     };
   }
+  function step(steps = 1, dt = 1 / 60) {
+    const run = () => runStep(steps, dt);
+    operationQueue = operationQueue.then(run, run);
+    return operationQueue;
+  }
   function stepAndRead(steps = 1, dt = 1 / 60) {
     const run = () => runStepAndRead(steps, dt);
-    readbackQueue = readbackQueue.then(run, run);
-    return readbackQueue;
+    operationQueue = operationQueue.then(run, run);
+    return operationQueue;
+  }
+  async function createRenderer(canvas) {
+    if (!canvas?.getContext) {
+      return {
+        render_backend: 'webgpu_render_unavailable',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+        reason: 'missing render canvas',
+      };
+    }
+    /** @type {GPUCanvasContext} */
+    const context = canvas.getContext('webgpu');
+    if (!context) {
+      return {
+        render_backend: 'webgpu_render_unavailable',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+        reason: 'GPUCanvasContext unavailable',
+      };
+    }
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({
+      device,
+      format,
+      alphaMode: 'premultiplied',
+    });
+    const renderParamsBuffer = device.createBuffer({
+      label: 'lerms-finger-juice-render-params',
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const renderShaderModule = device.createShaderModule({
+      label: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+      code: RENDER_SHADER,
+    });
+    let renderPipeline;
+    try {
+      renderPipeline = await device.createRenderPipelineAsync({
+        label: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        layout: 'auto',
+        vertex: { module: renderShaderModule, entryPoint: 'vs_main' },
+        fragment: {
+          module: renderShaderModule,
+          entryPoint: 'fs_main',
+          targets: [{
+            format,
+            blend: {
+              color: {
+                srcFactor: 'src-alpha',
+                dstFactor: 'one-minus-src-alpha',
+                operation: 'add',
+              },
+              alpha: {
+                srcFactor: 'one',
+                dstFactor: 'one-minus-src-alpha',
+                operation: 'add',
+              },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+    } catch (error) {
+      return {
+        render_backend: 'webgpu_render_unavailable',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+        reason: `WebGPU render pipeline validation failed: ${error.message || String(error)}`,
+      };
+    }
+    const renderBindGroup = device.createBindGroup({
+      label: 'lerms-finger-juice-render-bindgroup',
+      layout: renderPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: particleBuffer } },
+        { binding: 1, resource: { buffer: renderParamsBuffer } },
+      ],
+    });
+    let renderFrameCount = 0;
+    function render({ width = canvas.clientWidth || 1, height = canvas.clientHeight || 1, pixelRatio = globalThis.devicePixelRatio || 1 } = {}) {
+      const cssWidth = Math.max(1, finite(width, 1));
+      const cssHeight = Math.max(1, finite(height, 1));
+      const ratio = Math.max(1, finite(pixelRatio, 1));
+      const targetWidth = Math.max(1, Math.floor(cssWidth * ratio));
+      const targetHeight = Math.max(1, Math.floor(cssHeight * ratio));
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+      const params = new Float32Array([cssWidth, cssHeight, ratio, maxParticles]);
+      device.queue.writeBuffer(renderParamsBuffer, 0, params);
+      const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-direct-render' });
+      const pass = encoder.beginRenderPass({
+        label: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        colorAttachments: [{
+          view: context.getCurrentTexture().createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        }],
+      });
+      pass.setPipeline(renderPipeline);
+      pass.setBindGroup(0, renderBindGroup);
+      pass.draw(6, maxParticles);
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+      renderFrameCount += 1;
+      return {
+        render_backend: 'webgpu_direct_render',
+        renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+        renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+        renderFrameCount,
+      };
+    }
+    return {
+      render_backend: 'webgpu_direct_render',
+      renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+      renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+      render,
+    };
   }
   return {
     solver_backend: 'webgpu_compute',
     solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
     shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+    render_backend: 'webgpu_direct_render',
+    renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+    renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
     adapterInfo,
     workgroupSize: WORKGROUP_SIZE,
     maxParticles,
+    step,
     stepAndRead,
+    createRenderer,
   };
 }
