@@ -317,6 +317,10 @@ function makePreparedSidecar(outputPath) {
 function findCommand(command) {
   if (!command) return null;
   if (isAbsolute(command)) return existsSync(command) ? command : null;
+  const manifestRelative = resolve(dirname(manifestPath), command);
+  if (existsSync(manifestRelative)) return manifestRelative;
+  const cwdRelative = resolve(process.cwd(), command);
+  if (existsSync(cwdRelative)) return cwdRelative;
   for (const dir of (process.env.PATH || '').split(delimiter)) {
     if (!dir) continue;
     const candidate = join(dir, command);
@@ -327,11 +331,15 @@ function findCommand(command) {
 
 function adapterAvailability(stage) {
   const envVar = stage.route?.commandEnv || null;
-  const configuredCommand = envVar ? (process.env[envVar] || '').trim() : '';
+  const envCommand = envVar ? (process.env[envVar] || '').trim() : '';
+  const defaultCommand = (stage.route?.commandDefault || '').trim();
+  const configuredCommand = envCommand || defaultCommand;
   if (!configuredCommand) {
     return {
       status: 'unconfigured',
       envVar,
+      commandDefault: defaultCommand || null,
+      source: 'missing',
       configuredCommand: null,
       resolvedCommand: null,
     };
@@ -340,6 +348,8 @@ function adapterAvailability(stage) {
   return {
     status: resolvedCommand ? 'available' : 'missing',
     envVar,
+    commandDefault: defaultCommand || null,
+    source: envCommand ? 'env' : 'default',
     configuredCommand,
     resolvedCommand,
   };

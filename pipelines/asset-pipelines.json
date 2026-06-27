@@ -223,7 +223,7 @@
       "id": "lotus-normals-from-image-v0",
       "label": "Lotus-D Image To Normal Map",
       "routeId": "adapter.lotus-normals.v0",
-      "description": "Greenroom image-to-normal route. It executes KAMINOS_LOTUS_NORMALS_COMMAND with --input, --output, and --report paths. The output is a route-local normal-map artifact and adapter report, not renderer truth or a baked material claim.",
+      "description": "Greenroom image-to-normal route. It executes KAMINOS_LOTUS_NORMALS_COMMAND or the bundled gpu-greenroom lotus_normals adapter with --input, --output, and --report paths. The output is a route-local normal-map artifact and adapter report, not renderer truth or a baked material claim.",
       "artifacts": {
         "input": {
           "role": "source-image",
@@ -243,6 +243,7 @@
             "id": "adapter.lotus-normals.v0",
             "tool": "Lotus-D",
             "commandEnv": "KAMINOS_LOTUS_NORMALS_COMMAND",
+            "commandDefault": "scripts/run-lotus-greenroom-adapter.mjs",
             "modelFamily": "Lotus-D",
             "realModel": true,
             "executesModel": true,
@@ -257,7 +258,7 @@
       "id": "chord-materials-from-image-v0",
       "label": "CHORD Image To PBR Material Bundle",
       "routeId": "adapter.chord-materials.v0",
-      "description": "Greenroom image-to-PBR-material route. It executes KAMINOS_CHORD_MATERIALS_COMMAND with --input, --output, and --report paths. The output is a caller-rooted material bundle describing CHORD basecolor, normal, roughness, and metalness artifacts when the configured adapter produces them.",
+      "description": "Greenroom image-to-PBR-material route. It executes KAMINOS_CHORD_MATERIALS_COMMAND or the bundled gpu-greenroom chord_materials adapter with --input, --output, and --report paths. The output is a caller-rooted material bundle describing CHORD basecolor, normal, roughness, and metalness artifacts when the configured adapter produces them.",
       "artifacts": {
         "input": {
           "role": "source-image",
@@ -277,6 +278,7 @@
             "id": "adapter.chord-materials.v0",
             "tool": "CHORD",
             "commandEnv": "KAMINOS_CHORD_MATERIALS_COMMAND",
+            "commandDefault": "scripts/run-chord-greenroom-adapter.mjs",
             "modelFamily": "CHORD",
             "realModel": true,
             "executesModel": true,

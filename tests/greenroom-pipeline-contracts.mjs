@@ -12,16 +12,16 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const lotusPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'lotus-normals-from-image-v0');
 assert.ok(lotusPipeline, 'manifest must include a Lotus-D image-to-normal-map greenroom route');
 assert.equal(lotusPipeline.routeId, 'adapter.lotus-normals.v0');
-assert.match(lotusPipeline.description, /KAMINOS_LOTUS_NORMALS_COMMAND/, 'Lotus route must name its explicit adapter command env');
-assert.ok(lotusPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_LOTUS_NORMALS_COMMAND' && stage.route?.modelFamily === 'Lotus-D'), 'Lotus route must execute a Lotus-D model adapter command');
+assert.match(lotusPipeline.description, /gpu-greenroom lotus_normals/, 'Lotus route must name its bundled gpu-greenroom job type');
+assert.ok(lotusPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_LOTUS_NORMALS_COMMAND' && stage.route?.commandDefault === 'scripts/run-lotus-greenroom-adapter.mjs' && stage.route?.modelFamily === 'Lotus-D'), 'Lotus route must execute a Lotus-D model adapter command with a bundled Greenroom default');
 assert.equal(lotusPipeline.artifacts?.normalMap?.role, 'normal-map');
 assert.ok(lotusPipeline.artifacts?.normalMap?.pathTemplate && !lotusPipeline.artifacts.normalMap.pathTemplate.startsWith('/'), 'Lotus normal output must be caller-rooted');
 
 const chordPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'chord-materials-from-image-v0');
 assert.ok(chordPipeline, 'manifest must include a CHORD image-to-PBR-materials greenroom route');
 assert.equal(chordPipeline.routeId, 'adapter.chord-materials.v0');
-assert.match(chordPipeline.description, /KAMINOS_CHORD_MATERIALS_COMMAND/, 'CHORD route must name its explicit adapter command env');
-assert.ok(chordPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_CHORD_MATERIALS_COMMAND' && stage.route?.modelFamily === 'CHORD'), 'CHORD route must execute a CHORD model adapter command');
+assert.match(chordPipeline.description, /gpu-greenroom chord_materials/, 'CHORD route must name its bundled gpu-greenroom job type');
+assert.ok(chordPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_CHORD_MATERIALS_COMMAND' && stage.route?.commandDefault === 'scripts/run-chord-greenroom-adapter.mjs' && stage.route?.modelFamily === 'CHORD'), 'CHORD route must execute a CHORD model adapter command with a bundled Greenroom default');
 assert.equal(chordPipeline.artifacts?.materialBundle?.role, 'pbr-material-bundle');
 assert.ok(chordPipeline.artifacts?.materialBundle?.pathTemplate && !chordPipeline.artifacts.materialBundle.pathTemplate.startsWith('/'), 'CHORD material bundle output must be caller-rooted');
 
@@ -136,10 +136,15 @@ try {
   assert.equal(chordReport.stages[0].effectiveRoute.requestedRealModel, true);
   assert.equal(chordReport.stages[0].effectiveRoute.realModel, false, 'mock CHORD adapter must not count as real model evidence');
 
+  const missingManifestPath = join(tempRoot, 'manifest-without-lotus-default.json');
+  const missingManifest = JSON.parse(JSON.stringify(manifest));
+  const missingLotusPipeline = missingManifest.pipelines.find(pipeline => pipeline.id === 'lotus-normals-from-image-v0');
+  delete missingLotusPipeline.stages[0].route.commandDefault;
+  writeFileSync(missingManifestPath, JSON.stringify(missingManifest, null, 2));
   const missingReportPath = join(tempRoot, 'reports', 'missing-lotus.json');
   const missingLotus = spawnSync(process.execPath, [
     witnessPath,
-    '--manifest', manifestPath,
+    '--manifest', missingManifestPath,
     '--pipeline-id', 'lotus-normals-from-image-v0',
     '--input', inputPath,
     '--out-dir', join(tempRoot, 'missing-lotus-out'),
@@ -157,7 +162,7 @@ try {
   assert.equal(missingReport.ok, false);
   assert.equal(missingReport.requestedPipelineId, 'lotus-normals-from-image-v0');
   assert.equal(missingReport.stages[0].status, 'failed');
-  assert.match(missingReport.error, /KAMINOS_LOTUS_NORMALS_COMMAND/, 'Lotus failure must name the missing command env');
+  assert.match(missingReport.error, /KAMINOS_LOTUS_NORMALS_COMMAND/, 'Lotus failure must name the missing command env when no bundled default exists');
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }
