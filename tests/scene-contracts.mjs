@@ -79,6 +79,8 @@ assert.match(index, /window\.resetSelectedSplatCorrection\s*=\s*resetSelectedSpl
 assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
 assert.match(index, /function composeSplatObjectPivotTransform\(/, 'Corrected splat imports compose the scene object pivot from the saved centroid offset');
 assert.match(index, /function applySplatVisualRootOffset\(/, 'Corrected splat imports compensate the visual root so pivot corrections do not move the visible splat');
+assert.match(index, /function composeSplatVisualRootOffset\(/, 'Corrected splat visual-root offset is composed independently from scene scale so scale radiates from the corrected pivot');
+assert.match(index, /scaleFromCorrectedPivotWorldPosition/, 'Splat pivot debug state exposes a scale-from-corrected-pivot witness coordinate');
 assert.match(index, /Splat Correction Mode/, 'viewport exposes an explicit splat correction edit-mode badge');
 assert.match(index, /async function enterSplatCorrectionMode\(/, 'selected splats can enter correction mode without numeric-only editing');
 assert.match(index, /function exitSplatCorrectionMode\(/, 'splat correction mode has an explicit exit path');

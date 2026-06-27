@@ -171,6 +171,7 @@ assert.match(witness, /splat correction leaked into render truth claim/, 'Splat 
 assert.match(witness, /splat correction mode did not retarget gizmo/, 'Splat correction mode witness proves gizmo retargets to correction draft');
 assert.match(witness, /splat correction mode dirtied scene transform/, 'Splat correction mode witness proves scene placement stays distinct from asset correction');
 assert.match(witness, /splat correction pivot edit moved splat preview/, 'Splat correction mode witness proves pivot edits move the marker without moving the splat preview');
+assert.match(witness, /splat correction scale did not radiate from corrected pivot/, 'Splat correction mode witness proves scaled splats use the corrected pivot as the transform origin');
 assert.match(witness, /splat correction mode did not save draft/, 'Splat correction mode witness proves draft edits persist through the sidecar');
 assert.match(witness, /splat correction mode did not save axis flip/, 'Splat correction mode witness proves axis flips persist through the sidecar');
 assert.match(witness, /splat correction axis flip dirtied scene transform/, 'Splat correction mode witness proves axis flips do not mutate scene placement');

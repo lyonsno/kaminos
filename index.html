@@ -1882,13 +1882,28 @@ function splatVisualRootFor(object) {
   return object?.userData?.kaminosSplatVisualRoot || null;
 }
 
+function composeSplatVisualRootOffset(sceneTransform = {}, correction = {}) {
+  const scenePlacement = cloneTransformState(sceneTransform);
+  const normalized = normalizeSplatCorrection(correction);
+  const pivotTransform = composeSplatObjectPivotTransform(scenePlacement, normalized);
+  const anchorWorld = new THREE.Vector3(...scenePlacement.position);
+  const pivotWorld = new THREE.Vector3(...pivotTransform.position);
+  const pivotRotationInverse = new THREE.Quaternion()
+    .setFromEuler(new THREE.Euler(...pivotTransform.rotation))
+    .invert();
+  const localOffset = anchorWorld.sub(pivotWorld).applyQuaternion(pivotRotationInverse);
+  return [
+    localOffset.x / normalized.axisFlips[0],
+    localOffset.y / normalized.axisFlips[1],
+    localOffset.z / normalized.axisFlips[2],
+  ];
+}
+
 function applySplatVisualRootOffset(record, sceneTransform = record?.sceneTransform, correction = record?.splat?.correction) {
   const visualRoot = splatVisualRootFor(record?.object);
   if (!record?.object || !visualRoot) return null;
   const scenePlacement = cloneTransformState(sceneTransform);
-  record.object.updateMatrixWorld?.(true);
-  const anchorWorld = new THREE.Vector3(...scenePlacement.position);
-  const anchorLocal = record.object.worldToLocal(anchorWorld.clone());
+  const anchorLocal = new THREE.Vector3(...composeSplatVisualRootOffset(scenePlacement, correction));
   visualRoot.position.copy(anchorLocal);
   visualRoot.rotation.set(0, 0, 0);
   visualRoot.scale.set(1, 1, 1);
@@ -1900,9 +1915,7 @@ function applySplatVisualRootOffsetForObject(object, sceneTransform = {}, correc
   const visualRoot = splatVisualRootFor(object);
   if (!object || !visualRoot) return null;
   const scenePlacement = cloneTransformState(sceneTransform);
-  object.updateMatrixWorld?.(true);
-  const anchorWorld = new THREE.Vector3(...scenePlacement.position);
-  const anchorLocal = object.worldToLocal(anchorWorld.clone());
+  const anchorLocal = new THREE.Vector3(...composeSplatVisualRootOffset(scenePlacement, correction));
   visualRoot.position.copy(anchorLocal);
   visualRoot.rotation.set(0, 0, 0);
   visualRoot.scale.set(1, 1, 1);
@@ -3226,12 +3239,16 @@ window.kaminosSplatPivotDebugState = function(id = null) {
   const visualAnchor = visualRoot
     ? visualRoot.localToWorld(new THREE.Vector3(0, 0, 0)).toArray()
     : null;
+  const scaleFromCorrectedPivotWorldPosition = record.object
+    ? record.object.localToWorld(new THREE.Vector3(...composeSplatVisualRootOffset(sceneTransform, correction))).toArray()
+    : null;
   return {
     objectId: record.id,
     sceneAnchorWorldPosition: sceneAnchor,
     objectPivotWorldPosition: objectPivot,
     correctionPivotWorldPosition: correctionPivot,
     visualAnchorWorldPosition: visualAnchor,
+    scaleFromCorrectedPivotWorldPosition,
     visualRootLocalPosition: visualRoot?.position?.toArray?.() || null,
     sceneTransform,
     correction,

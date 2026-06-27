@@ -3658,7 +3658,7 @@ async function runSplatCorrectionModeScenario(ws) {
       const plannedSceneTransform = {
         position: [1.0, 0.25, -0.5],
         rotation: [0.4, -0.2, 0.1],
-        scale: [1.1, 1.2, 1.3],
+        scale: [1, 1, 1],
       };
       const sceneBeforeMode = window.kaminosSetSceneObjectTransform(splat.id, plannedSceneTransform);
       const entered = await window.enterSplatCorrectionMode(splat.id);
@@ -3669,6 +3669,11 @@ async function runSplatCorrectionModeScenario(ws) {
       });
       const sceneAfterDraft = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const pivotAfterDraft = window.kaminosSplatPivotDebugState?.(splat.id) || null;
+      const sceneAfterScale = window.kaminosSetSceneObjectTransform(splat.id, {
+        ...plannedSceneTransform,
+        scale: [2, 2, 2],
+      });
+      const pivotAfterScale = window.kaminosSplatPivotDebugState?.(splat.id) || null;
       const flipDraft = window.kaminosToggleSplatCorrectionAxisFlip('x');
       const sceneAfterFlip = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
       const pivotAfterFlip = window.kaminosSplatPivotDebugState?.(splat.id) || null;
@@ -3717,6 +3722,8 @@ async function runSplatCorrectionModeScenario(ws) {
         draft,
         sceneAfterDraft,
         pivotAfterDraft,
+        sceneAfterScale,
+        pivotAfterScale,
         flipDraft,
         sceneAfterFlip,
         pivotAfterFlip,
@@ -3751,11 +3758,13 @@ async function runSplatCorrectionModeScenario(ws) {
   if (!sameSceneTransform) {
     throw new Error(`splat correction mode dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
+  const scaledScene = evidence.sceneAfterScale?.sceneTransform;
   const afterFlip = evidence.sceneAfterFlip?.sceneTransform;
   const flipPreservedSceneTransform = Array.isArray(afterFlip?.position)
-    && before.position.every((value, index) => Math.abs(value - afterFlip.position[index]) < 1e-6)
-    && before.rotation.every((value, index) => Math.abs(value - afterFlip.rotation[index]) < 1e-6)
-    && before.scale.every((value, index) => Math.abs(value - afterFlip.scale[index]) < 1e-6);
+    && Array.isArray(scaledScene?.position)
+    && scaledScene.position.every((value, index) => Math.abs(value - afterFlip.position[index]) < 1e-6)
+    && scaledScene.rotation.every((value, index) => Math.abs(value - afterFlip.rotation[index]) < 1e-6)
+    && scaledScene.scale.every((value, index) => Math.abs(value - afterFlip.scale[index]) < 1e-6);
   if (!flipPreservedSceneTransform) {
     throw new Error(`splat correction axis flip dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
@@ -3770,8 +3779,18 @@ async function runSplatCorrectionModeScenario(ws) {
       || Math.abs(evidence.sceneAfterDraft?.transform?.rotation?.[2] - 0.25) > 1e-6) {
     throw new Error(`splat correction pivot edit moved splat preview: ${JSON.stringify(evidence)}`);
   }
+  const scaledVisual = evidence.pivotAfterScale;
+  if (!scaledVisual
+      || Math.abs(scaledVisual.visualAnchorWorldPosition?.[0] - 0.8) > 1e-6
+      || Math.abs(scaledVisual.visualAnchorWorldPosition?.[1] + 0.05) > 1e-6
+      || Math.abs(scaledVisual.visualAnchorWorldPosition?.[2] + 0.9) > 1e-6
+      || Math.abs(scaledVisual.scaleFromCorrectedPivotWorldPosition?.[0] - scaledVisual.visualAnchorWorldPosition?.[0]) > 1e-6
+      || Math.abs(scaledVisual.scaleFromCorrectedPivotWorldPosition?.[1] - scaledVisual.visualAnchorWorldPosition?.[1]) > 1e-6
+      || Math.abs(scaledVisual.scaleFromCorrectedPivotWorldPosition?.[2] - scaledVisual.visualAnchorWorldPosition?.[2]) > 1e-6) {
+    throw new Error(`splat correction scale did not radiate from corrected pivot: ${JSON.stringify(evidence)}`);
+  }
   const flippedVisual = evidence.sceneAfterFlip?.transform;
-  if (!flippedVisual || Math.abs(flippedVisual.scale?.[0] + 1.1) > 1e-6) {
+  if (!flippedVisual || Math.abs(flippedVisual.scale?.[0] + 2) > 1e-6) {
     throw new Error(`splat correction mode did not compose axis flip into preview scale: ${JSON.stringify(evidence)}`);
   }
   const cropToggleCorrection = evidence.cropToggleDraft?.draftCorrection
@@ -3782,7 +3801,7 @@ async function runSplatCorrectionModeScenario(ws) {
     throw new Error(`splat correction crop edit reset axis flip: ${JSON.stringify(evidence)}`);
   }
   const cropToggleVisual = evidence.sceneAfterCropToggle?.transform;
-  if (!cropToggleVisual || Math.abs(cropToggleVisual.scale?.[0] + 1.1) > 1e-6) {
+  if (!cropToggleVisual || Math.abs(cropToggleVisual.scale?.[0] + 2) > 1e-6) {
     throw new Error(`splat correction crop edit dropped flipped preview scale: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.cropMode?.targetAttached
@@ -3806,9 +3825,10 @@ async function runSplatCorrectionModeScenario(ws) {
   }
   const afterCropEdit = evidence.sceneAfterCropEdit?.sceneTransform;
   const cropEditPreservedSceneTransform = Array.isArray(afterCropEdit?.position)
-    && before.position.every((value, index) => Math.abs(value - afterCropEdit.position[index]) < 1e-6)
-    && before.rotation.every((value, index) => Math.abs(value - afterCropEdit.rotation[index]) < 1e-6)
-    && before.scale.every((value, index) => Math.abs(value - afterCropEdit.scale[index]) < 1e-6);
+    && Array.isArray(scaledScene?.position)
+    && scaledScene.position.every((value, index) => Math.abs(value - afterCropEdit.position[index]) < 1e-6)
+    && scaledScene.rotation.every((value, index) => Math.abs(value - afterCropEdit.rotation[index]) < 1e-6)
+    && scaledScene.scale.every((value, index) => Math.abs(value - afterCropEdit.scale[index]) < 1e-6);
   if (!cropEditPreservedSceneTransform) {
     throw new Error(`splat correction crop mode dirtied scene transform: ${JSON.stringify(evidence)}`);
   }
