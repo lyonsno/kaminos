@@ -14,6 +14,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-orb-shell-composition-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const focus = args.get('--focus') || 'wide';
+const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
 
@@ -74,6 +75,24 @@ async function evaluate(ws, expression) {
   const result = await send(ws, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
   return result.result.value;
+}
+
+async function waitForCompositionWitness(ws) {
+  const deadline = Date.now() + 8000;
+  let lastState = null;
+  while (Date.now() < deadline) {
+    lastState = await evaluate(ws, `
+      (() => ({
+        hasWitness: !!window.__kaminosOrbShellCompositionWitness,
+        hasDebugState: typeof window.__kaminosOrbShellCompositionWitness?.debugState === 'function',
+        location: window.location.href,
+        documentReadyState: document.readyState
+      }))()
+    `);
+    if (lastState?.hasWitness && lastState?.hasDebugState) return lastState;
+    await delay(120);
+  }
+  throw new Error(`composition witness route did not initialize: ${JSON.stringify(lastState)}`);
 }
 
 async function forceAmbientOcclusion(ws, enabled) {
@@ -165,6 +184,7 @@ async function main() {
     await send(ws, 'Runtime.enable');
     await send(ws, 'Page.enable');
     await delay(settleMs);
+    const compositionWitnessReadyState = await waitForCompositionWitness(ws);
     const forcedAoState = await forceAmbientOcclusion(ws, forceAo);
     if (forcedAoState) await delay(300);
     if (focus === 'side-rim-return') {
@@ -339,7 +359,7 @@ async function main() {
 
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps' || focus === 'aperture-tangency') {
+    if (clipCanvas || focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps' || focus === 'aperture-tangency') {
       const canvasRect = await evaluate(ws, `
         (() => {
           const canvas = document.querySelector('canvas');
@@ -362,6 +382,7 @@ async function main() {
     writeReport({
       ...report,
       effectiveUrl: page.url,
+      compositionWitnessReadyState,
       phase,
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
