@@ -2,9 +2,13 @@ export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0
 export const LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE = 'wgsl-ballistic-heightfield-surface-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_renderer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-splat-renderer-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_buffer_v0';
+export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
 
 const PARTICLE_FLOATS = 16;
+const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
+const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -81,12 +85,48 @@ function chemistryCode(chemistry) {
   return 1;
 }
 
+function chemistryName(code) {
+  if (code === 2) return 'pooling';
+  if (code === 3) return 'weird';
+  return 'knockback';
+}
+
+function emitterLife(chemistry) {
+  return chemistry === 'pooling' ? 8.0 : 7.2;
+}
+
+function emitterVelocity(emitter, aim = normalize3(emitter.aim_world, [0, 0.34, 0.94])) {
+  const motion = vec3(emitter.motion_world, [0, 0, 0]);
+  const arcBoost = 0.42 + Math.max(0, aim[1]) * 1.6;
+  const speed = (emitter.emission_state === 'jet' ? 2.15 : 1.18) * (0.35 + finite(emitter.strength, 1) * 0.65);
+  return add(add(mul(aim, speed), motion), [0, arcBoost, 0]);
+}
+
 function makeRng(seed = 1) {
   let state = (Math.floor(seed) || 1) >>> 0;
   return () => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 0xffffffff;
   };
+}
+
+function hash01(seed) {
+  let value = (Math.floor(seed) || 1) >>> 0;
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x7feb352d) >>> 0;
+  value ^= value >>> 15;
+  value = Math.imul(value, 0x846ca68b) >>> 0;
+  value ^= value >>> 16;
+  return (value & 0x00ffffff) / 0x00ffffff;
+}
+
+function spawnJitter(index, emitterIndex, respawnCount, stepSeed, radius) {
+  const base = ((index + 1) * 374761393) ^ ((emitterIndex + 7) * 668265263) ^ ((respawnCount + 11) * 2246822519) ^ ((stepSeed + 13) * 3266489917);
+  return [
+    (hash01(base) - 0.5) * radius,
+    (hash01(base + 0x9e3779b9) - 0.5) * radius * 0.55,
+    (hash01(base + 0x85ebca6b) - 0.5) * radius,
+  ];
 }
 
 function writeParticle(buffer, index, particle) {
@@ -104,9 +144,9 @@ function writeParticle(buffer, index, particle) {
   buffer[offset + 10] = particle.age;
   buffer[offset + 11] = particle.life;
   buffer[offset + 12] = particle.emitterIndex;
-  buffer[offset + 13] = 1;
+  buffer[offset + 13] = particle.active === false ? 0 : 1;
   buffer[offset + 14] = particle.impacted ? 1 : 0;
-  buffer[offset + 15] = 0;
+  buffer[offset + 15] = finite(particle.respawnCount, 0);
 }
 
 function readParticle(buffer, index) {
@@ -123,6 +163,85 @@ function readParticle(buffer, index) {
     emitterIndex: buffer[offset + 12],
     active: buffer[offset + 13] > 0.5,
     impacted: buffer[offset + 14] > 0.5,
+    respawnCount: buffer[offset + 15],
+  };
+}
+
+export function createWebGPUEmitterBufferData(emitterPacket) {
+  const packetEmitters = emitterPacket?.emitters || [];
+  const activeEmitters = packetEmitters
+    .map((emitter, packetIndex) => ({ emitter, packetIndex }))
+    .filter(item => item.emitter?.active);
+  const emitterCount = activeEmitters.length;
+  const data = new Float32Array(Math.max(1, emitterCount) * EMITTER_FLOATS);
+  const sources = [];
+  for (let i = 0; i < activeEmitters.length; i += 1) {
+    const { emitter, packetIndex } = activeEmitters[i];
+    const offset = i * EMITTER_FLOATS;
+    const origin = vec3(emitter.origin_world, [0, 0.36, -0.84]);
+    const aim = normalize3(emitter.aim_world, [0, 0.34, 0.94]);
+    const motion = vec3(emitter.motion_world, [0, 0, 0]);
+    const radius = finite(emitter.radius, 0.045);
+    const strength = finite(emitter.strength, 1);
+    const chemistry = chemistryCode(emitter.chemistry);
+    const velocity = emitterVelocity(emitter, aim);
+    data[offset + 0] = origin[0];
+    data[offset + 1] = origin[1];
+    data[offset + 2] = origin[2];
+    data[offset + 3] = 1;
+    data[offset + 4] = aim[0];
+    data[offset + 5] = aim[1];
+    data[offset + 6] = aim[2];
+    data[offset + 7] = chemistry;
+    data[offset + 8] = motion[0];
+    data[offset + 9] = motion[1];
+    data[offset + 10] = motion[2];
+    data[offset + 11] = radius;
+    data[offset + 12] = strength;
+    data[offset + 13] = emitter.emission_state === 'jet' ? 1 : 0;
+    data[offset + 14] = Math.max(0, packetIndex);
+    data[offset + 15] = emitterLife(emitter.chemistry);
+    sources.push({
+      emitterIndex: Math.max(0, packetIndex),
+      emitterSlot: i,
+      emitter_id: emitter.id || `emitter-${packetIndex}`,
+      chemistry: emitter.chemistry,
+      chemistryCode: chemistry,
+      position: origin,
+      origin,
+      aim,
+      motion,
+      velocity,
+      radius,
+      strength,
+      life: emitterLife(emitter.chemistry),
+    });
+  }
+  return {
+    data,
+    sources,
+    emitterCount,
+    emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+    respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+  };
+}
+
+function respawnParticleFromSource(particle, source, index, stepSeed = 0) {
+  const respawnCount = finite(particle.respawnCount, 0) + 1;
+  const jitter = spawnJitter(index, source.emitterIndex, respawnCount, stepSeed, source.radius);
+  return {
+    position: add(source.origin || source.position, jitter),
+    phase: 0,
+    velocity: source.velocity,
+    chemistry: source.chemistryCode,
+    radius: source.radius,
+    strength: source.strength,
+    age: 0,
+    life: source.life,
+    emitterIndex: source.emitterIndex,
+    active: true,
+    impacted: false,
+    respawnCount,
   };
 }
 
@@ -131,36 +250,29 @@ export function createInitialWebGPUParticles(emitterPacket, options = {}) {
   const seed = options.seed || 11;
   const rng = makeRng(seed);
   const data = new Float32Array(maxParticles * PARTICLE_FLOATS);
-  const sources = [];
-  const activeEmitters = (emitterPacket.emitters || []).filter(emitter => emitter.active);
+  const emitterData = createWebGPUEmitterBufferData(emitterPacket);
+  const sources = emitterData.sources;
   for (let i = 0; i < maxParticles; i += 1) {
-    const emitter = activeEmitters[i % Math.max(1, activeEmitters.length)];
-    if (!emitter) continue;
-    const radius = finite(emitter.radius, 0.045);
+    const source = sources[i % Math.max(1, sources.length)];
+    if (!source) continue;
+    const radius = source.radius;
     const jitter = [(rng() - 0.5) * radius, (rng() - 0.5) * radius, (rng() - 0.5) * radius];
-    const origin = vec3(emitter.origin_world, [0, 0.36, -0.84]);
-    const start = add(origin, jitter);
-    const aim = normalize3(emitter.aim_world, [0, 0.34, 0.94]);
-    const motion = vec3(emitter.motion_world, [0, 0, 0]);
-    const arcBoost = 0.42 + Math.max(0, aim[1]) * 1.6;
-    const speed = (emitter.emission_state === 'jet' ? 2.15 : 1.18) * (0.35 + finite(emitter.strength, 1) * 0.65);
-    const velocity = add(add(mul(aim, speed), motion), [0, arcBoost, 0]);
-    const emitterIndex = Math.max(0, (emitterPacket.emitters || []).findIndex(item => item.id === emitter.id));
+    const start = add(source.origin, jitter);
     writeParticle(data, i, {
       position: start,
       phase: 0,
-      velocity,
-      chemistry: chemistryCode(emitter.chemistry),
+      velocity: source.velocity,
+      chemistry: source.chemistryCode,
       radius,
-      strength: finite(emitter.strength, 1),
+      strength: source.strength,
       age: (i % 18) * -0.012,
-      life: emitter.chemistry === 'pooling' ? 8.0 : 7.2,
-      emitterIndex,
+      life: source.life,
+      emitterIndex: source.emitterIndex,
       impacted: false,
+      respawnCount: 0,
     });
-    sources.push({ emitterIndex, emitter_id: emitter.id, chemistry: emitter.chemistry, position: start, velocity });
   }
-  return { data, sources, maxParticles };
+  return { data, sources, maxParticles, emitterData };
 }
 
 export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
@@ -176,7 +288,13 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
         writeParticle(data, i, particle);
         continue;
       }
-      if (particle.age >= particle.life) particle.age = particle.life - dt;
+      if (particle.age >= particle.life) {
+        const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex)
+          || options.sources?.[i % Math.max(1, options.sources.length)];
+        if (!source) continue;
+        writeParticle(data, i, respawnParticleFromSource(particle, source, i, step));
+        continue;
+      }
       if (particle.phase < 0.5) {
         particle.velocity[1] -= 5.2 * dt;
         particle.position = add(particle.position, mul(particle.velocity, dt));
@@ -221,13 +339,16 @@ function targetHits(particles, targets, kind) {
 
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
+  const rawParticles = [];
   for (let i = 0; i < buffer.length / PARTICLE_FLOATS; i += 1) {
     const particle = readParticle(buffer, i);
+    rawParticles.push(particle);
     if (!particle.active || particle.age < 0 || particle.age >= particle.life) continue;
+    const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex);
     particles.push({
       id: `wgpu-${i}`,
-      emitter_id: options.sources?.find(source => source.emitterIndex === particle.emitterIndex)?.emitter_id || `emitter-${particle.emitterIndex}`,
-      chemistry: particle.chemistry === 2 ? 'pooling' : particle.chemistry === 3 ? 'weird' : 'knockback',
+      emitter_id: source?.emitter_id || `emitter-${particle.emitterIndex}`,
+      chemistry: chemistryName(particle.chemistry),
       phase: particle.phase >= 0.5 ? 'surface_flow' : 'airborne',
       surface_flow: particle.phase >= 0.5,
       pooling: particle.chemistry === 2 && particle.phase >= 0.5,
@@ -237,6 +358,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       strength: round(particle.strength, 4),
       emitterIndex: particle.emitterIndex,
       impacted: particle.impacted,
+      respawnCount: Math.floor(finite(particle.respawnCount, 0)),
     });
   }
   const lermHits = targetHits(particles, options.lerms || [], 'lerm');
@@ -289,11 +411,37 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const phaseMarkers = trails.flatMap(trail => trail.phase_markers || []);
   const segmentLengths = trails.map(trail => length3(sub(trail.samples[1].position, trail.samples[0].position)));
   const zValues = trailSamples.map(sample => sample.position[2]);
+  const particlesPerEmitter = {};
+  for (const particle of particles) {
+    particlesPerEmitter[particle.emitter_id] = (particlesPerEmitter[particle.emitter_id] || 0) + 1;
+  }
+  const ringSource = options.sources?.find(source => source.emitter_id === 'ring')
+    || options.sources?.find(source => source.chemistry === 'weird');
+  const ringParticles = ringSource
+    ? particles.filter(particle => particle.emitterIndex === ringSource.emitterIndex)
+    : [];
+  const ringDeltas = ringParticles.map(particle => particle.position[0] - ringSource.origin[0]);
+  const ringEmitterLateralDrift = ringSource ? {
+    emitter_id: ringSource.emitter_id,
+    source_x: round(ringSource.origin[0], 4),
+    aim_x: round(ringSource.aim[0], 4),
+    motion_x: round(ringSource.motion[0], 4),
+    particle_count: ringParticles.length,
+    average_x_delta: ringDeltas.length ? round(ringDeltas.reduce((sum, value) => sum + value, 0) / ringDeltas.length, 4) : 0,
+    min_x_delta: ringDeltas.length ? round(Math.min(...ringDeltas), 4) : 0,
+    max_x_delta: ringDeltas.length ? round(Math.max(...ringDeltas), 4) : 0,
+  } : null;
   return {
     solver_backend: options.solver_backend || 'webgpu_compute',
     solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
     shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+    emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+    respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
     particleCount: particles.length,
+    maxParticleAge: rawParticles.length ? round(Math.max(...rawParticles.map(particle => finite(particle.age, 0))), 4) : 0,
+    gpuRespawnCount: Math.floor(rawParticles.reduce((sum, particle) => sum + finite(particle.respawnCount, 0), 0)),
+    particlesPerEmitter,
+    ringEmitterLateralDrift,
     airborneCount: particles.filter(particle => !particle.surface_flow).length,
     surfaceFlowCount: particles.filter(particle => particle.surface_flow).length,
     poolingCount: particles.filter(particle => particle.pooling).length,
@@ -338,15 +486,27 @@ struct Particle {
   flags: vec4f,
 };
 
+struct Emitter {
+  originActive: vec4f,
+  aimChem: vec4f,
+  motionRadius: vec4f,
+  strengthExtensionIndexLife: vec4f,
+};
+
 struct Params {
   dt: f32,
   particleCount: u32,
   steps: u32,
-  pad: u32,
+  emitterCount: u32,
+  stepCount: u32,
+  pad0: u32,
+  pad1: u32,
+  pad2: u32,
 };
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> params: Params;
+@group(0) @binding(2) var<storage, read> emitters: array<Emitter>;
 
 fn terrainHeightAt(x: f32, z: f32) -> f32 {
   let bowl = -0.08 + 0.11 * x * x + 0.035 * cos(z * 1.65);
@@ -372,6 +532,55 @@ fn slideVelocityOnTerrain(velocity: vec3f, normal: vec3f, chemistry: f32) -> vec
   return tangent * viscosity + downhill * slide;
 }
 
+fn hash01(seed: u32) -> f32 {
+  var value = seed;
+  value = value ^ (value >> 16u);
+  value = value * 0x7feb352du;
+  value = value ^ (value >> 15u);
+  value = value * 0x846ca68bu;
+  value = value ^ (value >> 16u);
+  return f32(value & 0x00ffffffu) / 16777215.0;
+}
+
+fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
+  var out = particle;
+  if (params.emitterCount == 0u) {
+    out.flags.y = 0.0;
+    return out;
+  }
+  let hintedEmitterIndex = u32(max(0.0, particle.flags.x));
+  let fallbackSlot = index % params.emitterCount;
+  let emitterSlot = select(fallbackSlot, hintedEmitterIndex, hintedEmitterIndex < params.emitterCount);
+  let emitter = emitters[emitterSlot];
+  let origin = emitter.originActive.xyz;
+  let aim = normalize(emitter.aimChem.xyz + vec3f(0.00001, 0.00001, 0.00001));
+  let chemistry = emitter.aimChem.w;
+  let motion = emitter.motionRadius.xyz;
+  let radius = emitter.motionRadius.w;
+  let strength = emitter.strengthExtensionIndexLife.x;
+  let extension = emitter.strengthExtensionIndexLife.y;
+  let sourceEmitterIndex = emitter.strengthExtensionIndexLife.z;
+  let life = emitter.strengthExtensionIndexLife.w;
+  let respawnCount = particle.flags.w + 1.0;
+  let seed = ((index + 1u) * 374761393u)
+    ^ ((u32(sourceEmitterIndex) + 7u) * 668265263u)
+    ^ ((u32(respawnCount) + 11u) * 2246822519u)
+    ^ ((stepSeed + 13u) * 3266489917u);
+  let jitter = vec3f(
+    hash01(seed) - 0.5,
+    (hash01(seed + 0x9e3779b9u) - 0.5) * 0.55,
+    hash01(seed + 0x85ebca6bu) - 0.5
+  ) * radius;
+  let speedBase = select(1.18, 2.15, extension > 0.5);
+  let speed = speedBase * (0.35 + strength * 0.65);
+  let arcBoost = 0.42 + max(0.0, aim.y) * 1.6;
+  out.posPhase = vec4f(origin + jitter, 0.0);
+  out.velChem = vec4f(aim * speed + motion + vec3f(0.0, arcBoost, 0.0), chemistry);
+  out.misc = vec4f(radius, strength, 0.0, life);
+  out.flags = vec4f(sourceEmitterIndex, emitter.originActive.w, 0.0, respawnCount);
+  return out;
+}
+
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
   let index = global_id.x;
@@ -386,16 +595,23 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
     var position = particle.posPhase.xyz;
     var phase = particle.posPhase.w;
     var velocity = particle.velChem.xyz;
-    let chemistry = particle.velChem.w;
-    let radius = particle.misc.x;
+    var chemistry = particle.velChem.w;
+    var radius = particle.misc.x;
     var age = particle.misc.z + params.dt;
-    let life = particle.misc.w;
+    var life = particle.misc.w;
     if (age < 0.0) {
       particle.misc.z = age;
       continue;
     }
     if (age >= life) {
-      age = life - params.dt;
+      particle = respawnParticle(particle, index, params.stepCount + s);
+      position = particle.posPhase.xyz;
+      phase = particle.posPhase.w;
+      velocity = particle.velChem.xyz;
+      chemistry = particle.velChem.w;
+      radius = particle.misc.x;
+      age = particle.misc.z;
+      life = particle.misc.w;
     }
     if (phase < 0.5) {
       velocity.y = velocity.y - 5.2 * params.dt;
@@ -526,7 +742,7 @@ function unavailableSolver(reason, context = {}) {
 
 export async function createWebGPUFingerJuiceSolver(options = {}) {
   const maxParticles = Math.max(16, Math.floor(options.maxParticles || 900));
-  const { data, sources } = createInitialWebGPUParticles(options.emitterPacket, {
+  const { data, sources, emitterData } = createInitialWebGPUParticles(options.emitterPacket, {
     maxParticles,
     seed: options.seed || 11,
   });
@@ -557,6 +773,11 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
+  const emitterBuffer = device.createBuffer({
+    label: 'lerms-finger-juice-emitters',
+    size: emitterData.data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
   const readbackBuffer = device.createBuffer({
     label: 'lerms-finger-juice-particle-readback',
     size: byteLength,
@@ -564,10 +785,11 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   });
   const paramsBuffer = device.createBuffer({
     label: 'lerms-finger-juice-params',
-    size: 16,
+    size: 32,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(particleBuffer, 0, data);
+  device.queue.writeBuffer(emitterBuffer, 0, emitterData.data);
   const shaderModule = device.createShaderModule({
     label: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
     code: COMPUTE_SHADER,
@@ -588,17 +810,22 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     entries: [
       { binding: 0, resource: { buffer: particleBuffer } },
       { binding: 1, resource: { buffer: paramsBuffer } },
+      { binding: 2, resource: { buffer: emitterBuffer } },
     ],
   });
   let stepCount = 0;
   let operationQueue = Promise.resolve();
   function encodeCompute(encoder, safeSteps, safeDt, label = 'lerms-finger-juice-step') {
-    const params = new ArrayBuffer(16);
+    const params = new ArrayBuffer(32);
     const paramsView = new DataView(params);
     paramsView.setFloat32(0, safeDt, true);
     paramsView.setUint32(4, maxParticles, true);
     paramsView.setUint32(8, safeSteps, true);
-    paramsView.setUint32(12, 0, true);
+    paramsView.setUint32(12, emitterData.emitterCount, true);
+    paramsView.setUint32(16, stepCount, true);
+    paramsView.setUint32(20, 0, true);
+    paramsView.setUint32(24, 0, true);
+    paramsView.setUint32(28, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, params);
     const pass = encoder.beginComputePass({ label });
     pass.setPipeline(pipeline);
@@ -607,13 +834,15 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     pass.end();
   }
   async function runStep(steps = 1, dt = 1 / 60) {
-    const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
+    const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
     const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
     if (safeSteps <= 0) {
       return {
         solver_backend: 'webgpu_compute',
         solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
         shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+        emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+        respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
         stepCount,
       };
     }
@@ -626,11 +855,13 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       solver_backend: 'webgpu_compute',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
       shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       stepCount,
     };
   }
   async function runStepAndRead(steps = 1, dt = 1 / 60) {
-    const safeSteps = Math.max(0, Math.min(720, Math.floor(Number(steps) || 0)));
+    const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
     const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
     const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step-readback' });
     if (safeSteps > 0) {
@@ -661,16 +892,20 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       solver_backend: 'webgpu_compute',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
       shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
       stepCount,
       readbackParticleFloats: result.length,
+      emitterCount: emitterData.emitterCount,
       cpuOracle: {
         solver_backend: cpuOracle.solver_backend,
         particleCount: cpuOracle.particleCount,
         surfaceFlowCount: cpuOracle.surfaceFlowCount,
         maxRangeZ: cpuOracle.maxRangeZ,
+        gpuRespawnCount: cpuOracle.gpuRespawnCount,
       },
     };
   }
@@ -808,12 +1043,15 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     solver_backend: 'webgpu_compute',
     solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
     shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+    emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+    respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
     adapterInfo,
     workgroupSize: WORKGROUP_SIZE,
     maxParticles,
+    emitterCount: emitterData.emitterCount,
     step,
     stepAndRead,
     createRenderer,
