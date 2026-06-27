@@ -63,6 +63,7 @@ assert.match(webgpuCoreSource, /wgsl-stability-damped-relaxation-v0/, 'WebGPU so
 assert.match(webgpuCoreSource, /wgsl-visual-streak-bead-damping-v0/, 'WebGPU solver names the visual streak/bead damping contract');
 assert.match(webgpuCoreSource, /wgsl-density-position-solve-v0/, 'WebGPU solver names the density/position solve contract');
 assert.match(webgpuCoreSource, /wgsl-particle-support-budget-v0/, 'WebGPU solver names the particle support/budget contract');
+assert.match(webgpuCoreSource, /wgsl-density-continuity-projection-v0/, 'WebGPU solver names the density continuity projection contract');
 assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
@@ -95,10 +96,16 @@ assert.match(webgpuCoreSource, /cohesionNeighborCount/, 'WebGPU cohesion diagnos
 assert.match(webgpuCoreSource, /ribbonAlignment/, 'WebGPU cohesion diagnostics report ribbon alignment');
 assert.match(webgpuCoreSource, /applySpatialSurfaceRelaxation/, 'WebGPU solver applies spatial surface relaxation after cohesion');
 assert.match(webgpuCoreSource, /applyDensityPositionSolve/, 'WebGPU solver applies an explicit density/position correction pass');
+assert.match(webgpuCoreSource, /applyDensityContinuityProjection/, 'WebGPU solver applies a spatial density continuity projection pass');
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
 assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /densityPositionSolveStats/, 'WebGPU solver reports density/position solve diagnostics');
+assert.match(webgpuCoreSource, /densityContinuityProjectionStats/, 'WebGPU solver reports density continuity projection diagnostics');
+assert.match(webgpuCoreSource, /continuityPeakOccupancyRatio/, 'continuity diagnostics report peak occupancy pressure');
+assert.match(webgpuCoreSource, /continuityProjectionCandidateCount/, 'continuity diagnostics report projection candidate count');
+assert.match(webgpuCoreSource, /CONTINUITY_BIN_REFRESH_CHUNK/, 'continuity solve refreshes spatial bins across long step batches');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
+assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
 assert.match(webgpuCoreSource, /averageSupportNeighborCount/, 'support diagnostics report average neighbor support');
 assert.match(webgpuCoreSource, /unsupportedCorrectionRatio/, 'support diagnostics report unsupported correction ratio');
@@ -155,6 +162,7 @@ assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid dia
 assert.match(pageSource, /surfaceCohesionStats/, 'prototype displays surface cohesion diagnostics');
 assert.match(pageSource, /spatialSurfaceRelaxationStats/, 'prototype displays spatial surface relaxation diagnostics');
 assert.match(pageSource, /densityPositionSolveStats/, 'prototype displays density/position solve diagnostics');
+assert.match(pageSource, /densityContinuityProjectionStats/, 'prototype displays density continuity projection diagnostics');
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
@@ -214,6 +222,10 @@ assert.match(witnessSource, /relaxedParticleCount/, 'witness checks relaxation a
 assert.match(witnessSource, /sheetContinuityRatio/, 'witness checks spatial sheet continuity');
 assert.match(witnessSource, /densityPositionSolveStats/, 'witness requires density/position solve diagnostics');
 assert.match(witnessSource, /wgsl-density-position-solve-v0/, 'witness records density/position solve contract');
+assert.match(witnessSource, /densityContinuityProjectionStats/, 'witness requires density continuity projection diagnostics');
+assert.match(witnessSource, /wgsl-density-continuity-projection-v0/, 'witness records density continuity projection contract');
+assert.match(witnessSource, /continuityPeakOccupancyRatio/, 'witness records continuity peak occupancy ratio');
+assert.match(witnessSource, /continuityProjectionCandidateCount/, 'witness records continuity projection candidate count');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
