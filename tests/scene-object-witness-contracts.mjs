@@ -182,6 +182,9 @@ assert.match(witness, /splat correction crop mode did not update crop bounds/, '
 assert.match(witness, /splat correction crop mode dirtied scene transform/, 'Splat correction mode witness proves viewport crop-box edits keep scene placement separate');
 assert.match(witness, /splat correction crop preview did not hide outside points/, 'Splat correction mode witness proves normal preview hides cropped-away points');
 assert.match(witness, /splat correction crop preview did not show edit context/, 'Splat correction mode witness proves edit mode shows cropped-away points faintly');
+assert.match(witness, /splat-autocrop/, 'Splat correction witness has a focused autocrop scenario');
+assert.match(witness, /splat autocrop did not consume sidecar-shaped foreground depth evidence/, 'Splat autocrop witness requires foreground/depth-shaped evidence to drive the crop proposal');
+assert.match(witness, /splat autocrop did not recenter pivot to crop center/, 'Splat autocrop witness proves autocrop recenters the corrected pivot to the crop center');
 assert.match(witness, /splat-crop-frame/, 'Splat correction witness has a focused crop-frame scenario for box/predicate alignment');
 assert.match(witness, /cropTargetParentName !== 'splat-visual-root'/, 'Splat correction crop-frame witness fails when the crop box is not parented in the preview frame');
 assert.match(witness, /saved splat crop centroid preview did not show included points before edit mode/, 'Splat correction sidecar witness proves saved crop plus centroid offset remains visible outside edit mode');

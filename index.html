@@ -304,6 +304,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           </div>
           <div class="splat-correction-actions">
             <button type="button" class="btn" id="splat-correction-mode-button" onclick="toggleSplatCorrectionMode()">Edit Correction</button>
+            <button type="button" class="btn" onclick="applySelectedSplatAutocrop()">Auto Crop</button>
             <button type="button" class="btn" onclick="saveSelectedSplatCorrection()">Save Correction</button>
             <button type="button" class="btn" onclick="resetSelectedSplatCorrection()">Reset Correction</button>
             <button type="button" class="btn" id="splat-correction-revert-button" onclick="revertSplatCorrectionDraft()" hidden>Revert Draft</button>
@@ -2817,8 +2818,10 @@ function initTransformInspector() {
 
 window.kaminosSaveSelectedSplatCorrection = saveSelectedSplatCorrection;
 window.kaminosResetSelectedSplatCorrection = resetSelectedSplatCorrection;
+window.kaminosApplySelectedSplatAutocrop = applySelectedSplatAutocrop;
 window.saveSelectedSplatCorrection = saveSelectedSplatCorrection;
 window.resetSelectedSplatCorrection = resetSelectedSplatCorrection;
+window.applySelectedSplatAutocrop = applySelectedSplatAutocrop;
 window.kaminosHybridSplatOverlayDebugState = hybridSplatOverlayDebugState;
 window.kaminosHybridSplatOverlayProjectionProbe = () => hybridSplatOverlayProjectionProbe();
 window.kaminosSetHybridSplatOverlayModuleUrl = setHybridSplatOverlayModuleUrl;
@@ -5747,17 +5750,20 @@ function replaceSplatPointGeometry(points, geometry) {
 
 function splatCropPointCoordinates(positions, index, correction, frame = 'axis-flipped-asset') {
   const offset = index * 3;
-  if (frame === 'raw-normalized') {
-    return [
-      positions[offset + 0],
-      positions[offset + 1],
-      positions[offset + 2],
-    ];
-  }
+  return splatCropPointCoordinatesFromPosition([
+    positions[offset + 0],
+    positions[offset + 1],
+    positions[offset + 2],
+  ], correction, frame);
+}
+
+function splatCropPointCoordinatesFromPosition(position, correction, frame = 'axis-flipped-asset') {
+  const raw = numberTriplet(position, [0, 0, 0]);
+  if (frame === 'raw-normalized') return raw;
   const coordinates = [
-    positions[offset + 0] * correction.axisFlips[0],
-    positions[offset + 1] * correction.axisFlips[1],
-    positions[offset + 2] * correction.axisFlips[2],
+    raw[0] * correction.axisFlips[0],
+    raw[1] * correction.axisFlips[1],
+    raw[2] * correction.axisFlips[2],
   ];
   if (frame === 'pivot-local-minus-centroid') {
     return coordinates.map((value, axis) => value - correction.centroidOffset[axis]);
@@ -5778,6 +5784,125 @@ function countSplatCropFrame(sourcePositions, pointCount, correction, cropMin, c
     if (splatPointInsideCrop(sourcePositions, index, correction, cropMin, cropMax, frame)) count++;
   }
   return count;
+}
+
+function splatAutocropEvidenceFromRecord(record) {
+  const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
+  if (!preview?.sourcePositions || !preview.totalPointCount) return null;
+  return {
+    schema: 'kaminos.splat-autocrop-evidence.v0',
+    source: 'point-cloud-preview',
+    frame: 'axis-flipped-asset',
+    positions: preview.sourcePositions,
+    pointCount: preview.totalPointCount,
+  };
+}
+
+function splatAutocropPointAccepted(point, options = {}) {
+  if (!point || point.foreground === false) return false;
+  const maskThreshold = Number.isFinite(Number(options.maskThreshold)) ? Number(options.maskThreshold) : 0.5;
+  const mask = point.maskAlpha ?? point.alpha ?? point.mask ?? point.foregroundScore;
+  if (mask !== undefined && Number(mask) < maskThreshold) return false;
+  const maxDepth = Number(options.maxDepth);
+  if (Number.isFinite(maxDepth) && Number(point.depth) > maxDepth) return false;
+  const minDepth = Number(options.minDepth);
+  if (Number.isFinite(minDepth) && Number(point.depth) < minDepth) return false;
+  return true;
+}
+
+function forEachSplatAutocropEvidencePoint(evidence = {}, callback) {
+  if (Array.isArray(evidence.points)) {
+    evidence.points.forEach(point => {
+      const position = Array.isArray(point) ? point : point?.position;
+      if (Array.isArray(position)) callback(position, Array.isArray(point) ? {} : point);
+    });
+    return;
+  }
+  const positions = evidence.positions;
+  const count = Math.min(
+    Number.isFinite(Number(evidence.pointCount)) ? Number(evidence.pointCount) : Math.floor((positions?.length || 0) / 3),
+    Math.floor((positions?.length || 0) / 3),
+  );
+  for (let index = 0; index < count; index++) {
+    const offset = index * 3;
+    callback([positions[offset], positions[offset + 1], positions[offset + 2]], { index });
+  }
+}
+
+function proposeSplatAutocropFromSidecarEvidence(evidence = {}, correction = {}, options = {}) {
+  const normalized = normalizeSplatCorrection(correction);
+  const frame = evidence.frame || options.frame || 'axis-flipped-asset';
+  const padding = numberTriplet(
+    Array.isArray(options.padding) ? options.padding : [options.padding ?? 0.04, options.padding ?? 0.04, options.padding ?? 0.04],
+    [0.04, 0.04, 0.04],
+  ).map(value => Math.max(0, Number(value) || 0));
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  let selectedPointCount = 0;
+  forEachSplatAutocropEvidencePoint(evidence, (position, point) => {
+    if (!splatAutocropPointAccepted(point, options)) return;
+    const coordinates = splatCropPointCoordinatesFromPosition(position, normalized, frame);
+    for (let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis], coordinates[axis]);
+      max[axis] = Math.max(max[axis], coordinates[axis]);
+    }
+    selectedPointCount++;
+  });
+  if (!selectedPointCount) return null;
+  const crop = {
+    enabled: true,
+    min: min.map((value, axis) => value - padding[axis]),
+    max: max.map((value, axis) => value + padding[axis]),
+  };
+  const center = crop.min.map((value, axis) => (value + crop.max[axis]) / 2);
+  const recenterPivot = options.recenterPivot !== false;
+  const nextCorrection = normalizeSplatCorrection({
+    ...normalized,
+    centroidOffset: recenterPivot ? center : normalized.centroidOffset,
+    crop,
+  });
+  return {
+    schema: 'kaminos.splat-autocrop-proposal.v0',
+    evidenceSource: evidence.source || 'sidecar-shaped-evidence',
+    evidenceFrame: frame,
+    selectedPointCount,
+    crop,
+    centroidOffset: nextCorrection.centroidOffset,
+    correction: nextCorrection,
+  };
+}
+
+function applySelectedSplatAutocrop(evidence = null, options = {}) {
+  const entry = selectedSplatRecord();
+  if (!entry) {
+    setInfo('Select a splat first');
+    return null;
+  }
+  const proposed = proposeSplatAutocropFromSidecarEvidence(
+    evidence || splatAutocropEvidenceFromRecord(entry),
+    entry.splat?.correction,
+    options,
+  );
+  if (!proposed) {
+    setInfo('Splat autocrop found no foreground evidence');
+    return null;
+  }
+  setSceneObjectSplatMetadata(entry, {
+    ...entry.splat,
+    correction: proposed.correction,
+  });
+  applySplatCorrectionToRecord(entry, proposed.correction);
+  if (splatCorrectionMode?.objectId === entry.id) {
+    splatCorrectionMode.draftCorrection = normalizeSplatCorrection(proposed.correction);
+    setSplatCorrectionTargetsFromCorrection(proposed.correction);
+    setSplatCorrectionDraftDirty(true);
+  }
+  buildRenderHandoffV0(entry);
+  updateSplatCorrectionPanel(entry);
+  updateTransformInspector();
+  window._kaminosDirty?.();
+  setInfo(`Splat autocrop applied: ${proposed.selectedPointCount} points`);
+  return proposed;
 }
 
 function chooseSplatCropFrame(preview, correction, cropMin, cropMax) {

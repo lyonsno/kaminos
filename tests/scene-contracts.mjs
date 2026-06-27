@@ -96,6 +96,9 @@ assert.match(index, /window\.kaminosToggleSplatCorrectionAxisFlip/, 'browser wit
 assert.match(index, /function setSplatCorrectionEditMode\(/, 'splat correction mode exposes explicit Pivot/Crop edit targets');
 assert.match(index, /splat-correction-crop-target/, 'splat correction crop mode has a named viewport crop-box target');
 assert.match(index, /window\.kaminosSetSplatCorrectionCropTransform/, 'browser witnesses can edit crop bounds through the viewport crop target');
+assert.match(index, /function proposeSplatAutocropFromSidecarEvidence\(/, 'Splat autocrop has a deterministic sidecar-shaped evidence helper');
+assert.match(index, /window\.kaminosApplySelectedSplatAutocrop/, 'browser witnesses can apply selected splat autocrop without DOM inference');
+assert.match(index, /Auto Crop/, 'Splat Correction panel exposes an operator-visible autocrop command');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');

@@ -3858,6 +3858,89 @@ async function runSplatCorrectionModeScenario(ws) {
   }
 }
 
+async function runSplatAutocropScenario(ws) {
+  phase = 'scenario-splat-autocrop';
+  lastEvidence.splatAutocrop = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const ply = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex 6',
+        'property float x',
+        'property float y',
+        'property float z',
+        'property uchar red',
+        'property uchar green',
+        'property uchar blue',
+        'end_header',
+        '-1 0 0 255 80 80',
+        '1 0 0 80 255 80',
+        '0 -1 0 80 80 255',
+        '0 1 0 255 220 80',
+        '0 0 -1 255 80 220',
+        '0 0 1 80 255 220',
+      ].join('\\n') + '\\n';
+      document.querySelector('[data-tab="greenroom"]').click();
+      const file = new File([ply], 'Witness Autocrop.PLY', { type: 'application/octet-stream' });
+      const ingestResult = await window.kaminosIngestDroppedSplatFile(file, { clear: true });
+      await wait(250);
+      const sceneDebug = window.kaminosSceneObjectDebugState?.() || [];
+      const splat = sceneDebug.find(record => record.type === 'splat' && record.source === ingestResult?.entry?.source)
+        || sceneDebug.find(record => record.type === 'splat');
+      if (!splat) throw new Error('autocrop scenario could not import splat');
+      window.selectSceneObject(splat.id);
+      const proposal = window.kaminosApplySelectedSplatAutocrop({
+        schema: 'kaminos.splat-autocrop-evidence.v0',
+        source: 'synthetic-sidecar-depth-mask',
+        frame: 'raw-normalized',
+        points: [
+          { position: [-0.4, -0.2, 0.2], foreground: true, depth: 0.25, maskAlpha: 1 },
+          { position: [0.6, 0.4, 0.8], foreground: true, depth: 0.35, maskAlpha: 0.9 },
+          { position: [0, 0, -0.9], foreground: true, depth: 2.0, maskAlpha: 1 },
+          { position: [0.9, 0.9, 0.9], foreground: false, depth: 0.2, maskAlpha: 0 },
+        ],
+      }, { padding: [0.1, 0.05, 0.2], maxDepth: 1.0, recenterPivot: true });
+      const afterAutocrop = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === splat.id);
+      const pivot = window.kaminosSplatPivotDebugState?.(splat.id) || null;
+      const preview = window.kaminosSplatPreviewDebugState?.(splat.id) || null;
+      return {
+        ingestResult: { entry: ingestResult?.entry || null },
+        proposal,
+        afterAutocrop,
+        pivot,
+        preview,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.splatAutocrop;
+  const correction = evidence.afterAutocrop?.splat?.correction;
+  if (!evidence.proposal
+      || evidence.proposal.schema !== 'kaminos.splat-autocrop-proposal.v0'
+      || evidence.proposal.evidenceSource !== 'synthetic-sidecar-depth-mask'
+      || evidence.proposal.selectedPointCount !== 2) {
+    throw new Error(`splat autocrop did not consume sidecar-shaped foreground depth evidence: ${JSON.stringify(evidence)}`);
+  }
+  if (!correction?.crop?.enabled
+      || Math.abs(correction.crop.min?.[0] + 0.5) > 1e-6
+      || Math.abs(correction.crop.max?.[0] - 0.7) > 1e-6
+      || Math.abs(correction.crop.min?.[1] + 0.25) > 1e-6
+      || Math.abs(correction.crop.max?.[1] - 0.45) > 1e-6
+      || Math.abs(correction.crop.min?.[2] - 0.0) > 1e-6
+      || Math.abs(correction.crop.max?.[2] - 1.0) > 1e-6) {
+    throw new Error(`splat autocrop did not write expected crop bounds: ${JSON.stringify(evidence)}`);
+  }
+  if (Math.abs(correction.centroidOffset?.[0] - 0.1) > 1e-6
+      || Math.abs(correction.centroidOffset?.[1] - 0.1) > 1e-6
+      || Math.abs(correction.centroidOffset?.[2] - 0.5) > 1e-6
+      || Math.abs(evidence.pivot?.correctionPivotWorldPosition?.[0] - 0.1) > 1e-6
+      || Math.abs(evidence.pivot?.correctionPivotWorldPosition?.[1] - 0.1) > 1e-6
+      || Math.abs(evidence.pivot?.correctionPivotWorldPosition?.[2] - 0.5) > 1e-6) {
+    throw new Error(`splat autocrop did not recenter pivot to crop center: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSplatCropFrameScenario(ws) {
   phase = 'scenario-splat-crop-frame';
   lastEvidence.splatCropFrame = await evaluate(ws, `
@@ -4170,6 +4253,8 @@ try {
     await runSplatCorrectionSidecarScenario(ws);
   } else if (scenario === 'splat-correction-mode') {
     await runSplatCorrectionModeScenario(ws);
+  } else if (scenario === 'splat-autocrop') {
+    await runSplatAutocropScenario(ws);
   } else if (scenario === 'splat-crop-frame') {
     await runSplatCropFrameScenario(ws);
   } else if (scenario === 'ao-route-delta') {
