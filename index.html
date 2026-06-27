@@ -583,7 +583,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="orb-shell-seed-val">17</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Leaves</span>
+      <span class="slider-label">Density</span>
       <input type="range" id="orb-shell-leaf-count" min="8" max="14" step="1" value="10">
       <span class="slider-val" id="orb-shell-leaf-count-val">10</span>
     </div>
@@ -4371,7 +4371,7 @@ function updateOrbShellCompositionReadout() {
   document.getElementById('orb-shell-composition-identity').textContent = ORB_SHELL_COMPOSITION_IDENTITY;
   const state = orbShellCompositionWitness?.debugState?.();
   document.getElementById('orb-shell-composition-baseline').textContent = state?.baselineDisposition || 'coherent-but-wrong-model-baseline';
-  document.getElementById('orb-shell-composition-variant').textContent = `${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0}/leaves-${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
+  document.getElementById('orb-shell-composition-variant').textContent = `${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0}/pressure-${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
   document.getElementById('orb-shell-composition-macros').textContent = String(state?.macroAssemblageCount ?? 0);
   document.getElementById('orb-shell-composition-bands').textContent = String(state?.bandMemberCount ?? 0);
   document.getElementById('orb-shell-composition-families').textContent = Object.values(state?.inverseProceduralHypotheses || {}).flat().slice(0, 3).join(',') || 'none';
@@ -4382,6 +4382,10 @@ function updateOrbShellCompositionReadout() {
 
 function frameOrbShellCompositionCamera() {
   orbShellCompositionWitness?.frameCamera?.();
+}
+
+function orbShellCompositionStatusText(state) {
+  return `Orb Shell Macro Grounding — ${state?.macroAssemblageCount ?? 0} macro thrusts / ${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0} / density pressure ${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
 }
 
 function readOrbShellCompositionControls() {
@@ -4445,7 +4449,7 @@ function initOrbShellCompositionRoute() {
     camera,
     controls,
     onStatus: status => {
-      if (status.phase === 'built') setInfo(`Orb Shell Macro Grounding — ${status.macroAssemblageCount} macro thrusts / ${status.variantId}`);
+      if (status.phase === 'built') setInfo(orbShellCompositionStatusText(status));
     },
     onDirty: () => window._kaminosDirty?.(),
   });
@@ -4458,7 +4462,7 @@ function initOrbShellCompositionRoute() {
     orbShellCompositionWitness.setActive(active);
     if (active) frameOrbShellCompositionCamera();
     updateOrbShellCompositionReadout();
-    setInfo(active ? 'Orb Shell Macro Grounding — semantic composition fixture' : 'Orb Shell Macro Grounding disabled');
+    setInfo(active ? orbShellCompositionStatusText(orbShellCompositionWitness.debugState()) : 'Orb Shell Macro Grounding disabled');
   });
   document.getElementById('orb-shell-composition-frame').addEventListener('click', frameOrbShellCompositionCamera);
 
@@ -4469,7 +4473,7 @@ function initOrbShellCompositionRoute() {
     orbShellWitness?.setActive(false);
     orbShellCompositionWitness.setActive(true);
     frameOrbShellCompositionCamera();
-    setInfo('Orb Shell Macro Grounding — semantic composition fixture');
+    setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
   }
   updateOrbShellCompositionReadout();
 }
