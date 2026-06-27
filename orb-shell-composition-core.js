@@ -4,6 +4,7 @@ export const ORB_SHELL_CONTROLLED_VARIATION_MODE = 'orb-shell-controlled-variati
 export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-substrip-decomposition-v0';
 export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
+export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witness-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -804,6 +805,127 @@ function createApertureTerminationField(composition) {
   };
 }
 
+function aperturePressureRingPoint(voidRecord, angle) {
+  const [cx, cy, cz] = voidRecord.center;
+  const [rx, ry] = voidRecord.radius;
+  const x = cx + Math.cos(angle) * rx;
+  const y = cy + Math.sin(angle) * ry;
+  const z = Math.max(cz * 0.8, Math.sqrt(Math.max(0.01, 1 - x * x - y * y))) + 0.05;
+  return [x, y, z];
+}
+
+function aperturePressureRingPointAndTangent(voidRecord, angle) {
+  const point = aperturePressureRingPoint(voidRecord, angle);
+  const next = aperturePressureRingPoint(voidRecord, angle + 0.01);
+  const prev = aperturePressureRingPoint(voidRecord, angle - 0.01);
+  return {
+    point,
+    tangent: normalizePoint(subtractPoints(next, prev)),
+  };
+}
+
+function nearestAperturePressureRingSample(voidRecord, point, steps = 180) {
+  let nearest = null;
+  for (let index = 0; index < steps; index++) {
+    const angle = (index / steps) * TAU;
+    const ring = aperturePressureRingPointAndTangent(voidRecord, angle);
+    const distance = pointDistance(point, ring.point);
+    if (!nearest || distance < nearest.distance) {
+      nearest = { ...ring, angle, distance };
+    }
+  }
+  return nearest;
+}
+
+function createApertureTangencyWitnessPlan(composition, apertureRelativeTerminationPlan, substrips) {
+  const primaryVoid = composition.AperturePressure?.primaryVoids?.[0];
+  const apertureField = apertureRelativeTerminationPlan?.apertureField;
+  if (!primaryVoid || !apertureField) {
+    return {
+      schema: 'ApertureTangencyWitnessPlan',
+      mode: ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE,
+      id: 'limited-two-family-aperture-tangency-witness-plan',
+      measuredApertureFieldId: apertureField?.id || null,
+      measuredApertureSourceId: primaryVoid?.id || null,
+      visualOverlayMode: 'terminal-and-orbit-tangent-rays',
+      sampleCount: 0,
+      samples: [],
+      overlayGeometryIds: [],
+      failureModes: ['missing-visible-aperture-source', 'pretty-geometry-without-aperture-coupling'],
+    };
+  }
+  const samples = substrips.map(strip => {
+    const terminalSample = strip.edgeSamples.at(-1);
+    const terminalPoint = terminalSample.center;
+    const terminalTangent = normalizePoint(terminalSample.tangent);
+    const nearest = nearestAperturePressureRingSample(primaryVoid, terminalPoint);
+    const tangentOrbitAlignment = Math.abs(dotPoints(terminalTangent, nearest.tangent));
+    const tangentOrbitAngleRadians = Math.acos(clamp(tangentOrbitAlignment, -1, 1));
+    const captureRadiusError = nearest.distance;
+    const requestedTerminationClass = strip.apertureTermination.terminationClass;
+    const classVerdict = requestedTerminationClass === 'orbit-capture'
+      ? (
+        tangentOrbitAlignment >= 0.72 && captureRadiusError <= 0.28
+          ? 'measured-orbit-capture-coupling'
+          : 'orbit-capture-request-not-yet-geometrically-proven'
+      )
+      : (
+        tangentOrbitAlignment <= 0.82 || strip.apertureTermination.ownsFurthestVisibleTip
+          ? 'measured-counter-curve-refusal'
+          : 'counter-curve-request-not-yet-geometrically-proven'
+      );
+    const id = `${strip.id}-aperture-tangency-sample`;
+    return {
+      schema: 'ApertureTangencySample',
+      mode: ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE,
+      id,
+      substripId: strip.id,
+      parentAssemblage: strip.parentAssemblage,
+      siblingRole: strip.siblingRole,
+      requestedTerminationClass,
+      ownsFurthestVisibleTip: strip.apertureTermination.ownsFurthestVisibleTip,
+      terminalVisibility: strip.apertureTermination.terminalVisibility,
+      terminalPoint,
+      terminalTangent,
+      nearestAperturePoint: nearest.point,
+      nearestApertureAngleRadians: nearest.angle,
+      apertureOrbitTangent: nearest.tangent,
+      tangentOrbitAlignment,
+      tangentOrbitAngleRadians,
+      captureRadiusError,
+      captureRadiusErrorVerdict: captureRadiusError <= 0.28 ? 'near-visible-aperture-orbit' : 'not-yet-near-visible-aperture-orbit',
+      classVerdict,
+      overlayGeometryIds: [
+        `${id}-terminal-tangent-ray`,
+        `${id}-aperture-orbit-tangent-ray`,
+        `${id}-nearest-aperture-point`,
+      ],
+    };
+  });
+  const verdictCounts = samples.reduce((counts, sample) => {
+    counts[sample.classVerdict] = (counts[sample.classVerdict] || 0) + 1;
+    return counts;
+  }, {});
+  return {
+    schema: 'ApertureTangencyWitnessPlan',
+    mode: ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE,
+    id: 'limited-two-family-aperture-tangency-witness-plan',
+    measuredApertureFieldId: apertureField.id,
+    measuredApertureSourceId: primaryVoid.id,
+    visibleBlueRingField: primaryVoid.id,
+    visualOverlayMode: 'terminal-and-orbit-tangent-rays',
+    sampleCount: samples.length,
+    samples,
+    overlayGeometryIds: samples.flatMap(sample => sample.overlayGeometryIds),
+    verdictCounts,
+    failureModes: [
+      'pretty-geometry-without-aperture-coupling',
+      'requested-orbit-class-without-measured-terminal-tangent-alignment',
+      'requested-counter-curve-class-without-visible-orbit-refusal',
+    ],
+  };
+}
+
 function dynamicSubstripVRange(spec, localT) {
   const [baseV0, baseV1] = spec.normalizedVRange;
   const baseCenter = (baseV0 + baseV1) * 0.5;
@@ -1135,6 +1257,11 @@ function createMacroFamilySubstripPlan(composition) {
     parentAssemblageIds,
     substrips,
   );
+  const apertureTangencyWitnessPlan = createApertureTangencyWitnessPlan(
+    composition,
+    apertureRelativeTerminationPlan,
+    substrips,
+  );
   return {
     schema: 'MacroFamilySubstripPlan',
     mode: ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE,
@@ -1146,6 +1273,7 @@ function createMacroFamilySubstripPlan(composition) {
     gapContracts,
     gapContractCount: gapContracts.length,
     apertureRelativeTerminationPlan,
+    apertureTangencyWitnessPlan,
     apertureTerminationClassCounts: apertureRelativeTerminationPlan.apertureTerminationClassCounts,
     renderPolicy: {
       parentFillDemotion: 'muted-territory-support-not-final-slab',
@@ -2599,17 +2727,18 @@ function makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap) {
 }
 
 function makeAperturePressureRing(THREE, voidRecord) {
-  const [cx, cy, cz] = voidRecord.center;
-  const [rx, ry] = voidRecord.radius;
   const points = [];
   for (let i = 0; i <= 120; i++) {
     const a = (i / 120) * TAU;
-    const x = cx + Math.cos(a) * rx;
-    const y = cy + Math.sin(a) * ry;
-    const z = Math.max(cz * 0.8, Math.sqrt(Math.max(0.01, 1 - x * x - y * y))) + 0.05;
-    points.push(new THREE.Vector3(x, y, z));
+    points.push(new THREE.Vector3(...aperturePressureRingPoint(voidRecord, a)));
   }
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, true), 120, 0.006, 8, true);
+}
+
+function makeApertureTangencyVectorGeometry(THREE, startPoint, direction, length = 0.18, radius = 0.005) {
+  const start = new THREE.Vector3(...startPoint);
+  const end = start.clone().add(new THREE.Vector3(...direction).normalize().multiplyScalar(length));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 1, radius, 8, false);
 }
 
 function makeSeamGapHintGeometry(THREE, gap) {
@@ -3218,6 +3347,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const hopMaterial = neutralPbrMaterial({ color: 0x3d3530, roughness: 0.5, metalness: 0.04 });
   const apertureMaterial = new THREE.MeshBasicMaterial({ color: 0x61b8d9, transparent: true, opacity: 0.28, depthWrite: false });
   const terminationMaterial = new THREE.MeshBasicMaterial({ color: 0xff6a1c, transparent: true, opacity: 0.42 });
+  const apertureTerminalTangentMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
+  const apertureOrbitTangentMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
+  const apertureTangencyPointMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
   const apertureOwnerBodyMaterial = neutralPbrMaterial({ color: 0x1a2427, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = neutralPbrMaterial({ color: 0x46565b, roughness: 0.4, metalness: 0.05 });
   const crossingSubSurgeRailMaterial = neutralPbrMaterial({ color: 0x1d2a2f, roughness: 0.52, metalness: 0.04 });
@@ -3295,6 +3427,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     hopMaterial,
     apertureMaterial,
     terminationMaterial,
+    apertureTerminalTangentMaterial,
+    apertureOrbitTangentMaterial,
+    apertureTangencyPointMaterial,
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
@@ -3569,6 +3704,35 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       ring.userData.AperturePressure = voidRecord;
       group.add(ring);
     }
+    for (const sample of composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.samples || []) {
+      const terminalRay = new THREE.Mesh(
+        makeApertureTangencyVectorGeometry(THREE, sample.terminalPoint, sample.terminalTangent, 0.2, 0.006),
+        apertureTerminalTangentMaterial,
+      );
+      terminalRay.name = `${sample.id}-terminal-tangent-ray`;
+      terminalRay.visible = false;
+      terminalRay.userData.ApertureTangencySample = sample;
+      terminalRay.userData.apertureTangencyOverlayRole = 'terminal-tangent-ray';
+      group.add(terminalRay);
+
+      const orbitRay = new THREE.Mesh(
+        makeApertureTangencyVectorGeometry(THREE, sample.nearestAperturePoint, sample.apertureOrbitTangent, 0.2, 0.006),
+        apertureOrbitTangentMaterial,
+      );
+      orbitRay.name = `${sample.id}-aperture-orbit-tangent-ray`;
+      orbitRay.visible = false;
+      orbitRay.userData.ApertureTangencySample = sample;
+      orbitRay.userData.apertureTangencyOverlayRole = 'aperture-orbit-tangent-ray';
+      group.add(orbitRay);
+
+      const nearestPoint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 8), apertureTangencyPointMaterial);
+      nearestPoint.name = `${sample.id}-nearest-aperture-point`;
+      nearestPoint.position.set(...sample.nearestAperturePoint);
+      nearestPoint.visible = false;
+      nearestPoint.userData.ApertureTangencySample = sample;
+      nearestPoint.userData.apertureTangencyOverlayRole = 'nearest-aperture-point';
+      group.add(nearestPoint);
+    }
     for (const gap of composition.expandedMacroRegionProxyPlan?.seamGaps || []) {
       const seamName = `${gap.id}-future-mesh-boundary-input`;
       if (composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.includes(seamName)) continue;
@@ -3611,6 +3775,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
       apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
       apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
+      apertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
+      apertureTangencySampleCount: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.sampleCount || 0,
+      apertureTangencyVerdictCounts: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.verdictCounts || {},
+      apertureTangencyMeasuredApertureSourceId: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.measuredApertureSourceId,
+      apertureTangencyOverlayGeometryIds: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.overlayGeometryIds || [],
       selectedParentPromotedBodyMeshCount: renderedSelectedParentPromotedBodyMeshIds.length,
       selectedParentPromotedBodyMeshIds: renderedSelectedParentPromotedBodyMeshIds,
       selectedParentSideWallMeshCount: renderedSelectedParentSideWallMeshIds.length,
@@ -3717,6 +3886,51 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.target.set(-0.49, 0.96, 0.02);
       controls.update();
       onDirty?.();
+    },
+    frameApertureTangencyWitness() {
+      camera.position.set(0.12, -1.08, 3.35);
+      controls.target.set(-0.04, -0.73, 0.78);
+      controls.update();
+      onDirty?.();
+    },
+    enableApertureTangencyWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.apertureTangencyWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleOverlayIds = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const isOverlay = !!child.userData?.ApertureTangencySample;
+        const isAperture = !!child.userData?.AperturePressure;
+        const isMeasuredSubstrip = !!child.userData?.MacroFamilySubstrip
+          && !child.userData?.MacroFamilySubstripSideWall
+          && !child.userData?.MacroFamilySubstripTerminalCap;
+        child.visible = isOverlay || isAperture || isMeasuredSubstrip;
+        if (child.visible) {
+          visibleCount += 1;
+          if (isOverlay) visibleOverlayIds.push(child.name);
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      controls.update();
+      onDirty?.();
+      return {
+        schema: 'ApertureTangencyWitnessState',
+        mode: 'aperture-tangency-overlay-v0',
+        witnessPlanId: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.id,
+        measuredApertureSourceId: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.measuredApertureSourceId,
+        visualOverlayMode: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.visualOverlayMode,
+        visibleCount,
+        hiddenCount,
+        visibleOverlayIds,
+        sampleCount: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.sampleCount || 0,
+      };
     },
     enableLiveTerminalCapWitness() {
       scene.children.forEach(child => {
@@ -3866,6 +4080,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         apertureRelativeTerminationPlan: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan,
         apertureTerminationField: composition.macroFamilySubstripPlan?.apertureRelativeTerminationPlan?.apertureField,
         apertureTerminationClassCounts: composition.macroFamilySubstripPlan?.apertureTerminationClassCounts || {},
+        ApertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
+        apertureTangencyWitnessPlan: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan,
+        ApertureTangencySample: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.samples || [],
+        apertureTangencySampleCount: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.sampleCount || 0,
+        apertureTangencyVerdictCounts: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.verdictCounts || {},
+        apertureTangencyMeasuredApertureSourceId: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.measuredApertureSourceId,
+        apertureTangencyOverlayGeometryIds: composition.macroFamilySubstripPlan?.apertureTangencyWitnessPlan?.overlayGeometryIds || [],
         selectedParentPromotedBodyMeshCount: selectedParentPromotedBodyMeshIds().length,
         selectedParentPromotedBodyMeshIds: selectedParentPromotedBodyMeshIds(),
         selectedParentSideWallMeshCount: selectedParentSideWallMeshIds().length,

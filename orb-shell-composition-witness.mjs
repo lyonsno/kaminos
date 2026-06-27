@@ -24,6 +24,7 @@ let counter = 0;
 const browserEvents = [];
 let cleanSidewallTopologyWitness = null;
 let liveTerminalCapWitness = null;
+let apertureTangencyWitness = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -183,6 +184,11 @@ async function main() {
       cleanSidewallTopologyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableCleanSidewallTopologyWitness?.()');
       await delay(500);
     }
+    if (focus === 'aperture-tangency') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameApertureTangencyWitness?.()');
+      apertureTangencyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableApertureTangencyWitness?.()');
+      await delay(500);
+    }
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -219,6 +225,19 @@ async function main() {
     assert.equal(state?.apertureTerminationField?.schema, 'ApertureTerminationField', 'aperture termination field missing from debug state');
     assert.ok(state?.apertureTerminationClassCounts?.['orbit-capture'] >= 1, 'orbit-capture termination class missing from debug state');
     assert.ok(state?.apertureTerminationClassCounts?.['counter-curve-blade'] >= 1, 'counter-curve blade termination class missing from debug state');
+    assert.equal(state?.apertureTangencyWitnessPlan?.schema, 'ApertureTangencyWitnessPlan', 'aperture tangency witness plan missing from debug state');
+    assert.equal(state?.apertureTangencyWitnessPlan?.measuredApertureFieldId, state.apertureRelativeTerminationPlan.apertureField.id, 'aperture tangency witness must measure active termination field');
+    assert.equal(state?.apertureTangencyMeasuredApertureSourceId, 'primary-front-teardrop-void', 'aperture tangency witness must measure visible blue aperture source');
+    assert.equal(state?.apertureTangencySampleCount, state.macroFamilySubstripCount, 'aperture tangency sample count must match visible substrip count');
+    assert.ok(state?.ApertureTangencySample?.every(sample => sample?.schema === 'ApertureTangencySample'), 'ApertureTangencySample records missing from debug state');
+    assert.ok(state?.ApertureTangencySample?.every(sample => Number.isFinite(sample.tangentOrbitAlignment)), 'ApertureTangencySample alignment measurements missing');
+    assert.ok(state?.apertureTangencyOverlayGeometryIds?.some(id => id.includes('terminal-tangent')), 'terminal tangent overlay ids missing');
+    assert.ok(state?.apertureTangencyOverlayGeometryIds?.some(id => id.includes('aperture-orbit-tangent')), 'aperture orbit tangent overlay ids missing');
+    if (focus === 'aperture-tangency') {
+      assert.equal(apertureTangencyWitness?.schema, 'ApertureTangencyWitnessState', 'aperture tangency witness did not activate');
+      assert.equal(apertureTangencyWitness?.visualOverlayMode, 'terminal-and-orbit-tangent-rays', 'aperture tangency witness did not enable vector overlay');
+      assert.ok(apertureTangencyWitness?.visibleOverlayIds?.length >= state.apertureTangencySampleCount * 2, 'aperture tangency overlay meshes not visible');
+    }
     assert.equal(state?.selectedParentPromotedBodyMeshCount, 0, 'selected parent promoted body slabs must be absent from normal render');
     assert.equal(state?.selectedParentSideWallMeshCount, 0, 'selected parent sidewalls must be absent from normal render');
     assert.equal(state?.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps must be absent from normal render');
@@ -320,7 +339,7 @@ async function main() {
 
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps') {
+    if (focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps' || focus === 'aperture-tangency') {
       const canvasRect = await evaluate(ws, `
         (() => {
           const canvas = document.querySelector('canvas');
@@ -363,6 +382,14 @@ async function main() {
       apertureRelativeTerminationPlan: state.apertureRelativeTerminationPlan,
       apertureTerminationField: state.apertureTerminationField,
       apertureTerminationClassCounts: state.apertureTerminationClassCounts,
+      ApertureTangencyWitnessPlan: state.ApertureTangencyWitnessPlan,
+      apertureTangencyWitnessPlan: state.apertureTangencyWitnessPlan,
+      ApertureTangencySample: state.ApertureTangencySample,
+      apertureTangencySampleCount: state.apertureTangencySampleCount,
+      apertureTangencyVerdictCounts: state.apertureTangencyVerdictCounts,
+      apertureTangencyMeasuredApertureSourceId: state.apertureTangencyMeasuredApertureSourceId,
+      apertureTangencyOverlayGeometryIds: state.apertureTangencyOverlayGeometryIds,
+      apertureTangencyWitness,
       selectedParentPromotedBodyMeshCount: state.selectedParentPromotedBodyMeshCount,
       selectedParentPromotedBodyMeshIds: state.selectedParentPromotedBodyMeshIds,
       selectedParentSideWallMeshCount: state.selectedParentSideWallMeshCount,
