@@ -17,6 +17,8 @@ assert.match(core, /subordinate-ridge-not-lone-wand/, 'composition demotes the c
 assert.match(core, /makeMacroPromotedBodyGeometry/, 'composition renders promoted macro body geometry');
 assert.match(core, /LiveMacroSideWallPlan/, 'composition names live macro sidewall plan records');
 assert.match(core, /makeMacroPromotedBodySideWallGeometry/, 'composition renders live macro sidewall polygon geometry');
+assert.match(core, /LiveMacroTerminalCap/, 'composition names live macro terminal cap records');
+assert.match(core, /makeMacroPromotedBodyTerminalCapGeometry/, 'composition renders terminal cap polygon geometry');
 assert.match(core, /liveRenderMaterialPolicy/, 'composition records live render material policy');
 assert.match(core, /territoryProxyUnderlayVisible: false/, 'live sidewall witness suppresses overlapping territory proxy underlay');
 assert.match(core, /legacyRoundTargetBandTubesVisible: false/, 'live sidewall witness suppresses old round target band tubes');
@@ -31,9 +33,13 @@ assert.match(witness, /promotedBodyCount/, 'composition witness reports promoted
 assert.match(witness, /lowerCupClosure/, 'composition witness reports lower cup closure');
 assert.match(witness, /crossingTuckIntegration/, 'composition witness reports crossing tuck integration');
 assert.match(witness, /LiveMacroSideWall/, 'composition witness reports live macro sidewall records');
+assert.match(witness, /LiveMacroTerminalCap/, 'composition witness reports live macro terminal cap records');
 assert.match(witness, /liveMacroSideWallVisibilityVerdict/, 'composition witness reports live macro sidewall visibility verdict');
+assert.match(witness, /terminalCapClosureVerdict/, 'composition witness reports terminal cap closure verdict');
 assert.match(witness, /live-macro-sidewall/, 'composition witness has a focused live sidewall smoke mode');
+assert.match(witness, /live-terminal-caps/, 'composition witness has a focused terminal cap smoke mode');
 assert.match(core, /frameLiveMacroSideWall/, 'composition module can frame the live macro sidewall target');
+assert.match(core, /frameLiveMacroTerminalCaps/, 'composition module can frame the live terminal cap target');
 assert.match(witness, /legacyScaffoldSuppressionVerdict/, 'composition witness reports target scaffold suppression verdict');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
@@ -62,6 +68,18 @@ assert.deepEqual(
   ['nw-body', 'nw-rail', 'nw-hop'],
   'live sidewall target suppresses old north-west round body/rail/hop tubes',
 );
+assert.equal(fixture.liveMacroSideWallPlan.terminalCapCount, 2, 'live sidewall plan seals both promoted shell termini');
+assert.equal(fixture.liveMacroSideWallPlan.terminalCapClosureVerdict, 'live-promoted-body-termini-capped', 'live sidewall plan records closed promoted body termini');
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.schema === 'LiveMacroTerminalCap'), 'live sidewall plan carries terminal cap records');
+assert.deepEqual(
+  fixture.liveMacroSideWallPlan.terminalCaps.map(cap => cap.endRole),
+  ['start-terminus', 'end-terminus'],
+  'live terminal caps cover start and end termini',
+);
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.sideWallIds.length === 2), 'terminal caps bridge both sidewall edges');
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capFaceCount >= 4), 'terminal caps record polygon cap faces');
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capThicknessStats.mean >= 0.035), 'terminal caps retain visible shell thickness');
+assert.ok(fixture.liveMacroSideWallPlan.terminalCaps.every(cap => cap.capWidthStats.mean >= 0.2), 'terminal caps span the promoted shell width');
 
 const liveSideWall = fixture.liveMacroSideWallPlan.sideWalls.find(wall => wall.parentAssemblage === 'north-west-dominant-thrust' && wall.targetEdge === 'left-promoted-body-edge');
 assert.equal(liveSideWall?.schema, 'LiveMacroSideWall', 'north-west promoted body has a live sidewall record');

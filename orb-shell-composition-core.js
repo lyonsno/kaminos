@@ -590,6 +590,56 @@ function createLiveMacroSideWall(assemblage, targetEdge = 'left-promoted-body-ed
   };
 }
 
+function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
+  const leftWall = sideWalls.find(wall => wall.targetEdge === 'left-promoted-body-edge');
+  const rightWall = sideWalls.find(wall => wall.targetEdge === 'right-promoted-body-edge');
+  if (!leftWall || !rightWall) return null;
+  const sampleIndex = endRole === 'start-terminus' ? 0 : leftWall.sideWallSamples.length - 1;
+  const left = leftWall.sideWallSamples[sampleIndex];
+  const right = rightWall.sideWallSamples[sampleIndex];
+  const outerMid = lerpPoint(left.outer, right.outer, 0.5);
+  const innerMid = lerpPoint(left.inner, right.inner, 0.5);
+  const capWidthStats = summarizeDistances([
+    { distance: pointDistance(left.outer, right.outer) },
+    { distance: pointDistance(outerMid, innerMid) },
+    { distance: pointDistance(left.inner, right.inner) },
+  ]);
+  const capThicknessStats = summarizeDistances([
+    { distance: pointDistance(left.outer, left.inner) },
+    { distance: pointDistance(outerMid, innerMid) },
+    { distance: pointDistance(right.outer, right.inner) },
+  ]);
+  return {
+    schema: 'LiveMacroTerminalCap',
+    mode: 'live-promoted-body-terminal-cap-v0',
+    id: `${assemblage.id}-${endRole}-live-terminal-cap`,
+    parentAssemblage: assemblage.id,
+    targetPromotedBodyId: assemblage.macroPromotedBody?.id,
+    endRole,
+    t: endRole === 'start-terminus' ? 0 : 1,
+    sideWallIds: [leftWall.id, rightWall.id],
+    capSamples: {
+      outerLeft: left.outer,
+      outerMid,
+      outerRight: right.outer,
+      innerLeft: left.inner,
+      innerMid,
+      innerRight: right.inner,
+    },
+    capWidthStats,
+    capThicknessStats,
+    capFaceCount: 4,
+    couplingContract: {
+      leftSideWallEdgeShared: true,
+      rightSideWallEdgeShared: true,
+      outerSurfaceEdgeShared: true,
+      innerThicknessEdgeShared: true,
+      couplingVerdict: 'terminal-cap-bridges-sidewalls-and-thickness-edges',
+    },
+    visualContract: 'normal live render shows a closed solid end on the promoted shell strip',
+  };
+}
+
 function createLiveMacroSideWallPlan(composition) {
   const target = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-west-dominant-thrust');
   const sideWalls = target
@@ -598,6 +648,11 @@ function createLiveMacroSideWallPlan(composition) {
         createLiveMacroSideWall(target, 'right-promoted-body-edge'),
       ]
     : [];
+  const terminalCaps = target
+    ? ['start-terminus', 'end-terminus']
+        .map(endRole => createLiveMacroTerminalCap(target, sideWalls, endRole))
+        .filter(Boolean)
+    : [];
   const suppressedLegacyRoundBandIds = target?.childBandPlan?.map(member => member.id) || [];
   return {
     schema: 'LiveMacroSideWallPlan',
@@ -605,6 +660,11 @@ function createLiveMacroSideWallPlan(composition) {
     targetAssemblageIds: [...new Set(sideWalls.map(wall => wall.parentAssemblage))],
     sideWalls,
     sideWallCount: sideWalls.length,
+    terminalCaps,
+    terminalCapCount: terminalCaps.length,
+    terminalCapClosureVerdict: terminalCaps.length === 2
+      ? 'live-promoted-body-termini-capped'
+      : 'live-promoted-body-termini-open',
     suppressedLegacyRoundBandIds,
     suppressedLegacyTerminationSocketIds: suppressedLegacyRoundBandIds.flatMap(id => [
       `${id}-start-termination-socket`,
@@ -2008,6 +2068,46 @@ function makeMacroPromotedBodySideWallGeometry(THREE, sideWall) {
   return geometry;
 }
 
+function makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap) {
+  const points = [
+    terminalCap.capSamples.outerLeft,
+    terminalCap.capSamples.outerMid,
+    terminalCap.capSamples.outerRight,
+    terminalCap.capSamples.innerLeft,
+    terminalCap.capSamples.innerMid,
+    terminalCap.capSamples.innerRight,
+  ].map(point => new THREE.Vector3(...point));
+  const indices = [
+    0, 1, 3,
+    1, 4, 3,
+    1, 2, 4,
+    2, 5, 4,
+  ];
+  const capNormal = new THREE.Vector3()
+    .crossVectors(points[2].clone().sub(points[0]), points[3].clone().sub(points[0]))
+    .normalize();
+  const normals = [];
+  for (let i = 0; i < points.length; i++) normals.push(capNormal.x, capNormal.y, capNormal.z);
+  const vertices = points.flatMap(point => [point.x, point.y, point.z]);
+  const uvs = [
+    0, 0,
+    0.5, 0,
+    1, 0,
+    0, 1,
+    0.5, 1,
+    1, 1,
+  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.LiveMacroTerminalCap = terminalCap;
+  return geometry;
+}
+
 function makeAperturePressureRing(THREE, voidRecord) {
   const [cx, cy, cz] = voidRecord.center;
   const [rx, ry] = voidRecord.radius;
@@ -2616,6 +2716,14 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
         macroGroup.add(sideWallMesh);
       }
+      for (const terminalCap of composition.liveMacroSideWallPlan?.terminalCaps?.filter(cap => cap.parentAssemblage === assemblage.id) || []) {
+        const capMesh = new THREE.Mesh(makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap), liveMacroSideWallMaterial);
+        capMesh.name = terminalCap.id;
+        capMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
+        capMesh.userData.LiveMacroTerminalCap = terminalCap;
+        capMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+        macroGroup.add(capMesh);
+      }
       if (composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy?.territoryProxyUnderlayVisible !== false) {
         const territoryMesh = new THREE.Mesh(makeMacroTerritoryBodyGeometry(THREE, assemblage), territoryMaterial);
         territoryMesh.name = `${assemblage.id}-macro-territory-body`;
@@ -2753,6 +2861,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
       liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
+      liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
+      terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
       liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
       suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
       suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
@@ -2815,6 +2925,41 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.target.set(-0.82, 0.08, 0.64);
       controls.update();
       onDirty?.();
+    },
+    frameLiveMacroTerminalCaps() {
+      camera.position.set(-0.74, 1.18, 0.78);
+      controls.target.set(-0.49, 0.96, 0.02);
+      controls.update();
+      onDirty?.();
+    },
+    enableLiveTerminalCapWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.liveTerminalCapWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const promotedBody = child.userData?.MacroPromotedBody;
+        const isTargetBody = promotedBody?.parentAssemblage === 'north-west-dominant-thrust';
+        const isTargetSideWall = child.userData?.LiveMacroSideWall?.parentAssemblage === 'north-west-dominant-thrust';
+        const isTargetTerminalCap = child.userData?.LiveMacroTerminalCap?.parentAssemblage === 'north-west-dominant-thrust';
+        child.visible = isTargetBody || isTargetSideWall || isTargetTerminalCap;
+        if (child.visible) visibleCount += 1;
+        else hiddenCount += 1;
+      });
+      controls.update();
+      onDirty?.();
+      return {
+        mode: 'live-terminal-cap-isolated-witness-v0',
+        targetAssemblage: 'north-west-dominant-thrust',
+        visibleCount,
+        hiddenCount,
+        visibleRoles: ['MacroPromotedBody', 'LiveMacroSideWall', 'LiveMacroTerminalCap'],
+      };
     },
     enableCleanSidewallTopologyWitness() {
       scene.children.forEach(child => {
@@ -2945,6 +3090,8 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
         liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
         targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
+        liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
+        terminalCapClosureVerdict: composition.liveMacroSideWallPlan?.terminalCapClosureVerdict,
         liveRenderMaterialPolicy: composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy,
         suppressedLegacyRoundBandIds: composition.liveMacroSideWallPlan?.suppressedLegacyRoundBandIds || [],
         suppressedLegacyTerminationSocketIds: composition.liveMacroSideWallPlan?.suppressedLegacyTerminationSocketIds || [],
@@ -3003,6 +3150,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LiveMacroSideWallPlan: composition.liveMacroSideWallPlan,
         liveMacroSideWallPlan: composition.liveMacroSideWallPlan,
         LiveMacroSideWall: composition.liveMacroSideWallPlan?.sideWalls || [],
+        LiveMacroTerminalCap: composition.liveMacroSideWallPlan?.terminalCaps || [],
         lowerCupClosure: composition.macroBodyPromotion?.lowerCupClosure,
         crossingTuckIntegration: composition.macroBodyPromotion?.crossingTuckIntegration,
         ExpandedMacroRegionProxyPlan: composition.expandedMacroRegionProxyPlan,
