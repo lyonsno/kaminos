@@ -207,6 +207,14 @@ async function main() {
     assert.equal(state?.controlledVariation?.schema, 'OrbShellVariationDescriptor', 'controlled variation descriptor missing from debug state');
     assert.equal(state?.effectiveVariation?.mode, 'orb-shell-controlled-variation-assay-v0', 'effective variation mode missing from debug state');
     assert.ok(state?.variantId, 'variantId missing from debug state');
+    assert.equal(state?.MacroFamilySubstripPlan?.schema, 'MacroFamilySubstripPlan', 'MacroFamilySubstripPlan missing from debug state');
+    assert.equal(state?.MacroFamilySubstripPlan?.mode, 'parent-owned-lamellar-substrip-decomposition-v0', 'MacroFamilySubstripPlan mode missing from debug state');
+    assert.ok(state?.macroFamilySubstripParentIds?.length >= 1, 'macro family substrip parent ids missing from debug state');
+    assert.ok(state?.macroFamilySubstripCount >= 2, 'parent-owned substrips missing from debug state');
+    assert.equal(state?.macroFamilySubstripMeshCount, state.macroFamilySubstripCount, 'rendered parent-owned substrip mesh count must match plan count');
+    assert.equal(state?.macroFamilySubstripSideWallMeshCount, state.macroFamilySubstripCount * 2, 'rendered parent-owned substrip sidewall mesh count must match plan sidewalls');
+    assert.equal(state?.macroFamilyObjecthoodVerdict, 'parent-families-remain-nameable-after-subdivision', 'macro family objecthood verdict missing from debug state');
+    assert.ok(state?.MacroFamilySubstrip?.every(strip => strip?.schema === 'MacroFamilySubstrip'), 'MacroFamilySubstrip records missing from debug state');
     assert.equal(state?.ChannelThroughLineAudit?.schema, 'ChannelThroughLineAudit', 'ChannelThroughLineAudit missing from debug state');
     assert.equal(state?.ChannelThroughLineAudit?.mode, 'channel-through-line-audit-v0', 'ChannelThroughLineAudit mode missing from debug state');
     assert.equal(state?.constantGapVerdict, 'not-yet-proven', 'channel audit must not claim solved constant-gap corridors');
@@ -330,6 +338,17 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
+      macroFamilySubstripPlan: state.macroFamilySubstripPlan,
+      MacroFamilySubstrip: state.MacroFamilySubstrip,
+      macroFamilySubstripParentIds: state.macroFamilySubstripParentIds,
+      macroFamilySubstripCount: state.macroFamilySubstripCount,
+      macroFamilySubstripMeshCount: state.macroFamilySubstripMeshCount,
+      macroFamilySubstripMeshIds: state.macroFamilySubstripMeshIds,
+      macroFamilySubstripSideWallMeshCount: state.macroFamilySubstripSideWallMeshCount,
+      macroFamilySubstripSideWallMeshIds: state.macroFamilySubstripSideWallMeshIds,
+      macroFamilySubstripGapContracts: state.macroFamilySubstripGapContracts,
+      macroFamilyObjecthoodVerdict: state.macroFamilyObjecthoodVerdict,
       channelAuditVerdict: state.channelAuditVerdict,
       constantGapVerdict: state.constantGapVerdict,
       channelCandidateCount: state.channelCandidateCount,
