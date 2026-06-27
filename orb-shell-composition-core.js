@@ -814,6 +814,31 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
       sideAxis: right.sideAxis,
     });
   }
+  const terminalCaps = ['start-terminus', 'end-terminus'].map(endRole => {
+    const sample = endRole === 'start-terminus' ? edgeSamples[0] : edgeSamples[edgeSamples.length - 1];
+    const sideWallIndex = endRole === 'start-terminus' ? 0 : leftSideWallSamples.length - 1;
+    const leftWall = leftSideWallSamples[sideWallIndex];
+    const rightWall = rightSideWallSamples[sideWallIndex];
+    return {
+      schema: 'MacroFamilySubstripTerminalCap',
+      mode: ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE,
+      id: `${assemblage.id}-${spec.id}-${endRole}-terminal-cap`,
+      parentAssemblage: assemblage.id,
+      sourceSubstripId: `${assemblage.id}-${spec.id}`,
+      endRole,
+      t: sample.t,
+      capSamples: {
+        outerLeft: leftWall.outer,
+        outerRight: rightWall.outer,
+        innerLeft: leftWall.inner,
+        innerRight: rightWall.inner,
+        outerMid: sample.center,
+        innerMid: addScaledPoint(sample.center, sample.surfaceNormal, -(spec.sideWallDepth ?? 0.026)),
+      },
+      inheritsParentTermination: true,
+      geometryKind: 'flat-substrip-end-cap-not-parent-slab-cap',
+    };
+  });
   return {
     schema: 'MacroFamilySubstrip',
     mode: ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE,
@@ -857,6 +882,7 @@ function makeMacroFamilySubstrip(assemblage, spec, sampleCount = 54) {
         inheritsParentTermination: true,
       },
     },
+    terminalCaps,
     failurePressure: 'substrip-must-read-as-owned-anatomy-not-independent-band',
   };
 }
@@ -923,13 +949,28 @@ function createMacroFamilySubstripPlan(composition) {
       ambientOcclusionAsProofAllowed: false,
       materialMode: 'neutral-ao-off-topology-truth-smoke',
     },
+    visibleParentRetirementPolicy: {
+      schema: 'VisibleParentRetirementPolicy',
+      mode: 'visible-parent-slab-retired-for-decomposed-families-v0',
+      retiredParentAssemblageIds: parentAssemblageIds,
+      normalRenderParentPromotedBodiesVisible: false,
+      normalRenderParentSideWallsVisible: false,
+      normalRenderParentTerminalCapsVisible: false,
+      diagnosticParentDescriptorsPreserved: true,
+      reason: 'macro family is procedural territory; visible shell read must come from owned lamellar plates',
+    },
     meshAccounting: {
       substripMeshCount: substrips.length,
       sideWallMeshCount: substrips.length * 2,
+      terminalCapMeshCount: substrips.length * 2,
+      selectedParentPromotedBodyMeshCount: 0,
+      selectedParentSideWallMeshCount: 0,
+      selectedParentTerminalCapMeshCount: 0,
       sideWallIds: substrips.flatMap(strip => [
         `${strip.id}-left-sidewall`,
         `${strip.id}-right-sidewall`,
       ]),
+      terminalCapIds: substrips.flatMap(strip => strip.terminalCaps.map(cap => cap.id)),
     },
     macroFamilyObjecthoodVerdict: 'parent-families-remain-nameable-after-subdivision',
     failurePressure: 'do-not-regress-to-independent-strip-soup',
@@ -2713,6 +2754,33 @@ function makeMacroFamilySubstripSideWallGeometry(THREE, substrip, sideName) {
   return geometry;
 }
 
+function makeMacroFamilySubstripTerminalCapGeometry(THREE, cap) {
+  const points = cap.capSamples;
+  const outerLeft = new THREE.Vector3(...points.outerLeft);
+  const outerMid = new THREE.Vector3(...points.outerMid);
+  const outerRight = new THREE.Vector3(...points.outerRight);
+  const innerLeft = new THREE.Vector3(...points.innerLeft);
+  const innerMid = new THREE.Vector3(...points.innerMid);
+  const innerRight = new THREE.Vector3(...points.innerRight);
+  const vertices = [
+    outerLeft, outerMid, outerRight,
+    innerLeft, innerMid, innerRight,
+  ];
+  const normal = outerMid.clone().normalize();
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices.flatMap(point => [point.x, point.y, point.z]), 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(Array.from({ length: vertices.length }, () => [normal.x, normal.y, normal.z]).flat(), 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([
+    0, 1, 0.5, 1, 1, 1,
+    0, 0, 0.5, 0, 1, 0,
+  ], 2));
+  geometry.setIndex([0, 1, 3, 1, 4, 3, 1, 2, 4, 2, 5, 4]);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.MacroFamilySubstripTerminalCap = cap;
+  return geometry;
+}
+
 function makeLowerCupClosureGeometry(THREE, lowerCupDepth = 1) {
   const rowCount = 22;
   const columnCount = 13;
@@ -3073,7 +3141,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   function macroFamilySubstripMeshIds() {
     const ids = [];
     group?.traverse(child => {
-      if (child.userData?.MacroFamilySubstrip && !child.userData?.MacroFamilySubstripSideWall) ids.push(child.name);
+      if (
+        child.userData?.MacroFamilySubstrip
+        && !child.userData?.MacroFamilySubstripSideWall
+        && !child.userData?.MacroFamilySubstripTerminalCap
+      ) ids.push(child.name);
     });
     return ids;
   }
@@ -3082,6 +3154,44 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     const ids = [];
     group?.traverse(child => {
       if (child.userData?.MacroFamilySubstripSideWall) ids.push(child.name);
+    });
+    return ids;
+  }
+
+  function macroFamilySubstripTerminalCapMeshIds() {
+    const ids = [];
+    group?.traverse(child => {
+      if (child.userData?.MacroFamilySubstripTerminalCap) ids.push(child.name);
+    });
+    return ids;
+  }
+
+  function selectedParentPromotedBodyMeshIds() {
+    const retiredParentIds = composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || [];
+    const ids = [];
+    group?.traverse(child => {
+      const parentId = child.userData?.MacroPromotedBody?.parentAssemblage;
+      if (parentId && retiredParentIds.includes(parentId) && child.name.endsWith('-macro-promoted-body')) ids.push(child.name);
+    });
+    return ids;
+  }
+
+  function selectedParentSideWallMeshIds() {
+    const retiredParentIds = composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || [];
+    const ids = [];
+    group?.traverse(child => {
+      const parentId = child.userData?.LiveMacroSideWall?.parentAssemblage;
+      if (parentId && retiredParentIds.includes(parentId)) ids.push(child.name);
+    });
+    return ids;
+  }
+
+  function selectedParentTerminalCapMeshIds() {
+    const retiredParentIds = composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || [];
+    const ids = [];
+    group?.traverse(child => {
+      const parentId = child.userData?.LiveMacroTerminalCap?.parentAssemblage;
+      if (parentId && retiredParentIds.includes(parentId)) ids.push(child.name);
     });
     return ids;
   }
@@ -3106,31 +3216,35 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroGroup.name = assemblage.id;
       macroGroup.userData.MacroAssemblage = assemblage;
       macroGroup.userData.MacroTorsionField = assemblage.macroTorsionField;
+      const retiredParentIds = composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || [];
+      const parentRetiredFromNormalRender = retiredParentIds.includes(assemblage.id);
       const hasOwnedSubstrips = composition.macroFamilySubstripPlan?.parentAssemblageIds?.includes(assemblage.id);
-      const promotedMesh = new THREE.Mesh(
-        makeMacroPromotedBodyGeometry(THREE, assemblage),
-        hasOwnedSubstrips ? promotedBodySupportMaterial : promotedBodyMaterial,
-      );
-      promotedMesh.name = `${assemblage.id}-macro-promoted-body`;
-      promotedMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
-      promotedMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
-      promotedMesh.userData.MacroFamilySubstripPlan = hasOwnedSubstrips ? composition.macroFamilySubstripPlan : null;
-      macroGroup.add(promotedMesh);
-      for (const sideWall of composition.liveMacroSideWallPlan?.sideWalls?.filter(wall => wall.parentAssemblage === assemblage.id) || []) {
-        const sideWallMesh = new THREE.Mesh(makeMacroPromotedBodySideWallGeometry(THREE, sideWall), liveMacroSideWallMaterial);
-        sideWallMesh.name = sideWall.id;
-        sideWallMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
-        sideWallMesh.userData.LiveMacroSideWall = sideWall;
-        sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
-        macroGroup.add(sideWallMesh);
-      }
-      for (const terminalCap of composition.liveMacroSideWallPlan?.terminalCaps?.filter(cap => cap.parentAssemblage === assemblage.id) || []) {
-        const capMesh = new THREE.Mesh(makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap), liveMacroSideWallMaterial);
-        capMesh.name = terminalCap.id;
-        capMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
-        capMesh.userData.LiveMacroTerminalCap = terminalCap;
-        capMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
-        macroGroup.add(capMesh);
+      if (!parentRetiredFromNormalRender) {
+        const promotedMesh = new THREE.Mesh(
+          makeMacroPromotedBodyGeometry(THREE, assemblage),
+          hasOwnedSubstrips ? promotedBodySupportMaterial : promotedBodyMaterial,
+        );
+        promotedMesh.name = `${assemblage.id}-macro-promoted-body`;
+        promotedMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+        promotedMesh.userData.MacroTorsionField = assemblage.macroTorsionField;
+        promotedMesh.userData.MacroFamilySubstripPlan = hasOwnedSubstrips ? composition.macroFamilySubstripPlan : null;
+        macroGroup.add(promotedMesh);
+        for (const sideWall of composition.liveMacroSideWallPlan?.sideWalls?.filter(wall => wall.parentAssemblage === assemblage.id) || []) {
+          const sideWallMesh = new THREE.Mesh(makeMacroPromotedBodySideWallGeometry(THREE, sideWall), liveMacroSideWallMaterial);
+          sideWallMesh.name = sideWall.id;
+          sideWallMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
+          sideWallMesh.userData.LiveMacroSideWall = sideWall;
+          sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+          macroGroup.add(sideWallMesh);
+        }
+        for (const terminalCap of composition.liveMacroSideWallPlan?.terminalCaps?.filter(cap => cap.parentAssemblage === assemblage.id) || []) {
+          const capMesh = new THREE.Mesh(makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap), liveMacroSideWallMaterial);
+          capMesh.name = terminalCap.id;
+          capMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;
+          capMesh.userData.LiveMacroTerminalCap = terminalCap;
+          capMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+          macroGroup.add(capMesh);
+        }
       }
       for (const substrip of composition.macroFamilySubstripPlan?.substrips?.filter(strip => strip.parentAssemblage === assemblage.id) || []) {
         const substripMesh = new THREE.Mesh(makeMacroFamilySubstripGeometry(THREE, substrip), macroFamilySubstripMaterial);
@@ -3150,6 +3264,15 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
           sideWallMesh.userData.MacroFamilySubstripSideWall = { substripId: substrip.id, sideName };
           sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
           macroGroup.add(sideWallMesh);
+        }
+        for (const cap of substrip.terminalCaps || []) {
+          const capMesh = new THREE.Mesh(makeMacroFamilySubstripTerminalCapGeometry(THREE, cap), macroFamilySubstripSideWallMaterial);
+          capMesh.name = cap.id;
+          capMesh.userData.MacroFamilySubstripPlan = composition.macroFamilySubstripPlan;
+          capMesh.userData.MacroFamilySubstrip = substrip;
+          capMesh.userData.MacroFamilySubstripTerminalCap = cap;
+          capMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
+          macroGroup.add(capMesh);
         }
       }
       if (composition.liveMacroSideWallPlan?.liveRenderMaterialPolicy?.territoryProxyUnderlayVisible !== false) {
@@ -3260,6 +3383,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     const renderedLiveMacroSideWallMeshIds = liveMacroSideWallMeshIds();
     const renderedSubstripMeshIds = macroFamilySubstripMeshIds();
     const renderedSubstripSideWallMeshIds = macroFamilySubstripSideWallMeshIds();
+    const renderedSubstripTerminalCapMeshIds = macroFamilySubstripTerminalCapMeshIds();
+    const renderedSelectedParentPromotedBodyMeshIds = selectedParentPromotedBodyMeshIds();
+    const renderedSelectedParentSideWallMeshIds = selectedParentSideWallMeshIds();
+    const renderedSelectedParentTerminalCapMeshIds = selectedParentTerminalCapMeshIds();
     onStatus?.({
       phase: 'built',
       identity: ORB_SHELL_COMPOSITION_IDENTITY,
@@ -3273,6 +3400,15 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroFamilySubstripMeshIds: renderedSubstripMeshIds,
       macroFamilySubstripSideWallMeshCount: renderedSubstripSideWallMeshIds.length,
       macroFamilySubstripSideWallMeshIds: renderedSubstripSideWallMeshIds,
+      macroFamilySubstripTerminalCapMeshCount: renderedSubstripTerminalCapMeshIds.length,
+      macroFamilySubstripTerminalCapMeshIds: renderedSubstripTerminalCapMeshIds,
+      visibleParentRetirementPolicy: composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy,
+      selectedParentPromotedBodyMeshCount: renderedSelectedParentPromotedBodyMeshIds.length,
+      selectedParentPromotedBodyMeshIds: renderedSelectedParentPromotedBodyMeshIds,
+      selectedParentSideWallMeshCount: renderedSelectedParentSideWallMeshIds.length,
+      selectedParentSideWallMeshIds: renderedSelectedParentSideWallMeshIds,
+      selectedParentTerminalCapMeshCount: renderedSelectedParentTerminalCapMeshIds.length,
+      selectedParentTerminalCapMeshIds: renderedSelectedParentTerminalCapMeshIds,
       macroFamilyObjecthoodVerdict: composition.macroFamilySubstripPlan?.macroFamilyObjecthoodVerdict,
       channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
       constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,
@@ -3515,7 +3651,16 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroFamilySubstripMeshIds: macroFamilySubstripMeshIds(),
         macroFamilySubstripSideWallMeshCount: macroFamilySubstripSideWallMeshIds().length,
         macroFamilySubstripSideWallMeshIds: macroFamilySubstripSideWallMeshIds(),
+        macroFamilySubstripTerminalCapMeshCount: macroFamilySubstripTerminalCapMeshIds().length,
+        macroFamilySubstripTerminalCapMeshIds: macroFamilySubstripTerminalCapMeshIds(),
         macroFamilySubstripGapContracts: composition.macroFamilySubstripPlan?.gapContracts || [],
+        visibleParentRetirementPolicy: composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy,
+        selectedParentPromotedBodyMeshCount: selectedParentPromotedBodyMeshIds().length,
+        selectedParentPromotedBodyMeshIds: selectedParentPromotedBodyMeshIds(),
+        selectedParentSideWallMeshCount: selectedParentSideWallMeshIds().length,
+        selectedParentSideWallMeshIds: selectedParentSideWallMeshIds(),
+        selectedParentTerminalCapMeshCount: selectedParentTerminalCapMeshIds().length,
+        selectedParentTerminalCapMeshIds: selectedParentTerminalCapMeshIds(),
         macroFamilyObjecthoodVerdict: composition.macroFamilySubstripPlan?.macroFamilyObjecthoodVerdict,
         channelAuditVerdict: composition.channelThroughLineAudit?.channelAuditVerdict,
         constantGapVerdict: composition.channelThroughLineAudit?.constantGapVerdict,

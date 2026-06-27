@@ -12,9 +12,14 @@ assert.match(core, /MacroFamilySubstrip/, 'composition module names parent-owned
 assert.match(core, /parent-owned-lamellar-substrip-decomposition-v0/, 'composition module names the parent-owned substrip mode');
 assert.match(core, /makeMacroFamilySubstripGeometry/, 'composition renders flat parent-owned substrip geometry');
 assert.match(core, /makeMacroFamilySubstripSideWallGeometry/, 'composition renders exposed substrip sidewall geometry');
+assert.match(core, /VisibleParentRetirementPolicy/, 'composition names visible parent retirement policy');
+assert.match(core, /selectedParentPromotedBodyMeshCount/, 'composition reports selected parent promoted body render suppression');
+assert.match(core, /makeMacroFamilySubstripTerminalCapGeometry/, 'composition renders substrip terminal cap geometry after parent caps retire');
 assert.match(witness, /MacroFamilySubstripPlan/, 'composition witness records the macro-family substrip plan');
 assert.match(witness, /macroFamilySubstripMeshCount/, 'composition witness reports rendered substrip mesh count');
 assert.match(witness, /macroFamilySubstripSideWallMeshCount/, 'composition witness reports rendered substrip sidewall mesh count');
+assert.match(witness, /macroFamilySubstripTerminalCapMeshCount/, 'composition witness reports rendered substrip terminal cap mesh count');
+assert.match(witness, /selectedParentPromotedBodyMeshCount/, 'composition witness reports selected parent promoted body mesh suppression');
 assert.match(witness, /macroFamilyObjecthoodVerdict/, 'composition witness reports whether parent macro objecthood is preserved');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
@@ -32,6 +37,12 @@ assert.ok(plan.substripCount >= 5, 'two families expose at least five owned sub-
 assert.equal(plan.renderPolicy.parentFillDemotion, 'muted-territory-support-not-final-slab', 'parent fills are demoted below child lane read');
 assert.equal(plan.renderPolicy.roundDiagnosticRailsVisible, false, 'substrip grammar forbids round diagnostic rails as final-visible lanes');
 assert.equal(plan.renderPolicy.textureGrooveSubstitutionAllowed, false, 'substrip grammar forbids texture grooves as lane proof');
+assert.equal(plan.visibleParentRetirementPolicy?.schema, 'VisibleParentRetirementPolicy', 'plan exposes visible parent retirement policy');
+assert.equal(plan.visibleParentRetirementPolicy?.mode, 'visible-parent-slab-retired-for-decomposed-families-v0', 'plan records retired visible parent slab mode');
+assert.deepEqual(plan.visibleParentRetirementPolicy?.retiredParentAssemblageIds, plan.parentAssemblageIds, 'selected decomposed parents are retired from normal visible slab rendering');
+assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentPromotedBodiesVisible, false, 'normal smoke hides selected parent promoted bodies');
+assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentSideWallsVisible, false, 'normal smoke hides selected parent sidewalls');
+assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentTerminalCapsVisible, false, 'normal smoke hides selected parent terminal caps');
 assert.equal(plan.macroFamilyObjecthoodVerdict, 'parent-families-remain-nameable-after-subdivision', 'plan preserves macro family objecthood');
 
 const byParent = new Map();
@@ -69,4 +80,9 @@ for (const gap of plan.gapContracts) {
 
 assert.equal(plan.meshAccounting.substripMeshCount, plan.substripCount, 'mesh accounting covers every substrip face');
 assert.equal(plan.meshAccounting.sideWallMeshCount, plan.substripCount * 2, 'mesh accounting includes both exposed sidewalls per substrip');
+assert.equal(plan.meshAccounting.terminalCapMeshCount, plan.substripCount * 2, 'mesh accounting includes both terminal caps per visible substrip');
+assert.equal(plan.meshAccounting.selectedParentPromotedBodyMeshCount, 0, 'selected parent body slabs are not normal-rendered');
+assert.equal(plan.meshAccounting.selectedParentSideWallMeshCount, 0, 'selected parent sidewall slabs are not normal-rendered');
+assert.equal(plan.meshAccounting.selectedParentTerminalCapMeshCount, 0, 'selected parent terminal caps are not normal-rendered');
+assert.ok(plan.substrips.every(strip => strip.terminalCaps?.length === 2), 'each visible substrip owns its own terminal caps after parent caps retire');
 assert.equal(plan.failurePressure, 'do-not-regress-to-independent-strip-soup', 'plan records the strip-soup failure pressure');
