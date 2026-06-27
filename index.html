@@ -10641,6 +10641,15 @@ function pipelineRunUsesFixture(result) {
   return Boolean(result?.report?.document?.stages?.some(stage => stage.status === 'fixture'));
 }
 
+function pipelineRunUsesAdapterFixture(result) {
+  const stages = result?.report?.document?.stages || [];
+  const artifacts = result?.report?.document?.artifacts || [];
+  return Boolean(
+    stages.some(stage => stage.effectiveRoute?.fixtureMode === 'mock-adapter')
+    || artifacts.some(artifact => artifact?.fixtureSource?.mode === 'mock-adapter')
+  );
+}
+
 function pipelineRouteUsesFixture(routeOrNode = null) {
   if (routeOrNode?.fixtureBacked) return true;
   const pipeline = routeOrNode?.pipeline || routeOrNode || selectedPipelineRecord();
@@ -11005,6 +11014,7 @@ function createPipelineGraphImageNode(asset, position = null) {
 
 function pipelineRunPreviewTruthLabel(result, artifact = null) {
   if (!artifact?.path) return 'no generated preview';
+  if (pipelineRunUsesAdapterFixture(result)) return 'adapter fixture / point-cloud preview';
   if (pipelineRunUsesFixture(result)) return 'fixture / point-cloud preview';
   if ((result?.generatorId || result?.generatorLabel || result?.pipelineId || '').toString().toLowerCase().includes('sharp')) {
     return 'real SHARP / point-cloud preview';
@@ -12449,11 +12459,12 @@ function pipelineRunResultRows(result) {
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const splat = pipelineRunArtifact(result, 'splat');
   const fixtureBacked = pipelineRunUsesFixture(result);
+  const adapterFixture = pipelineRunUsesAdapterFixture(result);
   return [
     { key: 'generator', value: result.generatorLabel || 'unknown' },
     { key: 'backend', value: result.backendPipelineId || result.pipelineId || 'unknown' },
     { key: 'effect', value: splat ? 'Splat output artifact written; preview still must be loaded explicitly.' : 'Sidecar metadata written; no new splat generated.' },
-    ...(fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
+    ...(adapterFixture ? [{ key: 'truth', value: 'mock SHARP adapter fixture output; not real SHARP inference' }] : fixtureBacked ? [{ key: 'truth', value: 'input provenance only; output fixed fixture' }] : []),
     { key: 'report', value: result.report?.path || 'missing' },
     { key: 'bundle', value: result.bundle?.path || 'missing' },
     { key: 'splat', value: splat?.path || 'not generated' },
@@ -12729,8 +12740,9 @@ function renderPipelineRunResultPanel() {
   if (title) title.textContent = result.ok ? `${pipelineRunTitle(result)} completed` : 'Pipeline run failed';
   if (body) {
     const fixtureBacked = pipelineRunUsesFixture(result);
+    const adapterFixture = pipelineRunUsesAdapterFixture(result);
     body.textContent = result.ok
-      ? (fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live SHARP is configured.' : splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
+      ? (adapterFixture ? 'This route used a mock SHARP adapter fixture. The command ran and produced a visible test splat, but this is not real SHARP inference.' : fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live SHARP is configured.' : splat?.path ? 'This route wrote a splat output artifact. Use Load Output to append that output to the scene.' : 'This route wrote metadata for the captured source splat. It does not generate a new splat; use Load Source to view the run source.')
       : (result.pipelineDescription || 'This run failed before producing trustworthy output.');
   }
   if (grid) {

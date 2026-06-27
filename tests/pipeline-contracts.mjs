@@ -326,16 +326,21 @@ writeFileSync(report, JSON.stringify({
   const liveReport = JSON.parse(readFileSync(liveReportPath, 'utf8'));
   assert.equal(liveReport.ok, true);
   assert.equal(liveReport.effectiveRouteConfig.routeId, 'adapter.sharp-image-to-splat-live.v0');
-  assert.deepEqual(liveReport.stages.map(stage => stage.status), ['real', 'real']);
-  assert.equal(liveReport.stages[0].effectiveRoute.realModel, true);
+  assert.deepEqual(liveReport.stages.map(stage => stage.status), ['fixture', 'fixture']);
+  assert.equal(liveReport.stages[0].effectiveRoute.realModel, false);
+  assert.equal(liveReport.stages[0].effectiveRoute.requestedRealModel, true);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schema, 'mock.sharp-adapter-report.v0');
+  assert.equal(liveReport.stages[0].effectiveRoute.fixtureMode, 'mock-adapter');
+  assert.match(liveReport.stages[0].effectiveRoute.truthBoundary, /mock SHARP adapter fixture output/);
   assert.equal(liveReport.stages[0].effectiveRoute.availability.status, 'available');
   assert.equal(liveReport.stages[0].effectiveRoute.commandEnv, 'KAMINOS_SHARP_COMMAND');
   assert.equal(liveReport.stages[0].effectiveRoute.executedCommand[0], mockSharpCommand);
   assert.ok(liveReport.artifacts.splat.path.startsWith(liveOutDir), 'live SHARP splat output must use caller out-dir');
   assert.ok(liveReport.artifacts.sidecar.path.startsWith(liveOutDir), 'live SHARP sidecar output must use caller out-dir');
-  assert.equal(liveReport.artifacts.splat.status, 'real');
-  assert.equal(liveReport.artifacts.sidecar.status, 'real');
-  assert.ok(!liveReport.artifacts.splat.fixtureSource, 'live SHARP output must not carry fixture source provenance');
+  assert.equal(liveReport.artifacts.splat.status, 'fixture');
+  assert.equal(liveReport.artifacts.sidecar.status, 'fixture');
+  assert.equal(liveReport.artifacts.splat.fixtureSource?.mode, 'mock-adapter');
+  assert.match(liveReport.artifacts.splat.fixtureSource?.truthBoundary || '', /mock SHARP adapter fixture output/);
   const liveSplat = readFileSync(liveReport.artifacts.splat.path, 'utf8');
   assert.match(liveSplat, /element vertex 729/, 'configured live SHARP mock route must emit enough points to be visibly inspectable');
   assert.match(liveSplat, /property uchar red/, 'configured live SHARP mock route must emit RGB colors for the Kaminos point-cloud preview');
@@ -344,8 +349,8 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveSidecar.pipeline.id, 'sharp-image-to-splat-live-v0');
   assert.equal(liveSidecar.asset.type, 'splat');
   assert.equal(liveSidecar.asset.path, liveReport.artifacts.splat.path);
-  assert.equal(liveSidecar.status.stageMode, 'real');
-  assert.match(liveSidecar.status.truthBoundary, /live SHARP adapter output/);
+  assert.equal(liveSidecar.status.stageMode, 'fixture');
+  assert.match(liveSidecar.status.truthBoundary, /mock SHARP adapter fixture output/);
   assert.equal(liveSidecar.asset.renderCapabilities.realHybridRender, false);
 
   const adapterOutDir = join(tempRoot, 'adapter-out');
