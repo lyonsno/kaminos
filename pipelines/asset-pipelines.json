@@ -218,6 +218,74 @@
           "outputArtifact": "supermatAdapter"
         }
       ]
+    },
+    {
+      "id": "lotus-normals-from-image-v0",
+      "label": "Lotus-D Image To Normal Map",
+      "routeId": "adapter.lotus-normals.v0",
+      "description": "Greenroom image-to-normal route. It executes KAMINOS_LOTUS_NORMALS_COMMAND with --input, --output, and --report paths. The output is a route-local normal-map artifact and adapter report, not renderer truth or a baked material claim.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "normalMap": {
+          "role": "normal-map",
+          "pathTemplate": "artifacts/lotus-normal-map.png"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-lotus-normals",
+          "label": "Run Lotus-D Normal Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.lotus-normals.v0",
+            "tool": "Lotus-D",
+            "commandEnv": "KAMINOS_LOTUS_NORMALS_COMMAND",
+            "modelFamily": "Lotus-D",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "external-command"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "normalMap"
+        }
+      ]
+    },
+    {
+      "id": "chord-materials-from-image-v0",
+      "label": "CHORD Image To PBR Material Bundle",
+      "routeId": "adapter.chord-materials.v0",
+      "description": "Greenroom image-to-PBR-material route. It executes KAMINOS_CHORD_MATERIALS_COMMAND with --input, --output, and --report paths. The output is a caller-rooted material bundle describing CHORD basecolor, normal, roughness, and metalness artifacts when the configured adapter produces them.",
+      "artifacts": {
+        "input": {
+          "role": "source-image",
+          "required": true
+        },
+        "materialBundle": {
+          "role": "pbr-material-bundle",
+          "pathTemplate": "artifacts/chord-materials.kaminos-material-bundle.json"
+        }
+      },
+      "stages": [
+        {
+          "id": "run-chord-materials",
+          "label": "Run CHORD Material Adapter",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.chord-materials.v0",
+            "tool": "CHORD",
+            "commandEnv": "KAMINOS_CHORD_MATERIALS_COMMAND",
+            "modelFamily": "CHORD",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "external-command"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "materialBundle"
+        }
+      ]
     }
   ]
 }
