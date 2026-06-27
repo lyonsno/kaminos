@@ -11,6 +11,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT = 'wgsl-same-ch
 export const LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT = 'wgsl-spatial-surface-relaxation-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT = 'wgsl-stability-damped-relaxation-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT = 'wgsl-visual-streak-bead-damping-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT = 'wgsl-density-position-solve-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -28,6 +29,8 @@ const SPATIAL_PRESSURE_MIN_X = -0.75;
 const SPATIAL_PRESSURE_MAX_X = 0.75;
 const SPATIAL_PRESSURE_MIN_Z = -0.95;
 const SPATIAL_PRESSURE_MAX_Z = 2.25;
+const DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY = 18;
+const DENSITY_POSITION_SOLVE_REST_DISTANCE = PRESSURE_RADIUS * 0.62;
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 
 function finite(value, fallback = 0) {
@@ -716,6 +719,81 @@ function spatialSurfaceRelaxationStats(particles) {
   };
 }
 
+function densityPositionSolveStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+      solveMode: 'bounded_pair_and_cell_position_correction_v0',
+      solveIterations: 1,
+      targetCellOccupancy: DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY,
+      restDistance: round(DENSITY_POSITION_SOLVE_REST_DISTANCE, 4),
+      surfaceParticleCount: 0,
+      correctionCandidateCount: 0,
+      closePairCount: 0,
+      denseSolveCellCount: 0,
+      densitySolveCoverageRatio: 0,
+      averageConstraintError: 0,
+      maxConstraintError: 0,
+    };
+  }
+
+  const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
+  for (const particle of surfaceParticles) {
+    bins[spatialCellIndex(particle.position)] += 1;
+  }
+
+  let denseSolveCellCount = 0;
+  for (const count of bins) {
+    if (count >= DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY) denseSolveCellCount += 1;
+  }
+
+  let correctionCandidateCount = 0;
+  let closePairCount = 0;
+  let totalConstraintError = 0;
+  let maxConstraintError = 0;
+  for (let index = 0; index < surfaceParticles.length; index += 1) {
+    const particle = surfaceParticles[index];
+    const occupancy = bins[spatialCellIndex(particle.position)] || 0;
+    let localConstraintErrorSum = 0;
+    let localClosePairCount = 0;
+    for (let offset = 1; offset <= PRESSURE_NEIGHBOR_WINDOW; offset += 1) {
+      for (const neighbor of [
+        surfaceParticles[(index + offset) % surfaceParticles.length],
+        surfaceParticles[(index + surfaceParticles.length - offset) % surfaceParticles.length],
+      ]) {
+        if (!neighbor || neighbor.id === particle.id || neighbor.chemistry !== particle.chemistry) continue;
+        const distance = length3(sub(particle.position, neighbor.position));
+        if (distance <= 0.0001 || distance >= DENSITY_POSITION_SOLVE_REST_DISTANCE) continue;
+        closePairCount += 1;
+        localClosePairCount += 1;
+        localConstraintErrorSum += (DENSITY_POSITION_SOLVE_REST_DISTANCE - distance) / DENSITY_POSITION_SOLVE_REST_DISTANCE;
+      }
+    }
+    const localConstraintError = localClosePairCount ? localConstraintErrorSum / localClosePairCount : 0;
+    if (localConstraintError > 0 || occupancy >= DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY) {
+      correctionCandidateCount += 1;
+      totalConstraintError += localConstraintError;
+      maxConstraintError = Math.max(maxConstraintError, localConstraintError);
+    }
+  }
+
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+    solveMode: 'bounded_pair_and_cell_position_correction_v0',
+    solveIterations: 1,
+    targetCellOccupancy: DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY,
+    restDistance: round(DENSITY_POSITION_SOLVE_REST_DISTANCE, 4),
+    surfaceParticleCount: surfaceParticles.length,
+    correctionCandidateCount,
+    closePairCount,
+    denseSolveCellCount,
+    densitySolveCoverageRatio: round(correctionCandidateCount / surfaceParticles.length, 4),
+    averageConstraintError: correctionCandidateCount ? round(totalConstraintError / correctionCandidateCount, 4) : 0,
+    maxConstraintError: round(maxConstraintError, 4),
+  };
+}
+
 function stabilityStats(particles, spatialStats, depthStats) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
   if (!surfaceParticles.length) {
@@ -916,6 +994,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const depthStats = fluidDepthStats(particles);
   const cohesionStats = surfaceCohesionStats(particles);
   const relaxationStats = spatialSurfaceRelaxationStats(particles);
+  const densitySolveStats = densityPositionSolveStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const visualStats = visualStreakBeadStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
@@ -931,6 +1010,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     surfaceRelaxationContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT,
+    densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
     stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
     sourceTruth,
@@ -941,6 +1021,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     fluidDepthStats: depthStats,
     surfaceCohesionStats: cohesionStats,
     spatialSurfaceRelaxationStats: relaxationStats,
+    densityPositionSolveStats: densitySolveStats,
     stabilityStats: solverStabilityStats,
     visualStreakBeadStats: visualStats,
     juiceHitEvents,
@@ -1026,6 +1107,8 @@ const SPATIAL_PRESSURE_MIN_X: f32 = ${SPATIAL_PRESSURE_MIN_X.toFixed(4)};
 const SPATIAL_PRESSURE_MAX_X: f32 = ${SPATIAL_PRESSURE_MAX_X.toFixed(4)};
 const SPATIAL_PRESSURE_MIN_Z: f32 = ${SPATIAL_PRESSURE_MIN_Z.toFixed(4)};
 const SPATIAL_PRESSURE_MAX_Z: f32 = ${SPATIAL_PRESSURE_MAX_Z.toFixed(4)};
+const DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY: f32 = ${DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY.toFixed(1)};
+const DENSITY_POSITION_SOLVE_REST_DISTANCE: f32 = ${DENSITY_POSITION_SOLVE_REST_DISTANCE.toFixed(4)};
 
 fn terrainHeightAt(x: f32, z: f32) -> f32 {
   let bowl = -0.08 + 0.11 * x * x + 0.035 * cos(z * 1.65);
@@ -1246,6 +1329,66 @@ fn applySpatialSurfaceRelaxation(position: vec3f, velocity: vec3f, radius: f32, 
   return vec3f(relaxed.x, position.y, relaxed.z);
 }
 
+fn applyDensityPositionSolve(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
+  var pairCorrection = vec3f(0.0, 0.0, 0.0);
+  var pairWeight = 0.0;
+  let restDistance = max(DENSITY_POSITION_SOLVE_REST_DISTANCE, radius * 0.62);
+  for (var offset: u32 = 1u; offset <= ${PRESSURE_NEIGHBOR_WINDOW}u; offset = offset + 1u) {
+    let forwardIndex = (index + offset) % params.particleCount;
+    let backIndex = (index + params.particleCount - offset) % params.particleCount;
+    let forward = particles[forwardIndex];
+    let back = particles[backIndex];
+    if (forward.flags.y > 0.5 && forward.posPhase.w >= 0.5 && forward.misc.z >= 0.0 && forward.misc.z < forward.misc.w && abs(forward.velChem.w - chemistry) < 0.25) {
+      let delta = position - forward.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < restDistance) {
+        let overlap = (restDistance - distance) / restDistance;
+        pairCorrection = pairCorrection + normalize(delta) * overlap;
+        pairWeight = pairWeight + overlap;
+      }
+    }
+    if (back.flags.y > 0.5 && back.posPhase.w >= 0.5 && back.misc.z >= 0.0 && back.misc.z < back.misc.w && abs(back.velChem.w - chemistry) < 0.25) {
+      let delta = position - back.posPhase.xyz;
+      let distance = length(delta);
+      if (distance > 0.0001 && distance < restDistance) {
+        let overlap = (restDistance - distance) / restDistance;
+        pairCorrection = pairCorrection + normalize(delta) * overlap;
+        pairWeight = pairWeight + overlap;
+      }
+    }
+  }
+
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  let left = pressureCellCountAt(cellX - 1, cellZ);
+  let right = pressureCellCountAt(cellX + 1, cellZ);
+  let back = pressureCellCountAt(cellX, cellZ - 1);
+  let front = pressureCellCountAt(cellX, cellZ + 1);
+  let cellCenter = pressureCellCenter(cellX, cellZ);
+  let localOutward = vec3f(position.x - cellCenter.x, 0.0, position.z - cellCenter.z);
+  let localOutwardLength = length(localOutward);
+  let densityGradient = vec3f(left - right, 0.0, back - front);
+  let densityGradientLength = length(densityGradient);
+  let cellDirection = select(
+    select(vec3f(0.0, 0.0, 0.0), localOutward / localOutwardLength, localOutwardLength > 0.0001),
+    densityGradient / densityGradientLength,
+    densityGradientLength > 0.0001
+  );
+  let overDensity = max(0.0, center - DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY);
+  let pairDirection = select(vec3f(0.0, 0.0, 0.0), pairCorrection / max(pairWeight, 0.0001), pairWeight > 0.0001);
+  let pairStep = min(radius * 0.34, pairWeight * select(select(0.0018, 0.0015, chemistry > 2.5), 0.0022, chemistry > 1.5 && chemistry < 2.5));
+  let cellStep = min(radius * 0.42, overDensity * select(select(0.00024, 0.00020, chemistry > 2.5), 0.00028, chemistry > 1.5 && chemistry < 2.5));
+  let correction = pairDirection * pairStep + cellDirection * cellStep;
+  let correctionLength = length(correction);
+  if (correctionLength <= 0.00001) {
+    return position;
+  }
+  let maxStep = radius * 0.58;
+  let limitedCorrection = correction / correctionLength * min(correctionLength, maxStep);
+  return vec3f(position.x + limitedCorrection.x, position.y, position.z + limitedCorrection.z);
+}
+
 fn applySurfaceStabilityDamping(position: vec3f, velocity: vec3f, chemistry: f32) -> vec3f {
   let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
   let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
@@ -1429,6 +1572,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position = position + velocity * params.dt;
       position = applySpatialSurfaceRelaxation(position, velocity, radius, chemistry);
+      position = applyDensityPositionSolve(index, position, velocity, radius, chemistry);
       velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
       velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
@@ -1695,6 +1839,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
         fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
         visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+        densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
         stepCount,
       };
     }
@@ -1713,6 +1858,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+      densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
       stepCount,
     };
   }
@@ -1763,6 +1909,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
       visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+      densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
@@ -1936,6 +2083,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
     fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+    densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
     renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,

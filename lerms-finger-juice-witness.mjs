@@ -678,6 +678,10 @@ async function run() {
     assert.ok(state.spatialSurfaceRelaxationStats?.relaxedParticleCount > 0, 'route did not expose relaxed surface particles');
     assert.ok(state.spatialSurfaceRelaxationStats?.denseCellCount > 0, 'route did not expose dense relaxation cells');
     assert.ok(state.spatialSurfaceRelaxationStats?.sheetContinuityRatio > 0.2, 'route did not expose spatial sheet continuity');
+    assert.equal(state.densityPositionSolveStats?.pressureContract, 'wgsl-density-position-solve-v0', 'density position stats do not identify solve contract');
+    assert.ok(state.densityPositionSolveStats?.correctionCandidateCount > 0, 'route did not expose density correction candidates');
+    assert.ok(Number.isFinite(state.densityPositionSolveStats?.averageConstraintError), 'route did not expose average density constraint error');
+    assert.ok(Number.isFinite(state.densityPositionSolveStats?.maxConstraintError), 'route did not expose max density constraint error');
     assert.equal(state.stabilityStats?.pressureContract, 'wgsl-stability-damped-relaxation-v0', 'stability stats do not identify damping contract');
     assert.ok(Number.isFinite(state.stabilityStats?.stabilityRiskScore), 'route did not expose stability risk score');
     assert.ok(Number.isFinite(state.stabilityStats?.highSpeedParticleCount), 'route did not expose high-speed particle count');
@@ -737,6 +741,11 @@ async function run() {
         fluidDepthContract: stress?.fluidDepthContract || null,
         surfaceCohesionContract: stress?.surfaceCohesionStats?.pressureContract || null,
         surfaceRelaxationContract: stress?.spatialSurfaceRelaxationStats?.pressureContract || null,
+        densityPositionSolveContract: stress?.densityPositionSolveStats?.pressureContract || null,
+        correctionCandidateCount: stress?.densityPositionSolveStats?.correctionCandidateCount || 0,
+        averageConstraintError: stress?.densityPositionSolveStats?.averageConstraintError || 0,
+        maxConstraintError: stress?.densityPositionSolveStats?.maxConstraintError || 0,
+        densitySolveCoverageRatio: stress?.densityPositionSolveStats?.densitySolveCoverageRatio || 0,
         stabilityContract: stress?.stabilityStats?.pressureContract || null,
         visualDampingContract: stress?.visualStreakBeadStats?.pressureContract || null,
         detachedBeadParticleCount: stress?.visualStreakBeadStats?.detachedBeadParticleCount || 0,
@@ -763,6 +772,10 @@ async function run() {
     assert.ok(extendedFlowProbe.relaxedParticleCount >= 700, 'expanded witness phase did not relax enough surface particles');
     assert.ok(extendedFlowProbe.denseCellCount >= 8, 'expanded witness phase did not retain enough dense relaxation cells');
     assert.ok(extendedFlowProbe.sheetContinuityRatio > 0.55, 'expanded witness phase did not preserve sheet continuity across occupied cells');
+    assert.equal(extendedFlowProbe.densityPositionSolveContract, 'wgsl-density-position-solve-v0', 'expanded witness phase lost density/position solve contract');
+    assert.ok(extendedFlowProbe.correctionCandidateCount >= 160, 'expanded witness phase did not exercise enough density correction candidates');
+    assert.ok(extendedFlowProbe.densitySolveCoverageRatio > 0.08, 'expanded witness phase density solve coverage is too low');
+    assert.ok(extendedFlowProbe.maxConstraintError < 1.8, 'expanded witness phase density constraint error is too high');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
     assert.equal(extendedFlowProbe.visualDampingContract, 'wgsl-visual-streak-bead-damping-v0', 'expanded witness phase lost visual streak/bead damping contract');
     assert.ok(extendedFlowProbe.highSpeedParticleCount <= 180, 'expanded witness phase has too many high-speed surface outliers');
@@ -960,6 +973,7 @@ async function run() {
       fluidDepthStats: state.fluidDepthStats,
       surfaceCohesionStats: state.surfaceCohesionStats,
       spatialSurfaceRelaxationStats: state.spatialSurfaceRelaxationStats,
+      densityPositionSolveStats: state.densityPositionSolveStats,
       stabilityStats: state.stabilityStats,
       visualStreakBeadStats: state.visualStreakBeadStats,
       visualFailureMetrics,
