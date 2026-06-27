@@ -15,6 +15,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT = 'wgsl-d
 export const LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT = 'wgsl-particle-support-budget-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT = 'wgsl-density-continuity-projection-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT = 'wgsl-sampled-neighborhood-density-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT = 'wgsl-deep-density-continuity-projection-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -985,6 +986,74 @@ function sampledNeighborhoodDensityStats(particles) {
   };
 }
 
+function deepDensityContinuityStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
+  for (const particle of surfaceParticles) {
+    bins[spatialCellIndex(particle.position)] += 1;
+  }
+  if (!surfaceParticles.length) {
+    return {
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+      projectionMode: 'two_ring_low_occupancy_continuity_projection_v0',
+      deepContinuityTargetCellOccupancy: Math.floor(DENSITY_CONTINUITY_TARGET_OCCUPANCY * 0.72),
+      surfaceParticleCount: 0,
+      deepContinuityProjectionCandidateCount: 0,
+      deepContinuityOccupiedCellCount: 0,
+      deepContinuityDenseCellCount: 0,
+      deepContinuityMaxCellOccupancy: 0,
+      deepContinuityPeakOccupancyRatio: 0,
+      deepContinuityRedistributionPressure: 0,
+    };
+  }
+
+  const target = Math.floor(DENSITY_CONTINUITY_TARGET_OCCUPANCY * 0.72);
+  let deepContinuityOccupiedCellCount = 0;
+  let deepContinuityDenseCellCount = 0;
+  let deepContinuityMaxCellOccupancy = 0;
+  let excessTotal = 0;
+  for (const count of bins) {
+    if (count <= 0) continue;
+    deepContinuityOccupiedCellCount += 1;
+    deepContinuityMaxCellOccupancy = Math.max(deepContinuityMaxCellOccupancy, count);
+    if (count >= target) {
+      deepContinuityDenseCellCount += 1;
+      excessTotal += count - target;
+    }
+  }
+
+  let deepContinuityProjectionCandidateCount = 0;
+  for (const particle of surfaceParticles) {
+    const coords = spatialCellCoords(particle.position);
+    const center = bins[coords.z * SPATIAL_PRESSURE_GRID_X + coords.x] || 0;
+    let ringPressure = 0;
+    for (let dz = -2; dz <= 2; dz += 1) {
+      const neighborZ = coords.z + dz;
+      if (neighborZ < 0 || neighborZ >= SPATIAL_PRESSURE_GRID_Z) continue;
+      for (let dx = -2; dx <= 2; dx += 1) {
+        if (dx === 0 && dz === 0) continue;
+        const neighborX = coords.x + dx;
+        if (neighborX < 0 || neighborX >= SPATIAL_PRESSURE_GRID_X) continue;
+        ringPressure += Math.max(0, center - (bins[neighborZ * SPATIAL_PRESSURE_GRID_X + neighborX] || 0));
+      }
+    }
+    if (center >= target || ringPressure > target * 3) deepContinuityProjectionCandidateCount += 1;
+  }
+
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+    projectionMode: 'two_ring_low_occupancy_continuity_projection_v0',
+    deepContinuityTargetCellOccupancy: target,
+    surfaceParticleCount: surfaceParticles.length,
+    deepContinuityProjectionCandidateCount,
+    deepContinuityOccupiedCellCount,
+    deepContinuityDenseCellCount,
+    deepContinuityMaxCellOccupancy,
+    deepContinuityPeakOccupancyRatio: round(deepContinuityMaxCellOccupancy / Math.max(1, target), 4),
+    deepContinuityRedistributionPressure: round(excessTotal / surfaceParticles.length, 4),
+  };
+}
+
 function particleSupportBudgetStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
   const supportScale = particleSupportScale(particles.length);
@@ -1316,6 +1385,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const densitySolveStats = densityPositionSolveStats(particles);
   const densityContinuityStats = densityContinuityProjectionStats(particles);
   const sampledNeighborhoodStats = sampledNeighborhoodDensityStats(particles);
+  const deepDensityStats = deepDensityContinuityStats(particles);
   const supportBudgetStats = particleSupportBudgetStats(particles);
   const restEnergyStats = settleRestEnergyStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
@@ -1336,6 +1406,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
     densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
     sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+    deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
     particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
@@ -1350,6 +1421,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     densityPositionSolveStats: densitySolveStats,
     densityContinuityProjectionStats: densityContinuityStats,
     sampledNeighborhoodDensityStats: sampledNeighborhoodStats,
+    deepDensityContinuityStats: deepDensityStats,
     particleSupportBudgetStats: supportBudgetStats,
     settleRestEnergyStats: restEnergyStats,
     stabilityStats: solverStabilityStats,
@@ -1827,6 +1899,59 @@ fn applySampledNeighborhoodDensity(index: u32, position: vec3f, radius: f32, che
   return vec3f(position.x + correction.x / correctionLength * projectedStep, position.y, position.z + correction.z / correctionLength * projectedStep);
 }
 
+fn applyDeepDensityContinuityProjection(index: u32, position: vec3f, radius: f32, chemistry: f32) -> vec3f {
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  let targetOccupancy = DENSITY_CONTINUITY_TARGET_OCCUPANCY * 0.72;
+  if (center <= targetOccupancy) {
+    return position;
+  }
+
+  var lowOutflow = vec3f(0.0, 0.0, 0.0);
+  var lowWeight = 0.0;
+  var ringOccupied = 0.0;
+  for (var dz: i32 = -2; dz <= 2; dz = dz + 1) {
+    for (var dx: i32 = -2; dx <= 2; dx = dx + 1) {
+      if (dx == 0 && dz == 0) {
+        continue;
+      }
+      let count = pressureCellCountAt(cellX + dx, cellZ + dz);
+      let lower = max(0.0, center - count);
+      if (count > 0.0) {
+        ringOccupied = ringOccupied + 1.0;
+      }
+      if (lower <= 0.0) {
+        continue;
+      }
+      let direction = normalize(vec3f(f32(dx), 0.0, f32(dz)) + vec3f(0.0003, 0.0, 0.0007));
+      let distanceWeight = select(1.0, 0.62, abs(dx) > 1 || abs(dz) > 1);
+      lowOutflow = lowOutflow + direction * lower * distanceWeight;
+      lowWeight = lowWeight + lower * distanceWeight;
+    }
+  }
+
+  let cellCenter = pressureCellCenter(cellX, cellZ);
+  let localOutward = vec3f(position.x - cellCenter.x, 0.0, position.z - cellCenter.z);
+  let localLength = length(localOutward);
+  let seeded = hash01(((index + 5u) * 747796405u) ^ ((params.stepCount + 23u) * 2891336453u));
+  let seededDirection = vec3f(cos(seeded * 6.2831853), 0.0, sin(seeded * 6.2831853));
+  let outflowLength = length(lowOutflow);
+  let direction = select(
+    select(seededDirection, localOutward / localLength, localLength > 0.0001),
+    lowOutflow / outflowLength,
+    outflowLength > 0.0001
+  );
+  let overTarget = max(0.0, center - targetOccupancy);
+  let ringOpenness = max(0.0, 24.0 - ringOccupied) / 24.0;
+  let chemistryScale = select(select(0.72, 0.80, chemistry > 2.5), 0.58, chemistry > 1.5 && chemistry < 2.5);
+  let projectedStep = min(
+    radius * 1.05,
+    (sqrt(overTarget) * 0.00072 + min(lowWeight, center * 18.0) * 0.0000045 + ringOpenness * 0.0022) * chemistryScale
+  );
+  return vec3f(position.x + direction.x * projectedStep, position.y, position.z + direction.z * projectedStep);
+}
+
 fn applySurfaceBasinContainment(position: vec3f, radius: f32, chemistry: f32) -> vec3f {
   var correction = vec2f(0.0, 0.0);
   let lateralExcess = max(0.0, abs(position.x) - 0.48);
@@ -2044,6 +2169,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       position = applyDensityPositionSolve(index, position, velocity, radius, chemistry);
       position = applyDensityContinuityProjection(index, position, radius, chemistry);
       position = applySampledNeighborhoodDensity(index, position, radius, chemistry);
+      position = applyDeepDensityContinuityProjection(index, position, radius, chemistry);
       position = applySurfaceBasinContainment(position, radius, chemistry);
       velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
       velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
@@ -2068,6 +2194,7 @@ struct Particle {
 struct RenderParams {
   viewport: vec4f,
   camera: vec4f,
+  cameraPan: vec4f,
 };
 
 struct VertexOut {
@@ -2115,6 +2242,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   let orbitCameraYaw = params.camera.x;
   let orbitCameraPitch = params.camera.y;
   let orbitCameraZoom = max(0.1, params.camera.z);
+  let orbitCameraPan = params.cameraPan.xy;
   let yawSin = sin(orbitCameraYaw);
   let yawCos = cos(orbitCameraYaw);
   let pitchSin = sin(orbitCameraPitch);
@@ -2129,8 +2257,8 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   let scale = responsiveProjectionScale * orbitCameraZoom / max(0.42, depth);
   let responsiveParticleScale = clamp(responsiveProjectionScale / 390.0, 1.0, 2.2);
   let screen = vec2f(
-    width * 0.5 + cameraWorld.x * scale,
-    height * 0.74 - cameraWorld.z * height * 0.23 * orbitCameraZoom - cameraWorld.y * scale * 0.52
+    width * (0.5 + orbitCameraPan.x) + cameraWorld.x * scale,
+    height * (0.74 + orbitCameraPan.y) - cameraWorld.z * height * 0.23 * orbitCameraZoom - cameraWorld.y * scale * 0.52
   );
   let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.46, 1.0);
   let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale * particleBudgetScale;
@@ -2342,6 +2470,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
         densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
         sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+        deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
         particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
         continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
         stepCount,
@@ -2362,6 +2491,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
       densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
       sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+      deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount,
@@ -2418,6 +2548,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
       densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
       sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+      deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount: safeSteps > 0 ? Math.ceil(safeSteps / CONTINUITY_BIN_REFRESH_CHUNK) : 0,
@@ -2491,7 +2622,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     });
     const renderParamsBuffer = device.createBuffer({
       label: 'lerms-finger-juice-render-params',
-      size: 32,
+      size: 48,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     const renderShaderModule = device.createShaderModule({
@@ -2566,6 +2697,10 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         finite(camera.pitch, 0),
         finite(camera.zoom, 1),
         0,
+        finite(camera.panX, 0),
+        finite(camera.panY, 0),
+        0,
+        0,
       ]);
       device.queue.writeBuffer(renderParamsBuffer, 0, params);
       const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-direct-render' });
@@ -2612,6 +2747,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
     densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
     sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+    deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
     particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,

@@ -65,6 +65,7 @@ assert.match(webgpuCoreSource, /wgsl-density-position-solve-v0/, 'WebGPU solver 
 assert.match(webgpuCoreSource, /wgsl-particle-support-budget-v0/, 'WebGPU solver names the particle support/budget contract');
 assert.match(webgpuCoreSource, /wgsl-density-continuity-projection-v0/, 'WebGPU solver names the density continuity projection contract');
 assert.match(webgpuCoreSource, /wgsl-sampled-neighborhood-density-v0/, 'WebGPU solver names the sampled particle-neighborhood density contract');
+assert.match(webgpuCoreSource, /wgsl-deep-density-continuity-projection-v0/, 'WebGPU solver names the deeper density continuity projection contract');
 assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
@@ -99,6 +100,7 @@ assert.match(webgpuCoreSource, /applySpatialSurfaceRelaxation/, 'WebGPU solver a
 assert.match(webgpuCoreSource, /applyDensityPositionSolve/, 'WebGPU solver applies an explicit density/position correction pass');
 assert.match(webgpuCoreSource, /applyDensityContinuityProjection/, 'WebGPU solver applies a spatial density continuity projection pass');
 assert.match(webgpuCoreSource, /applySampledNeighborhoodDensity/, 'WebGPU solver applies a sampled particle-neighborhood density pass');
+assert.match(webgpuCoreSource, /applyDeepDensityContinuityProjection/, 'WebGPU solver applies a deeper multi-ring density continuity projection pass');
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
 assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /densityPositionSolveStats/, 'WebGPU solver reports density/position solve diagnostics');
@@ -109,6 +111,8 @@ assert.match(webgpuCoreSource, /CONTINUITY_BIN_REFRESH_CHUNK/, 'continuity solve
 assert.match(webgpuCoreSource, /sampledNeighborhoodDensityStats/, 'WebGPU solver reports sampled particle-neighborhood density diagnostics');
 assert.match(webgpuCoreSource, /averageSampledNeighborCount/, 'sampled neighborhood diagnostics report average sampled neighbor support');
 assert.match(webgpuCoreSource, /neighborhoodDensityCorrectionCandidateCount/, 'sampled neighborhood diagnostics report correction candidates');
+assert.match(webgpuCoreSource, /deepDensityContinuityStats/, 'WebGPU solver reports deeper density continuity diagnostics');
+assert.match(webgpuCoreSource, /deepContinuityProjectionCandidateCount/, 'deeper continuity diagnostics report correction candidates');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
@@ -182,11 +186,16 @@ assert.match(pageSource, /responsiveSmokeProjection/, 'prototype uses viewport-r
 assert.match(pageSource, /orbit-camera-controls-v0/, 'prototype exposes operator orbit camera controls');
 assert.match(pageSource, /fingerJuiceCamera/, 'prototype keeps an explicit mutable orbit camera state');
 assert.match(pageSource, /pointerdown/, 'prototype lets the operator drag to orbit the camera');
+assert.match(pageSource, /cameraPan/, 'prototype keeps explicit camera pan state');
+assert.match(pageSource, /panCamera/, 'prototype lets the operator pan the camera target');
+assert.match(pageSource, /shiftKey/, 'prototype supports modifier drag for camera pan');
+assert.match(pageSource, /zoom\s*=\s*Math\.max\(0\.28/, 'prototype permits enough zoom-out for whole-field inspection');
 assert.match(pageSource, /wheel/, 'prototype lets the operator zoom the orbit camera');
 assert.match(pageSource, /__lermsFingerJuiceCameraForWitness/, 'prototype exposes camera state for witness/debug inspection');
 assert.match(webgpuCoreSource, /orbitCameraYaw/, 'WebGPU renderer accepts orbit camera yaw');
 assert.match(webgpuCoreSource, /orbitCameraPitch/, 'WebGPU renderer accepts orbit camera pitch');
 assert.match(webgpuCoreSource, /orbitCameraZoom/, 'WebGPU renderer accepts orbit camera zoom');
+assert.match(webgpuCoreSource, /orbitCameraPan/, 'WebGPU renderer accepts orbit camera pan');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
@@ -243,6 +252,8 @@ assert.match(witnessSource, /continuityProjectionCandidateCount/, 'witness recor
 assert.match(witnessSource, /sampledNeighborhoodDensityStats/, 'witness requires sampled particle-neighborhood density diagnostics');
 assert.match(witnessSource, /wgsl-sampled-neighborhood-density-v0/, 'witness records sampled particle-neighborhood density contract');
 assert.match(witnessSource, /averageSampledNeighborCount/, 'witness records sampled neighborhood density support');
+assert.match(witnessSource, /wgsl-deep-density-continuity-projection-v0/, 'witness records deeper density continuity projection contract');
+assert.match(witnessSource, /deepDensityContinuityStats/, 'witness requires deeper density continuity diagnostics');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
