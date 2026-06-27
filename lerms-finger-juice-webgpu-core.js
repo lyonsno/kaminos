@@ -5,6 +5,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-spla
 export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_buffer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT = 'wgsl-spatial-cell-pressure-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 
@@ -13,6 +14,13 @@ const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
 const PRESSURE_NEIGHBOR_WINDOW = 6;
 const PRESSURE_RADIUS = 0.105;
+const SPATIAL_PRESSURE_GRID_X = 24;
+const SPATIAL_PRESSURE_GRID_Z = 32;
+const SPATIAL_PRESSURE_CELL_COUNT = SPATIAL_PRESSURE_GRID_X * SPATIAL_PRESSURE_GRID_Z;
+const SPATIAL_PRESSURE_MIN_X = -0.75;
+const SPATIAL_PRESSURE_MAX_X = 0.75;
+const SPATIAL_PRESSURE_MIN_Z = -0.95;
+const SPATIAL_PRESSURE_MAX_Z = 2.25;
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 
 function finite(value, fallback = 0) {
@@ -454,6 +462,57 @@ function pressureDensityStats(particles) {
   };
 }
 
+function spatialCellIndex(position) {
+  const xRange = Math.max(0.0001, SPATIAL_PRESSURE_MAX_X - SPATIAL_PRESSURE_MIN_X);
+  const zRange = Math.max(0.0001, SPATIAL_PRESSURE_MAX_Z - SPATIAL_PRESSURE_MIN_Z);
+  const xCell = Math.max(0, Math.min(
+    SPATIAL_PRESSURE_GRID_X - 1,
+    Math.floor(((position[0] - SPATIAL_PRESSURE_MIN_X) / xRange) * SPATIAL_PRESSURE_GRID_X),
+  ));
+  const zCell = Math.max(0, Math.min(
+    SPATIAL_PRESSURE_GRID_Z - 1,
+    Math.floor(((position[2] - SPATIAL_PRESSURE_MIN_Z) / zRange) * SPATIAL_PRESSURE_GRID_Z),
+  ));
+  return zCell * SPATIAL_PRESSURE_GRID_X + xCell;
+}
+
+function spatialPressureStats(particles) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
+  for (const particle of surfaceParticles) {
+    bins[spatialCellIndex(particle.position)] += 1;
+  }
+  let occupiedCellCount = 0;
+  let maxCellOccupancy = 0;
+  let occupiedParticleCount = 0;
+  for (const count of bins) {
+    if (count <= 0) continue;
+    occupiedCellCount += 1;
+    occupiedParticleCount += count;
+    maxCellOccupancy = Math.max(maxCellOccupancy, count);
+  }
+  return {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+    spatialPressureMode: 'gpu_cell_occupancy_gradient_v0',
+    spatialPressureRefresh: 'per_submitted_compute_pass',
+    spatialCellCount: SPATIAL_PRESSURE_CELL_COUNT,
+    occupiedCellCount,
+    maxCellOccupancy,
+    averageOccupiedCellOccupancy: occupiedCellCount ? round(occupiedParticleCount / occupiedCellCount, 4) : 0,
+    surfaceParticleCount: surfaceParticles.length,
+    spatialPressureGrid: {
+      x: SPATIAL_PRESSURE_GRID_X,
+      z: SPATIAL_PRESSURE_GRID_Z,
+    },
+    spatialPressureBounds: {
+      minX: SPATIAL_PRESSURE_MIN_X,
+      maxX: SPATIAL_PRESSURE_MAX_X,
+      minZ: SPATIAL_PRESSURE_MIN_Z,
+      maxZ: SPATIAL_PRESSURE_MAX_Z,
+    },
+  };
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   const particles = [];
   const rawParticles = [];
@@ -554,6 +613,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     max_x_delta: ringDeltas.length ? round(Math.max(...ringDeltas), 4) : 0,
   } : null;
   const pressureStats = pressureDensityStats(particles);
+  const spatialStats = spatialPressureStats(particles);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -564,10 +624,12 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
     respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
     pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+    spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
     sourceTruth,
     sourceDiagnostics,
     emitterDiagnostics,
     pressureDensityStats: pressureStats,
+    spatialPressureStats: spatialStats,
     juiceHitEvents,
     juiceHitEventCount: lermHits.hitEvents.length + goinHits.hitEvents.length,
     particleCount: particles.length,
@@ -640,6 +702,15 @@ struct Params {
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> params: Params;
 @group(0) @binding(2) var<storage, read> emitters: array<Emitter>;
+@group(0) @binding(3) var<storage, read_write> pressureBins: array<atomic<u32>>;
+
+const SPATIAL_PRESSURE_GRID_X: u32 = ${SPATIAL_PRESSURE_GRID_X}u;
+const SPATIAL_PRESSURE_GRID_Z: u32 = ${SPATIAL_PRESSURE_GRID_Z}u;
+const SPATIAL_PRESSURE_CELL_COUNT: u32 = ${SPATIAL_PRESSURE_CELL_COUNT}u;
+const SPATIAL_PRESSURE_MIN_X: f32 = ${SPATIAL_PRESSURE_MIN_X.toFixed(4)};
+const SPATIAL_PRESSURE_MAX_X: f32 = ${SPATIAL_PRESSURE_MAX_X.toFixed(4)};
+const SPATIAL_PRESSURE_MIN_Z: f32 = ${SPATIAL_PRESSURE_MIN_Z.toFixed(4)};
+const SPATIAL_PRESSURE_MAX_Z: f32 = ${SPATIAL_PRESSURE_MAX_Z.toFixed(4)};
 
 fn terrainHeightAt(x: f32, z: f32) -> f32 {
   let bowl = -0.08 + 0.11 * x * x + 0.035 * cos(z * 1.65);
@@ -692,6 +763,58 @@ fn applyLocalDensityPressure(index: u32, position: vec3f, velocity: vec3f, radiu
   return velocity + vec3f(correction.x, 0.0, correction.z) * pressureScale;
 }
 
+fn pressureCellAxis(value: f32, minValue: f32, maxValue: f32, cells: u32) -> u32 {
+  let span = max(0.0001, maxValue - minValue);
+  let normalized = clamp((value - minValue) / span, 0.0, 0.9999);
+  return min(u32(floor(normalized * f32(cells))), cells - 1u);
+}
+
+fn pressureCellIndex(position: vec3f) -> u32 {
+  let cellX = pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X);
+  let cellZ = pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z);
+  return cellZ * SPATIAL_PRESSURE_GRID_X + cellX;
+}
+
+fn pressureCellCountAt(cellX: i32, cellZ: i32) -> f32 {
+  if (cellX < 0 || cellZ < 0 || cellX >= i32(SPATIAL_PRESSURE_GRID_X) || cellZ >= i32(SPATIAL_PRESSURE_GRID_Z)) {
+    return 0.0;
+  }
+  let index = u32(cellZ) * SPATIAL_PRESSURE_GRID_X + u32(cellX);
+  return f32(atomicLoad(&pressureBins[index]));
+}
+
+fn pressureCellCenter(cellX: i32, cellZ: i32) -> vec3f {
+  let cellSizeX = (SPATIAL_PRESSURE_MAX_X - SPATIAL_PRESSURE_MIN_X) / f32(SPATIAL_PRESSURE_GRID_X);
+  let cellSizeZ = (SPATIAL_PRESSURE_MAX_Z - SPATIAL_PRESSURE_MIN_Z) / f32(SPATIAL_PRESSURE_GRID_Z);
+  return vec3f(
+    SPATIAL_PRESSURE_MIN_X + (f32(cellX) + 0.5) * cellSizeX,
+    0.0,
+    SPATIAL_PRESSURE_MIN_Z + (f32(cellZ) + 0.5) * cellSizeZ
+  );
+}
+
+fn applySpatialCellPressure(position: vec3f, velocity: vec3f, chemistry: f32) -> vec3f {
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  if (center <= 1.0) {
+    return velocity;
+  }
+  let left = pressureCellCountAt(cellX - 1, cellZ);
+  let right = pressureCellCountAt(cellX + 1, cellZ);
+  let back = pressureCellCountAt(cellX, cellZ - 1);
+  let front = pressureCellCountAt(cellX, cellZ + 1);
+  let neighborGradient = vec3f(left - right, 0.0, back - front);
+  let cellCenter = pressureCellCenter(cellX, cellZ);
+  let localOutward = vec3f(position.x - cellCenter.x, 0.0, position.z - cellCenter.z);
+  let gradient = neighborGradient + localOutward * center * 0.35;
+  let gradientLength = length(gradient);
+  let direction = select(normalize(localOutward + vec3f(0.0007, 0.0, 0.0003)), normalize(gradient), gradientLength >= 0.0001);
+  let chemistryScale = select(select(0.0026, 0.0021, chemistry > 2.5), 0.0032, chemistry > 1.5 && chemistry < 2.5);
+  let occupancyScale = min(center, 12.0);
+  return velocity + direction * chemistryScale * occupancyScale;
+}
+
 fn hash01(seed: u32) -> f32 {
   var value = seed;
   value = value ^ (value >> 16u);
@@ -742,6 +865,27 @@ fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
+fn clear_pressure_bins(@builtin(global_invocation_id) global_id: vec3u) {
+  let index = global_id.x;
+  if (index >= SPATIAL_PRESSURE_CELL_COUNT) {
+    return;
+  }
+  atomicStore(&pressureBins[index], 0u);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn accumulate_pressure_bins(@builtin(global_invocation_id) global_id: vec3u) {
+  let index = global_id.x;
+  if (index >= params.particleCount) {
+    return;
+  }
+  let particle = particles[index];
+  if (particle.flags.y > 0.5 && particle.posPhase.w >= 0.5 && particle.misc.z >= 0.0 && particle.misc.z < particle.misc.w) {
+    atomicAdd(&pressureBins[pressureCellIndex(particle.posPhase.xyz)], 1u);
+  }
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
   let index = global_id.x;
   if (index >= params.particleCount) {
@@ -786,6 +930,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
     } else {
       velocity = slideVelocityOnTerrain(velocity, terrainNormalAt(position.x, position.z), chemistry);
       velocity = applyLocalDensityPressure(index, position, velocity, radius, chemistry);
+      velocity = applySpatialCellPressure(position, velocity, chemistry);
       position = position + velocity * params.dt;
       position.y = terrainHeightAt(position.x, position.z) + radius * 0.25;
     }
@@ -940,6 +1085,11 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: emitterData.data.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
+  const pressureBinBuffer = device.createBuffer({
+    label: 'lerms-finger-juice-pressureBins',
+    size: SPATIAL_PRESSURE_CELL_COUNT * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
   const readbackBuffer = device.createBuffer({
     label: 'lerms-finger-juice-particle-readback',
     size: byteLength,
@@ -956,11 +1106,36 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     label: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
     code: COMPUTE_SHADER,
   });
+  const computeBindGroupLayout = device.createBindGroupLayout({
+    label: 'lerms-finger-juice-compute-bindgroup-layout',
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const computePipelineLayout = device.createPipelineLayout({
+    label: 'lerms-finger-juice-compute-pipeline-layout',
+    bindGroupLayouts: [computeBindGroupLayout],
+  });
   let pipeline;
+  let clearPressurePipeline;
+  let accumulatePressurePipeline;
   try {
+    clearPressurePipeline = await device.createComputePipelineAsync({
+      label: `${LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT}:clear_pressure_bins`,
+      layout: computePipelineLayout,
+      compute: { module: shaderModule, entryPoint: 'clear_pressure_bins' },
+    });
+    accumulatePressurePipeline = await device.createComputePipelineAsync({
+      label: `${LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT}:accumulate_pressure_bins`,
+      layout: computePipelineLayout,
+      compute: { module: shaderModule, entryPoint: 'accumulate_pressure_bins' },
+    });
     pipeline = await device.createComputePipelineAsync({
       label: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
-      layout: 'auto',
+      layout: computePipelineLayout,
       compute: { module: shaderModule, entryPoint: 'main' },
     });
   } catch (error) {
@@ -968,11 +1143,12 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   }
   const bindGroup = device.createBindGroup({
     label: 'lerms-finger-juice-bindgroup',
-    layout: pipeline.getBindGroupLayout(0),
+    layout: computeBindGroupLayout,
     entries: [
       { binding: 0, resource: { buffer: particleBuffer } },
       { binding: 1, resource: { buffer: paramsBuffer } },
       { binding: 2, resource: { buffer: emitterBuffer } },
+      { binding: 3, resource: { buffer: pressureBinBuffer } },
     ],
   });
   let stepCount = 0;
@@ -990,8 +1166,12 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     paramsView.setUint32(28, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, params);
     const pass = encoder.beginComputePass({ label });
-    pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
+    pass.setPipeline(clearPressurePipeline);
+    pass.dispatchWorkgroups(Math.ceil(SPATIAL_PRESSURE_CELL_COUNT / WORKGROUP_SIZE));
+    pass.setPipeline(accumulatePressurePipeline);
+    pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
+    pass.setPipeline(pipeline);
     pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
     pass.end();
   }
@@ -1005,6 +1185,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
         emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
         respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+        pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+        spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
         stepCount,
       };
     }
@@ -1019,6 +1201,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
       emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
       respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+      spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       stepCount,
     };
   }
@@ -1059,6 +1243,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
       emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
       respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+      spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
       adapterInfo,
       workgroupSize: WORKGROUP_SIZE,
       maxParticles,
