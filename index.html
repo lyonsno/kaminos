@@ -558,6 +558,13 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
           <option value="full" selected>Full source</option>
         </select>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Interrupt</span>
+        <select id="motion-panel-cliplet-interrupt" class="select-input">
+          <option value="off" selected>Off</option>
+          <option value="path-trigger">Path trigger</option>
+        </select>
+      </div>
       <textarea class="gen-input" id="motion-panel-prompt" rows="2" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
       <div class="slider-row">
         <span class="slider-label">Duration</span>
@@ -947,6 +954,7 @@ import {
   buildMotionTrackHarness,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
+  buildGeneratedPoseClipletPathInterrupt,
   buildGeneratedPoseClipletPlayback,
   buildGeneratedPoseTemporalCliplets,
   buildGeneratedPoseTemporalBehaviorState,
@@ -959,11 +967,12 @@ import {
   normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
   sampleGeneratedPoseTemporalMotion,
+  sampleGeneratedPoseClipletPathInterrupt,
   sampleGeneratedPoseClipletPlayback,
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
-} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627';
+} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
@@ -4702,6 +4711,36 @@ function motionPanelClipletPlaybackFromInputs(cliplets) {
   });
 }
 
+function motionPanelClipletInterruptModeFromInputs() {
+  const mode = String(document.getElementById('motion-panel-cliplet-interrupt')?.value || 'off');
+  return mode === 'path-trigger' ? 'path-trigger' : 'off';
+}
+
+function motionPanelSelectedClipletSegment(cliplets) {
+  if (!cliplets?.segments?.length) return null;
+  const selectedId = String(document.getElementById('motion-panel-cliplet-playback')?.value || 'full');
+  const selected = selectedId !== 'full'
+    ? cliplets.segments.find(segment => segment.id === selectedId)
+    : null;
+  if (selected) return selected;
+  return cliplets.segments.find(segment => String(segment.labelGuess || '').toLowerCase().includes('brake'))
+    || cliplets.segments.find(segment => Number(segment.index) > 0)
+    || cliplets.segments[0];
+}
+
+function motionPanelClipletInterruptFromInputs(track, cliplets) {
+  if (motionPanelClipletInterruptModeFromInputs() !== 'path-trigger') return null;
+  const selected = motionPanelSelectedClipletSegment(cliplets);
+  if (!track || !selected) return null;
+  return buildGeneratedPoseClipletPathInterrupt({
+    generatedInput: track,
+    cliplets,
+    segmentId: selected.id,
+    radius: 0.18,
+    id: `${cliplets.sourceClipId || 'generated'}_${selected.index}_path_interrupt_v0`,
+  });
+}
+
 function motionServerSourceRoot(result) {
   const root = result?.root_positions?.[0] || result?.joints?.[0]?.[0] || [0, 0, 0];
   return [Number(root[0]) || 0, Number(root[1]) || 0, Number(root[2]) || 0];
@@ -5183,6 +5222,16 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
   compressionRing.rotation.x = -Math.PI / 2;
   visual.group.add(compressionRing);
   visual.compressionRing = compressionRing;
+  const interruptTrigger = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.006, 8, 96),
+    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.0, depthTest: false })
+  );
+  interruptTrigger.name = 'generated-pose-temporal-cliplet-interrupt-trigger';
+  interruptTrigger.rotation.x = -Math.PI / 2;
+  interruptTrigger.visible = false;
+  interruptTrigger.renderOrder = 35;
+  root.add(interruptTrigger);
+  visual.interruptTrigger = interruptTrigger;
   visual.track = harness.track;
   visual.behaviorReadout = createWorldSpaceBehaviorReadout({ color: '#f0d28a' });
   root.add(visual.group);
@@ -5236,6 +5285,8 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     lastCliplet: null,
     lastClipletPlayback: null,
     lastClipletPlaybackTimeline: null,
+    lastClipletInterrupt: null,
+    lastClipletInterruptTimeline: null,
   };
   updateMotionPhraseControlApplicability();
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
@@ -5484,22 +5535,49 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const visual = state.visual;
   state.timeScale = motionPanelSpeedFromInputs();
   const elapsedTime = (nowSeconds - state.startedAt) * state.timeScale;
-  const clipletPlaybackTimeline = motionPanelClipletPlaybackFromInputs(state.generatedMotionCliplets);
+  const interruptSourceInput = state.generatedInput || state.track;
+  const clipletInterruptTimeline = motionPanelClipletInterruptFromInputs(interruptSourceInput, state.generatedMotionCliplets);
+  const clipletInterruptEnvelope = clipletInterruptTimeline
+    ? sampleGeneratedPoseClipletPathInterrupt(interruptSourceInput, clipletInterruptTimeline, elapsedTime)
+    : null;
+  const clipletPlaybackTimeline = clipletInterruptTimeline ? null : motionPanelClipletPlaybackFromInputs(state.generatedMotionCliplets);
   const clipletPlaybackEnvelope = clipletPlaybackTimeline
     ? sampleGeneratedPoseClipletPlayback(state.track, clipletPlaybackTimeline, elapsedTime)
     : null;
-  const localTime = clipletPlaybackEnvelope
-    ? clipletPlaybackEnvelope.playback.sourceTime
-    : elapsedTime % state.duration;
-  const sample = clipletPlaybackEnvelope?.motionSample || sampleGeneratedPoseTemporalMotion(state.track, localTime);
+  const localTime = clipletInterruptEnvelope
+    ? (clipletInterruptEnvelope.motionSample.temporalSample?.time ?? (elapsedTime % state.duration))
+    : clipletPlaybackEnvelope
+      ? clipletPlaybackEnvelope.playback.sourceTime
+      : elapsedTime % state.duration;
+  const sample = clipletInterruptEnvelope?.motionSample || clipletPlaybackEnvelope?.motionSample || sampleGeneratedPoseTemporalMotion(state.track, localTime);
   const temporalSample = sample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, localTime);
-  const activeCliplet = clipletPlaybackEnvelope?.playback?.segmentId
+  const activeCliplet = clipletInterruptEnvelope?.interrupt?.selectedSegmentId && clipletInterruptEnvelope.interrupt.fired
+    ? clipletInterruptTimeline.selectedSegment
+    : clipletPlaybackEnvelope?.playback?.segmentId
     ? (clipletPlaybackTimeline.segments.find(segment => segment.sourceSegmentId === clipletPlaybackEnvelope.playback.segmentId)?.sourceSegment || null)
     : generatedPoseClipletForSourceFrame(state.generatedMotionCliplets, temporalSample?.sourceFrame ?? 0);
   const compression = Number(temporalSample?.bowCompression || 0);
   const horizontalDisplayScale = Number(state.horizontalDisplayScale || 2.2);
   const verticalDisplayScale = Number(state.verticalDisplayScale || 5.0);
   const rootPosition = new THREE.Vector3(sample.root[0] * horizontalDisplayScale, sample.root[1] * verticalDisplayScale + 0.24, sample.root[2] * horizontalDisplayScale);
+  if (visual.interruptTrigger) {
+    if (clipletInterruptTimeline?.trigger?.root) {
+      const trigger = clipletInterruptTimeline.trigger;
+      const radius = Math.max(0.03, Number(trigger.radius || 0.18) * horizontalDisplayScale);
+      visual.interruptTrigger.visible = true;
+      visual.interruptTrigger.position.set(
+        Number(trigger.root[0] || 0) * horizontalDisplayScale,
+        0.006,
+        Number(trigger.root[2] || 0) * horizontalDisplayScale,
+      );
+      visual.interruptTrigger.scale.setScalar(radius / 0.18);
+      visual.interruptTrigger.material.opacity = clipletInterruptEnvelope?.interrupt?.fired ? 0.72 : 0.34;
+      visual.interruptTrigger.material.color.set(clipletInterruptEnvelope?.interrupt?.fired ? 0xffb184 : 0xf0d28a);
+    } else {
+      visual.interruptTrigger.visible = false;
+      visual.interruptTrigger.material.opacity = 0;
+    }
+  }
   const sampleAttention = new THREE.Vector3(sample.attention[0] * horizontalDisplayScale, sample.attention[1] * Math.min(2.2, verticalDisplayScale) + 0.24, sample.attention[2] * horizontalDisplayScale);
   const attentionTarget = motionAttentionTargetForSample(sampleAttention, state.targetContext);
   const attention = attentionTarget.position;
@@ -5535,8 +5613,10 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.maxEffort = Math.max(state.maxEffort, sample.effort);
   state.lastTemporalSample = temporalSample;
   state.lastCliplet = activeCliplet;
-  state.lastClipletPlayback = clipletPlaybackEnvelope?.playback || null;
+  state.lastClipletPlayback = clipletInterruptEnvelope?.playbackSample?.playback || clipletPlaybackEnvelope?.playback || null;
   state.lastClipletPlaybackTimeline = clipletPlaybackTimeline;
+  state.lastClipletInterrupt = clipletInterruptEnvelope?.interrupt || null;
+  state.lastClipletInterruptTimeline = clipletInterruptTimeline;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
     sample,
@@ -5592,8 +5672,13 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     cliplet: activeCliplet,
     clipletId: activeCliplet?.id || null,
     clipletLabel: activeCliplet?.labelGuess || null,
-    clipletPlayback: clipletPlaybackEnvelope?.playback || null,
-    clipletPlaybackMode: clipletPlaybackTimeline ? clipletPlaybackTimeline.mode : 'full-source',
+    clipletPlayback: clipletInterruptEnvelope?.playbackSample?.playback || clipletPlaybackEnvelope?.playback || null,
+    clipletPlaybackMode: clipletInterruptEnvelope
+      ? `interrupt-${clipletInterruptEnvelope.interrupt.activeSource}`
+      : clipletPlaybackTimeline ? clipletPlaybackTimeline.mode : 'full-source',
+    clipletInterrupt: clipletInterruptEnvelope?.interrupt || null,
+    clipletInterruptMode: clipletInterruptTimeline?.mode || 'off',
+    clipletInterruptTimeline,
     sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
     sourceBracket: temporalSample?.bracket ?? null,
@@ -6147,7 +6232,9 @@ async function captureMotionPanelRendererFrame(label, index) {
     clipletId: motionTemporalState?.lastCliplet?.id || motionTemporalState?.lastActors?.[0]?.clipletId || null,
     clipletLabel: motionTemporalState?.lastCliplet?.labelGuess || motionTemporalState?.lastActors?.[0]?.clipletLabel || null,
     clipletPlayback: motionTemporalState?.lastClipletPlayback || motionTemporalState?.lastActors?.[0]?.clipletPlayback || null,
-    clipletPlaybackMode: motionTemporalState?.lastClipletPlaybackTimeline?.mode || motionTemporalState?.lastActors?.[0]?.clipletPlaybackMode || 'full-source',
+    clipletPlaybackMode: motionTemporalState?.lastActors?.[0]?.clipletPlaybackMode || motionTemporalState?.lastClipletPlaybackTimeline?.mode || 'full-source',
+    clipletInterrupt: motionTemporalState?.lastClipletInterrupt || motionTemporalState?.lastActors?.[0]?.clipletInterrupt || null,
+    clipletInterruptTimeline: motionTemporalState?.lastClipletInterruptTimeline || motionTemporalState?.lastActors?.[0]?.clipletInterruptTimeline || null,
     sourceFrame: motionTemporalState?.lastActors?.[0]?.sourceFrame ?? null,
     sourceFrameTotal: motionPanelSourceFrameTotal(),
   };
@@ -6214,7 +6301,8 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       frame.clipletLabel = clipletLabel;
       ctx.fillText(`${sheetFrameLabel} · ${sourceFrameLabel}`, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const state = [clipletLabel || frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'current view';
+      const interruptState = frame.clipletInterrupt?.state ? `interrupt ${frame.clipletInterrupt.state}` : null;
+      const state = [clipletLabel || frame.behaviorState, interruptState || frame.behaviorPhase].filter(Boolean).join(' / ') || 'current view';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
     }
     const dataUrl = filmstrip.toDataURL('image/png');
@@ -6280,13 +6368,17 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());
-  document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', () => {
+  const resetMotionClipletSelection = () => {
     if (!motionTemporalState?.active) return;
     motionTemporalState.startedAt = performance.now() / 1000;
     motionTemporalState.lastClipletPlayback = null;
     motionTemporalState.lastClipletPlaybackTimeline = null;
+    motionTemporalState.lastClipletInterrupt = null;
+    motionTemporalState.lastClipletInterruptTimeline = null;
     updateGeneratedPoseTemporalFrame(performance.now() / 1000);
-  });
+  };
+  document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
+  document.getElementById('motion-panel-cliplet-interrupt')?.addEventListener('change', resetMotionClipletSelection);
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
     button.addEventListener('click', () => void createGeneratedPoseTemporalScene({
       force: true,
@@ -6603,6 +6695,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     clipletPlaybackOptions: state?.clipletPlaybackOptions || renderMotionPanelClipletPlaybackOptions(harness.cliplets),
     clipletPlayback: state?.lastClipletPlayback || null,
     clipletPlaybackTimeline: state?.lastClipletPlaybackTimeline || null,
+    clipletInterrupt: state?.lastClipletInterrupt || null,
+    clipletInterruptTimeline: state?.lastClipletInterruptTimeline || null,
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     behaviorState: state?.lastBehaviorState || null,

@@ -38,5 +38,7 @@ assert.match(witness, /Page\.navigate/, 'live witness navigates after CDP Runtim
 assert.match(witness, /Runtime\.exceptionThrown/, 'live witness records early runtime exceptions such as module import failures');
 assert.match(witness, /Runtime\.consoleAPICalled/, 'live witness records early console calls before route preflight');
 assert.match(witness, /consoleEvents/, 'live witness includes captured console events in durable reports');
+assert.match(witness, /consoleFailureEvents/, 'live witness promotes browser console exceptions/errors into witness failures');
+assert.match(witness, /browser console produced/, 'live witness rejects success closeout when the browser route throws');
 assert.match(witness, /writeReport\(\{\s*ok: false/s, 'live witness writes a durable failure report');
 assert.doesNotMatch(witness, /Math\.min\([^)]*frameCount/, 'live witness must not silently cap requested frame count');

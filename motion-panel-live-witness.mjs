@@ -35,6 +35,7 @@ const overlaySize = positiveNumber(args.get('--overlay-size'), 3, '--overlay-siz
 const sourceUpAxis = args.get('--source-up-axis') || 'auto';
 const sourceForwardAxis = args.get('--source-forward-axis') || 'auto';
 const clipletPlayback = String(args.get('--cliplet-playback') || 'full');
+const clipletInterrupt = String(args.get('--cliplet-interrupt') || 'off');
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
@@ -159,6 +160,14 @@ function recordConsoleEvent(event) {
       url: msg.params.entry?.url || null,
     });
   }
+}
+
+function consoleFailureEvents() {
+  return consoleEvents.filter(event => (
+    event.kind === 'exception'
+    || (event.kind === 'console' && ['error', 'assert'].includes(String(event.type || '').toLowerCase()))
+    || (event.kind === 'log' && ['error', 'warning'].includes(String(event.level || '').toLowerCase()))
+  ));
 }
 
 async function cdpFetch(path, options) {
@@ -307,6 +316,7 @@ async function generateMotion(ws) {
 async function configureClipletPlayback(ws) {
   return evaluate(ws, `(() => {
     const requested = ${JSON.stringify(clipletPlayback)};
+    const requestedInterrupt = ${JSON.stringify(clipletInterrupt)};
     const select = document.getElementById('motion-panel-cliplet-playback');
     if (!select) throw new Error('missing motion panel cliplet playback selector');
     const options = [...select.options].map(option => ({ value: option.value, label: option.textContent || '' }));
@@ -321,15 +331,23 @@ async function configureClipletPlayback(ws) {
       select.value = match.value;
     }
     select.dispatchEvent(new Event('change', { bubbles: true }));
+    const interruptSelect = document.getElementById('motion-panel-cliplet-interrupt');
+    if (!interruptSelect) throw new Error('missing motion panel cliplet interrupt selector');
+    interruptSelect.value = requestedInterrupt === 'path-trigger' ? 'path-trigger' : 'off';
+    interruptSelect.dispatchEvent(new Event('change', { bubbles: true }));
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
     return {
       schema: 'kaminos.motion-panel-live-cliplet-playback-config.v0',
       requested,
+      requestedInterrupt,
       selected: select.value,
       selectedLabel: options.find(option => option.value === select.value)?.label || null,
+      selectedInterrupt: interruptSelect.value,
       options,
       clipletPlayback: state?.clipletPlayback || null,
       clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
+      clipletInterrupt: state?.clipletInterrupt || null,
+      clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
     };
   })()`, { timeoutMs: 20000 });
 }
@@ -356,6 +374,8 @@ async function captureFrame(ws, index) {
       clipletLabel: actor?.clipletLabel || state?.activeCliplet?.labelGuess || null,
       clipletPlayback: actor?.clipletPlayback || state?.clipletPlayback || null,
       clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
+      clipletInterrupt: actor?.clipletInterrupt || state?.clipletInterrupt || null,
+      clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
       sourceFrame: actor?.sourceFrame ?? null,
@@ -399,6 +419,7 @@ async function composeFilmstrip(ws, frames) {
       behaviorPhase: frame.debug?.behaviorState?.phase || null,
       clipletLabel: frame.debug?.clipletLabel || frame.debug?.cliplet?.labelGuess || null,
       clipletId: frame.debug?.clipletId || frame.debug?.cliplet?.id || null,
+      clipletInterrupt: frame.debug?.clipletInterrupt || null,
       sourceFrame: frame.debug?.sourceFrame ?? null,
       sourceFrameTotal: frame.debug?.sourceFrameTotal ?? null,
       sheetFrameLabel: frame.sheetFrameLabel,
@@ -459,7 +480,8 @@ async function composeFilmstrip(ws, frames) {
       const sourceFrameLabel = frame.sourceFrameLabel || ('source ' + sourceFrame + '/' + sourceFrameTotal);
       ctx.fillText(sheetFrameLabel + ' · ' + sourceFrameLabel, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const state = [frame.clipletLabel || frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
+      const interruptState = frame.clipletInterrupt?.state ? ('interrupt ' + frame.clipletInterrupt.state) : null;
+      const state = [frame.clipletLabel || frame.behaviorState, interruptState || frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
     }
     return {
@@ -667,6 +689,10 @@ try {
   }
 
   phase = 'writing-report';
+  const failures = consoleFailureEvents();
+  if (failures.length) {
+    throw new Error(`browser console produced ${failures.length} failure event(s): ${JSON.stringify(failures.slice(0, 3))}`);
+  }
   writeReport({
     ok: true,
     preflight,

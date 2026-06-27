@@ -8,6 +8,7 @@ export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
 export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
 export const GENERATED_MOTION_CLIPLETS_SCHEMA = 'kaminos.generated-motion-cliplets.v0';
+export const GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA = 'kaminos.generated-motion-cliplet-interrupt.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
@@ -1842,6 +1843,8 @@ function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endInde
     index: segmentIndex,
     labelGuess: generatedPoseTemporalClipletLabel({ phaseLabels, metrics, segmentIndex, segmentCount }),
     sourceClipId: input.id,
+    startIndex,
+    endIndex,
     startFrame: Number(first.frame),
     endFrame: Number(last.frame),
     startSourceFrame: Number(clipletSourceFrame(first).toFixed(5)),
@@ -2050,6 +2053,110 @@ export function sampleGeneratedPoseClipletPlayback(generatedInput = DEFAULT_KIMO
       },
     },
     motionSample,
+  };
+}
+
+function generatedPoseClipletSegmentById(cliplets, segmentId) {
+  const id = String(segmentId || '');
+  if (!cliplets?.segments?.length) return null;
+  return cliplets.segments.find(segment => segment.id === id) || null;
+}
+
+export function buildGeneratedPoseClipletPathInterrupt({
+  generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  cliplets,
+  segmentId,
+  radius = 0.18,
+  id = null,
+} = {}) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  if (cliplets?.schema !== GENERATED_MOTION_CLIPLETS_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLETS_SCHEMA}, got ${cliplets?.schema || 'missing schema'}`);
+  }
+  const selected = generatedPoseClipletSegmentById(cliplets, segmentId);
+  if (!selected) throw new Error(`Unknown generated motion cliplet interrupt segment id: ${segmentId || 'missing'}`);
+  const triggerSample = input.temporalSamples[Math.max(0, Math.min(input.temporalSamples.length - 1, Number(selected.startIndex) || 0))]
+    || sampleGeneratedPoseTemporalMotion(input, selected.startTime).temporalSample;
+  const triggerRoot = vec3(triggerSample?.root);
+  const playback = buildGeneratedPoseClipletPlayback({
+    cliplets,
+    segmentIds: [selected.id],
+    mode: 'interrupt-loop',
+    id: `${cliplets.sourceClipId || input.id || 'generated'}_${selected.index}_path_interrupt_playback_v0`,
+  });
+  const triggerRadius = Math.max(0.001, Number(radius) || 0.18);
+  return {
+    schema: GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA,
+    route: MOTION_ROUTE_IDENTITY,
+    id: String(id || `${cliplets.sourceClipId || input.id || 'generated'}_${selected.index}_path_interrupt_v0`),
+    mode: 'path-trigger',
+    state: 'armed',
+    sourceClipId: input.id,
+    sourceKind: cliplets.sourceKind || input.sourceKind,
+    sourceStatus: cliplets.sourceStatus || input.sourceStatus,
+    sourceModel: cliplets.sourceModel || input.sourceModel,
+    sourceRoute: cliplets.sourceRoute || input.sourceRoute,
+    selectedSegmentId: selected.id,
+    selectedLabel: selected.labelGuess,
+    selectedSegment: selected,
+    trigger: {
+      schema: 'kaminos.generated-motion-cliplet-path-trigger.v0',
+      sourceSegmentId: selected.id,
+      labelGuess: selected.labelGuess,
+      sourceTime: Number(selected.startTime),
+      sourceFrame: Number(selected.startSourceFrame),
+      sourceIndex: Number(selected.startIndex) || 0,
+      radius: Number(triggerRadius.toFixed(5)),
+      root: triggerRoot.map(value => Number(value.toFixed(5))),
+    },
+    playback,
+  };
+}
+
+export function sampleGeneratedPoseClipletPathInterrupt(
+  generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
+  interrupt,
+  t = 0,
+) {
+  if (interrupt?.schema !== GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA) {
+    throw new Error(`Expected ${GENERATED_MOTION_CLIPLET_INTERRUPT_SCHEMA}, got ${interrupt?.schema || 'missing schema'}`);
+  }
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const duration = Math.max(1e-6, Number(input.duration) || Number(input.temporalSamples.at(-1)?.time) || 0);
+  const sourceTime = ((Number(t) || 0) % duration + duration) % duration;
+  const fullSample = sampleGeneratedPoseTemporalMotion(input, sourceTime);
+  const triggerRoot = vec3(interrupt.trigger?.root);
+  const sampleRoot = vec3(fullSample.root);
+  const distanceToTrigger = lengthVec3(subVec3(sampleRoot, triggerRoot));
+  const radius = Math.max(0.001, Number(interrupt.trigger?.radius) || 0.18);
+  const timelineReached = sourceTime >= Number(interrupt.trigger?.sourceTime || 0);
+  const fired = distanceToTrigger <= radius || timelineReached;
+  const playbackSample = fired
+    ? sampleGeneratedPoseClipletPlayback(input, interrupt.playback, Math.max(0, sourceTime - Number(interrupt.trigger?.sourceTime || 0)))
+    : null;
+  const motionSample = playbackSample?.motionSample || fullSample;
+  const sourceFrame = Number(fullSample.temporalSample?.sourceFrame ?? 0);
+  return {
+    schema: 'kaminos.generated-motion-cliplet-interrupt-sample-envelope.v0',
+    interrupt: {
+      schema: 'kaminos.generated-motion-cliplet-interrupt-sample.v0',
+      interruptId: interrupt.id,
+      sourceClipId: interrupt.sourceClipId,
+      mode: interrupt.mode,
+      state: fired ? 'fired' : 'armed',
+      fired,
+      activeSource: fired ? 'cliplet-playback' : 'full-source',
+      selectedSegmentId: interrupt.selectedSegmentId,
+      selectedLabel: interrupt.selectedLabel,
+      sourceTime: Number(sourceTime.toFixed(5)),
+      sourceFrame: Number(sourceFrame.toFixed(5)),
+      distanceToTrigger: Number(distanceToTrigger.toFixed(5)),
+      trigger: interrupt.trigger,
+      playbackId: interrupt.playback?.id || null,
+      playbackSample: playbackSample?.playback || null,
+    },
+    motionSample,
+    playbackSample,
   };
 }
 
