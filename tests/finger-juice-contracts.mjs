@@ -113,6 +113,7 @@ assert.match(pageSource, /fluidDepthStats/, 'prototype displays deeper fluid dia
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceVisualFrameForWitness/, 'prototype exposes a focused visual frame for witness capture');
 assert.match(pageSource, /visualActivityFrame/, 'prototype computes projected activity framing for witness capture');
+assert.match(pageSource, /dense-fluid-activity-clip-v0/, 'prototype can focus witness capture on dense fluid activity instead of sparse outliers');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');
@@ -157,6 +158,8 @@ assert.match(witnessSource, /flowExtentZ/, 'witness checks widened forward fluid
 assert.match(witnessSource, /visualActivityMetrics/, 'witness records captured pixel activity metrics');
 assert.match(witnessSource, /parsePngRgba/, 'witness parses PNG screenshots for visual activity metrics');
 assert.match(witnessSource, /activityBoundsAreaRatio/, 'witness rejects visually tiny activity bounding boxes');
+assert.match(witnessSource, /filledActivityRatio/, 'witness rejects mostly empty captures even when sparse activity bounds are large');
+assert.match(witnessSource, /dilatedActivityRatio/, 'witness measures visual activity occupancy after local dilation, not just raw colored pixels');
 assert.match(witnessSource, /Page\.captureScreenshot[^]*clip/, 'witness captures a focused clip instead of only the whole distant viewport');
 assert.match(witnessSource, /sourceDiagnostics/, 'witness requires source diagnostics');
 assert.match(witnessSource, /emitterDiagnostics/, 'witness requires emitter diagnostics');

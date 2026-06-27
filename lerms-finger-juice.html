@@ -373,7 +373,7 @@
 
       if (!points.length) {
         return {
-          visualActivityFrame: 'expanded-flow-focused-clip-v0',
+          visualActivityFrame: 'dense-fluid-activity-clip-v0',
           pointCount: 0,
           rawBounds: null,
           clip: {
@@ -405,15 +405,57 @@
       const height = window.innerHeight;
       const rawWidth = Math.max(1, maxX - minX);
       const rawHeight = Math.max(1, maxY - minY);
-      const padX = Math.max(44, rawWidth * 0.22);
-      const padY = Math.max(36, rawHeight * 0.28);
-      let clipX = minX - padX;
-      let clipY = minY - padY;
-      let clipWidth = rawWidth + padX * 2;
-      let clipHeight = rawHeight + padY * 2;
 
-      const minClipWidth = Math.min(width, 560);
-      const minClipHeight = Math.min(height, 360);
+      const visiblePoints = points
+        .filter(point => point.x >= -80 && point.x <= width + 80 && point.y >= -80 && point.y <= height + 80);
+      const densityRadius = 104;
+      let densest = visiblePoints[0] || points[0];
+      let densestScore = -Infinity;
+      for (const candidate of visiblePoints.length ? visiblePoints : points) {
+        let score = 0;
+        for (const point of visiblePoints.length ? visiblePoints : points) {
+          const dx = candidate.x - point.x;
+          const dy = candidate.y - point.y;
+          const distance2 = dx * dx + dy * dy;
+          if (distance2 <= densityRadius * densityRadius) {
+            score += 1 - distance2 / (densityRadius * densityRadius);
+          }
+        }
+        if (score > densestScore) {
+          densestScore = score;
+          densest = candidate;
+        }
+      }
+
+      const densePoints = (visiblePoints.length ? visiblePoints : points)
+        .filter(point => {
+          const dx = point.x - densest.x;
+          const dy = point.y - densest.y;
+          return dx * dx + dy * dy <= 184 * 184;
+        });
+      let denseMinX = Infinity;
+      let denseMinY = Infinity;
+      let denseMaxX = -Infinity;
+      let denseMaxY = -Infinity;
+      for (const point of densePoints.length ? densePoints : [densest]) {
+        denseMinX = Math.min(denseMinX, point.x);
+        denseMinY = Math.min(denseMinY, point.y);
+        denseMaxX = Math.max(denseMaxX, point.x);
+        denseMaxY = Math.max(denseMaxY, point.y);
+      }
+      const denseWidth = Math.max(1, denseMaxX - denseMinX);
+      const denseHeight = Math.max(1, denseMaxY - denseMinY);
+      const padX = Math.max(18, denseWidth * 0.08);
+      const padY = Math.max(18, denseHeight * 0.12);
+      let clipX = denseMinX - padX;
+      let clipY = denseMinY - padY;
+      let clipWidth = denseWidth + padX * 2;
+      let clipHeight = denseHeight + padY * 2;
+
+      const minClipWidth = Math.min(width, 320);
+      const minClipHeight = Math.min(height, 220);
+      const maxClipWidth = Math.min(width, 380);
+      const maxClipHeight = Math.min(height, 250);
       if (clipWidth < minClipWidth) {
         const delta = minClipWidth - clipWidth;
         clipX -= delta * 0.5;
@@ -424,6 +466,14 @@
         clipY -= delta * 0.5;
         clipHeight = minClipHeight;
       }
+      if (clipWidth > maxClipWidth) {
+        clipX += (clipWidth - maxClipWidth) * 0.5;
+        clipWidth = maxClipWidth;
+      }
+      if (clipHeight > maxClipHeight) {
+        clipY += (clipHeight - maxClipHeight) * 0.5;
+        clipHeight = maxClipHeight;
+      }
 
       clipX = Math.max(0, Math.min(width - 1, clipX));
       clipY = Math.max(0, Math.min(height - 1, clipY));
@@ -433,13 +483,21 @@
       clipHeight = Math.min(height - clipY, clipHeight);
 
       return {
-        visualActivityFrame: 'expanded-flow-focused-clip-v0',
+        visualActivityFrame: 'dense-fluid-activity-clip-v0',
         pointCount: points.length,
+        densePointCount: densePoints.length,
+        densityScore: Number(densestScore.toFixed(3)),
         rawBounds: {
           x: Number(minX.toFixed(2)),
           y: Number(minY.toFixed(2)),
           width: Number(rawWidth.toFixed(2)),
           height: Number(rawHeight.toFixed(2)),
+        },
+        denseBounds: {
+          x: Number(denseMinX.toFixed(2)),
+          y: Number(denseMinY.toFixed(2)),
+          width: Number(denseWidth.toFixed(2)),
+          height: Number(denseHeight.toFixed(2)),
         },
         clip: {
           x: Number(clipX.toFixed(2)),

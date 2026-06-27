@@ -26,6 +26,7 @@ let stderr = '';
 let primaryOutputWritten = false;
 let browserVersion = null;
 let lastTrustworthyState = null;
+let lastVisualEvidence = null;
 const consoleEvents = [];
 
 function summarizeConsoleEvent(event) {
@@ -200,6 +201,8 @@ function measureVisualActivity(buffer) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  const dilatedActivity = new Uint8Array(png.width * png.height);
+  const dilationRadius = 7;
   for (let y = 0; y < png.height; y += 1) {
     const row = png.rows[y];
     for (let x = 0; x < png.width; x += 1) {
@@ -213,10 +216,24 @@ function measureVisualActivity(buffer) {
       minY = Math.min(minY, y);
       maxX = Math.max(maxX, x);
       maxY = Math.max(maxY, y);
+      for (let dy = -dilationRadius; dy <= dilationRadius; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= png.height) continue;
+        for (let dx = -dilationRadius; dx <= dilationRadius; dx += 1) {
+          if (dx * dx + dy * dy > dilationRadius * dilationRadius) continue;
+          const xx = x + dx;
+          if (xx < 0 || xx >= png.width) continue;
+          dilatedActivity[yy * png.width + xx] = 1;
+        }
+      }
     }
   }
 
   const totalPixels = png.width * png.height;
+  let dilatedActivityCount = 0;
+  for (const pixel of dilatedActivity) {
+    if (pixel) dilatedActivityCount += 1;
+  }
   const hasActivity = interestingPixelCount > 0;
   const activityBounds = hasActivity
     ? {
@@ -232,6 +249,10 @@ function measureVisualActivity(buffer) {
     height: png.height,
     interestingPixelCount,
     interestingPixelRatio: interestingPixelCount / Math.max(1, totalPixels),
+    filledActivityRatio: interestingPixelCount / Math.max(1, totalPixels),
+    dilatedActivityCount,
+    dilationRadius,
+    dilatedActivityRatio: dilatedActivityCount / Math.max(1, totalPixels),
     activityBounds,
     activityBoundsAreaRatio: activityBoundsArea / Math.max(1, totalPixels),
     activityBoundsWidthRatio: (activityBounds?.width || 0) / Math.max(1, png.width),
@@ -452,7 +473,7 @@ async function run() {
 
     phase = 'capture_screenshot';
     const visualFrame = await evaluate(ws, `window.__lermsFingerJuiceVisualFrameForWitness && window.__lermsFingerJuiceVisualFrameForWitness()`);
-    assert.equal(visualFrame?.visualActivityFrame, 'expanded-flow-focused-clip-v0', 'route did not expose focused expanded-flow visual frame');
+    assert.equal(visualFrame?.visualActivityFrame, 'dense-fluid-activity-clip-v0', 'route did not expose dense fluid visual frame');
     assert.ok(visualFrame.clip?.width > 0 && visualFrame.clip?.height > 0, 'focused visual frame missing valid clip');
     await evaluate(ws, `window.__lermsFingerJuiceRenderForWitness && window.__lermsFingerJuiceRenderForWitness()`);
     const captureSurface = await evaluate(ws, `(() => {
@@ -474,13 +495,21 @@ async function run() {
     assert.ok(png.length > 4096, 'screenshot is too small to be credible visual evidence');
     assert.equal(png.readUInt32BE(0), 0x89504e47, 'screenshot is not PNG');
     const visualActivityMetrics = measureVisualActivity(png);
-    assert.ok(visualActivityMetrics.interestingPixelCount > 256, 'focused screenshot lacks measurable juice activity');
-    assert.ok(visualActivityMetrics.activityBoundsAreaRatio >= 0.24, 'focused screenshot still frames activity too small');
-    assert.ok(visualActivityMetrics.activityBoundsWidthRatio >= 0.54, 'focused screenshot does not use enough width for activity');
-    assert.ok(visualActivityMetrics.activityBoundsHeightRatio >= 0.24, 'focused screenshot does not use enough height for activity');
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, png);
     primaryOutputWritten = true;
+    lastVisualEvidence = {
+      screenshot: out,
+      visualFrame,
+      captureSurface,
+      visualActivityMetrics,
+    };
+    assert.ok(visualActivityMetrics.interestingPixelCount > 256, 'focused screenshot lacks measurable juice activity');
+    assert.ok(visualActivityMetrics.filledActivityRatio >= 0.22, 'focused screenshot is still mostly empty colored-fluid space');
+    assert.ok(visualActivityMetrics.dilatedActivityRatio >= 0.48, 'focused screenshot does not have enough local fluid occupancy after dilation');
+    assert.ok(visualActivityMetrics.activityBoundsAreaRatio >= 0.42, 'focused screenshot still frames activity too small');
+    assert.ok(visualActivityMetrics.activityBoundsWidthRatio >= 0.68, 'focused screenshot does not use enough width for activity');
+    assert.ok(visualActivityMetrics.activityBoundsHeightRatio >= 0.48, 'focused screenshot does not use enough height for activity');
 
     phase = 'complete';
     writeReport({
@@ -555,6 +584,7 @@ async function run() {
     writeReport({
       error: error.message,
       lastTrustworthyState,
+      lastVisualEvidence,
     });
     throw error;
   } finally {
