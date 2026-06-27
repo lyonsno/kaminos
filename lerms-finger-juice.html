@@ -68,7 +68,7 @@
     const lerms = [
       { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
       { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
-      { id: 'yellow-lerm-1', position: [0.08, -0.09, 1.46], radius: 0.18, mass: 1.0 },
+      { id: 'yellow-lerm-1', position: [0.02, -0.1, 1.9], radius: 0.2, mass: 1.0 },
     ];
     const goins = [
       { id: 'goin-1', position: [0.0, -0.09, 1.66], radius: 0.24, mass: 2.2 },
@@ -119,6 +119,10 @@
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
     };
     let webgpuFramePending = false;
+    let webgpuAccumulatedSeconds = 0;
+    let webgpuLastReadbackMs = 0;
+    let webgpuLastSubmittedSteps = 0;
+    const webgpuFrameStepDt = 1 / 120;
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
@@ -180,6 +184,13 @@
         hand_sample_space: emitterPacket.hand_sample_space,
         lerms_world_frame: emitterPacket.lerms_world_frame,
         terrain_frame: emitterPacket.terrain_frame,
+        webgpu_cadence: {
+          pending: webgpuFramePending,
+          accumulated_seconds: Number(webgpuAccumulatedSeconds.toFixed(4)),
+          fixed_step_dt: webgpuFrameStepDt,
+          last_readback_ms: Number(webgpuLastReadbackMs.toFixed(2)),
+          last_submitted_steps: webgpuLastSubmittedSteps,
+        },
       };
     }
 
@@ -396,14 +407,27 @@
 
     let last = performance.now();
     function frame(now) {
-      const dt = Math.min(1 / 30, Math.max(1 / 120, (now - last) / 1000));
+      const rawDt = Math.max(0, (now - last) / 1000);
+      const dt = Math.min(1 / 30, Math.max(1 / 120, rawDt));
       last = now;
       if (routeActive) {
         if (webgpuSolver?.solver_backend === 'webgpu_compute') {
-          if (!webgpuFramePending) {
+          webgpuAccumulatedSeconds += rawDt;
+          if (!webgpuFramePending && webgpuAccumulatedSeconds >= webgpuFrameStepDt) {
+            const submittedSteps = Math.max(1, Math.floor(webgpuAccumulatedSeconds / webgpuFrameStepDt));
+            webgpuAccumulatedSeconds -= submittedSteps * webgpuFrameStepDt;
+            webgpuLastSubmittedSteps = submittedSteps;
             webgpuFramePending = true;
-            webgpuSolver.stepAndRead(2, dt * 0.5).then(state => {
+            const readbackStartedAt = performance.now();
+            webgpuSolver.stepAndRead(submittedSteps, webgpuFrameStepDt).then(state => {
+              webgpuLastReadbackMs = performance.now() - readbackStartedAt;
               webgpuState = state;
+            }).catch(error => {
+              webgpuState = {
+                ...webgpuState,
+                solver_backend: 'webgpu_unavailable',
+                error: error.message,
+              };
             }).finally(() => {
               webgpuFramePending = false;
             });

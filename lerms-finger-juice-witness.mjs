@@ -183,6 +183,28 @@ async function run() {
     await delay(settleMs);
     await waitForRouteHooks(ws);
 
+    phase = 'cadence_probe';
+    const cadenceProbe = await evaluate(ws, `(async () => {
+      for (let i = 0; i < 80; i += 1) {
+        const state = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+        if (state?.solver_backend === 'webgpu_compute') break;
+        await new Promise(resolve => setTimeout(resolve, 125));
+      }
+      const before = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      const after = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+      return {
+        beforeStepCount: before?.stepCount ?? null,
+        afterStepCount: after?.stepCount ?? null,
+        deltaSteps: (after?.stepCount ?? 0) - (before?.stepCount ?? 0),
+        beforeCadence: before?.webgpu_cadence || null,
+        afterCadence: after?.webgpu_cadence || null,
+        solver_backend: after?.solver_backend || null,
+      };
+    })()`);
+    assert.ok(cadenceProbe.solver_backend === 'webgpu_compute', 'cadence probe did not reach WebGPU compute state');
+    assert.ok(cadenceProbe.deltaSteps >= 40, 'WebGPU frame loop dropped elapsed simulation time while readback was pending');
+
     phase = 'read_debug_state';
     const state = await evaluate(ws, `(async () => {
       if (window.__lermsFingerJuiceStepForWitness) {
@@ -252,6 +274,7 @@ async function run() {
       workgroupSize: state.workgroupSize,
       cpuOracle: state.cpuOracle,
       overlapState,
+      cadenceProbe,
       terrainContract: state.terrainContract,
       visualRenderer: state.visualRenderer,
       simulation_authority: state.simulation_authority,
