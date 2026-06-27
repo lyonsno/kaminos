@@ -801,6 +801,8 @@ assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE\s*=\s*
 assert.match(core, /MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-procedural-breakup-bypass-v0'/, 'volume core names the non-bonfire procedural-breakup bypass strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE\s*=\s*'bonfire-symmetric-force-active-v0'/, 'volume core names the active bonfire symmetric-force strategy');
 assert.match(core, /MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-symmetric-force-bypass-v0'/, 'volume core names the non-bonfire symmetric-force bypass strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE\s*=\s*'bonfire-non-wind-force-active-v0'/, 'volume core names the active bonfire non-wind force strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-non-wind-force-bypass-v0'/, 'volume core names the non-bonfire non-wind force bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -830,6 +832,13 @@ assert.match(core, /var symmetricMicroForce = vec2<f32>\(0\.0\)/, 'main-fluid sh
 assert.match(core, /var symmetricShredForce = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric shred force to a bypassed neutral value');
 assert.match(core, /var symmetricFineBreakup = vec2<f32>\(0\.0\)/, 'main-fluid shader initializes symmetric fine-breakup force to a bypassed neutral value');
 assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,420}symmetricDetailForce = bonfireSymmetricLateralForce[\s\S]{0,420}symmetricMicroForce = bonfireSymmetricLateralForce[\s\S]{0,420}symmetricShredForce = bonfireSymmetricLateralForce[\s\S]{0,900}symmetricFineBreakup = bonfireSymmetricLateralForce/, 'main-fluid shader evaluates expensive bonfire symmetric lateral forces only for the bonfire scene');
+assert.match(core, /mainFluidBonfireNonWindForceStrategy/, 'sim-cost ledger records the bonfire non-wind force strategy');
+assert.match(core, /bonfireNonWindForceEvaluationsPerCell/, 'sim-cost ledger records bonfire non-wind force evaluations per cell');
+assert.match(core, /var bonfireZeroMeanFlow = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire zero-mean flow to a bypassed neutral value');
+assert.match(core, /var bonfirePlumeRoll = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire plume roll to a bypassed neutral value');
+assert.match(core, /var bonfireCellRoll = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire cell roll to a bypassed neutral value');
+assert.match(core, /var bonfireLayeredPlumeShear = vec3<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire layered plume shear to a bypassed neutral value');
+assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,700}bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow[\s\S]{0,700}bonfirePlumeRoll = bonfireZeroMeanPlumeRoll[\s\S]{0,700}bonfireCellRoll = bonfireConvectiveCellRoll[\s\S]{0,1600}bonfireLayeredPlumeShear = vec3<f32>/, 'main-fluid shader evaluates bonfire non-wind roll and shear forces only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');

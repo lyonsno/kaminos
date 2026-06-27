@@ -186,6 +186,8 @@ const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedura
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
 const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
+const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
+const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
 function externalEmitterBufferBytes() {
@@ -2181,24 +2183,30 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireNonWindAuthority
     * bonfireCenteringCarrier
     * (0.076 + speed * 0.0120);
-  let bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.23 + microAmount * 0.15 + shredAmount * 0.070 + fireLickAmount * 0.060);
-  let bonfirePlumeRoll = bonfireZeroMeanPlumeRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.24 + microAmount * 0.13 + shredAmount * 0.080 + fireLickAmount * 0.060);
-  let bonfireCellRoll = bonfireConvectiveCellRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.22 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.055);
-  let bonfireLayerShearRadial = max(length(p.xz), 0.025);
-  let bonfireLayerShearDir = p.xz / bonfireLayerShearRadial;
-  let bonfireLayerShearTangent = vec2<f32>(-bonfireLayerShearDir.y, bonfireLayerShearDir.x);
-  let bonfireLayerShearBand = smoothstep(0.12, 0.32, bonfireVisualAboveSource) * (1.0 - smoothstep(1.02, 1.52, bonfireVisualAboveSource));
-  let bonfireLayerShearPhase = bonfireVisualAboveSource * 19.0 + bonfireLayerShearRadial * 12.0 + time * 1.18;
-  let bonfireLayeredPlumeShear2 = (bonfireLayerShearDir * sin(bonfireLayerShearPhase) * 0.64 + bonfireLayerShearTangent * cos(bonfireLayerShearPhase * 0.73 + bonfireLayeredBreakup * 2.0) * 0.52)
-    * bonfireLayerShearBand
-    * bonfireCenteringCarrier
-    * (0.026 + curl * 0.007 + microAmount * 0.004)
-    * (0.62 + bonfireLayeredBreakup * 0.48);
-  let bonfireLayeredPlumeShear = vec3<f32>(
-    bonfireLayeredPlumeShear2.x,
-    -sin(bonfireLayerShearPhase * 0.81) * bonfireLayerShearBand * bonfireCenteringCarrier * 0.010,
-    bonfireLayeredPlumeShear2.y
-  );
+  var bonfireZeroMeanFlow = vec3<f32>(0.0);
+  var bonfirePlumeRoll = vec3<f32>(0.0);
+  var bonfireCellRoll = vec3<f32>(0.0);
+  var bonfireLayeredPlumeShear = vec3<f32>(0.0);
+  if (bonfireScene > 0.5) {
+    bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.23 + microAmount * 0.15 + shredAmount * 0.070 + fireLickAmount * 0.060);
+    bonfirePlumeRoll = bonfireZeroMeanPlumeRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.24 + microAmount * 0.13 + shredAmount * 0.080 + fireLickAmount * 0.060);
+    bonfireCellRoll = bonfireConvectiveCellRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.22 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.055);
+    let bonfireLayerShearRadial = max(length(p.xz), 0.025);
+    let bonfireLayerShearDir = p.xz / bonfireLayerShearRadial;
+    let bonfireLayerShearTangent = vec2<f32>(-bonfireLayerShearDir.y, bonfireLayerShearDir.x);
+    let bonfireLayerShearBand = smoothstep(0.12, 0.32, bonfireVisualAboveSource) * (1.0 - smoothstep(1.02, 1.52, bonfireVisualAboveSource));
+    let bonfireLayerShearPhase = bonfireVisualAboveSource * 19.0 + bonfireLayerShearRadial * 12.0 + time * 1.18;
+    let bonfireLayeredPlumeShear2 = (bonfireLayerShearDir * sin(bonfireLayerShearPhase) * 0.64 + bonfireLayerShearTangent * cos(bonfireLayerShearPhase * 0.73 + bonfireLayeredBreakup * 2.0) * 0.52)
+      * bonfireLayerShearBand
+      * bonfireCenteringCarrier
+      * (0.026 + curl * 0.007 + microAmount * 0.004)
+      * (0.62 + bonfireLayeredBreakup * 0.48);
+    bonfireLayeredPlumeShear = vec3<f32>(
+      bonfireLayeredPlumeShear2.x,
+      -sin(bonfireLayerShearPhase * 0.81) * bonfireLayerShearBand * bonfireCenteringCarrier * 0.010,
+      bonfireLayeredPlumeShear2.y
+    );
+  }
   vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
   vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
   vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
@@ -4018,6 +4026,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireSymmetricForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const mainFluidBonfireNonWindForceStrategy = bonfireCombustionFieldActive
+      ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
+      : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+    const bonfireNonWindForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
     const pressureSourceStrategy = pressureEnabled
       ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
@@ -4056,6 +4068,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireProceduralBreakupEvaluationsPerCell = bonfireProceduralBreakupEvaluationsPerCell;
     state.mainFluidBonfireSymmetricForceStrategy = mainFluidBonfireSymmetricForceStrategy;
     state.bonfireSymmetricForceEvaluationsPerCell = bonfireSymmetricForceEvaluationsPerCell;
+    state.mainFluidBonfireNonWindForceStrategy = mainFluidBonfireNonWindForceStrategy;
+    state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
     state.fireLickBreakupEnabled = fireLickBreakupEnabled;
     state.fireLickBreakupEvaluationsPerCell = fireLickBreakupEvaluationsPerCell;
     state.fireLickOperatorGain = fireLickOperatorGain;
@@ -4086,6 +4100,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireProceduralBreakupEvaluationsPerCell,
       mainFluidBonfireSymmetricForceStrategy,
       bonfireSymmetricForceEvaluationsPerCell,
+      mainFluidBonfireNonWindForceStrategy,
+      bonfireNonWindForceEvaluationsPerCell,
       fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain,
@@ -5247,6 +5263,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
         mainFluidBonfireSymmetricForceStrategy: state.mainFluidBonfireSymmetricForceStrategy,
         bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
+        mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
+        bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
         fireLickBreakupEnabled: state.fireLickBreakupEnabled,
         fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
         fireLickOperatorGain: state.fireLickOperatorGain,
@@ -5533,6 +5551,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireProceduralBreakupEvaluationsPerCell: state.bonfireProceduralBreakupEvaluationsPerCell,
       mainFluidBonfireSymmetricForceStrategy: state.mainFluidBonfireSymmetricForceStrategy,
       bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
+      mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
+      bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
       fireLickBreakupEnabled: state.fireLickBreakupEnabled,
       fireLickBreakupEvaluationsPerCell: state.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: state.fireLickOperatorGain,
