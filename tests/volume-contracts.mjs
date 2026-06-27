@@ -795,6 +795,8 @@ assert.match(core, /PRESSURE_SOURCE_STRATEGY_DISABLED/, 'volume core names disab
 assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP\s*=\s*'main-fluid-fire-lick-breakup-v0'/, 'volume core names the active fire-lick breakup main-kernel strategy');
 assert.match(core, /MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS\s*=\s*'main-fluid-zero-fire-lick-bypass-v0'/, 'volume core names the zero-fire-lick bypass main-kernel strategy');
 assert.match(core, /MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY\s*=\s*'main-fluid-local-projection-staged-pressure-only-v0'/, 'volume core names staged-only main-fluid local projection strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE\s*=\s*'bonfire-combustion-field-active-v0'/, 'volume core names the active bonfire combustion-field kernel strategy');
+assert.match(core, /MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS\s*=\s*'non-bonfire-combustion-field-bypass-v0'/, 'volume core names the non-bonfire combustion-field bypass strategy');
 assert.match(core, /FIRE_LICK_BREAKUP_BYPASS_THRESHOLD/, 'volume core names the zero-fire-lick bypass threshold');
 assert.match(core, /updateSimCostLedger/, 'volume core keeps a structural sim-cost ledger for high-grid throughput probes');
 assert.match(core, /simCostLedger/, 'debug state exposes the sim-cost ledger');
@@ -805,6 +807,11 @@ assert.match(core, /mainFluidLocalProjectionDivergenceEvaluationsPerCell/, 'sim-
 assert.match(core, /fireLickBreakupEvaluationsPerCell/, 'sim-cost ledger records fire-lick breakup evaluations per cell');
 assert.match(core, /fireLickBreakupEnabled/, 'main-fluid shader makes zero-fire-lick breakup bypass explicit');
 assert.match(core, /fireLickAshCarry/, 'main-fluid shader preserves zero-lick ash carry without paying breakup evaluation');
+assert.match(core, /mainFluidBonfireCombustionFieldStrategy/, 'sim-cost ledger records the bonfire combustion-field strategy');
+assert.match(core, /bonfireCombustionFieldEvaluationsPerCell/, 'sim-cost ledger records bonfire combustion-field evaluations per cell');
+assert.match(core, /var bonfireSmoothCombustion = vec4<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire smooth-combustion field to a bypassed neutral value');
+assert.match(core, /var bonfirePacketCombustion = vec4<f32>\(0\.0\)/, 'main-fluid shader initializes bonfire packet-combustion field to a bypassed neutral value');
+assert.match(core, /if\s*\(bonfireScene > 0\.5\)\s*\{[\s\S]{0,320}bonfireCombustionCellField[\s\S]{0,320}bonfireCombustionPacketField[\s\S]{0,120}\}/, 'main-fluid shader evaluates expensive bonfire combustion fields only for the bonfire scene');
 assert.doesNotMatch(core, /let\s+projectionCorrection\s*=\s*pressureProjectionCorrection\(cellI,\s*effectiveProjection\)/, 'main fluid kernel does not keep the old local divergence projection heuristic active');
 assert.match(core, /let\s+projectionCorrection\s*=\s*vec3<f32>\(0\.0\)/, 'main fluid kernel bypasses local projection and relies on staged pressure projection');
 assert.match(core, /simPassesPerFrame/, 'sim-cost ledger records full-grid sim pass count');

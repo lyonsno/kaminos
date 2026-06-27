@@ -31,6 +31,8 @@ const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
+const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-field-active-v0';
+const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const FALSE_CLOSURE_LABELS = [
   'wrong-fallback-route',
   'stale-default-config',
@@ -661,7 +663,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -688,6 +690,31 @@ function validateWitness(run, witness, effective) {
     throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown main fluid local projection strategy', {
       scenarioId: run.id,
       mainFluidLocalProjectionStrategy: ledger.mainFluidLocalProjectionStrategy,
+      ledger,
+    });
+  }
+  if (![MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE, MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS].includes(ledger.mainFluidBonfireCombustionFieldStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown bonfire combustion-field strategy', {
+      scenarioId: run.id,
+      mainFluidBonfireCombustionFieldStrategy: ledger.mainFluidBonfireCombustionFieldStrategy,
+      ledger,
+    });
+  }
+  const expectedBonfireCombustionStrategy = effective.volumeScene === 'bonfire_plume'
+    ? MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE
+    : MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS;
+  const expectedBonfireCombustionEvaluations = effective.volumeScene === 'bonfire_plume' ? 2 : 0;
+  if (
+    ledger.mainFluidBonfireCombustionFieldStrategy !== expectedBonfireCombustionStrategy ||
+    Number(ledger.bonfireCombustionFieldEvaluationsPerCell) !== expectedBonfireCombustionEvaluations
+  ) {
+    throwSweepFailure('stale-default-config', 'validation', 'simulation cost ledger bonfire combustion-field cost does not match the effective scene', {
+      scenarioId: run.id,
+      volumeScene: effective.volumeScene,
+      mainFluidBonfireCombustionFieldStrategy: ledger.mainFluidBonfireCombustionFieldStrategy,
+      bonfireCombustionFieldEvaluationsPerCell: ledger.bonfireCombustionFieldEvaluationsPerCell,
+      expectedBonfireCombustionStrategy,
+      expectedBonfireCombustionEvaluations,
       ledger,
     });
   }
@@ -869,6 +896,8 @@ for (let i = 0; i < runs.length; i += 1) {
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: simCostLedger?.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
       fireLickBreakupEvaluationsPerCell: simCostLedger?.fireLickBreakupEvaluationsPerCell,
       fireLickOperatorGain: simCostLedger?.fireLickOperatorGain,
+      mainFluidBonfireCombustionFieldStrategy: simCostLedger?.mainFluidBonfireCombustionFieldStrategy,
+      bonfireCombustionFieldEvaluationsPerCell: simCostLedger?.bonfireCombustionFieldEvaluationsPerCell,
       pressureDivergencePasses: simCostLedger?.pressureDivergencePasses,
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
