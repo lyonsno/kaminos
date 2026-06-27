@@ -22,6 +22,9 @@ assert.match(witness, /selectedTake/, 'live witness records the selected take in
 assert.match(witness, /motion take shelf did not select generated take/, 'live witness rejects missing generated-take selection');
 assert.match(witness, /current-view export did not record selected take/, 'live witness rejects exports without selected take evidence');
 assert.match(witness, /sourceGhostAtExportStart/, 'live witness records source ghost visibility at current-view export start');
+assert.match(witness, /source mode overlay did not produce x-ray source ghost evidence/, 'live witness rejects overlay mode without x-ray overlay evidence');
+assert.match(witness, /source ghost overlay display bounds are not credible/, 'live witness rejects overlay ghosts that collapse into an illegible display span');
+assert.match(witness, /exportTray/, 'live witness records the motion panel export tray after current-view export');
 assert.match(witness, /Page\.captureScreenshot/, 'live witness captures the operator-facing browser viewport');
 assert.match(witness, /writeReport\(\{\s*ok: false/s, 'live witness writes a durable failure report');
 assert.doesNotMatch(witness, /Math\.min\([^)]*frameCount/, 'live witness must not silently cap requested frame count');

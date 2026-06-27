@@ -403,6 +403,9 @@ async function exportCurrentViewFilmstrip(ws) {
     const exported = await window.exportMotionPanelCurrentViewFilmstrip();
     if (!exported?.dataUrl?.startsWith('data:image/png;base64,')) throw new Error('current-view export did not return a PNG data URL');
     const sourceModeAfterExport = document.getElementById('motion-panel-source-ghost-mode')?.value || null;
+    const exportTray = typeof window.kaminosMotionPanelExportTrayDebugState === 'function'
+      ? window.kaminosMotionPanelExportTrayDebugState()
+      : null;
     return {
       schema: 'kaminos.motion-panel-live-current-view-export.v0',
       status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
@@ -426,6 +429,8 @@ async function exportCurrentViewFilmstrip(ws) {
       columns: exported.columns || null,
       rows: exported.rows || null,
       downloadName: exported.downloadName || null,
+      exportRecord: exported.exportRecord || null,
+      exportTray,
       dataUrl: exported.dataUrl,
     };
   })()`, { timeoutMs: 240000 });
@@ -504,6 +509,20 @@ try {
     for (let index = 0; index < frameTotal; index++) {
       capturedFrames.push(await captureFrame(ws, index));
       if (index < frameTotal - 1) await delay(intervalMs);
+    }
+    if (sourceMode === 'overlay') {
+      const overlayFrames = capturedFrames
+        .map(frame => frame.debug?.sourceGhost)
+        .filter(sourceGhost => sourceGhost?.mode === 'overlay');
+      if (!overlayFrames.some(sourceGhost => sourceGhost.visible && sourceGhost.overlayOcclusionMode === 'xray-over-body')) {
+        throw new Error(`source mode overlay did not produce x-ray source ghost evidence: ${JSON.stringify(overlayFrames[0] || null)}`);
+      }
+      if (!overlayFrames.some(sourceGhost => {
+        const span = sourceGhost.displayBounds?.span || [];
+        return Number(span[1]) >= 0.52 && Math.max(Number(span[0]) || 0, Number(span[2]) || 0) >= 0.08;
+      })) {
+        throw new Error(`source ghost overlay display bounds are not credible: ${JSON.stringify(overlayFrames[0]?.displayBounds || null)}`);
+      }
     }
 
     phase = 'composing-filmstrip';

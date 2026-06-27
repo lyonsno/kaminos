@@ -566,6 +566,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
       <div class="field" style="margin-top: 8px;"><span class="field-key">Takes</span><span class="field-val" id="motion-panel-take-count">0</span></div>
       <div id="motion-panel-take-shelf" style="display: flex; flex-direction: column; gap: 5px; margin-top: 6px;"></div>
+      <div class="field" style="margin-top: 8px;"><span class="field-key">Exports</span><span class="field-val" id="motion-panel-export-count">0</span></div>
+      <div id="motion-panel-export-tray" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;"></div>
     </div>
     <div class="panel">
       <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
@@ -4589,16 +4591,32 @@ function sampleMotionServerJointFrame(result, sourceFrame = 0) {
   });
 }
 
+function motionSourceGhostOverlayBase(sourceGhost, rootPosition = null) {
+  const rootX = Number(rootPosition?.x || 0);
+  const rootY = Number(rootPosition?.y || 0);
+  const rootZ = Number(rootPosition?.z || 0);
+  const overlayForwardOffset = 0.18;
+  const overlayLift = 0.035;
+  const base = [
+    rootX,
+    Math.max(0.045, rootY - 0.22 + overlayLift),
+    rootZ + overlayForwardOffset,
+  ];
+  sourceGhost.lastOverlayBase = {
+    schema: 'kaminos.motion-source-ghost-overlay-base.v0',
+    base: base.map(value => Number(value.toFixed(5))),
+    overlayForwardOffset,
+    overlayLift,
+  };
+  return base;
+}
+
 function transformSourceGhostJoint(joint, sourceGhost, mode, rootPosition = null) {
   const sourceRoot = sourceGhost.sourceRoot;
   const basis = sourceGhost.displayBasis;
   const scale = mode === 'overlay' ? sourceGhost.overlayScale : sourceGhost.sidecarScale;
   const base = mode === 'overlay'
-    ? [
-      Number(rootPosition?.x || 0),
-      Math.max(0.04, Number(rootPosition?.y || 0) - 0.18),
-      Number(rootPosition?.z || 0),
-    ]
+    ? motionSourceGhostOverlayBase(sourceGhost, rootPosition)
     : sourceGhost.sidecarOffset;
   return [
     base[0] + ((Number(joint?.[basis.rightAxis]) || 0) - sourceRoot[basis.rightAxis]) * scale,
@@ -4626,6 +4644,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
     transparent: true,
     opacity: motionPanelSourceGhostOpacityFromInputs(),
     depthWrite: false,
+    depthTest: false,
   });
   const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
   lines.name = 'motion-source-ghost-soma77-bones';
@@ -4640,6 +4659,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
     transparent: true,
     opacity: Math.min(0.72, motionPanelSourceGhostOpacityFromInputs() * 1.2),
     depthWrite: false,
+    depthTest: false,
   });
   const points = new THREE.Points(pointGeometry, pointMaterial);
   points.name = 'motion-source-ghost-soma77-joints';
@@ -4663,7 +4683,7 @@ function createMotionSourceGhostVisual(result, options = {}) {
     displayBasis,
     sourceRoot,
     sidecarScale,
-    overlayScale: sidecarScale * 0.48,
+    overlayScale: sidecarScale * 0.66,
     sidecarOffset: [-1.18, 0.015, 0.05],
     mode: options.mode || motionPanelSourceGhostModeFromInputs(),
     opacity: options.opacity ?? motionPanelSourceGhostOpacityFromInputs(),
@@ -4698,6 +4718,10 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
   sourceGhost.group.visible = jointCount > 0;
   sourceGhost.lines.material.opacity = opacity;
   sourceGhost.points.material.opacity = Math.min(0.72, opacity * 1.2);
+  sourceGhost.lines.material.depthTest = mode !== 'overlay';
+  sourceGhost.points.material.depthTest = mode !== 'overlay';
+  sourceGhost.lines.renderOrder = mode === 'overlay' ? 40 : 12;
+  sourceGhost.points.renderOrder = mode === 'overlay' ? 41 : 13;
   const displayMin = [Infinity, Infinity, Infinity];
   const displayMax = [-Infinity, -Infinity, -Infinity];
   const noteDisplayPoint = point => {
@@ -4727,6 +4751,12 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
   const orbSourceFrame = Number(options.orbSourceFrame);
   const frameNumber = Number(sourceFrame) || 0;
   const sourceFrameSharedWithOrb = Number.isFinite(orbSourceFrame) && Math.abs(frameNumber - orbSourceFrame) < 0.0001;
+  const displayBounds = {
+    min: displayMin.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
+    max: displayMax.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
+    span: displayMax.map((value, axis) => Number(((Number.isFinite(value) ? value : 0) - (Number.isFinite(displayMin[axis]) ? displayMin[axis] : 0)).toFixed(5))),
+  };
+  const displayCenter = displayBounds.min.map((value, axis) => Number(((value + displayBounds.max[axis]) * 0.5).toFixed(5)));
   const debug = {
     schema: 'kaminos.motion-source-ghost.v0',
     available: true,
@@ -4752,11 +4782,11 @@ function updateMotionSourceGhostFrame(sourceGhost, result, sourceFrame = 0, opti
     pointsObjectName: sourceGhost.points.name,
     sidecarScale: Number(sourceGhost.sidecarScale.toFixed(5)),
     overlayScale: Number(sourceGhost.overlayScale.toFixed(5)),
-    displayBounds: {
-      min: displayMin.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
-      max: displayMax.map(value => Number((Number.isFinite(value) ? value : 0).toFixed(5))),
-      span: displayMax.map((value, axis) => Number(((Number.isFinite(value) ? value : 0) - (Number.isFinite(displayMin[axis]) ? displayMin[axis] : 0)).toFixed(5))),
-    },
+    overlayBase: sourceGhost.lastOverlayBase,
+    overlayOcclusionMode: mode === 'overlay' ? 'xray-over-body' : 'sidecar-scene-depth',
+    materialDepthTest: !!sourceGhost.lines.material.depthTest,
+    displayBounds,
+    displayCenter,
   };
   sourceGhost.lastDebug = debug;
   return debug;
@@ -5327,8 +5357,10 @@ function motionPreviewNumberFromInputs(panelId, legacyId, fallback) {
 }
 
 const motionPanelTakes = [];
+const motionPanelExportTray = [];
 let motionPanelNextTakeId = 1;
 let motionPanelSelectedTakeId = null;
+let motionPanelNextExportId = 1;
 
 function motionPanelTakeMetadata({ clip, sourceResult = null, options = {} }) {
   const createdAt = new Date().toISOString();
@@ -5388,19 +5420,67 @@ function renderMotionPanelTakeShelf() {
   if (!shelf) return;
   shelf.innerHTML = '';
   for (const take of motionPanelTakes.slice().reverse()) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = `btn${take.metadata.id === motionPanelSelectedTakeId ? ' active' : ''}`;
-    row.setAttribute('data-motion-panel-take-preview', take.metadata.id);
-    row.style.textAlign = 'left';
-    row.style.whiteSpace = 'normal';
+    const row = document.createElement('div');
+    row.style.border = `1px solid ${take.metadata.id === motionPanelSelectedTakeId ? '#1976d2' : '#2f2f2f'}`;
+    row.style.background = take.metadata.id === motionPanelSelectedTakeId ? 'rgba(21, 101, 192, 0.14)' : '#202020';
+    row.style.borderRadius = '6px';
+    row.style.padding = '6px';
     row.innerHTML = `
       <span style="display: block; color: #ddd;">${escapeHtml(take.metadata.label)}</span>
       <span style="display: block; color: #777; font-size: 10px;">${escapeHtml(take.metadata.clipId)} · ${take.metadata.frameCount}f · ${escapeHtml(take.metadata.sourceModel || take.metadata.sourceFormat || 'motion')}</span>
+      <span style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
+        <button class="btn${take.metadata.id === motionPanelSelectedTakeId ? ' active' : ''}" data-motion-panel-take-current="${escapeHtml(take.metadata.id)}" type="button">Current</button>
+        <button class="btn" data-motion-panel-take-preview="${escapeHtml(take.metadata.id)}" type="button">Preview</button>
+        <button class="btn" data-motion-panel-take-rename="${escapeHtml(take.metadata.id)}" type="button">Rename</button>
+        <button class="btn" data-motion-panel-take-delete="${escapeHtml(take.metadata.id)}" type="button">Delete</button>
+      </span>
     `;
-    row.addEventListener('click', () => void previewMotionPanelTake(take.id));
+    row.querySelector('[data-motion-panel-take-current]')?.addEventListener('click', () => selectMotionPanelTake(take.metadata.id));
+    row.querySelector('[data-motion-panel-take-preview]')?.addEventListener('click', () => void previewMotionPanelTake(take.metadata.id));
+    row.querySelector('[data-motion-panel-take-rename]')?.addEventListener('click', () => {
+      const label = window.prompt?.('Rename motion take', take.metadata.label);
+      if (label != null) renameMotionPanelTake(take.metadata.id, label);
+    });
+    row.querySelector('[data-motion-panel-take-delete]')?.addEventListener('click', () => deleteMotionPanelTake(take.metadata.id));
     shelf.appendChild(row);
   }
+}
+
+function selectMotionPanelTake(takeId) {
+  const take = motionPanelTakes.find(entry => entry.metadata.id === takeId || entry.id === takeId);
+  if (!take) throw new Error(`Motion take "${takeId}" was not found`);
+  motionPanelSelectedTakeId = take.metadata.id;
+  renderMotionPanelTakeShelf();
+  return motionPanelSelectedTakeEvidence();
+}
+
+function renameMotionPanelTake(takeId, label) {
+  const take = motionPanelTakes.find(entry => entry.metadata.id === takeId || entry.id === takeId);
+  if (!take) throw new Error(`Motion take "${takeId}" was not found`);
+  const nextLabel = String(label || '').trim();
+  if (!nextLabel) return motionPanelSelectedTakeEvidence();
+  take.metadata.label = nextLabel;
+  take.metadata.renamedAt = new Date().toISOString();
+  renderMotionPanelTakeShelf();
+  return {
+    schema: 'kaminos.motion-panel-take-rename.v0',
+    take: take.metadata,
+  };
+}
+
+function deleteMotionPanelTake(takeId) {
+  const index = motionPanelTakes.findIndex(entry => entry.metadata.id === takeId || entry.id === takeId);
+  if (index < 0) throw new Error(`Motion take "${takeId}" was not found`);
+  const [deleted] = motionPanelTakes.splice(index, 1);
+  if (motionPanelSelectedTakeId === deleted.metadata.id) {
+    motionPanelSelectedTakeId = motionPanelTakes[Math.max(0, index - 1)]?.metadata?.id || motionPanelTakes[0]?.metadata?.id || null;
+  }
+  renderMotionPanelTakeShelf();
+  return {
+    schema: 'kaminos.motion-panel-take-delete.v0',
+    deletedTakeId: deleted.metadata.id,
+    selectedTake: motionPanelSelectedTakeEvidence(),
+  };
 }
 
 function recordMotionPanelTake({ clip, sourceResult: result, options = {} }) {
@@ -5419,7 +5499,7 @@ function recordMotionPanelTake({ clip, sourceResult: result, options = {} }) {
 async function previewMotionPanelTake(takeId) {
   const take = motionPanelTakes.find(entry => entry.metadata.id === takeId || entry.id === takeId);
   if (!take) throw new Error(`Motion take "${takeId}" was not found`);
-  motionPanelSelectedTakeId = take.metadata.id;
+  selectMotionPanelTake(take.metadata.id);
   const state = await createGeneratedPoseTemporalScene({
     force: true,
     generatedInput: take.clip,
@@ -5434,6 +5514,67 @@ async function previewMotionPanelTake(takeId) {
   };
 }
 
+function renderMotionPanelExportTray() {
+  const tray = document.getElementById('motion-panel-export-tray');
+  const count = document.getElementById('motion-panel-export-count');
+  if (count) count.textContent = String(motionPanelExportTray.length);
+  if (!tray) return;
+  tray.innerHTML = '';
+  for (const entry of motionPanelExportTray.slice().reverse()) {
+    const row = document.createElement('div');
+    row.style.border = '1px solid #2f2f2f';
+    row.style.background = '#202020';
+    row.style.borderRadius = '6px';
+    row.style.padding = '6px';
+    row.innerHTML = `
+      <img src="${entry.dataUrl}" alt="" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 4px; border: 1px solid #333; background: #050505;">
+      <span style="display: block; color: #ddd; margin-top: 5px;">${escapeHtml(entry.label)}</span>
+      <span style="display: block; color: #777; font-size: 10px;">${entry.frameCount}f · ${entry.width}x${entry.height} · ${escapeHtml(entry.referenceMode)}</span>
+      <button class="btn" data-motion-panel-export-download="${escapeHtml(entry.id)}" type="button">Download</button>
+    `;
+    row.querySelector('[data-motion-panel-export-download]')?.addEventListener('click', () => downloadMotionPanelExport(entry.id));
+    tray.appendChild(row);
+  }
+}
+
+function downloadMotionPanelExport(exportId) {
+  const entry = motionPanelExportTray.find(item => item.id === exportId);
+  if (!entry) throw new Error(`Motion export "${exportId}" was not found`);
+  const a = document.createElement('a');
+  a.href = entry.dataUrl;
+  a.download = entry.downloadName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return entry;
+}
+
+function recordMotionPanelExport(result) {
+  const selectedTake = result.selectedTake || motionPanelSelectedTakeEvidence();
+  const entry = {
+    schema: 'kaminos.motion-panel-export-tray-entry.v0',
+    id: `motion_export_${String(motionPanelNextExportId++).padStart(3, '0')}`,
+    label: selectedTake?.label || result.prompt || 'Motion Export',
+    prompt: result.prompt || null,
+    selectedTake,
+    referenceMode: result.referenceMode || 'current',
+    effectiveReferenceMode: result.effectiveReferenceMode || null,
+    frameCount: result.frameCount || 0,
+    width: result.width || 0,
+    height: result.height || 0,
+    downloadName: result.downloadName,
+    dataUrl: result.dataUrl,
+    createdAt: new Date().toISOString(),
+  };
+  motionPanelExportTray.push(entry);
+  renderMotionPanelExportTray();
+  const { dataUrl, ...metadata } = entry;
+  return {
+    ...metadata,
+    hasDataUrl: !!dataUrl,
+  };
+}
+
 window.kaminosMotionPanelTakeShelfDebugState = function() {
   return {
     schema: 'kaminos.motion-panel-take-shelf.v0',
@@ -5441,6 +5582,17 @@ window.kaminosMotionPanelTakeShelfDebugState = function() {
     selectedTakeId: motionPanelSelectedTakeId,
     selectedTake: motionPanelSelectedTakeEvidence(),
     takes: motionPanelTakes.map(take => take.metadata),
+  };
+};
+
+window.kaminosMotionPanelExportTrayDebugState = function() {
+  return {
+    schema: 'kaminos.motion-panel-export-tray.v0',
+    exportCount: motionPanelExportTray.length,
+    exports: motionPanelExportTray.map(({ dataUrl, ...entry }) => ({
+      ...entry,
+      hasDataUrl: !!dataUrl,
+    })),
   };
 };
 
@@ -5694,6 +5846,7 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       dataUrl,
       downloadName: a.download,
     };
+    result.exportRecord = recordMotionPanelExport(result);
     window.__kaminosMotionPanelLastCurrentViewExport = result;
     setMotionPanelTemporalStatus(`Exported ${frames.length} current-view frame${frames.length === 1 ? '' : 's'}`, '#66bb6a');
     return result;

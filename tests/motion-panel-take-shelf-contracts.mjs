@@ -11,8 +11,17 @@ assert.match(index, /function motionPanelTakeMetadata/, 'take shelf extracts com
 assert.match(index, /function recordMotionPanelTake/, 'generated and fixture previews record takes');
 assert.match(index, /function renderMotionPanelTakeShelf/, 'take shelf renders the current take list');
 assert.match(index, /function previewMotionPanelTake/, 'take shelf can re-preview prior generated takes');
+assert.match(index, /function renameMotionPanelTake/, 'take shelf can rename a generated take');
+assert.match(index, /function deleteMotionPanelTake/, 'take shelf can delete a generated take');
+assert.match(index, /function selectMotionPanelTake/, 'take shelf has explicit current-take selection');
 assert.match(index, /function motionPanelSelectedTakeEvidence/, 'export can identify the selected take');
 assert.match(index, /window\.kaminosMotionPanelTakeShelfDebugState/, 'take shelf exposes debug state for smoke automation');
+assert.match(index, /window\.kaminosMotionPanelExportTrayDebugState/, 'motion panel exposes local export tray debug state');
 assert.match(index, /recordMotionPanelTake\(\{\s*clip,\s*sourceResult: result/s, 'preview bridge records generated server results as takes');
 assert.match(index, /data-motion-panel-take-preview/, 'take shelf rows expose a re-preview action');
+assert.match(index, /data-motion-panel-take-current/, 'take shelf rows expose an explicit current-take action');
+assert.match(index, /data-motion-panel-take-rename/, 'take shelf rows expose a rename action');
+assert.match(index, /data-motion-panel-take-delete/, 'take shelf rows expose a delete action');
+assert.match(index, /id="motion-panel-export-tray"/, 'motion panel exposes a local export tray');
+assert.match(index, /recordMotionPanelExport\(/, 'current-view exports are staged into the local export tray');
 assert.match(index, /selectedTake: motionPanelSelectedTakeEvidence\(\)/, 'current-view export records selected take evidence');
