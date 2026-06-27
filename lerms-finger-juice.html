@@ -170,10 +170,15 @@
     let webgpuLastSubmittedSteps = 0;
     let webgpuSubmittedStepsTotal = 0;
     let webgpuRenderFrameCount = 0;
+    let liveReadbackRequestedCount = 0;
+    let liveReadbackCompletedCount = 0;
+    let liveReadbackSkippedCount = 0;
+    let liveReadbackCpuOracleMode = null;
     let witnessCaptureFrozen = false;
     let witnessFrozenCaptureState = null;
     const webgpuFrameStepDt = 1 / 120;
     const webgpuReadbackPeriod = 0.55;
+    const liveReadbackContract = 'live_readback_decoupled_v0';
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
@@ -283,6 +288,11 @@
           last_submitted_steps: webgpuLastSubmittedSteps,
           submitted_steps_total: webgpuSubmittedStepsTotal,
           render_frame_count: webgpuRenderFrameCount,
+          live_readback_contract: liveReadbackContract,
+          live_readback_requested_count: liveReadbackRequestedCount,
+          live_readback_completed_count: liveReadbackCompletedCount,
+          live_readback_skipped_count: liveReadbackSkippedCount,
+          last_cpu_oracle_mode: liveReadbackCpuOracleMode || webgpuState?.cpuOracleMode || null,
         },
       };
     }
@@ -306,7 +316,11 @@
       const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
       const safeDt = Math.max(1 / 240, Math.min(1 / 20, Number(dt) || 1 / 60));
       if (routeActive && webgpuSolver?.solver_backend === 'webgpu_compute') {
-        const state = await webgpuSolver.stepAndRead(safeSteps, safeDt);
+        const state = await webgpuSolver.stepAndRead(safeSteps, safeDt, {
+          cpuOracle: true,
+          reason: 'witness_forced_readback',
+        });
+        liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
         webgpuState = {
           ...state,
           render_backend: webgpuState.render_backend,
@@ -810,25 +824,38 @@
           }
           if (!webgpuReadbackPending && webgpuReadbackAccumulatedSeconds >= webgpuReadbackPeriod) {
             webgpuReadbackAccumulatedSeconds = 0;
-            webgpuReadbackPending = true;
-            const readbackStartedAt = performance.now();
-            webgpuSolver.stepAndRead(0, webgpuFrameStepDt).then(state => {
-              webgpuLastReadbackMs = performance.now() - readbackStartedAt;
-              webgpuState = {
-                ...state,
-                render_backend: webgpuState.render_backend,
-                renderRoute: webgpuState.renderRoute,
-                renderShaderRoute: webgpuState.renderShaderRoute,
-              };
-            }).catch(error => {
-              webgpuState = {
-                ...webgpuState,
-                solver_backend: 'webgpu_unavailable',
-                error: error.message,
-              };
-            }).finally(() => {
-              webgpuReadbackPending = false;
-            });
+            liveReadbackRequestedCount += 1;
+            if (webgpuFramePending) {
+              liveReadbackSkippedCount += 1;
+              liveReadbackCpuOracleMode = 'skip_cpu_oracle_live_readback_v0';
+            } else {
+              webgpuReadbackPending = true;
+              const readbackStartedAt = performance.now();
+              const previousCpuOracle = webgpuState.cpuOracle || null;
+              webgpuSolver.stepAndRead(0, webgpuFrameStepDt, {
+                cpuOracle: false,
+                reason: 'live_animation_debug_readback',
+              }).then(state => {
+                webgpuLastReadbackMs = performance.now() - readbackStartedAt;
+                liveReadbackCompletedCount += 1;
+                liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
+                webgpuState = {
+                  ...state,
+                  render_backend: webgpuState.render_backend,
+                  renderRoute: webgpuState.renderRoute,
+                  renderShaderRoute: webgpuState.renderShaderRoute,
+                  cpuOracle: state.cpuOracle || previousCpuOracle,
+                };
+              }).catch(error => {
+                webgpuState = {
+                  ...webgpuState,
+                  solver_backend: 'webgpu_unavailable',
+                  error: error.message,
+                };
+              }).finally(() => {
+                webgpuReadbackPending = false;
+              });
+            }
           }
         } else {
           for (let i = 0; i < 2; i += 1) prototype.step(dt * 0.5);

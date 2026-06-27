@@ -116,6 +116,8 @@ assert.match(webgpuCoreSource, /sourceDiagnostics/, 'WebGPU summaries expose sou
 assert.match(webgpuCoreSource, /emitterDiagnostics/, 'WebGPU summaries expose live emitter diagnostics');
 assert.match(webgpuCoreSource, /@compute\s+@workgroup_size/, 'WebGPU solver shader contains compute entry point');
 assert.match(webgpuCoreSource, /runCpuFingerJuiceOracle/, 'WebGPU route keeps CPU oracle comparison');
+assert.match(webgpuCoreSource, /cpuOracleMode/, 'WebGPU readback reports whether CPU oracle ran or was skipped');
+assert.match(webgpuCoreSource, /skip_cpu_oracle_live_readback_v0/, 'WebGPU readback can skip CPU oracle for live debug sampling');
 assert.match(webgpuCoreSource, /adapterInfo/, 'WebGPU route records adapter identity');
 
 assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares its smoke route query');
@@ -125,6 +127,9 @@ assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates 
 assert.match(pageSource, /juice-gpu-layer/, 'prototype includes a WebGPU juice overlay canvas');
 assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
 assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
+assert.match(pageSource, /live_readback_decoupled_v0/, 'prototype names the live readback decoupling contract');
+assert.match(pageSource, /liveReadbackSkippedCount/, 'prototype records skipped live debug readbacks instead of blocking frames');
+assert.match(pageSource, /cpuOracle:\s*false/, 'prototype disables CPU oracle during live animation readbacks');
 assert.match(pageSource, /sourceDiagnostics/, 'prototype displays source diagnostics');
 assert.match(pageSource, /emitterDiagnostics/, 'prototype displays live emitter diagnostics');
 assert.match(pageSource, /pressureDensityStats/, 'prototype displays pressure density diagnostics');
@@ -166,6 +171,11 @@ assert.match(witnessSource, /wgsl-spatial-cell-pressure-v0/, 'witness records sp
 assert.match(witnessSource, /wgsl-spatial-viscosity-pressure-v0/, 'witness records deeper fluid pressure/viscosity contract');
 assert.match(witnessSource, /lerms\.juice-hit-event\.v0/, 'witness records LERMS juice-hit-event schema');
 assert.match(witnessSource, /readbackCadence/, 'witness records throttled readback cadence');
+assert.match(witnessSource, /framePacingProbe/, 'witness records requestAnimationFrame pacing over live smoke');
+assert.match(witnessSource, /maxFrameGapMs/, 'witness reports maximum live frame gap');
+assert.match(witnessSource, /p95FrameGapMs/, 'witness reports p95 live frame gap');
+assert.match(witnessSource, /readbackHitchEvents/, 'witness correlates frame hitches with live readback activity');
+assert.match(witnessSource, /live_readback_decoupled_v0/, 'witness requires live readback decoupling identity');
 assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
 assert.match(witnessSource, /cpuOracle/, 'witness records CPU oracle comparison');
 assert.match(witnessSource, /respawnProbeSteps/, 'witness forces a bounded respawn probe');

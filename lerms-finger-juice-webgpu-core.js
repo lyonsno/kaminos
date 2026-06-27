@@ -1541,6 +1541,7 @@ function unavailableSolver(reason, context = {}) {
         shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
         adapterInfo: null,
         reason,
+        cpuOracleMode: 'cpu_oracle_unavailable_v0',
         cpuOracle: context.cpuOracle || null,
       };
     },
@@ -1715,9 +1716,13 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       stepCount,
     };
   }
-  async function runStepAndRead(steps = 1, dt = 1 / 60) {
+  async function runStepAndRead(steps = 1, dt = 1 / 60, readOptions = {}) {
     const safeSteps = Math.max(0, Math.floor(Number(steps) || 0));
     const safeDt = Math.max(1 / 240, Math.min(1 / 20, finite(dt, 1 / 60)));
+    const shouldRunCpuOracle = readOptions.cpuOracle !== false;
+    const cpuOracleMode = shouldRunCpuOracle
+      ? 'cpu_oracle_replayed_v0'
+      : 'skip_cpu_oracle_live_readback_v0';
     const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step-readback' });
     if (safeSteps > 0) {
       encodeCompute(encoder, safeSteps, safeDt, LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE);
@@ -1729,14 +1734,16 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     const result = new Float32Array(readbackBuffer.getMappedRange()).slice();
     readbackBuffer.unmap();
     stepCount += safeSteps;
-    const cpuOracle = runCpuFingerJuiceOracle(data, {
-      steps: stepCount,
-      dt: safeDt,
-      sources: currentSources,
-      emitterPacket: currentEmitterPacket,
-      lerms: options.lerms || [],
-      goins: options.goins || [],
-    });
+    const cpuOracle = shouldRunCpuOracle
+      ? runCpuFingerJuiceOracle(data, {
+          steps: stepCount,
+          dt: safeDt,
+          sources: currentSources,
+          emitterPacket: currentEmitterPacket,
+          lerms: options.lerms || [],
+          goins: options.goins || [],
+        })
+      : null;
     const summary = summarizeWebGPUParticles(result, {
       sources: currentSources,
       emitterPacket: currentEmitterPacket,
@@ -1762,13 +1769,15 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       stepCount,
       readbackParticleFloats: result.length,
       emitterCount: currentEmitterData.emitterCount,
-      cpuOracle: {
+      cpuOracleMode,
+      cpuOracleReason: readOptions.reason || null,
+      cpuOracle: cpuOracle ? {
         solver_backend: cpuOracle.solver_backend,
         particleCount: cpuOracle.particleCount,
         surfaceFlowCount: cpuOracle.surfaceFlowCount,
         maxRangeZ: cpuOracle.maxRangeZ,
         gpuRespawnCount: cpuOracle.gpuRespawnCount,
-      },
+      } : null,
     };
   }
   function setEmitterPacket(emitterPacket = {}) {
@@ -1792,8 +1801,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     operationQueue = operationQueue.then(run, run);
     return operationQueue;
   }
-  function stepAndRead(steps = 1, dt = 1 / 60) {
-    const run = () => runStepAndRead(steps, dt);
+  function stepAndRead(steps = 1, dt = 1 / 60, readOptions = {}) {
+    const run = () => runStepAndRead(steps, dt, readOptions);
     operationQueue = operationQueue.then(run, run);
     return operationQueue;
   }

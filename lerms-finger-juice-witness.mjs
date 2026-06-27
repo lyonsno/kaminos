@@ -546,6 +546,62 @@ async function run() {
     assert.ok(cadenceProbe.deltaRenderFrames > 0, 'direct WebGPU renderer did not produce frames during cadence probe');
     assert.ok(cadenceProbe.readbackCadence >= 0.5, 'readback cadence is not throttled away from the render frame loop');
 
+    phase = 'frame_pacing_probe';
+    const framePacingProbe = await evaluate(ws, `(async () => {
+      const startState = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+      const frameGaps = [];
+      let lastFrame = performance.now();
+      let stopped = false;
+      function percentile(values, ratio) {
+        if (!values.length) return null;
+        const sorted = values.slice().sort((a, b) => a - b);
+        const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)));
+        return sorted[index];
+      }
+      await new Promise(resolve => {
+        const startedAt = performance.now();
+        function tick(now) {
+          frameGaps.push(now - lastFrame);
+          lastFrame = now;
+          if (now - startedAt >= 2600) {
+            stopped = true;
+            resolve();
+            return;
+          }
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+      const endState = window.__lermsFingerJuiceDebug && window.__lermsFingerJuiceDebug();
+      const highGapThresholdMs = 80;
+      const readbackHitchEvents = frameGaps.filter(gap => gap >= highGapThresholdMs);
+      const completedReadbacks = (endState?.webgpu_cadence?.live_readback_completed_count ?? 0)
+        - (startState?.webgpu_cadence?.live_readback_completed_count ?? 0);
+      const skippedReadbacks = (endState?.webgpu_cadence?.live_readback_skipped_count ?? 0)
+        - (startState?.webgpu_cadence?.live_readback_skipped_count ?? 0);
+      return {
+        contract: endState?.webgpu_cadence?.live_readback_contract || null,
+        stopped,
+        sampleCount: frameGaps.length,
+        averageFrameGapMs: frameGaps.length ? frameGaps.reduce((sum, gap) => sum + gap, 0) / frameGaps.length : null,
+        maxFrameGapMs: frameGaps.length ? Math.max(...frameGaps) : null,
+        p95FrameGapMs: percentile(frameGaps, 0.95),
+        p99FrameGapMs: percentile(frameGaps, 0.99),
+        readbackHitchEvents: readbackHitchEvents.map(gap => Number(gap.toFixed(2))),
+        completedReadbacks,
+        skippedReadbacks,
+        startCadence: startState?.webgpu_cadence || null,
+        endCadence: endState?.webgpu_cadence || null,
+      };
+    })()`);
+    assert.equal(framePacingProbe.contract, 'live_readback_decoupled_v0', 'live readback decoupling identity missing');
+    assert.ok(framePacingProbe.sampleCount >= 90, 'frame pacing probe did not sample enough animation frames');
+    assert.ok(framePacingProbe.completedReadbacks + framePacingProbe.skippedReadbacks > 0, 'frame pacing probe did not observe a live readback decision');
+    assert.ok(framePacingProbe.endCadence?.last_cpu_oracle_mode === 'skip_cpu_oracle_live_readback_v0', 'live animation readback did not skip CPU oracle replay');
+    assert.ok(framePacingProbe.p95FrameGapMs <= 42, `p95 frame gap too high: ${framePacingProbe.p95FrameGapMs}`);
+    assert.ok(framePacingProbe.maxFrameGapMs <= 110, `max frame gap too high: ${framePacingProbe.maxFrameGapMs}`);
+    assert.ok(framePacingProbe.readbackHitchEvents.length <= 1, 'live readbacks correlate with repeated high frame gaps');
+
     phase = 'read_debug_state';
     let state = await evaluate(ws, `(async () => {
       if (window.__lermsFingerJuiceStepForWitness) {
@@ -877,6 +933,7 @@ async function run() {
       cpuOracle: state.cpuOracle,
       overlapState,
       cadenceProbe,
+      framePacingProbe,
       preRespawnState,
       respawnProbeSteps,
       captureSurface,
