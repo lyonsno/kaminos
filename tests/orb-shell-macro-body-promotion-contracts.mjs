@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const core = readFileSync(join(root, 'orb-shell-composition-core.js'), 'utf8');
 const witness = readFileSync(join(root, 'orb-shell-composition-witness.mjs'), 'utf8');
+const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 assert.match(core, /MacroPromotedBody/, 'composition module names MacroPromotedBody descriptors');
 assert.match(core, /macro-body-promotion-closure-v0/, 'composition module names the macro-body promotion mode');
@@ -41,6 +42,12 @@ assert.match(witness, /liveMacroSideWallMeshCount/, 'composition witness reports
 assert.match(witness, /liveMacroSideWallMeshIds/, 'composition witness reports promoted live sidewall mesh ids separately from inner-return side planes');
 assert.match(witness, /terminalCapClosureVerdict/, 'composition witness reports terminal cap closure verdict');
 assert.match(witness, /normalWitnessMaterialPolicy/, 'composition witness reports normal material policy');
+assert.match(witness, /--force-ao/, 'composition witness can force AO on or off for material truth-smoke comparisons');
+assert.match(witness, /renderEffectPolicy/, 'composition witness reports effective render-effect policy');
+assert.match(witness, /kaminosAODebugState/, 'composition witness records effective GTAO state');
+assert.match(index, /applyOrbShellCompositionRenderEffectPolicy/, 'orb shell route applies a scoped render-effect policy');
+assert.match(index, /orb_shell_ao/, 'orb shell route exposes an AO override query param');
+assert.match(index, /gtao-disabled-for-topology-truth-smoke/, 'orb shell route defaults GTAO off for topology truth-smoke');
 assert.match(witness, /live-macro-sidewall/, 'composition witness has a focused live sidewall smoke mode');
 assert.match(witness, /live-terminal-caps/, 'composition witness has a focused terminal cap smoke mode');
 assert.match(core, /frameLiveMacroSideWall/, 'composition module can frame the live macro sidewall target');

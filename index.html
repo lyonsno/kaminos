@@ -15882,6 +15882,33 @@ function frameOrbShellCompositionCamera() {
   orbShellCompositionWitness?.frameCamera?.();
 }
 
+function parseBooleanRouteFlag(value, defaultValue = false) {
+  if (value === null || value === undefined) return defaultValue;
+  return ['1', 'true', 'on', 'yes'].includes(String(value).toLowerCase());
+}
+
+function applyOrbShellCompositionRenderEffectPolicy(params) {
+  const ambientOcclusionEnabled = parseBooleanRouteFlag(params.get('orb_shell_ao'), false);
+  const aoToggle = document.getElementById('ao-toggle');
+  const aoControls = document.getElementById('ao-controls');
+  if (aoToggle) aoToggle.checked = ambientOcclusionEnabled;
+  if (aoControls) aoControls.style.display = ambientOcclusionEnabled ? '' : 'none';
+  if (aoIntensity) {
+    aoIntensity.value = ambientOcclusionEnabled ? parseFloat(document.getElementById('ao-intensity').value) : 0;
+  }
+  window.__kaminosOrbShellRenderEffectPolicy = {
+    schema: 'OrbShellRenderEffectPolicy',
+    mode: 'gtao-disabled-for-topology-truth-smoke',
+    ambientOcclusionEnabled,
+    overrideParam: 'orb_shell_ao',
+    reason: ambientOcclusionEnabled
+      ? 'operator-requested-gtao-comparison'
+      : 'screen-space-gtao-creates-through-surface-ghost-bands-on-orb-shell-overlaps',
+  };
+  window._kaminosDirty?.();
+  return window.__kaminosOrbShellRenderEffectPolicy;
+}
+
 function initOrbShellCompositionRoute() {
   const params = new URLSearchParams(window.location.search);
   orbShellCompositionWitness = createKaminosOrbShellCompositionWitness({
@@ -15913,6 +15940,7 @@ function initOrbShellCompositionRoute() {
 
   if (params.get('kaminos_orb_shell_grounding') === '1') {
     document.getElementById('env-loading').style.display = 'none';
+    applyOrbShellCompositionRenderEffectPolicy(params);
     setActiveTab('orb-shell');
     orbShellWitness?.setActive(false);
     orbShellCompositionWitness.setActive(true);
