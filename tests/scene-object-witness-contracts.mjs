@@ -22,6 +22,7 @@ assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
+assert.match(witness, /kiln-image-import-tray/, 'witness supports a kiln image import tray scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
 assert.match(witness, /splat-correction-sidecar/, 'witness supports selected splat correction sidecar persistence');
 assert.match(witness, /splat-correction-mode/, 'witness supports viewport-driven splat correction mode');
@@ -165,6 +166,10 @@ assert.match(witness, /direct splat drop did not upload to the experimental inbo
 assert.match(witness, /direct splat drop did not import from the reloadable inbox route/, 'Direct splat drop witness rejects object URL/local-file imports');
 assert.match(witness, /direct splat drop did not register point-cloud splat/, 'Direct splat drop witness proves ingested PLY imports use the point-cloud preview path');
 assert.match(witness, /direct splat drop did not preserve ingest provenance/, 'Direct splat drop witness proves source/root/stage provenance survives import');
+assert.match(witness, /kiln image import tray did not expose visible panel/, 'Kiln image tray witness requires the visible import panel');
+assert.match(witness, /kiln image import tray did not record fixture import/, 'Kiln image tray witness proves fixture imports enter the ledger');
+assert.match(witness, /kiln image import tray did not preserve fallback route truth/, 'Kiln image tray witness proves requested/effective route mismatch remains visible');
+assert.match(witness, /kiln image import tray screenshot did not include visible ledger rows/, 'Kiln image tray witness rejects nonblankness without visible ledger rows');
 assert.match(witness, /splat correction did not persist to sidecar/, 'Splat correction witness proves corrections are server-persisted');
 assert.match(witness, /splat correction did not reload from sidecar/, 'Splat correction witness proves correction metadata reloads from the asset sidecar');
 assert.match(witness, /splat correction leaked into render truth claim/, 'Splat correction witness rejects claiming correction sidecars as real hybrid rendering');

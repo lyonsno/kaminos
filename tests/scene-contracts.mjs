@@ -201,6 +201,17 @@ assert.match(index, /event\.stopPropagation\(\);[\s\S]*window\.removeSceneObject
 assert.match(index, /if \(event\.target !== button\) return;[\s\S]*event\.preventDefault\(\);[\s\S]*window\.selectSceneObject/, 'row keyboard selection must ignore events from child remove controls');
 assert.match(index, /window\.removeSceneObject\s*=\s*function\(id\)[\s\S]*scene\.remove\(entry\.object\);[\s\S]*disposeObjectTree\(entry\.object\);[\s\S]*setActiveSceneObject\(fallback\?\.id \|\| null\);/, 'removing an object must remove and dispose it while retargeting active selection');
 assert.match(index, /id="append-import-toggle"/, 'Assets tab exposes an explicit append import toggle for authoring multi-object scenes');
+assert.match(index, /id="kiln-image-import-panel"/, 'Assets tab exposes a visible kiln image import tray panel');
+assert.match(index, /id="kiln-image-drop-zone"/, 'kiln image tray has a dedicated image drop target instead of reusing mesh receipt drops');
+assert.match(index, /id="kiln-image-file-input"/, 'kiln image tray has an explicit file input for image artifacts');
+assert.match(index, /id="kiln-image-artifact-list"/, 'kiln image tray renders artifact ledger rows');
+assert.match(index, /function buildKilnImageArtifact\(/, 'browser tray builds kaminos.kiln.image-artifact.v0 artifacts');
+assert.match(index, /function buildKilnImageRouteReceipt\(/, 'browser tray builds kaminos.kiln.image-route-receipt.v0 receipts');
+assert.match(index, /async function importKilnImageFile\(/, 'browser tray ingests real file-shaped image artifacts');
+assert.match(index, /function renderKilnImageImportTray\(/, 'browser tray renders source truth and warnings');
+assert.match(index, /window\.kaminosKilnImageImportTrayDebugState/, 'browser witnesses can inspect the kiln image import ledger without DOM inference');
+assert.match(index, /window\.kaminosImportImageFixture/, 'browser witnesses can create a fixture image import through the same tray path');
+assert.match(index, /fallback_artifact_not_requested_route_truth/, 'visible tray keeps fallback source-truth warnings loud');
 assert.match(index, /function shouldClearSceneForImport\(/, 'direct import paths share one append-aware clear/replace decision');
 assert.match(index, /async function showGLB\(file, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'GLB imports can append instead of replacing the scene');
 assert.match(index, /async function showOBJ\(objFile, mtlFile, options = \{\}\) \{[\s\S]*if \(shouldClearSceneForImport\(options\)\) clearScene\(\);/, 'OBJ imports can append instead of replacing the scene');

@@ -3371,6 +3371,62 @@ async function runSplatAssetInboxScenario(ws) {
   }
 }
 
+async function runKilnImageImportTrayScenario(ws) {
+  phase = 'scenario-kiln-image-import-tray';
+  lastEvidence.kilnImageImportTray = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const tab = document.querySelector('[data-tab="assets"]');
+      if (tab) tab.click();
+      const visible = element => !!element && getComputedStyle(element).display !== 'none' && getComputedStyle(element).visibility !== 'hidden';
+      const panel = document.getElementById('kiln-image-import-panel');
+      const dropZone = document.getElementById('kiln-image-drop-zone');
+      const before = window.kaminosKilnImageImportTrayDebugState?.() || null;
+      if (window.kaminosImportImageFixture) await window.kaminosImportImageFixture();
+      for (let i = 0; i < 80; i++) {
+        const rows = [...document.querySelectorAll('#kiln-image-artifact-list .kiln-image-artifact-row')];
+        if (rows.length) break;
+        await wait(125);
+      }
+      const rows = [...document.querySelectorAll('#kiln-image-artifact-list .kiln-image-artifact-row')];
+      const rowTexts = rows.map(row => row.textContent.trim());
+      const warningTexts = [...document.querySelectorAll('#kiln-image-artifact-list .kiln-image-warning')]
+        .map(node => node.textContent.trim());
+      const after = window.kaminosKilnImageImportTrayDebugState?.() || null;
+      const fallbackArtifact = (after?.artifacts || []).find(artifact => artifact.sourceTruthWarnings?.includes('fallback_artifact_not_requested_route_truth')) || null;
+      return {
+        panelVisible: visible(panel),
+        dropZoneVisible: visible(dropZone),
+        before,
+        after,
+        rowCount: rows.length,
+        rowTexts,
+        warningTexts,
+        fallbackArtifact,
+        sourceTruthText: document.getElementById('kiln-image-artifact-list')?.textContent || '',
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.kilnImageImportTray;
+  if (!evidence.panelVisible || !evidence.dropZoneVisible) {
+    throw new Error(`kiln image import tray did not expose visible panel: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.after || evidence.after.importCount < 1 || !evidence.fallbackArtifact) {
+    throw new Error(`kiln image import tray did not record fixture import: ${JSON.stringify(evidence)}`);
+  }
+  const receipt = evidence.fallbackArtifact.routeReceipt || {};
+  if (receipt.requestedRoute !== 'openai_api'
+      || receipt.effectiveRoute !== 'fixture'
+      || receipt.fallbackReason !== 'openai_api_unconfigured'
+      || !evidence.warningTexts.includes('fallback_artifact_not_requested_route_truth')) {
+    throw new Error(`kiln image import tray did not preserve fallback route truth: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.rowCount < 1 || !evidence.sourceTruthText.includes('openai_api -> fixture')) {
+    throw new Error(`kiln image import tray screenshot did not include visible ledger rows: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSplatDirectDropIngestScenario(ws) {
   phase = 'scenario-splat-direct-drop-ingest';
   lastEvidence.splatDirectDropIngest = await evaluate(ws, `
@@ -4144,6 +4200,8 @@ try {
     await runRealSavedSplatCropVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-inbox') {
     await runSplatAssetInboxScenario(ws);
+  } else if (scenario === 'kiln-image-import-tray') {
+    await runKilnImageImportTrayScenario(ws);
   } else if (scenario === 'splat-direct-drop-ingest') {
     await runSplatDirectDropIngestScenario(ws);
   } else if (scenario === 'splat-correction-sidecar') {

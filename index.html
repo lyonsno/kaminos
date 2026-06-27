@@ -155,6 +155,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
 .scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
 .scene-object-empty { font-size: 11px; color: #555; }
+.kiln-image-drop-zone { border: 1px dashed #3a3a3a; border-radius: 8px; padding: 12px; color: #777; background: #191919; cursor: pointer; font-size: 11px; text-align: center; transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.kiln-image-drop-zone:hover, .kiln-image-drop-zone.dragover { border-color: #2f67c7; background: #172235; color: #d8e8ff; }
+.kiln-image-tools { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.kiln-image-artifact-list { display: flex; flex-direction: column; gap: 6px; }
+.kiln-image-artifact-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; padding: 7px 8px; background: #202020; border: 1px solid #303030; border-radius: 6px; }
+.kiln-image-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 5px; border: 1px solid #333; background: #111; }
+.kiln-image-title { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kiln-image-meta { color: #666; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; white-space: normal; line-height: 1.25; margin-top: 2px; }
+.kiln-image-warning-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.kiln-image-warning { color: #e4b365; border: 1px solid #4d3820; background: #241b10; border-radius: 4px; padding: 2px 5px; font: 9px 'SF Mono', monospace; }
+.kiln-image-empty { font-size: 11px; color: #555; }
 .transform-inspector { display: flex; flex-direction: column; gap: 9px; }
 .transform-inspector-empty { font-size: 11px; color: #555; }
 .transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
@@ -225,6 +236,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="checkbox" id="append-import-toggle">
       <span>Append</span>
     </label>
+
+    <h2>Kiln Images</h2>
+    <div class="panel" id="kiln-image-import-panel">
+      <div id="kiln-image-drop-zone" class="kiln-image-drop-zone" role="button" tabindex="0">
+        Drop image artifacts here<br>or click to browse
+      </div>
+      <input type="file" id="kiln-image-file-input" accept="image/*" multiple style="display:none">
+      <div class="kiln-image-tools">
+        <button type="button" class="btn" id="kiln-image-fixture-button">Fixture</button>
+        <button type="button" class="btn" id="kiln-image-clear-button">Clear</button>
+      </div>
+      <div id="kiln-image-empty" class="kiln-image-empty">No kiln image artifacts imported</div>
+      <div id="kiln-image-artifact-list" class="kiln-image-artifact-list"></div>
+    </div>
 
     <h2>Scene Objects</h2>
     <div class="panel">
@@ -961,6 +986,7 @@ const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
+let kilnImageArtifacts = [];
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
 let sceneSaveBlockedByFailedRestore = false;
@@ -973,6 +999,9 @@ let transformGizmoDragging = false;
 let splatCorrectionMode = null;
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
+const KILN_IMAGE_ARTIFACT_SCHEMA = 'kaminos.kiln.image-artifact.v0';
+const KILN_IMAGE_ROUTE_RECEIPT_SCHEMA = 'kaminos.kiln.image-route-receipt.v0';
+const KILN_IMAGE_LEDGER_SCHEMA = 'kaminos.kiln.image-ledger.v0';
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
 const HYBRID_SPLAT_OVERLAY_MODULE_URL_PARAMS = [
   'hybrid_splat_overlay_module_url',
@@ -3046,6 +3075,353 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   updateHybridSplatOverlayFrame();
   return window.kaminosCameraDebugState();
 };
+
+function kilnImageNowIso() {
+  return new Date().toISOString();
+}
+
+function kilnImageNormalizeArray(value) {
+  return Array.isArray(value) ? value.map(item => String(item)).filter(Boolean) : [];
+}
+
+async function kilnImageSha256Hex(value) {
+  const buffer = value instanceof ArrayBuffer ? value : new TextEncoder().encode(String(value ?? '')).buffer;
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function kilnImageWarningsForArtifact({ sourceKind, licenseOrCustody, routeReceipt, sourceTruthWarnings = [] }) {
+  const warnings = kilnImageNormalizeArray(sourceTruthWarnings);
+  if (licenseOrCustody === 'operator_supplied_unknown') warnings.push('operator_supplied_unknown_custody');
+  if (sourceKind === 'external_app_export') warnings.push('external_app_export_not_reproducible_by_kaminos');
+  if (sourceKind === 'web_reference') warnings.push('web_reference_not_authored_or_generated_truth');
+  if (sourceKind === 'fallback') warnings.push('fallback_artifact_not_requested_route_truth');
+  if (routeReceipt?.requestedRoute && routeReceipt?.effectiveRoute && routeReceipt.requestedRoute !== routeReceipt.effectiveRoute) {
+    warnings.push('route_receipt_requested_effective_mismatch');
+  }
+  return [...new Set(warnings)];
+}
+
+async function buildKilnImageRouteReceipt({
+  requestedRoute,
+  effectiveRoute,
+  backend = null,
+  model = null,
+  modelVersionOrHash = null,
+  runtime = 'browser',
+  device = null,
+  prompt = null,
+  negativePrompt = null,
+  seed = null,
+  steps = null,
+  cfgOrGuidance = null,
+  scheduler = null,
+  size = null,
+  quality = null,
+  inputArtifactIds = [],
+  maskArtifactIds = [],
+  depthArtifactIds = [],
+  normalArtifactIds = [],
+  scribbleArtifactIds = [],
+  regionLockIds = [],
+  negativeLawIds = [],
+  startedAt = null,
+  finishedAt = null,
+  durationMs = null,
+  costEstimate = null,
+  errorPhase = null,
+  errorMessage = null,
+  fallbackReason = null,
+  sourceTruthWarnings = [],
+} = {}) {
+  const requested = String(requestedRoute || '').trim();
+  const effective = String(effectiveRoute || '').trim();
+  if (!requested) throw new Error('requestedRoute is required');
+  if (!effective) throw new Error('effectiveRoute is required');
+  const warnings = kilnImageNormalizeArray(sourceTruthWarnings);
+  if (requested !== effective) {
+    if (!String(fallbackReason || '').trim()) {
+      throw new Error('fallbackReason is required when effectiveRoute differs from requestedRoute');
+    }
+    warnings.push('fallback_route_mismatch');
+  }
+  const receipt = {
+    schema: KILN_IMAGE_ROUTE_RECEIPT_SCHEMA,
+    requestedRoute: requested,
+    effectiveRoute: effective,
+    backend,
+    model,
+    modelVersionOrHash,
+    runtime,
+    device,
+    prompt,
+    negativePrompt,
+    seed,
+    steps,
+    cfgOrGuidance,
+    scheduler,
+    size,
+    quality,
+    inputArtifactIds: kilnImageNormalizeArray(inputArtifactIds),
+    maskArtifactIds: kilnImageNormalizeArray(maskArtifactIds),
+    depthArtifactIds: kilnImageNormalizeArray(depthArtifactIds),
+    normalArtifactIds: kilnImageNormalizeArray(normalArtifactIds),
+    scribbleArtifactIds: kilnImageNormalizeArray(scribbleArtifactIds),
+    regionLockIds: kilnImageNormalizeArray(regionLockIds),
+    negativeLawIds: kilnImageNormalizeArray(negativeLawIds),
+    startedAt,
+    finishedAt,
+    durationMs,
+    costEstimate,
+    errorPhase,
+    errorMessage,
+    fallbackReason: fallbackReason || null,
+    sourceTruthWarnings: [...new Set(warnings)],
+  };
+  receipt.receiptHash = await kilnImageSha256Hex(JSON.stringify({ ...receipt, receiptHash: null }));
+  return receipt;
+}
+
+async function buildKilnImageArtifact({
+  artifactId,
+  createdAt = kilnImageNowIso(),
+  sourceKind,
+  assetRole = 'candidate',
+  promotionState = 'bench_evidence',
+  mimeType,
+  width,
+  height,
+  storageRef,
+  content = null,
+  contentHash = null,
+  operatorNote = null,
+  licenseOrCustody = 'operator_supplied_unknown',
+  routeReceipt = null,
+  conditioningLinks = {},
+  failureLabels = [],
+  sourceTruthWarnings = [],
+} = {}) {
+  const id = String(artifactId || '').trim();
+  if (!id) throw new Error('artifactId is required');
+  const artifact = {
+    schema: KILN_IMAGE_ARTIFACT_SCHEMA,
+    artifactId: id,
+    createdAt,
+    sourceKind: String(sourceKind || '').trim(),
+    assetRole,
+    promotionState,
+    mimeType: String(mimeType || '').trim(),
+    width: Number(width),
+    height: Number(height),
+    storageRef: String(storageRef || '').trim(),
+    contentHash: contentHash || await kilnImageSha256Hex(content || id),
+    operatorNote,
+    licenseOrCustody,
+    routeReceipt,
+    conditioningLinks: {
+      specimenCheckpointId: conditioningLinks.specimenCheckpointId ?? null,
+      cameraId: conditioningLinks.cameraId ?? null,
+      viewId: conditioningLinks.viewId ?? null,
+      inputArtifactIds: kilnImageNormalizeArray(conditioningLinks.inputArtifactIds),
+      maskArtifactIds: kilnImageNormalizeArray(conditioningLinks.maskArtifactIds),
+      depthArtifactIds: kilnImageNormalizeArray(conditioningLinks.depthArtifactIds),
+      normalArtifactIds: kilnImageNormalizeArray(conditioningLinks.normalArtifactIds),
+      scribbleArtifactIds: kilnImageNormalizeArray(conditioningLinks.scribbleArtifactIds),
+      collageArtifactIds: kilnImageNormalizeArray(conditioningLinks.collageArtifactIds),
+      referenceArtifactIds: kilnImageNormalizeArray(conditioningLinks.referenceArtifactIds),
+      regionLockIds: kilnImageNormalizeArray(conditioningLinks.regionLockIds),
+      negativeLawIds: kilnImageNormalizeArray(conditioningLinks.negativeLawIds),
+      previousCandidateArtifactIds: kilnImageNormalizeArray(conditioningLinks.previousCandidateArtifactIds),
+    },
+    failureLabels: kilnImageNormalizeArray(failureLabels),
+    sourceTruthWarnings: [],
+  };
+  artifact.sourceTruthWarnings = kilnImageWarningsForArtifact({
+    sourceKind: artifact.sourceKind,
+    licenseOrCustody,
+    routeReceipt,
+    sourceTruthWarnings,
+  });
+  return artifact;
+}
+
+function kilnImageLedgerDebugState() {
+  return {
+    schema: KILN_IMAGE_LEDGER_SCHEMA,
+    artifactSchema: KILN_IMAGE_ARTIFACT_SCHEMA,
+    routeReceiptSchema: KILN_IMAGE_ROUTE_RECEIPT_SCHEMA,
+    importCount: kilnImageArtifacts.length,
+    fallbackCount: kilnImageArtifacts.filter(artifact => artifact.sourceTruthWarnings.includes('fallback_artifact_not_requested_route_truth')).length,
+    artifacts: kilnImageArtifacts.map(artifact => ({
+      artifactId: artifact.artifactId,
+      sourceKind: artifact.sourceKind,
+      assetRole: artifact.assetRole,
+      promotionState: artifact.promotionState,
+      mimeType: artifact.mimeType,
+      width: artifact.width,
+      height: artifact.height,
+      storageRef: artifact.storageRef,
+      contentHash: artifact.contentHash,
+      routeReceipt: artifact.routeReceipt,
+      sourceTruthWarnings: artifact.sourceTruthWarnings,
+    })),
+  };
+}
+
+function renderKilnImageImportTray() {
+  const list = document.getElementById('kiln-image-artifact-list');
+  const empty = document.getElementById('kiln-image-empty');
+  if (!list || !empty) return;
+  empty.style.display = kilnImageArtifacts.length ? 'none' : '';
+  list.innerHTML = kilnImageArtifacts.map(artifact => {
+    const receipt = artifact.routeReceipt || {};
+    const route = `${receipt.requestedRoute || artifact.sourceKind} -> ${receipt.effectiveRoute || artifact.sourceKind}`;
+    const warnings = (artifact.sourceTruthWarnings || []).map(warning => (
+      `<span class="kiln-image-warning">${escapeHtml(warning)}</span>`
+    )).join('');
+    return `
+      <div class="kiln-image-artifact-row" data-kiln-image-artifact-id="${escapeHtml(artifact.artifactId)}">
+        <img class="kiln-image-thumb" alt="" src="${escapeHtml(artifact.storageRef)}">
+        <span>
+          <div class="kiln-image-title">${escapeHtml(artifact.artifactId)}</div>
+          <div class="kiln-image-meta">${escapeHtml(artifact.sourceKind)} / ${escapeHtml(artifact.promotionState)} / ${escapeHtml(route)}</div>
+          <div class="kiln-image-meta">${escapeHtml(`${artifact.width}x${artifact.height}`)} / ${escapeHtml(artifact.contentHash.slice(0, 16))}</div>
+          ${warnings ? `<div class="kiln-image-warning-row">${warnings}</div>` : ''}
+        </span>
+      </div>
+    `;
+  }).join('');
+}
+
+async function imageDimensionsFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error('kiln image import could not read image dimensions'));
+    image.src = url;
+  });
+}
+
+async function importKilnImageFile(file, options = {}) {
+  const arrayBuffer = await file.arrayBuffer();
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error || new Error('kiln image import file read failed'));
+    reader.readAsDataURL(file);
+  });
+  const dimensions = await imageDimensionsFromUrl(dataUrl);
+  const contentHash = await kilnImageSha256Hex(arrayBuffer);
+  const createdAt = kilnImageNowIso();
+  const requestedRoute = options.requestedRoute || 'operator_import';
+  const effectiveRoute = options.effectiveRoute || requestedRoute;
+  const fallbackReason = options.fallbackReason || (requestedRoute !== effectiveRoute ? 'effective_route_changed' : null);
+  const routeReceipt = await buildKilnImageRouteReceipt({
+    requestedRoute,
+    effectiveRoute,
+    backend: options.backend ?? null,
+    model: options.model ?? null,
+    runtime: 'browser-import-tray',
+    size: `${dimensions.width}x${dimensions.height}`,
+    startedAt: createdAt,
+    finishedAt: kilnImageNowIso(),
+    fallbackReason,
+    sourceTruthWarnings: options.sourceTruthWarnings || [],
+  });
+  const sourceKind = options.sourceKind || (effectiveRoute === 'fixture' ? 'fallback' : 'operator_import');
+  const artifact = await buildKilnImageArtifact({
+    artifactId: options.artifactId || `kiln-image-${contentHash.slice(0, 12)}`,
+    createdAt,
+    sourceKind,
+    assetRole: options.assetRole || 'candidate',
+    promotionState: options.promotionState || 'bench_evidence',
+    mimeType: file.type || options.mimeType || 'application/octet-stream',
+    width: dimensions.width,
+    height: dimensions.height,
+    storageRef: dataUrl,
+    content: arrayBuffer,
+    contentHash,
+    operatorNote: options.operatorNote || null,
+    licenseOrCustody: options.licenseOrCustody || 'operator_supplied_unknown',
+    routeReceipt,
+    conditioningLinks: options.conditioningLinks || {},
+    failureLabels: options.failureLabels || [],
+    sourceTruthWarnings: options.sourceTruthWarnings || [],
+  });
+  kilnImageArtifacts = [artifact, ...kilnImageArtifacts];
+  renderKilnImageImportTray();
+  setInfo(`Kiln image import: ${artifact.artifactId}`);
+  return artifact;
+}
+
+function kilnImageFixtureFile() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="64" viewBox="0 0 96 64">
+    <rect width="96" height="64" fill="#181818"/>
+    <ellipse cx="48" cy="38" rx="24" ry="15" fill="#b91f25"/>
+    <circle cx="34" cy="40" r="7" fill="#9e171c"/>
+    <circle cx="63" cy="42" r="6" fill="#9e171c"/>
+    <ellipse cx="50" cy="28" rx="17" ry="20" fill="#d13836"/>
+    <circle cx="50" cy="21" r="6" fill="#f16f68" opacity=".48"/>
+    <text x="8" y="58" fill="#f0c36b" font-family="monospace" font-size="7">fixture fallback</text>
+  </svg>`;
+  return new File([svg], 'kiln-image-fixture-red-lerm.svg', { type: 'image/svg+xml' });
+}
+
+async function kaminosImportImageFixture() {
+  return importKilnImageFile(kilnImageFixtureFile(), {
+    artifactId: 'fixture-red-lerm-fallback-001',
+    requestedRoute: 'openai_api',
+    effectiveRoute: 'fixture',
+    fallbackReason: 'openai_api_unconfigured',
+    sourceKind: 'fallback',
+    licenseOrCustody: 'kaminos_fixture',
+    operatorNote: 'Fixture image proves import tray source truth without claiming API generation.',
+    sourceTruthWarnings: ['fallback_artifact_not_requested_route_truth'],
+  });
+}
+
+function initKilnImageImportTray() {
+  renderKilnImageImportTray();
+  const dropZone = document.getElementById('kiln-image-drop-zone');
+  const input = document.getElementById('kiln-image-file-input');
+  document.getElementById('kiln-image-fixture-button')?.addEventListener('click', () => kaminosImportImageFixture());
+  document.getElementById('kiln-image-clear-button')?.addEventListener('click', () => {
+    kilnImageArtifacts = [];
+    renderKilnImageImportTray();
+    setInfo('Kiln image tray cleared');
+  });
+  dropZone?.addEventListener('click', () => input?.click());
+  dropZone?.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      input?.click();
+    }
+  });
+  dropZone?.addEventListener('dragover', event => {
+    event.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone?.addEventListener('drop', async event => {
+    event.preventDefault();
+    dropZone.classList.remove('dragover');
+    const files = [...(event.dataTransfer?.files || [])].filter(file => file.type?.startsWith('image/'));
+    for (const file of files) await importKilnImageFile(file);
+  });
+  input?.addEventListener('change', async event => {
+    for (const file of [...(event.target.files || [])]) await importKilnImageFile(file);
+    input.value = '';
+  });
+  window.addEventListener('paste', async event => {
+    const files = [...(event.clipboardData?.files || [])].filter(file => file.type?.startsWith('image/'));
+    for (const file of files) {
+      await importKilnImageFile(file, { requestedRoute: 'clipboard_import', effectiveRoute: 'clipboard_import', sourceKind: 'clipboard_import' });
+    }
+  });
+}
+
+window.kaminosKilnImageImportTrayDebugState = kilnImageLedgerDebugState;
+window.kaminosImportImageFixture = kaminosImportImageFixture;
 
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
@@ -6252,6 +6628,7 @@ async function initScene() {
     updateTransformInspector();
   });
   initTransformInspector();
+  initKilnImageImportTray();
   const viewportEl = document.getElementById('viewport');
   renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
   renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
