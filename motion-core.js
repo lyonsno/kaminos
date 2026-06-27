@@ -7,6 +7,7 @@ export const MOTION_PHRASE_CONTROL_SCHEMA = 'kaminos.motion-phrase-controls.v0';
 export const MOTION_TRACK_SCHEMA = 'kaminos.motion-track.v0';
 export const GENERATED_POSE_OUTPUT_MAP_SCHEMA = 'kaminos.generated-pose-output-map.v0';
 export const GENERATED_MOTION_BEHAVIOR_STATE_SCHEMA = 'kaminos.generated-motion-behavior-state.v0';
+export const GENERATED_MOTION_CLIPLETS_SCHEMA = 'kaminos.generated-motion-cliplets.v0';
 export const MOTION_ROUTE_IDENTITY = 'procedural-orb-motion-grammar-v0';
 export const DEFAULT_GENERATED_POSE_TEMPORAL_REGISTRY_URL = 'fixtures/generated-pose-temporal/kimodo-matrix.v0.json';
 export const MOTION_SERVER_TEMPORAL_SOURCE_FORMAT = 'motion-server-soma77-json';
@@ -49,6 +50,10 @@ function scaleVec3(a, scale) {
 
 function lengthVec3(a) {
   return Math.hypot(a[0], a[1], a[2]);
+}
+
+function dotVec3(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
 function normalizeVec3(a, fallback = [0, 0, 1]) {
@@ -1715,6 +1720,7 @@ function normalizeGeneratedPoseTemporalInput(generatedInput = DEFAULT_KIMODO_BOW
     sourceOrientationRemap: normalizeMotionSourceOrientationRemap(generatedInput.sourceOrientationRemap || {}),
     temporalSamples: samples.map((sample, index) => ({
       frame: Math.round(Number(sample.frame) || index),
+      sourceFrame: Number.isFinite(Number(sample.sourceFrame)) ? Number(sample.sourceFrame) : Math.round(Number(sample.frame) || index),
       time: Number.isFinite(Number(sample.time)) ? Number(sample.time) : index / Math.max(1, Number(generatedInput.fps) || 30),
       phaseLabel: String(sample.phaseLabel || 'carry'),
       root: vec3(sample.root),
@@ -1746,6 +1752,189 @@ function temporalFixtureMetrics(generatedInput) {
     maxBowCompression: Number(Math.max(...bowValues).toFixed(5)),
     meanBowCompression: Number((bowValues.reduce((sum, value) => sum + value, 0) / Math.max(1, bowValues.length)).toFixed(5)),
     handSpanRange: Number((Math.max(...handSpanValues) - Math.min(...handSpanValues)).toFixed(5)),
+  };
+}
+
+function clipletSourceFrame(sample) {
+  return Number.isFinite(Number(sample?.sourceFrame)) ? Number(sample.sourceFrame) : Number(sample?.frame) || 0;
+}
+
+function generatedPoseTemporalMotionEdges(samples) {
+  const edges = samples.map((sample, index) => ({
+    index,
+    speed: 0,
+    acceleration: 0,
+    directionChange: 0,
+    direction: [0, 0, 1],
+    stepDistance: 0,
+  }));
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const delta = subVec3(vec3(current.root), vec3(previous.root));
+    const distance = lengthVec3(delta);
+    const dt = Math.max(1e-6, Number(current.time) - Number(previous.time));
+    const direction = normalizeVec3(delta, edges[index - 1]?.direction || [0, 0, 1]);
+    const dot = clamp(dotVec3(direction, edges[index - 1]?.direction || direction), -1, 1);
+    edges[index] = {
+      index,
+      speed: distance / dt,
+      acceleration: Math.abs((distance / dt) - edges[index - 1].speed) / dt,
+      directionChange: index > 1 ? clamp((1 - dot) / 2, 0, 1) : 0,
+      direction,
+      stepDistance: distance,
+    };
+  }
+  return edges;
+}
+
+function generatedPoseTemporalClipletLabel({
+  phaseLabels,
+  metrics,
+  segmentIndex,
+  segmentCount,
+}) {
+  const phases = new Set(phaseLabels.map(label => String(label || '').toLowerCase()));
+  const has = value => phases.has(value);
+  if (has('brake') || metrics.compressionPeak > 0.68 || (metrics.accelerationPeak > 1.8 && metrics.speedEnd < metrics.speedStart * 0.55)) {
+    return 'brake / compress';
+  }
+  if (has('escape') || (metrics.directionChangePeak > 0.45 && metrics.rootTravel > 0.12)) {
+    return 'escape / sprint';
+  }
+  if (has('recover') || has('return') || has('settle') || segmentIndex === segmentCount - 1) {
+    return metrics.velocityPeak < 0.18 ? 'settle / recover' : 'recover / return';
+  }
+  if (has('notice') || has('anticipate') || metrics.velocityPeak < 0.12) return 'hesitate / notice';
+  if (has('compress') || has('release')) return 'flourish / compress';
+  if (has('commit') || metrics.rootTravel > 0.18) return 'approach / commit';
+  return segmentIndex === 0 ? 'enter / approach' : 'source motion';
+}
+
+function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endIndex, segmentIndex, segmentCount) {
+  const samples = input.temporalSamples.slice(startIndex, endIndex + 1);
+  const edgeSlice = edges.slice(startIndex, endIndex + 1);
+  const first = samples[0];
+  const last = samples.at(-1);
+  const phaseLabels = [...new Set(samples.map(sample => sample.phaseLabel))];
+  const rootTravel = edgeSlice.reduce((sum, edge) => sum + Number(edge.stepDistance || 0), 0);
+  const velocityPeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.speed) || 0));
+  const accelerationPeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.acceleration) || 0));
+  const directionChangePeak = Math.max(0, ...edgeSlice.map(edge => Number(edge.directionChange) || 0));
+  const compressionPeak = Math.max(0, ...samples.map(sample => Number(sample.bowCompression) || 0));
+  const effortPeak = Math.max(0, ...samples.map(sample => (
+    0.18 + (Number(sample.bowCompression) || 0) * 0.78 + (Number(sample.handSpan) || 0) * 0.08
+  )));
+  const metrics = {
+    rootTravel: Number(rootTravel.toFixed(5)),
+    velocityPeak: Number(velocityPeak.toFixed(5)),
+    accelerationPeak: Number(accelerationPeak.toFixed(5)),
+    directionChangePeak: Number(directionChangePeak.toFixed(5)),
+    effortPeak: Number(effortPeak.toFixed(5)),
+    compressionPeak: Number(compressionPeak.toFixed(5)),
+    speedStart: Number((edgeSlice[0]?.speed || 0).toFixed(5)),
+    speedEnd: Number((edgeSlice.at(-1)?.speed || 0).toFixed(5)),
+  };
+  const idRoot = String(input.id || 'generated_pose_temporal').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  return {
+    schema: 'kaminos.generated-motion-cliplet-segment.v0',
+    id: `${idRoot}_cliplet_${String(segmentIndex).padStart(3, '0')}`,
+    index: segmentIndex,
+    labelGuess: generatedPoseTemporalClipletLabel({ phaseLabels, metrics, segmentIndex, segmentCount }),
+    sourceClipId: input.id,
+    startFrame: Number(first.frame),
+    endFrame: Number(last.frame),
+    startSourceFrame: Number(clipletSourceFrame(first).toFixed(5)),
+    endSourceFrame: Number(clipletSourceFrame(last).toFixed(5)),
+    startTime: Number(first.time.toFixed(5)),
+    endTime: Number(last.time.toFixed(5)),
+    duration: Number(Math.max(0, last.time - first.time).toFixed(5)),
+    sampleCount: samples.length,
+    phaseLabels,
+    metrics,
+  };
+}
+
+export function generatedPoseClipletForSourceFrame(cliplets, sourceFrame = 0) {
+  const frame = Number(sourceFrame);
+  if (!cliplets?.segments?.length || !Number.isFinite(frame)) return null;
+  return cliplets.segments.find(segment => (
+    frame >= Number(segment.startSourceFrame) && frame <= Number(segment.endSourceFrame)
+  )) || cliplets.segments.at(-1) || null;
+}
+
+export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE) {
+  const input = normalizeGeneratedPoseTemporalInput(generatedInput);
+  const samples = input.temporalSamples;
+  const edges = generatedPoseTemporalMotionEdges(samples);
+  const speeds = edges.map(edge => Number(edge.speed) || 0);
+  const accelerations = edges.map(edge => Number(edge.acceleration) || 0);
+  const maxAcceleration = Math.max(0, ...accelerations);
+  const maxSpeed = Math.max(0, ...speeds);
+  const boundaries = new Set([0]);
+  for (let index = 1; index < samples.length; index++) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const phaseChanged = previous.phaseLabel !== current.phaseLabel;
+    const directionBreak = edges[index].directionChange > 0.42 && edges[index].stepDistance > 0.002;
+    const accelerationBreak = maxAcceleration > 1e-6
+      && edges[index].acceleration > maxAcceleration * 0.72
+      && edges[index].speed > maxSpeed * 0.18;
+    if (phaseChanged || directionBreak || accelerationBreak) boundaries.add(index);
+  }
+  const starts = [...boundaries].sort((a, b) => a - b);
+  const rawSegments = starts.map((start, index) => ({
+    start,
+    end: (starts[index + 1] ?? samples.length) - 1,
+  })).filter(segment => segment.end >= segment.start);
+  const merged = [];
+  for (const segment of rawSegments) {
+    const previous = merged.at(-1);
+    if (previous && segment.end - segment.start < 2 && samples[segment.start]?.phaseLabel === samples[previous.end]?.phaseLabel) {
+      previous.end = segment.end;
+    } else {
+      merged.push({ ...segment });
+    }
+  }
+  const metrics = {
+    rootTravel: Number(edges.reduce((sum, edge) => sum + Number(edge.stepDistance || 0), 0).toFixed(5)),
+    velocityPeak: Number(maxSpeed.toFixed(5)),
+    accelerationPeak: Number(maxAcceleration.toFixed(5)),
+    directionChangePeak: Number(Math.max(0, ...edges.map(edge => Number(edge.directionChange) || 0)).toFixed(5)),
+    effortPeak: Number(Math.max(0, ...samples.map(sample => (
+      0.18 + (Number(sample.bowCompression) || 0) * 0.78 + (Number(sample.handSpan) || 0) * 0.08
+    ))).toFixed(5)),
+    compressionPeak: Number(Math.max(0, ...samples.map(sample => Number(sample.bowCompression) || 0)).toFixed(5)),
+  };
+  const segments = merged.map((segment, index) => summarizeGeneratedPoseTemporalSegment(
+    input,
+    edges,
+    segment.start,
+    segment.end,
+    index,
+    merged.length,
+  ));
+  return {
+    schema: GENERATED_MOTION_CLIPLETS_SCHEMA,
+    route: MOTION_ROUTE_IDENTITY,
+    sourceClipId: input.id,
+    sourceKind: input.sourceKind || 'generated-pose-temporal',
+    sourceStatus: input.sourceStatus || 'fixture',
+    sourceModel: input.sourceModel || 'unknown',
+    sourceRoute: input.sourceRoute || 'unknown',
+    sourceFrameCount: Number(input.rawFrameCount || samples.length),
+    sampleCount: samples.length,
+    fps: Math.max(1, Math.round(Number(input.fps) || 30)),
+    duration: Number((Number(input.duration) || samples.at(-1).time || 0).toFixed(5)),
+    sourceFrameStride: Number(input.sourceFrameStride || 1),
+    segmentation: {
+      schema: 'kaminos.generated-motion-cliplet-segmentation.v0',
+      method: 'phase-root-velocity-acceleration-direction-v0',
+      boundarySignals: ['phaseLabel', 'rootVelocity', 'rootAcceleration', 'rootDirectionChange', 'bowCompression'],
+      labelAuthority: 'heuristic-v0-source-witness-not-gameplay-state',
+    },
+    metrics,
+    segments,
   };
 }
 
@@ -2185,6 +2374,7 @@ export function buildGeneratedPoseTemporalHarness({
   filmstripFrames = 7,
 } = {}) {
   const track = adaptGeneratedPoseTemporalToTrack(generatedInput);
+  const cliplets = buildGeneratedPoseTemporalCliplets(generatedInput);
   const simDuration = Math.max(0.1, Number.isFinite(Number(duration)) ? Number(duration) : track.duration);
   const simFps = Math.max(1, Math.round(Number(fps) || 12));
   const simulation = simulateMotionTrack(track, { duration: simDuration, fps: simFps, mode: 'mass-attention' });
@@ -2218,12 +2408,18 @@ export function buildGeneratedPoseTemporalHarness({
       ...simulation.metrics,
       ...track.temporalMetrics,
     },
+    cliplets,
     simulation,
-    filmstrip: frameIndexes.map(index => ({
-      frameIndex: index,
-      t: simulation.frames[index].t,
-      actors: [motionTrackActorSample(actor, simulation.frames[index].sample, [0, 0, 0])],
-    })),
+    filmstrip: frameIndexes.map(index => {
+      const frame = simulation.frames[index];
+      const sourceFrame = interpolateGeneratedPoseTemporalSample(track, frame.t)?.sourceFrame ?? null;
+      return {
+        frameIndex: index,
+        t: frame.t,
+        cliplet: generatedPoseClipletForSourceFrame(cliplets, sourceFrame),
+        actors: [motionTrackActorSample(actor, frame.sample, [0, 0, 0])],
+      };
+    }),
   };
 }
 

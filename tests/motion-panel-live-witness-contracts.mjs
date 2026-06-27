@@ -12,6 +12,8 @@ assert.match(witness, /--interval-ms/, 'live witness exposes capture interval as
 assert.match(witness, /--tile-width/, 'live witness exposes filmstrip tile width as an invocation input');
 assert.match(witness, /--columns/, 'live witness exposes filmstrip grid columns as an invocation input');
 assert.match(witness, /--export-current-view/, 'live witness can exercise the in-page current-view export path');
+assert.match(witness, /BOOLEAN_ARGS/, 'live witness parser distinguishes boolean flags from valued flags');
+assert.match(witness, /i \+= BOOLEAN_ARGS\.has/, 'live witness boolean flags must not shift later valued arguments such as report and filmstrip paths');
 assert.match(witness, /--export-reference-mode/, 'live witness can force an export-only reference skeleton mode');
 assert.match(witness, /window\.exportMotionPanelCurrentViewFilmstrip/, 'live witness invokes the actual Motion panel current-view export function');
 assert.match(witness, /kaminos\.motion-panel-live-current-view-export\.v0/, 'live witness records current-view export evidence with a stable schema');

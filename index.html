@@ -941,8 +941,10 @@ import {
   buildMotionTrackHarness,
   buildGeneratedMotionTrackHarness,
   buildGeneratedPoseOutputMapHarness,
+  buildGeneratedPoseTemporalCliplets,
   buildGeneratedPoseTemporalBehaviorState,
   buildGeneratedPoseTemporalHarness,
+  generatedPoseClipletForSourceFrame,
   generatedPoseTemporalClipById,
   interpolateGeneratedPoseTemporalSample,
   motionClipById,
@@ -953,7 +955,7 @@ import {
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
-} from './motion-core.js?v=source-orientation-remap-20260627';
+} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
@@ -5098,6 +5100,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     fps: 12,
     filmstripFrames: 7,
   });
+  const generatedMotionCliplets = harness.cliplets || buildGeneratedPoseTemporalCliplets(selectedGeneratedInput);
   const root = new THREE.Group();
   root.name = 'generated-pose-temporal-harness-root';
   root.userData.kaminosGeneratedPoseTemporal = {
@@ -5157,6 +5160,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     root,
     harness,
     track: harness.track,
+    generatedMotionCliplets,
     generatedInput: selectedGeneratedInput,
     requestedClipId,
     registryClipId: harness.registryClipId,
@@ -5183,6 +5187,7 @@ async function createGeneratedPoseTemporalScene({ force = false, clipId = null, 
     lastBehaviorState: null,
     lastBehaviorReadout: null,
     lastSourceGhost: null,
+    lastCliplet: null,
   };
   updateMotionPhraseControlApplicability();
   updateGeneratedPoseTemporalFrame(performance.now() / 1000);
@@ -5433,6 +5438,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const localTime = ((nowSeconds - state.startedAt) * state.timeScale) % state.duration;
   const sample = sampleGeneratedPoseTemporalMotion(state.track, localTime);
   const temporalSample = sample.temporalSample || interpolateGeneratedPoseTemporalSample(state.track, localTime);
+  const activeCliplet = generatedPoseClipletForSourceFrame(state.generatedMotionCliplets, temporalSample?.sourceFrame ?? 0);
   const compression = Number(temporalSample?.bowCompression || 0);
   const horizontalDisplayScale = Number(state.horizontalDisplayScale || 2.2);
   const verticalDisplayScale = Number(state.verticalDisplayScale || 5.0);
@@ -5471,6 +5477,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.frameCount += 1;
   state.maxEffort = Math.max(state.maxEffort, sample.effort);
   state.lastTemporalSample = temporalSample;
+  state.lastCliplet = activeCliplet;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
     sample,
@@ -5523,6 +5530,9 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     effort: Number(sample.effort.toFixed(5)),
     scale: Number(sample.scale.toFixed(5)),
     bowCompression: Number(compression.toFixed(5)),
+    cliplet: activeCliplet,
+    clipletId: activeCliplet?.id || null,
+    clipletLabel: activeCliplet?.labelGuess || null,
     sourceFrame: temporalSample?.sourceFrame ?? null,
     sourceTime: temporalSample?.time ?? null,
     sourceBracket: temporalSample?.bracket ?? null,
@@ -6072,6 +6082,9 @@ async function captureMotionPanelRendererFrame(label, index) {
     camera: motionPanelCurrentViewCameraEvidence(),
     behaviorState: motionTemporalState?.lastBehaviorState?.state || null,
     behaviorPhase: motionTemporalState?.lastBehaviorState?.phase || null,
+    cliplet: motionTemporalState?.lastCliplet || motionTemporalState?.lastActors?.[0]?.cliplet || null,
+    clipletId: motionTemporalState?.lastCliplet?.id || motionTemporalState?.lastActors?.[0]?.clipletId || null,
+    clipletLabel: motionTemporalState?.lastCliplet?.labelGuess || motionTemporalState?.lastActors?.[0]?.clipletLabel || null,
     sourceFrame: motionTemporalState?.lastActors?.[0]?.sourceFrame ?? null,
     sourceFrameTotal: motionPanelSourceFrameTotal(),
   };
@@ -6132,11 +6145,13 @@ async function exportMotionPanelCurrentViewFilmstrip() {
       const sourceFrame = Number.isFinite(Number(frame.sourceFrame)) ? Number(frame.sourceFrame).toFixed(1) : 'live';
       const sourceFrameTotal = Number.isFinite(Number(frame.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(frame.sourceFrameTotal)))) : '?';
       const sourceFrameLabel = `source ${sourceFrame}/${sourceFrameTotal}`;
+      const clipletLabel = frame.clipletLabel || frame.cliplet?.labelGuess || null;
       frame.sheetFrameLabel = sheetFrameLabel;
       frame.sourceFrameLabel = sourceFrameLabel;
+      frame.clipletLabel = clipletLabel;
       ctx.fillText(`${sheetFrameLabel} · ${sourceFrameLabel}`, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const state = [frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'current view';
+      const state = [clipletLabel || frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'current view';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
     }
     const dataUrl = filmstrip.toDataURL('image/png');
@@ -6513,6 +6528,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     sourceOrientationRemap: state?.sourceOrientationRemap || harness.track.sourceOrientationRemap || null,
     phaseLabels: harness.metrics.phaseLabels,
     lastTemporalSample: state?.lastTemporalSample || null,
+    activeCliplet: state?.lastCliplet || null,
+    generatedMotionCliplets: state?.generatedMotionCliplets || harness.cliplets || buildGeneratedPoseTemporalCliplets(DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE),
     attentionTargetMode: motionAttentionTargetModeFromInputs(),
     attentionTargetEvidence: state?.lastAttentionTargetEvidence || selectedSceneObjectMotionAttentionTarget(),
     behaviorState: state?.lastBehaviorState || null,
@@ -6542,6 +6559,7 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
       sampleCount: harness.sampleCount,
       sourceFrameStride: harness.sourceFrameStride,
       sourceOrientationRemap: harness.track.sourceOrientationRemap || state?.sourceOrientationRemap || null,
+      generatedMotionCliplets: harness.cliplets || state?.generatedMotionCliplets || null,
       track: {
         schema: harness.track.schema,
         id: harness.track.id,

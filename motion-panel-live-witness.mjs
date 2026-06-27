@@ -5,8 +5,19 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) {
-  args.set(process.argv[i], process.argv[i + 1]);
+const BOOLEAN_ARGS = new Set(['--export-current-view']);
+for (let i = 2; i < process.argv.length;) {
+  const key = process.argv[i];
+  if (!String(key || '').startsWith('--')) throw new Error(`Unexpected positional argument: ${key}`);
+  if (BOOLEAN_ARGS.has(key)) {
+    args.set(key, true);
+    i += 1;
+    continue;
+  }
+  const value = process.argv[i + 1];
+  if (value == null || String(value).startsWith('--')) throw new Error(`${key} requires a value`);
+  args.set(key, value);
+  i += BOOLEAN_ARGS.has(key) ? 1 : 2;
 }
 
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -308,6 +319,10 @@ async function captureFrame(ws, index) {
       canvasRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
       actorRoot: actor?.root || null,
       behaviorState: actor?.behaviorState || null,
+      cliplet: actor?.cliplet || state?.activeCliplet || null,
+      clipletId: actor?.clipletId || state?.activeCliplet?.id || null,
+      clipletLabel: actor?.clipletLabel || state?.activeCliplet?.labelGuess || null,
+      generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
       sourceFrame: actor?.sourceFrame ?? null,
       sourceFrameTotal: sourceGhost?.sourceFrameTotal ?? null,
@@ -348,6 +363,8 @@ async function composeFilmstrip(ws, frames) {
       screenshotDataUrl: frame.screenshotDataUrl,
       behaviorState: frame.debug?.behaviorState?.state || null,
       behaviorPhase: frame.debug?.behaviorState?.phase || null,
+      clipletLabel: frame.debug?.clipletLabel || frame.debug?.cliplet?.labelGuess || null,
+      clipletId: frame.debug?.clipletId || frame.debug?.cliplet?.id || null,
       sourceFrame: frame.debug?.sourceFrame ?? null,
       sourceFrameTotal: frame.debug?.sourceFrameTotal ?? null,
       sheetFrameLabel: frame.sheetFrameLabel,
@@ -408,7 +425,7 @@ async function composeFilmstrip(ws, frames) {
       const sourceFrameLabel = frame.sourceFrameLabel || ('source ' + sourceFrame + '/' + sourceFrameTotal);
       ctx.fillText(sheetFrameLabel + ' · ' + sourceFrameLabel, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const state = [frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
+      const state = [frame.clipletLabel || frame.behaviorState, frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
     }
     return {
@@ -491,6 +508,8 @@ async function exportCurrentViewFilmstrip(ws) {
       sourceGhostAtExportStart: exported.sourceGhostAtExportStart || null,
       sourceGhostAtExportEnd: exported.sourceGhostAtExportEnd || null,
       attentionTargetEvidence: temporalDebug?.attentionTargetEvidence || temporalDebug?.actors?.[0]?.attentionTargetEvidence || null,
+      activeCliplet: temporalDebug?.activeCliplet || temporalDebug?.actors?.[0]?.cliplet || null,
+      generatedMotionCliplets: temporalDebug?.generatedMotionCliplets || temporalDebug?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       sourceOrientationRemap: temporalDebug?.sourceOrientationRemap || exported.sourceGhostAtExportStart?.sourceOrientationRemap || null,
       phraseControlApplicability,
       prompt: exported.prompt || null,
