@@ -17,6 +17,13 @@ const focus = args.get('--focus') || 'wide';
 const clipCanvas = args.has('--clip-canvas');
 const forceAoRaw = args.get('--force-ao');
 const forceAo = forceAoRaw === undefined ? null : !['0', 'false', 'off', 'no'].includes(String(forceAoRaw).toLowerCase());
+const uiSeedRaw = args.get('--ui-seed');
+const uiLeafCountRaw = args.get('--ui-leaf-count');
+const requestedUiControls = {
+  seed: uiSeedRaw === undefined ? null : Number(uiSeedRaw),
+  leafCount: uiLeafCountRaw === undefined ? null : Number(uiLeafCountRaw),
+};
+const shouldApplyUiControls = Number.isFinite(requestedUiControls.seed) || Number.isFinite(requestedUiControls.leafCount);
 
 let phase = 'init';
 let browser = null;
@@ -114,6 +121,50 @@ async function forceAmbientOcclusion(ws, enabled) {
   `);
 }
 
+async function applyOrbShellCompositionUiControls(ws) {
+  if (!shouldApplyUiControls) return null;
+  return evaluate(ws, `
+    (() => {
+      const requestedUiControls = ${JSON.stringify(requestedUiControls)};
+      const seedInput = document.getElementById('orb-shell-seed');
+      const leafInput = document.getElementById('orb-shell-leaf-count');
+      if (!seedInput || !leafInput) {
+        return {
+          applied: false,
+          reason: 'orb-shell-seed-or-leaf-control-missing',
+          requestedUiControls,
+        };
+      }
+      if (Number.isFinite(requestedUiControls.seed)) {
+        seedInput.value = String(Math.max(0, Math.min(99999, Math.round(requestedUiControls.seed))));
+        seedInput.dispatchEvent(new Event('input', { bubbles: true }));
+        seedInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (Number.isFinite(requestedUiControls.leafCount)) {
+        leafInput.value = String(Math.max(8, Math.min(14, Math.round(requestedUiControls.leafCount))));
+        leafInput.dispatchEvent(new Event('input', { bubbles: true }));
+        leafInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      window._kaminosDirty?.();
+      const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
+      return {
+        applied: true,
+        requestedUiControls,
+        appliedUiControls: {
+          seed: Number(seedInput.value),
+          leafCount: Number(leafInput.value),
+        },
+        effectiveVariation: {
+          variantId: state?.variantId,
+          variationSeed: state?.variationSeed,
+          variationLeafCount: state?.variationLeafCount,
+          uiControlSource: state?.uiControlSource,
+        },
+      };
+    })()
+  `);
+}
+
 async function readRenderEffectPolicy(ws, forcedAoState) {
   return evaluate(ws, `
     (() => {
@@ -185,6 +236,17 @@ async function main() {
     await send(ws, 'Page.enable');
     await delay(settleMs);
     const compositionWitnessReadyState = await waitForCompositionWitness(ws);
+    const appliedUiControls = await applyOrbShellCompositionUiControls(ws);
+    if (appliedUiControls) {
+      assert.equal(appliedUiControls.applied, true, 'requested UI controls did not apply');
+      if (Number.isFinite(requestedUiControls.seed)) {
+        assert.equal(appliedUiControls.appliedUiControls.seed, Math.round(requestedUiControls.seed), 'UI seed control did not retain requested value');
+      }
+      if (Number.isFinite(requestedUiControls.leafCount)) {
+        assert.equal(appliedUiControls.appliedUiControls.leafCount, Math.max(8, Math.min(14, Math.round(requestedUiControls.leafCount))), 'UI leaf control did not retain requested value');
+      }
+      await delay(500);
+    }
     const forcedAoState = await forceAmbientOcclusion(ws, forceAo);
     if (forcedAoState) await delay(300);
     if (focus === 'side-rim-return') {
@@ -383,6 +445,8 @@ async function main() {
       ...report,
       effectiveUrl: page.url,
       compositionWitnessReadyState,
+      requestedUiControls: shouldApplyUiControls ? requestedUiControls : null,
+      appliedUiControls,
       phase,
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
@@ -497,6 +561,8 @@ async function main() {
       frontApertureOwnershipCount: state.frontApertureOwnershipCount,
       variantId: state.variantId,
       variationSeed: state.variationSeed,
+      variationLeafCount: state.variationLeafCount,
+      uiControlSource: state.uiControlSource,
       controlledVariation: state.controlledVariation,
       effectiveVariation: state.effectiveVariation,
       MacroBodyPromotionPlan: state.MacroBodyPromotionPlan,
