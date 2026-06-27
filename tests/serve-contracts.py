@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import json
 import os
 from pathlib import Path
 import sys
@@ -339,6 +340,56 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_splat_autocrop_evidence_loads_adjacent_crop_hint_sidecar():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        experimental = root / "splats" / "inbox"
+        experimental.mkdir(parents=True)
+        asset = experimental / "plant-shelf.ply"
+        asset.write_bytes(b"ply\n")
+        (experimental / "plant-shelf.ply.kaminos-autocrop.json").write_text(json.dumps({
+            "schema": "kaminos.splat-autocrop-evidence.v0",
+            "source": "fixture-depth-mask-sidecar",
+            "frame": "axis-flipped-asset",
+            "cropHint": {
+                "min": [-0.2, -0.1, 0.15],
+                "max": [0.4, 0.35, 0.9],
+                "selectedPointCount": 42,
+            },
+        }))
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        try:
+            document = serve.load_splat_autocrop_evidence("splat-inbox", "plant-shelf.ply")
+            entries = serve.list_asset_entries(kind="splat")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert document["schema"] == "kaminos.splat-autocrop-evidence.v0"
+        assert document["root_id"] == "splat-inbox"
+        assert document["path"] == "plant-shelf.ply"
+        assert document["hasAutocropEvidence"] is True
+        assert document["source"] == "fixture-depth-mask-sidecar"
+        assert document["cropHint"]["min"] == [-0.2, -0.1, 0.15]
+        assert document["cropHint"]["max"] == [0.4, 0.35, 0.9]
+        assert document["selectedPointCount"] == 42
+        assert entries[0]["autocropEvidence"]["status"] == "available"
+        assert entries[0]["autocropEvidence"]["route"] == "/api/splat-autocrop-evidence?root=splat-inbox&path=plant-shelf.ply"
+
+
 def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
     os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = "http://127.0.0.1:5174/src/splatOverlay.ts"
@@ -365,4 +416,5 @@ if __name__ == "__main__":
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
+    test_splat_autocrop_evidence_loads_adjacent_crop_hint_sidecar()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

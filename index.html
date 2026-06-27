@@ -304,7 +304,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           </div>
           <div class="splat-correction-actions">
             <button type="button" class="btn" id="splat-correction-mode-button" onclick="toggleSplatCorrectionMode()">Edit Correction</button>
-            <button type="button" class="btn" onclick="applySelectedSplatAutocrop()">Auto Crop</button>
+            <button type="button" class="btn" onclick="applySelectedSplatAutocrop().catch(error => setInfo(error.message || 'Splat autocrop failed'))">Auto Crop</button>
             <button type="button" class="btn" onclick="saveSelectedSplatCorrection()">Save Correction</button>
             <button type="button" class="btn" onclick="resetSelectedSplatCorrection()">Reset Correction</button>
             <button type="button" class="btn" id="splat-correction-revert-button" onclick="revertSplatCorrectionDraft()" hidden>Revert Draft</button>
@@ -1978,6 +1978,15 @@ async function fetchSplatAssetCorrection(splat = {}) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || data.error) return null;
   return data.correction ? normalizeSplatCorrection(data.correction) : null;
+}
+
+async function fetchSplatAutocropEvidence(splat = {}) {
+  const route = splatAssetRouteIdentity(splat);
+  if (!route) return null;
+  const resp = await fetch('/api/splat-autocrop-evidence' + '?' + new URLSearchParams(route));
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) return null;
+  return data;
 }
 
 function setSceneObjectSplatMetadata(record, splat) {
@@ -5829,6 +5838,41 @@ function forEachSplatAutocropEvidencePoint(evidence = {}, callback) {
   }
 }
 
+function splatAutocropCropHint(evidence = {}) {
+  const candidates = [
+    evidence.cropHint,
+    evidence.autocrop?.cropHint,
+    evidence.autocrop,
+    evidence.bounds,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const min = numberTriplet(candidate.min, [NaN, NaN, NaN]);
+    const max = numberTriplet(candidate.max, [NaN, NaN, NaN]);
+    if (min.every(Number.isFinite) && max.every(Number.isFinite)) {
+      return {
+        min,
+        max,
+        frame: candidate.frame || evidence.frame || 'axis-flipped-asset',
+        selectedPointCount: Number.isFinite(Number(candidate.selectedPointCount))
+          ? Number(candidate.selectedPointCount)
+          : Number.isFinite(Number(evidence.selectedPointCount))
+            ? Number(evidence.selectedPointCount)
+            : 0,
+      };
+    }
+  }
+  return null;
+}
+
+function splatAutocropHasEvidence(evidence = {}) {
+  return !!(
+    splatAutocropCropHint(evidence)
+    || Array.isArray(evidence.points)
+    || Array.isArray(evidence.positions)
+  );
+}
+
 function proposeSplatAutocropFromSidecarEvidence(evidence = {}, correction = {}, options = {}) {
   const normalized = normalizeSplatCorrection(correction);
   const frame = evidence.frame || options.frame || 'axis-flipped-asset';
@@ -5836,6 +5880,30 @@ function proposeSplatAutocropFromSidecarEvidence(evidence = {}, correction = {},
     Array.isArray(options.padding) ? options.padding : [options.padding ?? 0.04, options.padding ?? 0.04, options.padding ?? 0.04],
     [0.04, 0.04, 0.04],
   ).map(value => Math.max(0, Number(value) || 0));
+  const cropHint = splatAutocropCropHint(evidence);
+  if (cropHint) {
+    const crop = {
+      enabled: true,
+      min: cropHint.min.map((value, axis) => value - padding[axis]),
+      max: cropHint.max.map((value, axis) => value + padding[axis]),
+    };
+    const center = crop.min.map((value, axis) => (value + crop.max[axis]) / 2);
+    const recenterPivot = options.recenterPivot !== false;
+    const nextCorrection = normalizeSplatCorrection({
+      ...normalized,
+      centroidOffset: recenterPivot ? center : normalized.centroidOffset,
+      crop,
+    });
+    return {
+      schema: 'kaminos.splat-autocrop-proposal.v0',
+      evidenceSource: evidence.source || 'sidecar-crop-hint',
+      evidenceFrame: cropHint.frame || frame,
+      selectedPointCount: cropHint.selectedPointCount,
+      crop,
+      centroidOffset: nextCorrection.centroidOffset,
+      correction: nextCorrection,
+    };
+  }
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   let selectedPointCount = 0;
@@ -5872,14 +5940,24 @@ function proposeSplatAutocropFromSidecarEvidence(evidence = {}, correction = {},
   };
 }
 
-function applySelectedSplatAutocrop(evidence = null, options = {}) {
+async function applySelectedSplatAutocrop(evidence = undefined, options = {}) {
   const entry = selectedSplatRecord();
   if (!entry) {
     setInfo('Select a splat first');
     return null;
   }
+  const explicitEvidence = evidence !== undefined && evidence !== null;
+  let effectiveEvidence = explicitEvidence ? evidence : await fetchSplatAutocropEvidence(entry.splat);
+  if (!splatAutocropHasEvidence(effectiveEvidence)) {
+    if (options.allowPointCloudFallback) {
+      effectiveEvidence = splatAutocropEvidenceFromRecord(entry);
+    } else {
+      setInfo('No splat autocrop sidecar evidence; keeping current crop');
+      return null;
+    }
+  }
   const proposed = proposeSplatAutocropFromSidecarEvidence(
-    evidence || splatAutocropEvidenceFromRecord(entry),
+    effectiveEvidence,
     entry.splat?.correction,
     options,
   );

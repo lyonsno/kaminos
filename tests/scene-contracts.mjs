@@ -97,6 +97,10 @@ assert.match(index, /function setSplatCorrectionEditMode\(/, 'splat correction m
 assert.match(index, /splat-correction-crop-target/, 'splat correction crop mode has a named viewport crop-box target');
 assert.match(index, /window\.kaminosSetSplatCorrectionCropTransform/, 'browser witnesses can edit crop bounds through the viewport crop target');
 assert.match(index, /function proposeSplatAutocropFromSidecarEvidence\(/, 'Splat autocrop has a deterministic sidecar-shaped evidence helper');
+assert.match(index, /async function fetchSplatAutocropEvidence\(/, 'Splat autocrop fetches declared asset sidecar evidence before proposing bounds');
+assert.match(index, /\/api\/splat-autocrop-evidence/, 'Splat autocrop uses the server evidence route instead of only the point-cloud preview');
+assert.match(index, /allowPointCloudFallback/, 'Splat autocrop point-cloud fallback is explicit and cannot silently expand real assets');
+assert.match(index, /No splat autocrop sidecar evidence/, 'Splat autocrop tells the operator when sidecar evidence is absent instead of overwriting the current crop');
 assert.match(index, /window\.kaminosApplySelectedSplatAutocrop/, 'browser witnesses can apply selected splat autocrop without DOM inference');
 assert.match(index, /Auto Crop/, 'Splat Correction panel exposes an operator-visible autocrop command');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');

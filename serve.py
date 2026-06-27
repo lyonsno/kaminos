@@ -47,6 +47,7 @@ GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+SPLAT_AUTOCROP_EVIDENCE_SCHEMA = "kaminos.splat-autocrop-evidence.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -268,6 +269,7 @@ def build_asset_entry(root, path):
         rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
     correction_document = load_splat_asset_correction(root_id, rel_path)
+    autocrop_evidence = splat_autocrop_evidence_summary(root_id, rel_path)
     return {
         "id": f"{root_id}:{rel_path}",
         "kind": root.get("kind"),
@@ -280,6 +282,7 @@ def build_asset_entry(root, path):
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
         "correction": correction_document.get("correction") if correction_document else None,
+        "autocropEvidence": autocrop_evidence,
         "display": build_asset_display_metadata(
             path,
             root_label=root.get("label") or root_id,
@@ -318,6 +321,14 @@ def resolve_splat_asset_path(root_id, rel_path):
 
 def splat_correction_sidecar_path(asset_path):
     return asset_path.with_name(asset_path.name + ".kaminos-splat.json")
+
+
+def splat_autocrop_evidence_sidecar_candidates(asset_path):
+    return [
+        asset_path.with_name(asset_path.name + ".kaminos-autocrop.json"),
+        asset_path.with_name(asset_path.stem + ".kaminos-autocrop.json"),
+        asset_path.with_name(asset_path.stem + ".kaminos-pipeline.json"),
+    ]
 
 
 def _number_list(value, *, length, fallback):
@@ -390,6 +401,126 @@ def save_splat_asset_correction(root_id, rel_path, payload):
     }
     splat_correction_sidecar_path(asset_path).write_text(json.dumps(document, indent=2))
     return document
+
+
+def _read_json_file(path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _crop_hint_from_value(value):
+    if not isinstance(value, dict):
+        return None
+    min_values = _number_list(value.get("min"), length=3, fallback=[float("nan")] * 3)
+    max_values = _number_list(value.get("max"), length=3, fallback=[float("nan")] * 3)
+    if any(item != item for item in min_values + max_values):
+        return None
+    return {
+        "min": min_values,
+        "max": max_values,
+        "frame": value.get("frame"),
+        "selectedPointCount": value.get("selectedPointCount"),
+    }
+
+
+def _autocrop_evidence_payload(document):
+    if not isinstance(document, dict):
+        return {}
+    candidates = [
+        document,
+        document.get("autocrop"),
+        document.get("autocropEvidence"),
+        document.get("cropHint"),
+        document.get("bounds"),
+    ]
+    crop_hint = None
+    for candidate in candidates:
+        crop_hint = _crop_hint_from_value(candidate)
+        if crop_hint:
+            break
+    payload = {}
+    if crop_hint:
+        payload["cropHint"] = crop_hint
+        if crop_hint.get("selectedPointCount") is not None:
+            payload["selectedPointCount"] = crop_hint.get("selectedPointCount")
+    if isinstance(document.get("points"), list):
+        payload["points"] = document.get("points")
+    if isinstance(document.get("positions"), list):
+        payload["positions"] = document.get("positions")
+        if document.get("pointCount") is not None:
+            payload["pointCount"] = document.get("pointCount")
+    if document.get("frame"):
+        payload["frame"] = document.get("frame")
+    elif crop_hint and crop_hint.get("frame"):
+        payload["frame"] = crop_hint.get("frame")
+    return payload
+
+
+def _autocrop_has_evidence(payload):
+    return bool(
+        payload.get("cropHint")
+        or payload.get("points")
+        or payload.get("positions")
+    )
+
+
+def load_splat_autocrop_evidence(root_id, rel_path):
+    root, root_path, asset_path = resolve_splat_asset_path(root_id, rel_path)
+    rel = asset_path.relative_to(root_path).as_posix()
+    sidecars = []
+    evidence_payload = {}
+    evidence_source = None
+    for sidecar_path in splat_autocrop_evidence_sidecar_candidates(asset_path):
+        if not sidecar_path.is_file():
+            continue
+        document = _read_json_file(sidecar_path)
+        if not isinstance(document, dict):
+            continue
+        payload = _autocrop_evidence_payload(document)
+        sidecar_info = {
+            "path": sidecar_path.name,
+            "schema": document.get("schema"),
+            "sourceInputPath": (document.get("source") or {}).get("inputPath") if isinstance(document.get("source"), dict) else None,
+        }
+        sidecars.append(sidecar_info)
+        if _autocrop_has_evidence(payload) and not evidence_payload:
+            evidence_payload = payload
+            evidence_source = document.get("source") if isinstance(document.get("source"), str) else sidecar_path.name
+            break
+    route = "/api/splat-autocrop-evidence?" + urlencode({"root": root.get("id") or root_id, "path": rel})
+    document = {
+        "schema": SPLAT_AUTOCROP_EVIDENCE_SCHEMA,
+        "root_id": root.get("id") or root_id,
+        "path": rel,
+        "assetSource": "/api/read?" + urlencode({"root": root.get("id") or root_id, "path": rel}),
+        "route": route,
+        "hasAutocropEvidence": _autocrop_has_evidence(evidence_payload),
+        "status": "available" if _autocrop_has_evidence(evidence_payload) else "missing",
+        "sidecars": sidecars,
+    }
+    if evidence_source:
+        document["source"] = evidence_source
+    document.update(evidence_payload)
+    return document
+
+
+def splat_autocrop_evidence_summary(root_id, rel_path):
+    try:
+        document = load_splat_autocrop_evidence(root_id, rel_path)
+    except (FileNotFoundError, PermissionError, ValueError):
+        return None
+    status = "available" if document.get("hasAutocropEvidence") else "missing"
+    if document.get("sidecars") and status == "missing":
+        status = "sidecar-without-autocrop-evidence"
+    return {
+        "schema": SPLAT_AUTOCROP_EVIDENCE_SCHEMA,
+        "status": status,
+        "route": document.get("route"),
+        "sidecarCount": len(document.get("sidecars") or []),
+        "selectedPointCount": document.get("selectedPointCount"),
+    }
 
 
 def splat_inbox_root():
@@ -506,6 +637,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/splat-autocrop-evidence":
+            self.handle_splat_autocrop_evidence_get(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -645,6 +778,22 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             document = save_splat_asset_correction(root_id, rel_path, payload.get("correction", payload))
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
+
+    def handle_splat_autocrop_evidence_get(self, params):
+        root_id = params.get("root", [""])[0]
+        rel_path = params.get("path", [""])[0]
+        try:
+            document = load_splat_autocrop_evidence(root_id, rel_path)
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
             return

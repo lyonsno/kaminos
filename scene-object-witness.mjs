@@ -3890,7 +3890,7 @@ async function runSplatAutocropScenario(ws) {
         || sceneDebug.find(record => record.type === 'splat');
       if (!splat) throw new Error('autocrop scenario could not import splat');
       window.selectSceneObject(splat.id);
-      const proposal = window.kaminosApplySelectedSplatAutocrop({
+      const proposal = await window.kaminosApplySelectedSplatAutocrop({
         schema: 'kaminos.splat-autocrop-evidence.v0',
         source: 'synthetic-sidecar-depth-mask',
         frame: 'raw-normalized',
