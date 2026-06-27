@@ -416,6 +416,35 @@ try {
       assertWitness(!executeButton.inspectorText.includes('input provenance only; output fixed fixture'), 'Live SHARP route still looked fixture-backed in the inspector', executeButton);
     }
     await click(cdp, executeButton.point);
+    const pendingGeneratedOutput = await waitFor(cdp, `(() => {
+      const state = window.kaminosPipelineDockDebugState?.();
+      const generatedOutputNodes = state?.generatedOutputNodes || [];
+      const pendingRecord = generatedOutputNodes.find(item =>
+        item.routeNodeId === ${JSON.stringify(routeNode.routeNodeId)}
+        && ['pending', 'running'].includes(item.status)
+        && item.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)}
+      ) || null;
+      const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
+      const statusNode = pendingRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
+      const statusPill = pendingRecord ? document.querySelector(\`[data-pipeline-route-output-id="\${pendingRecord.id}"][data-pipeline-generated-output-status]\`) : null;
+      return {
+        ok: Boolean(
+          pendingRecord
+          && !pendingRecord.artifact?.path
+          && pendingRecord.runTimeline?.length >= 1
+          && pendingRecord.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0'
+          && pendingRecord.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0'
+          && outputContainer
+          && statusNode
+          && statusPill
+        ),
+        pendingRecord,
+        generatedOutputNodes,
+        outputContainerText: outputContainer?.innerText || '',
+        statusNodeText: statusNode?.innerText || '',
+        statusPillText: statusPill?.innerText || '',
+      };
+    })()`, 'Graph Execute pending generated output', 12000);
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
@@ -423,9 +452,11 @@ try {
       const outputRecord = state?.generatedOutputNodes?.find(item => item.runId === run?.runId) || null;
       const outputNode = outputRecord ? document.querySelector(\`[data-pipeline-generated-output-node-id="\${outputRecord.id}"]\`) : null;
       const outputLoadButton = outputRecord ? document.querySelector(\`[data-pipeline-graph-node-action="load-output"][data-pipeline-graph-node-action-node-id="\${outputRecord.id}"]\`) : null;
+      const outputContainer = document.querySelector(\`[data-pipeline-output-container-route-id="${routeNode.routeNodeId}"]\`);
+      const outputStatus = outputRecord ? outputNode?.dataset?.pipelineGeneratedOutputStatus || null : null;
       const expectedTruth = ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && splat?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputLoadButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && (${JSON.stringify(expectsFixture)} ? splat?.fixtureSource : splat?.status === 'real' && !splat?.fixtureSource)),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -434,7 +465,12 @@ try {
         statusText: document.querySelector('#pipeline-graph-inspector-status')?.innerText || '',
         resultText: document.querySelector('#pipeline-run-result-panel')?.innerText || '',
         generatedOutputId: outputRecord?.id || null,
+        outputStatus,
         generatedOutputNodes: state?.generatedOutputNodes || [],
+        routeSnapshot: outputRecord?.routeSnapshot || null,
+        graphSnapshot: outputRecord?.graphSnapshot || null,
+        runTimeline: outputRecord?.runTimeline || [],
+        outputContainerText: outputContainer?.innerText || '',
         generatedOutputNodeText: outputNode?.innerText || '',
         generatedOutputLoadAction: Boolean(outputLoadButton),
         splat,
@@ -556,12 +592,15 @@ try {
         const distinctGeneratedOutputs = new Set(routeOutputs.map(item => item.id)).size;
         const distinctArtifactPaths = new Set(routeOutputs.map(item => item.artifact?.path).filter(Boolean)).size;
         const latestRun = state?.lastRun || null;
+        const latestOutput = routeOutputs.find(item => item.runId === latestRun?.runId) || null;
         return {
           ok: runs.length >= 2
             && routeOutputs.length >= 2
             && distinctGeneratedOutputs >= 2
             && distinctArtifactPaths >= 2
             && routeOutputs.some(item => item.runId === ${JSON.stringify(executed.runId)})
+            && routeOutputs.every(item => item.status === 'complete' && item.runTimeline?.length >= 3 && item.routeSnapshot?.schema && item.graphSnapshot?.schema)
+            && latestOutput?.status === 'complete'
             && latestRun?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(secondImageHook.graphImageNodeId)}
             && latestRun?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)},
           runIds: runs.map(run => run.runId),
@@ -573,6 +612,7 @@ try {
             graphExecution: latestRun.graphExecution,
             source: latestRun.source,
           } : null,
+          latestOutput,
           firstGeneratedOutputId: ${JSON.stringify(executed.generatedOutputId)},
           secondImageHook: ${JSON.stringify(secondImageHook)},
         };
@@ -589,6 +629,7 @@ try {
       imageCard,
       routeNode: hookedRouteNode,
       executeButton,
+      pendingGeneratedOutput,
       executed,
       loadOutputButton,
       after,

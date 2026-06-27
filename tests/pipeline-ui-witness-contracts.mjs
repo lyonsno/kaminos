@@ -28,6 +28,12 @@ assert.match(witness, /loadedPipelineArtifactPaths/, 'Pipeline UI witness must a
 assert.match(witness, /secondAssetNeedle/, 'Pipeline UI witness must support a two-input repeated-generation smoke');
 assert.match(witness, /generatedOutputNodes/, 'Pipeline UI witness must inspect generated-output records, not only singleton DOM nodes');
 assert.match(witness, /distinctGeneratedOutputs/, 'Pipeline UI witness must assert repeated generation preserves distinct output identities');
+assert.match(witness, /pendingGeneratedOutput/, 'Pipeline UI witness must observe a pending generated-output record before completion');
+assert.match(witness, /runTimeline/, 'Pipeline UI witness must assert generated output records carry status timeline evidence');
+assert.match(witness, /routeSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable route snapshots');
+assert.match(witness, /graphSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable graph snapshots');
+assert.match(witness, /data-pipeline-output-container-route-id/, 'Pipeline UI witness must assert route-local output container porcelain is visible');
+assert.match(witness, /data-pipeline-generated-output-status/, 'Pipeline UI witness must assert output status is visible in the graph DOM');
 assert.doesNotMatch(witness, /data-pipeline-graph-node-id="route"/, 'Pipeline UI witness must not depend on singleton route node ids');
 assert.doesNotMatch(witness, /data-pipeline-generated-output-node-id="output"/, 'Pipeline UI witness must not depend on singleton output node ids');
 assert.match(witness, /graphExecution/, 'Pipeline UI witness must assert graph execution provenance on the selected run');
