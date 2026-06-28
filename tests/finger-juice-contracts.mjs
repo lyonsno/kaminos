@@ -136,6 +136,13 @@ assert.match(webgpuCoreSource, /substrateDensityConstraintStats/, 'WebGPU solver
 assert.match(webgpuCoreSource, /substrateConstraintCandidateCount/, 'substrate density diagnostics report candidate counts');
 assert.match(webgpuCoreSource, /averageSubstrateConstraintError/, 'substrate density diagnostics report average constraint error');
 assert.match(webgpuCoreSource, /unsupportedSubstrateConstraintRatio/, 'substrate density diagnostics report unsupported constraint ratio');
+assert.match(webgpuCoreSource, /wgsl-iterative-density-continuity-projection-v0/, 'WebGPU solver names the iterative density continuity contract');
+assert.match(webgpuCoreSource, /applyIterativeDensityContinuityProjection/, 'WebGPU solver applies an iterative density continuity projection pass');
+assert.match(webgpuCoreSource, /iterativeDensityContinuityStats/, 'WebGPU solver reports iterative density continuity diagnostics');
+assert.match(webgpuCoreSource, /iterativeDensityContinuityIterationCount/, 'iterative density diagnostics report iteration count');
+assert.match(webgpuCoreSource, /averageIterativeDensityResidual/, 'iterative density diagnostics report average residual');
+assert.match(webgpuCoreSource, /iterativeDensityConvergenceRatio/, 'iterative density diagnostics report convergence ratio');
+assert.match(webgpuCoreSource, /iterativeDensityClampCount/, 'iterative density diagnostics report clamped corrections');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
@@ -201,6 +208,7 @@ assert.match(pageSource, /sampledNeighborhoodDensityStats/, 'prototype displays 
 assert.match(pageSource, /localPairDensityStats/, 'prototype displays local pair density projection diagnostics');
 assert.match(pageSource, /neighborSupportSubstrateStats/, 'prototype displays neighbor-support substrate diagnostics');
 assert.match(pageSource, /substrateDensityConstraintStats/, 'prototype displays substrate density constraint diagnostics');
+assert.match(pageSource, /iterativeDensityContinuityStats/, 'prototype displays iterative density continuity diagnostics');
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
@@ -307,6 +315,11 @@ assert.match(witnessSource, /wgsl-substrate-density-constraint-solve-v0/, 'witne
 assert.match(witnessSource, /substrateDensityConstraintStats/, 'witness requires substrate density constraint diagnostics');
 assert.match(witnessSource, /substrateConstraintCandidateCount/, 'witness records substrate density constraint candidates');
 assert.match(witnessSource, /averageSubstrateConstraintError/, 'witness records substrate density constraint error');
+assert.match(witnessSource, /wgsl-iterative-density-continuity-projection-v0/, 'witness records iterative density continuity contract');
+assert.match(witnessSource, /iterativeDensityContinuityStats/, 'witness requires iterative density continuity diagnostics');
+assert.match(witnessSource, /iterativeDensityContinuityCandidateCount/, 'witness records iterative density continuity candidates');
+assert.match(witnessSource, /averageIterativeDensityResidual/, 'witness records iterative density continuity residual');
+assert.match(witnessSource, /iterativeDensityConvergenceRatio/, 'witness records iterative density convergence ratio');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
