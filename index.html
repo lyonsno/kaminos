@@ -416,11 +416,6 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-plume-height-val">1.45</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Flame Life</span>
-      <input type="range" id="volume-flame-life" min="0.35" max="1.8" step="0.05" value="1">
-      <span class="slider-val" id="volume-flame-life-val">1.00</span>
-    </div>
-    <div class="slider-row">
       <span class="slider-label">Wind Strength</span>
       <input type="range" id="volume-wind-strength" min="0" max="1.5" step="0.05" value="0">
       <span class="slider-val" id="volume-wind-strength-val">0.00</span>
@@ -674,7 +669,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=flame-life-pressure-label-0628';
+import { createKaminosVolumePrototype } from './volume-core.js?v=routed-pressure-label-0628';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1644,7 +1639,6 @@ let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
 let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
-let routedVolumeFlameLife = 1;
 let routedVolumeMajorantCadence = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
@@ -1946,7 +1940,6 @@ function readVolumeControls() {
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
     detailScale: parseFloat(document.getElementById('volume-detail-scale').value),
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
-    flameLife: parseFloat(document.getElementById('volume-flame-life').value),
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
     windHeight: parseFloat(document.getElementById('volume-wind-height').value),
@@ -2015,7 +2008,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
-  document.getElementById('volume-flame-life-val').textContent = c.flameLife.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
@@ -2141,11 +2133,6 @@ async function initKaminosVolumeRoute() {
   const routeReactionFuelScale = Number(params.get('volume_reaction_fuel'));
   if (params.has('volume_reaction_fuel') && Number.isFinite(routeReactionFuelScale)) {
     routedVolumeReactionFuelScale = Math.max(0, Math.min(1.5, routeReactionFuelScale));
-  }
-  const routeFlameLife = Number(params.get('volume_flame_life'));
-  if (params.has('volume_flame_life') && Number.isFinite(routeFlameLife)) {
-    routedVolumeFlameLife = normalizeVolumeFlameLife(routeFlameLife);
-    setVolumeControlValue('volume-flame-life', routedVolumeFlameLife.toFixed(2));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
@@ -2366,7 +2353,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-flame-life', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

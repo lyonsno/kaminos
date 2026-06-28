@@ -289,11 +289,6 @@ function finiteOr(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function expectedFlameLifeForRun(run) {
-  const requested = Number(run.flameLife);
-  return Number.isFinite(requested) ? Math.max(0.35, Math.min(1.8, requested)) : 1;
-}
-
 function pressureEffectiveLabelForRun(run, effective) {
   const strategy = String(effective.pressureStrategy || run.pressureStrategy || 'global').toLowerCase();
   if (strategy === 'spatial_tiers') return 'Tiered P3';
@@ -406,7 +401,6 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_fire_scale', run.fireScale);
   applyNumberParam(url, 'volume_detail_scale', run.detailScale);
   applyNumberParam(url, 'volume_plume_height', run.plumeHeight);
-  applyNumberParam(url, 'volume_flame_life', run.flameLife);
   applyNumberParam(url, 'volume_radiance', run.radiance);
   applyNumberParam(url, 'volume_absorption', run.absorption);
   applyNumberParam(url, 'volume_wind_strength', run.windStrength);
@@ -426,7 +420,6 @@ function slugFor(run) {
 }
 
 function requestedConfig(run) {
-  const expectedFlameLife = expectedFlameLifeForRun(run);
   return {
     performanceMatrixId: run.performanceMatrixId || null,
     scenarioId: run.id,
@@ -455,8 +448,6 @@ function requestedConfig(run) {
     reactionFuel: run.reactionFuel,
     fireScale: run.fireScale,
     detailScale: run.detailScale,
-    flameLife: run.flameLife,
-    expectedFlameLife,
     microdetail: run.microdetail,
     interfaceShred: run.interfaceShred,
     fireLicks: run.fireLicks,
@@ -521,8 +512,6 @@ function effectiveConfig(witness) {
     reactionFuelScale: witness.reactionFuelScale ?? controls.reactionFuelScale ?? controls.reactionFuel,
     fireScale: witness.fireScale ?? controls.fireScale,
     detailScale: witness.detailScale ?? controls.detailScale,
-    flameLife: witness.flameLife ?? controls.flameLife,
-    expectedFlameLife: witness.expectedFlameLife,
     microdetail: witness.microdetail ?? controls.microdetail,
     interfaceShred: witness.interfaceShred ?? controls.interfaceShred,
     fireLicks: witness.fireLicks ?? controls.fireLicks,
@@ -680,17 +669,6 @@ function validateWitness(run, witness, effective) {
   checkNumber(checks, run, effective, 'reactionFuel', 'reactionFuelScale');
   checkNumber(checks, run, effective, 'fireScale');
   checkNumber(checks, run, effective, 'detailScale');
-  checkNumber(checks, run, effective, 'flameLife');
-  const expectedFlameLife = expectedFlameLifeForRun(run);
-  if (Math.abs(Number(effective.expectedFlameLife ?? NaN) - expectedFlameLife) > 0.001) {
-    throwSweepFailure('stale-default-config', 'validation', 'witness expected flame life did not match the requested run', {
-      scenarioId: run.id,
-      requested: run.flameLife,
-      expected: expectedFlameLife,
-      effective: effective.expectedFlameLife,
-    });
-  }
-  checks.push({ name: 'expectedFlameLife', requested: run.flameLife, expected: expectedFlameLife, effective: effective.expectedFlameLife });
   checkNumber(checks, run, effective, 'microdetail');
   checkNumber(checks, run, effective, 'interfaceShred');
   checkNumber(checks, run, effective, 'fireLicks');
@@ -1194,8 +1172,6 @@ for (let i = 0; i < runs.length; i += 1) {
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
       pressureJacobiFullGridEquivalentPasses: simCostLedger?.pressureJacobiFullGridEquivalentPasses,
       pressureEffectiveLabel: witness.pressureEffectiveLabel,
-      flameLife: witness.flameLife,
-      expectedFlameLife: witness.expectedFlameLife,
       tallPlumePressureIterationStrategy: simCostLedger?.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: simCostLedger?.tallPlumePressureIterationTarget,
       tallPlumePressureTierStrategy: simCostLedger?.tallPlumePressureTierStrategy,
