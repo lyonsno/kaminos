@@ -39,6 +39,10 @@ BROWSE_ROOTS = {
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
     )),
+    "lerms-preview": Path(os.environ.get(
+        "KAMINOS_LERMS_PREVIEW_ROOT",
+        "/private/tmp",
+    )),
     "pixal3d": Path(os.path.expanduser("~/dev/pixal3d-mlx/outputs")),
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }

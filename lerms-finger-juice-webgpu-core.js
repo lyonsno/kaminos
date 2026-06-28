@@ -1,3 +1,8 @@
+import {
+  createFingerJuiceSupportFrame,
+  createReservoirDomainDiagnostics,
+} from './lerms-finger-juice-core.js';
+
 export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE = 'wgsl-ballistic-heightfield-surface-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_renderer_v0';
@@ -1523,6 +1528,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       timestampMs: options.timestampMs || 0,
     });
     const particlesPerEmitter = {};
+    const liveParticles = [];
     let activeParticleCount = 0;
     let surfaceFlowCount = 0;
     let maxParticleAge = 0;
@@ -1543,10 +1549,24 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex);
       const emitterId = source?.emitter_id || `emitter-${particle.emitterIndex}`;
       particlesPerEmitter[emitterId] = (particlesPerEmitter[emitterId] || 0) + 1;
+      liveParticles.push({
+        id: `wgpu-live-${i}`,
+        emitter_id: emitterId,
+        chemistry: chemistryName(particle.chemistry),
+        phase: particle.phase >= 0.5 ? 'surface_flow' : 'airborne',
+        surface_flow: particle.phase >= 0.5,
+        pooling: particle.chemistry === 2 && particle.phase >= 0.5,
+        position: particle.position.map(value => round(value, 4)),
+        velocity: particle.velocity.map(value => round(value, 4)),
+        radius: round(particle.radius, 4),
+        strength: round(particle.strength, 4),
+      });
     }
     substrateSupportValues.sort((a, b) => a - b);
     const substrateSupportTotal = substrateSupportValues.reduce((sum, value) => sum + value, 0);
     const substrateSupportedCount = substrateSupportValues.filter(value => value >= 2).length;
+    const supportFrame = createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+    const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(liveParticles, supportFrame);
     return {
       solver_backend: options.solver_backend || 'webgpu_compute',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
@@ -1572,6 +1592,10 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       sourceTruth,
       sourceDiagnostics: createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []),
       emitterDiagnostics: createEmitterDiagnostics(options.sources || [], particlesPerEmitter, null),
+      supportFrame,
+      supportFrameChecksum: supportFrame.supportFrameChecksum,
+      substrateReservoirDiagnostics,
+      activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
       neighborSupportSubstrateStats: {
         pressureContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
         neighborSupportSubstrateMode: 'gpu_hash_sampled_same_chemistry_support_buffer_v0',
@@ -1626,6 +1650,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       maxParticleAge: round(maxParticleAge, 4),
       gpuRespawnCount: Math.floor(gpuRespawnCount),
       particlesPerEmitter,
+      particles: liveParticles.slice(0, 128),
       frameId: options.frameId || `kaminos-finger-juice-step-${Math.max(0, Math.floor(options.stepCount || 0))}`,
       stepCount: Math.max(0, Math.floor(options.stepCount || 0)),
     };
@@ -1748,6 +1773,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const restEnergyStats = settleRestEnergyStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const visualStats = visualStreakBeadStats(particles);
+  const supportFrame = createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+  const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(particles, supportFrame);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
   const sourceDiagnostics = createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []);
@@ -1775,6 +1802,10 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     sourceTruth,
     sourceDiagnostics,
     emitterDiagnostics,
+    supportFrame,
+    supportFrameChecksum: supportFrame.supportFrameChecksum,
+    substrateReservoirDiagnostics,
+    activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
     pressureDensityStats: pressureStats,
     spatialPressureStats: spatialStats,
     fluidDepthStats: depthStats,

@@ -18,6 +18,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-wi
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
+const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
 
@@ -4666,7 +4667,7 @@ try {
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
-    '--headless=new',
+    ...(headless ? ['--headless=new'] : ['--no-first-run', '--no-default-browser-check', '--disable-extensions']),
     '--disable-gpu-sandbox',
     '--enable-unsafe-webgpu',
     '--enable-features=Vulkan,UseSkiaRenderer',
