@@ -311,6 +311,7 @@ async function main() {
     phase = 'write_report';
     writeReport({
       ok: true,
+      failure_phase: null,
       screenshot: out,
       debugState: lastDebugState,
       fullViewportActivityMetrics,
