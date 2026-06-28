@@ -415,8 +415,18 @@ async function focusMotionPanelTakeShelf(ws) {
     const host = document.getElementById('motion-panel-take-shelf');
     if (!host) throw new Error('missing motion panel take shelf');
     host.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const currentHost = document.getElementById('motion-panel-current-take');
+    const savedHost = document.getElementById('motion-panel-saved-takes');
     const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
-    const rows = [...host.children].map(row => ({
+    const rows = [...host.querySelectorAll('.motion-panel-take-card')].map(row => ({
+      text: (row.textContent || '').replace(/\\s+/g, ' ').trim(),
+      buttonCount: row.querySelectorAll('button').length,
+    }));
+    const currentRows = [...(currentHost?.querySelectorAll('.motion-panel-take-card') || [])].map(row => ({
+      text: (row.textContent || '').replace(/\\s+/g, ' ').trim(),
+      buttonCount: row.querySelectorAll('button').length,
+    }));
+    const savedRows = [...(savedHost?.querySelectorAll('.motion-panel-take-card') || [])].map(row => ({
       text: (row.textContent || '').replace(/\\s+/g, ' ').trim(),
       buttonCount: row.querySelectorAll('button').length,
     }));
@@ -425,6 +435,8 @@ async function focusMotionPanelTakeShelf(ws) {
       schema: 'kaminos.motion-panel-live-take-shelf-focus.v0',
       rowCount: rows.length,
       rows,
+      currentRows,
+      savedRows,
       shelf,
       rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     };

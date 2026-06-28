@@ -113,7 +113,17 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 .motion-control-panel[data-motion-controls-applicable="false"] .btn { opacity: 0.45; cursor: not-allowed; }
 .select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
 .select-input:focus { border-color: #1976d2; }
-.motion-panel-phrase-preview { display: grid; gap: 6px; margin: 7px 0 8px 68px; }
+.motion-panel-section-title { margin: 2px 0 8px; color: #aaa; font-size: 11px; font-weight: 700; }
+.motion-panel-section-subtitle { margin: -4px 0 8px; color: #5f5f5f; font: 10px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.motion-panel-compact-details { margin: 8px 0; border: 1px solid #2d2d2d; border-radius: 7px; background: rgba(255,255,255,0.015); overflow: hidden; }
+.motion-panel-compact-details > summary { padding: 8px 10px; color: #777; font-size: 10px; cursor: pointer; list-style-position: inside; user-select: none; }
+.motion-panel-compact-details > summary:hover { color: #bbb; background: rgba(255,255,255,0.02); }
+.motion-panel-compact-body { padding: 0 10px 10px; }
+.motion-panel-primary-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 7px 0; }
+.motion-panel-primary-actions .btn { width: 100%; margin: 0; }
+.motion-panel-secondary-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 7px 0; }
+.motion-panel-secondary-actions .btn { margin: 0; }
+.motion-panel-phrase-preview { display: grid; gap: 6px; margin: 7px 0 8px; }
 .motion-panel-phrase-preview-empty { font: 10px 'SF Mono', monospace; color: #555; }
 .motion-panel-phrase-chip { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; width: 100%; text-align: left; padding: 7px 8px; background: #202020; border: 1px solid #333; border-radius: 6px; color: #cfcfcf; cursor: pointer; }
 .motion-panel-phrase-chip:hover, .motion-panel-phrase-chip.active { border-color: #6f5b2a; background: #25231c; color: #fff2cc; }
@@ -122,6 +132,17 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 .motion-panel-phrase-rawbar { grid-column: 1 / -1; display: grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: minmax(10px, 1fr); height: 4px; }
 .motion-panel-phrase-rawtick { min-width: 10px; border-radius: 2px; background: rgba(240, 210, 138, 0.28); }
 .motion-panel-phrase-meta { grid-column: 1 / -1; font: 9px 'SF Mono', monospace; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.motion-panel-take-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.motion-panel-take-card { border: 1px solid #2f2f2f; background: #202020; border-radius: 6px; padding: 7px; }
+.motion-panel-take-card.current { border-color: #1976d2; background: rgba(21, 101, 192, 0.14); }
+.motion-panel-take-card.saved { border-color: #4a3d22; background: #201f1b; }
+.motion-panel-take-card.loaded { background: rgba(94, 75, 33, 0.16); }
+.motion-panel-take-card.empty { color: #555; font: 10px 'SF Mono', monospace; }
+.motion-panel-take-title { display: block; color: #ddd; font-size: 12px; line-height: 1.15; overflow-wrap: anywhere; }
+.motion-panel-take-title.saved { color: #f0d28a; }
+.motion-panel-take-meta { display: block; color: #777; font-size: 10px; margin-top: 3px; overflow-wrap: anywhere; }
+.motion-panel-take-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.motion-panel-take-actions .btn { margin: 0; }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
@@ -471,229 +492,272 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
   <!-- Motion Tab -->
   <div class="tab-content" id="tab-motion">
     <h2>Motion Agency</h2>
-    <div class="panel">
-      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_motion_agency=1</span></div>
-      <div class="field"><span class="field-key">Identity</span><span class="field-val" id="motion-route-id">procedural-orb-motion-grammar-v0</span></div>
-      <div class="slider-row">
-        <span class="slider-label">Attention</span>
-        <select id="motion-attention-target-mode" class="select-input">
-          <option value="selected-object" selected>Selected object</option>
-          <option value="sample">Clip sample</option>
-        </select>
-      </div>
-      <div class="volume-actions">
-        <button class="btn" id="motion-enable">Spawn Orbs</button>
-        <button class="btn" id="motion-phrase-enable">Decision</button>
-        <button class="btn" id="motion-controls-enable">Controls</button>
-        <button class="btn" id="motion-tracks-enable">Tracks</button>
-        <button class="btn" id="motion-generated-enable">Generated</button>
-        <button class="btn" id="motion-output-map-enable">Mapped</button>
-        <button class="btn" id="motion-temporal-enable">Temporal</button>
-        <button class="btn" id="motion-frame-camera">Frame</button>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="field"><span class="field-key">Phrase Route</span><span class="route-chip">kaminos_motion_phrase=1</span></div>
-      <div class="field"><span class="field-key">Target</span><span class="field-val">notice-prepare-commit-recover</span></div>
-    </div>
-    <div class="panel">
-      <div class="field"><span class="field-key">Track Route</span><span class="route-chip">kaminos_motion_tracks=1</span></div>
-      <div class="field"><span class="field-key">Generated Route</span><span class="route-chip">kaminos_generated_motion_track=1</span></div>
-      <div class="field"><span class="field-key">Mapped Route</span><span class="route-chip">kaminos_motion_output_map=1</span></div>
-      <div class="field"><span class="field-key">Temporal Route</span><span class="route-chip">kaminos_generated_pose_temporal=1</span></div>
-      <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
-      <div class="volume-actions" id="motion-temporal-clips">
-        <button class="btn" data-motion-temporal-clip="kimodo_theatrical_bow_temporal_v0">Bow</button>
-        <button class="btn" data-motion-temporal-clip="kimodo_cautious_sneak_temporal_v0">Sneak</button>
-        <button class="btn" data-motion-temporal-clip="kimodo_startled_jumpback_temporal_v0">Startle</button>
-        <button class="btn" data-motion-temporal-clip="kimodo_energetic_dance_temporal_v0">Dance</button>
-        <button class="btn" data-motion-temporal-clip="kimodo_angry_kick_punch_temporal_v0">Fight</button>
-        <button class="btn" data-motion-temporal-clip="kimodo_curious_walk_look_temporal_v0">Curious</button>
-      </div>
-    </div>
     <div class="panel" id="motion-panel-orb-preview">
-      <div class="field"><span class="field-key">Generate Motion</span><span class="route-chip">kaminos_motion_panel_temporal_fixture=1</span></div>
-      <input class="gen-input" id="motion-panel-server-url" value="http://localhost:8098" aria-label="Motion server URL">
-      <div class="slider-row">
-        <span class="slider-label">Source</span>
-        <select id="motion-panel-source-ghost-mode" class="select-input">
-          <option value="sidecar" selected>Sidecar</option>
-          <option value="overlay">Overlay</option>
-          <option value="hidden">Hidden</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Source Up</span>
-        <select id="motion-panel-source-up-axis" class="select-input">
-          <option value="auto" selected>Auto</option>
-          <option value="+x">+X</option>
-          <option value="-x">-X</option>
-          <option value="+y">+Y</option>
-          <option value="-y">-Y</option>
-          <option value="+z">+Z</option>
-          <option value="-z">-Z</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Source Forward</span>
-        <select id="motion-panel-source-forward-axis" class="select-input">
-          <option value="auto" selected>Auto</option>
-          <option value="+x">+X</option>
-          <option value="-x">-X</option>
-          <option value="+y">+Y</option>
-          <option value="-y">-Y</option>
-          <option value="+z">+Z</option>
-          <option value="-z">-Z</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Ghost</span>
-        <input type="range" id="motion-panel-source-opacity" min="0.08" max="0.9" step="0.01" value="0.38">
-        <span class="slider-val" id="motion-panel-source-opacity-val">0.38</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Source Size</span>
-        <input type="range" id="motion-panel-source-overlay-size" min="0.75" max="5" step="0.05" value="3">
-        <span class="slider-val" id="motion-panel-source-overlay-size-val">3.00x</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Speed</span>
-        <input type="range" id="motion-panel-speed" min="0.25" max="3" step="0.05" value="1">
-        <span class="slider-val" id="motion-panel-speed-val">1.00x</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Cliplet</span>
-        <select id="motion-panel-cliplet-playback" class="select-input">
-          <option value="full" selected>Full source</option>
-        </select>
-      </div>
-      <div id="motion-panel-phrase-preview" class="motion-panel-phrase-preview" aria-live="polite"></div>
-      <div class="slider-row">
-        <span class="slider-label">Interrupt</span>
-        <select id="motion-panel-cliplet-interrupt" class="select-input">
-          <option value="off" selected>Off</option>
-          <option value="path-trigger">Path trigger</option>
-        </select>
-      </div>
-      <textarea class="gen-input" id="motion-panel-prompt" rows="2" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
-      <div class="slider-row">
-        <span class="slider-label">Duration</span>
-        <input type="range" id="motion-panel-duration" min="1" max="18" step="1" value="6">
-        <span class="slider-val" id="motion-panel-duration-val">6s</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Steps</span>
-        <input type="range" id="motion-panel-steps" min="10" max="200" step="10" value="100">
-        <span class="slider-val" id="motion-panel-steps-val">100</span>
-      </div>
-      <div class="volume-actions">
-        <button class="btn" id="motion-gen-btn">Generate Motion</button>
-        <button class="btn" id="motion-panel-generate-preview">Generate + Preview</button>
-        <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Export</span>
-        <select id="motion-panel-export-resolution" class="select-input">
-          <option value="360">Compact</option>
-          <option value="560" selected>Share</option>
-          <option value="720">Large</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Frames</span>
-        <select id="motion-panel-export-frames" class="select-input">
-          <option value="8">8</option>
-          <option value="12" selected>12</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Columns</span>
-        <select id="motion-panel-export-columns" class="select-input">
-          <option value="4" selected>4</option>
-          <option value="5">5</option>
-          <option value="10">10</option>
-        </select>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Reference</span>
-        <select id="motion-panel-export-reference" class="select-input">
-          <option value="current" selected>Current</option>
-          <option value="hidden">Hidden</option>
-          <option value="overlay">Overlay</option>
-          <option value="sidecar">Sidecar</option>
-        </select>
-      </div>
-      <div class="volume-actions">
-        <button class="btn" id="motion-panel-export-view">Export Current View</button>
-        <button class="btn" id="motion-panel-export-selected-cliplet">Cliplet Sheet</button>
-      </div>
-      <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
-      <div class="field" style="margin-top: 8px;"><span class="field-key">Takes</span><span class="field-val" id="motion-panel-take-count">0</span></div>
-      <div class="volume-actions">
-        <button class="btn" id="motion-panel-promote-take">Promote Take</button>
-        <button class="btn" id="motion-panel-load-durable-takes">Load Saved</button>
-      </div>
-      <div id="motion-panel-take-shelf" style="display: flex; flex-direction: column; gap: 5px; margin-top: 6px;"></div>
-      <div class="field" style="margin-top: 8px;"><span class="field-key">Exports</span><span class="field-val" id="motion-panel-export-count">0</span></div>
-      <div id="motion-panel-export-tray" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;"></div>
+      <section id="motion-panel-generate-section">
+        <div class="motion-panel-section-title">Generate Motion</div>
+        <textarea class="gen-input" id="motion-panel-prompt" rows="3" style="resize: vertical; font-family: inherit;" placeholder="A tiny lerm creeps uphill and waves.">a little lerm creeps uphill and waves</textarea>
+        <div class="slider-row">
+          <span class="slider-label">Duration</span>
+          <input type="range" id="motion-panel-duration" min="1" max="18" step="1" value="6">
+          <span class="slider-val" id="motion-panel-duration-val">6s</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Steps</span>
+          <input type="range" id="motion-panel-steps" min="10" max="200" step="10" value="100">
+          <span class="slider-val" id="motion-panel-steps-val">100</span>
+        </div>
+        <div class="motion-panel-primary-actions">
+          <button class="btn" id="motion-gen-btn">Generate Motion</button>
+          <button class="btn" id="motion-panel-generate-preview">Generate + Preview</button>
+        </div>
+        <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
+      </section>
+
+      <section id="motion-panel-phrase-section">
+        <div class="motion-panel-section-title">Phrases</div>
+        <div class="slider-row">
+          <span class="slider-label">Cliplet</span>
+          <select id="motion-panel-cliplet-playback" class="select-input">
+            <option value="full" selected>Full source</option>
+          </select>
+        </div>
+        <div id="motion-panel-phrase-preview" class="motion-panel-phrase-preview" aria-live="polite"></div>
+        <details class="motion-panel-compact-details" id="motion-panel-interrupt-options">
+          <summary>Interrupt</summary>
+          <div class="motion-panel-compact-body">
+            <div class="slider-row">
+              <span class="slider-label">Mode</span>
+              <select id="motion-panel-cliplet-interrupt" class="select-input">
+                <option value="off" selected>Off</option>
+                <option value="path-trigger">Path trigger</option>
+              </select>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="motion-panel-take-shelf">
+        <section id="motion-panel-current-take-section">
+          <div class="field"><span class="field-key">Current Take</span><span class="field-val" id="motion-panel-take-count">0 / 0</span></div>
+          <div class="motion-panel-secondary-actions">
+            <button class="btn" id="motion-panel-promote-take">Promote Take</button>
+            <button class="btn" id="motion-panel-load-durable-takes">Load Saved</button>
+          </div>
+          <div id="motion-panel-current-take" class="motion-panel-take-list"></div>
+        </section>
+
+        <section id="motion-panel-saved-takes-section">
+          <div class="motion-panel-section-title">Saved Takes</div>
+          <div id="motion-panel-saved-takes" class="motion-panel-take-list"></div>
+        </section>
+      </section>
+
+      <section id="motion-panel-export-section">
+        <div class="motion-panel-section-title">Export</div>
+        <div class="motion-panel-primary-actions">
+          <button class="btn" id="motion-panel-export-view">Export Current View</button>
+          <button class="btn" id="motion-panel-export-selected-cliplet">Cliplet Sheet</button>
+        </div>
+        <details class="motion-panel-compact-details" id="motion-panel-export-options">
+          <summary>Export Options</summary>
+          <div class="motion-panel-compact-body">
+            <div class="slider-row">
+              <span class="slider-label">Size</span>
+              <select id="motion-panel-export-resolution" class="select-input">
+                <option value="360">Compact</option>
+                <option value="560" selected>Share</option>
+                <option value="720">Large</option>
+              </select>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Frames</span>
+              <select id="motion-panel-export-frames" class="select-input">
+                <option value="8">8</option>
+                <option value="12" selected>12</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Columns</span>
+              <select id="motion-panel-export-columns" class="select-input">
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+              </select>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Reference</span>
+              <select id="motion-panel-export-reference" class="select-input">
+                <option value="current" selected>Current</option>
+                <option value="hidden">Hidden</option>
+                <option value="overlay">Overlay</option>
+                <option value="sidecar">Sidecar</option>
+              </select>
+            </div>
+          </div>
+        </details>
+        <div class="field" style="margin-top: 8px;"><span class="field-key">Exports</span><span class="field-val" id="motion-panel-export-count">0</span></div>
+        <div id="motion-panel-export-tray" class="motion-panel-take-list"></div>
+      </section>
+
+      <details class="motion-panel-compact-details" id="motion-panel-source-options">
+        <summary>Source Display</summary>
+        <div class="motion-panel-compact-body">
+          <input class="gen-input" id="motion-panel-server-url" value="http://localhost:8098" aria-label="Motion server URL">
+          <div class="slider-row">
+            <span class="slider-label">Source</span>
+            <select id="motion-panel-source-ghost-mode" class="select-input">
+              <option value="sidecar" selected>Sidecar</option>
+              <option value="overlay">Overlay</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Source Up</span>
+            <select id="motion-panel-source-up-axis" class="select-input">
+              <option value="auto" selected>Auto</option>
+              <option value="+x">+X</option>
+              <option value="-x">-X</option>
+              <option value="+y">+Y</option>
+              <option value="-y">-Y</option>
+              <option value="+z">+Z</option>
+              <option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Source Forward</span>
+            <select id="motion-panel-source-forward-axis" class="select-input">
+              <option value="auto" selected>Auto</option>
+              <option value="+x">+X</option>
+              <option value="-x">-X</option>
+              <option value="+y">+Y</option>
+              <option value="-y">-Y</option>
+              <option value="+z">+Z</option>
+              <option value="-z">-Z</option>
+            </select>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Ghost</span>
+            <input type="range" id="motion-panel-source-opacity" min="0.08" max="0.9" step="0.01" value="0.38">
+            <span class="slider-val" id="motion-panel-source-opacity-val">0.38</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Source Size</span>
+            <input type="range" id="motion-panel-source-overlay-size" min="0.75" max="5" step="0.05" value="3">
+            <span class="slider-val" id="motion-panel-source-overlay-size-val">3.00x</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">Speed</span>
+            <input type="range" id="motion-panel-speed" min="0.25" max="3" step="0.05" value="1">
+            <span class="slider-val" id="motion-panel-speed-val">1.00x</span>
+          </div>
+          <div class="motion-panel-secondary-actions">
+            <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
+          </div>
+        </div>
+      </details>
     </div>
-    <div class="panel motion-control-panel" id="motion-phrase-control-panel" data-motion-controls-applicable="false">
-      <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
-      <div class="field"><span class="field-key">Applies</span><span class="field-val" id="motion-control-applicability">inactive</span></div>
-      <div class="volume-actions" id="motion-control-presets"></div>
-      <div class="slider-row">
-        <span class="slider-label">Mass</span>
-        <input type="range" id="motion-control-mass" min="0.2" max="4" step="0.01" value="1.45">
-        <span class="slider-val" id="motion-control-mass-val">1.45</span>
+
+    <details class="motion-panel-compact-details" id="motion-panel-debug-routes">
+      <summary>Routes And Fixtures</summary>
+      <div class="motion-panel-compact-body">
+        <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_motion_agency=1</span></div>
+        <div class="field"><span class="field-key">Identity</span><span class="field-val" id="motion-route-id">procedural-orb-motion-grammar-v0</span></div>
+        <div class="slider-row">
+          <span class="slider-label">Attention</span>
+          <select id="motion-attention-target-mode" class="select-input">
+            <option value="selected-object" selected>Selected object</option>
+            <option value="sample">Clip sample</option>
+          </select>
+        </div>
+        <div class="volume-actions">
+          <button class="btn" id="motion-enable">Spawn Orbs</button>
+          <button class="btn" id="motion-phrase-enable">Decision</button>
+          <button class="btn" id="motion-controls-enable">Controls</button>
+          <button class="btn" id="motion-tracks-enable">Tracks</button>
+          <button class="btn" id="motion-generated-enable">Generated</button>
+          <button class="btn" id="motion-output-map-enable">Mapped</button>
+          <button class="btn" id="motion-temporal-enable">Temporal</button>
+          <button class="btn" id="motion-frame-camera">Frame</button>
+        </div>
+        <div class="field"><span class="field-key">Phrase Route</span><span class="route-chip">kaminos_motion_phrase=1</span></div>
+        <div class="field"><span class="field-key">Target</span><span class="field-val">notice-prepare-commit-recover</span></div>
+        <div class="field"><span class="field-key">Track Route</span><span class="route-chip">kaminos_motion_tracks=1</span></div>
+        <div class="field"><span class="field-key">Generated Route</span><span class="route-chip">kaminos_generated_motion_track=1</span></div>
+        <div class="field"><span class="field-key">Mapped Route</span><span class="route-chip">kaminos_motion_output_map=1</span></div>
+        <div class="field"><span class="field-key">Temporal Route</span><span class="route-chip">kaminos_generated_pose_temporal=1</span></div>
+        <div class="field"><span class="field-key">Fixture</span><span class="field-val">CoG + head attention</span></div>
+        <div class="volume-actions" id="motion-temporal-clips">
+          <button class="btn" data-motion-temporal-clip="kimodo_theatrical_bow_temporal_v0">Bow</button>
+          <button class="btn" data-motion-temporal-clip="kimodo_cautious_sneak_temporal_v0">Sneak</button>
+          <button class="btn" data-motion-temporal-clip="kimodo_startled_jumpback_temporal_v0">Startle</button>
+          <button class="btn" data-motion-temporal-clip="kimodo_energetic_dance_temporal_v0">Dance</button>
+          <button class="btn" data-motion-temporal-clip="kimodo_angry_kick_punch_temporal_v0">Fight</button>
+          <button class="btn" data-motion-temporal-clip="kimodo_curious_walk_look_temporal_v0">Curious</button>
+        </div>
       </div>
-      <div class="slider-row">
-        <span class="slider-label">Commit</span>
-        <input type="range" id="motion-control-commitment" min="0" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-commitment-val">1.00</span>
+    </details>
+    <details class="motion-panel-compact-details motion-control-panel" id="motion-panel-phrase-controls-details">
+      <summary>Phrase Controls</summary>
+      <div class="motion-panel-compact-body motion-control-panel" id="motion-phrase-control-panel" data-motion-controls-applicable="false">
+        <div class="field"><span class="field-key">Control Route</span><span class="route-chip">kaminos_motion_phrase_controls=1</span></div>
+        <div class="field"><span class="field-key">Applies</span><span class="field-val" id="motion-control-applicability">inactive</span></div>
+        <div class="volume-actions" id="motion-control-presets"></div>
+        <div class="slider-row">
+          <span class="slider-label">Mass</span>
+          <input type="range" id="motion-control-mass" min="0.2" max="4" step="0.01" value="1.45">
+          <span class="slider-val" id="motion-control-mass-val">1.45</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Commit</span>
+          <input type="range" id="motion-control-commitment" min="0" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-commitment-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Anticipate</span>
+          <input type="range" id="motion-control-anticipation" min="0" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-anticipation-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Hold</span>
+          <input type="range" id="motion-control-hold" min="0.2" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-hold-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Effort</span>
+          <input type="range" id="motion-control-effort" min="0" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-effort-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Overshoot</span>
+          <input type="range" id="motion-control-overshoot" min="0" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-overshoot-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Recover</span>
+          <input type="range" id="motion-control-recovery" min="0.2" max="2.5" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-recovery-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Tempo</span>
+          <input type="range" id="motion-control-tempo" min="0.25" max="3" step="0.01" value="1">
+          <span class="slider-val" id="motion-control-tempo-val">1.00</span>
+        </div>
       </div>
-      <div class="slider-row">
-        <span class="slider-label">Anticipate</span>
-        <input type="range" id="motion-control-anticipation" min="0" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-anticipation-val">1.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Hold</span>
-        <input type="range" id="motion-control-hold" min="0.2" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-hold-val">1.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Effort</span>
-        <input type="range" id="motion-control-effort" min="0" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-effort-val">1.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Overshoot</span>
-        <input type="range" id="motion-control-overshoot" min="0" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-overshoot-val">1.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Recover</span>
-        <input type="range" id="motion-control-recovery" min="0.2" max="2.5" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-recovery-val">1.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Tempo</span>
-        <input type="range" id="motion-control-tempo" min="0.25" max="3" step="0.01" value="1">
-        <span class="slider-val" id="motion-control-tempo-val">1.00</span>
-      </div>
-    </div>
+    </details>
     <div class="panel motion-readout">
       <div class="field"><span class="field-key">Actors</span><span class="field-val" id="motion-actor-count">0</span></div>
       <div class="field"><span class="field-key">Fallbacks</span><span class="field-val" id="motion-fallback-count">0</span></div>
       <div class="field"><span class="field-key">Frame</span><span class="field-val" id="motion-frame-count">0</span></div>
       <div class="field"><span class="field-key">Max effort</span><span class="field-val" id="motion-max-effort">0.00</span></div>
     </div>
-    <h2>Procedural Clips</h2>
-    <div class="panel">
-      <div class="motion-clip-list" id="motion-clip-list"></div>
-    </div>
+    <details class="motion-panel-compact-details" id="motion-panel-procedural-clips-details">
+      <summary>Procedural Clips</summary>
+      <div class="motion-panel-compact-body">
+        <div class="motion-clip-list" id="motion-clip-list"></div>
+      </div>
+    </details>
   </div>
 
   <!-- Volume Tab -->
@@ -5977,54 +6041,72 @@ function motionPanelSourceGhostExportEvidence() {
   };
 }
 
-function renderMotionPanelTakeShelf() {
-  const shelf = document.getElementById('motion-panel-take-shelf');
-  const count = document.getElementById('motion-panel-take-count');
-  if (count) count.textContent = `${motionPanelTakes.length} / ${motionPanelDurableTakeSummaries.length}`;
+function renderMotionPanelCurrentTake() {
+  const shelf = document.getElementById('motion-panel-current-take');
   if (!shelf) return;
   shelf.innerHTML = '';
-  for (const take of motionPanelTakes.slice().reverse()) {
+  const take = motionPanelTakes.find(entry => entry.metadata.id === motionPanelSelectedTakeId) || null;
+  if (!take) {
     const row = document.createElement('div');
-    row.style.border = `1px solid ${take.metadata.id === motionPanelSelectedTakeId ? '#1976d2' : '#2f2f2f'}`;
-    row.style.background = take.metadata.id === motionPanelSelectedTakeId ? 'rgba(21, 101, 192, 0.14)' : '#202020';
-    row.style.borderRadius = '6px';
-    row.style.padding = '6px';
-    row.innerHTML = `
-      <span style="display: block; color: #ddd;">${escapeHtml(take.metadata.label)}</span>
-      <span style="display: block; color: #777; font-size: 10px;">${escapeHtml(take.metadata.clipId)} · ${take.metadata.frameCount}f · ${escapeHtml(take.metadata.sourceModel || take.metadata.sourceFormat || 'motion')}${take.metadata.durableTakeId ? ` · saved ${escapeHtml(take.metadata.durableTakeId)}` : ''}</span>
-      <span style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
-        <button class="btn${take.metadata.id === motionPanelSelectedTakeId ? ' active' : ''}" data-motion-panel-take-current="${escapeHtml(take.metadata.id)}" type="button">Current</button>
-        <button class="btn" data-motion-panel-take-preview="${escapeHtml(take.metadata.id)}" type="button">Preview</button>
-        <button class="btn" data-motion-panel-take-rename="${escapeHtml(take.metadata.id)}" type="button">Rename</button>
-        <button class="btn" data-motion-panel-take-delete="${escapeHtml(take.metadata.id)}" type="button">Delete</button>
-      </span>
-    `;
-    row.querySelector('[data-motion-panel-take-current]')?.addEventListener('click', () => selectMotionPanelTake(take.metadata.id));
-    row.querySelector('[data-motion-panel-take-preview]')?.addEventListener('click', () => void previewMotionPanelTake(take.metadata.id));
-    row.querySelector('[data-motion-panel-take-rename]')?.addEventListener('click', () => {
-      const label = window.prompt?.('Rename motion take', take.metadata.label);
-      if (label != null) renameMotionPanelTake(take.metadata.id, label);
-    });
-    row.querySelector('[data-motion-panel-take-delete]')?.addEventListener('click', () => deleteMotionPanelTake(take.metadata.id));
+    row.className = 'motion-panel-take-card empty';
+    row.textContent = 'No generated take loaded yet.';
     shelf.appendChild(row);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'motion-panel-take-card current';
+  row.innerHTML = `
+    <span class="motion-panel-take-title">${escapeHtml(take.metadata.label)}</span>
+    <span class="motion-panel-take-meta">${escapeHtml(take.metadata.clipId)} · ${take.metadata.frameCount}f · ${escapeHtml(take.metadata.sourceModel || take.metadata.sourceFormat || 'motion')}${take.metadata.durableTakeId ? ` · saved ${escapeHtml(take.metadata.durableTakeId)}` : ''}</span>
+    <span class="motion-panel-take-actions">
+      <button class="btn active" data-motion-panel-take-current="${escapeHtml(take.metadata.id)}" type="button">Current</button>
+      <button class="btn" data-motion-panel-take-preview="${escapeHtml(take.metadata.id)}" type="button">Preview</button>
+      <button class="btn" data-motion-panel-take-rename="${escapeHtml(take.metadata.id)}" type="button">Rename</button>
+      <button class="btn" data-motion-panel-take-delete="${escapeHtml(take.metadata.id)}" type="button">Delete</button>
+    </span>
+  `;
+  row.querySelector('[data-motion-panel-take-current]')?.addEventListener('click', () => selectMotionPanelTake(take.metadata.id));
+  row.querySelector('[data-motion-panel-take-preview]')?.addEventListener('click', () => void previewMotionPanelTake(take.metadata.id));
+  row.querySelector('[data-motion-panel-take-rename]')?.addEventListener('click', () => {
+    const label = window.prompt?.('Rename motion take', take.metadata.label);
+    if (label != null) renameMotionPanelTake(take.metadata.id, label);
+  });
+  row.querySelector('[data-motion-panel-take-delete]')?.addEventListener('click', () => deleteMotionPanelTake(take.metadata.id));
+  shelf.appendChild(row);
+}
+
+function renderMotionPanelSavedTakes() {
+  const shelf = document.getElementById('motion-panel-saved-takes');
+  if (!shelf) return;
+  shelf.innerHTML = '';
+  if (!motionPanelDurableTakeSummaries.length) {
+    const row = document.createElement('div');
+    row.className = 'motion-panel-take-card empty';
+    row.textContent = 'No saved takes loaded.';
+    shelf.appendChild(row);
+    return;
   }
   for (const summary of motionPanelDurableTakeSummaries) {
     const alreadyLoaded = motionPanelTakes.some(take => take.metadata.durableTakeId === summary.id);
     const row = document.createElement('div');
-    row.style.border = '1px solid #4a3d22';
-    row.style.background = alreadyLoaded ? 'rgba(94, 75, 33, 0.16)' : '#201f1b';
-    row.style.borderRadius = '6px';
-    row.style.padding = '6px';
+    row.className = `motion-panel-take-card saved${alreadyLoaded ? ' loaded' : ''}`;
     row.innerHTML = `
-      <span style="display: block; color: #f0d28a;">${escapeHtml(summary.title || summary.id)}</span>
-      <span style="display: block; color: #777; font-size: 10px;">saved ${escapeHtml(summary.id)} · ${summary.frameCount || 0}f · ${summary.phraseCount || 0} phrases</span>
-      <span style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
+      <span class="motion-panel-take-title saved">${escapeHtml(summary.title || summary.id)}</span>
+      <span class="motion-panel-take-meta">saved ${escapeHtml(summary.id)} · ${summary.frameCount || 0}f · ${summary.phraseCount || 0} phrases</span>
+      <span class="motion-panel-take-actions">
         <button class="btn" data-motion-panel-durable-preview="${escapeHtml(summary.id)}" type="button">${alreadyLoaded ? 'Repreview' : 'Load'}</button>
       </span>
     `;
     row.querySelector('[data-motion-panel-durable-preview]')?.addEventListener('click', () => void previewDurableMotionPanelTake(summary.id));
     shelf.appendChild(row);
   }
+}
+
+function renderMotionPanelTakeShelf() {
+  const count = document.getElementById('motion-panel-take-count');
+  if (count) count.textContent = `${motionPanelTakes.length} / ${motionPanelDurableTakeSummaries.length}`;
+  renderMotionPanelCurrentTake();
+  renderMotionPanelSavedTakes();
 }
 
 function selectMotionPanelTake(takeId) {
@@ -6285,6 +6367,7 @@ function recordMotionPanelExport(result) {
 }
 
 window.kaminosMotionPanelTakeShelfDebugState = function() {
+  const detailsOpen = (id) => !!document.getElementById(id)?.open;
   return {
     schema: 'kaminos.motion-panel-take-shelf.v0',
     takeCount: motionPanelTakes.length,
@@ -6293,6 +6376,17 @@ window.kaminosMotionPanelTakeShelfDebugState = function() {
     selectedTake: motionPanelSelectedTakeEvidence(),
     takes: motionPanelTakes.map(take => take.metadata),
     durableTakes: motionPanelDurableTakeSummaries,
+    operatorLayout: {
+      schema: 'kaminos.motion-panel-operator-layout.v0',
+      generateSection: !!document.getElementById('motion-panel-generate-section'),
+      currentTakeSurface: !!document.getElementById('motion-panel-current-take'),
+      savedTakesSurface: !!document.getElementById('motion-panel-saved-takes'),
+      sourceOptionsOpen: detailsOpen('motion-panel-source-options'),
+      exportOptionsOpen: detailsOpen('motion-panel-export-options'),
+      debugRoutesOpen: detailsOpen('motion-panel-debug-routes'),
+      phraseControlsOpen: detailsOpen('motion-panel-phrase-controls-details'),
+      proceduralClipsOpen: detailsOpen('motion-panel-procedural-clips-details'),
+    },
   };
 };
 
