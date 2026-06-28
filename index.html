@@ -11855,6 +11855,7 @@ function deriveBrowserKilnActivityState(opts) {
 let routeCompositionTrayState = null;
 let specimenPacketCockpitState = null;
 let specimenPacketNextRouteRequestState = null;
+let specimenPacketCockpitSourceState = null;
 
 function createBrowserTray(trayId) {
   return {
@@ -12013,6 +12014,7 @@ function pipelineBeginRouteKilnRun({ routeNode, source, requestedPipelineId, pip
   });
   routeCompositionTrayState = tray;
   renderRouteCompositionTray();
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
   return tray.routeRuns.find(run => run.runId === pendingRecord?.runId) || null;
 }
 
@@ -12022,6 +12024,7 @@ function pipelineUpdateRouteKilnRun(runId, patch = {}) {
   tray = trayUpdateRouteRun(tray, { runId, ...patch });
   routeCompositionTrayState = tray;
   renderRouteCompositionTray();
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
   return tray.routeRuns.find(run => run.runId === runId) || null;
 }
 
@@ -12043,6 +12046,7 @@ function pipelineAppendRouteKilnOutputs(run, routeRunId) {
     existing.add(artifactId);
   }
   routeCompositionTrayState = tray;
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
   return tray;
 }
 
@@ -12187,6 +12191,25 @@ function buildBrowserNextSpecimenPacketRouteRequest(packet, previousRequest) {
   };
 }
 
+function refreshBrowserSpecimenPacketCockpitFromRouteEvidence() {
+  if (!specimenPacketCockpitState || !specimenPacketCockpitSourceState) return null;
+  const routeRequests = [
+    ...(specimenPacketCockpitSourceState.routeRequests || []),
+    ...(specimenPacketNextRouteRequestState ? [specimenPacketNextRouteRequestState] : []),
+  ];
+  specimenPacketCockpitState = buildBrowserSpecimenPacketCockpit({
+    packetId: specimenPacketCockpitState.packetId,
+    checkpoint: specimenPacketCockpitSourceState.checkpoint,
+    viewArtifacts: specimenPacketCockpitSourceState.viewArtifacts,
+    routeRequests,
+    tray: routeCompositionTrayState,
+    failureTags: specimenPacketCockpitState.failureTags || [],
+    negativeLawPatch: specimenPacketCockpitState.negativeLawPatch || { added: [] },
+  });
+  renderSpecimenPacketCockpit();
+  return specimenPacketCockpitState;
+}
+
 function renderSpecimenPacketCockpit() {
   const panel = document.getElementById('specimen-packet-cockpit-panel');
   const body = document.getElementById('specimen-packet-cockpit-body');
@@ -12210,6 +12233,7 @@ function renderSpecimenPacketCockpit() {
   const nextRequestLabel = nextRequestId
     ? nextRequestId.replace(`${packet.packetId}-`, '')
     : '';
+  const latestCandidate = packet.candidateArtifacts?.at(-1) || null;
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr;gap:6px;font-family:'SF Mono',monospace;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
@@ -12240,6 +12264,9 @@ function renderSpecimenPacketCockpit() {
     <div style="margin-top:7px;color:${patch.length ? '#f0b85a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-negative-law-patch="${patch.join(',')}">
       Next pass blocks: ${patch.length ? patch.map(escapeHtml).join(', ') : 'none yet'}
     </div>
+    <div style="margin-top:5px;color:${latestCandidate ? '#8fc7d6' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-route-evidence="${latestCandidate?.candidateArtifactId || ''}">
+      Route evidence: ${latestCandidate ? `${escapeHtml(latestCandidate.sourceKind || 'generated')} candidate` : 'no candidate yet'}
+    </div>
     <div style="margin-top:5px;color:${nextRequestId ? '#66bb6a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-next-request="${nextRequestId}">
       Next request: ${nextRequestLabel ? escapeHtml(nextRequestLabel) : 'mark a failure to strengthen law'}
     </div>
@@ -12264,6 +12291,11 @@ function kaminosLoadFixtureSpecimenPacketCockpit() {
   });
   routeCompositionTrayState = tray;
   specimenPacketNextRouteRequestState = null;
+  specimenPacketCockpitSourceState = {
+    checkpoint,
+    viewArtifacts,
+    routeRequests: [request],
+  };
   specimenPacketCockpitState = buildBrowserSpecimenPacketCockpit({
     packetId: 'packet-red-lerm-001',
     checkpoint,
@@ -12273,6 +12305,42 @@ function kaminosLoadFixtureSpecimenPacketCockpit() {
   });
   renderRouteCompositionTray();
   renderSpecimenPacketCockpit();
+  return specimenPacketCockpitState;
+}
+
+function kaminosSimulateSpecimenPacketLiveRouteEvidence() {
+  if (!specimenPacketCockpitState) kaminosLoadFixtureSpecimenPacketCockpit();
+  const request = specimenPacketCockpitSourceState?.routeRequests?.[0] || specimenPacketCockpitState?.routeRequests?.[0] || null;
+  const runId = 'packet-sharp-live-route-001';
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-packet-live-${runId}`);
+  tray = trayUpdateRouteRun(tray, {
+    runId,
+    requestedRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    effectiveRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    backendClass: 'browser-webgpu',
+    statusBadge: 'fixture',
+    routePhase: 'completed',
+    receiptId: 'simulated-packet-sharp-live-route-001-report',
+    inputArtifactIds: request?.inputArtifactIds || [],
+    conditioningArtifactIds: Object.values(request?.conditioningArtifactIds || {}),
+    outputArtifactIds: ['packet-sharp-live-route-001-splat'],
+    sourceTruthWarnings: ['simulated_route_evidence_not_live_compute'],
+  });
+  const existing = new Set((tray.outputArtifacts || []).map(artifact => artifact.artifactId));
+  if (!existing.has('packet-sharp-live-route-001-splat')) {
+    tray = trayAppendOutput(tray, {
+      artifactId: 'packet-sharp-live-route-001-splat',
+      title: 'SHARP simulated splat candidate',
+      sourceKind: 'fixture',
+      routeRunId: runId,
+      mimeType: 'model/ply',
+      source: '/tmp/kaminos/packet-sharp-live-route-001/output.ply',
+      sourceTruthWarnings: ['simulated_route_evidence_not_live_compute'],
+    });
+  }
+  routeCompositionTrayState = tray;
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
+  renderRouteCompositionTray();
   return specimenPacketCockpitState;
 }
 
@@ -12563,6 +12631,7 @@ function clearRouteCompositionTray() {
   routeCompositionTrayState = null;
   specimenPacketCockpitState = null;
   specimenPacketNextRouteRequestState = null;
+  specimenPacketCockpitSourceState = null;
   renderRouteCompositionTray();
 }
 
@@ -12688,6 +12757,8 @@ window.kaminosTrayImportImageFile = trayImportImageFile;
 window.kaminosSimulateSharpKilnLifecycleForWitness = simulateSharpKilnLifecycleForWitness;
 window.kaminosLoadFixtureSpecimenPacketCockpit = kaminosLoadFixtureSpecimenPacketCockpit;
 window.kaminosTagSpecimenPacketFailure = tagBrowserSpecimenPacketFailure;
+window.kaminosRefreshSpecimenPacketCockpitFromRouteEvidence = refreshBrowserSpecimenPacketCockpitFromRouteEvidence;
+window.kaminosSimulateSpecimenPacketLiveRouteEvidence = kaminosSimulateSpecimenPacketLiveRouteEvidence;
 window.kaminosSpecimenPacketCockpitState = () => specimenPacketCockpitState;
 window.kaminosSpecimenPacketNextRouteRequest = () => specimenPacketNextRouteRequestState;
 window.kaminosSpecimenPacketCockpitWitness = specimenPacketCockpitWitness;

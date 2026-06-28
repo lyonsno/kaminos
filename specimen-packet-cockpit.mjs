@@ -231,6 +231,29 @@ export function buildNextSpecimenPacketRouteRequest(packet, previousRequest) {
   };
 }
 
+export function refreshSpecimenPacketCockpitFromRouteEvidence(packet, {
+  checkpoint,
+  viewArtifacts = [],
+  routeRequests = null,
+  routeRuns = null,
+  tray = null,
+  candidateArtifacts = null,
+} = {}) {
+  if (!packet?.packetId) throw new Error('valid specimen packet is required');
+  return buildSpecimenPacketCockpit({
+    packetId: packet.packetId,
+    checkpoint,
+    viewArtifacts,
+    routeRequests: routeRequests || packet.routeRequests || [],
+    routeRuns,
+    tray,
+    candidateArtifacts,
+    failureTags: packet.failureTags || [],
+    negativeLawPatch: packet.negativeLawPatch || { added: [] },
+    promotionState: packet.promotionState || 'bench_evidence',
+  });
+}
+
 export function specimenPacketCockpitWitness(packet) {
   const viewKinds = (packet?.truthLayers || []).map(layer => layer.viewKind);
   const nextRequestCarriesFailureLaw = Boolean(packet?.cockpitSummary?.nextRequestCarriesFailureLaw);

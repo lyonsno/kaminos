@@ -533,6 +533,85 @@ try {
       packetState,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'specimen-packet-live-route') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    await evalJson(cdp, `(() => {
+      const packet = window.kaminosLoadFixtureSpecimenPacketCockpit?.();
+      window.kaminosTagSpecimenPacketFailure?.('added_face', null, 'Operator marked candidate failure before live retry.');
+      const refreshed = window.kaminosSimulateSpecimenPacketLiveRouteEvidence?.();
+      return {
+        packetOk: packet?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0',
+        refreshedOk: refreshed?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0',
+        packetId: refreshed?.packetId || packet?.packetId || null,
+      };
+    })()`);
+    await wait(500);
+
+    const packetState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosSpecimenPacketCockpitWitness?.();
+      const panel = document.querySelector('[data-specimen-packet-cockpit]');
+      const evidence = panel?.querySelector('[data-specimen-packet-route-evidence]');
+      const patch = panel?.querySelector('[data-specimen-packet-negative-law-patch]');
+      const next = panel?.querySelector('[data-specimen-packet-next-request]');
+      const rect = panel?.getBoundingClientRect();
+      const liveRun = witness?.packet?.routeRuns?.find(run => run.runId === 'packet-sharp-live-route-001') || null;
+      const candidate = witness?.packet?.candidateArtifacts?.find(item => item.candidateArtifactId === 'packet-sharp-live-route-001-splat') || null;
+      return {
+        ok: Boolean(
+          witness?.ok === true
+          && liveRun?.statusBadge === 'fixture'
+          && liveRun?.kilnActivity?.truthMode === 'fixture'
+          && liveRun?.kilnActivity?.sourceTruthWarnings?.includes('fixture_kiln_not_live_compute')
+          && liveRun?.sourceTruthWarnings?.includes('fixture_route_not_live_execution')
+          && candidate?.sourceKind === 'fixture'
+          && candidate?.sourceTruthWarnings?.includes('fixture_not_live_generated_output')
+          && witness?.packet?.failureTags?.some(tag => tag.tag === 'added_face')
+          && witness?.nextRequestCarriesFailureLaw === true
+          && patch?.dataset.specimenPacketNegativeLawPatch?.includes('do_not_install_face')
+          && evidence?.dataset.specimenPacketRouteEvidence === 'packet-sharp-live-route-001-splat'
+          && next?.dataset.specimenPacketNextRequest
+        ),
+        witness,
+        liveRun,
+        candidate,
+        dom: {
+          panelDataset: panel ? { ...panel.dataset } : null,
+          panelText: panel?.innerText || '',
+          evidenceText: evidence?.innerText || '',
+          evidenceDataset: evidence ? { ...evidence.dataset } : null,
+          patchText: patch?.innerText || '',
+          nextText: next?.innerText || '',
+        },
+        panelRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'Specimen packet live route evidence loop', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = packetState.panelRect
+      ? await screenshotVisibleProbe(afterPath, packetState.panelRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 200 && screenshotProbe.saturatedPixels >= 20, 'Specimen packet live route cockpit was not visibly inspectable', {
+      packetState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      packetState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'specimen-intake') {
     const fixtureButton = await evalJson(cdp, `(() => {
       const button = document.querySelector('#pipeline-specimen-fixture-button');

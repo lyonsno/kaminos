@@ -17,6 +17,7 @@ import {
   buildSpecimenPacketCockpit,
   tagSpecimenPacketFailure,
   buildNextSpecimenPacketRouteRequest,
+  refreshSpecimenPacketCockpitFromRouteEvidence,
   specimenPacketCockpitWitness,
 } from '../specimen-packet-cockpit.mjs';
 
@@ -116,3 +117,46 @@ assert.equal(witness.truthLayerCount, 5);
 assert.equal(witness.routeRunCount, 2);
 assert.equal(witness.failureTagCount, 1);
 assert.equal(witness.nextRequestCarriesFailureLaw, true);
+
+const liveTray = updateRouteRun(tray, {
+  runId: 'sharp-live-run-001',
+  requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+  effectiveRoute: 'adapter.sharp-image-to-splat-live.v0',
+  backendClass: 'browser-webgpu',
+  statusBadge: 'real',
+  routePhase: 'completed',
+  receiptId: '/tmp/kaminos/sharp-live-run-001/report.json',
+  inputArtifactIds: [request.inputArtifactIds[0]],
+  conditioningArtifactIds: Object.values(request.conditioningArtifactIds),
+  outputArtifactIds: ['sharp-live-run-001-splat'],
+});
+
+const livePacket = refreshSpecimenPacketCockpitFromRouteEvidence(failed, {
+  checkpoint,
+  viewArtifacts,
+  routeRequests: [nextRequest],
+  tray: {
+    ...liveTray,
+    outputArtifacts: [
+      ...liveTray.outputArtifacts,
+      {
+        schema: 'kaminos.kiln.tray-artifact-entry.v0',
+        artifactId: 'sharp-live-run-001-splat',
+        title: 'SHARP live splat candidate',
+        sourceKind: 'generated',
+        routeRunId: 'sharp-live-run-001',
+        mimeType: 'model/ply',
+        source: '/tmp/kaminos/sharp-live-run-001/output.ply',
+        sourceTruthWarnings: [],
+      },
+    ],
+  },
+});
+
+assert.equal(livePacket.packetId, failed.packetId, 'live route refresh must preserve packet identity');
+assert.ok(livePacket.routeRuns.some(run => run.runId === 'sharp-live-run-001' && run.statusBadge === 'real'));
+assert.ok(livePacket.activityStates.some(state => state.activityState === 'cooled' && state.truthMode === 'live'));
+assert.ok(livePacket.candidateArtifacts.some(candidate => candidate.candidateArtifactId === 'sharp-live-run-001-splat'));
+assert.ok(livePacket.lineageReceipts.some(receipt => receipt.receiptId === '/tmp/kaminos/sharp-live-run-001/report.json'));
+assert.ok(livePacket.failureTags.some(tag => tag.tag === 'added_face'), 'live route refresh must not erase prior failure tags');
+assert.ok(livePacket.negativeLawPatch.added.includes('do_not_install_face'), 'live route refresh must preserve strengthened law');
