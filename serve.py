@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and re.match(r"^\d+$", sys.argv[1]) else 8090
 ROOT = Path(__file__).parent.resolve()
 
 # Directories the browse API can access
@@ -41,6 +41,10 @@ BROWSE_ROOTS = {
     )),
     "pixal3d": Path(os.path.expanduser("~/dev/pixal3d-mlx/outputs")),
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
+    "lerms-preview": Path(os.environ.get(
+        "KAMINOS_LERMS_PREVIEW_DIR",
+        "/tmp",
+    )).expanduser(),
 }
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")

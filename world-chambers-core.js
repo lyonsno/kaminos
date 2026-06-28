@@ -2,6 +2,9 @@ export const WORLD_CHAMBER_REGISTRY_SCHEMA = 'kaminos.world-chambers.registry.v0
 export const WORLD_CHAMBER_DESCRIPTOR_SCHEMA = 'kaminos.world-chamber.descriptor.v0';
 export const WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA = 'kaminos.world-chamber.preview-bench.v0';
 export const WORLD_CHAMBER_RECEIPT_SCHEMA = 'kaminos.world-chamber.receipt.v0';
+export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA = 'lerms.preview-bench-actor-motion-payload.v0';
+export const LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-state.v0';
+export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE = 'lerms/preview-bench/actor-motion-payload-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
 export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
@@ -373,6 +376,80 @@ function previewCameraPreset(cameraId) {
   return LERMS_PREVIEW_CAMERA_PRESETS.find(preset => preset.id === cameraId) || LERMS_PREVIEW_CAMERA_PRESETS[0];
 }
 
+function countFrameArray(frame, key, fallbackKey = null) {
+  if (Array.isArray(frame?.[key])) return frame[key].length;
+  if (fallbackKey && Array.isArray(frame?.[fallbackKey])) return frame[fallbackKey].length;
+  return 0;
+}
+
+export function normalizeLermsPreviewActorMotionPayloadReport(report, payloadSource = null) {
+  assertObject(report, 'LERMS Preview Bench actor-motion report');
+  const payload = report.payload || report;
+  assertObject(payload, 'LERMS Preview Bench actor-motion payload');
+  if (payload.schema !== LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA) {
+    throw new Error(`actor-motion payload schema mismatch: expected ${LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA} but got ${payload.schema || 'missing'}`);
+  }
+  if (payload.route !== LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE) {
+    throw new Error(`actor-motion payload route mismatch: expected ${LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE} but got ${payload.route || 'missing'}`);
+  }
+  const surface = payload.acceptanceSurface;
+  assertObject(surface, 'actor-motion acceptance surface');
+  if (surface.worldChamberId !== LERMS_UNDERHILL_CHAMBER_ID || surface.posture !== 'inspect' || surface.bench !== LERMS_TERRAIN_PREVIEW_BENCH_ID) {
+    throw new Error(`actor-motion payload does not target the LERMS Preview Bench: ${JSON.stringify(surface)}`);
+  }
+  if (surface.routeQuery !== routeStringForPreviewBench(LERMS_UNDERHILL_CHAMBER_ID, 'inspect', LERMS_TERRAIN_PREVIEW_BENCH_ID)) {
+    throw new Error(`actor-motion payload route query mismatch: ${surface.routeQuery || 'missing'}`);
+  }
+  if (payload.witnessState?.schema !== LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA) {
+    throw new Error(`actor-motion witness state schema mismatch: ${payload.witnessState?.schema || 'missing'}`);
+  }
+  if (!Array.isArray(payload.actorMotion) || payload.actorMotion.length === 0) {
+    throw new Error('actor-motion payload must include actorMotion records');
+  }
+  if (payload.frame?.schema !== 'lerms.first-vertical-frame.v0') {
+    throw new Error(`actor-motion frame schema mismatch: ${payload.frame?.schema || 'missing'}`);
+  }
+  if (payload.sourceTruthUpgrade?.schema !== 'lerms.first-vertical-source-truth-upgrade.v0') {
+    throw new Error(`actor-motion source-truth upgrade schema mismatch: ${payload.sourceTruthUpgrade?.schema || 'missing'}`);
+  }
+  const selectedCliplets = payload.actorMotion.map(actor => actor?.selectedCliplet).filter(Boolean);
+  const firstCliplet = selectedCliplets[0] || {};
+  const states = [...new Set(payload.actorMotion.map(actor => actor?.state).filter(Boolean))];
+  const downgrades = Array.isArray(payload.downgrades) ? payload.downgrades : [];
+  const rejectedSurfaces = Array.isArray(payload.rejectedSurfaces) ? payload.rejectedSurfaces : [];
+  return {
+    schema: LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
+    payloadSchema: payload.schema,
+    route: payload.route,
+    reportSchema: report.schema || null,
+    reportPath: report.reportPath || null,
+    payloadSource: normalizeReceiptSource(payloadSource),
+    source: clone(payload.frame.source || {}),
+    sourceTruthUpgrade: clone(payload.sourceTruthUpgrade),
+    actorCount: payload.actorMotion.length,
+    frameCounts: {
+      terrain: countFrameArray(payload.frame, 'terrainSamples'),
+      lerms: countFrameArray(payload.frame, 'lerms'),
+      goins: countFrameArray(payload.frame, 'goins'),
+      juiceHits: countFrameArray(payload.frame, 'juiceHits'),
+      carrierDrops: countFrameArray(payload.frame, 'carrierDrops', 'carrierDropEvents'),
+    },
+    motionAdapterSchema: payload.witnessState.motionAdapterSchema || payload.actorMotion[0]?.motionAdapter?.schema || null,
+    selectedClipletSource: {
+      schema: firstCliplet.schema || null,
+      route: firstCliplet.sourceRoute || null,
+      model: firstCliplet.sourceModel || null,
+      status: firstCliplet.sourceStatus || null,
+    },
+    states,
+    actors: clone(payload.actorMotion),
+    downgrades: clone(downgrades),
+    rejectedSurfaces: clone(rejectedSurfaces),
+    custody: payload.custody ? clone(payload.custody) : null,
+    outputsVisualPreview: payload.witnessState.outputsVisualPreview === true,
+  };
+}
+
 export function createLermsPreviewBenchState(registry = createDefaultWorldChambersRegistry(), options = {}) {
   const debug = worldChamberDebugState(registry);
   const chamber = debug.activeChamber;
@@ -391,6 +468,9 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
   const primaryTerrain = terrainSamples[0] || null;
   const receiptMode = debug.receiptSource?.mode || (debug.usingFixtureFallback ? 'embedded_fixture' : 'unknown');
   const freshness = debug.usingFixtureFallback || receiptMode === 'embedded_fixture' ? 'fixture' : 'external';
+  const actorMotion = options.actorMotionPayloadReport
+    ? normalizeLermsPreviewActorMotionPayloadReport(options.actorMotionPayloadReport, options.actorMotionPayloadSource)
+    : null;
   return {
     schema: LERMS_PREVIEW_WITNESS_SCHEMA,
     hostDescriptor: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
@@ -410,6 +490,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
       source: debug.authority || 'authority unavailable',
       freshness,
       fallback: receiptMode,
+      actorMotion: actorMotion?.source?.authority || null,
     },
     activeCamera: clone(activeCamera),
     cameraPresets: clone(LERMS_PREVIEW_CAMERA_PRESETS),
@@ -434,6 +515,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
     forgeRail: chamber.forgeRail ? clone(chamber.forgeRail) : null,
     intentionallyAbsent: debug.intentionallyAbsent ? clone(debug.intentionallyAbsent) : null,
     receiptLoadError: debug.receiptLoadError ? clone(debug.receiptLoadError) : null,
+    actorMotion,
   };
 }
 

@@ -1666,6 +1666,73 @@ async function runLermsPreviewBenchTerrainScenario(ws) {
   }
 }
 
+async function runLermsPreviewBenchActorMotionScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-actor-motion';
+  lastEvidence.lermsPreviewBenchActorMotion = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS actor motion witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if (state.actorMotion?.actorCount) break;
+        await wait(125);
+      }
+      const actorMotionPayload = state.actorMotion || null;
+      return {
+        state,
+        actorMotionPayload,
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        title: document.getElementById('lerms-preview-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('lerms-preview-route')?.textContent?.trim() || null,
+        actorMotionBadge: document.getElementById('lerms-preview-actor-motion-badge')?.textContent?.trim() || null,
+        actorCountText: document.getElementById('lerms-preview-actor-count')?.textContent?.trim() || null,
+        statesText: document.getElementById('lerms-preview-actor-states')?.textContent?.trim() || null,
+        motionSourceText: document.getElementById('lerms-preview-motion-source')?.textContent?.trim() || null,
+        downgradeText: document.getElementById('lerms-preview-motion-downgrade')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.lermsPreviewBenchActorMotion;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS actor motion Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`LERMS actor motion witness state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`LERMS actor motion route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.payloadSchema !== 'lerms.preview-bench-actor-motion-payload.v0') {
+    throw new Error(`LERMS actor motion payload schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.route !== 'lerms/preview-bench/actor-motion-payload-file') {
+    throw new Error(`LERMS actor motion payload route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.source?.authority !== 'live_simulation') {
+    throw new Error(`LERMS actor motion source authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.actorCount < 6) {
+    throw new Error(`LERMS actor motion actor count too low: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorMotionPayload?.states?.includes('hit_reacting') || !evidence.actorMotionPayload?.states?.includes('rerouting_to_goin')) {
+    throw new Error(`LERMS actor motion state coverage missing hit/reroute: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.selectedClipletSource?.model !== 'kimodo') {
+    throw new Error(`LERMS actor motion cliplet model mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorMotionPayload?.downgrades?.includes('gutterglass_camera_witness_custody_not_claimed')) {
+    throw new Error(`LERMS actor motion payload did not preserve custody downgrade: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionBadge !== 'live_simulation') {
+    throw new Error(`LERMS actor motion UI badge mismatch: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4294,6 +4361,8 @@ try {
     await runWorldChambersLermsUnderhillReceiptUrlScenario(ws);
   } else if (scenario === 'lerms-preview-bench-terrain') {
     await runLermsPreviewBenchTerrainScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-actor-motion') {
+    await runLermsPreviewBenchActorMotionScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

@@ -145,6 +145,11 @@ def test_greenroom_stray_output_dirs_do_not_get_load_affordance():
             BROWSE_ROOTS["greenroom"] = previous
 
 
+def test_lerms_preview_payload_root_defaults_to_tmp_for_agent_handoffs():
+    assert "lerms-preview" in BROWSE_ROOTS
+    assert BROWSE_ROOTS["lerms-preview"] == Path(os.environ.get("KAMINOS_LERMS_PREVIEW_DIR", "/tmp")).expanduser()
+
+
 def test_splat_asset_index_separates_experimental_and_production_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         root = Path(tmp)

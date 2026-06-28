@@ -632,6 +632,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="field"><span class="field-key">Fallback</span><span class="field-val" id="lerms-preview-fallback-badge">embedded_fixture</span></div>
           <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="lerms-preview-freshness-badge">fixture</span></div>
           <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="lerms-preview-terrain-count">16 samples</span></div>
+          <div class="field"><span class="field-key">Actor Motion</span><span class="field-val" id="lerms-preview-actor-motion-badge">not loaded</span></div>
+          <div class="field"><span class="field-key">Actors</span><span class="field-val" id="lerms-preview-actor-count">0</span></div>
+          <div class="field"><span class="field-key">States</span><span class="field-val" id="lerms-preview-actor-states">none</span></div>
+          <div class="field"><span class="field-key">Motion Src</span><span class="field-val" id="lerms-preview-motion-source">none</span></div>
+          <div class="field"><span class="field-key">Downgrade</span><span class="field-val" id="lerms-preview-motion-downgrade">none</span></div>
         </div>
         <div class="lerms-preview-camera-list" id="lerms-preview-camera-list"></div>
       </div>
@@ -827,6 +832,8 @@ let lermsPreviewRouteState = {
   posture: 'inspect',
   cameraId: 'overview-oblique',
 };
+let lermsActorMotionPayloadReport = null;
+let lermsActorMotionPayloadSource = null;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
@@ -4308,7 +4315,11 @@ window.kaminosWorldChambersDebugState = currentWorldChambersDebugState;
 
 function updateLermsPreviewBenchState(options = {}) {
   lermsPreviewRouteState = { ...lermsPreviewRouteState, ...options };
-  lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
+  lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, {
+    ...lermsPreviewRouteState,
+    actorMotionPayloadReport: lermsActorMotionPayloadReport,
+    actorMotionPayloadSource: lermsActorMotionPayloadSource,
+  });
   window.__kaminosLermsPreviewState = lermsPreviewBenchState;
   return lermsPreviewBenchState;
 }
@@ -4320,6 +4331,23 @@ function worldChamberReceiptSourceLabel(receiptSource) {
   if (receiptSource.label) return receiptSource.label;
   if (receiptSource.requestedUrl) return receiptSource.requestedUrl;
   return receiptSource.mode || 'receipt source unknown';
+}
+
+function lermsActorMotionPayloadUrlFromRoute(params) {
+  const directUrl = params.get('lerms_actor_motion_payload_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('lerms_actor_motion_payload_root');
+  const path = params.get('lerms_actor_motion_payload_path');
+  if (root && path) {
+    const query = new URLSearchParams({ root, path }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      root,
+      path,
+    };
+  }
+  return null;
 }
 
 function renderWorldChambersPanel() {
@@ -4369,6 +4397,14 @@ function renderWorldChambersPanel() {
   document.getElementById('lerms-preview-fallback-badge').textContent = previewState.badges.fallback;
   document.getElementById('lerms-preview-freshness-badge').textContent = previewState.badges.freshness;
   document.getElementById('lerms-preview-terrain-count').textContent = `${previewState.terrain.sampleCount} samples`;
+  const actorMotion = previewState.actorMotion;
+  document.getElementById('lerms-preview-actor-motion-badge').textContent = actorMotion?.source?.authority || 'not loaded';
+  document.getElementById('lerms-preview-actor-count').textContent = actorMotion ? String(actorMotion.actorCount) : '0';
+  document.getElementById('lerms-preview-actor-states').textContent = actorMotion?.states?.join(', ') || 'none';
+  document.getElementById('lerms-preview-motion-source').textContent = actorMotion?.selectedClipletSource
+    ? [actorMotion.selectedClipletSource.model, actorMotion.selectedClipletSource.status].filter(Boolean).join(' / ') || actorMotion.selectedClipletSource.route || 'source unavailable'
+    : 'none';
+  document.getElementById('lerms-preview-motion-downgrade').textContent = actorMotion?.downgrades?.[0] || 'none';
   const cameraList = document.getElementById('lerms-preview-camera-list');
   cameraList.innerHTML = '';
   for (const preset of previewState.cameraPresets) {
@@ -4430,13 +4466,47 @@ async function initWorldChambersRoute() {
     });
   }
   const receiptRoute = worldChamberReceiptUrlFromRoute(params);
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || requestedBench) {
+  const actorMotionRoute = lermsActorMotionPayloadUrlFromRoute(params);
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || actorMotionRoute || requestedBench) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
     const debug = currentWorldChambersDebugState();
     const previewState = window.__kaminosLermsPreviewState;
-    setInfo(receiptRoute ? `World Chamber: loading receipt ${receiptRoute.url}` : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`);
+    const loadingLabel = receiptRoute
+      ? `World Chamber: loading receipt ${receiptRoute.url}`
+      : actorMotionRoute
+        ? `LERMS Preview Bench: loading actor motion ${actorMotionRoute.url}`
+        : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
+    setInfo(loadingLabel);
+  }
+  if (actorMotionRoute) {
+    try {
+      lermsActorMotionPayloadReport = await loadWorldChamberReceiptFromUrl(actorMotionRoute.url);
+      lermsActorMotionPayloadSource = {
+        mode: actorMotionRoute.mode,
+        label: actorMotionRoute.mode === 'server_file' ? `${actorMotionRoute.root}/${actorMotionRoute.path}` : actorMotionRoute.url,
+        requestedUrl: actorMotionRoute.url,
+        effectiveUrl: new URL(actorMotionRoute.url, window.location.href).href,
+        root: actorMotionRoute.root,
+        path: actorMotionRoute.path,
+      };
+      renderWorldChambersPanel();
+      const previewState = window.__kaminosLermsPreviewState;
+      setInfo(`LERMS Preview Bench actor motion loaded: ${previewState.actorMotion?.actorCount || 0} actors`);
+    } catch (error) {
+      lermsActorMotionPayloadReport = null;
+      lermsActorMotionPayloadSource = {
+        mode: actorMotionRoute.mode,
+        requestedUrl: actorMotionRoute.url,
+        effectiveUrl: new URL(actorMotionRoute.url, window.location.href).href,
+        root: actorMotionRoute.root,
+        path: actorMotionRoute.path,
+        error: error.message || String(error),
+      };
+      renderWorldChambersPanel();
+      setInfo(`LERMS Preview Bench actor motion load failed: ${error.message || error}`);
+    }
   }
   if (!receiptRoute) return;
 

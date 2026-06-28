@@ -42,6 +42,9 @@ const {
   WORLD_CHAMBER_DESCRIPTOR_SCHEMA,
   WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
   WORLD_CHAMBER_REGISTRY_SCHEMA,
+  LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE,
+  LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA,
+  LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
   LERMS_PREVIEW_WITNESS_SCHEMA,
   LERMS_TERRAIN_PREVIEW_BENCH_ID,
   LERMS_UNDERHILL_CHAMBER_ID,
@@ -56,6 +59,9 @@ const {
 assert.equal(WORLD_CHAMBER_REGISTRY_SCHEMA, 'kaminos.world-chambers.registry.v0');
 assert.equal(WORLD_CHAMBER_DESCRIPTOR_SCHEMA, 'kaminos.world-chamber.descriptor.v0');
 assert.equal(WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA, 'kaminos.world-chamber.preview-bench.v0');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA, 'lerms.preview-bench-actor-motion-payload.v0');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA, 'lerms.preview-bench-actor-motion-state.v0');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE, 'lerms/preview-bench/actor-motion-payload-file');
 assert.equal(LERMS_PREVIEW_WITNESS_SCHEMA, 'kaminos.lerms-preview-witness.v0');
 assert.equal(LERMS_UNDERHILL_CHAMBER_ID, 'lerms-underhill');
 assert.equal(LERMS_TERRAIN_PREVIEW_BENCH_ID, 'terrain-preview');
@@ -131,6 +137,142 @@ assert.deepEqual(benchState.cameraPresets.map(preset => preset.id), LERMS_PREVIE
 assert.equal(benchState.terrain.sampleCount, 16);
 assert.equal(benchState.schemaPreservation.frame, 'lerms.first-vertical-frame.v0');
 assert.equal(benchState.schemaPreservation.terrain, 'lerms.terrain-sample.v0');
+assert.equal(benchState.actorMotion, null);
+
+const actorMotionReport = {
+  ok: true,
+  schema: 'lerms.preview-bench-actor-motion-payload-report.v0',
+  route: 'lerms/preview-bench/actor-motion-payload-file',
+  reportPath: '/tmp/lerms-preview-bench-motion-payload-0628.json',
+  payload: {
+    schema: 'lerms.preview-bench-actor-motion-payload.v0',
+    route: 'lerms/preview-bench/actor-motion-payload-file',
+    acceptanceSurface: {
+      kind: 'kaminos_preview_bench_payload',
+      worldChamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+      routeQuery: 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview',
+      expectedHost: 'kaminos_workbench_kiln_preview_bench',
+    },
+    rejectedSurfaces: [{
+      route: 'browser/?schnoz_3d=1',
+      acceptanceSurface: false,
+      reason: 'debug-only',
+    }],
+    frame: {
+      schema: 'lerms.first-vertical-frame.v0',
+      source: {
+        schema: 'lerms.source-truth.v0',
+        authority: 'live_simulation',
+        route: 'lerms/schnoz-lerm-simulation/witness-file/frame',
+        frameId: 'schnoz-lerm-live-sim-frame-001',
+        sampleAgeMs: 16,
+      },
+      terrainSamples: [{ schema: 'lerms.terrain-sample.v0', id: 'terrain-crown-right' }],
+      lerms: [
+        { schema: 'lerms.lerm-state.v0', id: 'schnoz-carrier', state: 'carrying_goin' },
+        { schema: 'lerms.lerm-state.v0', id: 'schnoz-hit-carrier', state: 'hit_reacting' },
+      ],
+      goins: [{ schema: 'lerms.goin-state.v0', id: 'goin-carried-001' }],
+      juiceHits: [{ schema: 'lerms.juice-hit-event.v0', id: 'hit-001' }],
+      carrierDrops: [],
+    },
+    sourceTruthUpgrade: {
+      schema: 'lerms.first-vertical-source-truth-upgrade.v0',
+      accepted: true,
+      effectiveAuthority: 'live_simulation',
+      predicates: {
+        hasHitToDropChain: true,
+      },
+    },
+    actorMotion: [
+      {
+        schema: 'lerms.preview-bench-actor-motion.v0',
+        actorId: 'schnoz-carrier',
+        species: 'red',
+        role: 'carrier_actor',
+        state: 'carrying_goin',
+        terrainSampleId: 'terrain-crown-right',
+        selectedCliplet: {
+          schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
+          sourceRoute: 'motion-server:http://127.0.0.1:8098/generate',
+          sourceModel: 'kimodo',
+          sourceStatus: 'archived-live-generated-witness',
+          clipletLabel: 'carry-flee',
+        },
+        motionAdapter: {
+          schema: 'lerms.schnoz-motion-adapter.v0',
+        },
+      },
+      {
+        schema: 'lerms.preview-bench-actor-motion.v0',
+        actorId: 'schnoz-hit-carrier',
+        species: 'red',
+        role: 'carrier_actor',
+        state: 'hit_reacting',
+        terrainSampleId: 'terrain-crown-right',
+        selectedCliplet: {
+          schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
+          sourceRoute: 'motion-server:http://127.0.0.1:8098/generate',
+          sourceModel: 'kimodo',
+          sourceStatus: 'archived-live-generated-witness',
+          clipletLabel: 'brake-recover',
+        },
+        motionAdapter: {
+          schema: 'lerms.schnoz-motion-adapter.v0',
+        },
+      },
+    ],
+    witnessState: {
+      schema: 'lerms.preview-bench-actor-motion-state.v0',
+      chamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+      routeReady: true,
+      actorCount: 2,
+      motionAdapterSchema: 'lerms.schnoz-motion-adapter.v0',
+      outputsVisualPreview: false,
+      sourceTruthEffectiveAuthority: 'live_simulation',
+    },
+    downgrades: [
+      'proxy_body_visual_only',
+      'final_red_lerm_body_not_claimed',
+      'kaminos_host_route_not_owned_by_lerms_payload',
+      'gutterglass_camera_witness_custody_not_claimed',
+      'minion_chamber_ontology_not_claimed',
+    ],
+  },
+};
+
+const actorMotionBenchState = createLermsPreviewBenchState(registry, {
+  posture: 'inspect',
+  benchId: 'terrain-preview',
+  cameraId: 'overview-oblique',
+  actorMotionPayloadReport: actorMotionReport,
+  actorMotionPayloadSource: {
+    mode: 'server_file',
+    requestedUrl: '/api/read?root=lerms-preview&path=lerms-preview-bench-motion-payload-0628.json',
+    root: 'lerms-preview',
+    path: 'lerms-preview-bench-motion-payload-0628.json',
+  },
+});
+assert.equal(actorMotionBenchState.actorMotion.schema, 'lerms.preview-bench-actor-motion-state.v0');
+assert.equal(actorMotionBenchState.actorMotion.payloadSchema, 'lerms.preview-bench-actor-motion-payload.v0');
+assert.equal(actorMotionBenchState.actorMotion.route, 'lerms/preview-bench/actor-motion-payload-file');
+assert.equal(actorMotionBenchState.actorMotion.source.authority, 'live_simulation');
+assert.equal(actorMotionBenchState.actorMotion.sourceTruthUpgrade.effectiveAuthority, 'live_simulation');
+assert.equal(actorMotionBenchState.actorMotion.actorCount, 2);
+assert.equal(actorMotionBenchState.actorMotion.frameCounts.lerms, 2);
+assert.equal(actorMotionBenchState.actorMotion.frameCounts.goins, 1);
+assert.equal(actorMotionBenchState.actorMotion.motionAdapterSchema, 'lerms.schnoz-motion-adapter.v0');
+assert.equal(actorMotionBenchState.actorMotion.selectedClipletSource.route, 'motion-server:http://127.0.0.1:8098/generate');
+assert.equal(actorMotionBenchState.actorMotion.selectedClipletSource.model, 'kimodo');
+assert.equal(actorMotionBenchState.actorMotion.selectedClipletSource.status, 'archived-live-generated-witness');
+assert.ok(actorMotionBenchState.actorMotion.states.includes('hit_reacting'));
+assert.ok(actorMotionBenchState.actorMotion.downgrades.includes('gutterglass_camera_witness_custody_not_claimed'));
+assert.equal(actorMotionBenchState.actorMotion.payloadSource.root, 'lerms-preview');
+assert.equal(actorMotionBenchState.badges.actorMotion, 'live_simulation');
 
 const palmDaddyComposerReceipt = structuredClone(LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
 palmDaddyComposerReceipt.phase = 'complete';
@@ -248,6 +390,7 @@ const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /world-chambers-lerms-underhill/, 'scene witness exposes the LERMS Underhill world chamber scenario');
 assert.match(witness, /world-chambers-lerms-underhill-receipt-url/, 'scene witness exposes the external receipt URL world chamber scenario');
 assert.match(witness, /lerms-preview-bench-terrain/, 'scene witness exposes the LERMS terrain preview bench scenario');
+assert.match(witness, /lerms-preview-bench-actor-motion/, 'scene witness exposes the LERMS actor-motion preview bench scenario');
 assert.match(witness, /__kaminosLermsPreviewState/, 'scene witness reads the LERMS Preview Bench state surface');
 assert.match(witness, /kaminosWorldChambersDebugState/, 'scene witness reads the world chamber debug state');
 assert.match(witness, /first-vertical-composer\/witness-file/, 'scene witness verifies the effective composer witness route');
