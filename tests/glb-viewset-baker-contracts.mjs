@@ -45,3 +45,7 @@ assert.match(index, /kaminos-viewset-bake-mode/, 'GLB debug-load route hides app
 assert.match(index, /forceOpaque/, 'GLB debug-load route can force opaque materials for sprite-viewset capture');
 assert.match(index, /groundPlane\)\s*groundPlane\.visible\s*=\s*false/, 'GLB debug-load route suppresses the viewer ground plane before viewset capture');
 assert.match(index, /scene\.background\s*=\s*null/, 'GLB debug-load route suppresses the viewer background before viewset capture');
+assert.match(index, /glb_job/, 'Kaminos supports durable Greenroom GLB job-output deep links for A/B comparison tabs');
+assert.match(index, /glb_file/, 'Kaminos GLB deep links accept an explicit output filename');
+assert.match(index, /greenroomImportMesh\(url,\s*fileName/, 'Kaminos GLB deep links load through the existing Greenroom mesh route');
+assert.match(index, /transformControls\.detach\(\)[\s\S]*Deep-link GLB loaded/, 'Kaminos GLB deep links hide transform controls for clean A/B comparison tabs');

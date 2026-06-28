@@ -8116,6 +8116,27 @@ async function greenroomImportMesh(url, fileName, display) {
   setInfo(`Greenroom import: ${display?.title || fileName}`);
 }
 
+async function loadGreenroomGlbDeepLink(params) {
+  const jobId = params.get('glb_job');
+  if (!jobId) return false;
+  const fileName = params.get('glb_file') || 'output.glb';
+  const label = params.get('glb_label') || `${jobId} / ${fileName}`;
+  const url = `/api/job-output?job_id=${encodeURIComponent(jobId)}&file=${encodeURIComponent(fileName)}`;
+  await greenroomImportMesh(url, fileName, {
+    title: label,
+    subtitle: `Greenroom job ${jobId}`,
+    meta: url,
+    raw_name: jobId,
+  });
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  document.getElementById('transform-bar')?.classList.remove('visible');
+  setInfo(`Deep-link GLB loaded: ${label}`);
+  return true;
+}
+
 function createSplatSceneObjectPlaceholder({ url, fileName, display, metadata = {} } = {}) {
   const group = new THREE.Group();
   const visualRoot = new THREE.Group();
@@ -9880,6 +9901,7 @@ initScene().then(() => {
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
+    if (await loadGreenroomGlbDeepLink(params)) return;
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
