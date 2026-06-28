@@ -495,23 +495,34 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Pressure</span>
+      <select id="volume-pressure-mode" class="select-input">
+        <option value="auto" selected>Default</option>
+        <option value="spatial-tiers">Tiered</option>
+        <option value="global-p3">Full P3</option>
+        <option value="global-p2">Full P2</option>
+        <option value="global-p1">Full P1</option>
+      </select>
+      <span class="slider-val" id="volume-pressure-mode-val">Default</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">P2 Max</span>
-      <input type="range" id="volume-pressure-tier-lower-max" min="0.10" max="0.90" step="0.01" value="0.50">
+      <input type="range" id="volume-pressure-tier-lower-max" min="0.10" max="0.98" step="0.01" value="0.50">
       <span class="slider-val" id="volume-pressure-tier-lower-max-val">0.50</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">P3 Min</span>
-      <input type="range" id="volume-pressure-tier-hero-min" min="0" max="0.60" step="0.01" value="0.05">
+      <input type="range" id="volume-pressure-tier-hero-min" min="0" max="0.95" step="0.01" value="0.05">
       <span class="slider-val" id="volume-pressure-tier-hero-min-val">0.05</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">P3 Max</span>
-      <input type="range" id="volume-pressure-tier-hero-max" min="0.02" max="0.60" step="0.01" value="0.22">
+      <input type="range" id="volume-pressure-tier-hero-max" min="0.02" max="0.98" step="0.01" value="0.22">
       <span class="slider-val" id="volume-pressure-tier-hero-max-val">0.22</span>
     </div>
     <div class="slider-row">
@@ -1630,6 +1641,7 @@ let routedVolumeReactionFuelScale = 1;
 let routedVolumeMajorantCadence = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
+let routedVolumePressureMode = 'auto';
 let routedVolumeSimProfile = false;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
@@ -1673,17 +1685,56 @@ function snapVolumeAdaptiveRays(value) {
 }
 
 function normalizeVolumePressureTierControls(values = {}) {
-  const lowerMax = clampVolumeValue(values.lowerMax ?? values.pressureTierLowerMax ?? 0.50, 0.10, 0.90);
-  const rawHeroMax = clampVolumeValue(values.heroMax ?? values.pressureTierHeroMax ?? 0.22, 0.02, Math.min(0.60, lowerMax));
+  const lowerMax = clampVolumeValue(values.lowerMax ?? values.pressureTierLowerMax ?? 0.50, 0.10, 0.98);
+  const rawHeroMax = clampVolumeValue(values.heroMax ?? values.pressureTierHeroMax ?? 0.22, 0.02, Math.min(0.98, lowerMax));
   const heroMinCeiling = Math.max(0, rawHeroMax - 0.01);
   const heroMin = clampVolumeValue(values.heroMin ?? values.pressureTierHeroMin ?? 0.05, 0, heroMinCeiling);
-  const heroMax = clampVolumeValue(rawHeroMax, heroMin + 0.01, Math.min(0.60, lowerMax));
+  const heroMax = clampVolumeValue(rawHeroMax, heroMin + 0.01, Math.min(0.98, lowerMax));
   return {
     lowerMax,
     heroMin,
     heroMax,
     overlay: clampVolumeValue(values.overlay ?? values.pressureTierOverlay ?? 0, 0, 1),
   };
+}
+
+function normalizeVolumePressureMode(value) {
+  const mode = String(value || 'auto').toLowerCase();
+  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1'].includes(mode) ? mode : 'auto';
+}
+
+function volumePressureModeFromRoute(strategy, iterations) {
+  if (String(strategy || '').toLowerCase() === 'spatial_tiers') return 'spatial-tiers';
+  const count = Number(iterations);
+  if (!Number.isFinite(count)) return 'auto';
+  if (count <= 1) return 'global-p1';
+  if (count >= 3) return 'global-p3';
+  return 'global-p2';
+}
+
+function volumePressureConfigForMode(mode) {
+  switch (normalizeVolumePressureMode(mode)) {
+    case 'spatial-tiers':
+      return { pressureMode: 'spatial-tiers', pressureStrategy: 'spatial_tiers', pressureIterations: 3 };
+    case 'global-p3':
+      return { pressureMode: 'global-p3', pressureStrategy: 'global', pressureIterations: 3 };
+    case 'global-p2':
+      return { pressureMode: 'global-p2', pressureStrategy: 'global', pressureIterations: 2 };
+    case 'global-p1':
+      return { pressureMode: 'global-p1', pressureStrategy: 'global', pressureIterations: 1 };
+    default:
+      return { pressureMode: 'auto', pressureStrategy: routedVolumePressureStrategy, pressureIterations: routedVolumePressureIterations };
+  }
+}
+
+function pressureModeLabel(mode) {
+  switch (normalizeVolumePressureMode(mode)) {
+    case 'spatial-tiers': return 'Tiered';
+    case 'global-p3': return 'Full P3';
+    case 'global-p2': return 'Full P2';
+    case 'global-p1': return 'Full P1';
+    default: return 'Default';
+  }
 }
 
 function setVolumeControlValue(id, value) {
@@ -1825,6 +1876,7 @@ function applyRayBudgetPreset(name, options = {}) {
 }
 
 function readVolumeControls() {
+  const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value);
   return {
     volumeScene: document.getElementById('volume-scene').value,
     density: parseFloat(document.getElementById('volume-density').value),
@@ -1861,6 +1913,7 @@ function readVolumeControls() {
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+    pressureMode: pressureConfig.pressureMode,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -1882,8 +1935,8 @@ function readVolumeControls() {
     canonicalBuoyancy: routedCanonicalBuoyancy,
     reactionFuelScale: routedVolumeReactionFuelScale,
     majorantCadence: routedVolumeMajorantCadence,
-    pressureIterations: routedVolumePressureIterations,
-    pressureStrategy: routedVolumePressureStrategy,
+    pressureIterations: pressureConfig.pressureIterations,
+    pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
@@ -1927,6 +1980,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-majorant-grid-val').textContent = `${c.majorantGrid}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+  const pressureMode = normalizeVolumePressureMode(c.pressureMode);
+  if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
+  document.getElementById('volume-pressure-mode-val').textContent = pressureModeLabel(pressureMode);
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
   if (pressureTierControls.heroMin !== c.pressureTierHeroMin) setVolumeControlValue('volume-pressure-tier-hero-min', pressureTierControls.heroMin.toFixed(2));
@@ -2060,6 +2116,8 @@ async function initKaminosVolumeRoute() {
   if (routePressureStrategy === 'spatial_tiers' || routePressureStrategy === 'global') {
     routedVolumePressureStrategy = routePressureStrategy;
   }
+  routedVolumePressureMode = volumePressureModeFromRoute(routedVolumePressureStrategy, routedVolumePressureIterations);
+  setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
   const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
   routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
   const routeGrid = Number(params.get('volume_grid'));
@@ -2257,7 +2315,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

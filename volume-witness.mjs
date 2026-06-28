@@ -383,11 +383,13 @@ const expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Nu
   ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
-const expectedPressureIterations = routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
-  ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
-  : defaultPressureIterationsForScene(expectedVolumeScene);
 const expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
 const expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+const expectedPressureIterations = expectedSpatialPressureTiers
+  ? 3
+  : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
+    ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
+    : defaultPressureIterationsForScene(expectedVolumeScene);
 const expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 const expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
@@ -933,7 +935,7 @@ async function main() {
     assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
     assert.equal(state.controls?.majorantCadence, expectedMajorantCadence, 'majorant cadence route/control did not apply');
     assert.equal(state.majorantCadence, expectedMajorantCadence, 'effective majorant cadence did not reach debug state');
-    if (routeParams.has('volume_pressure_iterations')) {
+    if (routeParams.has('volume_pressure_iterations') || expectedSpatialPressureTiers) {
       assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
     }
     assert.equal(state.controls?.pressureStrategy || 'global', expectedPressureStrategy, 'pressure strategy route/control did not apply');

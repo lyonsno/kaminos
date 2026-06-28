@@ -98,10 +98,16 @@ assert.match(index, /pressureIterations/, 'Volume controls carry staged pressure
 assert.match(index, /volume_pressure_strategy/, 'URL route can select staged pressure strategy for spatial-quality probes');
 assert.match(index, /routedVolumePressureStrategy/, 'Volume controls carry routed pressure strategy identity into the renderer');
 assert.match(index, /pressureStrategy/, 'Volume controls expose effective pressure strategy to the renderer');
+assert.match(index, /volume-pressure-mode/, 'Volume cockpit exposes a live pressure mode selector for tier/global comparison');
+assert.match(index, /global-p3/, 'Volume pressure mode selector can switch to full global pressure3');
+assert.match(index, /pressureMode/, 'Volume controls derive pressure strategy and iterations from the live pressure mode selector');
 assert.match(index, /volume-pressure-tier-overlay/, 'Volume cockpit exposes a pressure-tier overlay opacity slider');
 assert.match(index, /volume-pressure-tier-lower-max/, 'Volume cockpit exposes the pressure2 lower-slab max threshold');
 assert.match(index, /volume-pressure-tier-hero-min/, 'Volume cockpit exposes the pressure3 hero-band min threshold');
 assert.match(index, /volume-pressure-tier-hero-max/, 'Volume cockpit exposes the pressure3 hero-band max threshold');
+assert.match(index, /id="volume-pressure-tier-lower-max" min="0\.10" max="0\.98"/, 'Pressure2 tier max slider can reach the upper flame/smoke transition band');
+assert.match(index, /id="volume-pressure-tier-hero-min" min="0" max="0\.95"/, 'Pressure3 tier min slider can move out of the bottom fire root');
+assert.match(index, /id="volume-pressure-tier-hero-max" min="0\.02" max="0\.98"/, 'Pressure3 tier max slider can reach the upper flame/smoke transition band');
 assert.match(index, /volume_pressure_tier_overlay/, 'URL route can seed the pressure-tier overlay opacity');
 assert.match(index, /volume_pressure_tier_lower_max/, 'URL route can seed the pressure2 lower-slab max threshold');
 assert.match(index, /volume_pressure_tier_hero_min/, 'URL route can seed the pressure3 hero-band min threshold');
@@ -901,6 +907,7 @@ assert.match(core, /pressureTierRequestedBounds/, 'sim-cost ledger records reque
 assert.match(core, /pressureTierEffectiveBounds/, 'sim-cost ledger records dispatch-effective pressure tier y bounds');
 assert.match(core, /pressureTierOverlayOpacity/, 'debug state records pressure-tier overlay opacity without treating it as sim cost');
 assert.match(core, /pressureTierDebugOverlayColor/, 'raymarch shader can color pressure tier bands as a transparent overlay');
+assert.doesNotMatch(core, /pressureTierGuideY/, 'pressure-tier overlay does not use the old post-raymarch screen-footprint slab guide');
 assert.match(core, /csPressureJacobiTiered/, 'volume core has a tiered Jacobi kernel for partial slab pressure refinement');
 assert.match(core, /csProjectPressureTiered/, 'volume core has a tiered projection kernel that can read composite pressure buffers');
 assert.match(core, /pressureReadComposite/, 'tiered projection reads pressure through a composite tier-aware accessor');
@@ -970,6 +977,7 @@ assert.match(witness, /expectedHistoryClamp/, 'witness verifies temporal history
 assert.match(witness, /expectedMajorantGrid/, 'witness verifies coarse majorant grid route/control identity');
 assert.match(witness, /expectedMajorantCadence/, 'witness verifies coarse majorant cadence route/control identity');
 assert.match(witness, /expectedPressureIterations/, 'witness verifies pressure iteration route/control identity');
+assert.match(witness, /expectedPressureIterations = expectedSpatialPressureTiers[\s\S]{0,80}\? 3/, 'witness treats spatial pressure tiers as pressure3-by-construction');
 assert.match(witness, /expectedSimProfile/, 'witness verifies sim profile request identity');
 assert.match(witness, /adaptiveRaymarch/, 'witness records effective adaptive raymarch strength');
 assert.match(witness, /occupancySkip/, 'witness records effective occupancy skip strength');

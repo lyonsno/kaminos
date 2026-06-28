@@ -260,10 +260,10 @@ function tallPlumePressureTierStrategy(scene, pressureStrategy) {
 }
 
 function normalizePressureTierControls(value = {}) {
-  const lowerMax = clampFinite(value.pressureTierLowerMax ?? value.lowerMax, 0.10, 0.90, DEFAULT_PRESSURE_TIER_LOWER_MAX);
-  const rawHeroMax = clampFinite(value.pressureTierHeroMax ?? value.heroMax, 0.02, Math.min(0.60, lowerMax), DEFAULT_PRESSURE_TIER_HERO_MAX);
-  const heroMin = clampFinite(value.pressureTierHeroMin ?? value.heroMin, 0, Math.max(0, rawHeroMax - 0.01), DEFAULT_PRESSURE_TIER_HERO_MIN);
-  const heroMax = clampFinite(rawHeroMax, heroMin + 0.01, Math.min(0.60, lowerMax), DEFAULT_PRESSURE_TIER_HERO_MAX);
+  const lowerMax = clampFinite(value.pressureTierLowerMax ?? value.lowerMax, 0.10, 0.98, DEFAULT_PRESSURE_TIER_LOWER_MAX);
+  const rawHeroMax = clampFinite(value.pressureTierHeroMax ?? value.heroMax, 0.02, Math.min(0.98, lowerMax), DEFAULT_PRESSURE_TIER_HERO_MAX);
+  const heroMin = clampFinite(value.pressureTierHeroMin ?? value.heroMin, 0, Math.min(0.95, Math.max(0, rawHeroMax - 0.01)), DEFAULT_PRESSURE_TIER_HERO_MIN);
+  const heroMax = clampFinite(rawHeroMax, heroMin + 0.01, Math.min(0.98, lowerMax), DEFAULT_PRESSURE_TIER_HERO_MAX);
   const overlay = clampFinite(value.pressureTierOverlay ?? value.overlay, 0, 1, DEFAULT_PRESSURE_TIER_OVERLAY);
   return { lowerMax, heroMin, heroMax, overlay };
 }
@@ -906,15 +906,15 @@ fn pressureTierY(c: vec3<i32>) -> f32 {
 }
 
 fn pressureTierLowerMax() -> f32 {
-  return clamp(u.pressure_tier_controls.x, 0.10, 0.90);
+  return clamp(u.pressure_tier_controls.x, 0.10, 0.98);
 }
 
 fn pressureTierHeroMin() -> f32 {
-  return clamp(u.pressure_tier_controls.y, 0.0, 0.60);
+  return clamp(u.pressure_tier_controls.y, 0.0, 0.95);
 }
 
 fn pressureTierHeroMax() -> f32 {
-  return max(pressureTierHeroMin() + 0.01, clamp(u.pressure_tier_controls.z, 0.02, min(0.60, pressureTierLowerMax())));
+  return max(pressureTierHeroMin() + 0.01, clamp(u.pressure_tier_controls.z, 0.02, min(0.98, pressureTierLowerMax())));
 }
 
 fn pressureTierDebugOverlayColor(y: f32) -> vec4<f32> {
@@ -3148,9 +3148,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);
-  let pressureTierGuideY = clamp(((entryP.y + exitP.y) * 0.25) + 0.5, 0.0, 1.0);
-  let pressureTierGuide = pressureTierDebugOverlayColor(pressureTierGuideY);
-  grade = mix(grade, pressureTierGuide.rgb, clamp(pressureTierGuide.a * 0.72, 0.0, 0.62));
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
