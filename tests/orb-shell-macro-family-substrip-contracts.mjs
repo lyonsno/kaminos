@@ -28,6 +28,13 @@ const fixture = createTargetOrbShellCompositionFixture({ variantId: 'wide-cup', 
 const denseFixture = createTargetOrbShellCompositionFixture({ variantId: 'wide-cup', variationSeed: 12, variationLeafCount: 14 });
 const plan = fixture.macroFamilySubstripPlan;
 const densePlan = denseFixture.macroFamilySubstripPlan;
+const neutralSeedSweepCounts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 14, 18]
+  .map(variationSeed => createTargetOrbShellCompositionFixture({
+    variantId: 'wide-cup',
+    variationSeed,
+    variationLeafCount: 10,
+  }).macroFamilySubstripPlan.substripCount);
+const distinctNeutralSeedSweepCounts = new Set(neutralSeedSweepCounts);
 
 assert.equal(plan?.schema, 'MacroFamilySubstripPlan', 'fixture exposes a macro family substrip plan');
 assert.equal(plan.mode, 'parent-owned-lamellar-substrip-decomposition-v0', 'plan records the accepted parent-owned substrip mode');
@@ -38,6 +45,7 @@ assert.equal(plan.substripCountLaw?.macroFamilyCountPreserved, true, 'substrip c
 assert.ok(plan.parentAssemblageIds.includes('north-west-dominant-thrust'), 'plan decomposes the dominant north-west family');
 assert.ok(plan.parentAssemblageIds.includes('north-east-counter-thrust'), 'plan decomposes the counter-thrust family');
 assert.ok(plan.parentAssemblageIds.length <= 2, 'first substrip slice stays bounded to two parent families');
+assert.equal(plan.substripCount, 5, 'accepted wide-cup:7 baseline remains the five-child-strip comparison anchor');
 assert.ok(plan.substripCount >= 5, 'two families expose at least five owned sub-lanes');
 assert.equal(plan.renderPolicy.parentFillDemotion, 'muted-territory-support-not-final-slab', 'parent fills are demoted below child lane read');
 assert.equal(plan.renderPolicy.roundDiagnosticRailsVisible, false, 'substrip grammar forbids round diagnostic rails as final-visible lanes');
@@ -68,6 +76,14 @@ assert.notDeepEqual(
 assert.ok(
   densePlan.substripCountLaw.perParentCounts.some(item => item.actualCount > item.minimumCount),
   'dense count law adds at least one sibling lane beyond minimum anatomy',
+);
+assert.ok(
+  distinctNeutralSeedSweepCounts.size >= 3,
+  `neutral density seed sweep must produce multiple literal child strip counts, got ${neutralSeedSweepCounts.join(',')}`,
+);
+assert.ok(
+  Math.max(...neutralSeedSweepCounts) > plan.substripCount,
+  'neutral density seed sweep must sometimes add optional sibling lanes without requiring max density',
 );
 assert.equal(
   densePlan.apertureTangencyWitnessPlan.verdictCounts['counter-curve-request-not-yet-geometrically-proven'] || 0,
