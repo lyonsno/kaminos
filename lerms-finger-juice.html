@@ -89,7 +89,7 @@
     const params = new URLSearchParams(location.search);
     const routeActive = params.get('lerms_world_finger_juice') === '1';
     const visualRenderer = 'source-legible-phase-breadcrumbs-v2';
-    const particleSupportBudget = 24000;
+    const particleSupportBudget = 36000;
     const lerms = [
       { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
       { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
@@ -175,6 +175,8 @@
     let webgpuLastComputeMs = 0;
     let webgpuLastSubmittedSteps = 0;
     let webgpuSubmittedStepsTotal = 0;
+    let webgpuDroppedCatchupStepsTotal = 0;
+    let webgpuLastDroppedCatchupSteps = 0;
     let webgpuRenderFrameCount = 0;
     let liveReadbackRequestedCount = 0;
     let liveReadbackCompletedCount = 0;
@@ -188,6 +190,7 @@
     let fingerJuiceCamera = { ...defaultFingerJuiceCamera };
     let cameraDrag = null;
     const webgpuFrameStepDt = 1 / 120;
+    const webgpuMaxFrameSteps = 8;
     const webgpuReadbackPeriod = 0.55;
     const liveReadbackContract = 'live_readback_decoupled_v0';
 
@@ -331,11 +334,14 @@
           accumulated_seconds: Number(webgpuAccumulatedSeconds.toFixed(4)),
           readback_accumulated_seconds: Number(webgpuReadbackAccumulatedSeconds.toFixed(4)),
           fixed_step_dt: webgpuFrameStepDt,
+          max_frame_steps: webgpuMaxFrameSteps,
           readback_period: webgpuReadbackPeriod,
           last_readback_ms: Number(webgpuLastReadbackMs.toFixed(2)),
           last_compute_ms: Number(webgpuLastComputeMs.toFixed(2)),
           last_submitted_steps: webgpuLastSubmittedSteps,
+          last_dropped_catchup_steps: webgpuLastDroppedCatchupSteps,
           submitted_steps_total: webgpuSubmittedStepsTotal,
+          dropped_catchup_steps_total: webgpuDroppedCatchupStepsTotal,
           render_frame_count: webgpuRenderFrameCount,
           live_readback_contract: liveReadbackContract,
           live_readback_requested_count: liveReadbackRequestedCount,
@@ -924,8 +930,14 @@
           webgpuAccumulatedSeconds += rawDt;
           webgpuReadbackAccumulatedSeconds += rawDt;
           if (!webgpuFramePending && webgpuAccumulatedSeconds >= webgpuFrameStepDt) {
-            const submittedSteps = Math.max(1, Math.floor(webgpuAccumulatedSeconds / webgpuFrameStepDt));
+            const requestedSteps = Math.max(1, Math.floor(webgpuAccumulatedSeconds / webgpuFrameStepDt));
+            const submittedSteps = Math.min(webgpuMaxFrameSteps, requestedSteps);
+            webgpuLastDroppedCatchupSteps = Math.max(0, requestedSteps - submittedSteps);
+            webgpuDroppedCatchupStepsTotal += webgpuLastDroppedCatchupSteps;
             webgpuAccumulatedSeconds -= submittedSteps * webgpuFrameStepDt;
+            if (webgpuLastDroppedCatchupSteps > 0) {
+              webgpuAccumulatedSeconds = Math.min(webgpuAccumulatedSeconds, webgpuFrameStepDt * webgpuMaxFrameSteps);
+            }
             webgpuLastSubmittedSteps = submittedSteps;
             webgpuSubmittedStepsTotal += submittedSteps;
             webgpuFramePending = true;

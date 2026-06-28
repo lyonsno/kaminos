@@ -27,15 +27,15 @@ export const LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE = 'live_lightweig
 const PARTICLE_FLOATS = 16;
 const EMITTER_FLOATS = 16;
 const WORKGROUP_SIZE = 64;
-const DEFAULT_PARTICLE_SUPPORT_BUDGET = 24000;
+const DEFAULT_PARTICLE_SUPPORT_BUDGET = 36000;
 const BASELINE_PARTICLE_SUPPORT_BUDGET = 2400;
-const MIN_PARTICLE_SUPPORT_SCALE = 0.32;
+const MIN_PARTICLE_SUPPORT_SCALE = 0.26;
 const PRESSURE_NEIGHBOR_WINDOW = 6;
 const PRESSURE_RADIUS = 0.105;
 const SURFACE_VISCOSITY_RADIUS = PRESSURE_RADIUS * 1.35;
 const SPATIAL_PRESSURE_ITERATIONS = 2;
-const SPATIAL_PRESSURE_GRID_X = 64;
-const SPATIAL_PRESSURE_GRID_Z = 96;
+const SPATIAL_PRESSURE_GRID_X = 80;
+const SPATIAL_PRESSURE_GRID_Z = 120;
 const SPATIAL_PRESSURE_CELL_COUNT = SPATIAL_PRESSURE_GRID_X * SPATIAL_PRESSURE_GRID_Z;
 const SPATIAL_PRESSURE_MIN_X = -0.75;
 const SPATIAL_PRESSURE_MAX_X = 0.75;
@@ -71,7 +71,7 @@ function particleSupportScale(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) 
 }
 
 function particleRadiusForBudget(sourceRadius, particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
-  return Math.max(0.018, finite(sourceRadius, 0.045) * particleSupportScale(particleBudget));
+  return Math.max(0.012, finite(sourceRadius, 0.045) * particleSupportScale(particleBudget));
 }
 
 function pressureRadiusForBudget(particleBudget = DEFAULT_PARTICLE_SUPPORT_BUDGET) {
@@ -2862,7 +2862,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     width * (0.5 + orbitCameraPan.x) + cameraWorld.x * scale,
     height * (0.74 + orbitCameraPan.y) - cameraWorld.z * height * 0.23 * orbitCameraZoom - cameraWorld.y * scale * 0.52
   );
-  let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.46, 1.0);
+  let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.30, 1.0);
   let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale * particleBudgetScale;
   let finalScreen = screen + corner * radius;
   var out: VertexOut;
