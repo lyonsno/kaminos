@@ -411,6 +411,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="pipeline">Pipeline</div>
+    <div class="tab" data-tab="tray">Tray</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
   </div>
@@ -823,6 +824,51 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="field"><span class="field-key">Manifest</span><span class="field-val" id="pipeline-manifest-id">unloaded</span></div>
         <div class="field"><span class="field-key">Registry</span><span class="field-val" id="pipeline-registry-scope">run-local</span></div>
         <div class="field"><span class="field-key">Run</span><span class="field-val" id="pipeline-run-state">idle</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tray Tab -->
+  <div class="tab-content" id="tab-tray">
+    <h2>Composition Tray</h2>
+    <div class="panel" id="route-composition-tray-panel" data-route-composition-tray-scope="browser-local">
+      <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
+        Source images, conditioning layers, route runs, and outputs in one place.
+      </div>
+      <div style="margin-bottom: 10px;">
+        <button type="button" class="btn" id="route-composition-tray-fixture-button">Load Fixture Tray</button>
+        <button type="button" class="btn" id="route-composition-tray-clear-button">Clear</button>
+      </div>
+      <div id="route-composition-tray-source-section">
+        <div style="font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Source Images</div>
+        <div id="route-composition-tray-sources" style="margin-bottom: 10px;">
+          <div style="font-size: 10px; color: #444;">No source images yet.</div>
+        </div>
+      </div>
+      <div id="route-composition-tray-conditioning-section">
+        <div style="font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Conditioning Layers</div>
+        <div id="route-composition-tray-conditioning" style="margin-bottom: 10px;">
+          <div style="font-size: 10px; color: #444;">No conditioning layers attached.</div>
+        </div>
+      </div>
+      <div id="route-composition-tray-runs-section">
+        <div style="font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Route Runs</div>
+        <div id="route-composition-tray-runs" style="margin-bottom: 10px;">
+          <div style="font-size: 10px; color: #444;">No route runs yet.</div>
+        </div>
+      </div>
+      <div id="route-composition-tray-outputs-section">
+        <div style="font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Outputs</div>
+        <div id="route-composition-tray-outputs" style="margin-bottom: 10px;">
+          <div style="font-size: 10px; color: #444;">No outputs yet.</div>
+        </div>
+      </div>
+      <div id="route-composition-tray-diagnostics" style="border-top: 1px solid #2a2a2a; padding-top: 8px; margin-top: 4px;">
+        <div class="field"><span class="field-key">Tray</span><span class="field-val" id="route-composition-tray-id">empty</span></div>
+        <div class="field"><span class="field-key">Sources</span><span class="field-val" id="route-composition-tray-source-count">0</span></div>
+        <div class="field"><span class="field-key">Conditioning</span><span class="field-val" id="route-composition-tray-conditioning-count">0</span></div>
+        <div class="field"><span class="field-key">Runs</span><span class="field-val" id="route-composition-tray-run-count">0</span></div>
+        <div class="field"><span class="field-key">Outputs</span><span class="field-val" id="route-composition-tray-output-count">0</span></div>
       </div>
     </div>
   </div>
@@ -11555,6 +11601,339 @@ window.addEventListener('keydown', e => {
     document.getElementById('scene-file-input').click();
   }
 });
+
+// --- Route Composition Tray ---
+const ROUTE_COMPOSITION_TRAY_SCHEMA_BROWSER = 'kaminos.kiln.route-composition-tray.v0';
+const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0';
+const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
+
+const TRAY_CONDITIONING_LINK_ROLES = ['source-image', 'mask', 'matte', 'depth', 'normal', 'scribble', 'reference', 'negative-law', 'canny', 'segmentation'];
+
+const TRAY_SOURCE_KIND_DISPLAY = {
+  'fixture': 'Fixture',
+  'imported-external': 'External import',
+  'imported-manual': 'Manual import',
+  'generated': 'Generated',
+  'cached': 'Cached',
+  'failed': 'Failed',
+  'browser-local': 'Browser local',
+};
+
+const TRAY_STATUS_BADGE_DISPLAY = {
+  'real': 'Completed',
+  'fixture': 'Fixture (not live)',
+  'cached': 'Cached result',
+  'fallback': 'Fallback route',
+  'missing-backend': 'Backend unavailable',
+  'failed': 'Failed',
+  'partial': 'Partial result',
+  'stale': 'Stale',
+};
+
+function trayHumanizeRoute(id) {
+  if (!id) return '';
+  return id.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
+function traySourceTruthWarningsForEntry(sourceKind) {
+  const warnings = [];
+  if (sourceKind === 'fixture') warnings.push('fixture_not_live_generated_output');
+  if (sourceKind === 'failed') warnings.push('failed_artifact_no_usable_output');
+  return [...new Set(warnings)];
+}
+
+function traySourceTruthWarningsForRun(statusBadge, requestedRoute, effectiveRoute) {
+  const warnings = [];
+  if (statusBadge === 'fixture') warnings.push('fixture_route_not_live_execution');
+  if (statusBadge === 'missing-backend') warnings.push('missing_backend_route_unavailable');
+  if (statusBadge === 'fallback') warnings.push('fallback_not_requested_route');
+  if (statusBadge === 'failed') warnings.push('route_execution_failed');
+  if (requestedRoute && effectiveRoute && requestedRoute !== effectiveRoute) warnings.push('route_requested_effective_mismatch');
+  return [...new Set(warnings)];
+}
+
+let routeCompositionTrayState = null;
+
+function createBrowserTray(trayId) {
+  return {
+    schema: ROUTE_COMPOSITION_TRAY_SCHEMA_BROWSER,
+    trayId: trayId || `tray-${Date.now().toString(36)}`,
+    sourceArtifacts: [],
+    conditioningLinks: [],
+    routeRuns: [],
+    outputArtifacts: [],
+  };
+}
+
+function trayMakeArtifactEntry(opts) {
+  const warnings = traySourceTruthWarningsForEntry(opts.sourceKind);
+  return {
+    schema: TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER,
+    artifactId: opts.artifactId,
+    title: opts.title || opts.artifactId,
+    sourceKind: opts.sourceKind,
+    displaySourceKind: TRAY_SOURCE_KIND_DISPLAY[opts.sourceKind] || opts.sourceKind,
+    mimeType: opts.mimeType || null,
+    source: opts.source || null,
+    routeRunId: opts.routeRunId || null,
+    conditioningRoles: opts.conditioningRoles || [],
+    sourceTruthWarnings: warnings,
+  };
+}
+
+function trayAddSource(tray, opts) {
+  const entry = trayMakeArtifactEntry(opts);
+  return { ...tray, sourceArtifacts: [...tray.sourceArtifacts, entry] };
+}
+
+function trayAddConditioningLink(tray, opts) {
+  const link = {
+    sourceArtifactId: opts.sourceArtifactId,
+    conditioningArtifactId: opts.conditioningArtifactId,
+    role: opts.role,
+    title: opts.title || `${opts.role} conditioning`,
+    sourceKind: opts.sourceKind || 'generated',
+  };
+  return { ...tray, conditioningLinks: [...tray.conditioningLinks, link] };
+}
+
+function trayAddRouteRun(tray, opts) {
+  const warnings = traySourceTruthWarningsForRun(opts.statusBadge, opts.requestedRoute, opts.effectiveRoute);
+  const run = {
+    schema: TRAY_ROUTE_RUN_SCHEMA_BROWSER,
+    runId: opts.runId,
+    requestedRoute: opts.requestedRoute,
+    effectiveRoute: opts.effectiveRoute,
+    backendClass: opts.backendClass,
+    statusBadge: opts.statusBadge,
+    receiptId: opts.receiptId || null,
+    inputArtifactIds: opts.inputArtifactIds || [],
+    conditioningArtifactIds: opts.conditioningArtifactIds || [],
+    displayRoute: trayHumanizeRoute(opts.effectiveRoute),
+    displayStatus: TRAY_STATUS_BADGE_DISPLAY[opts.statusBadge] || opts.statusBadge,
+    sourceTruthWarnings: warnings,
+  };
+  return { ...tray, routeRuns: [...tray.routeRuns, run] };
+}
+
+function trayAppendOutput(tray, opts) {
+  const entry = trayMakeArtifactEntry(opts);
+  return { ...tray, outputArtifacts: [...tray.outputArtifacts, entry] };
+}
+
+function buildBrowserFixtureWitnessTray() {
+  let tray = createBrowserTray('fixture-witness-tray-001');
+  tray = trayAddSource(tray, {
+    artifactId: 'fixture-source-red-lerm-photo',
+    title: 'Red lerm reference photo',
+    sourceKind: 'imported-external',
+    mimeType: 'image/png',
+  });
+  tray = trayAddConditioningLink(tray, {
+    sourceArtifactId: 'fixture-source-red-lerm-photo',
+    conditioningArtifactId: 'fixture-depth-001',
+    role: 'depth',
+    title: 'Depth map',
+    sourceKind: 'fixture',
+  });
+  tray = trayAddConditioningLink(tray, {
+    sourceArtifactId: 'fixture-source-red-lerm-photo',
+    conditioningArtifactId: 'fixture-normal-001',
+    role: 'normal',
+    title: 'Normal map',
+    sourceKind: 'fixture',
+  });
+  tray = trayAddConditioningLink(tray, {
+    sourceArtifactId: 'fixture-source-red-lerm-photo',
+    conditioningArtifactId: 'fixture-mask-001',
+    role: 'mask',
+    title: 'Foreground mask',
+    sourceKind: 'fixture',
+  });
+  tray = trayAddRouteRun(tray, {
+    runId: 'fixture-run-001',
+    requestedRoute: 'image_conditioned_generation',
+    effectiveRoute: 'fixture_generator',
+    backendClass: 'fixture',
+    statusBadge: 'fixture',
+    receiptId: 'fixture-receipt-001',
+    inputArtifactIds: ['fixture-source-red-lerm-photo'],
+    conditioningArtifactIds: ['fixture-depth-001', 'fixture-normal-001', 'fixture-mask-001'],
+  });
+  tray = trayAddRouteRun(tray, {
+    runId: 'fixture-run-002',
+    requestedRoute: 'sdxl_controlnet',
+    effectiveRoute: 'missing',
+    backendClass: 'missing',
+    statusBadge: 'missing-backend',
+    receiptId: 'fixture-receipt-002',
+    inputArtifactIds: ['fixture-source-red-lerm-photo'],
+    conditioningArtifactIds: ['fixture-depth-001'],
+  });
+  tray = trayAppendOutput(tray, {
+    artifactId: 'fixture-output-001',
+    title: 'Fixture generated concept',
+    sourceKind: 'fixture',
+    routeRunId: 'fixture-run-001',
+    mimeType: 'image/png',
+  });
+  return tray;
+}
+
+function renderRouteCompositionTray() {
+  const tray = routeCompositionTrayState;
+  const sourcesEl = document.getElementById('route-composition-tray-sources');
+  const conditioningEl = document.getElementById('route-composition-tray-conditioning');
+  const runsEl = document.getElementById('route-composition-tray-runs');
+  const outputsEl = document.getElementById('route-composition-tray-outputs');
+  if (!sourcesEl || !conditioningEl || !runsEl || !outputsEl) return;
+
+  // Diagnostics
+  const idEl = document.getElementById('route-composition-tray-id');
+  const srcCountEl = document.getElementById('route-composition-tray-source-count');
+  const condCountEl = document.getElementById('route-composition-tray-conditioning-count');
+  const runCountEl = document.getElementById('route-composition-tray-run-count');
+  const outCountEl = document.getElementById('route-composition-tray-output-count');
+
+  if (!tray) {
+    sourcesEl.innerHTML = '<div style="font-size:10px;color:#444">No source images yet.</div>';
+    conditioningEl.innerHTML = '<div style="font-size:10px;color:#444">No conditioning layers attached.</div>';
+    runsEl.innerHTML = '<div style="font-size:10px;color:#444">No route runs yet.</div>';
+    outputsEl.innerHTML = '<div style="font-size:10px;color:#444">No outputs yet.</div>';
+    if (idEl) idEl.textContent = 'empty';
+    if (srcCountEl) srcCountEl.textContent = '0';
+    if (condCountEl) condCountEl.textContent = '0';
+    if (runCountEl) runCountEl.textContent = '0';
+    if (outCountEl) outCountEl.textContent = '0';
+    return;
+  }
+
+  if (idEl) idEl.textContent = tray.trayId;
+  if (srcCountEl) srcCountEl.textContent = String(tray.sourceArtifacts.length);
+  if (condCountEl) condCountEl.textContent = String(tray.conditioningLinks.length);
+  if (runCountEl) runCountEl.textContent = String(tray.routeRuns.length);
+  if (outCountEl) outCountEl.textContent = String(tray.outputArtifacts.length);
+
+  function statusColor(badge) {
+    if (badge === 'real') return '#66bb6a';
+    if (badge === 'fixture') return '#f0b85a';
+    if (badge === 'missing-backend' || badge === 'failed') return '#ef5350';
+    if (badge === 'cached') return '#42a5f5';
+    if (badge === 'fallback') return '#ff9800';
+    return '#888';
+  }
+
+  function sourceKindBadge(kind) {
+    const label = TRAY_SOURCE_KIND_DISPLAY[kind] || kind;
+    let color = '#888';
+    if (kind === 'imported-external') color = '#42a5f5';
+    if (kind === 'imported-manual') color = '#ab47bc';
+    if (kind === 'generated') color = '#66bb6a';
+    if (kind === 'fixture') color = '#f0b85a';
+    if (kind === 'cached') color = '#42a5f5';
+    if (kind === 'failed') color = '#ef5350';
+    return `<span style="color:${color};font-size:9px;font-family:'SF Mono',monospace;background:${color}18;padding:1px 5px;border-radius:3px">${label}</span>`;
+  }
+
+  function warningBadges(warnings) {
+    if (!warnings || warnings.length === 0) return '';
+    return warnings.map(w => {
+      const readable = w.replace(/_/g, ' ');
+      return `<span style="color:#f0b85a;font-size:8px;font-family:'SF Mono',monospace;background:#f0b85a18;padding:1px 4px;border-radius:3px;margin-left:3px" title="${w}">${readable}</span>`;
+    }).join('');
+  }
+
+  // Sources
+  if (tray.sourceArtifacts.length === 0) {
+    sourcesEl.innerHTML = '<div style="font-size:10px;color:#444">No source images yet.</div>';
+  } else {
+    sourcesEl.innerHTML = tray.sourceArtifacts.map(a => `
+      <div class="route-composition-tray-row" data-tray-artifact-id="${a.artifactId}" style="padding:4px 0;border-bottom:1px solid #222">
+        <div style="font-size:11px;color:#ddd">${a.title}</div>
+        <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
+      </div>
+    `).join('');
+  }
+
+  // Conditioning
+  if (tray.conditioningLinks.length === 0) {
+    conditioningEl.innerHTML = '<div style="font-size:10px;color:#444">No conditioning layers attached.</div>';
+  } else {
+    conditioningEl.innerHTML = tray.conditioningLinks.map(l => `
+      <div class="route-composition-tray-row" data-tray-conditioning-role="${l.role}" style="padding:4px 0;border-bottom:1px solid #222">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:#ddd">${l.title}</span>
+          <span style="color:#1976d2;font-size:9px;font-family:'SF Mono',monospace;background:#1976d218;padding:1px 5px;border-radius:3px">${l.role}</span>
+        </div>
+        <div style="font-size:9px;color:#555;margin-top:2px">${sourceKindBadge(l.sourceKind)} linked to ${l.sourceArtifactId}</div>
+      </div>
+    `).join('');
+  }
+
+  // Route runs
+  if (tray.routeRuns.length === 0) {
+    runsEl.innerHTML = '<div style="font-size:10px;color:#444">No route runs yet.</div>';
+  } else {
+    runsEl.innerHTML = tray.routeRuns.map(r => `
+      <div class="route-composition-tray-row" data-tray-run-id="${r.runId}" data-tray-run-status="${r.statusBadge}" style="padding:4px 0;border-bottom:1px solid #222">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:#ddd">${r.displayRoute}</span>
+          <span style="color:${statusColor(r.statusBadge)};font-size:9px;font-family:'SF Mono',monospace;background:${statusColor(r.statusBadge)}18;padding:1px 5px;border-radius:3px">${r.displayStatus}</span>
+        </div>
+        <div style="font-size:9px;color:#555;margin-top:2px">
+          ${r.requestedRoute !== r.effectiveRoute ? `<span style="color:#f0b85a" title="Requested: ${r.requestedRoute}">Requested: ${trayHumanizeRoute(r.requestedRoute)}</span> ` : ''}
+          Backend: ${r.backendClass}
+        </div>
+        ${r.sourceTruthWarnings.length > 0 ? `<div style="margin-top:2px">${warningBadges(r.sourceTruthWarnings)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Outputs
+  if (tray.outputArtifacts.length === 0) {
+    outputsEl.innerHTML = '<div style="font-size:10px;color:#444">No outputs yet.</div>';
+  } else {
+    outputsEl.innerHTML = tray.outputArtifacts.map(a => `
+      <div class="route-composition-tray-row" data-tray-output-id="${a.artifactId}" data-tray-output-source-kind="${a.sourceKind}" style="padding:4px 0;border-bottom:1px solid #222">
+        <div style="font-size:11px;color:#ddd">${a.title}</div>
+        <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
+        ${a.routeRunId ? `<div style="font-size:9px;color:#555;margin-top:2px">From run: ${a.routeRunId}</div>` : ''}
+      </div>
+    `).join('');
+  }
+}
+
+function loadRouteCompositionFixtureTray() {
+  routeCompositionTrayState = buildBrowserFixtureWitnessTray();
+  renderRouteCompositionTray();
+}
+
+function clearRouteCompositionTray() {
+  routeCompositionTrayState = null;
+  renderRouteCompositionTray();
+}
+
+// Expose for witness/testing
+window.kaminosRouteCompositionTrayState = () => routeCompositionTrayState;
+window.kaminosLoadRouteCompositionFixtureTray = loadRouteCompositionFixtureTray;
+window.kaminosClearRouteCompositionTray = clearRouteCompositionTray;
+
+// Wire buttons
+document.addEventListener('DOMContentLoaded', () => {
+  const fixtureBtn = document.getElementById('route-composition-tray-fixture-button');
+  const clearBtn = document.getElementById('route-composition-tray-clear-button');
+  if (fixtureBtn) fixtureBtn.addEventListener('click', loadRouteCompositionFixtureTray);
+  if (clearBtn) clearBtn.addEventListener('click', clearRouteCompositionTray);
+});
+
+// Auto-load fixture if URL param present
+if (new URLSearchParams(window.location.search).has('route_composition_tray_fixture')) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadRouteCompositionFixtureTray);
+  } else {
+    loadRouteCompositionFixtureTray();
+  }
+}
 
 // --- Init ---
 grInit();

@@ -594,6 +594,122 @@ try {
       routeRequest,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'route-composition-tray') {
+    // Click the Tray tab
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(300);
+
+    // Click the fixture button
+    const fixtureButton = await evalJson(cdp, `(() => {
+      const btn = document.getElementById('route-composition-tray-fixture-button');
+      if (!btn) throw new Error('Fixture tray button not found');
+      const rect = btn.getBoundingClientRect();
+      return { text: btn.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await capture(cdp, beforePath);
+    await click(cdp, fixtureButton.point);
+    await wait(500);
+
+    // Wait for tray to render
+    const trayState = await waitFor(cdp, `(() => {
+      const tray = window.kaminosRouteCompositionTrayState?.();
+      if (!tray) return { ok: false, reason: 'no tray state' };
+      const panel = document.getElementById('route-composition-tray-panel');
+      const sourceRows = panel?.querySelectorAll('[data-tray-artifact-id]') || [];
+      const conditioningRows = panel?.querySelectorAll('[data-tray-conditioning-role]') || [];
+      const runRows = panel?.querySelectorAll('[data-tray-run-id]') || [];
+      const outputRows = panel?.querySelectorAll('[data-tray-output-id]') || [];
+      const trayIdField = document.getElementById('route-composition-tray-id')?.textContent || '';
+      const sourceCountField = document.getElementById('route-composition-tray-source-count')?.textContent || '';
+      const condCountField = document.getElementById('route-composition-tray-conditioning-count')?.textContent || '';
+      const runCountField = document.getElementById('route-composition-tray-run-count')?.textContent || '';
+      const outputCountField = document.getElementById('route-composition-tray-output-count')?.textContent || '';
+
+      // FALSE-CLOSURE checks in browser:
+      // 1. Fixture output carries fixture source kind (not generated)
+      const fixtureOutput = outputRows.length > 0 ? outputRows[0] : null;
+      const fixtureOutputSourceKind = fixtureOutput?.getAttribute('data-tray-output-source-kind') || '';
+      const fixtureIsNotGenerated = fixtureOutputSourceKind === 'fixture';
+
+      // 2. Missing-backend run has visible status badge
+      const missingBackendRun = [...runRows].find(el => el.getAttribute('data-tray-run-status') === 'missing-backend');
+      const missingBackendVisible = Boolean(missingBackendRun);
+
+      // 3. Source rows preserved after output append
+      const sourcePreserved = sourceRows.length >= 1;
+
+      // 4. displayRoute is human-legible (no underscores in visible run text)
+      const runTexts = [...runRows].map(el => el.textContent);
+      const noRawIds = runTexts.every(t => !t.includes('image_conditioned_generation') && !t.includes('fixture_generator'));
+
+      // 5. External import badge visible
+      const externalImportVisible = [...sourceRows].some(el => el.textContent.includes('External import'));
+
+      // Check the first output row area for screenshot verification
+      const firstOutputRect = fixtureOutput?.getBoundingClientRect();
+
+      return {
+        ok: Boolean(
+          tray.schema === 'kaminos.kiln.route-composition-tray.v0'
+          && tray.sourceArtifacts.length >= 1
+          && tray.conditioningLinks.length >= 2
+          && tray.routeRuns.length >= 1
+          && tray.outputArtifacts.length >= 1
+          && sourceRows.length >= 1
+          && conditioningRows.length >= 2
+          && runRows.length >= 1
+          && outputRows.length >= 1
+          && fixtureIsNotGenerated
+          && missingBackendVisible
+          && sourcePreserved
+          && noRawIds
+          && externalImportVisible
+          && trayIdField !== 'empty'
+        ),
+        tray,
+        dom: {
+          sourceRows: sourceRows.length,
+          conditioningRows: conditioningRows.length,
+          runRows: runRows.length,
+          outputRows: outputRows.length,
+          trayIdField,
+          sourceCountField,
+          condCountField,
+          runCountField,
+          outputCountField,
+          fixtureOutputSourceKind,
+          missingBackendVisible,
+          sourcePreserved,
+          noRawIds,
+          externalImportVisible,
+        },
+        firstOutputRect: firstOutputRect ? { x: firstOutputRect.x, y: firstOutputRect.y, width: firstOutputRect.width, height: firstOutputRect.height } : null,
+      };
+    })()`, 'Route composition tray fixture', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = trayState.firstOutputRect
+      ? await screenshotVisibleProbe(afterPath, trayState.firstOutputRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      trayTab,
+      fixtureButton,
+      trayState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
