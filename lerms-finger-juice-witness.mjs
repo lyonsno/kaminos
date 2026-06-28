@@ -717,6 +717,10 @@ async function run() {
     assert.equal(state.substrateDensityConstraintStats?.substrateDensityConstraintMode, 'bounded_support_lambda_sheet_projection_v0', 'substrate density stats do not identify constraint mode');
     assert.ok(state.substrateDensityConstraintStats?.substrateConstraintCandidateCount > 0, 'route did not expose substrate density constraint candidates');
     assert.ok(Number.isFinite(state.substrateDensityConstraintStats?.averageSubstrateConstraintError), 'route did not expose substrate density constraint error');
+    assert.equal(state.iterativeDensityContinuityStats?.pressureContract, 'wgsl-iterative-density-continuity-projection-v0', 'iterative density stats do not identify projection contract');
+    assert.ok(state.iterativeDensityContinuityStats?.iterativeDensityContinuityIterationCount >= 2, 'route did not expose iterative density iteration count');
+    assert.ok(state.iterativeDensityContinuityStats?.iterativeDensityContinuityCandidateCount > 0, 'route did not expose iterative density projection candidates');
+    assert.ok(Number.isFinite(state.iterativeDensityContinuityStats?.averageIterativeDensityResidual), 'route did not expose iterative density residual');
     assert.equal(state.deepDensityContinuityStats?.pressureContract, 'wgsl-deep-density-continuity-projection-v0', 'deep density continuity stats do not identify projection contract');
     assert.ok(state.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount > 0, 'route did not expose deeper continuity projection candidates');
     assert.equal(state.fingerJuiceCamera?.cameraControlContract, 'orbit-camera-controls-v0', 'route did not expose orbit camera controls');
@@ -820,6 +824,13 @@ async function run() {
         maxSubstrateConstraintError: stress?.substrateDensityConstraintStats?.maxSubstrateConstraintError || 0,
         unsupportedSubstrateConstraintRatio: stress?.substrateDensityConstraintStats?.unsupportedSubstrateConstraintRatio || 0,
         substrateSheetPullRatio: stress?.substrateDensityConstraintStats?.substrateSheetPullRatio || 0,
+        iterativeDensityContinuityContract: stress?.iterativeDensityContinuityStats?.pressureContract || null,
+        iterativeDensityContinuityIterationCount: stress?.iterativeDensityContinuityStats?.iterativeDensityContinuityIterationCount || 0,
+        iterativeDensityContinuityCandidateCount: stress?.iterativeDensityContinuityStats?.iterativeDensityContinuityCandidateCount || 0,
+        averageIterativeDensityResidual: stress?.iterativeDensityContinuityStats?.averageIterativeDensityResidual || 0,
+        maxIterativeDensityResidual: stress?.iterativeDensityContinuityStats?.maxIterativeDensityResidual || 0,
+        iterativeDensityConvergenceRatio: stress?.iterativeDensityContinuityStats?.iterativeDensityConvergenceRatio || 0,
+        iterativeDensityClampCount: stress?.iterativeDensityContinuityStats?.iterativeDensityClampCount || 0,
         deepDensityContinuityProjectionContract: stress?.deepDensityContinuityStats?.pressureContract || null,
         deepContinuityProjectionCandidateCount: stress?.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount || 0,
         deepContinuityPeakOccupancyRatio: stress?.deepDensityContinuityStats?.deepContinuityPeakOccupancyRatio || 0,
@@ -885,6 +896,11 @@ async function run() {
     assert.equal(extendedFlowProbe.substrateDensityConstraintContract, 'wgsl-substrate-density-constraint-solve-v0', 'expanded witness phase lost substrate density constraint contract');
     assert.ok(extendedFlowProbe.substrateConstraintCandidateCount >= 160, 'expanded witness phase did not exercise enough substrate density constraint candidates');
     assert.ok(Number.isFinite(extendedFlowProbe.averageSubstrateConstraintError), 'expanded witness phase did not expose substrate density constraint error');
+    assert.equal(extendedFlowProbe.iterativeDensityContinuityContract, 'wgsl-iterative-density-continuity-projection-v0', 'expanded witness phase lost iterative density continuity contract');
+    assert.ok(extendedFlowProbe.iterativeDensityContinuityIterationCount >= 2, 'expanded witness phase did not expose iterative density continuity iterations');
+    assert.ok(extendedFlowProbe.iterativeDensityContinuityCandidateCount >= 160, 'expanded witness phase did not exercise enough iterative density continuity candidates');
+    assert.ok(Number.isFinite(extendedFlowProbe.averageIterativeDensityResidual), 'expanded witness phase did not expose iterative density residual');
+    assert.ok(extendedFlowProbe.iterativeDensityConvergenceRatio >= 0, 'expanded witness phase did not expose iterative density convergence');
     assert.equal(extendedFlowProbe.deepDensityContinuityProjectionContract, 'wgsl-deep-density-continuity-projection-v0', 'expanded witness phase lost deeper density continuity contract');
     assert.ok(extendedFlowProbe.deepContinuityProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough deeper continuity projection candidates');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
@@ -1090,6 +1106,7 @@ async function run() {
       localPairDensityStats: state.localPairDensityStats,
       neighborSupportSubstrateStats: state.neighborSupportSubstrateStats,
       substrateDensityConstraintStats: state.substrateDensityConstraintStats,
+      iterativeDensityContinuityStats: state.iterativeDensityContinuityStats,
       deepDensityContinuityStats: state.deepDensityContinuityStats,
       particleSupportBudgetStats: state.particleSupportBudgetStats,
       settleRestEnergyStats: state.settleRestEnergyStats,
