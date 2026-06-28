@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
-const BOOLEAN_ARGS = new Set(['--export-current-view']);
+const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet']);
 for (let i = 2; i < process.argv.length;) {
   const key = process.argv[i];
   if (!String(key || '').startsWith('--')) throw new Error(`Unexpected positional argument: ${key}`);
@@ -39,6 +39,7 @@ const clipletInterrupt = String(args.get('--cliplet-interrupt') || 'off');
 const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
+const exportSelectedCliplet = args.has('--export-selected-cliplet');
 const exportReferenceMode = exportReferenceModeFromArgs(args.get('--export-reference-mode'));
 const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
@@ -112,6 +113,7 @@ function writeReport(report) {
     tileWidth,
     columns,
     exportCurrentView,
+    exportSelectedCliplet,
     exportReferenceMode,
     cameraPosition,
     cameraTarget,
@@ -597,6 +599,60 @@ async function exportCurrentViewFilmstrip(ws) {
   };
 }
 
+async function exportSelectedClipletFilmstrip(ws) {
+  const result = await evaluate(ws, `(async () => {
+    const parseVec = value => String(value || '')
+      .split(',')
+      .map(part => Number(part.trim()))
+      .filter(number => Number.isFinite(number));
+    const cameraPosition = parseVec(${JSON.stringify(cameraPosition)});
+    const cameraTarget = parseVec(${JSON.stringify(cameraTarget)});
+    if (cameraPosition.length || cameraTarget.length) {
+      if (typeof window.kaminosSetCameraDebugPose !== 'function') throw new Error('camera debug pose setter unavailable');
+      window.kaminosSetCameraDebugPose({
+        position: cameraPosition.length === 3 ? cameraPosition : undefined,
+        target: cameraTarget.length === 3 ? cameraTarget : undefined,
+      });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    if (typeof window.exportMotionPanelSelectedClipletFilmstrip !== 'function') throw new Error('selected-cliplet export function unavailable');
+    const exported = await window.exportMotionPanelSelectedClipletFilmstrip();
+    if (!exported?.dataUrl?.startsWith('data:image/png;base64,')) throw new Error('selected-cliplet export did not return a PNG data URL');
+    const exportTray = typeof window.kaminosMotionPanelExportTrayDebugState === 'function'
+      ? window.kaminosMotionPanelExportTrayDebugState()
+      : null;
+    return {
+      schema: 'kaminos.motion-panel-live-selected-cliplet-export.v0',
+      status: document.getElementById('motion-panel-temporal-status')?.textContent || null,
+      selectedTake: exported.selectedTake || null,
+      selectedCliplet: exported.selectedCliplet || null,
+      sourceRange: exported.sourceRange || null,
+      referenceMode: exported.referenceMode || null,
+      effectiveReferenceMode: exported.effectiveReferenceMode || null,
+      exportTray,
+      width: exported.width || null,
+      height: exported.height || null,
+      frameCount: exported.frameCount || 0,
+      frames: exported.frames || [],
+      dataUrl: exported.dataUrl,
+      downloadName: exported.downloadName || null,
+    };
+  })()`, { timeoutMs: 120000 });
+  if (!result?.selectedTake) throw new Error(`selected-cliplet export did not record selected take: ${JSON.stringify(result || null)}`);
+  if (!result?.selectedCliplet?.id) throw new Error(`selected-cliplet export did not record selected cliplet: ${JSON.stringify(result || null)}`);
+  const base64 = String(result.dataUrl || '').replace(/^data:image\/png;base64,/, '');
+  const png = Buffer.from(base64, 'base64');
+  assertPng(png, 'selected-cliplet export filmstrip');
+  mkdirSync(dirname(filmstripPath), { recursive: true });
+  writeFileSync(filmstripPath, png);
+  const { dataUrl, ...metadata } = result;
+  return {
+    ...metadata,
+    path: filmstripPath,
+    bytes: png.length,
+  };
+}
+
 try {
   mkdirSync(outDir, { recursive: true });
   mkdirSync(userDataDir, { recursive: true });
@@ -654,7 +710,10 @@ try {
 
   let filmstrip = null;
   let frames = [];
-  if (exportCurrentView) {
+  if (exportSelectedCliplet) {
+    phase = 'exporting-selected-cliplet-filmstrip';
+    filmstrip = await exportSelectedClipletFilmstrip(ws);
+  } else if (exportCurrentView) {
     phase = 'exporting-current-view-filmstrip';
     filmstrip = await exportCurrentViewFilmstrip(ws);
     if (!filmstrip?.selectedTake) throw new Error(`current-view export did not record selected take: ${JSON.stringify(filmstrip || null)}`);

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(index, /id="motion-panel-export-view"/, 'motion panel exposes a current-view export button');
+assert.match(index, /id="motion-panel-export-selected-cliplet"/, 'motion panel exposes a selected-cliplet contact-sheet export button');
 assert.match(index, /id="motion-panel-export-resolution"/, 'motion panel exposes an export resolution selector');
 assert.match(index, /id="motion-panel-export-frames"/, 'motion panel exposes an export frame-count selector');
 assert.match(index, /id="motion-panel-export-columns"/, 'motion panel exposes an export columns selector');
@@ -18,6 +19,8 @@ assert.match(index, /function applyMotionPanelExportReferenceOverride/, 'motion 
 assert.match(index, /function restoreMotionPanelExportReferenceOverride/, 'motion panel restores the live source-ghost mode after export');
 assert.match(index, /async function exportMotionPanelCurrentViewFilmstrip/, 'motion panel implements current-view filmstrip export');
 assert.match(index, /window\.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilmstrip/, 'current-view export is scriptable for smoke automation');
+assert.match(index, /async function exportMotionPanelSelectedClipletFilmstrip/, 'motion panel implements exact selected-cliplet filmstrip export');
+assert.match(index, /window\.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip/, 'selected-cliplet export is scriptable for smoke automation');
 assert.match(index, /renderer\.domElement/, 'current-view export captures the existing renderer canvas');
 assert.match(index, /camera\.position\.toArray/, 'current-view export records camera position evidence');
 assert.match(index, /controls\.target\.toArray/, 'current-view export records controls target evidence');
@@ -25,6 +28,7 @@ assert.match(index, /window\.motionPanelCurrentViewCameraEvidence = motionPanelC
 assert.match(index, /canvas\.toDataURL\('image\/png'\)/, 'current-view export captures the displayed WebGPU canvas pixels');
 assert.match(index, /a\.download = `kaminos-motion-current-view/, 'current-view export downloads a shareable PNG');
 assert.match(index, /document\.getElementById\('motion-panel-export-view'\)\?\.addEventListener\('click'/, 'export button is wired in route initialization');
+assert.match(index, /document\.getElementById\('motion-panel-export-selected-cliplet'\)\?\.addEventListener\('click'/, 'selected-cliplet export button is wired in route initialization');
 
 const exportBlock = index.match(/async function exportMotionPanelCurrentViewFilmstrip[\s\S]*?window\.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilmstrip;/)?.[0] || '';
 assert.ok(exportBlock, 'export function block is discoverable');
@@ -43,3 +47,15 @@ assert.doesNotMatch(exportBlock, /frameMotionAgencyCamera\(/, 'current-view expo
 assert.doesNotMatch(exportBlock, /createGeneratedPoseTemporalScene\(/, 'current-view export must not recreate the motion scene');
 assert.doesNotMatch(index, /createImageBitmap\(/, 'current-view export must not use createImageBitmap on the WebGPU renderer canvas');
 assert.doesNotMatch(exportBlock, /readRenderTargetPixelsAsync|new THREE\.RenderTarget/, 'current-view export must not use banding-prone WebGPU render-target readback');
+
+const clipletExportBlock = index.match(/async function exportMotionPanelSelectedClipletFilmstrip[\s\S]*?window\.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip;/)?.[0] || '';
+assert.ok(clipletExportBlock, 'selected-cliplet export function block is discoverable');
+assert.match(clipletExportBlock, /motionPanelSelectedClipletSegment\(motionTemporalState\?\.generatedMotionCliplets\)/, 'selected-cliplet export uses the current selected cliplet from current motion state');
+assert.match(clipletExportBlock, /selectedCliplet/, 'selected-cliplet export records selected cliplet evidence');
+assert.match(clipletExportBlock, /sourceRange/, 'selected-cliplet export records selected source frame range');
+assert.match(clipletExportBlock, /sampleTime/, 'selected-cliplet export samples source times directly instead of waiting on realtime playback');
+assert.match(clipletExportBlock, /updateGeneratedPoseTemporalFrame\(nowSeconds\)/, 'selected-cliplet export drives the existing renderer to each sampled source time');
+assert.match(clipletExportBlock, /referenceMode: referenceRestore\.requestedMode/, 'selected-cliplet export records requested reference mode');
+assert.match(clipletExportBlock, /selectedTake: motionPanelSelectedTakeEvidence\(\)/, 'selected-cliplet export records selected take evidence');
+assert.match(clipletExportBlock, /recordMotionPanelExport\(result\)/, 'selected-cliplet export stages output in the export tray');
+assert.doesNotMatch(clipletExportBlock, /generateMotionPanelTemporalPreview|window\.generateMotion|\/generate/, 'selected-cliplet export must not regenerate motion');

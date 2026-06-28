@@ -617,6 +617,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
       </div>
       <div class="volume-actions">
         <button class="btn" id="motion-panel-export-view">Export Current View</button>
+        <button class="btn" id="motion-panel-export-selected-cliplet">Cliplet Sheet</button>
       </div>
       <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
       <div class="field" style="margin-top: 8px;"><span class="field-key">Takes</span><span class="field-val" id="motion-panel-take-count">0</span></div>
@@ -6348,6 +6349,144 @@ async function exportMotionPanelCurrentViewFilmstrip() {
 }
 window.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilmstrip;
 
+async function exportMotionPanelSelectedClipletFilmstrip() {
+  if (!motionTemporalState?.active) throw new Error('No generated temporal motion is active');
+  const selectedCliplet = motionPanelSelectedClipletSegment(motionTemporalState?.generatedMotionCliplets);
+  if (!selectedCliplet) throw new Error('No generated motion cliplet is selected');
+  const settings = motionPanelExportSettingsFromInputs();
+  const button = document.getElementById('motion-panel-export-selected-cliplet');
+  const prompt = motionPromptValueForPreview();
+  const referenceRestore = applyMotionPanelExportReferenceOverride();
+  const selectedTake = motionPanelSelectedTakeEvidence();
+  const playbackSelect = document.getElementById('motion-panel-cliplet-playback');
+  const interruptSelect = document.getElementById('motion-panel-cliplet-interrupt');
+  const previousClipletValue = playbackSelect?.value || 'full';
+  const previousInterruptValue = interruptSelect?.value || 'off';
+  const previousStartedAt = motionTemporalState.startedAt;
+  const previousTimeScale = motionTemporalState.timeScale;
+  if (button) button.disabled = true;
+  setMotionPanelTemporalStatus(`Exporting cliplet ${selectedCliplet.index}: ${selectedCliplet.labelGuess}`, '#42a5f5');
+  try {
+    if (playbackSelect) playbackSelect.value = selectedCliplet.id;
+    if (interruptSelect) interruptSelect.value = 'off';
+    const frameCount = Math.max(1, settings.frames);
+    const frames = [];
+    const sourceGhostAtExportStart = motionPanelSourceGhostExportEvidence();
+    const duration = Math.max(1e-6, Number(selectedCliplet.duration) || 0);
+    for (let index = 0; index < frameCount; index++) {
+      const u = frameCount <= 1 ? 0 : index / frameCount;
+      const sampleTime = Number((duration <= 1e-5
+        ? 0
+        : duration * u).toFixed(5));
+      const nowSeconds = performance.now() / 1000;
+      const timeScale = Math.max(0.05, motionPanelSpeedFromInputs());
+      motionTemporalState.startedAt = nowSeconds - sampleTime / timeScale;
+      updateGeneratedPoseTemporalFrame(nowSeconds);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const frame = await captureMotionPanelRendererFrame(`cliplet-${selectedCliplet.index}-frame-${index}`, index);
+      frame.sampleTime = sampleTime;
+      frame.selectedCliplet = selectedCliplet;
+      frame.sourceRange = {
+        startSourceFrame: selectedCliplet.startSourceFrame,
+        endSourceFrame: selectedCliplet.endSourceFrame,
+        sourceStartTime: selectedCliplet.startTime,
+        sourceEndTime: selectedCliplet.endTime,
+      };
+      frames.push(frame);
+    }
+    const sourceWidth = frames[0]?.width || renderer.domElement.width;
+    const sourceHeight = frames[0]?.height || renderer.domElement.height;
+    const labelHeight = 52;
+    const tileWidth = settings.tileWidth;
+    const tileHeight = Math.max(1, Math.round(tileWidth * sourceHeight / sourceWidth));
+    const columns = Math.min(settings.columns, frames.length);
+    const rows = Math.ceil(frames.length / columns);
+    const filmstrip = document.createElement('canvas');
+    filmstrip.width = tileWidth * columns;
+    filmstrip.height = (tileHeight + labelHeight) * rows;
+    const ctx = filmstrip.getContext('2d');
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, filmstrip.width, filmstrip.height);
+    ctx.font = '600 14px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textBaseline = 'top';
+    for (const frame of frames) {
+      const image = await loadMotionPanelExportImage(frame.dataUrl);
+      const column = frame.index % columns;
+      const row = Math.floor(frame.index / columns);
+      const x = column * tileWidth;
+      const y = row * (tileHeight + labelHeight);
+      ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, x, y + labelHeight, tileWidth, tileHeight);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+      ctx.fillRect(x, y, tileWidth, labelHeight);
+      ctx.fillStyle = 'rgba(240, 210, 138, 0.96)';
+      const sheetFrameLabel = `cliplet ${String(frame.index + 1).padStart(2, '0')}/${frames.length}`;
+      const sourceFrame = Number.isFinite(Number(frame.sourceFrame)) ? Number(frame.sourceFrame).toFixed(1) : 'live';
+      const sourceFrameTotal = Number.isFinite(Number(frame.sourceFrameTotal)) ? String(Math.max(1, Math.round(Number(frame.sourceFrameTotal)))) : '?';
+      const sourceFrameLabel = `source ${sourceFrame}/${sourceFrameTotal}`;
+      frame.sheetFrameLabel = sheetFrameLabel;
+      frame.sourceFrameLabel = sourceFrameLabel;
+      frame.clipletLabel = selectedCliplet.labelGuess;
+      ctx.fillText(`${sheetFrameLabel} · ${sourceFrameLabel}`, x + 10, y + 7);
+      ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
+      const sourceRange = `${Number(selectedCliplet.startSourceFrame).toFixed(0)}-${Number(selectedCliplet.endSourceFrame).toFixed(0)}`;
+      ctx.fillText(`${selectedCliplet.labelGuess} · source ${sourceRange}`.slice(0, 48), x + 10, y + 27);
+    }
+    const dataUrl = filmstrip.toDataURL('image/png');
+    const safeLabel = `${motionPanelSafeExportFilename(prompt).replace(/^kaminos-motion-current-view-/, '')}-cliplet-${String(selectedCliplet.index).padStart(2, '0')}`;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `kaminos-motion-selected-cliplet-${safeLabel}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    const result = {
+      schema: 'kaminos.motion-panel-selected-cliplet-filmstrip.v0',
+      prompt,
+      settings,
+      referenceMode: referenceRestore.requestedMode,
+      effectiveReferenceMode: referenceRestore.effectiveMode,
+      previousReferenceMode: referenceRestore.previousMode,
+      referenceOverrideApplied: referenceRestore.applied,
+      selectedTake: motionPanelSelectedTakeEvidence(),
+      selectedTakeAtStart: selectedTake,
+      selectedCliplet,
+      sourceRange: {
+        startSourceFrame: selectedCliplet.startSourceFrame,
+        endSourceFrame: selectedCliplet.endSourceFrame,
+        sourceStartTime: selectedCliplet.startTime,
+        sourceEndTime: selectedCliplet.endTime,
+      },
+      sourceGhostAtExportStart,
+      sourceGhostAtExportEnd: motionPanelSourceGhostExportEvidence(),
+      camera: motionPanelCurrentViewCameraEvidence(),
+      width: filmstrip.width,
+      height: filmstrip.height,
+      frameCount: frames.length,
+      frames: frames.map(({ dataUrl: _dataUrl, ...frame }) => frame),
+      columns,
+      rows,
+      dataUrl,
+      downloadName: a.download,
+    };
+    result.exportRecord = recordMotionPanelExport(result);
+    window.__kaminosMotionPanelLastSelectedClipletExport = result;
+    setMotionPanelTemporalStatus(`Exported cliplet ${selectedCliplet.index}: ${selectedCliplet.labelGuess}`, '#66bb6a');
+    return result;
+  } catch (error) {
+    setMotionPanelTemporalStatus(`Cliplet export failed: ${error.message}`, '#ef5350');
+    throw error;
+  } finally {
+    if (playbackSelect) playbackSelect.value = previousClipletValue;
+    if (interruptSelect) interruptSelect.value = previousInterruptValue;
+    motionTemporalState.startedAt = previousStartedAt;
+    motionTemporalState.timeScale = previousTimeScale;
+    updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+    restoreMotionPanelExportReferenceOverride(referenceRestore);
+    if (button) button.disabled = false;
+  }
+}
+window.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip;
+
 function initKaminosMotionAgencyRoute() {
   renderMotionClipList();
   renderMotionPhraseControlPresets();
@@ -6368,6 +6507,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());
+  document.getElementById('motion-panel-export-selected-cliplet')?.addEventListener('click', () => void exportMotionPanelSelectedClipletFilmstrip());
   const resetMotionClipletSelection = () => {
     if (!motionTemporalState?.active) return;
     motionTemporalState.startedAt = performance.now() / 1000;
