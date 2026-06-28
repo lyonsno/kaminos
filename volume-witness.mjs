@@ -30,6 +30,10 @@ const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
+const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
+const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
@@ -144,6 +148,17 @@ function expectedTallPlumePressureIterationStrategy(volumeScene, pressureIterati
   return volumeScene === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
+}
+
+function normalizePressureStrategy(value, volumeScene) {
+  const requested = String(value || 'global').toLowerCase();
+  return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
+}
+
+function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
+  return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
+    ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
+    : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
 
 const routeParams = new URL(url).searchParams;
@@ -371,8 +386,17 @@ const requestedPressureIterations = Number(routeParams.get('volume_pressure_iter
 const expectedPressureIterations = routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
   ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
   : defaultPressureIterationsForScene(expectedVolumeScene);
-const expectedTallPlumePressureStrategy = expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-const expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' ? 2 : 0;
+const expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
+const expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+const expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
+const expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
+  ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
+  : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
+const expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+const expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
+const expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
+  ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
+  : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const requestedSimProfile = (routeParams.get('volume_sim_profile') || '').toLowerCase();
 const expectedSimProfile = requestedSimProfile === '1' || requestedSimProfile === 'true' || requestedSimProfile === 'yes' || requestedSimProfile === 'on';
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
@@ -912,6 +936,7 @@ async function main() {
     if (routeParams.has('volume_pressure_iterations')) {
       assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
     }
+    assert.equal(state.controls?.pressureStrategy || 'global', expectedPressureStrategy, 'pressure strategy route/control did not apply');
     assert.equal(state.pressureIterationDefault, defaultPressureIterationsForScene(expectedVolumeScene), 'effective pressure iteration default did not reach debug state');
     assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
@@ -936,7 +961,6 @@ async function main() {
     const expectedDetailCoherenceExtraReads = expectedTallPlumeDetailCoherenceExtraReadsPerCell(expectedVolumeScene);
     const expectedTransitionBandStrategy = expectedTallPlumeTransitionBandStrategy(expectedVolumeScene);
     const expectedTransitionBandExtraReads = expectedTallPlumeTransitionBandExtraReadsPerCell(expectedVolumeScene);
-    const expectedTallPlumePressureIterationStrategyValue = expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
     const stateLedger = state.simCostLedger || {};
     assert.equal(stateLedger.identity, 'tall-plume-sim-cost-ledger-v0', 'sim cost ledger identity did not reach debug state');
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
@@ -945,8 +969,19 @@ async function main() {
     assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
     assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
-    assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureIterationStrategyValue, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
+    assert.equal(stateLedger.pressureStrategy || 'global', expectedPressureStrategy, 'sim cost ledger pressure strategy does not match effective route');
+    assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureStrategy, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
     assert.equal(Number(stateLedger.tallPlumePressureIterationTarget), expectedTallPlumePressureTarget, 'sim cost ledger tall-plume pressure target does not match effective scene');
+    assert.equal(stateLedger.tallPlumePressureTierStrategy, expectedTallPlumePressureTierStrategyValue, 'sim cost ledger spatial pressure tier strategy does not match effective route');
+    assert.equal(stateLedger.pressureProjectionReadStrategy, expectedPressureProjectionReadStrategy, 'sim cost ledger pressure projection read strategy does not match effective route');
+    if (expectedSpatialPressureTiers) {
+      assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
+      assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
+      assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
+      assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'spatial pressure tiers did not report three tier dispatches');
+      assert.equal(stateLedger.pressureTierBufferOwnership?.pressure3, 'B', 'spatial pressure tier buffer ownership did not preserve pressure3 in B');
+      assert.equal(stateLedger.pressureTierBufferOwnership?.pressure2, 'A', 'spatial pressure tier buffer ownership did not preserve pressure2 in A');
+    }
     assert.equal(stateLedger.mainFluidKernelStrategy, expectedMainFluidStrategy, 'sim cost ledger main fluid kernel strategy does not match effective fire-lick state');
     assert.equal(stateLedger.mainFluidLocalProjectionStrategy, expectedMainFluidLocalProjectionStrategy, 'sim cost ledger main fluid local projection strategy does not match staged pressure-only contract');
     assert.equal(Number(stateLedger.mainFluidLocalProjectionDivergenceEvaluationsPerCell), 0, 'sim cost ledger should not report local main-fluid divergence projection evaluations');
@@ -966,8 +1001,8 @@ async function main() {
     assert.equal(stateLedger.tallPlumeTransitionBandStrategy, expectedTransitionBandStrategy, 'sim cost ledger transition-band strategy does not match effective scene');
     assert.equal(Number(stateLedger.tallPlumeTransitionBandExtraReadsPerCell), expectedTransitionBandExtraReads, 'sim cost ledger transition-band breakup should not restore scalar neighborhood reads');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
-    assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
-    assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
+    assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
+    assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
     assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
     assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
@@ -1033,8 +1068,12 @@ async function main() {
       sampleLedger?.tallPlumeTransitionBandStrategy !== sampleTransitionBandStrategy ||
       Number(sampleLedger?.tallPlumeTransitionBandExtraReadsPerCell) !== sampleTransitionBandExtraReads ||
       Number(sampleLedger?.pressureDivergencePasses) !== 0 ||
-      sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
-      sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureIterations : 0) ||
+      sampleLedger?.pressureStrategy !== expectedPressureStrategy ||
+      sampleLedger?.tallPlumePressureTierStrategy !== expectedTallPlumePressureTierStrategyValue ||
+      sampleLedger?.pressureProjectionReadStrategy !== expectedPressureProjectionReadStrategy ||
+      sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
+      sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
+      (expectedSpatialPressureTiers && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
       sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
       !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
       typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
@@ -1709,13 +1748,25 @@ async function main() {
       pressureProjectionIterations: sample.pressureProjectionIterations,
       pressureIterationDefault: sample.pressureIterationDefault,
       pressureIterationRequested: sample.pressureIterationRequested,
+      pressureStrategy: sample.pressureStrategy,
       tallPlumePressureIterationStrategy: sample.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: sample.tallPlumePressureIterationTarget,
+      tallPlumePressureTierStrategy: sample.tallPlumePressureTierStrategy,
+      pressureProjectionReadStrategy: sample.pressureProjectionReadStrategy,
+      pressureJacobiFullGridPasses: sample.pressureJacobiFullGridPasses,
+      pressureJacobiPartialSlabPasses: sample.pressureJacobiPartialSlabPasses,
+      pressureJacobiFullGridEquivalentPasses: sample.pressureJacobiFullGridEquivalentPasses,
+      pressureTierDispatches: sample.pressureTierDispatches,
+      pressureTierBounds: sample.pressureTierBounds,
+      pressureTierBufferOwnership: sample.pressureTierBufferOwnership,
       simProfile: sample.simProfile,
       simCostLedger: sample.simCostLedger || state.simCostLedger || null,
       expectedMajorantCadence,
       expectedPressureIterations,
       expectedTallPlumePressureIterationStrategy: expectedTallPlumePressureStrategy,
+      expectedPressureStrategy,
+      expectedTallPlumePressureTierStrategy: expectedTallPlumePressureTierStrategyValue,
+      expectedPressureProjectionReadStrategy,
       expectedSimProfile,
       rayBudgetPreset: reportControls.rayBudgetPreset,
       expectedCanonicalMacroPreset,

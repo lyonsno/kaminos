@@ -179,6 +179,15 @@ const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0'
 const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
+const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
+const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
+const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
+const PRESSURE_STRATEGY_GLOBAL = 'global';
+const PRESSURE_TIER_LOWER_MAX = 0.50;
+const PRESSURE_TIER_HERO_MIN = 0.05;
+const PRESSURE_TIER_HERO_MAX = 0.22;
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
@@ -229,10 +238,73 @@ function normalizePressureIterationCount(value, scene) {
   return Math.max(0, Math.min(12, requested));
 }
 
+function normalizePressureStrategy(value, scene) {
+  const requested = String(value ?? PRESSURE_STRATEGY_GLOBAL).toLowerCase();
+  if (normalizeVolumeScene(scene) === 'tall_plume' && requested === PRESSURE_STRATEGY_SPATIAL_TIERS) {
+    return PRESSURE_STRATEGY_SPATIAL_TIERS;
+  }
+  return PRESSURE_STRATEGY_GLOBAL;
+}
+
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
   return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
+}
+
+function tallPlumePressureTierStrategy(scene, pressureStrategy) {
+  return normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS
+    ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
+    : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+}
+
+function pressureTierDispatchPlan(gridSize, pressureStrategy, scene) {
+  const spatial = normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS;
+  const workgroups = Math.ceil(gridSize / 4);
+  const fullCells = gridCellCount(gridSize);
+  if (!spatial) {
+    return {
+      strategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE,
+      projectionReadStrategy: PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER,
+      maxTierIterations: 0,
+      fullGridPasses: 0,
+      partialSlabPasses: 0,
+      equivalentPasses: 0,
+      dispatches: [],
+      bounds: null,
+      bufferOwnership: null,
+    };
+  }
+  const lowerWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * PRESSURE_TIER_LOWER_MAX) / 4)));
+  const heroWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * PRESSURE_TIER_HERO_MAX) / 4)));
+  const lowerDispatchCells = gridSize * gridSize * Math.min(gridSize, lowerWorkgroupsY * 4);
+  const heroDispatchCells = gridSize * gridSize * Math.min(gridSize, heroWorkgroupsY * 4);
+  const equivalentPasses = 1 + lowerDispatchCells / fullCells + heroDispatchCells / fullCells;
+  return {
+    strategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY,
+    projectionReadStrategy: PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE,
+    maxTierIterations: 3,
+    fullGridPasses: 1,
+    partialSlabPasses: 2,
+    equivalentPasses,
+    dispatches: [
+      { tier: 1, label: 'full-volume-pressure1', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'B' },
+      { tier: 2, label: 'lower-plume-pressure2', workgroupsX: workgroups, workgroupsY: lowerWorkgroupsY, workgroupsZ: workgroups, pressureBuffer: 'A' },
+      { tier: 3, label: 'hero-fire-band-pressure3', workgroupsX: workgroups, workgroupsY: heroWorkgroupsY, workgroupsZ: workgroups, pressureBuffer: 'B' },
+    ],
+    bounds: {
+      pressure1: { minY: 0, maxY: 1, buffer: 'B' },
+      pressure2: { minY: 0, maxY: PRESSURE_TIER_LOWER_MAX, buffer: 'A' },
+      pressure3: { minY: PRESSURE_TIER_HERO_MIN, maxY: PRESSURE_TIER_HERO_MAX, buffer: 'B' },
+    },
+    bufferOwnership: {
+      pressure1: 'B',
+      pressure2: 'A',
+      pressure3: 'B',
+      projectionCompositeBinding0: 'B',
+      projectionCompositeBinding1: 'A',
+    },
+  };
 }
 
 function normalizeSimProfileFlag(value) {
@@ -326,6 +398,9 @@ override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
+const PRESSURE_TIER_LOWER_MAX_WGSL: f32 = 0.50;
+const PRESSURE_TIER_HERO_MIN_WGSL: f32 = 0.05;
+const PRESSURE_TIER_HERO_MAX_WGSL: f32 = 0.22;
 
 struct Uniforms {
   invViewProj: mat4x4<f32>,
@@ -798,6 +873,25 @@ fn pressureRead(c: vec3<i32>) -> vec4<f32> {
   return pressureSrc[pressureIndexForCell(c)];
 }
 
+fn pressureReadAlt(c: vec3<i32>) -> vec4<f32> {
+  return pressureDst[pressureIndexForCell(c)];
+}
+
+fn pressureTierY(c: vec3<i32>) -> f32 {
+  return f32(clamp(c.y, 0, i32(GRID) - 1)) / max(1.0, f32(GRID - 1u));
+}
+
+fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
+  let y = pressureTierY(c);
+  if (y >= PRESSURE_TIER_HERO_MIN_WGSL && y <= PRESSURE_TIER_HERO_MAX_WGSL) {
+    return pressureRead(c);
+  }
+  if (y <= PRESSURE_TIER_LOWER_MAX_WGSL) {
+    return pressureReadAlt(c);
+  }
+  return pressureRead(c);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
@@ -826,6 +920,37 @@ fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
   pressureDst[index3(gid)] = vec4<f32>(div, pressure * 0.985, 0.0, 0.0);
 }
 
+fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let y = f32(gid.y) / max(1.0, f32(GRID - 1u));
+  if (y < minY || y > maxY) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let div = divergenceAtCell(c);
+  let neighborPressure =
+    pressureRead(c + vec3<i32>(-1, 0, 0)).y +
+    pressureRead(c + vec3<i32>( 1, 0, 0)).y +
+    pressureRead(c + vec3<i32>(0, -1, 0)).y +
+    pressureRead(c + vec3<i32>(0,  1, 0)).y +
+    pressureRead(c + vec3<i32>(0, 0, -1)).y +
+    pressureRead(c + vec3<i32>(0, 0,  1)).y;
+  let pressure = (neighborPressure - div) * (1.0 / 6.0);
+  pressureDst[index3(gid)] = vec4<f32>(div, pressure * 0.985, 0.0, 0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureJacobiTieredLower(@builtin(global_invocation_id) gid: vec3<u32>) {
+  pressureJacobiTiered(gid, 0.0, PRESSURE_TIER_LOWER_MAX_WGSL);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureJacobiTieredHero(@builtin(global_invocation_id) gid: vec3<u32>) {
+  pressureJacobiTiered(gid, PRESSURE_TIER_HERO_MIN_WGSL, PRESSURE_TIER_HERO_MAX_WGSL);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
@@ -843,6 +968,39 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureRead(c + vec3<i32>(1, 0, 0)).y - pressureRead(c + vec3<i32>(-1, 0, 0)).y,
     pressureRead(c + vec3<i32>(0, 1, 0)).y - pressureRead(c + vec3<i32>(0, -1, 0)).y,
     pressureRead(c + vec3<i32>(0, 0, 1)).y - pressureRead(c + vec3<i32>(0, 0, -1)).y
+  ) * 0.5;
+  let velocityDensity = fluidSrc[base];
+  let density = velocityDensity.w;
+  let material = fluidSrc[base + 1u];
+  let fireLayer = fluidSrc[base + 2u];
+  let microLayer = fluidSrc[base + 3u];
+  frontDst[idx] = frontSrc[idx];
+  let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
+  let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
+  let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
+  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base + 1u] = material;
+  fluidDst[base + 2u] = fireLayer;
+  fluidDst[base + 3u] = microLayer;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  let c = vec3<i32>(gid);
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  let canonicalPlumeScene = step(2.5, sceneMode);
+  let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
+  let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
+  let projection = clamp(u.source_controls.z, 0.0, 1.5) * bonfireProjectionAblation;
+  let pressureGradient = vec3<f32>(
+    pressureReadComposite(c + vec3<i32>(1, 0, 0)).y - pressureReadComposite(c + vec3<i32>(-1, 0, 0)).y,
+    pressureReadComposite(c + vec3<i32>(0, 1, 0)).y - pressureReadComposite(c + vec3<i32>(0, -1, 0)).y,
+    pressureReadComposite(c + vec3<i32>(0, 0, 1)).y - pressureReadComposite(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
   let density = velocityDensity.w;
@@ -3040,6 +3198,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
+    pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
+    tallPlumePressureTierStrategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE,
+    pressureProjectionReadStrategy: PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER,
+    pressureJacobiFullGridPasses: 0,
+    pressureJacobiPartialSlabPasses: 0,
+    pressureJacobiFullGridEquivalentPasses: 0,
+    pressureTierDispatches: [],
+    pressureTierBounds: null,
+    pressureTierBufferOwnership: null,
     mainFluidKernelStrategy: MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS,
     mainFluidLocalProjectionStrategy: MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY,
     mainFluidLocalProjectionDivergenceEvaluationsPerCell: 0,
@@ -3080,7 +3247,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let computePipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
+  let pressureJacobiTieredLowerPipeline = null;
+  let pressureJacobiTieredHeroPipeline = null;
   let pressureProjectPipeline = null;
+  let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
@@ -3100,6 +3270,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureProjectPipelineLayout = null;
+  let pressureProjectTieredPipelineLayout = null;
   let shader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
@@ -3596,10 +3767,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: pressureJacobiPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureJacobi', constants: computePipelineConstants },
     });
+    pressureJacobiTieredLowerPipeline = device.createComputePipeline({
+      label: `kaminos pressure tiered lower-slab jacobi compute pipeline ${gridSize}^3`,
+      layout: pressureJacobiPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureJacobiTieredLower', constants: computePipelineConstants },
+    });
+    pressureJacobiTieredHeroPipeline = device.createComputePipeline({
+      label: `kaminos pressure tiered hero-band jacobi compute pipeline ${gridSize}^3`,
+      layout: pressureJacobiPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureJacobiTieredHero', constants: computePipelineConstants },
+    });
     pressureProjectPipeline = device.createComputePipeline({
       label: `kaminos velocity projection compute pipeline ${gridSize}^3`,
       layout: pressureProjectPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressure', constants: computePipelineConstants },
+    });
+    pressureProjectTieredPipeline = device.createComputePipeline({
+      label: `kaminos velocity tiered pressure projection compute pipeline ${gridSize}^3`,
+      layout: pressureProjectTieredPipelineLayout,
+      compute: { module: shader, entryPoint: 'csProjectPressureTiered', constants: computePipelineConstants },
     });
     majorantComputePipeline = device.createComputePipeline({
       label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
@@ -3876,6 +4062,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos pressure projection pipeline layout',
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureReadBindGroupLayout],
     });
+    pressureProjectTieredPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos tiered pressure projection pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+    });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
     const pipelineError = await device.popErrorScope();
@@ -4093,10 +4283,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
     const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
+    const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
+    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
-    const tallPlumePressureStrategy = tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
-    const tallPlumePressureIterationTarget = scene === 'tall_plume' ? 2 : 0;
+    const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+    const tallPlumePressureStrategy = spatialPressureEnabled
+      ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
+      : tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
+    const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureEnabled ? 2 : 0;
+    const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+    const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
     const simPassesPerFrame = 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
     const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
@@ -4141,13 +4338,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureDivergencePasses = 0;
     const pressureJacobiPasses = pressureEnabled ? pressureIterations : 0;
     const pressureJacobiInlineDivergencePasses = pressureJacobiPasses;
+    const pressureJacobiFullGridPasses = spatialPressureEnabled ? tierPlan.fullGridPasses : pressureJacobiPasses;
+    const pressureJacobiPartialSlabPasses = spatialPressureEnabled ? tierPlan.partialSlabPasses : 0;
+    const pressureJacobiFullGridEquivalentPasses = spatialPressureEnabled ? tierPlan.equivalentPasses : pressureJacobiPasses;
     const pressureProjectionPasses = pressureEnabled ? 1 : 0;
-    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiPasses + pressureProjectionPasses;
+    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses;
     const fullGridPassBreakdown = {
       fluidSim: simPassesPerFrame,
       pressureDivergence: pressureDivergencePasses,
       pressureJacobi: pressureJacobiPasses,
       pressureJacobiInlineDivergence: pressureJacobiInlineDivergencePasses,
+      pressureJacobiFullGrid: pressureJacobiFullGridPasses,
+      pressureJacobiPartialSlab: pressureJacobiPartialSlabPasses,
+      pressureJacobiFullGridEquivalent: pressureJacobiFullGridEquivalentPasses,
       pressureProjection: pressureProjectionPasses,
       total: fullGridPassesPerFrame,
     };
@@ -4164,8 +4367,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
+    state.pressureStrategy = pressureStrategy;
     state.tallPlumePressureIterationStrategy = tallPlumePressureStrategy;
     state.tallPlumePressureIterationTarget = tallPlumePressureIterationTarget;
+    state.tallPlumePressureTierStrategy = tallPlumePressureTierStrategyValue;
+    state.pressureProjectionReadStrategy = pressureProjectionReadStrategy;
+    state.pressureJacobiFullGridPasses = pressureJacobiFullGridPasses;
+    state.pressureJacobiPartialSlabPasses = pressureJacobiPartialSlabPasses;
+    state.pressureJacobiFullGridEquivalentPasses = pressureJacobiFullGridEquivalentPasses;
+    state.pressureTierDispatches = spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [];
+    state.pressureTierBounds = spatialPressureEnabled ? { ...tierPlan.bounds } : null;
+    state.pressureTierBufferOwnership = spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null;
     state.mainFluidKernelStrategy = mainFluidKernelStrategy;
     state.mainFluidLocalProjectionStrategy = mainFluidLocalProjectionStrategy;
     state.mainFluidLocalProjectionDivergenceEvaluationsPerCell = mainFluidLocalProjectionDivergenceEvaluationsPerCell;
@@ -4206,6 +4418,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
+      pressureStrategy,
+      tallPlumePressureTierStrategy: tallPlumePressureTierStrategyValue,
+      pressureProjectionReadStrategy,
+      pressureJacobiFullGridPasses,
+      pressureJacobiPartialSlabPasses,
+      pressureJacobiFullGridEquivalentPasses,
+      pressureTierDispatches: spatialPressureEnabled ? tierPlan.dispatches.map(dispatch => ({ ...dispatch })) : [],
+      pressureTierBounds: spatialPressureEnabled ? { ...tierPlan.bounds } : null,
+      pressureTierBufferOwnership: spatialPressureEnabled ? { ...tierPlan.bufferOwnership } : null,
       mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -4273,7 +4494,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodePressureProjection(encoder) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
-    if (!pressureJacobiPipeline || !pressureProjectPipeline || pressureJacobiBindGroups.length !== 2 || pressureReadBindGroups.length !== 2 || majorantFrontBindGroups.length !== 2) {
+    const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
+    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene);
+    if (
+      !pressureJacobiPipeline ||
+      !pressureProjectPipeline ||
+      (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
+      pressureJacobiBindGroups.length !== 2 ||
+      pressureReadBindGroups.length !== 2 ||
+      majorantFrontBindGroups.length !== 2
+    ) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
@@ -4290,6 +4520,51 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return;
     }
     const workgroups = Math.ceil(gridSize / 4);
+    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label) => {
+      const pass = encoder.beginComputePass({ label });
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+      pass.setBindGroup(2, bindGroup);
+      pass.dispatchWorkgroups(workgroups, tierWorkgroupsY, workgroups);
+      pass.end();
+    };
+    if (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY) {
+      dispatchPressureTierPass(
+        pressureJacobiPipeline,
+        pressureJacobiBindGroups[0],
+        workgroups,
+        'kaminos pressure spatial tier pass 1 full-volume pressure1'
+      );
+      dispatchPressureTierPass(
+        pressureJacobiTieredLowerPipeline,
+        pressureJacobiBindGroups[1],
+        tierPlan.dispatches[1].workgroupsY,
+        'kaminos pressure spatial tier pass 2 lower-plume pressure2'
+      );
+      dispatchPressureTierPass(
+        pressureJacobiTieredHeroPipeline,
+        pressureJacobiBindGroups[0],
+        tierPlan.dispatches[2].workgroupsY,
+        'kaminos pressure spatial tier pass 3 hero-fire-band pressure3'
+      );
+      {
+        const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
+        pass.setPipeline(pressureProjectTieredPipeline);
+        pass.setBindGroup(0, bindGroups[currentFluid]);
+        pass.setBindGroup(2, pressureJacobiBindGroups[1]);
+        pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+        pass.end();
+        currentFluid = 1 - currentFluid;
+        currentFront = 1 - currentFront;
+      }
+      state.pressureProjectionEnabled = true;
+      state.pressureProjectionIterations = tierPlan.maxTierIterations;
+      state.frontFieldReadIndex = currentFront;
+      state.frontFieldWriteIndex = 1 - currentFront;
+      state.frontFieldProjectionPassthrough = true;
+      updateSimCostLedger();
+      return;
+    }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
       const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
@@ -5375,8 +5650,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureIterationDefault: state.pressureIterationDefault,
         pressureIterationRequested: state.pressureIterationRequested,
         pressureSourceStrategy: state.pressureSourceStrategy,
+        pressureStrategy: state.pressureStrategy,
         tallPlumePressureIterationStrategy: state.tallPlumePressureIterationStrategy,
         tallPlumePressureIterationTarget: state.tallPlumePressureIterationTarget,
+        tallPlumePressureTierStrategy: state.tallPlumePressureTierStrategy,
+        pressureProjectionReadStrategy: state.pressureProjectionReadStrategy,
+        pressureJacobiFullGridPasses: state.pressureJacobiFullGridPasses,
+        pressureJacobiPartialSlabPasses: state.pressureJacobiPartialSlabPasses,
+        pressureJacobiFullGridEquivalentPasses: state.pressureJacobiFullGridEquivalentPasses,
+        pressureTierDispatches: state.pressureTierDispatches ? state.pressureTierDispatches.map(dispatch => ({ ...dispatch })) : [],
+        pressureTierBounds: state.pressureTierBounds ? { ...state.pressureTierBounds } : null,
+        pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -5671,8 +5955,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested: state.pressureIterationRequested,
       pressureSourceStrategy: state.pressureSourceStrategy,
+      pressureStrategy: state.pressureStrategy,
       tallPlumePressureIterationStrategy: state.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: state.tallPlumePressureIterationTarget,
+      tallPlumePressureTierStrategy: state.tallPlumePressureTierStrategy,
+      pressureProjectionReadStrategy: state.pressureProjectionReadStrategy,
+      pressureJacobiFullGridPasses: state.pressureJacobiFullGridPasses,
+      pressureJacobiPartialSlabPasses: state.pressureJacobiPartialSlabPasses,
+      pressureJacobiFullGridEquivalentPasses: state.pressureJacobiFullGridEquivalentPasses,
+      pressureTierDispatches: state.pressureTierDispatches ? state.pressureTierDispatches.map(dispatch => ({ ...dispatch })) : [],
+      pressureTierBounds: state.pressureTierBounds ? { ...state.pressureTierBounds } : null,
+      pressureTierBufferOwnership: state.pressureTierBufferOwnership ? { ...state.pressureTierBufferOwnership } : null,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -5785,6 +6078,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
       state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+      state.pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
       updateSimCostLedger();
     },

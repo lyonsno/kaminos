@@ -1609,6 +1609,7 @@ let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
 let routedVolumeMajorantCadence = 1;
 let routedVolumePressureIterations = undefined;
+let routedVolumePressureStrategy = 'global';
 let routedVolumeSimProfile = false;
 const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
   bonfireRecenter: 1,
@@ -1844,6 +1845,7 @@ function readVolumeControls() {
     reactionFuelScale: routedVolumeReactionFuelScale,
     majorantCadence: routedVolumeMajorantCadence,
     pressureIterations: routedVolumePressureIterations,
+    pressureStrategy: routedVolumePressureStrategy,
     simProfile: routedVolumeSimProfile,
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
@@ -2006,6 +2008,10 @@ async function initKaminosVolumeRoute() {
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
   if (params.has('volume_pressure_iterations') && Number.isFinite(routePressureIterations)) {
     routedVolumePressureIterations = Math.max(0, Math.min(12, Math.round(routePressureIterations)));
+  }
+  const routePressureStrategy = (params.get('volume_pressure_strategy') || '').toLowerCase();
+  if (routePressureStrategy === 'spatial_tiers' || routePressureStrategy === 'global') {
+    routedVolumePressureStrategy = routePressureStrategy;
   }
   const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
   routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';

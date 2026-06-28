@@ -30,6 +30,10 @@ const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
+const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
+const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
+const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP = 'main-fluid-fire-lick-breakup-v0';
 const MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS = 'main-fluid-zero-fire-lick-bypass-v0';
 const MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY = 'main-fluid-local-projection-staged-pressure-only-v0';
@@ -213,6 +217,7 @@ const TALL_PLUME_PERFORMANCE_BASE = {
   majorantGuard: 0.3,
   majorantCadence: 1,
   pressureIterations: 2,
+  pressureStrategy: 'global',
   simProfile: true,
   renderScale: 0.75,
   adaptiveRays: 0.75,
@@ -387,6 +392,7 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_input_radius', run.inputRadius);
   applyNumberParam(url, 'volume_majorant_cadence', run.majorantCadence);
   applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
+  applyStringParam(url, 'volume_pressure_strategy', run.pressureStrategy);
   applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
   applyStringParam(url, 'volume_external_emitters', run.externalEmitterMode);
   return url.toString();
@@ -438,6 +444,7 @@ function requestedConfig(run) {
     flowRate: run.flowRate,
     majorantCadence: run.majorantCadence,
     pressureIterations: run.pressureIterations,
+    pressureStrategy: run.pressureStrategy,
     simProfile: run.simProfile,
     externalEmitterMode: run.externalEmitterMode || 'off',
   };
@@ -508,8 +515,13 @@ function effectiveConfig(witness) {
     pressureProjectionIterations: witness.pressureProjectionIterations ?? controls.pressureProjectionIterations ?? controls.pressureIterations,
     pressureIterationRequested: witness.pressureIterationRequested ?? controls.pressureIterationRequested,
     pressureIterationDefault: witness.pressureIterationDefault ?? controls.pressureIterationDefault,
+    pressureStrategy: witness.pressureStrategy ?? controls.pressureStrategy ?? witness.simCostLedger?.pressureStrategy,
     tallPlumePressureIterationStrategy: witness.tallPlumePressureIterationStrategy ?? witness.simCostLedger?.tallPlumePressureIterationStrategy,
     tallPlumePressureIterationTarget: witness.tallPlumePressureIterationTarget ?? witness.simCostLedger?.tallPlumePressureIterationTarget,
+    tallPlumePressureTierStrategy: witness.tallPlumePressureTierStrategy ?? witness.simCostLedger?.tallPlumePressureTierStrategy,
+    pressureProjectionReadStrategy: witness.pressureProjectionReadStrategy ?? witness.simCostLedger?.pressureProjectionReadStrategy,
+    pressureJacobiFullGridEquivalentPasses: witness.pressureJacobiFullGridEquivalentPasses ?? witness.simCostLedger?.pressureJacobiFullGridEquivalentPasses,
+    pressureTierDispatches: witness.pressureTierDispatches ?? witness.simCostLedger?.pressureTierDispatches,
     simProfile: witness.simProfile ?? Boolean(witness.simCostLedger),
     simCostLedger: witness.simCostLedger,
     temporalEvidenceSource: witness.temporalEvidenceSource,
@@ -648,7 +660,9 @@ function validateWitness(run, witness, effective) {
   checkNumber(checks, run, effective, 'inputRadius');
   checkNumber(checks, run, effective, 'flowRate');
   checkNumber(checks, run, effective, 'majorantCadence', 'majorantBuildCadence', 0.5);
-  checkNumber(checks, run, effective, 'pressureIterations', 'pressureProjectionIterations', 0.5);
+  if (run.pressureStrategy !== 'spatial_tiers') {
+    checkNumber(checks, run, effective, 'pressureIterations', 'pressureProjectionIterations', 0.5);
+  }
 
   if (run.simProfile !== undefined && !effective.simProfile && !effective.simCostLedger) {
     throwSweepFailure('stale-default-config', 'validation', 'simulation profile was requested but no effective cost ledger was produced', {
@@ -679,7 +693,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'tallPlumeTransitionBandExtraReadsPerCell', 'tallPlumePressureIterationTarget', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'pressureJacobiFullGridEquivalentPasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'tallPlumeTransitionBandExtraReadsPerCell', 'tallPlumePressureIterationTarget', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -702,13 +716,35 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
+  if (![TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY, TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE].includes(ledger.tallPlumePressureTierStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown tall-plume pressure tier strategy', {
+      scenarioId: run.id,
+      tallPlumePressureTierStrategy: ledger.tallPlumePressureTierStrategy,
+      ledger,
+    });
+  }
+  if (![PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE, PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER].includes(ledger.pressureProjectionReadStrategy)) {
+    throwSweepFailure('wrong-fallback-route', 'validation', 'simulation cost ledger reported an unknown pressure projection read strategy', {
+      scenarioId: run.id,
+      pressureProjectionReadStrategy: ledger.pressureProjectionReadStrategy,
+      ledger,
+    });
+  }
   const expectedTallPlumePressureIterationStrategy = effective.volumeScene === 'tall_plume' && Number(effective.pressureProjectionIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
-  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'tall_plume' ? 2 : 0;
+  const expectedTallPlumePressureTierStrategy = effective.volumeScene === 'tall_plume' && effective.pressureStrategy === 'spatial_tiers'
+    ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
+    : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
+  const expectedPressureProjectionReadStrategy = expectedTallPlumePressureTierStrategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
+    ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
+    : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
+  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'tall_plume' && expectedTallPlumePressureTierStrategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY ? 2 : 0;
   if (
     ledger.tallPlumePressureIterationStrategy !== expectedTallPlumePressureIterationStrategy ||
-    Number(ledger.tallPlumePressureIterationTarget) !== expectedTallPlumePressureIterationTarget
+    Number(ledger.tallPlumePressureIterationTarget) !== expectedTallPlumePressureIterationTarget ||
+    ledger.tallPlumePressureTierStrategy !== expectedTallPlumePressureTierStrategy ||
+    ledger.pressureProjectionReadStrategy !== expectedPressureProjectionReadStrategy
   ) {
     throwSweepFailure('stale-default-config', 'validation', 'simulation cost ledger tall-plume pressure strategy does not match the effective route', {
       scenarioId: run.id,
@@ -718,6 +754,8 @@ function validateWitness(run, witness, effective) {
       tallPlumePressureIterationTarget: ledger.tallPlumePressureIterationTarget,
       expectedTallPlumePressureIterationStrategy,
       expectedTallPlumePressureIterationTarget,
+      expectedTallPlumePressureTierStrategy,
+      expectedPressureProjectionReadStrategy,
       ledger,
     });
   }
@@ -1099,8 +1137,12 @@ for (let i = 0; i < runs.length; i += 1) {
       pressureDivergencePasses: simCostLedger?.pressureDivergencePasses,
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
+      pressureJacobiFullGridEquivalentPasses: simCostLedger?.pressureJacobiFullGridEquivalentPasses,
       tallPlumePressureIterationStrategy: simCostLedger?.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: simCostLedger?.tallPlumePressureIterationTarget,
+      tallPlumePressureTierStrategy: simCostLedger?.tallPlumePressureTierStrategy,
+      pressureProjectionReadStrategy: simCostLedger?.pressureProjectionReadStrategy,
+      pressureTierDispatches: simCostLedger?.pressureTierDispatches,
       fullGridPassBreakdown: simCostLedger?.fullGridPassBreakdown,
       majorantBuildCadence: simCostLedger?.majorantBuildCadence,
       backend: witness.backend,
