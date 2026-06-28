@@ -1880,6 +1880,12 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   if (!evidence.actorTimeline?.movingActorIds?.length || !evidence.actorTimeline?.stateTransitions?.length) {
     throw new Error(`LERMS actor timeline lacks motion/state-transition proof: ${JSON.stringify(evidence)}`);
   }
+  if (evidence.actorTimeline?.continuity?.stableActorIdentities !== true) {
+    throw new Error(`LERMS actor timeline lacks stableActorIdentities continuity proof: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.continuity?.framesWithCompleteActorSet !== evidence.actorTimeline?.frameCount) {
+    throw new Error(`LERMS actor timeline continuity does not cover every frame: ${JSON.stringify(evidence)}`);
+  }
   if (!evidence.actorTimeline?.downgrades?.includes('timevarying_payload_not_live_socket_stream')) {
     throw new Error(`LERMS actor timeline lost live-stream downgrade: ${JSON.stringify(evidence)}`);
   }
@@ -1896,6 +1902,10 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   }
   if (!samples.every(sample => sample.actorVisuals?.actorVisualCount > 0)) {
     throw new Error(`LERMS actor timeline visual layer missing during playback: ${JSON.stringify(evidence)}`);
+  }
+  const sampleActorIdSets = samples.map(sample => JSON.stringify((sample.actorObjects || []).map(actor => actor.actorId)));
+  if (new Set(sampleActorIdSets).size !== 1) {
+    throw new Error(`LERMS actor timeline visual objects lost stable identity set during playback: ${JSON.stringify(evidence)}`);
   }
 }
 

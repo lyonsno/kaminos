@@ -469,6 +469,14 @@ const actorMotionTimelineReport = {
         hitFlash: { world: [-0.2, 0.7, -0.45], radius: 0.36 },
       },
     ],
+    continuity: {
+      schema: 'lerms.preview-bench-actor-continuity.v0',
+      stableActorIdentities: true,
+      actorIds: ['schnoz-carrier', 'schnoz-hit-carrier'],
+      framesWithCompleteActorSet: 3,
+      discontinuityCount: 0,
+      identityPolicy: 'persistent_actor_id_across_preview_bench_timeline',
+    },
     playback: {
       schema: 'lerms.preview-bench-actor-motion-playback.v0',
       loop: true,
@@ -514,6 +522,11 @@ assert.equal(actorMotionTimelineState.frameCount, 3);
 assert.equal(actorMotionTimelineState.durationMs, 480);
 assert.equal(actorMotionTimelineState.requiresMotionWitness, true);
 assert.equal(actorMotionTimelineState.staticActorPayloadAcceptedAsLoop, false);
+assert.equal(actorMotionTimelineState.continuity.schema, 'lerms.preview-bench-actor-continuity.v0');
+assert.equal(actorMotionTimelineState.continuity.stableActorIdentities, true);
+assert.deepEqual(actorMotionTimelineState.continuity.actorIds, ['schnoz-carrier', 'schnoz-hit-carrier']);
+assert.equal(actorMotionTimelineState.continuity.framesWithCompleteActorSet, 3);
+assert.equal(actorMotionTimelineState.continuity.discontinuityCount, 0);
 assert.ok(actorMotionTimelineState.movingActorIds.includes('schnoz-carrier'));
 assert.ok(actorMotionTimelineState.stateTransitions.some((transition) => transition.actorId === 'schnoz-carrier' && transition.to === 'fleeing_with_goin'));
 assert.equal(actorMotionTimelineState.frames[0].visualPrimitives.length, 2);

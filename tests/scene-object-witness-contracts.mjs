@@ -29,6 +29,7 @@ assert.match(witness, /__kaminosPreviewBenchPayloads/, 'witness can read generic
 assert.match(witness, /actorMotionPayload/, 'witness records actor motion payload evidence instead of relying on sidebar text alone');
 assert.match(witness, /previewBenchPayloads/, 'witness records generic Preview Bench payload evidence instead of relying on sidebar text alone');
 assert.match(witness, /playbackSamples/, 'witness records timeline playback samples instead of relying on sidebar text alone');
+assert.match(witness, /stableActorIdentities/, 'witness verifies stable actor identity continuity during timeline playback');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
 assert.match(witness, /splat-correction-sidecar/, 'witness supports selected splat correction sidecar persistence');

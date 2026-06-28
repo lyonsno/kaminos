@@ -10,6 +10,7 @@ export const LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA = 'lerms.preview-bench-acto
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE = 'lerms/preview-bench/actor-motion-payload-file';
 export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA = 'lerms.preview-bench-actor-motion-timeline.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-timeline-state.v0';
+export const LERMS_PREVIEW_ACTOR_CONTINUITY_SCHEMA = 'lerms.preview-bench-actor-continuity.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE = 'lerms/preview-bench/actor-motion-timeline-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
@@ -602,6 +603,44 @@ function movementProof(frames) {
   return { movingActorIds, stateTransitions };
 }
 
+function actorContinuityProof(frames, sourceContinuity = null) {
+  const actorIds = (frames[0]?.actors || []).map(actor => actor.actorId).filter(Boolean);
+  const framesWithCompleteActorSet = frames.filter((frame) => {
+    const frameActorIds = frame.actors.map(actor => actor.actorId).filter(Boolean);
+    return frameActorIds.length === actorIds.length && frameActorIds.every((actorId, index) => actorId === actorIds[index]);
+  }).length;
+  const computed = {
+    schema: LERMS_PREVIEW_ACTOR_CONTINUITY_SCHEMA,
+    stableActorIdentities: framesWithCompleteActorSet === frames.length,
+    actorIds,
+    framesWithCompleteActorSet,
+    discontinuityCount: frames.length - framesWithCompleteActorSet,
+    identityPolicy: 'persistent_actor_id_across_preview_bench_timeline',
+    evidence: 'computed_from_normalized_timeline_frames',
+  };
+  if (!sourceContinuity) return computed;
+  assertObject(sourceContinuity, 'actor-motion timeline continuity');
+  if (sourceContinuity.schema !== LERMS_PREVIEW_ACTOR_CONTINUITY_SCHEMA) {
+    throw new Error(`actor-motion timeline continuity schema mismatch: expected ${LERMS_PREVIEW_ACTOR_CONTINUITY_SCHEMA} but got ${sourceContinuity.schema || 'missing'}`);
+  }
+  const sourceActorIds = Array.isArray(sourceContinuity.actorIds) ? sourceContinuity.actorIds : [];
+  if (JSON.stringify(sourceActorIds) !== JSON.stringify(actorIds)) {
+    throw new Error(`actor-motion timeline continuity actor IDs disagree with frames: ${JSON.stringify({ sourceActorIds, actorIds })}`);
+  }
+  if (Number(sourceContinuity.framesWithCompleteActorSet) !== framesWithCompleteActorSet) {
+    throw new Error(`actor-motion timeline continuity frame count disagrees with frames: ${JSON.stringify({ source: sourceContinuity.framesWithCompleteActorSet, computed: framesWithCompleteActorSet })}`);
+  }
+  if (Boolean(sourceContinuity.stableActorIdentities) !== computed.stableActorIdentities) {
+    throw new Error(`actor-motion timeline continuity stability disagrees with frames: ${JSON.stringify({ source: sourceContinuity.stableActorIdentities, computed: computed.stableActorIdentities })}`);
+  }
+  return {
+    ...computed,
+    discontinuityCount: Number(sourceContinuity.discontinuityCount ?? computed.discontinuityCount),
+    identityPolicy: sourceContinuity.identityPolicy || computed.identityPolicy,
+    evidence: 'source_continuity_cross_checked_against_normalized_frames',
+  };
+}
+
 export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSource = null) {
   assertObject(report, 'LERMS Preview Bench actor-motion timeline report');
   const timeline = report.timeline || report;
@@ -655,8 +694,12 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
     };
   });
   const proof = movementProof(frames);
+  const continuity = actorContinuityProof(frames, timeline.continuity || null);
+  if (!continuity.stableActorIdentities) {
+    throw new Error(`actor-motion timeline actor identities are not stable across frames: ${JSON.stringify(continuity)}`);
+  }
   const states = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.state).filter(Boolean)))];
-  const actorIds = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.actorId).filter(Boolean)))];
+  const actorIds = continuity.actorIds;
   return {
     schema: LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA,
     payloadSchema: timeline.schema,
@@ -671,6 +714,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
     staticActorPayloadAcceptedAsLoop: timeline.witnessState.staticActorPayloadAcceptedAsLoop === true,
     states,
     actorIds,
+    continuity,
     movingActorIds: proof.movingActorIds,
     stateTransitions: proof.stateTransitions,
     frames,
