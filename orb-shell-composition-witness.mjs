@@ -300,6 +300,12 @@ async function main() {
     assert.ok(state?.MacroContactSample?.every(sample => sample?.schema === 'MacroContactSample'), 'MacroContactSample records missing from debug state');
     assert.ok(state?.macroClosestContactIds?.length >= 1, 'closest contact ids missing from debug state');
     assert.ok(state?.macroGeometryCoherenceWatchCount >= 1, 'geometry coherence watch must preserve diagnostic trust caveats');
+    if (state?.selectedMacroAssemblageIds?.includes('lower-socket-keel')) {
+      assert.equal(state?.LowerSocketKeelAnatomyLaw?.schema, 'LowerSocketKeelAnatomyLaw', 'selected lower socket must preserve anatomy law in witness state');
+      assert.equal(state?.lowerSocketKeelAnatomyVerdict, 'procedural-lower-socket-anatomy-law-applied', 'selected lower socket must record applied anatomy-law verdict');
+    } else {
+      assert.equal(state?.LowerSocketKeelAnatomyLaw, null, 'retired lower socket must not expose stale anatomy law');
+    }
     if (focus === 'macro-contact-map') {
       assert.equal(macroContactMapWitness?.schema, 'MacroContactMapWitnessState', 'macro contact map witness did not activate');
       assert.equal(macroContactMapWitness?.visualOverlayMode, 'ranked-closest-contact-segments', 'macro contact map witness did not enable closest-contact overlay');
@@ -500,6 +506,9 @@ async function main() {
       macroClosestContactIds: state.macroClosestContactIds,
       macroGeometryCoherenceWatch: state.macroGeometryCoherenceWatch,
       macroGeometryCoherenceWatchCount: state.macroGeometryCoherenceWatchCount,
+      LowerSocketKeelAnatomyLaw: state.LowerSocketKeelAnatomyLaw,
+      lowerSocketKeelAnatomyLaw: state.lowerSocketKeelAnatomyLaw,
+      lowerSocketKeelAnatomyVerdict: state.lowerSocketKeelAnatomyVerdict,
       macroContactMapWitness,
       MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
       macroFamilySubstripPlan: state.macroFamilySubstripPlan,
