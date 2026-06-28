@@ -65,10 +65,15 @@ const denseNorthWest = denseFixture.macroAssemblages.find(item => item.id === 'n
 
 assert.equal(lightFixture.effectiveVariation.uiControlSource, 'test-ui', 'fixture preserves the UI control source');
 assert.equal(denseFixture.effectiveVariation.variationLeafCount, 14, 'fixture exposes effective UI leaf pressure');
-assert.equal(
-  denseFixture.macroAssemblages.length,
-  lightFixture.macroAssemblages.length,
-  'UI leaf pressure must preserve macro family count',
+assert.equal(denseFixture.macroAssemblageCountLaw?.schema, 'MacroAssemblageCountLaw', 'UI leaf pressure records effective macro count law');
+assert.ok(lightFixture.macroAssemblages.length >= 3 && lightFixture.macroAssemblages.length <= 5, 'light UI pressure keeps macro count bounded');
+assert.ok(denseFixture.macroAssemblages.length >= 3 && denseFixture.macroAssemblages.length <= 5, 'dense UI pressure keeps macro count bounded');
+assert.ok(
+  ['north-west-dominant-thrust', 'north-east-counter-thrust'].every(id => (
+    lightFixture.macroAssemblages.some(item => item.id === id)
+    && denseFixture.macroAssemblages.some(item => item.id === id)
+  )),
+  'UI leaf pressure preserves the required aperture anchor macro families',
 );
 assert.notEqual(
   denseNorthWest.sphericalTerritory.centerPhase,

@@ -283,6 +283,10 @@ async function main() {
     assert.equal(state?.active, true, 'composition witness inactive');
     assert.equal(state?.baselineDisposition, 'coherent-but-wrong-model-baseline', 'v0 baseline disposition missing');
     assert.ok(state?.macroAssemblageCount >= 3 && state.macroAssemblageCount <= 5, 'composition must expose 3-5 macro assemblages');
+    assert.equal(state?.MacroAssemblageCountLaw?.schema, 'MacroAssemblageCountLaw', 'MacroAssemblageCountLaw missing from debug state');
+    assert.deepEqual(state?.selectedMacroAssemblageIds, state?.macroAssemblageIds, 'selected macro ids must match rendered macro ids');
+    assert.ok(state?.selectedMacroAssemblageIds?.includes('north-west-dominant-thrust'), 'north-west anchor macro missing from selected ids');
+    assert.ok(state?.selectedMacroAssemblageIds?.includes('north-east-counter-thrust'), 'north-east anchor macro missing from selected ids');
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
     assert.ok(state?.closureAnchorCount >= 4, 'composition must expose spherical closure anchors');
@@ -407,8 +411,14 @@ async function main() {
     assert.equal(state?.normalWitnessMaterialPolicy?.environmentLit, true, 'normal witness material must use environment lighting');
     assert.equal(state?.legacyScaffoldSuppressionVerdict, 'covered-promoted-body-legacy-round-bands-suppressed', 'covered legacy round band scaffold suppression missing from debug state');
     assert.ok(state?.suppressedLegacyRoundBandIds?.includes('nw-body'), 'covered legacy round band ids missing from debug state');
-    assert.ok(state?.suppressedLegacyRoundBandIds?.includes('cr-cover'), 'covered legacy round band ids missing crown cover from debug state');
-    assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
+    if (state?.selectedMacroAssemblageIds?.includes('polar-crown-lock')) {
+      assert.ok(state?.suppressedLegacyRoundBandIds?.includes('cr-cover'), 'covered legacy round band ids missing crown cover from debug state');
+    }
+    if (state?.selectedMacroAssemblageIds?.includes('equatorial-cupping-whorl')) {
+      assert.equal(state?.lowerCupClosure?.mode, 'lower-cup-socket-contiguous', 'lower cup closure descriptor missing from debug state');
+    } else {
+      assert.ok(state?.retiredMacroAssemblageIds?.includes('equatorial-cupping-whorl'), 'retired equatorial macro must be named when lower cup closure is absent');
+    }
     assert.equal(state?.crossingTuckIntegration?.mode, 'crossing-tuck-macro-body', 'crossing tuck integration descriptor missing from debug state');
     assert.equal(state?.ExpandedMacroRegionProxyPlan?.schema, 'ExpandedMacroRegionProxyPlan', 'ExpandedMacroRegionProxyPlan missing from debug state');
     assert.equal(state?.expandedRegionCount, state.macroAssemblageCount, 'composition must expose one ExpandedMacroRegionProxy per macro assemblage');
@@ -451,6 +461,11 @@ async function main() {
       screenshot: { path: out, bytes: stats.bytes },
       visualStats: stats,
       macroAssemblageCount: state.macroAssemblageCount,
+      MacroAssemblageCountLaw: state.MacroAssemblageCountLaw,
+      macroAssemblageCountLaw: state.macroAssemblageCountLaw,
+      macroAssemblageIds: state.macroAssemblageIds,
+      selectedMacroAssemblageIds: state.selectedMacroAssemblageIds,
+      retiredMacroAssemblageIds: state.retiredMacroAssemblageIds,
       MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
       macroFamilySubstripPlan: state.macroFamilySubstripPlan,
       MacroFamilySubstrip: state.MacroFamilySubstrip,

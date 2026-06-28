@@ -52,7 +52,12 @@ const variant = createTargetOrbShellCompositionFixture({ variantId: 'asymmetric-
 
 assert.equal(variant.controlledVariation.schema, 'OrbShellVariationDescriptor', 'fixture records controlled variation descriptor');
 assert.equal(variant.effectiveVariation.variantId, 'asymmetric-tuck', 'fixture exposes effective variant id');
-assert.equal(variant.macroAssemblages.length, baseline.macroAssemblages.length, 'variation preserves macro count');
+assert.equal(variant.macroAssemblageCountLaw?.schema, 'MacroAssemblageCountLaw', 'variation records macro count selection law');
+assert.ok(variant.macroAssemblages.length >= 3 && variant.macroAssemblages.length <= 5, 'variation keeps macro count inside the target 3-5 range');
+assert.ok(
+  ['north-west-dominant-thrust', 'north-east-counter-thrust'].every(id => variant.macroAssemblages.some(item => item.id === id)),
+  'variation preserves the two required aperture anchor macro families',
+);
 assert.equal(variant.frontApertureOwnership.schema, 'PrimaryApertureFrame', 'variation preserves primary aperture frame');
 assert.equal(
   variant.frontApertureOwnership.owners.length,
