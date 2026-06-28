@@ -1311,10 +1311,12 @@ function createMacroFamilySubstripPlan(composition) {
   };
   const optionalSpecs = {
     'north-west-dominant-thrust': [
-      { id: 'outer-secondary-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-secondary', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.56, 0.72], startReach: 0.14, terminalReach: 0.82, mouthVOffset: 0.22, mouthWidthBoost: 0.08, terminalVTarget: 0.08, terminalNarrowing: 0.38, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-secondary-early-tuck-wedge', liftBias: 0.034, sideWallDepth: 0.02, layerOffset: 0.008, tipNoseLength: 0.01 },
+      { id: 'outer-secondary-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-secondary', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.56, 0.72], startReach: 0.14, terminalReach: 0.82, mouthVOffset: 0.22, mouthWidthBoost: 0.08, terminalVTarget: 0.08, terminalNarrowing: 0.38, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-secondary-early-tuck-wedge', liftBias: 0.034, sideWallDepth: 0.02, layerOffset: 0.008, tipNoseLength: 0.01, activationThreshold: 0.62 },
+      { id: 'outer-far-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-far', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.82, 0.94], startReach: 0.18, terminalReach: 0.74, mouthVOffset: 0.28, mouthWidthBoost: 0.06, terminalVTarget: 0.12, terminalNarrowing: 0.42, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-far-early-tuck-wedge', liftBias: 0.03, sideWallDepth: 0.018, layerOffset: 0.012, tipNoseLength: 0.008, activationThreshold: 0.7 },
     ],
     'north-east-counter-thrust': [
-      { id: 'outer-counter-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-counter', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [0.58, 0.74], startReach: 0.1, terminalReach: 0.72, mouthVOffset: 0.18, mouthWidthBoost: 0.1, terminalVTarget: 0.18, terminalNarrowing: 0.46, terminalVisibility: 'dies-early-before-counter-tip', endTerminalPlane: 'counter-curve-outer-early-death-wedge', liftBias: 0.024, sideWallDepth: 0.02, layerOffset: 0.006, tipNoseLength: 0.014 },
+      { id: 'inner-counter-shadow-lip', role: 'inner-support-strip', siblingRole: 'inner-counter', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [-0.78, -0.64], startReach: 0, terminalReach: 0.68, mouthVOffset: -0.22, mouthWidthBoost: 0.1, terminalVTarget: -0.11, terminalNarrowing: 0.5, terminalVisibility: 'dies-early-before-counter-tip', endTerminalPlane: 'counter-curve-inner-shadow-early-death-wedge', liftBias: 0.016, sideWallDepth: 0.018, layerOffset: -0.018, tipNoseLength: 0.012, activationThreshold: 0.66 },
+      { id: 'outer-counter-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-counter', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [0.58, 0.74], startReach: 0.1, terminalReach: 0.72, mouthVOffset: 0.18, mouthWidthBoost: 0.1, terminalVTarget: 0.18, terminalNarrowing: 0.46, terminalVisibility: 'dies-early-before-counter-tip', endTerminalPlane: 'counter-curve-outer-early-death-wedge', liftBias: 0.024, sideWallDepth: 0.02, layerOffset: 0.006, tipNoseLength: 0.014, activationThreshold: 0.66 },
     ],
   };
   const variation = composition.effectiveVariation || composition.controlledVariation || {};
@@ -1324,11 +1326,36 @@ function createMacroFamilySubstripPlan(composition) {
   const variantId = variation.variantId || 'baseline';
   const variationSeed = Number.isFinite(Number(variation.variationSeed)) ? Number(variation.variationSeed) : 0;
   const parentAssemblageIds = Object.keys(baseSpecs);
+  const optionalBudget = leafDensityPressure <= -0.25
+    ? 1
+    : leafDensityPressure < 0.25
+      ? 3
+      : 4;
+  const optionalCandidateRecords = parentAssemblageIds.flatMap(parentId => (
+    (optionalSpecs[parentId] || []).map((spec, index) => {
+      const parentDensityBias = leafDensityPressure * 0.22;
+      const optionSeed = (stableNoise(`${variantId}:${variationSeed}:${parentId}:${spec.id}:substrip-option`) + 1) * 0.5;
+      const activationScore = optionSeed + parentDensityBias - index * 0.04;
+      spec.activationScore = activationScore;
+      return {
+        parentId,
+        spec,
+        activationScore,
+        activationThreshold: spec.activationThreshold ?? 0.66,
+      };
+    })
+  ));
+  const activatedOptionalIds = new Set(optionalCandidateRecords
+    .filter(record => record.activationScore >= record.activationThreshold)
+    .sort((a, b) => b.activationScore - a.activationScore)
+    .slice(0, optionalBudget)
+    .map(record => record.spec.id));
   const selectedSpecs = {};
   const perParentCounts = [];
   for (const parentId of parentAssemblageIds) {
-    const score = leafDensityPressure + stableNoise(`${variantId}:${variationSeed}:${parentId}:substrip-count`) * 0.28;
-    const includedOptionalSpecs = (optionalSpecs[parentId] || []).filter((_, index) => score >= 0.58 + index * 0.36);
+    const parentDensityBias = leafDensityPressure * 0.22;
+    const includedOptionalSpecs = (optionalSpecs[parentId] || [])
+      .filter(spec => activatedOptionalIds.has(spec.id));
     selectedSpecs[parentId] = [...baseSpecs[parentId], ...includedOptionalSpecs]
       .sort((a, b) => a.normalizedVRange[0] - b.normalizedVRange[0]);
     perParentCounts.push({
@@ -1337,8 +1364,14 @@ function createMacroFamilySubstripPlan(composition) {
       optionalCandidateCount: optionalSpecs[parentId]?.length || 0,
       actualCount: selectedSpecs[parentId].length,
       densityPressure: leafDensityPressure,
-      seedScore: score,
+      densityBias: parentDensityBias,
+      optionalBudget,
       includedOptionalSpecIds: includedOptionalSpecs.map(spec => spec.id),
+      optionalScores: (optionalSpecs[parentId] || []).map(spec => ({
+        id: spec.id,
+        activationScore: spec.activationScore,
+        activationThreshold: spec.activationThreshold ?? 0.66,
+      })),
     });
   }
   const substripCountLaw = {
