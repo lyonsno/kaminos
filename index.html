@@ -888,7 +888,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <button type="button" class="btn" id="pipeline-specimen-goin-button">Goin</button>
           <button type="button" class="btn" id="pipeline-specimen-glove-wealth-button">Glove Wealth</button>
           <button type="button" class="btn" id="pipeline-specimen-checkpoint-button">Primitive Views</button>
-          <button type="button" class="btn" id="pipeline-conditioning-route-request-button">Route Request</button>
+          <button type="button" class="btn" id="pipeline-conditioning-route-request-button">Stage Bake</button>
         </div>
       </div>
       <div
@@ -4572,7 +4572,7 @@ function renderPipelineSpecimenIntake() {
   const latestRequest = pipelineDockState.conditioningRouteRequests?.[0] || null;
   const latest = pipelineDockState.specimenArtifacts?.[0] || null;
   state.textContent = latestRequest
-    ? `${latestRequest.requestId} / ${latestRequest.requestedRoute} -> ${latestRequest.intendedEffectiveRoute} / ${(latestRequest.sourceTruthWarnings || []).join(', ') || 'no warnings'}`
+    ? `Bake staged from ${latestRequest.specimenKind || 'specimen'} views. No image generated yet. ${(Object.keys(latestRequest.conditioningArtifactIds || {}).length || latestRequest.conditioningRoles?.length || 0)} layers linked from temporary fixture views.`
     : latest
     ? `${latest.artifactId} / ${latest.firstVerticalRole || latest.specimenKind || 'specimen'} / ${latest.sourceKind} / ${(latest.sourceTruthWarnings || []).join(', ') || 'no warnings'}`
     : 'No specimen artifact imported this session.';
@@ -4844,7 +4844,7 @@ function kaminosPipelineCreateFixtureConditioningRouteRequest() {
   ];
   renderPipelineSpecimenIntake();
   savePipelineGraphLocalState();
-  setInfo(`Conditioning route request created: ${request.requestId}`);
+  setInfo(`Bake staged from ${request.specimenKind || 'specimen'} views; no image generated yet.`);
   return request;
 }
 

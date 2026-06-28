@@ -539,6 +539,7 @@ try {
       const debug = window.kaminosPipelineSpecimenIntakeDebugState?.();
       const state = window.kaminosPipelineDockDebugState?.();
       const request = debug?.conditioningRouteRequests?.find(item => item.schema === 'kaminos.conditioning-route-request.v0') || null;
+      const buttonText = document.querySelector('#pipeline-conditioning-route-request-button')?.textContent?.trim() || '';
       const normalChip = document.querySelector('[data-pipeline-specimen-role="normal_source"]');
       const stateLineElement = document.querySelector('#pipeline-specimen-intake-state');
       const stateLine = stateLineElement?.textContent || '';
@@ -547,6 +548,7 @@ try {
       return {
         ok: Boolean(
           debug?.conditioningRouteRequestSchema === 'kaminos.conditioning-route-request.v0'
+          && buttonText === 'Stage Bake'
           && request?.requestId === 'fixture-red-lerm-primitive-001-conditioning-request-001'
           && request?.requestedRoute === 'image_conditioned_generation'
           && request?.intendedEffectiveRoute === 'request_only'
@@ -559,12 +561,16 @@ try {
           && request?.conditioningRoles?.includes('normal_source')
           && request?.conditioningRoles?.includes('mask_source')
           && request?.sourceTruthWarnings?.includes('route_request_not_generator_execution_truth')
-          && stateLine.includes('request_only')
+          && stateLine.includes('Bake staged from')
+          && stateLine.includes('No image generated yet')
+          && !stateLine.includes('route_request_')
+          && !stateLine.includes('fixture_primitive_')
           && normalChip
           && (state?.graphImageNodes || []).some(node => node.viewKind === 'normal' && node.conditioningRoles?.includes('normal_source'))
         ),
         debug,
         request,
+        buttonText,
         stateLine,
         graphImageNodes: state?.graphImageNodes || [],
         normalRect: normalRect ? { x: normalRect.x, y: normalRect.y, width: normalRect.width, height: normalRect.height } : null,
