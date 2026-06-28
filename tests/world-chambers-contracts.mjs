@@ -61,6 +61,7 @@ const {
   LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA,
   LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA,
   LERMS_PREVIEW_WITNESS_SCHEMA,
+  LERMS_PREVIEW_GOIN_VISUAL_SCHEMA,
   LERMS_TERRAIN_PREVIEW_BENCH_ID,
   LERMS_UNDERHILL_CHAMBER_ID,
   LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT,
@@ -68,6 +69,7 @@ const {
   createDefaultWorldChambersRegistry,
   createLermsPreviewBenchState,
   createLermsPreviewActorVisualPrimitives,
+  createLermsPreviewGoinVisualPrimitives,
   normalizePreviewBenchPayloadReport,
   normalizeLermsPreviewActorMotionTimelineReport,
   normalizeWorldChamberReceipt,
@@ -88,6 +90,7 @@ assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA, 'lerms.preview-bench-ac
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA, 'lerms.preview-bench-actor-motion-timeline-state.v0');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE, 'lerms/preview-bench/actor-motion-timeline-file');
 assert.equal(LERMS_PREVIEW_WITNESS_SCHEMA, 'kaminos.lerms-preview-witness.v0');
+assert.equal(LERMS_PREVIEW_GOIN_VISUAL_SCHEMA, 'kaminos.lerms-preview-goin-visual.v0');
 assert.equal(LERMS_UNDERHILL_CHAMBER_ID, 'lerms-underhill');
 assert.equal(LERMS_TERRAIN_PREVIEW_BENCH_ID, 'terrain-preview');
 assert.deepEqual(
@@ -446,6 +449,15 @@ const actorMotionTimelineReport = {
         timeMs: 0,
         events: ['carrier-fleeing'],
         actorMotion: actorMotionReport.payload.actorMotion,
+        goins: [
+          {
+            id: 'goin-hoard-001',
+            state: 'carried',
+            world: [-0.22, 0.48, 0.2],
+            custodyRole: 'carried_attachment',
+            carrierLermId: 'schnoz-carrier',
+          },
+        ],
       },
       {
         schema: 'lerms.preview-bench-actor-motion-timeline-frame.v0',
@@ -456,6 +468,15 @@ const actorMotionTimelineReport = {
         actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-carrier'
           ? { ...actor, state: 'fleeing_with_goin', world: [0.1, 0.44, 0.3], heading: [-1, 0, 0.2] }
           : actor),
+        goins: [
+          {
+            id: 'goin-hoard-001',
+            state: 'carried',
+            world: [0.04, 0.5, 0.32],
+            custodyRole: 'carried_attachment',
+            carrierLermId: 'schnoz-carrier',
+          },
+        ],
       },
       {
         schema: 'lerms.preview-bench-actor-motion-timeline-frame.v0',
@@ -466,9 +487,67 @@ const actorMotionTimelineReport = {
         actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-hit-carrier'
           ? { ...actor, state: 'tumbling', world: [-0.2, 0.5, -0.45] }
           : actor),
+        goins: [
+          {
+            id: 'goin-hoard-001',
+            state: 'dropped',
+            world: [-0.2, 0.46, -0.45],
+            custodyRole: 'dropped_marker',
+            droppedByActorId: 'schnoz-carrier',
+            targetedByActorIds: ['schnoz-hit-carrier'],
+          },
+        ],
         hitFlash: { world: [-0.2, 0.7, -0.45], radius: 0.36 },
       },
     ],
+    goinCustody: {
+      schema: 'lerms.preview-bench-goin-custody.v0',
+      visibleGoinPlayback: true,
+      authorityBoundary: {
+        lermsOwns: 'red_lerm_timeline_goin_custody_readability',
+        greedyOwns: 'glove_well_throw_physics_and_goin_law',
+      },
+      primaryCustodyChain: [
+        'goin-hoard-001:carried_by:schnoz-carrier',
+        'goin-hoard-001:carried_by:schnoz-carrier',
+        'goin-hoard-001:dropped_by:schnoz-carrier',
+      ],
+      goinIds: ['goin-hoard-001'],
+      attachments: [
+        {
+          frameIndex: 0,
+          goinId: 'goin-hoard-001',
+          carrierActorId: 'schnoz-carrier',
+          world: [-0.22, 0.48, 0.2],
+          visibleAttachment: true,
+        },
+        {
+          frameIndex: 1,
+          goinId: 'goin-hoard-001',
+          carrierActorId: 'schnoz-carrier',
+          world: [0.04, 0.5, 0.32],
+          visibleAttachment: true,
+        },
+      ],
+      drops: [
+        {
+          frameIndex: 2,
+          goinId: 'goin-hoard-001',
+          droppedByActorId: 'schnoz-carrier',
+          world: [-0.2, 0.46, -0.45],
+          visibleDropMarker: true,
+        },
+      ],
+      rerouteTargets: [
+        {
+          frameIndex: 2,
+          goinId: 'goin-hoard-001',
+          actorId: 'schnoz-hit-carrier',
+          world: [-0.2, 0.46, -0.45],
+          visibleTargetPull: true,
+        },
+      ],
+    },
     continuity: {
       schema: 'lerms.preview-bench-actor-continuity.v0',
       stableActorIdentities: true,
@@ -527,11 +606,24 @@ assert.equal(actorMotionTimelineState.continuity.stableActorIdentities, true);
 assert.deepEqual(actorMotionTimelineState.continuity.actorIds, ['schnoz-carrier', 'schnoz-hit-carrier']);
 assert.equal(actorMotionTimelineState.continuity.framesWithCompleteActorSet, 3);
 assert.equal(actorMotionTimelineState.continuity.discontinuityCount, 0);
+assert.equal(actorMotionTimelineState.goinCustody.schema, 'lerms.preview-bench-goin-custody.v0');
+assert.equal(actorMotionTimelineState.goinCustody.visibleGoinPlayback, true);
+assert.deepEqual(actorMotionTimelineState.goinCustody.goinIds, ['goin-hoard-001']);
+assert.equal(actorMotionTimelineState.goinCustody.attachments.length, 2);
+assert.equal(actorMotionTimelineState.goinCustody.drops.length, 1);
+assert.equal(actorMotionTimelineState.goinCustody.rerouteTargets.length, 1);
 assert.ok(actorMotionTimelineState.movingActorIds.includes('schnoz-carrier'));
 assert.ok(actorMotionTimelineState.stateTransitions.some((transition) => transition.actorId === 'schnoz-carrier' && transition.to === 'fleeing_with_goin'));
 assert.equal(actorMotionTimelineState.frames[0].visualPrimitives.length, 2);
 assert.equal(actorMotionTimelineState.frames[0].visualPrimitives[0].kind, 'proxy_schnoz_sphere');
+assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives.length, 1);
+assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].schema, 'kaminos.lerms-preview-goin-visual.v0');
+assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].kind, 'proxy_goin_marker');
+assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].custodyRole, 'carried_attachment');
 assert.equal(actorMotionTimelineState.payloadSource.root, 'lerms-preview');
+
+const directGoinVisualPrimitives = createLermsPreviewGoinVisualPrimitives(actorMotionTimelineState.frames[0]);
+assert.deepEqual(directGoinVisualPrimitives, actorMotionTimelineState.frames[0].goinVisualPrimitives);
 
 const interpolatedTimelineFrame = selectLermsPreviewTimelineFrame(actorMotionTimelineState, 120);
 assert.equal(interpolatedTimelineFrame.schema, 'kaminos.lerms-preview-timeline-playback-frame.v0');
@@ -541,6 +633,10 @@ assert.ok(interpolatedTimelineFrame.blend > 0.49 && interpolatedTimelineFrame.bl
 const interpolatedCarrier = interpolatedTimelineFrame.visualPrimitives.find((primitive) => primitive.actorId === 'schnoz-carrier');
 assert.ok(interpolatedCarrier);
 assert.ok(interpolatedCarrier.position[0] > -0.35 && interpolatedCarrier.position[0] < 0.15);
+const interpolatedGoin = interpolatedTimelineFrame.goinVisualPrimitives.find((primitive) => primitive.goinId === 'goin-hoard-001');
+assert.ok(interpolatedGoin);
+assert.ok(interpolatedGoin.position[0] > -0.23 && interpolatedGoin.position[0] < 0.05);
+assert.equal(interpolatedGoin.custodyRole, 'carried_attachment');
 
 const timelineBenchState = createLermsPreviewBenchState(registry, {
   posture: 'inspect',

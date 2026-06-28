@@ -1836,8 +1836,13 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
       const sample = () => ({
         playbackFrame: window.__kaminosLermsPreviewTimelinePlaybackFrame || null,
         actorVisuals: window.__kaminosLermsPreviewActorVisuals || null,
+        goinVisuals: window.__kaminosLermsPreviewGoinVisuals || null,
         actorObjects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
           ...(child.userData?.kaminosLermsPreviewActor || {}),
+          position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
+        })),
+        goinObjects: [...(window.__kaminosLermsPreviewGoinsGroup?.children || [])].map(child => ({
+          ...(child.userData?.kaminosLermsPreviewGoin || {}),
           position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
         })),
       });
@@ -1856,6 +1861,7 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
         actorTimelineBadge: document.getElementById('lerms-preview-actor-timeline-badge')?.textContent?.trim() || null,
         timelineFrameText: document.getElementById('lerms-preview-timeline-frame')?.textContent?.trim() || null,
         actorCountText: document.getElementById('lerms-preview-actor-count')?.textContent?.trim() || null,
+        goinCustodyText: document.getElementById('lerms-preview-goin-custody')?.textContent?.trim() || null,
         statesText: document.getElementById('lerms-preview-actor-states')?.textContent?.trim() || null,
         downgradeText: document.getElementById('lerms-preview-motion-downgrade')?.textContent?.trim() || null,
       };
@@ -1886,6 +1892,12 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   if (evidence.actorTimeline?.continuity?.framesWithCompleteActorSet !== evidence.actorTimeline?.frameCount) {
     throw new Error(`LERMS actor timeline continuity does not cover every frame: ${JSON.stringify(evidence)}`);
   }
+  if (evidence.actorTimeline?.goinCustody?.visibleGoinPlayback !== true) {
+    throw new Error(`LERMS actor timeline lacks visibleGoinPlayback custody proof: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.goinCustody?.attachments?.length || !evidence.actorTimeline?.goinCustody?.drops?.length || !evidence.actorTimeline?.goinCustody?.rerouteTargets?.length) {
+    throw new Error(`LERMS actor timeline goin custody lacks attachment/drop/reroute proof: ${JSON.stringify(evidence)}`);
+  }
   if (!evidence.actorTimeline?.downgrades?.includes('timevarying_payload_not_live_socket_stream')) {
     throw new Error(`LERMS actor timeline lost live-stream downgrade: ${JSON.stringify(evidence)}`);
   }
@@ -1902,6 +1914,18 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   }
   if (!samples.every(sample => sample.actorVisuals?.actorVisualCount > 0)) {
     throw new Error(`LERMS actor timeline visual layer missing during playback: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.every(sample => sample.goinVisuals?.goinVisualCount > 0)) {
+    throw new Error(`LERMS actor timeline goin visual layer missing during playback: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.some(sample => (sample.goinObjects || []).some(goin => goin.custodyRole === 'carried_attachment'))) {
+    throw new Error(`LERMS actor timeline did not render carried goin markers: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.some(sample => (sample.goinObjects || []).some(goin => ['dropped_marker', 'rolling_drop', 'reroute_target'].includes(goin.custodyRole)))) {
+    throw new Error(`LERMS actor timeline did not render dropped/reroute goin markers: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.goinCustodyText || evidence.goinCustodyText === 'not loaded') {
+    throw new Error(`LERMS actor timeline goin custody UI text missing: ${JSON.stringify(evidence)}`);
   }
   const sampleActorIdSets = samples.map(sample => JSON.stringify((sample.actorObjects || []).map(actor => actor.actorId)));
   if (new Set(sampleActorIdSets).size !== 1) {

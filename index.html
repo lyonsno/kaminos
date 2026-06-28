@@ -640,6 +640,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="field"><span class="field-key">Actor Timeline</span><span class="field-val" id="lerms-preview-actor-timeline-badge">not loaded</span></div>
           <div class="field"><span class="field-key">Frame</span><span class="field-val" id="lerms-preview-timeline-frame">none</span></div>
           <div class="field"><span class="field-key">Actors</span><span class="field-val" id="lerms-preview-actor-count">0</span></div>
+          <div class="field"><span class="field-key">Goin Custody</span><span class="field-val" id="lerms-preview-goin-custody">not loaded</span></div>
           <div class="field"><span class="field-key">States</span><span class="field-val" id="lerms-preview-actor-states">none</span></div>
           <div class="field"><span class="field-key">Motion Src</span><span class="field-val" id="lerms-preview-motion-source">none</span></div>
           <div class="field"><span class="field-key">Downgrade</span><span class="field-val" id="lerms-preview-motion-downgrade">none</span></div>
@@ -822,6 +823,7 @@ let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
 let lermsPreviewActorsGroup = null;
+let lermsPreviewGoinsGroup = null;
 let loadedFiles = {};
 let receipt = null;
 let currentEnvName = 'studio';
@@ -4366,6 +4368,14 @@ function clearLermsPreviewActorVisuals() {
   }
 }
 
+function clearLermsPreviewGoinVisuals() {
+  if (!lermsPreviewGoinsGroup) return;
+  for (const child of [...lermsPreviewGoinsGroup.children]) {
+    lermsPreviewGoinsGroup.remove(child);
+    disposeLermsPreviewActorVisual(child);
+  }
+}
+
 function ensureLermsPreviewActorsGroup() {
   if (lermsPreviewActorsGroup) return lermsPreviewActorsGroup;
   lermsPreviewActorsGroup = new THREE.Group();
@@ -4377,6 +4387,19 @@ function ensureLermsPreviewActorsGroup() {
   scene?.add(lermsPreviewActorsGroup);
   window.__kaminosLermsPreviewActorsGroup = lermsPreviewActorsGroup;
   return lermsPreviewActorsGroup;
+}
+
+function ensureLermsPreviewGoinsGroup() {
+  if (lermsPreviewGoinsGroup) return lermsPreviewGoinsGroup;
+  lermsPreviewGoinsGroup = new THREE.Group();
+  lermsPreviewGoinsGroup.name = 'lerms-preview-goin-visuals';
+  lermsPreviewGoinsGroup.userData.kaminosLermsPreviewGoinVisuals = {
+    schema: 'kaminos.lerms-preview-goin-visual-layer.v0',
+    goinVisualCount: 0,
+  };
+  scene?.add(lermsPreviewGoinsGroup);
+  window.__kaminosLermsPreviewGoinsGroup = lermsPreviewGoinsGroup;
+  return lermsPreviewGoinsGroup;
 }
 
 function makeLermsPreviewActorVisualMesh(primitive) {
@@ -4428,6 +4451,54 @@ function makeLermsPreviewActorVisualMesh(primitive) {
   return actorGroup;
 }
 
+function makeLermsPreviewGoinVisualMesh(primitive) {
+  const goinGroup = new THREE.Group();
+  goinGroup.name = `lerms-preview-goin-${primitive.goinId || 'unknown'}`;
+  goinGroup.userData.kaminosLermsPreviewGoin = {
+    schema: primitive.schema,
+    goinId: primitive.goinId,
+    state: primitive.state,
+    custodyRole: primitive.custodyRole,
+    kind: primitive.kind,
+    carrierActorId: primitive.carrierActorId || null,
+    droppedByActorId: primitive.droppedByActorId || null,
+    targetedByActorIds: primitive.targetedByActorIds || [],
+  };
+  const radius = primitive.radius || 0.085;
+  const color = new THREE.Color(primitive.color || '#f5c542');
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 18, 12),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.36,
+      metalness: 0.05,
+      emissive: color,
+      emissiveIntensity: primitive.custodyRole === 'reroute_target' ? 0.42 : 0.24,
+    }),
+  );
+  core.name = `${goinGroup.name}-marker`;
+  core.castShadow = true;
+  goinGroup.add(core);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 1.45, radius * 0.08, 8, 24),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.5,
+      metalness: 0,
+      emissive: color,
+      emissiveIntensity: primitive.custodyRole === 'reroute_target' ? 0.32 : 0.12,
+    }),
+  );
+  ring.name = `${goinGroup.name}-custody-ring`;
+  ring.rotation.x = Math.PI / 2;
+  goinGroup.add(ring);
+
+  const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.45, 0];
+  goinGroup.position.set(position[0], position[1] - 0.58, position[2]);
+  return goinGroup;
+}
+
 function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride = null) {
   if (!scene) return null;
   const group = ensureLermsPreviewActorsGroup();
@@ -4448,15 +4519,38 @@ function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride =
   return state;
 }
 
+function renderLermsPreviewGoinVisuals(previewState, goinPrimitivesOverride = null) {
+  if (!scene) return null;
+  const group = ensureLermsPreviewGoinsGroup();
+  clearLermsPreviewGoinVisuals();
+  const primitives = goinPrimitivesOverride || previewState?.actorMotionTimeline?.frames?.[0]?.goinVisualPrimitives || [];
+  for (const primitive of primitives) {
+    group.add(makeLermsPreviewGoinVisualMesh(primitive));
+  }
+  const state = {
+    schema: 'kaminos.lerms-preview-goin-visual-layer.v0',
+    goinVisualCount: primitives.length,
+    goinIds: primitives.map(primitive => primitive.goinId),
+    custodyRoles: [...new Set(primitives.map(primitive => primitive.custodyRole))],
+    kinds: [...new Set(primitives.map(primitive => primitive.kind))],
+    downgrades: [...new Set(primitives.map(primitive => primitive.downgrade))],
+  };
+  group.userData.kaminosLermsPreviewGoinVisuals = state;
+  window.__kaminosLermsPreviewGoinVisuals = state;
+  return state;
+}
+
 function updateLermsPreviewTimelinePlaybackFrame(nowMs = performance.now()) {
   const timeline = lermsPreviewBenchState?.actorMotionTimeline;
   if (!timeline?.frames?.length) {
     window.__kaminosLermsPreviewTimelinePlaybackFrame = null;
+    renderLermsPreviewGoinVisuals(lermsPreviewBenchState, []);
     return false;
   }
   if (!lermsPreviewTimelinePlaybackStartMs) lermsPreviewTimelinePlaybackStartMs = nowMs;
   const playbackFrame = selectLermsPreviewTimelineFrame(timeline, nowMs - lermsPreviewTimelinePlaybackStartMs);
   renderLermsPreviewActorVisuals(lermsPreviewBenchState, playbackFrame.visualPrimitives);
+  renderLermsPreviewGoinVisuals(lermsPreviewBenchState, playbackFrame.goinVisualPrimitives);
   window.__kaminosLermsPreviewTimelinePlaybackFrame = playbackFrame;
   return true;
 }
@@ -4534,7 +4628,10 @@ function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
   const timelineFrame = updateLermsPreviewTimelinePlaybackFrame() ? window.__kaminosLermsPreviewTimelinePlaybackFrame : null;
-  if (!timelineFrame) renderLermsPreviewActorVisuals(previewState);
+  if (!timelineFrame) {
+    renderLermsPreviewActorVisuals(previewState);
+    renderLermsPreviewGoinVisuals(previewState, []);
+  }
   const chamber = debug.activeChamber;
   const summary = debug.summary || {};
   document.getElementById('world-chamber-title').textContent = chamber?.title || 'Unknown chamber';
@@ -4593,6 +4690,9 @@ function renderWorldChambersPanel() {
     : actorTimeline
       ? String(actorTimeline.actorIds.length)
       : '0';
+  document.getElementById('lerms-preview-goin-custody').textContent = actorTimeline?.goinCustody?.visibleGoinPlayback
+    ? `${actorTimeline.goinCustody.goinIds?.length || 0} goins / ${actorTimeline.goinCustody.primaryCustodyChain?.at(-1) || 'custody'}`
+    : 'not loaded';
   document.getElementById('lerms-preview-actor-states').textContent = actorMotion?.states?.join(', ') || actorTimeline?.states?.join(', ') || 'none';
   document.getElementById('lerms-preview-motion-source').textContent = actorMotion?.selectedClipletSource
     ? [actorMotion.selectedClipletSource.model, actorMotion.selectedClipletSource.status].filter(Boolean).join(' / ') || actorMotion.selectedClipletSource.route || 'source unavailable'

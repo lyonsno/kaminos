@@ -14,6 +14,7 @@ export const LERMS_PREVIEW_ACTOR_CONTINUITY_SCHEMA = 'lerms.preview-bench-actor-
 export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE = 'lerms/preview-bench/actor-motion-timeline-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
+export const LERMS_PREVIEW_GOIN_VISUAL_SCHEMA = 'kaminos.lerms-preview-goin-visual.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
 export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
 
@@ -543,8 +544,53 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
   });
 }
 
+function goinColor(goin) {
+  if (goin?.custodyRole === 'reroute_target') return '#baff6a';
+  if (goin?.custodyRole === 'dropped_marker' || goin?.custodyRole === 'rolling_drop') return '#ffd45a';
+  if (goin?.state === 'carried' || goin?.custodyRole === 'carried_attachment') return '#7ee7ff';
+  return '#f5c542';
+}
+
+export function createLermsPreviewGoinVisualPrimitives(frameOrGoins) {
+  const goins = Array.isArray(frameOrGoins?.goins)
+    ? frameOrGoins.goins
+    : Array.isArray(frameOrGoins)
+      ? frameOrGoins
+      : [];
+  return goins.map((goin, index) => {
+    const position = vector3(goin?.world, [index * 0.24, 0.45, 0]);
+    const custodyRole = goin?.custodyRole || (goin?.state === 'carried' ? 'carried_attachment' : 'hoard_source');
+    return {
+      schema: LERMS_PREVIEW_GOIN_VISUAL_SCHEMA,
+      goinId: goin?.id || `lerms-preview-goin-${index}`,
+      state: goin?.state || 'unknown',
+      custodyRole,
+      carrierActorId: goin?.carrierLermId || null,
+      droppedByActorId: goin?.droppedByActorId || null,
+      targetedByActorIds: Array.isArray(goin?.targetedByActorIds) ? [...goin.targetedByActorIds] : [],
+      kind: 'proxy_goin_marker',
+      downgrade: 'proxy_goin_visual_only',
+      position: [
+        roundBenchNumber(position[0]),
+        roundBenchNumber(position[1]),
+        roundBenchNumber(position[2]),
+      ],
+      radius: roundBenchNumber(custodyRole === 'reroute_target' ? 0.13 : 0.11),
+      color: goinColor({ ...goin, custodyRole }),
+      source: {
+        payloadSchema: frameOrGoins?.payloadSchema || LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA,
+        custodyRole,
+      },
+    };
+  });
+}
+
 function actorVisualMapById(frame) {
   return new Map((frame?.visualPrimitives || []).map(primitive => [primitive.actorId, primitive]));
+}
+
+function goinVisualMapById(frame) {
+  return new Map((frame?.goinVisualPrimitives || []).map(primitive => [primitive.goinId, primitive]));
 }
 
 function interpolateNumber(a, b, blend) {
@@ -577,6 +623,34 @@ function interpolateActorVisualPrimitives(currentFrame, nextFrame, blend) {
       nosePosition: interpolateVec3(primitive.nosePosition, next.nosePosition, blend),
     };
   });
+}
+
+function interpolateGoinVisualPrimitives(currentFrame, nextFrame, blend) {
+  const current = currentFrame?.goinVisualPrimitives || [];
+  const nextById = goinVisualMapById(nextFrame);
+  const seen = new Set();
+  const interpolated = current.map((primitive) => {
+    seen.add(primitive.goinId);
+    const next = nextById.get(primitive.goinId);
+    if (!next) return clone(primitive);
+    return {
+      ...clone(primitive),
+      state: blend >= 0.5 ? next.state : primitive.state,
+      custodyRole: blend >= 0.5 ? next.custodyRole : primitive.custodyRole,
+      carrierActorId: blend >= 0.5 ? next.carrierActorId : primitive.carrierActorId,
+      droppedByActorId: blend >= 0.5 ? next.droppedByActorId : primitive.droppedByActorId,
+      targetedByActorIds: blend >= 0.5 ? clone(next.targetedByActorIds || []) : clone(primitive.targetedByActorIds || []),
+      position: interpolateVec3(primitive.position, next.position, blend),
+      radius: interpolateNumber(primitive.radius, next.radius, blend),
+      color: blend >= 0.5 ? next.color : primitive.color,
+    };
+  });
+  if (blend >= 0.5) {
+    for (const next of nextById.values()) {
+      if (!seen.has(next.goinId)) interpolated.push(clone(next));
+    }
+  }
+  return interpolated;
 }
 
 function movementProof(frames) {
@@ -641,6 +715,31 @@ function actorContinuityProof(frames, sourceContinuity = null) {
   };
 }
 
+function goinCustodyProof(frames, sourceCustody = null) {
+  const fallback = {
+    schema: 'lerms.preview-bench-goin-custody.v0',
+    visibleGoinPlayback: false,
+    evidence: 'computed_absent_source_goin_custody',
+    goinIds: [...new Set(frames.flatMap(frame => frame.goins.map(goin => goin.id).filter(Boolean)))],
+    attachments: [],
+    drops: [],
+    rerouteTargets: [],
+    primaryCustodyChain: [],
+  };
+  if (!sourceCustody) return fallback;
+  assertObject(sourceCustody, 'actor-motion timeline goin custody');
+  if (sourceCustody.schema !== 'lerms.preview-bench-goin-custody.v0') {
+    throw new Error(`actor-motion timeline goin custody schema mismatch: expected lerms.preview-bench-goin-custody.v0 but got ${sourceCustody.schema || 'missing'}`);
+  }
+  if (sourceCustody.visibleGoinPlayback !== true) {
+    throw new Error(`actor-motion timeline goin custody does not declare visible playback: ${JSON.stringify(sourceCustody)}`);
+  }
+  return {
+    ...clone(sourceCustody),
+    evidence: 'source_goin_custody_normalized_for_preview_playback',
+  };
+}
+
 export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSource = null) {
   assertObject(report, 'LERMS Preview Bench actor-motion timeline report');
   const timeline = report.timeline || report;
@@ -691,10 +790,12 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
       hitFlash: frame.hitFlash ? clone(frame.hitFlash) : null,
       reroute: frame.reroute ? clone(frame.reroute) : null,
       visualPrimitives: createLermsPreviewActorVisualPrimitives(actorState),
+      goinVisualPrimitives: createLermsPreviewGoinVisualPrimitives(frame),
     };
   });
   const proof = movementProof(frames);
   const continuity = actorContinuityProof(frames, timeline.continuity || null);
+  const goinCustody = goinCustodyProof(frames, timeline.goinCustody || null);
   if (!continuity.stableActorIdentities) {
     throw new Error(`actor-motion timeline actor identities are not stable across frames: ${JSON.stringify(continuity)}`);
   }
@@ -715,6 +816,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
     states,
     actorIds,
     continuity,
+    goinCustody,
     movingActorIds: proof.movingActorIds,
     stateTransitions: proof.stateTransitions,
     frames,
@@ -750,6 +852,7 @@ export function selectLermsPreviewTimelineFrame(timelineState, elapsedMs) {
     current: clone(current),
     next: clone(next),
     visualPrimitives: interpolateActorVisualPrimitives(current, next, blend),
+    goinVisualPrimitives: interpolateGoinVisualPrimitives(current, next, blend),
   };
 }
 
