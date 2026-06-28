@@ -5,12 +5,15 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const witnessPath = join(root, 'scene-object-witness.mjs');
 const indexPath = join(root, 'index.html');
+const gtaoComputePath = join(root, 'lib/addons/tsl/display/GTAOComputeNode.js');
 
 assert.ok(existsSync(witnessPath), 'scene-object-witness.mjs must provide a reusable browser witness for scene object UI');
 assert.ok(existsSync(indexPath), 'index.html must provide the browser debug surface consumed by the witness');
+assert.ok(existsSync(gtaoComputePath), 'GTAOComputeNode.js must provide the managed AO depth pass');
 
 const witness = readFileSync(witnessPath, 'utf8');
 const indexHtml = readFileSync(indexPath, 'utf8');
+const gtaoCompute = readFileSync(gtaoComputePath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
@@ -247,4 +250,7 @@ assert.match(witness, /window\.kaminosAODebugState/, 'AO route witness uses the 
 assert.match(witness, /three-tsl-render-pipeline-gtao-compute/, 'AO route witness requires the managed TSL RenderPipeline route identity');
 assert.match(witness, /rawPipelineActive/, 'AO route witness rejects raw pipeline activation');
 assert.match(witness, /stateOff\.intensity !== 0/, 'AO route witness proves the off capture actually bypasses AO intensity');
+assert.match(indexHtml, /kaminosExcludeFromAODepth/, 'LERMS cue sprites mark themselves out of the AO depth pass');
+assert.match(gtaoCompute, /kaminosExcludeFromAODepth/, 'GTAO depth pass honors explicit non-occluder UI/overlay metadata');
+assert.match(gtaoCompute, /depthWrite\s*===\s*false/, 'GTAO depth pass preserves original no-depth material semantics under overrideMaterial');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
