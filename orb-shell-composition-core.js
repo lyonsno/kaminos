@@ -12,6 +12,16 @@ const MACRO_VARIATION_IDS = [
   'north-east-counter-thrust',
   'equatorial-cupping-whorl',
   'polar-crown-lock',
+  'lower-socket-keel',
+];
+const REQUIRED_MACRO_ASSEMBLAGE_IDS = [
+  'north-west-dominant-thrust',
+  'north-east-counter-thrust',
+];
+const OPTIONAL_MACRO_ASSEMBLAGE_IDS = [
+  'equatorial-cupping-whorl',
+  'polar-crown-lock',
+  'lower-socket-keel',
 ];
 
 function spherePoint(lat, lon, radius = 1) {
@@ -184,6 +194,7 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
       'twist delta',
       'surface roll',
       'territory width',
+      'bounded macro assemblage count',
       'child sibling offset',
       'boundary aperture bite',
       'lower cup depth',
@@ -202,7 +213,8 @@ export function createControlledOrbShellVariationDescriptor({ variantId = 'basel
     preservedInvariants: [
       'PrimaryApertureFrame',
       'front-aperture-ownership',
-      'four-macro-assay-count',
+      'two-anchor-macro-assay-families',
+      'bounded-three-to-five-macro-count',
       'spherical-closure-anchors',
       'shaped-boundary-pressure-fields',
       'wrong-model-baseline-warning',
@@ -387,6 +399,63 @@ function macro(id, role, dominance, phase, handedness, territory, childBands, op
       layers: 'local-layer-event-schedule',
       terminations: 'termination-pressure',
     },
+  };
+}
+
+function createMacroAssemblageCountLaw(descriptor, candidates) {
+  const candidateIds = candidates.map(candidate => candidate.id);
+  const anchorMacroAssemblageIds = REQUIRED_MACRO_ASSEMBLAGE_IDS.filter(id => candidateIds.includes(id));
+  const optionalMacroCandidateIds = OPTIONAL_MACRO_ASSEMBLAGE_IDS.filter(id => candidateIds.includes(id));
+  const densityPressure = descriptor.leafDensityPressure || 0;
+  const countScore = stableNoise(`${descriptor.variantId}:${descriptor.variationSeed}:leaf-${descriptor.variationLeafCount}:macro-law-count`)
+    + densityPressure * 0.45;
+  const optionalTargetCount = countScore < -0.28
+    ? 1
+    : countScore > 0.34
+      ? 3
+      : 2;
+  const bias = {
+    'equatorial-cupping-whorl': 0.8,
+    'polar-crown-lock': 1.2,
+    'lower-socket-keel': -0.05,
+  };
+  const optionalScores = optionalMacroCandidateIds
+    .map(id => ({
+      id,
+      score: stableNoise(`${descriptor.variantId}:${descriptor.variationSeed}:leaf-${descriptor.variationLeafCount}:${id}:macro-option`)
+        + densityPressure * 0.22
+        + (bias[id] || 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+  const selectedOptionalIds = optionalScores
+    .slice(0, clamp(optionalTargetCount, 1, optionalMacroCandidateIds.length))
+    .map(item => item.id);
+  const selectedSet = new Set([...anchorMacroAssemblageIds, ...selectedOptionalIds]);
+  const selectedMacroAssemblageIds = candidateIds.filter(id => selectedSet.has(id));
+  return {
+    schema: 'MacroAssemblageCountLaw',
+    mode: 'anchor-preserving-bounded-macro-thrust-count-v0',
+    generationLaw: 'two-required-aperture-anchors-plus-ranked-optional-support-thrusts',
+    variantId: descriptor.variantId,
+    variationSeed: descriptor.variationSeed,
+    variationLeafCount: descriptor.variationLeafCount,
+    countScore,
+    leafDensityPressure: densityPressure,
+    minMacroAssemblageCount: REQUIRED_MACRO_ASSEMBLAGE_IDS.length + 1,
+    maxMacroAssemblageCount: REQUIRED_MACRO_ASSEMBLAGE_IDS.length + OPTIONAL_MACRO_ASSEMBLAGE_IDS.length,
+    requestedOptionalMacroCount: optionalTargetCount,
+    anchorMacroAssemblageIds,
+    optionalMacroCandidateIds,
+    optionalMacroScores: optionalScores,
+    selectedOptionalMacroIds: selectedOptionalIds,
+    selectedMacroAssemblageIds,
+    retiredMacroAssemblageIds: candidateIds.filter(id => !selectedSet.has(id)),
+    requiredAnchorGuarantee: 'north-west and north-east aperture/counter-thrust families always survive count variation',
+    nonGoals: [
+      'no-free-random-macro-soup',
+      'no-removal-of-primary-aperture-anchors',
+      'no-global-retopology-yet',
+    ],
   };
 }
 
@@ -2462,8 +2531,18 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
       { t0: 0, t1: 1, layer: 'outer', trigger: 'termination-cover' },
     ], 'beveled-free-cap', 'neighbor-tuck'),
   ];
+  const lowerKeel = [
+    band('lk-body', 'lower-socket-keel', 'body', 0.01, 0.115, [
+      { t0: 0, t1: 0.36, layer: 'outer', trigger: 'lower-socket-closure' },
+      { t0: 0.36, t1: 0.58, layer: 'inner-support', trigger: 'primary-aperture-underfold' },
+      { t0: 0.58, t1: 1, layer: 'outer', trigger: 'right-rim-re-emergence' },
+    ], 'socket-cap', 'rim-absorption'),
+    band('lk-edge', 'lower-socket-keel', 'edge-rail', -0.12, 0.044, [
+      { t0: 0, t1: 1, layer: 'outer', trigger: 'keel-side-lip' },
+    ], 'under-tuck', 'amber-seam-cap'),
+  ];
 
-  const macroAssemblages = [
+  const allMacroAssemblages = [
     macro('north-west-dominant-thrust', 'dominant-thrust', 1, -0.72, 1, {
       latRange: [-1.12, 1.02],
       lonWidth: 0.82,
@@ -2525,7 +2604,31 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
         { target: 'north-east-counter-thrust', relation: 'locks-counter-thrust-end' },
       ],
     }),
+    macro('lower-socket-keel', 'lower-socket-keel', 0.46, -1.42, -1, {
+      latRange: [-1.2, -0.12],
+      lonWidth: 0.7,
+    }, lowerKeel, {
+      spineFamily: 'opposed-crown-socket-closure',
+      control: { startLat: -1.18, endLat: -0.14, twist: 0.86, bow: -0.18 },
+      entryZone: 'lower-back-socket',
+      exitZone: 'lower-front-rim',
+      closureAnchorIds: ['lower-socket-anchor', 'left-side-rim-pressure-anchor', 'right-side-rim-pressure-anchor'],
+      widthFactor: 0.22,
+      intervals: [
+        { t0: 0, t1: 0.34, layer: 'outer', trigger: 'lower-socket-closure' },
+        { t0: 0.34, t1: 0.58, layer: 'inner-support', trigger: 'aperture-underfold' },
+        { t0: 0.58, t1: 1, layer: 'outer', trigger: 'right-rim-re-emergence' },
+      ],
+      neighborRelations: [
+        { target: 'equatorial-cupping-whorl', relation: 'may-replace-lower-cup-as-bottom-socket-support' },
+        { target: 'north-west-dominant-thrust', relation: 'anchors-below-dominant-thrust' },
+        { target: 'north-east-counter-thrust', relation: 'keeps-counter-thrust-from-floating' },
+      ],
+    }),
   ];
+  const macroAssemblageCountLaw = createMacroAssemblageCountLaw(controlledVariation, allMacroAssemblages);
+  const selectedMacroAssemblageIdSet = new Set(macroAssemblageCountLaw.selectedMacroAssemblageIds);
+  const macroAssemblages = allMacroAssemblages.filter(assemblage => selectedMacroAssemblageIdSet.has(assemblage.id));
 
   const composition = {
     schema: 'OrbShellComposition',
@@ -2548,6 +2651,7 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
       'compatible termination choice',
     ],
     macroAssemblages,
+    macroAssemblageCountLaw,
     sphericalClosureAnchors,
     frontApertureOwnership: makePrimaryApertureFrame(),
     AperturePressure: {
@@ -3943,6 +4047,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       variationLeafCount: composition.effectiveVariation.variationLeafCount,
       uiControlSource: composition.effectiveVariation.uiControlSource,
       macroAssemblageCount: composition.macroAssemblages.length,
+      MacroAssemblageCountLaw: composition.macroAssemblageCountLaw,
+      macroAssemblageCountLaw: composition.macroAssemblageCountLaw,
+      macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
+      selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || [],
+      retiredMacroAssemblageIds: composition.macroAssemblageCountLaw?.retiredMacroAssemblageIds || [],
       macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
       macroFamilySubstripParentIds: composition.macroFamilySubstripPlan?.parentAssemblageIds || [],
       macroFamilySubstripCount: composition.macroFamilySubstripPlan?.substripCount || 0,
@@ -4249,6 +4358,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         controlledVariation: composition.controlledVariation,
         effectiveVariation: composition.effectiveVariation,
         macroAssemblageCount: composition.macroAssemblages.length,
+        MacroAssemblageCountLaw: composition.macroAssemblageCountLaw,
+        macroAssemblageCountLaw: composition.macroAssemblageCountLaw,
+        macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
+        selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || [],
+        retiredMacroAssemblageIds: composition.macroAssemblageCountLaw?.retiredMacroAssemblageIds || [],
         MacroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         MacroFamilySubstrip: composition.macroFamilySubstripPlan?.substrips || [],

@@ -4385,7 +4385,7 @@ function frameOrbShellCompositionCamera() {
 }
 
 function orbShellCompositionStatusText(state) {
-  return `Orb Shell Macro Grounding — ${state?.macroAssemblageCount ?? 0} macro thrusts / child strips ${state?.macroFamilySubstripCount ?? 0} / ${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0} / density pressure ${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
+  return `Orb Shell Macro Grounding — macro thrusts ${state?.macroAssemblageCount ?? 0} / child strips ${state?.macroFamilySubstripCount ?? 0} / ${state?.variantId || 'baseline'}:${state?.variationSeed ?? 0} / density pressure ${state?.variationLeafCount ?? readOrbShellControls().leafCount}`;
 }
 
 function readOrbShellCompositionControls() {
