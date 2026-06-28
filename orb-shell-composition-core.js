@@ -459,6 +459,127 @@ function createMacroAssemblageCountLaw(descriptor, candidates) {
   };
 }
 
+function createMacroInterlockGraph(composition) {
+  const selectedIds = new Set(composition.macroAssemblages.map(assemblage => assemblage.id));
+  const candidateRelations = [
+    {
+      schema: 'MacroInterlockRelation',
+      id: 'lower-socket-keel-under-equatorial-cupping-whorl',
+      sourceMacroId: 'lower-socket-keel',
+      targetMacroId: 'equatorial-cupping-whorl',
+      relationType: 'socket-tuck-under',
+      precedence: 'target-claims-local-surface-over-source',
+      interval: { t0: 0.04, t1: 0.62, fade: 0.12 },
+      depthInset: 0.096,
+      widthScale: 0.62,
+      normalLiftDelta: -0.024,
+      topologyRelief: 1,
+      visualIntent: 'lower socket support ducks under the equatorial lower cup instead of occupying the same lower-left region as an adjacent slab',
+      nonGoal: 'not a boolean union or solved collision pass',
+    },
+  ];
+  const activeRelations = candidateRelations.filter(relation => (
+    selectedIds.has(relation.sourceMacroId) && selectedIds.has(relation.targetMacroId)
+  ));
+  const retiredRelations = candidateRelations.filter(relation => !activeRelations.includes(relation)).map(relation => ({
+    id: relation.id,
+    sourceMacroId: relation.sourceMacroId,
+    targetMacroId: relation.targetMacroId,
+    relationType: relation.relationType,
+    retiredReason: selectedIds.has(relation.sourceMacroId)
+      ? 'target-macro-not-selected'
+      : selectedIds.has(relation.targetMacroId)
+        ? 'source-macro-not-selected'
+        : 'source-and-target-not-selected',
+  }));
+  const interlockAffectedMacroIds = [...new Set(activeRelations.map(relation => relation.sourceMacroId))];
+  return {
+    schema: 'MacroInterlockGraph',
+    mode: 'selected-macro-precedence-and-local-tuck-v0',
+    generationLaw: 'selected macro families negotiate local precedence before final mesh fusion',
+    sourceMacroAssemblageCountLaw: composition.macroAssemblageCountLaw?.schema,
+    selectedMacroAssemblageIds: [...selectedIds],
+    activeRelations,
+    retiredRelations,
+    activeRelationCount: activeRelations.length,
+    visibleEffectCount: activeRelations.length,
+    interlockAffectedMacroIds,
+    firstSliceScope: 'lower-socket-keel-under-equatorial-cup-only',
+    failurePressure: [
+      'adjacent-macro-bodies-without-precedence',
+      'count-variation-as-crowding',
+      'tuck-label-without-visible-depth-change',
+    ],
+    nonGoals: [
+      'do-not-solve-global-collision',
+      'do-not-introduce-braid-scheduler',
+      'do-not-retire-anchor-families',
+    ],
+  };
+}
+
+function attachMacroInterlockEffects(composition) {
+  const graph = composition.macroInterlockGraph;
+  for (const assemblage of composition.macroAssemblages) {
+    assemblage.macroInterlockEffects = (graph?.activeRelations || [])
+      .filter(relation => relation.sourceMacroId === assemblage.id)
+      .map(relation => ({
+        schema: 'MacroInterlockGeometryEffect',
+        id: `${relation.id}-geometry-effect`,
+        relationId: relation.id,
+        relationType: relation.relationType,
+        sourceMacroId: relation.sourceMacroId,
+        targetMacroId: relation.targetMacroId,
+        interval: relation.interval,
+        depthInset: relation.depthInset,
+        widthScale: relation.widthScale,
+        normalLiftDelta: relation.normalLiftDelta,
+        topologyRelief: relation.topologyRelief,
+        visualContract: 'source macro centerline and width visibly tuck through the relation interval',
+      }));
+  }
+}
+
+function macroInterlockIntervalInfluence(effect, t) {
+  const interval = effect.interval || { t0: 0, t1: 1, fade: 0.08 };
+  if (t < interval.t0 || t > interval.t1) return 0;
+  const fade = interval.fade ?? 0.08;
+  const inWeight = smoothStep(interval.t0, Math.min(interval.t1, interval.t0 + fade), t);
+  const outWeight = 1 - smoothStep(Math.max(interval.t0, interval.t1 - fade), interval.t1, t);
+  return clamp(inWeight * outWeight, 0, 1);
+}
+
+function macroInterlockEffectAt(assemblage, t) {
+  const activeEffects = (assemblage.macroInterlockEffects || [])
+    .map(effect => ({ effect, influence: macroInterlockIntervalInfluence(effect, t) }))
+    .filter(item => item.influence > 0);
+  if (!activeEffects.length) {
+    return {
+      depthInset: 0,
+      widthScale: 1,
+      normalLiftDelta: 0,
+      topologyRelief: 0,
+      activeEffectIds: [],
+    };
+  }
+  return activeEffects.reduce((total, item) => {
+    const { effect, influence } = item;
+    return {
+      depthInset: total.depthInset + (effect.depthInset || 0) * influence,
+      widthScale: Math.min(total.widthScale, 1 - (1 - (effect.widthScale ?? 1)) * influence),
+      normalLiftDelta: total.normalLiftDelta + (effect.normalLiftDelta || 0) * influence,
+      topologyRelief: Math.max(total.topologyRelief, (effect.topologyRelief || 0) * influence),
+      activeEffectIds: [...total.activeEffectIds, effect.id],
+    };
+  }, {
+    depthInset: 0,
+    widthScale: 1,
+    normalLiftDelta: 0,
+    topologyRelief: 0,
+    activeEffectIds: [],
+  });
+}
+
 function makePrimaryApertureFrame() {
   return {
     schema: 'PrimaryApertureFrame',
@@ -645,10 +766,12 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     const nearestCut = nearestCutProfileSample(cutProfile, t);
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut);
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut);
+    const interlock = macroInterlockEffectAt(assemblage, t);
+    const interlockWidthScale = interlock.widthScale;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
     const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta;
     const crown = 0.82;
     const outer = addScaledPoint(
       addScaledPoint(center, sideAxis, sideSign * sideWidth),
@@ -749,10 +872,14 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
 
 function createLiveMacroSideWallPlan(composition) {
   const expectedTerminalCapCount = composition.macroAssemblages.length * 2;
+  const interlockAffectedMacroIds = composition.macroInterlockGraph?.interlockAffectedMacroIds || [];
   const sideWalls = composition.macroAssemblages.flatMap(assemblage => [
     createLiveMacroSideWall(assemblage, 'left-promoted-body-edge'),
     createLiveMacroSideWall(assemblage, 'right-promoted-body-edge'),
   ]);
+  const interlockAffectedSideWallCount = sideWalls.filter(wall => (
+    interlockAffectedMacroIds.includes(wall.parentAssemblage)
+  )).length;
   const terminalCaps = composition.macroAssemblages.flatMap(assemblage => {
     const assemblageSideWalls = sideWalls.filter(wall => wall.parentAssemblage === assemblage.id);
     return ['start-terminus', 'end-terminus']
@@ -765,6 +892,9 @@ function createLiveMacroSideWallPlan(composition) {
     schema: 'LiveMacroSideWallPlan',
     mode: 'live-promoted-body-sidewall-v0',
     targetAssemblageIds: [...new Set(sideWalls.map(wall => wall.parentAssemblage))],
+    macroInterlockGraph: composition.macroInterlockGraph,
+    interlockAffectedMacroIds,
+    interlockAffectedSideWallCount,
     sideWalls,
     sideWallCount: sideWalls.length,
     terminalCaps,
@@ -840,10 +970,12 @@ function macroFamilySurfaceSample(assemblage, t, normalizedV, liftBias = 0.018) 
   const nearestCut = nearestCutProfileSample(body.boundaryCutProfile || [], t);
   const expanded = assemblage.expandedRegionProxy;
   const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
-  const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut);
-  const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut);
+  const interlock = macroInterlockEffectAt(assemblage, t);
+  const interlockWidthScale = interlock.widthScale;
+  const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
+  const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
   const sideWidth = normalizedV < 0 ? leftWidth : rightWidth;
-  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias;
+  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias + interlock.normalLiftDelta;
   const topologyDip = topologyReliefStrength(assemblage, t);
   const crown = Math.max(0.62, 1 - Math.pow(Math.abs(normalizedV), 2.2) * 0.14 - topologyDip * 0.12);
   const point = addScaledPoint(
@@ -2404,6 +2536,8 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.spine.control.surfaceRoll = field.surfaceRoll;
     assemblage.spine.control.phaseLag = field.phaseLag;
   }
+  next.macroInterlockGraph = createMacroInterlockGraph(next);
+  attachMacroInterlockEffects(next);
   if (next.macroBodyPromotion.lowerCupClosure) {
     next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
   }
@@ -2716,7 +2850,8 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
     + siblingOffset;
   const layer = bandMember.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer';
   const layerBias = layer === 'inner-support' ? -0.045 : layer === 'under-neighbor' ? -0.025 : 0.02;
-  return spherePoint(lat, lon, radius + layerBias);
+  const interlock = macroInterlockEffectAt(assemblage, t);
+  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -2741,7 +2876,7 @@ function torsionSurfaceFrame(THREE, assemblage, side, normal, t, strength = 1) {
 
 function topologyReliefStrength(assemblage, t) {
   const intervals = assemblage.layerItinerary?.intervals || [];
-  let strength = 0;
+  let strength = macroInterlockEffectAt(assemblage, t).topologyRelief;
   for (const interval of intervals) {
     const isTopologyCarrier = interval.layer === 'under-neighbor' || interval.layer === 'inner-support';
     if (!isTopologyCarrier || t < interval.t0 - 0.08 || t > interval.t1 + 0.08) continue;
@@ -2876,9 +3011,11 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     ), cutProfile[0] || { leftScale: 1, rightScale: 1, t: 0 });
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut);
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut);
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile);
+    const interlock = macroInterlockEffectAt(assemblage, t);
+    const interlockWidthScale = interlock.widthScale;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta;
     const topologyDip = topologyReliefStrength(assemblage, t);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
@@ -4052,6 +4189,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
       selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || [],
       retiredMacroAssemblageIds: composition.macroAssemblageCountLaw?.retiredMacroAssemblageIds || [],
+      MacroInterlockGraph: composition.macroInterlockGraph,
+      macroInterlockGraph: composition.macroInterlockGraph,
+      macroInterlockActiveRelationCount: composition.macroInterlockGraph?.activeRelationCount || 0,
+      macroInterlockAffectedMacroIds: composition.macroInterlockGraph?.interlockAffectedMacroIds || [],
       macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
       macroFamilySubstripParentIds: composition.macroFamilySubstripPlan?.parentAssemblageIds || [],
       macroFamilySubstripCount: composition.macroFamilySubstripPlan?.substripCount || 0,
@@ -4103,6 +4244,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
       liveMacroSideWallMeshCount: renderedLiveMacroSideWallMeshIds.length,
       liveMacroSideWallMeshIds: renderedLiveMacroSideWallMeshIds,
+      interlockAffectedSideWallCount: composition.liveMacroSideWallPlan?.interlockAffectedSideWallCount || 0,
       liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
       liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,
@@ -4363,6 +4505,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroAssemblageIds: composition.macroAssemblages.map(item => item.id),
         selectedMacroAssemblageIds: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds || [],
         retiredMacroAssemblageIds: composition.macroAssemblageCountLaw?.retiredMacroAssemblageIds || [],
+        MacroInterlockGraph: composition.macroInterlockGraph,
+        macroInterlockGraph: composition.macroInterlockGraph,
+        macroInterlockActiveRelationCount: composition.macroInterlockGraph?.activeRelationCount || 0,
+        macroInterlockAffectedMacroIds: composition.macroInterlockGraph?.interlockAffectedMacroIds || [],
         MacroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         MacroFamilySubstrip: composition.macroFamilySubstripPlan?.substrips || [],
@@ -4419,6 +4565,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         liveMacroSideWallCount: composition.liveMacroSideWallPlan?.sideWallCount || 0,
         liveMacroSideWallMeshCount: liveMacroSideWallMeshIds().length,
         liveMacroSideWallMeshIds: liveMacroSideWallMeshIds(),
+        interlockAffectedSideWallCount: composition.liveMacroSideWallPlan?.interlockAffectedSideWallCount || 0,
         liveMacroSideWallVisibilityVerdict: composition.liveMacroSideWallPlan?.liveMacroSideWallVisibilityVerdict,
         targetLiveMacroSideWallIds: composition.liveMacroSideWallPlan?.targetAssemblageIds || [],
         liveMacroTerminalCapCount: composition.liveMacroSideWallPlan?.terminalCapCount || 0,

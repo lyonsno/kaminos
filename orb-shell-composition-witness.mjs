@@ -287,6 +287,8 @@ async function main() {
     assert.deepEqual(state?.selectedMacroAssemblageIds, state?.macroAssemblageIds, 'selected macro ids must match rendered macro ids');
     assert.ok(state?.selectedMacroAssemblageIds?.includes('north-west-dominant-thrust'), 'north-west anchor macro missing from selected ids');
     assert.ok(state?.selectedMacroAssemblageIds?.includes('north-east-counter-thrust'), 'north-east anchor macro missing from selected ids');
+    assert.equal(state?.MacroInterlockGraph?.schema, 'MacroInterlockGraph', 'MacroInterlockGraph missing from debug state');
+    assert.ok(Array.isArray(state?.MacroInterlockGraph?.activeRelations), 'MacroInterlockGraph active relations missing from debug state');
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
     assert.ok(state?.closureAnchorCount >= 4, 'composition must expose spherical closure anchors');
@@ -400,6 +402,11 @@ async function main() {
     assert.ok(state?.liveMacroSideWallCount >= 1, 'live macro sidewall missing from debug state');
     assert.ok(state?.liveMacroSideWallMeshCount <= state.liveMacroSideWallCount, 'rendered live macro sidewall mesh count cannot exceed plan count');
     assert.equal(state?.liveMacroSideWallMeshIds?.length, state.liveMacroSideWallMeshCount, 'rendered live macro sidewall mesh ids must match rendered count');
+    if (state?.selectedMacroAssemblageIds?.includes('lower-socket-keel') && state?.selectedMacroAssemblageIds?.includes('equatorial-cupping-whorl')) {
+      assert.ok(state?.macroInterlockActiveRelationCount >= 1, 'five-macro lower/equatorial case must expose an active interlock relation');
+      assert.ok(state?.macroInterlockAffectedMacroIds?.includes('lower-socket-keel'), 'interlock affected macro ids must include lower socket keel');
+      assert.ok(state?.interlockAffectedSideWallCount >= 2, 'interlock affected lower socket sidewalls must be accounted in debug state');
+    }
     assert.equal(state?.liveMacroSideWallVisibilityVerdict, 'visible-promoted-body-edge-sidewalls-rendered', 'live macro sidewall visibility verdict missing from debug state');
     assert.ok(state?.targetLiveMacroSideWallIds?.includes('north-west-dominant-thrust'), 'north-west live sidewall target missing from debug state');
     assert.ok(state?.LiveMacroSideWall?.every(wall => wall?.schema === 'LiveMacroSideWall'), 'LiveMacroSideWall records missing from debug state');
@@ -466,6 +473,10 @@ async function main() {
       macroAssemblageIds: state.macroAssemblageIds,
       selectedMacroAssemblageIds: state.selectedMacroAssemblageIds,
       retiredMacroAssemblageIds: state.retiredMacroAssemblageIds,
+      MacroInterlockGraph: state.MacroInterlockGraph,
+      macroInterlockGraph: state.macroInterlockGraph,
+      macroInterlockActiveRelationCount: state.macroInterlockActiveRelationCount,
+      macroInterlockAffectedMacroIds: state.macroInterlockAffectedMacroIds,
       MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
       macroFamilySubstripPlan: state.macroFamilySubstripPlan,
       MacroFamilySubstrip: state.MacroFamilySubstrip,
@@ -525,6 +536,7 @@ async function main() {
       liveMacroSideWallCount: state.liveMacroSideWallCount,
       liveMacroSideWallMeshCount: state.liveMacroSideWallMeshCount,
       liveMacroSideWallMeshIds: state.liveMacroSideWallMeshIds,
+      interlockAffectedSideWallCount: state.interlockAffectedSideWallCount,
       liveMacroSideWallVisibilityVerdict: state.liveMacroSideWallVisibilityVerdict,
       targetLiveMacroSideWallIds: state.targetLiveMacroSideWallIds,
       liveMacroTerminalCapCount: state.liveMacroTerminalCapCount,
