@@ -521,6 +521,73 @@ try {
       checkpoint,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'conditioning-route-request') {
+    const routeRequestButton = await evalJson(cdp, `(() => {
+      const button = document.querySelector('#pipeline-conditioning-route-request-button');
+      const rect = button?.getBoundingClientRect();
+      if (!rect) throw new Error('Conditioning route request button missing');
+      return {
+        text: button.textContent,
+        disabled: button.disabled,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`);
+    assertWitness(!routeRequestButton.disabled, 'Conditioning route request button was disabled', routeRequestButton);
+    await capture(cdp, beforePath);
+    await click(cdp, routeRequestButton.point);
+    const routeRequest = await waitFor(cdp, `(() => {
+      const debug = window.kaminosPipelineSpecimenIntakeDebugState?.();
+      const state = window.kaminosPipelineDockDebugState?.();
+      const request = debug?.conditioningRouteRequests?.find(item => item.schema === 'kaminos.conditioning-route-request.v0') || null;
+      const normalChip = document.querySelector('[data-pipeline-specimen-role="normal_source"]');
+      const stateLineElement = document.querySelector('#pipeline-specimen-intake-state');
+      const stateLine = stateLineElement?.textContent || '';
+      const normalRect = normalChip?.getBoundingClientRect();
+      const stateRect = stateLineElement?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          debug?.conditioningRouteRequestSchema === 'kaminos.conditioning-route-request.v0'
+          && request?.requestId === 'fixture-red-lerm-primitive-001-conditioning-request-001'
+          && request?.requestedRoute === 'image_conditioned_generation'
+          && request?.intendedEffectiveRoute === 'request_only'
+          && request?.routeReceipt?.effectiveRoute === 'request_only'
+          && request?.inputArtifactIds?.includes('fixture-red-lerm-primitive-001-beauty')
+          && request?.conditioningArtifactIds?.depth === 'fixture-red-lerm-primitive-001-depth'
+          && request?.conditioningArtifactIds?.normal === 'fixture-red-lerm-primitive-001-normal'
+          && request?.conditioningArtifactIds?.mask === 'fixture-red-lerm-primitive-001-mask'
+          && request?.conditioningRoles?.includes('depth_source')
+          && request?.conditioningRoles?.includes('normal_source')
+          && request?.conditioningRoles?.includes('mask_source')
+          && request?.sourceTruthWarnings?.includes('route_request_not_generator_execution_truth')
+          && stateLine.includes('request_only')
+          && normalChip
+          && (state?.graphImageNodes || []).some(node => node.viewKind === 'normal' && node.conditioningRoles?.includes('normal_source'))
+        ),
+        debug,
+        request,
+        stateLine,
+        graphImageNodes: state?.graphImageNodes || [],
+        normalRect: normalRect ? { x: normalRect.x, y: normalRect.y, width: normalRect.width, height: normalRect.height } : null,
+        stateRect: stateRect ? { x: stateRect.x, y: stateRect.y, width: stateRect.width, height: stateRect.height } : null,
+      };
+    })()`, 'Conditioning route request export', 12000);
+    await capture(cdp, afterPath);
+    const screenshotProbe = await screenshotVisibleProbe(afterPath, routeRequest.normalRect);
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'Conditioning route request normal-source chip was not visibly inspectable', {
+      routeRequest,
+      screenshotProbe,
+    });
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      routeRequestButton,
+      routeRequest,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'graph-execute-sharp' || scenario === 'graph-execute-sharp-repeat' || scenario === 'graph-execute-artifact') {
     const generatorCard = await evalJson(cdp, `(() => {
       const element = [...document.querySelectorAll('[data-pipeline-generator-id]')]
