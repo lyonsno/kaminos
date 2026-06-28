@@ -907,7 +907,7 @@ function blendOrbitCaptureTerminalSample(spec, apertureField, localT, left, righ
 }
 
 function blendCounterCurveSecondaryRefusal(spec, apertureField, localT, left, right, center) {
-  if (spec.parentTerminationClass !== 'counter-curve-blade' || spec.ownsFurthestVisibleTip || spec.siblingRole !== 'tucked') {
+  if (spec.parentTerminationClass !== 'counter-curve-blade' || spec.ownsFurthestVisibleTip || spec.siblingRole === 'lead') {
     return { left, right, center };
   }
   const blend = smoothStep(0.62, 1, localT);
@@ -1298,7 +1298,7 @@ function createApertureRelativeTerminationPlan(composition, apertureField, paren
 
 function createMacroFamilySubstripPlan(composition) {
   const apertureField = createApertureTerminationField(composition);
-  const selectedSpecs = {
+  const baseSpecs = {
     'north-west-dominant-thrust': [
       { id: 'broad-main-lamella', role: 'broad-main-lamella', siblingRole: 'lead', parentTerminationClass: 'orbit-capture', normalizedVRange: [-0.58, 0.12], startReach: 0.02, terminalReach: 0.98, mouthVOffset: 0.02, mouthWidthBoost: 0.16, terminalVTarget: -0.06, terminalNarrowing: 0.22, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-tucked-wedge', liftBias: 0.03, sideWallDepth: 0.03, tipNoseLength: 0.016 },
       { id: 'outer-edge-lip-rail', role: 'edge-lip-rail', siblingRole: 'outer', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.24, 0.46], startReach: 0.08, terminalReach: 0.9, mouthVOffset: 0.14, mouthWidthBoost: 0.1, terminalVTarget: 0.02, terminalNarrowing: 0.36, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-early-tuck-wedge', liftBias: 0.04, sideWallDepth: 0.024, tipNoseLength: 0.012 },
@@ -1309,7 +1309,59 @@ function createMacroFamilySubstripPlan(composition) {
       { id: 'inner-support-strip', role: 'inner-support-strip', siblingRole: 'tucked', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [-0.52, -0.36], startReach: 0, terminalReach: 0.78, mouthVOffset: -0.13, mouthWidthBoost: 0.14, terminalVTarget: -0.05, terminalNarrowing: 0.48, terminalVisibility: 'dies-early-into-lead-tip-corridor', endTerminalPlane: 'counter-curve-secondary-early-death-wedge', liftBias: 0.018, sideWallDepth: 0.022, layerOffset: -0.014, tipNoseLength: 0.018 },
     ],
   };
-  const parentAssemblageIds = Object.keys(selectedSpecs);
+  const optionalSpecs = {
+    'north-west-dominant-thrust': [
+      { id: 'outer-secondary-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-secondary', parentTerminationClass: 'orbit-capture', normalizedVRange: [0.56, 0.72], startReach: 0.14, terminalReach: 0.82, mouthVOffset: 0.22, mouthWidthBoost: 0.08, terminalVTarget: 0.08, terminalNarrowing: 0.38, terminalVisibility: 'tucked-or-covered', endTerminalPlane: 'orbit-capture-secondary-early-tuck-wedge', liftBias: 0.034, sideWallDepth: 0.02, layerOffset: 0.008, tipNoseLength: 0.01 },
+    ],
+    'north-east-counter-thrust': [
+      { id: 'outer-counter-pressure-lip', role: 'edge-lip-rail', siblingRole: 'outer-counter', parentTerminationClass: 'counter-curve-blade', normalizedVRange: [0.58, 0.74], startReach: 0.1, terminalReach: 0.72, mouthVOffset: 0.18, mouthWidthBoost: 0.1, terminalVTarget: 0.18, terminalNarrowing: 0.46, terminalVisibility: 'dies-early-before-counter-tip', endTerminalPlane: 'counter-curve-outer-early-death-wedge', liftBias: 0.024, sideWallDepth: 0.02, layerOffset: 0.006, tipNoseLength: 0.014 },
+    ],
+  };
+  const variation = composition.effectiveVariation || composition.controlledVariation || {};
+  const leafDensityPressure = Number.isFinite(Number(variation.leafDensityPressure))
+    ? Number(variation.leafDensityPressure)
+    : clamp(((Number(variation.variationLeafCount) || 10) - 10) / 4, -0.5, 1);
+  const variantId = variation.variantId || 'baseline';
+  const variationSeed = Number.isFinite(Number(variation.variationSeed)) ? Number(variation.variationSeed) : 0;
+  const parentAssemblageIds = Object.keys(baseSpecs);
+  const selectedSpecs = {};
+  const perParentCounts = [];
+  for (const parentId of parentAssemblageIds) {
+    const score = leafDensityPressure + stableNoise(`${variantId}:${variationSeed}:${parentId}:substrip-count`) * 0.28;
+    const includedOptionalSpecs = (optionalSpecs[parentId] || []).filter((_, index) => score >= 0.58 + index * 0.36);
+    selectedSpecs[parentId] = [...baseSpecs[parentId], ...includedOptionalSpecs]
+      .sort((a, b) => a.normalizedVRange[0] - b.normalizedVRange[0]);
+    perParentCounts.push({
+      parentAssemblage: parentId,
+      minimumCount: baseSpecs[parentId].length,
+      optionalCandidateCount: optionalSpecs[parentId]?.length || 0,
+      actualCount: selectedSpecs[parentId].length,
+      densityPressure: leafDensityPressure,
+      seedScore: score,
+      includedOptionalSpecIds: includedOptionalSpecs.map(spec => spec.id),
+    });
+  }
+  const substripCountLaw = {
+    schema: 'MacroFamilySubstripCountLaw',
+    mode: 'density-and-seed-driven-substrip-count-v0',
+    sourceVariation: {
+      variantId,
+      variationSeed,
+      variationLeafCount: variation.variationLeafCount ?? 10,
+      leafDensityPressure,
+      uiControlSource: variation.uiControlSource || 'route-or-programmatic',
+    },
+    macroFamilyCountPreserved: true,
+    parentAssemblageIds,
+    perParentCounts,
+    countPressureLaw: 'base-anatomy-plus-density-seeded-optional-sibling-lanes',
+    antiEvidence: [
+      'macro-family-count-randomization',
+      'single-ribbon-even-subdivision',
+      'optional-strip-without-gap-contract',
+      'optional-strip-without-aperture-termination-class',
+    ],
+  };
   const substrips = [];
   const gapContracts = [];
   for (const parentId of parentAssemblageIds) {
@@ -1361,6 +1413,7 @@ function createMacroFamilySubstripPlan(composition) {
     parentAssemblageIds,
     substrips,
     substripCount: substrips.length,
+    substripCountLaw,
     gapContracts,
     gapContractCount: gapContracts.length,
     apertureRelativeTerminationPlan,
@@ -2195,6 +2248,8 @@ function createChannelThroughLineAudit(composition) {
 
 export function applyControlledOrbShellVariation(composition, descriptor) {
   const next = clone(composition);
+  next.controlledVariation = descriptor;
+  next.effectiveVariation = descriptor;
   const macroParameters = descriptor.effectiveParameters.macroAssemblages;
   const frontParameters = descriptor.effectiveParameters.frontApertureOwnership;
   for (const assemblage of next.macroAssemblages) {
