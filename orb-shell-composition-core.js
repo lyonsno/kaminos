@@ -580,6 +580,91 @@ function macroInterlockEffectAt(assemblage, t) {
   });
 }
 
+function createLowerSocketKeelAnatomyLaw(assemblage) {
+  if (assemblage.id !== 'lower-socket-keel') return null;
+  return {
+    schema: 'LowerSocketKeelAnatomyLaw',
+    mode: 'single-body-side-return-termination-v0',
+    sourceMacroId: assemblage.id,
+    generationLaw: 'optional lower support resolves into one lower socket body with subordinate side-return lip before interlock tuning',
+    requiredAnatomy: [
+      'single-lower-socket-body',
+      'side-return-lip-as-subordinate-anatomy',
+      'inner-underfold-as-surface-event-not-separate-slab',
+      'named-terminal-cut-before-neighbor',
+    ],
+    forbiddenFailureClasses: [
+      'chopped-proxy-foot',
+      'multi-slab-side-return',
+      'rectangular-terminal-extrusion',
+      'floating-inner-fin',
+    ],
+    widthProfile: {
+      midScale: 0.72,
+      terminalWidthScale: 0.2,
+      terminalTaperPower: 0.56,
+    },
+    radialProfile: {
+      terminalInset: 0.028,
+      underfoldInset: 0.018,
+    },
+    liftProfile: {
+      terminalLiftDelta: -0.018,
+      underfoldLiftDelta: -0.012,
+    },
+    terminationDecision: {
+      schema: 'LowerSocketTerminationDecision',
+      decisionClass: 'cut-before-neighbor-socket-cap',
+      start: 'socket-cap',
+      end: 'cut-before-neighbor',
+      terminalCutStartT: 0.72,
+      terminalHoldT: 0.84,
+      forbiddenEndpoint: 'arbitrary-rectangular-foot',
+      contactPressureInput: 'MacroContactMap',
+      unresolvedInterlockPolicy: 'record-contact-pressure-without-extending-geometry-through-neighbor',
+    },
+    contactMapTrustPolicy: 'trust-after-lower-socket-anatomy-law',
+  };
+}
+
+function lowerSocketAnatomyEffectAt(assemblage, t) {
+  const law = assemblage.lowerSocketKeelAnatomyLaw || assemblage.macroPromotedBody?.lowerSocketKeelAnatomyLaw;
+  if (!law) {
+    return {
+      widthScale: 1,
+      radialInset: 0,
+      normalLiftDelta: 0,
+      active: false,
+    };
+  }
+  const profile = Math.pow(Math.sin(Math.PI * clamp(t, 0, 1)), law.widthProfile.terminalTaperPower);
+  const widthScale = law.widthProfile.terminalWidthScale
+    + (law.widthProfile.midScale - law.widthProfile.terminalWidthScale) * profile;
+  const terminalPressure = Math.max(
+    1 - smoothStep(0.62, 1, profile),
+    smoothStep(law.terminationDecision.terminalCutStartT, 1, t),
+  );
+  const underfoldPressure = Math.exp(-Math.pow((t - 0.46) / 0.18, 2));
+  return {
+    widthScale,
+    radialInset: law.radialProfile.terminalInset * terminalPressure
+      + law.radialProfile.underfoldInset * underfoldPressure,
+    normalLiftDelta: law.liftProfile.terminalLiftDelta * terminalPressure
+      + law.liftProfile.underfoldLiftDelta * underfoldPressure,
+    active: true,
+  };
+}
+
+function lowerSocketAnatomyParametricT(assemblage, t) {
+  const law = assemblage.lowerSocketKeelAnatomyLaw || assemblage.macroPromotedBody?.lowerSocketKeelAnatomyLaw;
+  if (!law) return t;
+  const cutStart = law.terminationDecision.terminalCutStartT ?? 0.72;
+  const terminalHold = law.terminationDecision.terminalHoldT ?? 0.84;
+  if (t <= cutStart) return t;
+  const collapse = smoothStep(cutStart, 1, t);
+  return cutStart + (terminalHold - cutStart) * (1 - Math.pow(1 - collapse, 1.45));
+}
+
 function macroContactEnvelopeRadius(assemblage, t) {
   const body = assemblage.territoryBodyOccupancy || {};
   const promoted = assemblage.macroPromotedBody || {};
@@ -587,11 +672,13 @@ function macroContactEnvelopeRadius(assemblage, t) {
   const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
   const terminalScale = 0.52 + 0.48 * profile;
   const interlock = macroInterlockEffectAt(assemblage, t);
+  const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const width = (body.widthProfile?.mid || 0.16)
     * (promoted.promotedBodyScale || 1.22)
     * (expanded.coverageScale || 1)
     * terminalScale
-    * interlock.widthScale;
+    * interlock.widthScale
+    * lowerSocket.widthScale;
   const thickness = body.thicknessProfile?.mid || 0.038;
   return width * 0.72 + thickness * 0.85;
 }
@@ -662,15 +749,25 @@ function macroContactDiagnosisTags(sourceMacroId, targetMacroId, relation, clear
 
 function createMacroGeometryCoherenceWatch(composition, contacts) {
   const selectedIds = new Set(composition.macroAssemblages.map(assemblage => assemblage.id));
+  const lowerSocketLaw = composition.lowerSocketKeelAnatomyLaw;
   const optionalStressIds = ['lower-socket-keel', 'polar-crown-lock', 'equatorial-cupping-whorl']
     .filter(id => selectedIds.has(id));
-  const watch = optionalStressIds.map(id => ({
-    schema: 'MacroGeometryCoherenceWatch',
-    macroId: id,
-    watchType: 'non-hero-optional-family-contact-trust',
-    reason: 'optional stress macro has less mature surface/termination grammar than the hero aperture anchors',
-    diagnosticPolicy: 'contact-map-can-indict-input-geometry-before-interlock-tuning',
-  }));
+  const watch = optionalStressIds.map(id => {
+    const lowerSocketGoverned = id === 'lower-socket-keel' && lowerSocketLaw;
+    return {
+      schema: 'MacroGeometryCoherenceWatch',
+      macroId: id,
+      watchType: lowerSocketGoverned
+        ? 'lower-socket-procedural-anatomy-contact-trust'
+        : 'non-hero-optional-family-contact-trust',
+      reason: lowerSocketGoverned
+        ? 'lower socket contact evidence is generated after applying a single-body termination/anatomy law'
+        : 'optional stress macro has less mature surface/termination grammar than the hero aperture anchors',
+      diagnosticPolicy: lowerSocketGoverned
+        ? lowerSocketLaw.contactMapTrustPolicy
+        : 'contact-map-can-indict-input-geometry-before-interlock-tuning',
+    };
+  });
   const badContacts = contacts
     .filter(contact => contact.clearanceVerdict === 'intersecting')
     .slice(0, 3)
@@ -800,6 +897,7 @@ function makePrimaryApertureFrame() {
 }
 
 function createMacroPromotedBodyDescriptor(assemblage) {
+  const lowerSocketKeelAnatomyLaw = createLowerSocketKeelAnatomyLaw(assemblage);
   const closureContracts = (assemblage.territoryBodyOccupancy?.closureAnchorIds || []).map(anchorId => ({
     kind: anchorId === 'lower-socket-anchor'
       ? 'lower-socket-join'
@@ -816,23 +914,39 @@ function createMacroPromotedBodyDescriptor(assemblage) {
     objecthood: 'macro-assemblage-body-not-final-band',
     promotedFromVisibleBandIds: assemblage.childBandPlan.map(member => member.id),
     primarySpineFamily: assemblage.spine.proceduralFamily,
-    promotedBodyScale: assemblage.role === 'crown-lock' ? 1.22 : assemblage.role === 'supporting-whorl' ? 1.34 : 1.28,
+    promotedBodyScale: lowerSocketKeelAnatomyLaw
+      ? 0.94
+      : assemblage.role === 'crown-lock'
+        ? 1.22
+        : assemblage.role === 'supporting-whorl'
+          ? 1.34
+          : 1.28,
     sideSilhouettePolicy: {
       schema: 'PromotedBodySideSilhouettePolicy',
-      mode: 'smooth-promoted-body-sides-v0',
+      mode: lowerSocketKeelAnatomyLaw
+        ? 'lower-socket-smooth-keel-side-return-v0'
+        : 'smooth-promoted-body-sides-v0',
       boundaryCutProfileVisible: false,
       sideScale: 1,
+      terminalWidthScale: lowerSocketKeelAnatomyLaw?.widthProfile.terminalWidthScale ?? 1,
       preservesTopologyRelief: true,
-      reason: 'truth-smoke needs clean macro side curves before reintroducing earned boundary articulation',
+      reason: lowerSocketKeelAnatomyLaw
+        ? 'lower socket must read as one procedural body with a subordinate side-return lip before contact tuning'
+        : 'truth-smoke needs clean macro side curves before reintroducing earned boundary articulation',
     },
     subordinateAnatomy: [
       'internal-rail-ridge',
       'edge-lip-channel',
       'slit-gap-within-macro-body',
       'child-band-as-anatomy-not-object',
+      ...(lowerSocketKeelAnatomyLaw ? ['side-return-lip-as-subordinate-anatomy'] : []),
     ],
     closureContracts,
-    failurePressure: 'visible-bands-must-not-remain-final-objects',
+    failurePressure: lowerSocketKeelAnatomyLaw
+      ? 'lower-socket-keel-must-not-regress-to-chopped-proxy-foot-or-competing-side-return-slab'
+      : 'visible-bands-must-not-remain-final-objects',
+    lowerSocketKeelAnatomyLaw,
+    terminationDecision: lowerSocketKeelAnatomyLaw?.terminationDecision || null,
   };
   if (assemblage.id === 'equatorial-cupping-whorl') {
     descriptor.lowerCupClosure = {
@@ -858,12 +972,17 @@ function createMacroPromotedBodyDescriptor(assemblage) {
 
 function createMacroBodyPromotionPlan(composition) {
   const promotedBodies = composition.macroAssemblages.map(createMacroPromotedBodyDescriptor);
+  const lowerSocketKeelAnatomyLaw = promotedBodies.find(body => body.lowerSocketKeelAnatomyLaw)?.lowerSocketKeelAnatomyLaw || null;
   return {
     schema: 'MacroBodyPromotionPlan',
     mode: 'macro-body-promotion-closure-v0',
     promotedBodies,
     lowerCupClosure: promotedBodies.find(body => body.lowerCupClosure)?.lowerCupClosure,
     crossingTuckIntegration: promotedBodies.find(body => body.crossingTuckIntegration)?.crossingTuckIntegration,
+    lowerSocketKeelAnatomyLaw,
+    lowerSocketKeelAnatomyVerdict: lowerSocketKeelAnatomyLaw
+      ? 'procedural-lower-socket-anatomy-law-applied'
+      : 'lower-socket-keel-not-selected',
     closurePolicy: [
       'macro-bodies-own-visible-objecthood',
       'subordinate-bands-become-ridges-slots-and-lips',
@@ -937,11 +1056,12 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
     const interlock = macroInterlockEffectAt(assemblage, t);
+    const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const interlockWidthScale = interlock.widthScale;
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
     const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta;
     const crown = 0.82;
     const outer = addScaledPoint(
       addScaledPoint(center, sideAxis, sideSign * sideWidth),
@@ -1141,11 +1261,12 @@ function macroFamilySurfaceSample(assemblage, t, normalizedV, liftBias = 0.018) 
   const expanded = assemblage.expandedRegionProxy;
   const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
   const interlock = macroInterlockEffectAt(assemblage, t);
+  const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const interlockWidthScale = interlock.widthScale;
-  const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
-  const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
+  const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
+  const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
   const sideWidth = normalizedV < 0 ? leftWidth : rightWidth;
-  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias + interlock.normalLiftDelta;
+  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias + interlock.normalLiftDelta + lowerSocket.normalLiftDelta;
   const topologyDip = topologyReliefStrength(assemblage, t);
   const crown = Math.max(0.62, 1 - Math.pow(Math.abs(normalizedV), 2.2) * 0.14 - topologyDip * 0.12);
   const point = addScaledPoint(
@@ -2693,8 +2814,11 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     }
   }
   next.macroBodyPromotion = createMacroBodyPromotionPlan(next);
+  next.lowerSocketKeelAnatomyLaw = next.macroBodyPromotion.lowerSocketKeelAnatomyLaw || null;
+  next.lowerSocketKeelAnatomyVerdict = next.macroBodyPromotion.lowerSocketKeelAnatomyVerdict;
   for (const assemblage of next.macroAssemblages) {
     assemblage.macroPromotedBody = next.macroBodyPromotion.promotedBodies.find(body => body.parentAssemblage === assemblage.id);
+    assemblage.lowerSocketKeelAnatomyLaw = assemblage.macroPromotedBody?.lowerSocketKeelAnatomyLaw || null;
   }
   next.macroTorsionFieldPlan = createMacroTorsionFieldPlan(next, macroParameters);
   for (const assemblage of next.macroAssemblages) {
@@ -3003,26 +3127,28 @@ export function createTargetOrbShellCompositionFixture(options = {}) {
 function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
-  const lat = control.startLat + (control.endLat - control.startLat) * t;
+  const anatomyT = lowerSocketAnatomyParametricT(assemblage, t);
+  const lat = control.startLat + (control.endLat - control.startLat) * anatomyT;
   const widthPressure = assemblage.sphericalTerritory.lonWidth * 0.12;
-  const siblingOffset = bandMember.siblingOffset + Math.sin(Math.PI * t) * widthPressure * 0.18;
+  const siblingOffset = bandMember.siblingOffset + Math.sin(Math.PI * anatomyT) * widthPressure * 0.18;
   const effectiveTwist = control.effectiveTwist ?? control.twist;
   const torsionWave = torsion
-    ? Math.sin(TAU * t + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * t)
+    ? Math.sin(TAU * anatomyT + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * anatomyT)
     : 0;
   const surfaceRollBias = torsion
-    ? torsion.surfaceRoll * Math.sin(Math.PI * t) * (bandMember.siblingOffset || 0) * 0.9
+    ? torsion.surfaceRoll * Math.sin(Math.PI * anatomyT) * (bandMember.siblingOffset || 0) * 0.9
     : 0;
   const lon = assemblage.sphericalTerritory.centerPhase
-    + assemblage.handedness * effectiveTwist * (t - 0.5)
-    + Math.sin(Math.PI * t) * control.bow
+    + assemblage.handedness * effectiveTwist * (anatomyT - 0.5)
+    + Math.sin(Math.PI * anatomyT) * control.bow
     + torsionWave
     + surfaceRollBias
     + siblingOffset;
   const layer = bandMember.layerIntervals.find(interval => t >= interval.t0 && t <= interval.t1)?.layer || 'outer';
   const layerBias = layer === 'inner-support' ? -0.045 : layer === 'under-neighbor' ? -0.025 : 0.02;
   const interlock = macroInterlockEffectAt(assemblage, t);
-  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset);
+  const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
+  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -3183,10 +3309,11 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     const expanded = assemblage.expandedRegionProxy;
     const scale = (promoted?.promotedBodyScale || 1.22) * (expanded?.coverageScale || 1);
     const interlock = macroInterlockEffectAt(assemblage, t);
+    const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const interlockWidthScale = interlock.widthScale;
-    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale;
-    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale;
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta;
+    const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
+    const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * interlockWidthScale * lowerSocket.widthScale;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta;
     const topologyDip = topologyReliefStrength(assemblage, t);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
@@ -4411,6 +4538,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroContactCount: composition.macroContactMap?.contactCount || 0,
       macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
       macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
+      LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
+      lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
+      lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
       macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
       macroFamilySubstripParentIds: composition.macroFamilySubstripPlan?.parentAssemblageIds || [],
       macroFamilySubstripCount: composition.macroFamilySubstripPlan?.substripCount || 0,
@@ -4550,6 +4680,56 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.target.set(-0.16, -0.05, 0.48);
       controls.update();
       onDirty?.();
+    },
+    frameLowerSocketAnatomy() {
+      camera.position.set(-1.72, 0.18, 1.56);
+      controls.target.set(-0.66, -0.42, 0.32);
+      controls.update();
+      onDirty?.();
+    },
+    enableLowerSocketAnatomyWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.lowerSocketAnatomyHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleMeshIds = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const promoted = child.userData?.MacroPromotedBody;
+        const substrip = child.userData?.MacroFamilySubstrip;
+        const sideWall = child.userData?.LiveMacroSideWall;
+        const terminalCap = child.userData?.LiveMacroTerminalCap;
+        const territory = child.userData?.MacroTerritoryBody;
+        const bandMember = child.userData?.BandMember;
+        const isLowerSocket = promoted?.parentAssemblage === 'lower-socket-keel'
+          || substrip?.parentAssemblage === 'lower-socket-keel'
+          || sideWall?.parentAssemblage === 'lower-socket-keel'
+          || terminalCap?.parentAssemblage === 'lower-socket-keel'
+          || territory?.parentAssemblage === 'lower-socket-keel'
+          || bandMember?.parentAssemblage === 'lower-socket-keel';
+        child.visible = !!isLowerSocket;
+        if (child.visible) {
+          visibleCount += 1;
+          visibleMeshIds.push(child.name);
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      this.frameLowerSocketAnatomy();
+      return {
+        schema: 'LowerSocketAnatomyWitnessState',
+        mode: 'lower-socket-anatomy-isolated-v0',
+        targetAssemblage: 'lower-socket-keel',
+        visibleCount,
+        hiddenCount,
+        visibleMeshIds,
+        lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
+        lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
+      };
     },
     enableMacroContactMapWitness() {
       scene.children.forEach(child => {
@@ -4780,6 +4960,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
         macroGeometryCoherenceWatch: composition.macroContactMap?.geometryCoherenceWatch || [],
         macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
+        LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
+        lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
+        lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
         MacroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         MacroFamilySubstrip: composition.macroFamilySubstripPlan?.substrips || [],
