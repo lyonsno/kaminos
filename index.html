@@ -96,6 +96,12 @@ canvas { display: block; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
 #info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+body.kaminos-viewset-bake-mode #info-bar,
+body.kaminos-viewset-bake-mode #fps-counter,
+body.kaminos-viewset-bake-mode #greenroom-preview-controls,
+body.kaminos-viewset-bake-mode #splat-correction-mode-badge { display: none !important; }
+body.kaminos-viewset-bake-mode,
+body.kaminos-viewset-bake-mode #viewport { background: transparent !important; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -8054,6 +8060,49 @@ async function greenroomViewMesh(url, fileName, display) {
   updateGreenroomPreviewControls();
   setInfo(`Greenroom view: ${display?.title || fileName}`);
 }
+
+window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaque = true } = {}) {
+  if (!source) throw new Error('Missing GLB source for debug load');
+  document.body.classList.add('kaminos-viewset-bake-mode');
+  if (typeof removeBackdrop === 'function') removeBackdrop();
+  if (groundPlane) groundPlane.visible = false;
+  showEnvBg = false;
+  scene.background = null;
+  scene.backgroundBlurriness = 0;
+  renderer.setClearColor?.(0x000000, 0);
+  renderer.setClearAlpha?.(0);
+  glbFileName = fileName || source.split('/').pop()?.split('?')[0] || 'viewset-source.glb';
+  const metadata = {
+    schema: 'kaminos.glb-viewset-debug-load.v0',
+    source,
+    type: 'glb',
+    fileName: glbFileName,
+    label: label || glbFileName,
+    groupLabel: label || glbFileName,
+    groupSource: source,
+  };
+  const model = await showGLB(source, {
+    clear: true,
+    register: false,
+    metadata,
+  });
+  if (opaque && typeof window.forceOpaque === 'function') {
+    window.forceOpaque();
+  }
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  document.getElementById('transform-bar')?.classList.remove('visible');
+  setInfo(`GLB viewset debug load: ${metadata.label}`);
+  return {
+    ok: true,
+    source,
+    fileName: glbFileName,
+    label: metadata.label,
+    objectName: model?.name || null,
+  };
+};
 
 async function greenroomImportMesh(url, fileName, display) {
   if (greenroomPreviewIsActive()) {

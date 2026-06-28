@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const root = new URL('..', import.meta.url).pathname;
+const bakerPath = join(root, 'glb-viewset-baker.mjs');
+const indexPath = join(root, 'index.html');
+
+assert.ok(existsSync(bakerPath), 'glb-viewset-baker.mjs must provide a reusable GLB viewset baking witness');
+
+const baker = readFileSync(bakerPath, 'utf8');
+const index = readFileSync(indexPath, 'utf8');
+
+assert.match(baker, /--source/, 'viewset baker accepts an explicit GLB source URL or path');
+assert.match(baker, /--url/, 'viewset baker accepts the Kaminos app URL instead of hardcoding a server');
+assert.match(baker, /--out-dir/, 'viewset baker writes frames to a caller-owned output directory');
+assert.match(baker, /--manifest/, 'viewset baker writes a caller-owned manifest path');
+assert.match(baker, /--angles/, 'viewset baker accepts an explicit angle list for StarCraft-style view rings');
+assert.match(baker, /--elevation/, 'viewset baker records the effective camera elevation');
+assert.match(baker, /--radius/, 'viewset baker records the effective camera radius');
+assert.match(baker, /window\.kaminosViewGLBDebugRoute/, 'viewset baker loads the asset through Kaminos debug route instead of inventing a second GLB loader');
+assert.match(baker, /window\.kaminosSetCameraDebugPose/, 'viewset baker drives the existing Kaminos camera debug surface');
+assert.match(baker, /viewportClip/, 'viewset baker captures the rendered viewport instead of baking the whole editor UI');
+assert.match(baker, /clip:/, 'viewset baker passes a screenshot clip for sprite-clean frames');
+assert.match(baker, /omitBackground:\s*true/, 'viewset baker asks Chrome for transparent page-background captures');
+assert.match(baker, /transparentBackground/, 'viewset manifest records transparent-background intent');
+assert.match(baker, /Page\.captureScreenshot/, 'viewset baker captures browser-rendered PNG frames');
+assert.match(baker, /viewsetFramePath/, 'viewset baker creates stable frame filenames');
+assert.match(baker, /sourceSha256/, 'viewset manifest records local source content identity when possible');
+assert.match(baker, /existsSync\(source\)/, 'viewset manifest does not mislabel server API routes as local source paths');
+assert.match(baker, /requestedSource/, 'viewset manifest records requested source identity');
+assert.match(baker, /effectiveSource/, 'viewset manifest records effective source identity');
+assert.match(baker, /frames:/, 'viewset manifest records every baked frame');
+assert.match(baker, /camera:/, 'viewset manifest records per-frame camera position and target');
+assert.match(baker, /pngMagic/, 'viewset baker validates PNG magic before claiming a frame');
+assert.match(baker, /phase/, 'viewset manifest records failure phase');
+assert.match(baker, /ok:\s*false/, 'viewset baker writes a manifest even on failure');
+assert.match(baker, /ok:\s*true/, 'viewset baker writes an explicit success manifest');
+
+assert.match(index, /window\.kaminosViewGLBDebugRoute/, 'Kaminos exposes a GLB debug-load route for browser witnesses');
+assert.match(index, /showGLB\(source,[\s\S]*register:\s*false/, 'GLB debug-load route uses preview/non-authoring load mode');
+assert.match(index, /kaminos\.glb-viewset-debug-load\.v0/, 'GLB debug-load route preserves route identity in loaded metadata');
+assert.match(index, /transformControls\.detach\(\)/, 'GLB debug-load route hides transform controls before viewset capture');
+assert.match(index, /kaminos-viewset-bake-mode/, 'GLB debug-load route hides app overlays before viewset capture');
+assert.match(index, /forceOpaque/, 'GLB debug-load route can force opaque materials for sprite-viewset capture');
+assert.match(index, /groundPlane\)\s*groundPlane\.visible\s*=\s*false/, 'GLB debug-load route suppresses the viewer ground plane before viewset capture');
+assert.match(index, /scene\.background\s*=\s*null/, 'GLB debug-load route suppresses the viewer background before viewset capture');
