@@ -64,6 +64,11 @@ const generatedClip = {
 const cliplets = buildGeneratedPoseTemporalCliplets(generatedClip);
 const brake = cliplets.segments.find(segment => segment.labelGuess.includes('brake'));
 assert.ok(brake, 'fixture includes a brake cliplet');
+const triggerRawBrake = cliplets.rawSegments.find(segment => (
+  brake.rawSegmentIds?.includes(segment.id)
+  && segment.labelGuess.includes('brake')
+));
+assert.ok(triggerRawBrake, 'merged brake phrase exposes a raw brake trigger child');
 
 const interrupt = buildGeneratedPoseClipletPathInterrupt({
   generatedInput: generatedClip,
@@ -76,9 +81,11 @@ assert.equal(interrupt.schema, 'kaminos.generated-motion-cliplet-interrupt.v0');
 assert.equal(interrupt.mode, 'path-trigger');
 assert.equal(interrupt.state, 'armed');
 assert.equal(interrupt.selectedSegmentId, brake.id);
-assert.equal(interrupt.trigger.sourceFrame, brake.startSourceFrame);
-assert.equal(interrupt.trigger.sourceTime, brake.startTime);
-assert.deepEqual(interrupt.trigger.root, temporalSamples[brake.startIndex].root);
+assert.equal(interrupt.trigger.sourceFrame, triggerRawBrake.startSourceFrame);
+assert.equal(interrupt.trigger.sourceTime, triggerRawBrake.startTime);
+assert.equal(interrupt.trigger.triggerSegmentId, triggerRawBrake.id);
+assert.equal(interrupt.trigger.triggerSegmentLayer, 'raw');
+assert.deepEqual(interrupt.trigger.root, temporalSamples[triggerRawBrake.startIndex].root);
 assert.equal(interrupt.playback.schema, 'kaminos.generated-motion-cliplet-playback.v0');
 assert.equal(interrupt.playback.segments[0].sourceSegmentId, brake.id);
 
@@ -90,7 +97,7 @@ assert.equal(armed.interrupt.activeSource, 'full-source');
 assert.equal(armed.motionSample.temporalSample.sourceFrame, 0);
 assert.ok(armed.interrupt.distanceToTrigger > interrupt.trigger.radius);
 
-const fired = sampleGeneratedPoseClipletPathInterrupt(generatedClip, interrupt, brake.startTime + 0.001);
+const fired = sampleGeneratedPoseClipletPathInterrupt(generatedClip, interrupt, interrupt.trigger.sourceTime + 0.001);
 assert.equal(fired.interrupt.state, 'fired');
 assert.equal(fired.interrupt.fired, true);
 assert.equal(fired.interrupt.activeSource, 'cliplet-playback');

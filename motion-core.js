@@ -1812,7 +1812,11 @@ function generatedPoseTemporalClipletLabel({
   return segmentIndex === 0 ? 'enter / approach' : 'source motion';
 }
 
-function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endIndex, segmentIndex, segmentCount) {
+function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endIndex, segmentIndex, segmentCount, {
+  schema = 'kaminos.generated-motion-cliplet-segment.v0',
+  layer = 'raw',
+  idPrefix = 'cliplet',
+} = {}) {
   const samples = input.temporalSamples.slice(startIndex, endIndex + 1);
   const edgeSlice = edges.slice(startIndex, endIndex + 1);
   const first = samples[0];
@@ -1838,8 +1842,9 @@ function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endInde
   };
   const idRoot = String(input.id || 'generated_pose_temporal').replace(/[^a-zA-Z0-9_-]+/g, '_');
   return {
-    schema: 'kaminos.generated-motion-cliplet-segment.v0',
-    id: `${idRoot}_cliplet_${String(segmentIndex).padStart(3, '0')}`,
+    schema,
+    layer,
+    id: `${idRoot}_${idPrefix}_${String(segmentIndex).padStart(3, '0')}`,
     index: segmentIndex,
     labelGuess: generatedPoseTemporalClipletLabel({ phaseLabels, metrics, segmentIndex, segmentCount }),
     sourceClipId: input.id,
@@ -1856,6 +1861,112 @@ function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endInde
     phaseLabels,
     metrics,
   };
+}
+
+function generatedPoseClipletLabelCategory(segment) {
+  const label = String(segment?.labelGuess || '').toLowerCase();
+  if (label.includes('escape') || label.includes('sprint')) return 'escape';
+  if (label.includes('settle') || label.includes('recover') || label.includes('return')) return 'settle';
+  if (label.includes('hesitate') || label.includes('notice')) return 'hesitate';
+  if (label.includes('brake') || label.includes('compress') || label.includes('flourish')) return 'brake';
+  if (label.includes('approach') || label.includes('commit') || label.includes('enter')) return 'approach';
+  return 'source';
+}
+
+function generatedPoseClipletCategories(rawSegments) {
+  return new Set(rawSegments.map(generatedPoseClipletLabelCategory));
+}
+
+function generatedPoseClipletGroupCanAbsorb(group, next) {
+  if (!group.length || !next) return false;
+  const categories = generatedPoseClipletCategories(group);
+  const nextCategory = generatedPoseClipletLabelCategory(next);
+  const last = group.at(-1);
+  const nextDuration = Number(next.duration) || 0;
+  const lastDuration = Number(last?.duration) || 0;
+  const groupDuration = Math.max(0, Number(group.at(-1)?.endTime) - Number(group[0]?.startTime));
+  const approachBrakeCluster = [...categories, nextCategory].every(category => category === 'approach' || category === 'brake')
+    && (nextDuration <= 0.34 || lastDuration <= 0.34 || groupDuration <= 0.75);
+  if (approachBrakeCluster) return true;
+  const sameCategory = categories.size === 1 && categories.has(nextCategory);
+  if (sameCategory && (nextDuration <= 0.22 || lastDuration <= 0.22)) return true;
+  return false;
+}
+
+function generatedPosePhraseClipletLabel(rawSegments) {
+  const categories = generatedPoseClipletCategories(rawSegments);
+  if (categories.has('approach') && categories.has('brake')) return 'approach-brake / commit-compress';
+  if (categories.has('escape')) return 'escape / sprint';
+  if (categories.has('settle')) return 'settle / recover';
+  if (categories.has('hesitate')) return 'hesitate / notice';
+  if (categories.has('brake')) return 'brake / compress';
+  if (categories.has('approach')) return rawSegments[0]?.index === 0 ? 'enter / approach' : 'approach / commit';
+  return rawSegments[0]?.labelGuess || 'source motion';
+}
+
+function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, phraseCount) {
+  const first = rawSegments[0];
+  const last = rawSegments.at(-1);
+  const phaseLabels = [...new Set(rawSegments.flatMap(segment => segment.phaseLabels || []))];
+  const maxMetric = key => Math.max(0, ...rawSegments.map(segment => Number(segment.metrics?.[key]) || 0));
+  const metrics = {
+    rootTravel: Number(rawSegments.reduce((sum, segment) => sum + Number(segment.metrics?.rootTravel || 0), 0).toFixed(5)),
+    velocityPeak: Number(maxMetric('velocityPeak').toFixed(5)),
+    accelerationPeak: Number(maxMetric('accelerationPeak').toFixed(5)),
+    directionChangePeak: Number(maxMetric('directionChangePeak').toFixed(5)),
+    effortPeak: Number(maxMetric('effortPeak').toFixed(5)),
+    compressionPeak: Number(maxMetric('compressionPeak').toFixed(5)),
+    speedStart: Number((first?.metrics?.speedStart || 0).toFixed(5)),
+    speedEnd: Number((last?.metrics?.speedEnd || 0).toFixed(5)),
+  };
+  const idRoot = String(input.id || 'generated_pose_temporal').replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const rawSegmentIds = rawSegments.map(segment => segment.id);
+  return {
+    schema: 'kaminos.generated-motion-phrase-cliplet-segment.v0',
+    layer: 'phrase',
+    id: `${idRoot}_phrase_${String(phraseIndex).padStart(3, '0')}`,
+    index: phraseIndex,
+    labelGuess: generatedPosePhraseClipletLabel(rawSegments),
+    sourceClipId: input.id,
+    startIndex: first.startIndex,
+    endIndex: last.endIndex,
+    startFrame: first.startFrame,
+    endFrame: last.endFrame,
+    startSourceFrame: first.startSourceFrame,
+    endSourceFrame: last.endSourceFrame,
+    startTime: first.startTime,
+    endTime: last.endTime,
+    duration: Number(Math.max(0, Number(last.endTime) - Number(first.startTime)).toFixed(5)),
+    sampleCount: rawSegments.reduce((sum, segment) => sum + Number(segment.sampleCount || 0), 0),
+    phaseLabels,
+    metrics,
+    rawSegmentIds,
+    rawSegmentRange: {
+      startIndex: Number(first.index),
+      endIndex: Number(last.index),
+    },
+    coalescing: {
+      schema: 'kaminos.generated-motion-phrase-cliplet-coalescing.v0',
+      method: 'duration-compatible-raw-preserving-v0',
+      reasons: rawSegments.length > 1 ? ['short-compatible-phrase'] : ['single-raw-segment'],
+      rawSegmentCount: rawSegments.length,
+      phraseIndex,
+      phraseCount,
+    },
+  };
+}
+
+function buildGeneratedPosePhraseCliplets(input, rawSegments) {
+  const groups = [];
+  for (const segment of rawSegments) {
+    const current = groups.at(-1);
+    if (current && generatedPoseClipletGroupCanAbsorb(current, segment)) {
+      current.push(segment);
+    } else {
+      groups.push([segment]);
+    }
+  }
+  return groups.map((group, index) => summarizeGeneratedPosePhraseCliplet(input, group, index, groups.length));
 }
 
 export function generatedPoseClipletForSourceFrame(cliplets, sourceFrame = 0) {
@@ -1886,19 +1997,19 @@ export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMO
     if (phaseChanged || directionBreak || accelerationBreak) boundaries.add(index);
   }
   const starts = [...boundaries].sort((a, b) => a - b);
-  const rawSegments = starts.map((start, index) => ({
+  const rawRanges = starts.map((start, index) => ({
     start,
     end: (starts[index + 1] ?? samples.length) - 1,
   })).filter(segment => segment.end >= segment.start);
-  const merged = [];
-  for (const segment of rawSegments) {
-    const previous = merged.at(-1);
-    if (previous && segment.end - segment.start < 2 && samples[segment.start]?.phaseLabel === samples[previous.end]?.phaseLabel) {
-      previous.end = segment.end;
-    } else {
-      merged.push({ ...segment });
-    }
-  }
+  const rawSegments = rawRanges.map((segment, index) => summarizeGeneratedPoseTemporalSegment(
+    input,
+    edges,
+    segment.start,
+    segment.end,
+    index,
+    rawRanges.length,
+  ));
+  const segments = buildGeneratedPosePhraseCliplets(input, rawSegments);
   const metrics = {
     rootTravel: Number(edges.reduce((sum, edge) => sum + Number(edge.stepDistance || 0), 0).toFixed(5)),
     velocityPeak: Number(maxSpeed.toFixed(5)),
@@ -1909,14 +2020,6 @@ export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMO
     ))).toFixed(5)),
     compressionPeak: Number(Math.max(0, ...samples.map(sample => Number(sample.bowCompression) || 0)).toFixed(5)),
   };
-  const segments = merged.map((segment, index) => summarizeGeneratedPoseTemporalSegment(
-    input,
-    edges,
-    segment.start,
-    segment.end,
-    index,
-    merged.length,
-  ));
   return {
     schema: GENERATED_MOTION_CLIPLETS_SCHEMA,
     route: MOTION_ROUTE_IDENTITY,
@@ -1933,10 +2036,15 @@ export function buildGeneratedPoseTemporalCliplets(generatedInput = DEFAULT_KIMO
     segmentation: {
       schema: 'kaminos.generated-motion-cliplet-segmentation.v0',
       method: 'phase-root-velocity-acceleration-direction-v0',
+      outputLayer: 'phrase',
+      rawLayer: 'rawSegments',
+      phraseLayer: 'segments',
+      coalescingMethod: 'duration-compatible-raw-preserving-v0',
       boundarySignals: ['phaseLabel', 'rootVelocity', 'rootAcceleration', 'rootDirectionChange', 'bowCompression'],
       labelAuthority: 'heuristic-v0-source-witness-not-gameplay-state',
     },
     metrics,
+    rawSegments,
     segments,
   };
 }
@@ -1976,6 +2084,9 @@ export function buildGeneratedPoseClipletPlayback({
       sourceEndTime: Number(segment.endTime),
       startSourceFrame: Number(segment.startSourceFrame),
       endSourceFrame: Number(segment.endSourceFrame),
+      layer: segment.layer || 'phrase',
+      rawSegmentIds: Array.isArray(segment.rawSegmentIds) ? [...segment.rawSegmentIds] : [segment.id],
+      rawSegmentRange: segment.rawSegmentRange || { startIndex: Number(segment.index), endIndex: Number(segment.index) },
       sourceSegment: segment,
     };
     cursor += duration;
@@ -2002,6 +2113,9 @@ export function buildGeneratedPoseClipletPlayback({
       endSourceFrame: segment.endSourceFrame,
       sourceStartTime: segment.sourceStartTime,
       sourceEndTime: segment.sourceEndTime,
+      layer: segment.layer || 'phrase',
+      rawSegmentIds: Array.isArray(segment.rawSegmentIds) ? [...segment.rawSegmentIds] : [],
+      rawSegmentRange: segment.rawSegmentRange || null,
     })),
     segments,
   };
@@ -2062,6 +2176,24 @@ function generatedPoseClipletSegmentById(cliplets, segmentId) {
   return cliplets.segments.find(segment => segment.id === id) || null;
 }
 
+function generatedPoseClipletTriggerSegment(cliplets, selected) {
+  if (!selected) return null;
+  const rawSegments = Array.isArray(cliplets?.rawSegments) ? cliplets.rawSegments : [];
+  const rawIds = new Set(Array.isArray(selected.rawSegmentIds) ? selected.rawSegmentIds : []);
+  const children = rawIds.size
+    ? rawSegments.filter(segment => rawIds.has(segment.id))
+    : [];
+  if (!children.length) return selected;
+  const selectedCategory = generatedPoseClipletLabelCategory(selected);
+  const sameCategory = children.find(segment => generatedPoseClipletLabelCategory(segment) === selectedCategory);
+  if (sameCategory && selectedCategory !== 'approach') return sameCategory;
+  const salient = children.find(segment => {
+    const category = generatedPoseClipletLabelCategory(segment);
+    return category === 'brake' || category === 'escape' || category === 'hesitate';
+  });
+  return salient || children[0] || selected;
+}
+
 export function buildGeneratedPoseClipletPathInterrupt({
   generatedInput = DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE,
   cliplets,
@@ -2075,8 +2207,9 @@ export function buildGeneratedPoseClipletPathInterrupt({
   }
   const selected = generatedPoseClipletSegmentById(cliplets, segmentId);
   if (!selected) throw new Error(`Unknown generated motion cliplet interrupt segment id: ${segmentId || 'missing'}`);
-  const triggerSample = input.temporalSamples[Math.max(0, Math.min(input.temporalSamples.length - 1, Number(selected.startIndex) || 0))]
-    || sampleGeneratedPoseTemporalMotion(input, selected.startTime).temporalSample;
+  const triggerSegment = generatedPoseClipletTriggerSegment(cliplets, selected);
+  const triggerSample = input.temporalSamples[Math.max(0, Math.min(input.temporalSamples.length - 1, Number(triggerSegment.startIndex) || 0))]
+    || sampleGeneratedPoseTemporalMotion(input, triggerSegment.startTime).temporalSample;
   const triggerRoot = vec3(triggerSample?.root);
   const playback = buildGeneratedPoseClipletPlayback({
     cliplets,
@@ -2103,9 +2236,12 @@ export function buildGeneratedPoseClipletPathInterrupt({
       schema: 'kaminos.generated-motion-cliplet-path-trigger.v0',
       sourceSegmentId: selected.id,
       labelGuess: selected.labelGuess,
-      sourceTime: Number(selected.startTime),
-      sourceFrame: Number(selected.startSourceFrame),
-      sourceIndex: Number(selected.startIndex) || 0,
+      sourceTime: Number(triggerSegment.startTime),
+      sourceFrame: Number(triggerSegment.startSourceFrame),
+      sourceIndex: Number(triggerSegment.startIndex) || 0,
+      triggerSegmentId: triggerSegment.id,
+      triggerSegmentLayer: triggerSegment.layer || selected.layer || 'phrase',
+      triggerLabel: triggerSegment.labelGuess,
       radius: Number(triggerRadius.toFixed(5)),
       root: triggerRoot.map(value => Number(value.toFixed(5))),
     },

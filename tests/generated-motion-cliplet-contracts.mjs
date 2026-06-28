@@ -64,21 +64,23 @@ assert.equal(cliplets.schema, 'kaminos.generated-motion-cliplets.v0');
 assert.equal(cliplets.sourceClipId, generatedClip.id);
 assert.equal(cliplets.sourceFrameCount, temporalSamples.length);
 assert.equal(cliplets.sampleCount, temporalSamples.length, 'cliplet analysis must not silently cap source frames');
-assert.ok(cliplets.segments.length >= 4, 'stop/reverse source fixture should split into at least approach, brake, escape, and settle');
+assert.equal(cliplets.segmentation.outputLayer, 'phrase', 'operator-facing cliplets use the phrase layer');
+assert.ok(cliplets.rawSegments.length >= 4, 'raw source evidence should split into at least approach, brake, escape, and settle');
+assert.ok(cliplets.segments.length <= cliplets.rawSegments.length, 'phrase cliplets must not be more crumbly than raw source evidence');
 assert.equal(cliplets.segments[0].startFrame, 0);
 assert.equal(cliplets.segments.at(-1).endFrame, temporalSamples.at(-1).frame);
 assert.equal(cliplets.segments[0].startSourceFrame, 0);
 assert.equal(cliplets.segments.at(-1).endSourceFrame, temporalSamples.at(-1).sourceFrame);
 assert.ok(
-  cliplets.segments.some(segment => segment.metrics.directionChangePeak > 0.45),
+  cliplets.rawSegments.some(segment => segment.metrics.directionChangePeak > 0.45),
   'cliplets preserve direction-change evidence for source-truth interruption slicing',
 );
 assert.ok(
-  cliplets.segments.some(segment => segment.labelGuess.includes('brake') || segment.labelGuess.includes('compress')),
+  cliplets.rawSegments.some(segment => segment.labelGuess.includes('brake') || segment.labelGuess.includes('compress')),
   'cliplets expose a readable brake/compression label guess',
 );
 assert.ok(
-  cliplets.segments.some(segment => segment.labelGuess.includes('escape') || segment.labelGuess.includes('sprint')),
+  cliplets.rawSegments.some(segment => segment.labelGuess.includes('escape') || segment.labelGuess.includes('sprint')),
   'cliplets expose a readable reverse/sprint label guess',
 );
 
@@ -93,6 +95,7 @@ const harness = motionCore.buildGeneratedPoseTemporalHarness({
 });
 assert.equal(harness.cliplets.schema, 'kaminos.generated-motion-cliplets.v0');
 assert.equal(harness.cliplets.sampleCount, temporalSamples.length);
+assert.ok(harness.cliplets.rawSegments.length >= harness.cliplets.segments.length, 'harness keeps raw cliplet evidence alongside phrase cliplets');
 assert.ok(harness.filmstrip.every(frame => frame.cliplet?.id), 'harness filmstrip frames carry cliplet evidence');
 
 assert.match(index, /buildGeneratedPoseTemporalCliplets/, 'browser imports or calls the source cliplet slicer');

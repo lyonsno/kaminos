@@ -973,7 +973,7 @@ import {
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
-} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627';
+} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
@@ -4687,7 +4687,10 @@ function renderMotionPanelClipletPlaybackOptions(cliplets) {
     option.value = segment.id;
     const start = Number.isFinite(Number(segment.startSourceFrame)) ? Number(segment.startSourceFrame).toFixed(0) : '?';
     const end = Number.isFinite(Number(segment.endSourceFrame)) ? Number(segment.endSourceFrame).toFixed(0) : '?';
-    option.textContent = `${String(segment.index).padStart(2, '0')} ${segment.labelGuess || 'cliplet'} · ${start}-${end}`;
+    const layer = segment.layer || cliplets?.segmentation?.outputLayer || 'phrase';
+    const rawCount = Array.isArray(segment.rawSegmentIds) ? segment.rawSegmentIds.length : 1;
+    const rawSuffix = rawCount > 1 ? ` · raw x${rawCount}` : '';
+    option.textContent = `${String(segment.index).padStart(2, '0')} ${segment.labelGuess || 'cliplet'} · ${start}-${end} · ${layer}${rawSuffix}`;
     select.appendChild(option);
   }
   select.value = [...select.options].some(option => option.value === previous) ? previous : 'full';
@@ -4696,6 +4699,8 @@ function renderMotionPanelClipletPlaybackOptions(cliplets) {
     selected: select.value,
     optionCount: select.options.length,
     segmentCount: segments.length,
+    outputLayer: cliplets?.segmentation?.outputLayer || 'phrase',
+    rawSegmentCount: Array.isArray(cliplets?.rawSegments) ? cliplets.rawSegments.length : null,
   };
 }
 
@@ -6386,6 +6391,8 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
       const frame = await captureMotionPanelRendererFrame(`cliplet-${selectedCliplet.index}-frame-${index}`, index);
       frame.sampleTime = sampleTime;
       frame.selectedCliplet = selectedCliplet;
+      frame.rawSegmentIds = Array.isArray(selectedCliplet.rawSegmentIds) ? [...selectedCliplet.rawSegmentIds] : [];
+      frame.rawSegmentRange = selectedCliplet.rawSegmentRange || null;
       frame.sourceRange = {
         startSourceFrame: selectedCliplet.startSourceFrame,
         endSourceFrame: selectedCliplet.endSourceFrame,
@@ -6426,10 +6433,13 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
       frame.sheetFrameLabel = sheetFrameLabel;
       frame.sourceFrameLabel = sourceFrameLabel;
       frame.clipletLabel = selectedCliplet.labelGuess;
+      frame.clipletLayer = selectedCliplet.layer || 'phrase';
       ctx.fillText(`${sheetFrameLabel} · ${sourceFrameLabel}`, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
       const sourceRange = `${Number(selectedCliplet.startSourceFrame).toFixed(0)}-${Number(selectedCliplet.endSourceFrame).toFixed(0)}`;
-      ctx.fillText(`${selectedCliplet.labelGuess} · source ${sourceRange}`.slice(0, 48), x + 10, y + 27);
+      const rawCount = Array.isArray(selectedCliplet.rawSegmentIds) ? selectedCliplet.rawSegmentIds.length : 1;
+      const layerLabel = `${selectedCliplet.layer || 'phrase'}${rawCount > 1 ? ` raw x${rawCount}` : ''}`;
+      ctx.fillText(`${selectedCliplet.labelGuess} · source ${sourceRange} · ${layerLabel}`.slice(0, 56), x + 10, y + 27);
     }
     const dataUrl = filmstrip.toDataURL('image/png');
     const safeLabel = `${motionPanelSafeExportFilename(prompt).replace(/^kaminos-motion-current-view-/, '')}-cliplet-${String(selectedCliplet.index).padStart(2, '0')}`;
@@ -6456,6 +6466,9 @@ async function exportMotionPanelSelectedClipletFilmstrip() {
         sourceStartTime: selectedCliplet.startTime,
         sourceEndTime: selectedCliplet.endTime,
       },
+      rawSegmentIds: Array.isArray(selectedCliplet.rawSegmentIds) ? [...selectedCliplet.rawSegmentIds] : [],
+      rawSegmentRange: selectedCliplet.rawSegmentRange || null,
+      clipletLayer: selectedCliplet.layer || 'phrase',
       sourceGhostAtExportStart,
       sourceGhostAtExportEnd: motionPanelSourceGhostExportEvidence(),
       camera: motionPanelCurrentViewCameraEvidence(),
@@ -6832,6 +6845,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
     lastTemporalSample: state?.lastTemporalSample || null,
     activeCliplet: state?.lastCliplet || null,
     generatedMotionCliplets: state?.generatedMotionCliplets || harness.cliplets || buildGeneratedPoseTemporalCliplets(DEFAULT_KIMODO_BOW_TEMPORAL_POSE_FIXTURE),
+    rawSegments: state?.generatedMotionCliplets?.rawSegments || harness.cliplets?.rawSegments || null,
+    phraseCliplets: state?.generatedMotionCliplets?.segments || harness.cliplets?.segments || null,
     clipletPlaybackOptions: state?.clipletPlaybackOptions || renderMotionPanelClipletPlaybackOptions(harness.cliplets),
     clipletPlayback: state?.lastClipletPlayback || null,
     clipletPlaybackTimeline: state?.lastClipletPlaybackTimeline || null,
