@@ -19,6 +19,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT = 'wgsl-
 export const LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT = 'wgsl-local-pair-density-projection-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
+export const LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE = 'live_lightweight_readback_v0';
 
 const PARTICLE_FLOATS = 16;
 const EMITTER_FLOATS = 16;
@@ -1317,6 +1318,59 @@ function visualStreakBeadStats(particles) {
 }
 
 export function summarizeWebGPUParticles(buffer, options = {}) {
+  if (options.summaryMode === LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE) {
+    const sourceTruth = createLermsSourceTruth(options.emitterPacket || {}, {
+      frameId: options.frameId || `kaminos-finger-juice-step-${Math.max(0, Math.floor(options.stepCount || 0))}`,
+      timestampMs: options.timestampMs || 0,
+    });
+    const particlesPerEmitter = {};
+    let activeParticleCount = 0;
+    let surfaceFlowCount = 0;
+    let maxParticleAge = 0;
+    let gpuRespawnCount = 0;
+    for (let i = 0; i < buffer.length / PARTICLE_FLOATS; i += 1) {
+      const particle = readParticle(buffer, i);
+      gpuRespawnCount += finite(particle.respawnCount, 0);
+      if (!particle.active || particle.age < 0 || particle.age >= particle.life) continue;
+      activeParticleCount += 1;
+      if (particle.phase >= 0.5) surfaceFlowCount += 1;
+      maxParticleAge = Math.max(maxParticleAge, finite(particle.age, 0));
+      const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex);
+      const emitterId = source?.emitter_id || `emitter-${particle.emitterIndex}`;
+      particlesPerEmitter[emitterId] = (particlesPerEmitter[emitterId] || 0) + 1;
+    }
+    return {
+      solver_backend: options.solver_backend || 'webgpu_compute',
+      solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
+      shaderRoute: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
+      emitterBufferRoute: LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE,
+      respawnContract: LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT,
+      pressureContract: LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT,
+      spatialPressureContract: LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT,
+      fluidDepthContract: LERMS_FINGER_JUICE_WEBGPU_FLUID_DEPTH_CONTRACT,
+      surfaceRelaxationContract: LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT,
+      densityPositionSolveContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_POSITION_SOLVE_CONTRACT,
+      densityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT,
+      sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
+      localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
+      deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+      particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+      stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
+      visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
+      summaryMode: LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE,
+      sourceTruth,
+      sourceDiagnostics: createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []),
+      emitterDiagnostics: createEmitterDiagnostics(options.sources || [], particlesPerEmitter, null),
+      particleCount: activeParticleCount,
+      surfaceFlowCount,
+      maxParticleAge: round(maxParticleAge, 4),
+      gpuRespawnCount: Math.floor(gpuRespawnCount),
+      particlesPerEmitter,
+      frameId: options.frameId || `kaminos-finger-juice-step-${Math.max(0, Math.floor(options.stepCount || 0))}`,
+      stepCount: Math.max(0, Math.floor(options.stepCount || 0)),
+    };
+  }
+
   const particles = [];
   const rawParticles = [];
   const sourceTruth = createLermsSourceTruth(options.emitterPacket || {}, {
@@ -2627,6 +2681,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       lerms: options.lerms || [],
       goins: options.goins || [],
       solver_backend: 'webgpu_compute',
+      summaryMode: readOptions.summaryMode || null,
     });
     return {
       ...summary,

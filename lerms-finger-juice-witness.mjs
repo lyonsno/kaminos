@@ -21,6 +21,8 @@ const settleMs = Number(args.get('--settle-ms') || 1700);
 const witnessSteps = Number(args.get('--witness-steps') || 180);
 const respawnProbeSteps = Number(args.get('--respawn-steps') || 620);
 const extendedFlowSteps = Number(args.get('--extended-flow-steps') || 420);
+const framePacingMs = Number(args.get('--frame-pacing-ms') || 2600);
+const cdpRequestTimeoutMs = Math.max(10000, framePacingMs + 5000);
 const viewportWidth = Number(args.get('--viewport-width') || 2048);
 const viewportHeight = Number(args.get('--viewport-height') || 1124);
 const largeViewportSmokeWitness = 'large-operator-viewport-2048x1124-v0';
@@ -31,6 +33,7 @@ let primaryOutputWritten = false;
 let browserVersion = null;
 let lastTrustworthyState = null;
 let lastVisualEvidence = null;
+let lastFramePacingProbe = null;
 const consoleEvents = [];
 
 function summarizeConsoleEvent(event) {
@@ -69,11 +72,14 @@ function writeReport(report) {
     userDataDir,
     settleMs,
     witnessSteps,
+    framePacingMs,
+    cdpRequestTimeoutMs,
     failure_phase: phase,
     primary_output_written: primaryOutputWritten,
     browserVersion,
     stderrTail: stderr.slice(-2000),
     consoleEvents: consoleEvents.map(summarizeConsoleEvent),
+    framePacingProbe: lastFramePacingProbe,
     ...report,
   }, null, 2));
 }
@@ -102,7 +108,7 @@ function wsRequest(ws, method, params = {}) {
     const timer = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       rejectReq(new Error(`${method}: CDP request timed out`));
-    }, 10000);
+    }, cdpRequestTimeoutMs);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
@@ -563,12 +569,13 @@ async function run() {
         const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)));
         return sorted[index];
       }
+      const framePacingDurationMs = ${JSON.stringify(framePacingMs)};
       await new Promise(resolve => {
         const startedAt = performance.now();
         function tick(now) {
           frameGaps.push(now - lastFrame);
           lastFrame = now;
-          if (now - startedAt >= 2600) {
+          if (now - startedAt >= framePacingDurationMs) {
             stopped = true;
             resolve();
             return;
@@ -592,6 +599,7 @@ async function run() {
         maxFrameGapMs: frameGaps.length ? Math.max(...frameGaps) : null,
         p95FrameGapMs: percentile(frameGaps, 0.95),
         p99FrameGapMs: percentile(frameGaps, 0.99),
+        framePacingMs: framePacingDurationMs,
         readbackHitchEvents: readbackHitchEvents.map(gap => Number(gap.toFixed(2))),
         completedReadbacks,
         skippedReadbacks,
@@ -599,10 +607,14 @@ async function run() {
         endCadence: endState?.webgpu_cadence || null,
       };
     })()`);
+    lastFramePacingProbe = framePacingProbe;
     assert.equal(framePacingProbe.contract, 'live_readback_decoupled_v0', 'live readback decoupling identity missing');
     assert.ok(framePacingProbe.sampleCount >= 90, 'frame pacing probe did not sample enough animation frames');
     assert.ok(framePacingProbe.completedReadbacks + framePacingProbe.skippedReadbacks > 0, 'frame pacing probe did not observe a live readback decision');
     assert.ok(framePacingProbe.endCadence?.last_cpu_oracle_mode === 'skip_cpu_oracle_live_readback_v0', 'live animation readback did not skip CPU oracle replay');
+    if (framePacingProbe.completedReadbacks > 0) {
+      assert.equal(framePacingProbe.endCadence?.last_live_readback_summary_mode, 'live_lightweight_readback_v0', 'live animation readback did not use lightweight summary mode');
+    }
     assert.ok(framePacingProbe.p95FrameGapMs <= 42, `p95 frame gap too high: ${framePacingProbe.p95FrameGapMs}`);
     assert.ok(framePacingProbe.maxFrameGapMs <= 110, `max frame gap too high: ${framePacingProbe.maxFrameGapMs}`);
     assert.ok(framePacingProbe.readbackHitchEvents.length <= 1, 'live readbacks correlate with repeated high frame gaps');

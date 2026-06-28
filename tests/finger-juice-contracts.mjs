@@ -161,6 +161,7 @@ assert.match(webgpuCoreSource, /@compute\s+@workgroup_size/, 'WebGPU solver shad
 assert.match(webgpuCoreSource, /runCpuFingerJuiceOracle/, 'WebGPU route keeps CPU oracle comparison');
 assert.match(webgpuCoreSource, /cpuOracleMode/, 'WebGPU readback reports whether CPU oracle ran or was skipped');
 assert.match(webgpuCoreSource, /skip_cpu_oracle_live_readback_v0/, 'WebGPU readback can skip CPU oracle for live debug sampling');
+assert.match(webgpuCoreSource, /live_lightweight_readback_v0/, 'WebGPU readback supports a lightweight live summary that avoids expensive diagnostics');
 assert.match(webgpuCoreSource, /adapterInfo/, 'WebGPU route records adapter identity');
 
 assert.match(pageSource, /lerms_world_finger_juice=1/, 'prototype page declares its smoke route query');
@@ -172,6 +173,7 @@ assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU
 assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
 assert.match(pageSource, /particleSupportBudget\s*=\s*24000/, 'prototype uses the 24k particle support budget');
 assert.match(pageSource, /live_readback_decoupled_v0/, 'prototype names the live readback decoupling contract');
+assert.match(pageSource, /summaryMode:\s*'live_lightweight_readback_v0'/, 'prototype uses lightweight summaries for live animation readbacks');
 assert.match(pageSource, /liveReadbackSkippedCount/, 'prototype records skipped live debug readbacks instead of blocking frames');
 assert.match(pageSource, /cpuOracle:\s*false/, 'prototype disables CPU oracle during live animation readbacks');
 assert.match(pageSource, /sourceDiagnostics/, 'prototype displays source diagnostics');
@@ -246,10 +248,13 @@ assert.match(witnessSource, /wgsl-spatial-viscosity-pressure-v0/, 'witness recor
 assert.match(witnessSource, /lerms\.juice-hit-event\.v0/, 'witness records LERMS juice-hit-event schema');
 assert.match(witnessSource, /readbackCadence/, 'witness records throttled readback cadence');
 assert.match(witnessSource, /framePacingProbe/, 'witness records requestAnimationFrame pacing over live smoke');
+assert.match(witnessSource, /framePacingMs/, 'witness accepts a configurable long frame pacing probe duration');
+assert.match(witnessSource, /cdpRequestTimeoutMs/, 'witness CDP timeout scales with the configured frame pacing duration');
 assert.match(witnessSource, /maxFrameGapMs/, 'witness reports maximum live frame gap');
 assert.match(witnessSource, /p95FrameGapMs/, 'witness reports p95 live frame gap');
 assert.match(witnessSource, /readbackHitchEvents/, 'witness correlates frame hitches with live readback activity');
 assert.match(witnessSource, /live_readback_decoupled_v0/, 'witness requires live readback decoupling identity');
+assert.match(witnessSource, /last_live_readback_summary_mode/, 'witness records the effective live readback summary mode');
 assert.match(witnessSource, /adapterInfo/, 'witness records WebGPU adapter identity');
 assert.match(witnessSource, /cpuOracle/, 'witness records CPU oracle comparison');
 assert.match(witnessSource, /respawnProbeSteps/, 'witness forces a bounded respawn probe');
