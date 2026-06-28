@@ -33,6 +33,7 @@ const browserEvents = [];
 let cleanSidewallTopologyWitness = null;
 let liveTerminalCapWitness = null;
 let apertureTangencyWitness = null;
+let macroContactMapWitness = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -271,6 +272,11 @@ async function main() {
       apertureTangencyWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableApertureTangencyWitness?.()');
       await delay(500);
     }
+    if (focus === 'macro-contact-map') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameMacroContactMap?.()');
+      macroContactMapWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroContactMapWitness?.()');
+      await delay(500);
+    }
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -289,6 +295,16 @@ async function main() {
     assert.ok(state?.selectedMacroAssemblageIds?.includes('north-east-counter-thrust'), 'north-east anchor macro missing from selected ids');
     assert.equal(state?.MacroInterlockGraph?.schema, 'MacroInterlockGraph', 'MacroInterlockGraph missing from debug state');
     assert.ok(Array.isArray(state?.MacroInterlockGraph?.activeRelations), 'MacroInterlockGraph active relations missing from debug state');
+    assert.equal(state?.MacroContactMap?.schema, 'MacroContactMap', 'MacroContactMap missing from debug state');
+    assert.equal(state?.macroContactCount, (state.macroAssemblageCount * (state.macroAssemblageCount - 1)) / 2, 'MacroContactMap must account for every unordered live macro pair');
+    assert.ok(state?.MacroContactSample?.every(sample => sample?.schema === 'MacroContactSample'), 'MacroContactSample records missing from debug state');
+    assert.ok(state?.macroClosestContactIds?.length >= 1, 'closest contact ids missing from debug state');
+    assert.ok(state?.macroGeometryCoherenceWatchCount >= 1, 'geometry coherence watch must preserve diagnostic trust caveats');
+    if (focus === 'macro-contact-map') {
+      assert.equal(macroContactMapWitness?.schema, 'MacroContactMapWitnessState', 'macro contact map witness did not activate');
+      assert.equal(macroContactMapWitness?.visualOverlayMode, 'ranked-closest-contact-segments', 'macro contact map witness did not enable closest-contact overlay');
+      assert.ok(macroContactMapWitness?.visibleOverlayIds?.length >= Math.min(3, state.macroClosestContactIds.length), 'macro contact map overlay meshes not visible');
+    }
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
     assert.ok(state?.closureAnchorCount >= 4, 'composition must expose spherical closure anchors');
@@ -477,6 +493,14 @@ async function main() {
       macroInterlockGraph: state.macroInterlockGraph,
       macroInterlockActiveRelationCount: state.macroInterlockActiveRelationCount,
       macroInterlockAffectedMacroIds: state.macroInterlockAffectedMacroIds,
+      MacroContactMap: state.MacroContactMap,
+      macroContactMap: state.macroContactMap,
+      MacroContactSample: state.MacroContactSample,
+      macroContactCount: state.macroContactCount,
+      macroClosestContactIds: state.macroClosestContactIds,
+      macroGeometryCoherenceWatch: state.macroGeometryCoherenceWatch,
+      macroGeometryCoherenceWatchCount: state.macroGeometryCoherenceWatchCount,
+      macroContactMapWitness,
       MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
       macroFamilySubstripPlan: state.macroFamilySubstripPlan,
       MacroFamilySubstrip: state.MacroFamilySubstrip,

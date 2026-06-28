@@ -580,6 +580,176 @@ function macroInterlockEffectAt(assemblage, t) {
   });
 }
 
+function macroContactEnvelopeRadius(assemblage, t) {
+  const body = assemblage.territoryBodyOccupancy || {};
+  const promoted = assemblage.macroPromotedBody || {};
+  const expanded = assemblage.expandedRegionProxy || {};
+  const profile = Math.pow(Math.sin(Math.PI * t), 0.34);
+  const terminalScale = 0.52 + 0.48 * profile;
+  const interlock = macroInterlockEffectAt(assemblage, t);
+  const width = (body.widthProfile?.mid || 0.16)
+    * (promoted.promotedBodyScale || 1.22)
+    * (expanded.coverageScale || 1)
+    * terminalScale
+    * interlock.widthScale;
+  const thickness = body.thicknessProfile?.mid || 0.038;
+  return width * 0.72 + thickness * 0.85;
+}
+
+function macroContactEnvelopeSample(assemblage, t) {
+  const point = sampleSpinePoint(assemblage, {
+    siblingOffset: 0,
+    layerIntervals: assemblage.layerItinerary?.intervals || [{ t0: 0, t1: 1, layer: 'outer' }],
+  }, t, 1.045);
+  return {
+    t,
+    point,
+    envelopeRadius: macroContactEnvelopeRadius(assemblage, t),
+  };
+}
+
+function findMacroClosestApproach(source, target, sampleCount = 18) {
+  const sourceSamples = [];
+  const targetSamples = [];
+  for (let index = 0; index < sampleCount; index++) {
+    const t = 0.03 + (index / (sampleCount - 1)) * 0.94;
+    sourceSamples.push(macroContactEnvelopeSample(source, t));
+    targetSamples.push(macroContactEnvelopeSample(target, t));
+  }
+  let best = null;
+  for (const sourceSample of sourceSamples) {
+    for (const targetSample of targetSamples) {
+      const distance = pointDistance(sourceSample.point, targetSample.point);
+      if (!best || distance < best.distance) {
+        best = {
+          distance,
+          sourceT: sourceSample.t,
+          targetT: targetSample.t,
+          sourcePoint: sourceSample.point,
+          targetPoint: targetSample.point,
+          sourceEnvelopeRadius: sourceSample.envelopeRadius,
+          targetEnvelopeRadius: targetSample.envelopeRadius,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+function findMacroContactRelation(composition, sourceMacroId, targetMacroId) {
+  return (composition.macroInterlockGraph?.activeRelations || []).find(relation => (
+    [relation.sourceMacroId, relation.targetMacroId].includes(sourceMacroId)
+    && [relation.sourceMacroId, relation.targetMacroId].includes(targetMacroId)
+  )) || null;
+}
+
+function macroContactDiagnosisTags(sourceMacroId, targetMacroId, relation, clearanceVerdict) {
+  const ids = [sourceMacroId, targetMacroId];
+  const tags = [];
+  if (relation) tags.push('known-interlock-relation');
+  if (ids.includes('north-east-counter-thrust') && (
+    ids.includes('north-west-dominant-thrust')
+    || ids.includes('polar-crown-lock')
+    || ids.includes('equatorial-cupping-whorl')
+  )) {
+    tags.push('upper-stack-watch');
+  }
+  if (ids.includes('lower-socket-keel')) tags.push('lower-socket-watch');
+  if (clearanceVerdict === 'intersecting') tags.push('clearance-failure-candidate');
+  if (clearanceVerdict === 'near') tags.push('near-contact-candidate');
+  return tags;
+}
+
+function createMacroGeometryCoherenceWatch(composition, contacts) {
+  const selectedIds = new Set(composition.macroAssemblages.map(assemblage => assemblage.id));
+  const optionalStressIds = ['lower-socket-keel', 'polar-crown-lock', 'equatorial-cupping-whorl']
+    .filter(id => selectedIds.has(id));
+  const watch = optionalStressIds.map(id => ({
+    schema: 'MacroGeometryCoherenceWatch',
+    macroId: id,
+    watchType: 'non-hero-optional-family-contact-trust',
+    reason: 'optional stress macro has less mature surface/termination grammar than the hero aperture anchors',
+    diagnosticPolicy: 'contact-map-can-indict-input-geometry-before-interlock-tuning',
+  }));
+  const badContacts = contacts
+    .filter(contact => contact.clearanceVerdict === 'intersecting')
+    .slice(0, 3)
+    .map(contact => ({
+      schema: 'MacroGeometryCoherenceWatch',
+      macroId: `${contact.sourceMacroId}<->${contact.targetMacroId}`,
+      watchType: 'measured-clearance-failure',
+      reason: 'closest envelope distance is inside the declared clearance radius',
+      contactId: contact.id,
+    }));
+  return [...watch, ...badContacts];
+}
+
+function createMacroContactMap(composition) {
+  const contacts = [];
+  for (let sourceIndex = 0; sourceIndex < composition.macroAssemblages.length; sourceIndex++) {
+    for (let targetIndex = sourceIndex + 1; targetIndex < composition.macroAssemblages.length; targetIndex++) {
+      const source = composition.macroAssemblages[sourceIndex];
+      const target = composition.macroAssemblages[targetIndex];
+      const closestApproach = findMacroClosestApproach(source, target);
+      const relation = findMacroContactRelation(composition, source.id, target.id);
+      const clearanceRadius = closestApproach
+        ? closestApproach.sourceEnvelopeRadius + closestApproach.targetEnvelopeRadius + (relation ? 0.055 : 0.035)
+        : 0;
+      const clearanceSlack = closestApproach ? closestApproach.distance - clearanceRadius : null;
+      const clearanceVerdict = !closestApproach
+        ? 'unproven'
+        : clearanceSlack < 0
+          ? 'intersecting'
+          : clearanceSlack < 0.075
+            ? 'near'
+            : 'clear';
+      const contact = {
+        schema: 'MacroContactSample',
+        id: `${source.id}--${target.id}`,
+        sourceMacroId: source.id,
+        targetMacroId: target.id,
+        closestApproach,
+        clearanceRadius,
+        clearanceSlack,
+        clearanceVerdict,
+        intendedPrecedenceRelationId: relation?.id || null,
+        intendedPrecedence: relation?.precedence || null,
+        diagnosisTags: macroContactDiagnosisTags(source.id, target.id, relation, clearanceVerdict),
+      };
+      contacts.push(contact);
+    }
+  }
+  const rankedContacts = [...contacts].sort((left, right) => (
+    (left.clearanceSlack ?? Number.POSITIVE_INFINITY) - (right.clearanceSlack ?? Number.POSITIVE_INFINITY)
+  ));
+  const geometryCoherenceWatch = createMacroGeometryCoherenceWatch(composition, contacts);
+  return {
+    schema: 'MacroContactMap',
+    mode: 'diagnostic-closest-approach-clearance-map-v0',
+    generationLaw: 'sample live macro body envelopes after variation and interlock effects, then rank closest macro pairs',
+    sourceMacroAssemblageCount: composition.macroAssemblages.length,
+    sourceMacroAssemblageIds: composition.macroAssemblages.map(assemblage => assemblage.id),
+    sampleCountPerMacro: 18,
+    contacts,
+    contactCount: contacts.length,
+    rankedContacts,
+    closestContactIds: rankedContacts.slice(0, 5).map(contact => contact.id),
+    geometryCoherenceWatch,
+    geometryCoherenceWatchCount: geometryCoherenceWatch.length,
+    diagnosticTrustPolicy: 'if optional macro geometry is malformed, repair the macro anatomy before treating interlock tuning as evidence',
+    failurePressure: [
+      'pretty-overlap-without-measured-clearance',
+      'one-sided-tuck-label-without-pairwise-contact-locus',
+      'malformed-non-hero-plate-confused-with-interlock-failure',
+    ],
+    nonGoals: [
+      'do-not-resolve-collisions-in-this-map',
+      'do-not-retire-macro-families-from-diagnostic-output',
+      'do-not-claim-final-over-under-from-centerline-sampling',
+    ],
+  };
+}
+
 function makePrimaryApertureFrame() {
   return {
     schema: 'PrimaryApertureFrame',
@@ -2561,6 +2731,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
     assemblage.expandedRegionProxy = next.expandedMacroRegionProxyPlan.expandedRegions.find(region => region.parentAssemblage === assemblage.id);
     assemblage.cleanProxySurfacePolicy = next.cleanProxySurfacePolicy;
   }
+  next.macroContactMap = createMacroContactMap(next);
   next.liveMacroSideWallPlan = createLiveMacroSideWallPlan(next);
   next.macroFamilySubstripPlan = createMacroFamilySubstripPlan(next);
   next.channelThroughLineAudit = createChannelThroughLineAudit(next);
@@ -3158,6 +3329,12 @@ function makeAperturePressureRing(THREE, voidRecord) {
 function makeApertureTangencyVectorGeometry(THREE, startPoint, direction, length = 0.18, radius = 0.005) {
   const start = new THREE.Vector3(...startPoint);
   const end = start.clone().add(new THREE.Vector3(...direction).normalize().multiplyScalar(length));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 1, radius, 8, false);
+}
+
+function makeMacroContactSegmentGeometry(THREE, contact, radius = 0.006) {
+  const start = new THREE.Vector3(...contact.closestApproach.sourcePoint);
+  const end = new THREE.Vector3(...contact.closestApproach.targetPoint);
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 1, radius, 8, false);
 }
 
@@ -3770,6 +3947,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const apertureTerminalTangentMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
   const apertureOrbitTangentMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.94, depthWrite: false, depthTest: false });
   const apertureTangencyPointMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
+  const macroContactIntersectMaterial = new THREE.MeshBasicMaterial({ color: 0xff3f5f, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
+  const macroContactNearMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
+  const macroContactClearMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.62, depthWrite: false, depthTest: false });
   const apertureOwnerBodyMaterial = neutralPbrMaterial({ color: 0x1a2427, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = neutralPbrMaterial({ color: 0x46565b, roughness: 0.4, metalness: 0.05 });
   const crossingSubSurgeRailMaterial = neutralPbrMaterial({ color: 0x1d2a2f, roughness: 0.52, metalness: 0.04 });
@@ -3850,6 +4030,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     apertureTerminalTangentMaterial,
     apertureOrbitTangentMaterial,
     apertureTangencyPointMaterial,
+    macroContactIntersectMaterial,
+    macroContactNearMaterial,
+    macroContactClearMaterial,
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
@@ -4153,6 +4336,36 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       nearestPoint.userData.apertureTangencyOverlayRole = 'nearest-aperture-point';
       group.add(nearestPoint);
     }
+    for (const contact of composition.macroContactMap?.rankedContacts?.slice(0, 5) || []) {
+      const material = contact.clearanceVerdict === 'intersecting'
+        ? macroContactIntersectMaterial
+        : contact.clearanceVerdict === 'near'
+          ? macroContactNearMaterial
+          : macroContactClearMaterial;
+      const segment = new THREE.Mesh(makeMacroContactSegmentGeometry(THREE, contact), material);
+      segment.name = `${contact.id}-macro-contact-segment`;
+      segment.visible = false;
+      segment.userData.MacroContactMap = composition.macroContactMap;
+      segment.userData.MacroContactSample = contact;
+      segment.userData.macroContactOverlayRole = 'closest-approach-segment';
+      group.add(segment);
+
+      const sourcePoint = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), material);
+      sourcePoint.name = `${contact.id}-source-contact-point`;
+      sourcePoint.position.set(...contact.closestApproach.sourcePoint);
+      sourcePoint.visible = false;
+      sourcePoint.userData.MacroContactSample = contact;
+      sourcePoint.userData.macroContactOverlayRole = 'source-contact-point';
+      group.add(sourcePoint);
+
+      const targetPoint = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), material);
+      targetPoint.name = `${contact.id}-target-contact-point`;
+      targetPoint.position.set(...contact.closestApproach.targetPoint);
+      targetPoint.visible = false;
+      targetPoint.userData.MacroContactSample = contact;
+      targetPoint.userData.macroContactOverlayRole = 'target-contact-point';
+      group.add(targetPoint);
+    }
     for (const gap of composition.expandedMacroRegionProxyPlan?.seamGaps || []) {
       const seamName = `${gap.id}-future-mesh-boundary-input`;
       if (composition.lamellarPlateBoundaryPlan?.suppressedDecorativeHintIds?.includes(seamName)) continue;
@@ -4193,6 +4406,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroInterlockGraph: composition.macroInterlockGraph,
       macroInterlockActiveRelationCount: composition.macroInterlockGraph?.activeRelationCount || 0,
       macroInterlockAffectedMacroIds: composition.macroInterlockGraph?.interlockAffectedMacroIds || [],
+      MacroContactMap: composition.macroContactMap,
+      macroContactMap: composition.macroContactMap,
+      macroContactCount: composition.macroContactMap?.contactCount || 0,
+      macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
+      macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
       macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
       macroFamilySubstripParentIds: composition.macroFamilySubstripPlan?.parentAssemblageIds || [],
       macroFamilySubstripCount: composition.macroFamilySubstripPlan?.substripCount || 0,
@@ -4326,6 +4544,52 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.target.set(-0.04, -0.73, 0.78);
       controls.update();
       onDirty?.();
+    },
+    frameMacroContactMap() {
+      camera.position.set(-0.28, 0.34, 3.1);
+      controls.target.set(-0.16, -0.05, 0.48);
+      controls.update();
+      onDirty?.();
+    },
+    enableMacroContactMapWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.macroContactMapWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleOverlayIds = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const isOverlay = !!child.userData?.MacroContactSample;
+        const promotedBody = child.userData?.MacroPromotedBody;
+        const isContextBody = promotedBody && composition.macroContactMap?.rankedContacts?.slice(0, 5).some(contact => (
+          contact.sourceMacroId === promotedBody.parentAssemblage
+          || contact.targetMacroId === promotedBody.parentAssemblage
+        ));
+        const isAperture = !!child.userData?.AperturePressure;
+        child.visible = isOverlay || isContextBody || isAperture;
+        if (child.visible) {
+          visibleCount += 1;
+          if (isOverlay) visibleOverlayIds.push(child.name);
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      controls.update();
+      onDirty?.();
+      return {
+        schema: 'MacroContactMapWitnessState',
+        mode: 'macro-contact-map-overlay-v0',
+        visualOverlayMode: 'ranked-closest-contact-segments',
+        contactCount: composition.macroContactMap?.contactCount || 0,
+        closestContactIds: composition.macroContactMap?.closestContactIds || [],
+        visibleCount,
+        hiddenCount,
+        visibleOverlayIds,
+      };
     },
     enableApertureTangencyWitness() {
       scene.children.forEach(child => {
@@ -4509,6 +4773,13 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroInterlockGraph: composition.macroInterlockGraph,
         macroInterlockActiveRelationCount: composition.macroInterlockGraph?.activeRelationCount || 0,
         macroInterlockAffectedMacroIds: composition.macroInterlockGraph?.interlockAffectedMacroIds || [],
+        MacroContactMap: composition.macroContactMap,
+        macroContactMap: composition.macroContactMap,
+        MacroContactSample: composition.macroContactMap?.contacts || [],
+        macroContactCount: composition.macroContactMap?.contactCount || 0,
+        macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
+        macroGeometryCoherenceWatch: composition.macroContactMap?.geometryCoherenceWatch || [],
+        macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
         MacroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         macroFamilySubstripPlan: composition.macroFamilySubstripPlan,
         MacroFamilySubstrip: composition.macroFamilySubstripPlan?.substrips || [],
