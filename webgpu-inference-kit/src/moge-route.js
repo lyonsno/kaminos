@@ -1,6 +1,7 @@
 import { createWebGpuLocalRouteReceipt } from './route-receipt.js';
 import { finishStagedSubmitProfile, validateStagedSubmitProfile } from './staged-profile.js';
 import { validateWebGpuBackendIdentity } from './gpu-environment.js';
+import { defineWebGpuRoute } from './route-boundary.js';
 
 export const MOGE_DEPTH_NORMAL_ROUTE_ID = 'moge.depth-normal.webgpu-local.v0';
 const MOGE_MODEL_ID = 'Ruicheng/moge-2-vitl-normal';
@@ -90,6 +91,38 @@ export function createMogeDepthNormalRouteReceipt(input) {
       totalMs: profile.totalMs,
       stages: profile.stages,
       profile,
+    },
+  });
+}
+
+export function createMogeDepthNormalRouteDefinition(input = {}) {
+  return defineWebGpuRoute({
+    routeId: MOGE_DEPTH_NORMAL_ROUTE_ID,
+    backendKind: 'webgpu-local',
+    model: {
+      id: MOGE_MODEL_ID,
+      revision: input.model?.revision || 'local-vitl-normal',
+      dtype: input.model?.dtype || 'fp16',
+    },
+    kernel: {
+      kitVersion: input.kernel?.kitVersion || '0.0.0',
+      profile: input.kernel?.profile || 'conv-transpose2d-stride2',
+      commit: input.kernel?.commit || null,
+    },
+    inputs: [
+      { role: 'source-image', required: true, artifactRequired: true, hashRequired: true },
+    ],
+    outputs: [
+      { role: 'depth', required: true, artifactRequired: true, hashRequired: true, shape: [592, 592] },
+      { role: 'normal', required: true, artifactRequired: true, hashRequired: true, shape: [3, 592, 592] },
+      { role: 'pointmap', required: false, artifactRequired: true, hashRequired: true, shape: [3, 592, 592] },
+      { role: 'mask', required: false, artifactRequired: true, hashRequired: true, shape: [592, 592] },
+    ],
+    requiredFeatures: input.requiredFeatures || [],
+    requiredStages: input.requiredStages || ['backbone', 'decoder-heads', 'output-readback'],
+    timingSource: input.timingSource || 'queue-submit-wait',
+    worker: input.worker || {
+      exportName: 'runMogeDepthNormalRoute',
     },
   });
 }

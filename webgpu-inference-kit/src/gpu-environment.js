@@ -55,6 +55,41 @@ export function createWebGpuDeviceRequest(adapter, options = {}) {
   };
 }
 
+export function requestBrowserWebGpuDevice(gpu, options = {}) {
+  if (!gpu || typeof gpu.requestAdapter !== 'function') {
+    throw new Error('gpu.requestAdapter must be available');
+  }
+
+  return (async () => {
+    const adapter = await gpu.requestAdapter(options.adapterOptions || {});
+    if (!adapter) throw new Error('WebGPU adapter unavailable');
+
+    const deviceRequest = createWebGpuDeviceRequest(adapter, options);
+    const descriptor = {
+      requiredFeatures: deviceRequest.requiredFeatures,
+      requiredLimits: deviceRequest.requiredLimits,
+    };
+    if (isNonEmptyString(options.label)) descriptor.label = options.label;
+
+    const device = await adapter.requestDevice(descriptor);
+    const backendIdentity = createWebGpuBackendIdentity({
+      adapterName: options.adapterName || adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter',
+      browser: options.browser || globalThis.navigator?.userAgent || null,
+      requestedFeatures: deviceRequest.requiredFeatures,
+      effectiveFeatures: device?.features || deviceRequest.requiredFeatures,
+      limits: device?.limits || adapter.limits,
+      timestampQuery: deviceRequest.timestampQuery,
+    });
+
+    return {
+      adapter,
+      device,
+      deviceRequest,
+      backendIdentity,
+    };
+  })();
+}
+
 export function createWebGpuBackendIdentity(input) {
   return {
     kind: 'webgpu-local',
