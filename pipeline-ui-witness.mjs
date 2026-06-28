@@ -594,6 +594,120 @@ try {
       routeRequest,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'stage-bake-tray') {
+    // Click Pipeline tab first to access Stage Bake
+    const pipelineTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="pipeline"]');
+      if (!tab) throw new Error('Pipeline tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, pipelineTab.point);
+    await wait(1000);
+
+    // Click Stage Bake button
+    const bakeBtnResult = await waitFor(cdp, `(() => {
+      const btn = document.getElementById('pipeline-conditioning-route-request-button');
+      if (!btn) return { ok: false, reason: 'no Stage Bake button' };
+      const rect = btn.getBoundingClientRect();
+      return {
+        ok: rect.width > 0 && rect.height > 0,
+        text: btn.textContent,
+        point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+      };
+    })()`, 'Stage Bake button', 12000);
+    await click(cdp, bakeBtnResult.point);
+    await wait(800);
+
+    await capture(cdp, beforePath);
+
+    // Switch to Tray tab
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    // Verify tray was populated from Stage Bake
+    const trayState = await waitFor(cdp, `(() => {
+      const tray = window.kaminosRouteCompositionTrayState?.();
+      if (!tray || !tray.sourceArtifacts?.length) return { ok: false, reason: 'tray not populated' };
+      const panel = document.getElementById('route-composition-tray-panel');
+      const sourceRows = panel?.querySelectorAll('[data-tray-artifact-id]') || [];
+      const conditioningRows = panel?.querySelectorAll('[data-tray-conditioning-role]') || [];
+      const runRows = panel?.querySelectorAll('[data-tray-run-id]') || [];
+
+      // The beauty input should appear as a source artifact
+      const hasBeautySource = tray.sourceArtifacts.some(a => a.artifactId.includes('beauty'));
+
+      // Conditioning links should include depth, normal, mask from the view artifacts
+      const condRoles = tray.conditioningLinks.map(l => l.role);
+      const hasDepth = condRoles.includes('depth');
+      const hasNormal = condRoles.includes('normal');
+      const hasMask = condRoles.includes('mask');
+
+      // Route run should exist with request-only effective route
+      const hasRequestOnlyRun = tray.routeRuns.some(r =>
+        r.effectiveRoute === 'request_only' && r.statusBadge === 'fixture'
+      );
+
+      // No output artifacts yet (no generator ran)
+      const noOutputs = tray.outputArtifacts.length === 0;
+
+      // FALSE-CLOSURE: route run must not claim live execution
+      const noLiveClaim = tray.routeRuns.every(r => r.statusBadge !== 'real');
+
+      // FALSE-CLOSURE: source kind on source artifact must be fixture (it came from fixture primitive)
+      const sourceIsFixture = tray.sourceArtifacts.every(a => a.sourceKind === 'fixture');
+
+      const firstRunRect = runRows.length > 0 ? runRows[0].getBoundingClientRect() : null;
+
+      return {
+        ok: Boolean(
+          hasBeautySource
+          && hasDepth && hasNormal && hasMask
+          && hasRequestOnlyRun
+          && noOutputs
+          && noLiveClaim
+          && sourceIsFixture
+          && sourceRows.length >= 1
+          && conditioningRows.length >= 3
+          && runRows.length >= 1
+        ),
+        tray,
+        dom: {
+          sourceRows: sourceRows.length,
+          conditioningRows: conditioningRows.length,
+          runRows: runRows.length,
+          hasBeautySource,
+          hasDepth, hasNormal, hasMask,
+          hasRequestOnlyRun,
+          noOutputs,
+          noLiveClaim,
+          sourceIsFixture,
+        },
+        firstRunRect: firstRunRect ? { x: firstRunRect.x, y: firstRunRect.y, width: firstRunRect.width, height: firstRunRect.height } : null,
+      };
+    })()`, 'Stage Bake tray population', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = trayState.firstRunRect
+      ? await screenshotVisibleProbe(afterPath, trayState.firstRunRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      trayState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'route-composition-tray') {
     // Click the Tray tab
     const trayTab = await evalJson(cdp, `(() => {

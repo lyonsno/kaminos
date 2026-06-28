@@ -4875,6 +4875,62 @@ function pipelineBuildConditioningRouteRequest({ checkpoint, viewArtifacts }) {
   };
 }
 
+function populateTrayFromConditioningRequest({ request, checkpoint, viewArtifacts }) {
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-bake-${request.requestId}`);
+
+  // Add the beauty/source input as a source artifact (if not already present)
+  const inputIds = request.inputArtifactIds || [];
+  for (const inputId of inputIds) {
+    if (!tray.sourceArtifacts.some(a => a.artifactId === inputId)) {
+      const viewArtifact = (viewArtifacts || []).find(v => v.artifactId === inputId || v.imageArtifact?.artifactId === inputId);
+      const imgArtifact = viewArtifact?.imageArtifact || viewArtifact;
+      tray = trayAddSource(tray, {
+        artifactId: inputId,
+        title: imgArtifact?.title || `${checkpoint?.specimenKind || 'Specimen'} source`,
+        sourceKind: imgArtifact?.sourceKind === 'fixture' ? 'fixture' : (imgArtifact?.sourceKind || 'imported-manual'),
+        mimeType: imgArtifact?.mimeType || null,
+        source: imgArtifact?.source || null,
+      });
+    }
+  }
+
+  // Add conditioning links from the request's conditioningArtifactIds map
+  const condIds = request.conditioningArtifactIds || {};
+  for (const [viewKind, condArtifactId] of Object.entries(condIds)) {
+    const role = viewKind; // depth, normal, mask, silhouette, beauty map directly
+    if (!tray.conditioningLinks.some(l => l.conditioningArtifactId === condArtifactId && l.role === role)) {
+      const viewArtifact = (viewArtifacts || []).find(v => v.viewKind === viewKind);
+      const imgArtifact = viewArtifact?.imageArtifact || viewArtifact;
+      const sourceId = inputIds[0] || null;
+      tray = trayAddConditioningLink(tray, {
+        sourceArtifactId: sourceId,
+        conditioningArtifactId: condArtifactId,
+        role,
+        title: imgArtifact?.title || `${viewKind} conditioning`,
+        sourceKind: imgArtifact?.sourceKind === 'fixture' ? 'fixture' : (imgArtifact?.sourceKind || 'generated'),
+        source: imgArtifact?.source || null,
+      });
+    }
+  }
+
+  // Add a route run entry reflecting the request-only state
+  if (!tray.routeRuns.some(r => r.runId === request.requestId)) {
+    tray = trayAddRouteRun(tray, {
+      runId: request.requestId,
+      requestedRoute: request.requestedRoute || 'image_conditioned_generation',
+      effectiveRoute: request.intendedEffectiveRoute || 'request_only',
+      backendClass: request.runtimeIdentity?.routeAdapter || 'request-only',
+      statusBadge: 'fixture',
+      receiptId: request.requestId,
+      inputArtifactIds: inputIds,
+      conditioningArtifactIds: Object.values(condIds),
+    });
+  }
+
+  routeCompositionTrayState = tray;
+  renderRouteCompositionTray();
+}
+
 function kaminosPipelineCreateFixtureConditioningRouteRequest() {
   let checkpoint = (pipelineDockState.specimenCheckpoints || []).find(item => item.specimenId === 'fixture-red-lerm-primitive-001') || null;
   let viewArtifacts = checkpoint ? pipelineViewArtifactsForCheckpoint(checkpoint.specimenId) : [];
@@ -4888,6 +4944,7 @@ function kaminosPipelineCreateFixtureConditioningRouteRequest() {
     request,
     ...(pipelineDockState.conditioningRouteRequests || []).filter(item => item.requestId !== request.requestId),
   ];
+  populateTrayFromConditioningRequest({ request, checkpoint, viewArtifacts });
   renderPipelineSpecimenIntake();
   savePipelineGraphLocalState();
   setInfo(`Bake staged from ${request.specimenKind || 'specimen'} views; no image generated yet.`);
