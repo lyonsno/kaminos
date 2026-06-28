@@ -45,6 +45,9 @@ const {
   LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE,
   LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA,
   LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
+  LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE,
+  LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA,
+  LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA,
   LERMS_PREVIEW_WITNESS_SCHEMA,
   LERMS_TERRAIN_PREVIEW_BENCH_ID,
   LERMS_UNDERHILL_CHAMBER_ID,
@@ -53,7 +56,9 @@ const {
   createDefaultWorldChambersRegistry,
   createLermsPreviewBenchState,
   createLermsPreviewActorVisualPrimitives,
+  normalizeLermsPreviewActorMotionTimelineReport,
   normalizeWorldChamberReceipt,
+  selectLermsPreviewTimelineFrame,
   worldChamberDebugState,
 } = await import('../world-chambers-core.js');
 
@@ -63,6 +68,9 @@ assert.equal(WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA, 'kaminos.world-chamber.preview-
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA, 'lerms.preview-bench-actor-motion-payload.v0');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA, 'lerms.preview-bench-actor-motion-state.v0');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE, 'lerms/preview-bench/actor-motion-payload-file');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA, 'lerms.preview-bench-actor-motion-timeline.v0');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA, 'lerms.preview-bench-actor-motion-timeline-state.v0');
+assert.equal(LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE, 'lerms/preview-bench/actor-motion-timeline-file');
 assert.equal(LERMS_PREVIEW_WITNESS_SCHEMA, 'kaminos.lerms-preview-witness.v0');
 assert.equal(LERMS_UNDERHILL_CHAMBER_ID, 'lerms-underhill');
 assert.equal(LERMS_TERRAIN_PREVIEW_BENCH_ID, 'terrain-preview');
@@ -318,6 +326,127 @@ assert.ok(actorMotionBenchState.actorMotion.visualPrimitives[1].radius < actorMo
 
 const directVisualPrimitives = createLermsPreviewActorVisualPrimitives(actorMotionBenchState.actorMotion);
 assert.deepEqual(directVisualPrimitives, actorMotionBenchState.actorMotion.visualPrimitives);
+
+const actorMotionTimelineReport = {
+  ok: true,
+  schema: 'lerms.preview-bench-actor-motion-timeline-report.v0',
+  route: 'lerms/preview-bench/actor-motion-timeline-file',
+  reportPath: '/tmp/lerms-preview-bench-motion-timeline-0628.json',
+  timeline: {
+    schema: 'lerms.preview-bench-actor-motion-timeline.v0',
+    route: 'lerms/preview-bench/actor-motion-timeline-file',
+    acceptanceSurface: {
+      kind: 'kaminos_preview_bench_timeline',
+      worldChamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+      routeQuery: 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview',
+    },
+    basePayload: actorMotionReport.payload,
+    durationMs: 480,
+    timeline: [
+      {
+        schema: 'lerms.preview-bench-actor-motion-timeline-frame.v0',
+        frameIndex: 0,
+        label: 'carry',
+        timeMs: 0,
+        events: ['carrier-fleeing'],
+        actorMotion: actorMotionReport.payload.actorMotion,
+      },
+      {
+        schema: 'lerms.preview-bench-actor-motion-timeline-frame.v0',
+        frameIndex: 1,
+        label: 'flee',
+        timeMs: 240,
+        events: ['carrier-fleeing'],
+        actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-carrier'
+          ? { ...actor, state: 'fleeing_with_goin', world: [0.1, 0.44, 0.3], heading: [-1, 0, 0.2] }
+          : actor),
+      },
+      {
+        schema: 'lerms.preview-bench-actor-motion-timeline-frame.v0',
+        frameIndex: 2,
+        label: 'hit',
+        timeMs: 480,
+        events: ['juice-hit-carrier'],
+        actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-hit-carrier'
+          ? { ...actor, state: 'tumbling', world: [-0.2, 0.5, -0.45] }
+          : actor),
+        hitFlash: { world: [-0.2, 0.7, -0.45], radius: 0.36 },
+      },
+    ],
+    playback: {
+      schema: 'lerms.preview-bench-actor-motion-playback.v0',
+      loop: true,
+      interpolation: 'linear-between-frames',
+      timeUnit: 'ms',
+      minimumMovementActors: 1,
+      minimumStateTransitions: 2,
+    },
+    witnessState: {
+      schema: 'lerms.preview-bench-actor-motion-timeline-state.v0',
+      chamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+      routeReady: true,
+      requiresMotionWitness: true,
+      staticActorPayloadAcceptedAsLoop: false,
+      frameCount: 3,
+      actorIds: ['schnoz-carrier', 'schnoz-hit-carrier'],
+      states: ['carrying_goin', 'fleeing_with_goin', 'hit_reacting', 'tumbling'],
+    },
+    downgrades: [
+      ...actorMotionReport.payload.downgrades,
+      'timevarying_payload_not_live_socket_stream',
+      'timeline_playback_not_behavior_engine',
+    ],
+    custody: {
+      lermsOwns: ['timelineBehaviorTruth'],
+      gutterglassOwns: ['Preview Bench playback and camera witness mechanics'],
+    },
+  },
+};
+
+const actorMotionTimelineState = normalizeLermsPreviewActorMotionTimelineReport(actorMotionTimelineReport, {
+  mode: 'server_file',
+  requestedUrl: '/api/read?root=lerms-preview&path=lerms-preview-bench-motion-timeline-0628.json',
+  root: 'lerms-preview',
+  path: 'lerms-preview-bench-motion-timeline-0628.json',
+});
+assert.equal(actorMotionTimelineState.schema, 'lerms.preview-bench-actor-motion-timeline-state.v0');
+assert.equal(actorMotionTimelineState.payloadSchema, 'lerms.preview-bench-actor-motion-timeline.v0');
+assert.equal(actorMotionTimelineState.route, 'lerms/preview-bench/actor-motion-timeline-file');
+assert.equal(actorMotionTimelineState.frameCount, 3);
+assert.equal(actorMotionTimelineState.durationMs, 480);
+assert.equal(actorMotionTimelineState.requiresMotionWitness, true);
+assert.equal(actorMotionTimelineState.staticActorPayloadAcceptedAsLoop, false);
+assert.ok(actorMotionTimelineState.movingActorIds.includes('schnoz-carrier'));
+assert.ok(actorMotionTimelineState.stateTransitions.some((transition) => transition.actorId === 'schnoz-carrier' && transition.to === 'fleeing_with_goin'));
+assert.equal(actorMotionTimelineState.frames[0].visualPrimitives.length, 2);
+assert.equal(actorMotionTimelineState.frames[0].visualPrimitives[0].kind, 'proxy_schnoz_sphere');
+assert.equal(actorMotionTimelineState.payloadSource.root, 'lerms-preview');
+
+const interpolatedTimelineFrame = selectLermsPreviewTimelineFrame(actorMotionTimelineState, 120);
+assert.equal(interpolatedTimelineFrame.schema, 'kaminos.lerms-preview-timeline-playback-frame.v0');
+assert.equal(interpolatedTimelineFrame.current.label, 'carry');
+assert.equal(interpolatedTimelineFrame.next.label, 'flee');
+assert.ok(interpolatedTimelineFrame.blend > 0.49 && interpolatedTimelineFrame.blend < 0.51);
+const interpolatedCarrier = interpolatedTimelineFrame.visualPrimitives.find((primitive) => primitive.actorId === 'schnoz-carrier');
+assert.ok(interpolatedCarrier);
+assert.ok(interpolatedCarrier.position[0] > -0.35 && interpolatedCarrier.position[0] < 0.15);
+
+const timelineBenchState = createLermsPreviewBenchState(registry, {
+  posture: 'inspect',
+  benchId: 'terrain-preview',
+  actorMotionTimelineReport,
+  actorMotionTimelineSource: {
+    mode: 'server_file',
+    root: 'lerms-preview',
+    path: 'lerms-preview-bench-motion-timeline-0628.json',
+  },
+});
+assert.equal(timelineBenchState.actorMotionTimeline.schema, 'lerms.preview-bench-actor-motion-timeline-state.v0');
+assert.equal(timelineBenchState.badges.actorMotionTimeline, 'timeline:3');
 
 const palmDaddyComposerReceipt = structuredClone(LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
 palmDaddyComposerReceipt.phase = 'complete';

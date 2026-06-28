@@ -5,6 +5,9 @@ export const WORLD_CHAMBER_RECEIPT_SCHEMA = 'kaminos.world-chamber.receipt.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA = 'lerms.preview-bench-actor-motion-payload.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-state.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE = 'lerms/preview-bench/actor-motion-payload-file';
+export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA = 'lerms.preview-bench-actor-motion-timeline.v0';
+export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-timeline-state.v0';
+export const LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE = 'lerms/preview-bench/actor-motion-timeline-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
@@ -461,6 +464,173 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
   });
 }
 
+function actorVisualMapById(frame) {
+  return new Map((frame?.visualPrimitives || []).map(primitive => [primitive.actorId, primitive]));
+}
+
+function interpolateNumber(a, b, blend) {
+  return roundBenchNumber(Number(a) + (Number(b) - Number(a)) * blend);
+}
+
+function interpolateVec3(a, b, blend) {
+  const from = vector3(a);
+  const to = vector3(b, from);
+  return [
+    interpolateNumber(from[0], to[0], blend),
+    interpolateNumber(from[1], to[1], blend),
+    interpolateNumber(from[2], to[2], blend),
+  ];
+}
+
+function interpolateActorVisualPrimitives(currentFrame, nextFrame, blend) {
+  const nextById = actorVisualMapById(nextFrame);
+  return (currentFrame?.visualPrimitives || []).map((primitive) => {
+    const next = nextById.get(primitive.actorId);
+    if (!next) return clone(primitive);
+    return {
+      ...clone(primitive),
+      state: blend >= 0.5 ? next.state : primitive.state,
+      position: interpolateVec3(primitive.position, next.position, blend),
+      heading: interpolateVec3(primitive.heading, next.heading, blend),
+      radius: interpolateNumber(primitive.radius, next.radius, blend),
+      squash: interpolateNumber(primitive.squash, next.squash, blend),
+      stretch: interpolateNumber(primitive.stretch, next.stretch, blend),
+      nosePosition: interpolateVec3(primitive.nosePosition, next.nosePosition, blend),
+    };
+  });
+}
+
+function movementProof(frames) {
+  const positionsByActor = new Map();
+  const statesByActor = new Map();
+  for (const frame of frames) {
+    for (const actor of frame.actors || []) {
+      if (!positionsByActor.has(actor.actorId)) positionsByActor.set(actor.actorId, new Set());
+      positionsByActor.get(actor.actorId).add((actor.world || []).join(','));
+      if (!statesByActor.has(actor.actorId)) statesByActor.set(actor.actorId, []);
+      const states = statesByActor.get(actor.actorId);
+      if (states[states.length - 1] !== actor.state) states.push(actor.state);
+    }
+  }
+  const movingActorIds = [...positionsByActor.entries()]
+    .filter(([, positions]) => positions.size > 1)
+    .map(([actorId]) => actorId);
+  const stateTransitions = [];
+  for (const [actorId, states] of statesByActor.entries()) {
+    for (let index = 1; index < states.length; index += 1) {
+      stateTransitions.push({ actorId, from: states[index - 1], to: states[index] });
+    }
+  }
+  return { movingActorIds, stateTransitions };
+}
+
+export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSource = null) {
+  assertObject(report, 'LERMS Preview Bench actor-motion timeline report');
+  const timeline = report.timeline || report;
+  assertObject(timeline, 'LERMS Preview Bench actor-motion timeline');
+  if (timeline.schema !== LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA) {
+    throw new Error(`actor-motion timeline schema mismatch: expected ${LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA} but got ${timeline.schema || 'missing'}`);
+  }
+  if (timeline.route !== LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE) {
+    throw new Error(`actor-motion timeline route mismatch: expected ${LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_ROUTE} but got ${timeline.route || 'missing'}`);
+  }
+  const surface = timeline.acceptanceSurface;
+  assertObject(surface, 'actor-motion timeline acceptance surface');
+  if (surface.worldChamberId !== LERMS_UNDERHILL_CHAMBER_ID || surface.posture !== 'inspect' || surface.bench !== LERMS_TERRAIN_PREVIEW_BENCH_ID) {
+    throw new Error(`actor-motion timeline does not target the LERMS Preview Bench: ${JSON.stringify(surface)}`);
+  }
+  if (surface.routeQuery !== routeStringForPreviewBench(LERMS_UNDERHILL_CHAMBER_ID, 'inspect', LERMS_TERRAIN_PREVIEW_BENCH_ID)) {
+    throw new Error(`actor-motion timeline route query mismatch: ${surface.routeQuery || 'missing'}`);
+  }
+  if (timeline.witnessState?.schema !== LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA) {
+    throw new Error(`actor-motion timeline witness state schema mismatch: ${timeline.witnessState?.schema || 'missing'}`);
+  }
+  if (!Array.isArray(timeline.timeline) || timeline.timeline.length < 2) {
+    throw new Error('actor-motion timeline needs at least two frames for motion playback');
+  }
+  for (let index = 1; index < timeline.timeline.length; index += 1) {
+    if (!(Number(timeline.timeline[index].timeMs) > Number(timeline.timeline[index - 1].timeMs))) {
+      throw new Error('actor-motion timeline frame times must strictly increase');
+    }
+  }
+  const frames = timeline.timeline.map((frame) => {
+    if (!Array.isArray(frame.actorMotion) || frame.actorMotion.length === 0) {
+      throw new Error(`actor-motion timeline frame ${frame.label || frame.frameIndex} has no actors`);
+    }
+    const actorState = {
+      schema: LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
+      payloadSchema: LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_SCHEMA,
+      motionAdapterSchema: 'lerms.schnoz-motion-adapter.v0',
+      actors: clone(frame.actorMotion),
+    };
+    return {
+      schema: frame.schema || 'lerms.preview-bench-actor-motion-timeline-frame.v0',
+      frameIndex: frame.frameIndex,
+      label: frame.label,
+      timeMs: Number(frame.timeMs),
+      events: clone(frame.events || []),
+      actors: clone(frame.actorMotion),
+      goins: clone(frame.goins || []),
+      hitFlash: frame.hitFlash ? clone(frame.hitFlash) : null,
+      reroute: frame.reroute ? clone(frame.reroute) : null,
+      visualPrimitives: createLermsPreviewActorVisualPrimitives(actorState),
+    };
+  });
+  const proof = movementProof(frames);
+  const states = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.state).filter(Boolean)))];
+  const actorIds = [...new Set(frames.flatMap(frame => frame.actors.map(actor => actor.actorId).filter(Boolean)))];
+  return {
+    schema: LERMS_PREVIEW_ACTOR_MOTION_TIMELINE_STATE_SCHEMA,
+    payloadSchema: timeline.schema,
+    route: timeline.route,
+    reportSchema: report.schema || null,
+    reportPath: report.reportPath || null,
+    payloadSource: normalizeReceiptSource(payloadSource),
+    frameCount: frames.length,
+    durationMs: Number(timeline.durationMs ?? frames[frames.length - 1].timeMs),
+    playback: clone(timeline.playback || {}),
+    requiresMotionWitness: timeline.witnessState.requiresMotionWitness === true,
+    staticActorPayloadAcceptedAsLoop: timeline.witnessState.staticActorPayloadAcceptedAsLoop === true,
+    states,
+    actorIds,
+    movingActorIds: proof.movingActorIds,
+    stateTransitions: proof.stateTransitions,
+    frames,
+    downgrades: clone(timeline.downgrades || []),
+    custody: timeline.custody ? clone(timeline.custody) : null,
+  };
+}
+
+export function selectLermsPreviewTimelineFrame(timelineState, elapsedMs) {
+  assertObject(timelineState, 'LERMS Preview Bench timeline state');
+  const frames = Array.isArray(timelineState.frames) ? timelineState.frames : [];
+  if (frames.length === 0) throw new Error('cannot select a timeline frame without frames');
+  const durationMs = Math.max(Number(timelineState.durationMs || frames[frames.length - 1].timeMs || 0), 1);
+  const localMs = ((Number(elapsedMs) % durationMs) + durationMs) % durationMs;
+  let current = frames[0];
+  let next = frames[1] || frames[0];
+  for (let index = 0; index < frames.length; index += 1) {
+    const candidate = frames[index];
+    const candidateNext = frames[index + 1] || frames[0];
+    const nextTime = index + 1 < frames.length ? candidateNext.timeMs : durationMs;
+    if (localMs >= candidate.timeMs && localMs <= nextTime) {
+      current = candidate;
+      next = candidateNext;
+      break;
+    }
+  }
+  const segmentDuration = Math.max((next.timeMs > current.timeMs ? next.timeMs : durationMs) - current.timeMs, 1);
+  const blend = clampNumber((localMs - current.timeMs) / segmentDuration, 0, 1);
+  return {
+    schema: 'kaminos.lerms-preview-timeline-playback-frame.v0',
+    elapsedMs: roundBenchNumber(localMs),
+    blend: roundBenchNumber(blend),
+    current: clone(current),
+    next: clone(next),
+    visualPrimitives: interpolateActorVisualPrimitives(current, next, blend),
+  };
+}
+
 export function normalizeLermsPreviewActorMotionPayloadReport(report, payloadSource = null) {
   assertObject(report, 'LERMS Preview Bench actor-motion report');
   const payload = report.payload || report;
@@ -552,6 +722,9 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
   const actorMotion = options.actorMotionPayloadReport
     ? normalizeLermsPreviewActorMotionPayloadReport(options.actorMotionPayloadReport, options.actorMotionPayloadSource)
     : null;
+  const actorMotionTimeline = options.actorMotionTimelineReport
+    ? normalizeLermsPreviewActorMotionTimelineReport(options.actorMotionTimelineReport, options.actorMotionTimelineSource)
+    : null;
   return {
     schema: LERMS_PREVIEW_WITNESS_SCHEMA,
     hostDescriptor: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
@@ -572,6 +745,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
       freshness,
       fallback: receiptMode,
       actorMotion: actorMotion?.source?.authority || null,
+      actorMotionTimeline: actorMotionTimeline ? `timeline:${actorMotionTimeline.frameCount}` : null,
     },
     activeCamera: clone(activeCamera),
     cameraPresets: clone(LERMS_PREVIEW_CAMERA_PRESETS),
@@ -597,6 +771,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
     intentionallyAbsent: debug.intentionallyAbsent ? clone(debug.intentionallyAbsent) : null,
     receiptLoadError: debug.receiptLoadError ? clone(debug.receiptLoadError) : null,
     actorMotion,
+    actorMotionTimeline,
   };
 }
 

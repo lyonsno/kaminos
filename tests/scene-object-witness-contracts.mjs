@@ -22,8 +22,10 @@ assert.match(witness, /greenroom-picker-display/, 'witness supports a Green Room
 assert.match(witness, /greenroom-preview-race/, 'witness supports a Green Room preview replacement race scenario');
 assert.match(witness, /greenroom-splat-handoff/, 'witness supports a Green Room splat import handoff scenario');
 assert.match(witness, /lerms-preview-bench-actor-motion/, 'witness supports LERMS Preview Bench actor-motion payload scenario');
+assert.match(witness, /lerms-preview-bench-actor-motion-timeline/, 'witness supports LERMS Preview Bench actor-motion timeline scenario');
 assert.match(witness, /__kaminosLermsPreviewState/, 'witness can read the LERMS Preview Bench state surface');
 assert.match(witness, /actorMotionPayload/, 'witness records actor motion payload evidence instead of relying on sidebar text alone');
+assert.match(witness, /playbackSamples/, 'witness records timeline playback samples instead of relying on sidebar text alone');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');
 assert.match(witness, /splat-correction-sidecar/, 'witness supports selected splat correction sidecar persistence');

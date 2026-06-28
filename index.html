@@ -633,6 +633,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="lerms-preview-freshness-badge">fixture</span></div>
           <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="lerms-preview-terrain-count">16 samples</span></div>
           <div class="field"><span class="field-key">Actor Motion</span><span class="field-val" id="lerms-preview-actor-motion-badge">not loaded</span></div>
+          <div class="field"><span class="field-key">Actor Timeline</span><span class="field-val" id="lerms-preview-actor-timeline-badge">not loaded</span></div>
+          <div class="field"><span class="field-key">Frame</span><span class="field-val" id="lerms-preview-timeline-frame">none</span></div>
           <div class="field"><span class="field-key">Actors</span><span class="field-val" id="lerms-preview-actor-count">0</span></div>
           <div class="field"><span class="field-key">States</span><span class="field-val" id="lerms-preview-actor-states">none</span></div>
           <div class="field"><span class="field-key">Motion Src</span><span class="field-val" id="lerms-preview-motion-source">none</span></div>
@@ -782,6 +784,7 @@ import {
   LERMS_UNDERHILL_CHAMBER_ID,
   createLermsPreviewBenchState,
   createDefaultWorldChambersRegistry,
+  selectLermsPreviewTimelineFrame,
   worldChamberDebugState,
 } from './world-chambers-core.js';
 import {
@@ -835,6 +838,9 @@ let lermsPreviewRouteState = {
 };
 let lermsActorMotionPayloadReport = null;
 let lermsActorMotionPayloadSource = null;
+let lermsActorMotionTimelineReport = null;
+let lermsActorMotionTimelineSource = null;
+let lermsPreviewTimelinePlaybackStartMs = 0;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
@@ -3823,6 +3829,8 @@ async function initScene() {
     controls.update();
     updateHybridSplatOverlayFrame();
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    const lermsTimelineActive = updateLermsPreviewTimelinePlaybackFrame();
+    if (lermsTimelineActive) needsRender = true;
 
     if (needsRender || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
@@ -3839,7 +3847,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !volumeBridgeActive && !lermsTimelineActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -4320,6 +4328,8 @@ function updateLermsPreviewBenchState(options = {}) {
     ...lermsPreviewRouteState,
     actorMotionPayloadReport: lermsActorMotionPayloadReport,
     actorMotionPayloadSource: lermsActorMotionPayloadSource,
+    actorMotionTimelineReport: lermsActorMotionTimelineReport,
+    actorMotionTimelineSource: lermsActorMotionTimelineSource,
   });
   window.__kaminosLermsPreviewState = lermsPreviewBenchState;
   return lermsPreviewBenchState;
@@ -4408,11 +4418,11 @@ function makeLermsPreviewActorVisualMesh(primitive) {
   return actorGroup;
 }
 
-function renderLermsPreviewActorVisuals(previewState) {
+function renderLermsPreviewActorVisuals(previewState, visualPrimitivesOverride = null) {
   if (!scene) return null;
   const group = ensureLermsPreviewActorsGroup();
   clearLermsPreviewActorVisuals();
-  const primitives = previewState?.actorMotion?.visualPrimitives || [];
+  const primitives = visualPrimitivesOverride || previewState?.actorMotion?.visualPrimitives || [];
   for (const primitive of primitives) {
     group.add(makeLermsPreviewActorVisualMesh(primitive));
   }
@@ -4426,6 +4436,19 @@ function renderLermsPreviewActorVisuals(previewState) {
   group.userData.kaminosLermsPreviewActorVisuals = state;
   window.__kaminosLermsPreviewActorVisuals = state;
   return state;
+}
+
+function updateLermsPreviewTimelinePlaybackFrame(nowMs = performance.now()) {
+  const timeline = lermsPreviewBenchState?.actorMotionTimeline;
+  if (!timeline?.frames?.length) {
+    window.__kaminosLermsPreviewTimelinePlaybackFrame = null;
+    return false;
+  }
+  if (!lermsPreviewTimelinePlaybackStartMs) lermsPreviewTimelinePlaybackStartMs = nowMs;
+  const playbackFrame = selectLermsPreviewTimelineFrame(timeline, nowMs - lermsPreviewTimelinePlaybackStartMs);
+  renderLermsPreviewActorVisuals(lermsPreviewBenchState, playbackFrame.visualPrimitives);
+  window.__kaminosLermsPreviewTimelinePlaybackFrame = playbackFrame;
+  return true;
 }
 
 function worldChamberReceiptSourceLabel(receiptSource) {
@@ -4452,10 +4475,28 @@ function lermsActorMotionPayloadUrlFromRoute(params) {
   return null;
 }
 
+function lermsActorMotionTimelineUrlFromRoute(params) {
+  const directUrl = params.get('lerms_actor_motion_timeline_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('lerms_actor_motion_timeline_root');
+  const path = params.get('lerms_actor_motion_timeline_path');
+  if (root && path) {
+    const query = new URLSearchParams({ root, path }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      root,
+      path,
+    };
+  }
+  return null;
+}
+
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
-  renderLermsPreviewActorVisuals(previewState);
+  const timelineFrame = updateLermsPreviewTimelinePlaybackFrame() ? window.__kaminosLermsPreviewTimelinePlaybackFrame : null;
+  if (!timelineFrame) renderLermsPreviewActorVisuals(previewState);
   const chamber = debug.activeChamber;
   const summary = debug.summary || {};
   document.getElementById('world-chamber-title').textContent = chamber?.title || 'Unknown chamber';
@@ -4501,13 +4542,26 @@ function renderWorldChambersPanel() {
   document.getElementById('lerms-preview-freshness-badge').textContent = previewState.badges.freshness;
   document.getElementById('lerms-preview-terrain-count').textContent = `${previewState.terrain.sampleCount} samples`;
   const actorMotion = previewState.actorMotion;
+  const actorTimeline = previewState.actorMotionTimeline;
   document.getElementById('lerms-preview-actor-motion-badge').textContent = actorMotion?.source?.authority || 'not loaded';
-  document.getElementById('lerms-preview-actor-count').textContent = actorMotion ? String(actorMotion.actorCount) : '0';
-  document.getElementById('lerms-preview-actor-states').textContent = actorMotion?.states?.join(', ') || 'none';
+  document.getElementById('lerms-preview-actor-timeline-badge').textContent = actorTimeline ? `timeline:${actorTimeline.frameCount}` : 'not loaded';
+  document.getElementById('lerms-preview-timeline-frame').textContent = timelineFrame
+    ? `${timelineFrame.current.label}->${timelineFrame.next.label} ${Math.round(timelineFrame.blend * 100)}%`
+    : 'none';
+  document.getElementById('lerms-preview-actor-count').textContent = actorMotion
+    ? String(actorMotion.actorCount)
+    : timelineFrame
+      ? String(timelineFrame.visualPrimitives.length)
+    : actorTimeline
+      ? String(actorTimeline.actorIds.length)
+      : '0';
+  document.getElementById('lerms-preview-actor-states').textContent = actorMotion?.states?.join(', ') || actorTimeline?.states?.join(', ') || 'none';
   document.getElementById('lerms-preview-motion-source').textContent = actorMotion?.selectedClipletSource
     ? [actorMotion.selectedClipletSource.model, actorMotion.selectedClipletSource.status].filter(Boolean).join(' / ') || actorMotion.selectedClipletSource.route || 'source unavailable'
-    : 'none';
-  document.getElementById('lerms-preview-motion-downgrade').textContent = actorMotion?.downgrades?.[0] || 'none';
+    : actorTimeline
+      ? 'timeline / lerms-owned behavior truth'
+      : 'none';
+  document.getElementById('lerms-preview-motion-downgrade').textContent = actorMotion?.downgrades?.[0] || actorTimeline?.downgrades?.[0] || 'none';
   const cameraList = document.getElementById('lerms-preview-camera-list');
   cameraList.innerHTML = '';
   for (const preset of previewState.cameraPresets) {
@@ -4570,7 +4624,8 @@ async function initWorldChambersRoute() {
   }
   const receiptRoute = worldChamberReceiptUrlFromRoute(params);
   const actorMotionRoute = lermsActorMotionPayloadUrlFromRoute(params);
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || actorMotionRoute || requestedBench) {
+  const actorTimelineRoute = lermsActorMotionTimelineUrlFromRoute(params);
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || actorMotionRoute || actorTimelineRoute || requestedBench) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
@@ -4580,7 +4635,9 @@ async function initWorldChambersRoute() {
       ? `World Chamber: loading receipt ${receiptRoute.url}`
       : actorMotionRoute
         ? `LERMS Preview Bench: loading actor motion ${actorMotionRoute.url}`
-        : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
+        : actorTimelineRoute
+          ? `LERMS Preview Bench: loading actor timeline ${actorTimelineRoute.url}`
+          : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
     setInfo(loadingLabel);
   }
   if (actorMotionRoute) {
@@ -4609,6 +4666,36 @@ async function initWorldChambersRoute() {
       };
       renderWorldChambersPanel();
       setInfo(`LERMS Preview Bench actor motion load failed: ${error.message || error}`);
+    }
+  }
+  if (actorTimelineRoute) {
+    try {
+      lermsActorMotionTimelineReport = await loadWorldChamberReceiptFromUrl(actorTimelineRoute.url);
+      lermsActorMotionTimelineSource = {
+        mode: actorTimelineRoute.mode,
+        label: actorTimelineRoute.mode === 'server_file' ? `${actorTimelineRoute.root}/${actorTimelineRoute.path}` : actorTimelineRoute.url,
+        requestedUrl: actorTimelineRoute.url,
+        effectiveUrl: new URL(actorTimelineRoute.url, window.location.href).href,
+        root: actorTimelineRoute.root,
+        path: actorTimelineRoute.path,
+      };
+      lermsPreviewTimelinePlaybackStartMs = performance.now();
+      renderWorldChambersPanel();
+      const previewState = window.__kaminosLermsPreviewState;
+      setInfo(`LERMS Preview Bench actor timeline loaded: ${previewState.actorMotionTimeline?.frameCount || 0} frames`);
+      window._kaminosDirty?.();
+    } catch (error) {
+      lermsActorMotionTimelineReport = null;
+      lermsActorMotionTimelineSource = {
+        mode: actorTimelineRoute.mode,
+        requestedUrl: actorTimelineRoute.url,
+        effectiveUrl: new URL(actorTimelineRoute.url, window.location.href).href,
+        root: actorTimelineRoute.root,
+        path: actorTimelineRoute.path,
+        error: error.message || String(error),
+      };
+      renderWorldChambersPanel();
+      setInfo(`LERMS Preview Bench actor timeline load failed: ${error.message || error}`);
     }
   }
   if (!receiptRoute) return;

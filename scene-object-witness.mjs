@@ -1747,6 +1747,87 @@ async function runLermsPreviewBenchActorMotionScenario(ws) {
   }
 }
 
+async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-actor-motion-timeline';
+  lastEvidence.lermsPreviewBenchActorMotionTimeline = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS actor timeline witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if (state.actorMotionTimeline?.frameCount) break;
+        await wait(125);
+      }
+      const sample = () => ({
+        playbackFrame: window.__kaminosLermsPreviewTimelinePlaybackFrame || null,
+        actorVisuals: window.__kaminosLermsPreviewActorVisuals || null,
+        actorObjects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
+          ...(child.userData?.kaminosLermsPreviewActor || {}),
+          position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
+        })),
+      });
+      const first = sample();
+      await wait(520);
+      const second = sample();
+      await wait(520);
+      const third = sample();
+      state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      return {
+        state,
+        actorTimeline: state.actorMotionTimeline || null,
+        playbackSamples: [first, second, third],
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        actorTimelineBadge: document.getElementById('lerms-preview-actor-timeline-badge')?.textContent?.trim() || null,
+        timelineFrameText: document.getElementById('lerms-preview-timeline-frame')?.textContent?.trim() || null,
+        actorCountText: document.getElementById('lerms-preview-actor-count')?.textContent?.trim() || null,
+        statesText: document.getElementById('lerms-preview-actor-states')?.textContent?.trim() || null,
+        downgradeText: document.getElementById('lerms-preview-motion-downgrade')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 20000 });
+  const evidence = lastEvidence.lermsPreviewBenchActorMotionTimeline;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS actor timeline Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.payloadSchema !== 'lerms.preview-bench-actor-motion-timeline.v0') {
+    throw new Error(`LERMS actor timeline payload schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.route !== 'lerms/preview-bench/actor-motion-timeline-file') {
+    throw new Error(`LERMS actor timeline route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.frameCount < 6 || evidence.actorTimeline?.durationMs < 1200) {
+    throw new Error(`LERMS actor timeline duration/frame count too low: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.requiresMotionWitness || evidence.actorTimeline?.staticActorPayloadAcceptedAsLoop !== false) {
+    throw new Error(`LERMS actor timeline did not require motion witness: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.movingActorIds?.length || !evidence.actorTimeline?.stateTransitions?.length) {
+    throw new Error(`LERMS actor timeline lacks motion/state-transition proof: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.downgrades?.includes('timevarying_payload_not_live_socket_stream')) {
+    throw new Error(`LERMS actor timeline lost live-stream downgrade: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimelineBadge?.startsWith('timeline:')) {
+    throw new Error(`LERMS actor timeline UI badge mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const samples = evidence.playbackSamples || [];
+  if (samples.length !== 3 || !samples.every(sample => sample.playbackFrame?.schema === 'kaminos.lerms-preview-timeline-playback-frame.v0')) {
+    throw new Error(`LERMS actor timeline playback samples missing: ${JSON.stringify(evidence)}`);
+  }
+  const samplePositions = samples.map(sample => JSON.stringify((sample.actorObjects || []).map(actor => [actor.actorId, actor.position])));
+  if (new Set(samplePositions).size < 2) {
+    throw new Error(`LERMS actor timeline visual objects did not move between samples: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.every(sample => sample.actorVisuals?.actorVisualCount > 0)) {
+    throw new Error(`LERMS actor timeline visual layer missing during playback: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4377,6 +4458,8 @@ try {
     await runLermsPreviewBenchTerrainScenario(ws);
   } else if (scenario === 'lerms-preview-bench-actor-motion') {
     await runLermsPreviewBenchActorMotionScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-actor-motion-timeline') {
+    await runLermsPreviewBenchActorMotionTimelineScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {
