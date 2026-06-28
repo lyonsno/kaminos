@@ -458,6 +458,81 @@ try {
       lifecycleState,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'specimen-packet-cockpit') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    await evalJson(cdp, `(() => {
+      const packet = window.kaminosLoadFixtureSpecimenPacketCockpit?.();
+      return { ok: Boolean(packet?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0'), packetId: packet?.packetId || null };
+    })()`);
+    await wait(500);
+
+    const failureButton = await waitFor(cdp, `(() => {
+      const button = document.querySelector('[data-specimen-failure-tag="added_face"]');
+      const rect = button?.getBoundingClientRect();
+      return {
+        ok: Boolean(rect?.width > 0 && rect?.height > 0),
+        text: button?.textContent || '',
+        point: rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null,
+      };
+    })()`, 'Specimen packet failure tag button', 12000);
+    await click(cdp, failureButton.point);
+    await wait(500);
+
+    const packetState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosSpecimenPacketCockpitWitness?.();
+      const panel = document.querySelector('[data-specimen-packet-cockpit]');
+      const patch = panel?.querySelector('[data-specimen-packet-negative-law-patch]');
+      const next = panel?.querySelector('[data-specimen-packet-next-request]');
+      const rect = panel?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          witness?.ok === true
+          && witness?.packet?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0'
+          && witness?.packet?.truthLayers?.length >= 5
+          && witness?.packet?.failureTags?.some(tag => tag.tag === 'added_face')
+          && witness?.nextRequestCarriesFailureLaw === true
+          && witness?.nextRouteRequest?.negativeLawPatch?.added?.includes('do_not_install_face')
+          && patch?.dataset.specimenPacketNegativeLawPatch?.includes('do_not_install_face')
+          && next?.dataset.specimenPacketNextRequest
+        ),
+        witness,
+        dom: {
+          panelDataset: panel ? { ...panel.dataset } : null,
+          panelText: panel?.innerText || '',
+          patchText: patch?.innerText || '',
+          nextText: next?.innerText || '',
+        },
+        panelRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'Specimen packet cockpit failure-to-next-request loop', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = packetState.panelRect
+      ? await screenshotVisibleProbe(afterPath, packetState.panelRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 200 && screenshotProbe.saturatedPixels >= 20, 'Specimen packet cockpit was not visibly inspectable', {
+      packetState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      failureButton,
+      packetState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'specimen-intake') {
     const fixtureButton = await evalJson(cdp, `(() => {
       const button = document.querySelector('#pipeline-specimen-fixture-button');

@@ -840,6 +840,19 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button type="button" class="btn" id="route-composition-tray-probe-route-button">Probe Route</button>
         <button type="button" class="btn" id="route-composition-tray-clear-button">Clear</button>
       </div>
+      <div id="specimen-packet-cockpit-panel" data-specimen-packet-cockpit="empty" style="border:1px solid #303030;background:#181818;border-radius:8px;padding:10px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+          <div>
+            <div style="font-size:11px;color:#ddd;font-weight:750;">Specimen Packet</div>
+            <div style="font-size:9px;color:#777;font-family:'SF Mono',monospace;">one specimen gets smarter after a bad route pass</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+            <button type="button" class="btn" id="specimen-packet-load-fixture-button">Load Specimen</button>
+            <button type="button" class="btn" data-specimen-failure-tag="added_face">Mark Face Error</button>
+          </div>
+        </div>
+        <div id="specimen-packet-cockpit-body" style="font-size:10px;color:#666;">No current specimen packet.</div>
+      </div>
       <div id="route-composition-tray-import-section" style="margin-bottom: 10px;">
         <div id="route-composition-tray-drop-zone" style="border: 2px dashed #333; border-radius: 8px; padding: 14px; text-align: center; color: #555; font-size: 11px; cursor: pointer; transition: all 0.2s; margin-bottom: 6px;">
           Drop image here, paste, or click to import
@@ -11711,6 +11724,7 @@ const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0'
 const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
 const KILN_ACTIVITY_STATE_SCHEMA_BROWSER = 'kaminos.kiln.activity-state.v0';
 const SHARP_KILN_LIVE_ROUTE_ID_BROWSER = 'adapter.sharp-image-to-splat-live.v0';
+const SPECIMEN_PACKET_COCKPIT_SCHEMA_BROWSER = 'kaminos.kiln.specimen-packet-cockpit.v0';
 
 const TRAY_CONDITIONING_LINK_ROLES = ['source-image', 'mask', 'matte', 'depth', 'normal', 'scribble', 'reference', 'negative-law', 'canny', 'segmentation'];
 const KILN_ACTIVITY_STATES_BROWSER = ['cold', 'queued', 'warming', 'burning', 'banking', 'cooled', 'failed', 'cached', 'fixture', 'fallback', 'unavailable'];
@@ -11839,6 +11853,8 @@ function deriveBrowserKilnActivityState(opts) {
 }
 
 let routeCompositionTrayState = null;
+let specimenPacketCockpitState = null;
+let specimenPacketNextRouteRequestState = null;
 
 function createBrowserTray(trayId) {
   return {
@@ -12051,6 +12067,232 @@ function pipelineFailRouteKilnRun({ routeNode, source, requestedPipelineId, pipe
     receiptId: run?.report?.path || run?.bundle?.path || pendingRecord?.runId || null,
     sourceTruthWarnings: error ? ['kiln_route_failed'] : undefined,
   });
+}
+
+const SPECIMEN_FAILURE_NEGATIVE_LAW_PATCHES_BROWSER = {
+  added_face: ['no_visible_eyes', 'no_mouth', 'do_not_install_face'],
+  mascot_drift: ['avoid_mascot_face', 'preserve_specimen_silhouette'],
+  lost_silhouette: ['preserve_silhouette_from_mask'],
+  topology_unusable: ['prefer_smooth_low_appendage_topology'],
+  route_failed: ['avoid_failed_route_until_backend_ready'],
+};
+
+function browserUnique(values) {
+  return [...new Set((values || []).map(value => String(value)).filter(Boolean))];
+}
+
+function buildBrowserSpecimenPacketCockpit({ packetId, checkpoint, viewArtifacts, routeRequests = [], tray = null, failureTags = [], negativeLawPatch = { added: [] } }) {
+  if (!checkpoint?.specimenId) throw new Error('Specimen checkpoint required before packet cockpit');
+  const truthLayers = SPECIMEN_VIEW_KINDS.map(viewKind => {
+    const artifact = (viewArtifacts || []).find(item => item.viewKind === viewKind);
+    if (!artifact) return null;
+    return {
+      truthLayerId: artifact.artifactId,
+      viewKind,
+      artifactId: artifact.artifactId,
+      sourceKind: artifact.sourceKind || artifact.imageArtifact?.sourceKind || null,
+      conditioningRoles: artifact.conditioningRoles || [],
+      sourceTruthWarnings: artifact.sourceTruthWarnings || artifact.imageArtifact?.sourceTruthWarnings || [],
+    };
+  }).filter(Boolean);
+  const routeRuns = tray?.routeRuns || [];
+  const candidateArtifacts = (tray?.outputArtifacts || []).map(artifact => ({
+    candidateArtifactId: artifact.artifactId,
+    title: artifact.title || artifact.artifactId,
+    sourceKind: artifact.sourceKind,
+    routeRunId: artifact.routeRunId || null,
+    sourceTruthWarnings: artifact.sourceTruthWarnings || [],
+  }));
+  const activityStates = routeRuns.map(run => run.kilnActivity).filter(Boolean);
+  const sourceTruthWarnings = browserUnique([
+    ...(checkpoint.sourceTruthWarnings || []),
+    ...truthLayers.flatMap(layer => layer.sourceTruthWarnings || []),
+    ...routeRequests.flatMap(request => request.sourceTruthWarnings || []),
+    ...routeRuns.flatMap(run => run.sourceTruthWarnings || []),
+    ...candidateArtifacts.flatMap(candidate => candidate.sourceTruthWarnings || []),
+  ]);
+  const packet = {
+    schema: SPECIMEN_PACKET_COCKPIT_SCHEMA_BROWSER,
+    packetId,
+    specimenKind: checkpoint.specimenKind,
+    firstVerticalRole: checkpoint.firstVerticalRole,
+    checkpointId: checkpoint.specimenId,
+    sourceArtifacts: truthLayers.filter(layer => layer.viewKind === 'beauty'),
+    truthLayers,
+    regionLaw: checkpoint.regionMasks || [],
+    negativeLaw: browserUnique([...(checkpoint.negativeLaw || []), ...(negativeLawPatch.added || [])]),
+    routeRequests,
+    routeRuns,
+    candidateArtifacts,
+    failureTags,
+    activityStates,
+    promotionState: 'bench_evidence',
+    negativeLawPatch: { added: browserUnique(negativeLawPatch.added || []) },
+    lineageReceipts: browserUnique([
+      checkpoint.routeReceipt?.requestedRoute,
+      ...routeRequests.map(request => request.routeReceipt?.requestedRoute),
+      ...routeRuns.map(run => run.receiptId || run.runId),
+    ]).map(receiptId => ({ receiptId })),
+    sourceTruthWarnings,
+  };
+  packet.cockpitSummary = {
+    northStar: 'one specimen gets smarter after a bad route pass',
+    currentActivityState: activityStates.at(-1)?.activityState || activityStates[0]?.activityState || 'cold',
+    hasCandidateOrFailure: candidateArtifacts.length > 0 || failureTags.length > 0 || routeRuns.some(run => run.statusBadge === 'failed'),
+    nextRequestCarriesFailureLaw: packet.negativeLawPatch.added.length > 0,
+  };
+  return packet;
+}
+
+function tagBrowserSpecimenPacketFailure(tag = 'added_face', targetId = null, note = '') {
+  if (!specimenPacketCockpitState) return null;
+  const added = browserUnique([
+    ...(specimenPacketCockpitState.negativeLawPatch?.added || []),
+    ...(SPECIMEN_FAILURE_NEGATIVE_LAW_PATCHES_BROWSER[tag] || []),
+  ]);
+  const failureTag = {
+    failureTagId: `${specimenPacketCockpitState.packetId}-failure-${String(specimenPacketCockpitState.failureTags?.length || 0).padStart(2, '0')}-${tag}`,
+    tag,
+    targetId: targetId || specimenPacketCockpitState.routeRuns.at(-1)?.runId || null,
+    note,
+    createdAt: new Date().toISOString(),
+  };
+  specimenPacketCockpitState = {
+    ...specimenPacketCockpitState,
+    failureTags: [...(specimenPacketCockpitState.failureTags || []), failureTag],
+    negativeLawPatch: { added },
+    negativeLaw: browserUnique([...(specimenPacketCockpitState.negativeLaw || []), ...added]),
+  };
+  specimenPacketCockpitState.cockpitSummary = {
+    ...specimenPacketCockpitState.cockpitSummary,
+    hasCandidateOrFailure: true,
+    nextRequestCarriesFailureLaw: added.length > 0,
+  };
+  specimenPacketNextRouteRequestState = buildBrowserNextSpecimenPacketRouteRequest(specimenPacketCockpitState, specimenPacketCockpitState.routeRequests[0]);
+  renderSpecimenPacketCockpit();
+  return specimenPacketCockpitState;
+}
+
+function buildBrowserNextSpecimenPacketRouteRequest(packet, previousRequest) {
+  if (!packet || !previousRequest) return null;
+  return {
+    ...previousRequest,
+    requestId: `${packet.packetId}-next-request-${String(packet.failureTags?.length || 0).padStart(2, '0')}`,
+    sourcePacketId: packet.packetId,
+    previousRouteRequestId: previousRequest.requestId,
+    failureTagIds: (packet.failureTags || []).map(tag => tag.failureTagId),
+    negativeLaw: browserUnique([...(previousRequest.negativeLaw || []), ...(packet.negativeLawPatch?.added || [])]),
+    negativeLawPatch: { added: browserUnique(packet.negativeLawPatch?.added || []) },
+    sourceTruthWarnings: browserUnique([...(previousRequest.sourceTruthWarnings || []), 'route_request_strengthened_by_failure_tags']),
+  };
+}
+
+function renderSpecimenPacketCockpit() {
+  const panel = document.getElementById('specimen-packet-cockpit-panel');
+  const body = document.getElementById('specimen-packet-cockpit-body');
+  if (!panel || !body) return;
+  const packet = specimenPacketCockpitState;
+  if (!packet) {
+    panel.dataset.specimenPacketCockpit = 'empty';
+    body.innerHTML = 'No current specimen packet.';
+    return;
+  }
+  panel.dataset.specimenPacketCockpit = packet.packetId;
+  panel.dataset.specimenPacketSchema = packet.schema;
+  const patch = packet.negativeLawPatch?.added || [];
+  const truthKinds = packet.truthLayers.map(layer => layer.viewKind);
+  const failedRun = packet.routeRuns.find(run => run.routePhase === 'failed' || run.statusBadge === 'failed');
+  const routeLabel = failedRun?.requestedRoute?.includes('sharp')
+    ? 'SHARP route'
+    : (failedRun?.displayRoute || failedRun?.requestedRoute || 'Route pass');
+  const sourceMode = packet.sourceTruthWarnings?.some(warning => warning.includes('fixture')) ? 'Fixture truth' : 'Source truth';
+  const nextRequestId = specimenPacketNextRouteRequestState?.requestId || '';
+  const nextRequestLabel = nextRequestId
+    ? nextRequestId.replace(`${packet.packetId}-`, '')
+    : '';
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr;gap:6px;font-family:'SF Mono',monospace;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div style="color:#ddd;font-weight:650;overflow-wrap:anywhere;">${escapeHtml(packet.specimenKind)} / ${escapeHtml(packet.firstVerticalRole)}</div>
+        <div style="color:#777;font-size:9px;overflow-wrap:anywhere;">${escapeHtml(packet.packetId)}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+        <div style="background:#202327;border:1px solid #2d3540;border-radius:6px;padding:6px;min-width:0;">
+          <div style="font-size:8px;color:#8fb4ff;text-transform:uppercase;letter-spacing:.4px;">Source</div>
+          <div style="font-size:10px;color:#ddd;margin-top:3px;">${escapeHtml(sourceMode)}</div>
+          <div style="font-size:9px;color:#777;margin-top:2px;">${packet.truthLayers.length} layers held</div>
+        </div>
+        <div style="background:#281f20;border:1px solid #493033;border-radius:6px;padding:6px;min-width:0;">
+          <div style="font-size:8px;color:#ef9a9a;text-transform:uppercase;letter-spacing:.4px;">Bad pass</div>
+          <div style="font-size:10px;color:#ddd;margin-top:3px;overflow-wrap:anywhere;">${escapeHtml(routeLabel)}</div>
+          <div style="font-size:9px;color:#ef9a9a;margin-top:2px;">${packet.failureTags.length} marked failure${packet.failureTags.length === 1 ? '' : 's'}</div>
+        </div>
+        <div style="background:#1e2a21;border:1px solid #2f4c34;border-radius:6px;padding:6px;min-width:0;">
+          <div style="font-size:8px;color:#7bd48a;text-transform:uppercase;letter-spacing:.4px;">Next pass</div>
+          <div style="font-size:10px;color:${nextRequestId ? '#7bd48a' : '#777'};margin-top:3px;">${nextRequestId ? 'Law strengthened' : 'Waiting for mark'}</div>
+          <div style="font-size:9px;color:#777;margin-top:2px;">${patch.length} new block${patch.length === 1 ? '' : 's'}</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:7px;display:flex;gap:4px;flex-wrap:wrap" data-specimen-packet-truth-layers="${packet.truthLayers.length}">
+      ${truthKinds.map(kind => `<span style="font-size:8px;color:#8fb4ff;background:#8fb4ff18;border-radius:3px;padding:1px 5px">${escapeHtml(kind)}</span>`).join('')}
+    </div>
+    <div style="margin-top:7px;color:${patch.length ? '#f0b85a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-negative-law-patch="${patch.join(',')}">
+      Next pass blocks: ${patch.length ? patch.map(escapeHtml).join(', ') : 'none yet'}
+    </div>
+    <div style="margin-top:5px;color:${nextRequestId ? '#66bb6a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-next-request="${nextRequestId}">
+      Next request: ${nextRequestLabel ? escapeHtml(nextRequestLabel) : 'mark a failure to strengthen law'}
+    </div>
+  `;
+}
+
+function kaminosLoadFixtureSpecimenPacketCockpit() {
+  const request = kaminosPipelineCreateFixtureConditioningRouteRequest();
+  const checkpoint = (pipelineDockState.specimenCheckpoints || []).find(item => item.specimenId === request.specimenCheckpointId);
+  const viewArtifacts = pipelineViewArtifactsForCheckpoint(request.specimenCheckpointId);
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-packet-${request.requestId}`);
+  tray = trayUpdateRouteRun(tray, {
+    runId: 'packet-sharp-failed-route-001',
+    requestedRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    effectiveRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    backendClass: 'browser-webgpu',
+    statusBadge: 'failed',
+    routePhase: 'failed',
+    receiptId: 'packet-sharp-failed-route-001-report',
+    inputArtifactIds: request.inputArtifactIds,
+    conditioningArtifactIds: Object.values(request.conditioningArtifactIds || {}),
+  });
+  routeCompositionTrayState = tray;
+  specimenPacketNextRouteRequestState = null;
+  specimenPacketCockpitState = buildBrowserSpecimenPacketCockpit({
+    packetId: 'packet-red-lerm-001',
+    checkpoint,
+    viewArtifacts,
+    routeRequests: [request],
+    tray,
+  });
+  renderRouteCompositionTray();
+  renderSpecimenPacketCockpit();
+  return specimenPacketCockpitState;
+}
+
+function specimenPacketCockpitWitness() {
+  const packet = specimenPacketCockpitState;
+  const nextRequestCarriesFailureLaw = Boolean(packet?.cockpitSummary?.nextRequestCarriesFailureLaw);
+  return {
+    schema: 'kaminos.kiln.specimen-packet-cockpit-witness.v0',
+    ok: Boolean(
+      packet?.schema === SPECIMEN_PACKET_COCKPIT_SCHEMA_BROWSER
+      && packet.truthLayers?.length >= SPECIMEN_VIEW_KINDS.length
+      && packet.routeRequests?.length >= 1
+      && packet.routeRuns?.length >= 1
+      && packet.failureTags?.length >= 1
+      && nextRequestCarriesFailureLaw
+    ),
+    packet,
+    nextRouteRequest: specimenPacketNextRouteRequestState,
+    nextRequestCarriesFailureLaw,
+  };
 }
 
 function buildBrowserFixtureWitnessTray() {
@@ -12290,6 +12532,7 @@ function renderRouteCompositionTray() {
   }
 
   window.kaminosRouteCompositionTrayKilnWitness = () => kilnWitness(routeCompositionTrayState);
+  renderSpecimenPacketCockpit();
 
   // Outputs
   if (tray.outputArtifacts.length === 0) {
@@ -12318,6 +12561,8 @@ function loadRouteCompositionFixtureTray() {
 
 function clearRouteCompositionTray() {
   routeCompositionTrayState = null;
+  specimenPacketCockpitState = null;
+  specimenPacketNextRouteRequestState = null;
   renderRouteCompositionTray();
 }
 
@@ -12441,15 +12686,25 @@ window.kaminosLoadRouteCompositionFixtureTray = loadRouteCompositionFixtureTray;
 window.kaminosClearRouteCompositionTray = clearRouteCompositionTray;
 window.kaminosTrayImportImageFile = trayImportImageFile;
 window.kaminosSimulateSharpKilnLifecycleForWitness = simulateSharpKilnLifecycleForWitness;
+window.kaminosLoadFixtureSpecimenPacketCockpit = kaminosLoadFixtureSpecimenPacketCockpit;
+window.kaminosTagSpecimenPacketFailure = tagBrowserSpecimenPacketFailure;
+window.kaminosSpecimenPacketCockpitState = () => specimenPacketCockpitState;
+window.kaminosSpecimenPacketNextRouteRequest = () => specimenPacketNextRouteRequestState;
+window.kaminosSpecimenPacketCockpitWitness = specimenPacketCockpitWitness;
 
 // Wire buttons and import handlers
 document.addEventListener('DOMContentLoaded', () => {
   const fixtureBtn = document.getElementById('route-composition-tray-fixture-button');
   const clearBtn = document.getElementById('route-composition-tray-clear-button');
   const probeBtn = document.getElementById('route-composition-tray-probe-route-button');
+  const packetBtn = document.getElementById('specimen-packet-load-fixture-button');
   if (fixtureBtn) fixtureBtn.addEventListener('click', loadRouteCompositionFixtureTray);
   if (clearBtn) clearBtn.addEventListener('click', clearRouteCompositionTray);
   if (probeBtn) probeBtn.addEventListener('click', trayProbeRoute);
+  if (packetBtn) packetBtn.addEventListener('click', kaminosLoadFixtureSpecimenPacketCockpit);
+  document.querySelectorAll('[data-specimen-failure-tag]').forEach(button => {
+    button.addEventListener('click', () => tagBrowserSpecimenPacketFailure(button.dataset.specimenFailureTag, null, 'Operator marked candidate failure.'));
+  });
 
   // File input
   const fileInput = document.getElementById('route-composition-tray-file-input');
