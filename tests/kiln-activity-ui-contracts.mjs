@@ -37,6 +37,23 @@ test('browser route runs carry kiln activity state', () => {
   assert.ok(html.includes('kilnActivity,'), 'tray route runs must attach kiln activity');
 });
 
+test('browser tray can update a route run lifecycle without duplicating it', () => {
+  assert.ok(html.includes('function trayUpdateRouteRun'), 'missing trayUpdateRouteRun lifecycle helper');
+  assert.ok(html.includes('routeRuns.map(run => run.runId === opts.runId'), 'route lifecycle update must address existing run by runId');
+  assert.ok(html.includes('outputArtifactIds'), 'route lifecycle must preserve output artifact identity');
+});
+
+test('pipeline graph execution mirrors SHARP route lifecycle into the tray', () => {
+  assert.ok(html.includes('function pipelineBeginRouteKilnRun'), 'missing route kiln begin bridge');
+  assert.ok(html.includes('function pipelineUpdateRouteKilnRun'), 'missing route kiln update bridge');
+  assert.ok(html.includes('function pipelineCompleteRouteKilnRun'), 'missing route kiln completion bridge');
+  assert.ok(html.includes('function pipelineFailRouteKilnRun'), 'missing route kiln failure bridge');
+  assert.ok(html.includes("routePhase: 'running'"), 'route execution must mark live running kiln phase');
+  assert.ok(html.includes("routePhase: 'banking'"), 'route execution must bank while output evidence is indexed');
+  assert.ok(html.includes("routePhase: 'failed'"), 'route execution must snuff on failures');
+  assert.ok(html.includes('adapter.sharp-image-to-splat-live.v0'), 'SHARP live route identity must be preserved');
+});
+
 test('tray renders kiln activity tile beside route source truth', () => {
   assert.ok(html.includes('route-composition-tray-kiln-tile'), 'missing kiln tile render class');
   assert.ok(html.includes('data-kiln-activity-state'), 'missing kiln activity state data attribute');

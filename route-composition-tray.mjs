@@ -81,6 +81,18 @@ const STATUS_BADGE_DISPLAY = {
   'stale': 'Stale',
 };
 
+function routeRunDisplayStatus(statusBadge, routePhase) {
+  if (statusBadge === 'real') {
+    if (routePhase === 'queued') return 'Queued';
+    if (routePhase === 'warming' || routePhase === 'preparing') return 'Warming';
+    if (routePhase === 'running') return 'Running';
+    if (routePhase === 'banking' || routePhase === 'settling' || routePhase === 'importing') return 'Banking';
+    if (routePhase === 'failed') return 'Failed';
+    return 'Completed';
+  }
+  return STATUS_BADGE_DISPLAY[statusBadge] || statusBadge;
+}
+
 function humanizeRouteId(id) {
   if (!id) return '';
   return id
@@ -248,6 +260,37 @@ export function addRouteRun(tray, {
   receiptId,
   inputArtifactIds = [],
   conditioningArtifactIds = [],
+  outputArtifactIds = [],
+}) {
+  const run = makeRouteRun({
+    runId,
+    requestedRoute,
+    effectiveRoute,
+    backendClass,
+    statusBadge,
+    routePhase,
+    receiptId,
+    inputArtifactIds,
+    conditioningArtifactIds,
+    outputArtifactIds,
+  });
+  return {
+    ...tray,
+    routeRuns: [...tray.routeRuns, run],
+  };
+}
+
+function makeRouteRun({
+  runId,
+  requestedRoute,
+  effectiveRoute,
+  backendClass,
+  statusBadge,
+  routePhase = 'completed',
+  receiptId,
+  inputArtifactIds = [],
+  conditioningArtifactIds = [],
+  outputArtifactIds = [],
 }) {
   const warnings = sourceTruthWarningsForRun({ statusBadge, requestedRoute, effectiveRoute });
   const kilnActivity = deriveKilnActivityState({
@@ -269,14 +312,41 @@ export function addRouteRun(tray, {
     receiptId: receiptId || null,
     inputArtifactIds,
     conditioningArtifactIds,
+    outputArtifactIds,
     displayRoute: humanizeRouteId(effectiveRoute),
-    displayStatus: STATUS_BADGE_DISPLAY[statusBadge] || statusBadge,
+    displayStatus: routeRunDisplayStatus(statusBadge, routePhase),
     kilnActivity,
     sourceTruthWarnings: unique([...warnings, ...kilnActivity.sourceTruthWarnings]),
   };
+  return run;
+}
+
+export function updateRouteRun(tray, opts) {
+  if (!opts?.runId) throw new Error('updateRouteRun requires runId');
+  const existing = (tray.routeRuns || []).find(run => run.runId === opts.runId) || null;
+  const merged = {
+    ...(existing || {}),
+    ...opts,
+    inputArtifactIds: opts.inputArtifactIds ?? existing?.inputArtifactIds ?? [],
+    conditioningArtifactIds: opts.conditioningArtifactIds ?? existing?.conditioningArtifactIds ?? [],
+    outputArtifactIds: opts.outputArtifactIds ?? existing?.outputArtifactIds ?? [],
+    requestedRoute: opts.requestedRoute ?? existing?.requestedRoute,
+    effectiveRoute: opts.effectiveRoute ?? existing?.effectiveRoute,
+    backendClass: opts.backendClass ?? existing?.backendClass,
+    statusBadge: opts.statusBadge ?? existing?.statusBadge,
+    routePhase: opts.routePhase ?? existing?.routePhase ?? 'completed',
+    receiptId: opts.receiptId ?? existing?.receiptId ?? null,
+  };
+  const run = makeRouteRun(merged);
+  if (!existing) {
+    return {
+      ...tray,
+      routeRuns: [...(tray.routeRuns || []), run],
+    };
+  }
   return {
     ...tray,
-    routeRuns: [...tray.routeRuns, run],
+    routeRuns: (tray.routeRuns || []).map(candidate => candidate.runId === opts.runId ? run : candidate),
   };
 }
 

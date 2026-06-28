@@ -7078,12 +7078,23 @@ async function pipelineExecuteGraphRouteNode(node) {
     pipeline,
     graphExecution,
   });
+  pipelineBeginRouteKilnRun({
+    routeNode: node,
+    source,
+    requestedPipelineId,
+    pipeline,
+    pendingRecord,
+  });
   pipelineDockState.selectedGraphEdgeId = null;
   pipelineDockState.selectedGraphNodeId = pendingRecord?.id || node?.id || 'source';
   pipelineSetGraphInspectorStatus(`Queued ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'} with ${source.label || source.source}...`, 'running');
   renderPipelineDock();
   try {
     pipelineUpdateGeneratedOutputStatus(pendingRecord.id, 'running', 'running inference', 'Backend request is in flight');
+    pipelineUpdateRouteKilnRun(pendingRecord.runId, {
+      routePhase: 'running',
+      statusBadge: pipelineRouteKilnStatusBadge(pipeline),
+    });
     const run = await runSelectedPipeline({
       sourceOverride: source,
       pipelineId: requestedPipelineId,
@@ -7093,9 +7104,21 @@ async function pipelineExecuteGraphRouteNode(node) {
       graphExecution,
     });
     if (!run?.ok) {
+      pipelineFailRouteKilnRun({
+        routeNode: node,
+        source,
+        requestedPipelineId,
+        pipeline,
+        pendingRecord,
+        run,
+      });
       pipelineFailGeneratedOutputNode(pendingRecord.id, run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`, run);
       throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
     }
+    pipelineUpdateRouteKilnRun(run.runId || pendingRecord.runId, {
+      ...pipelineRouteKilnBasePatch({ routeNode: node, source, requestedPipelineId, pipeline, pendingRecord, run }),
+      routePhase: 'banking',
+    });
     if (pipelinePrimaryRunArtifact(run)?.path) {
       const outputNode = pipelineCompleteGeneratedOutputNode(pendingRecord.id, run, node);
       pipelineDockState.selectedGraphNodeId = outputNode?.id || pendingRecord.id;
@@ -7103,9 +7126,25 @@ async function pipelineExecuteGraphRouteNode(node) {
       pipelineCompleteGeneratedOutputNode(pendingRecord.id, run, node);
       pipelineDockState.selectedGraphNodeId = 'evidence';
     }
+    pipelineCompleteRouteKilnRun({
+      routeNode: node,
+      source,
+      requestedPipelineId,
+      pipeline,
+      pendingRecord,
+      run,
+    });
     renderPipelineDock();
     return run;
   } catch (err) {
+    pipelineFailRouteKilnRun({
+      routeNode: node,
+      source,
+      requestedPipelineId,
+      pipeline,
+      pendingRecord,
+      error: err,
+    });
     pipelineFailGeneratedOutputNode(pendingRecord?.id, err.message || String(err), null);
     renderPipelineDock();
     throw err;
@@ -11671,6 +11710,7 @@ const ROUTE_COMPOSITION_TRAY_SCHEMA_BROWSER = 'kaminos.kiln.route-composition-tr
 const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0';
 const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
 const KILN_ACTIVITY_STATE_SCHEMA_BROWSER = 'kaminos.kiln.activity-state.v0';
+const SHARP_KILN_LIVE_ROUTE_ID_BROWSER = 'adapter.sharp-image-to-splat-live.v0';
 
 const TRAY_CONDITIONING_LINK_ROLES = ['source-image', 'mask', 'matte', 'depth', 'normal', 'scribble', 'reference', 'negative-law', 'canny', 'segmentation'];
 const KILN_ACTIVITY_STATES_BROWSER = ['cold', 'queued', 'warming', 'burning', 'banking', 'cooled', 'failed', 'cached', 'fixture', 'fallback', 'unavailable'];
@@ -11696,6 +11736,18 @@ const TRAY_STATUS_BADGE_DISPLAY = {
   'partial': 'Partial result',
   'stale': 'Stale',
 };
+
+function trayRouteRunDisplayStatus(statusBadge, routePhase) {
+  if (statusBadge === 'real') {
+    if (routePhase === 'queued') return 'Queued';
+    if (routePhase === 'warming' || routePhase === 'preparing') return 'Warming';
+    if (routePhase === 'running') return 'Running';
+    if (routePhase === 'banking' || routePhase === 'settling' || routePhase === 'importing') return 'Banking';
+    if (routePhase === 'failed') return 'Failed';
+    return 'Completed';
+  }
+  return TRAY_STATUS_BADGE_DISPLAY[statusBadge] || statusBadge;
+}
 
 function trayHumanizeRoute(id) {
   if (!id) return '';
@@ -11831,10 +11883,10 @@ function trayAddConditioningLink(tray, opts) {
   return { ...tray, conditioningLinks: [...tray.conditioningLinks, link] };
 }
 
-function trayAddRouteRun(tray, opts) {
+function trayMakeRouteRun(opts) {
   const warnings = traySourceTruthWarningsForRun(opts.statusBadge, opts.requestedRoute, opts.effectiveRoute);
   const kilnActivity = deriveBrowserKilnActivityState(opts);
-  const run = {
+  return {
     schema: TRAY_ROUTE_RUN_SCHEMA_BROWSER,
     runId: opts.runId,
     requestedRoute: opts.requestedRoute,
@@ -11845,17 +11897,160 @@ function trayAddRouteRun(tray, opts) {
     receiptId: opts.receiptId || null,
     inputArtifactIds: opts.inputArtifactIds || [],
     conditioningArtifactIds: opts.conditioningArtifactIds || [],
+    outputArtifactIds: opts.outputArtifactIds || [],
     displayRoute: trayHumanizeRoute(opts.effectiveRoute),
-    displayStatus: TRAY_STATUS_BADGE_DISPLAY[opts.statusBadge] || opts.statusBadge,
+    displayStatus: trayRouteRunDisplayStatus(opts.statusBadge, opts.routePhase || 'completed'),
     kilnActivity,
     sourceTruthWarnings: [...new Set([...warnings, ...kilnActivity.sourceTruthWarnings])],
   };
+}
+
+function trayAddRouteRun(tray, opts) {
+  const run = trayMakeRouteRun(opts);
   return { ...tray, routeRuns: [...tray.routeRuns, run] };
+}
+
+function trayUpdateRouteRun(tray, opts) {
+  if (!opts?.runId) throw new Error('trayUpdateRouteRun requires runId');
+  const existing = (tray.routeRuns || []).find(run => run.runId === opts.runId) || null;
+  const merged = {
+    ...(existing || {}),
+    ...opts,
+    inputArtifactIds: opts.inputArtifactIds ?? existing?.inputArtifactIds ?? [],
+    conditioningArtifactIds: opts.conditioningArtifactIds ?? existing?.conditioningArtifactIds ?? [],
+    outputArtifactIds: opts.outputArtifactIds ?? existing?.outputArtifactIds ?? [],
+    requestedRoute: opts.requestedRoute ?? existing?.requestedRoute,
+    effectiveRoute: opts.effectiveRoute ?? existing?.effectiveRoute,
+    backendClass: opts.backendClass ?? existing?.backendClass,
+    statusBadge: opts.statusBadge ?? existing?.statusBadge,
+    routePhase: opts.routePhase ?? existing?.routePhase ?? 'completed',
+    receiptId: opts.receiptId ?? existing?.receiptId ?? null,
+  };
+  const run = trayMakeRouteRun(merged);
+  if (!existing) return { ...tray, routeRuns: [...(tray.routeRuns || []), run] };
+  const routeRuns = tray.routeRuns || [];
+  return {
+    ...tray,
+    routeRuns: routeRuns.map(run => run.runId === opts.runId ? trayMakeRouteRun(merged) : run),
+  };
 }
 
 function trayAppendOutput(tray, opts) {
   const entry = trayMakeArtifactEntry(opts);
   return { ...tray, outputArtifacts: [...tray.outputArtifacts, entry] };
+}
+
+function pipelineRouteKilnBackendClass(pipeline, run = null) {
+  const stages = run?.report?.document?.stages || pipeline?.stages || [];
+  const firstModelStage = stages.find(stage => stage.route?.executesModel || stage.route?.realModel || stage.effectiveRoute?.effectiveBackend);
+  return firstModelStage?.effectiveRoute?.effectiveBackend
+    || firstModelStage?.route?.effectiveBackend
+    || pipeline?.stages?.find(stage => stage.route?.effectiveBackend)?.route?.effectiveBackend
+    || 'unknown';
+}
+
+function pipelineRouteKilnEffectiveRoute(pipeline, run = null) {
+  const stages = run?.report?.document?.stages || [];
+  const executed = stages.find(stage => stage.effectiveRoute?.id || stage.route?.id);
+  return pipeline?.routeId || run?.report?.document?.effectiveRouteConfig?.routeId || executed?.effectiveRoute?.id || executed?.route?.id || pipeline?.id || 'unknown';
+}
+
+function pipelineRouteKilnStatusBadge(pipeline, run = null) {
+  if (run && !run.ok) return 'failed';
+  if (pipelineRunUsesFixture(run) || pipelineRunUsesAdapterFixture(run) || pipelineRouteUsesFixture(pipeline)) return 'fixture';
+  return 'real';
+}
+
+function pipelineRouteKilnInputArtifactIds(source) {
+  return [source?.artifactId, source?.assetId, source?.graphNodeId, source?.rootId]
+    .filter(Boolean)
+    .map(String);
+}
+
+function pipelineRouteKilnOutputArtifactIds(run) {
+  return pipelineRunOutputArtifacts(run)
+    .map(artifact => artifact.id || artifact.path)
+    .filter(Boolean)
+    .map(String);
+}
+
+function pipelineRouteKilnBasePatch({ routeNode, source, requestedPipelineId, pipeline, pendingRecord, run = null }) {
+  const routeId = pipeline?.routeId || (requestedPipelineId === 'sharp-image-to-splat-live-v0' ? SHARP_KILN_LIVE_ROUTE_ID_BROWSER : requestedPipelineId) || run?.pipelineId || 'unknown';
+  return {
+    runId: run?.runId || pendingRecord?.runId || pendingRecord?.id || `pipeline-route-${Date.now().toString(36)}`,
+    requestedRoute: routeId,
+    effectiveRoute: pipelineRouteKilnEffectiveRoute(pipeline, run),
+    backendClass: pipelineRouteKilnBackendClass(pipeline, run),
+    statusBadge: pipelineRouteKilnStatusBadge(pipeline, run),
+    receiptId: run?.report?.path || run?.bundle?.path || pendingRecord?.runId || null,
+    inputArtifactIds: pipelineRouteKilnInputArtifactIds(source),
+    conditioningArtifactIds: [],
+    outputArtifactIds: pipelineRouteKilnOutputArtifactIds(run),
+  };
+}
+
+function pipelineBeginRouteKilnRun({ routeNode, source, requestedPipelineId, pipeline, pendingRecord }) {
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-route-${pendingRecord?.runId || Date.now().toString(36)}`);
+  tray = trayUpdateRouteRun(tray, {
+    ...pipelineRouteKilnBasePatch({ routeNode, source, requestedPipelineId, pipeline, pendingRecord }),
+    routePhase: 'queued',
+  });
+  routeCompositionTrayState = tray;
+  renderRouteCompositionTray();
+  return tray.routeRuns.find(run => run.runId === pendingRecord?.runId) || null;
+}
+
+function pipelineUpdateRouteKilnRun(runId, patch = {}) {
+  if (!runId) return null;
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-route-${runId}`);
+  tray = trayUpdateRouteRun(tray, { runId, ...patch });
+  routeCompositionTrayState = tray;
+  renderRouteCompositionTray();
+  return tray.routeRuns.find(run => run.runId === runId) || null;
+}
+
+function pipelineAppendRouteKilnOutputs(run, routeRunId) {
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-route-${routeRunId || Date.now().toString(36)}`);
+  const existing = new Set((tray.outputArtifacts || []).map(artifact => artifact.artifactId));
+  const sourceKind = pipelineRunUsesFixture(run) || pipelineRunUsesAdapterFixture(run) ? 'fixture' : 'generated';
+  for (const artifact of pipelineRunOutputArtifacts(run)) {
+    const artifactId = artifact.id || artifact.path;
+    if (!artifactId || existing.has(artifactId)) continue;
+    tray = trayAppendOutput(tray, {
+      artifactId,
+      title: pipelineArtifactTitle(artifact),
+      sourceKind,
+      routeRunId,
+      mimeType: artifact.mimeType || null,
+      source: artifact.path || null,
+    });
+    existing.add(artifactId);
+  }
+  routeCompositionTrayState = tray;
+  return tray;
+}
+
+function pipelineCompleteRouteKilnRun({ routeNode, source, requestedPipelineId, pipeline, pendingRecord, run }) {
+  const runId = run?.runId || pendingRecord?.runId;
+  if (!runId) return null;
+  pipelineAppendRouteKilnOutputs(run, runId);
+  pipelineUpdateRouteKilnRun(runId, {
+    ...pipelineRouteKilnBasePatch({ routeNode, source, requestedPipelineId, pipeline, pendingRecord, run }),
+    routePhase: 'completed',
+  });
+  return routeCompositionTrayState?.routeRuns?.find(routeRun => routeRun.runId === runId) || null;
+}
+
+function pipelineFailRouteKilnRun({ routeNode, source, requestedPipelineId, pipeline, pendingRecord, run = null, error = null }) {
+  const runId = run?.runId || pendingRecord?.runId;
+  if (!runId) return null;
+  return pipelineUpdateRouteKilnRun(runId, {
+    ...pipelineRouteKilnBasePatch({ routeNode, source, requestedPipelineId, pipeline, pendingRecord, run }),
+    statusBadge: 'failed',
+    routePhase: 'failed',
+    receiptId: run?.report?.path || run?.bundle?.path || pendingRecord?.runId || null,
+    sourceTruthWarnings: error ? ['kiln_route_failed'] : undefined,
+  });
 }
 
 function buildBrowserFixtureWitnessTray() {
@@ -12208,11 +12403,44 @@ function trayProbeRoute() {
 }
 window.kaminosTrayProbeRoute = trayProbeRoute;
 
+function simulateSharpKilnLifecycleForWitness(routePhase = 'running') {
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-sharp-witness-${Date.now().toString(36)}`);
+  const sourceId = 'witness-source-sharp-lifecycle';
+  if (!tray.sourceArtifacts.some(artifact => artifact.artifactId === sourceId)) {
+    tray = trayAddSource(tray, {
+      artifactId: sourceId,
+      title: 'Witness source image',
+      sourceKind: 'imported-manual',
+      mimeType: 'image/png',
+    });
+  }
+  tray = trayUpdateRouteRun(tray, {
+    runId: 'witness-sharp-kiln-lifecycle',
+    requestedRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    effectiveRoute: SHARP_KILN_LIVE_ROUTE_ID_BROWSER,
+    backendClass: 'browser-webgpu',
+    statusBadge: 'real',
+    routePhase,
+    receiptId: 'witness-simulated-sharp-route-lifecycle',
+    inputArtifactIds: [sourceId],
+    outputArtifactIds: routePhase === 'completed' ? ['witness-sharp-output-splat'] : [],
+  });
+  routeCompositionTrayState = tray;
+  renderRouteCompositionTray();
+  return {
+    schema: 'kaminos.kiln.sharp-lifecycle-dom-witness.v0',
+    simulatedRouteExecution: true,
+    routePhase,
+    witness: window.kaminosRouteCompositionTrayKilnWitness?.(),
+  };
+}
+
 // Expose for witness/testing
 window.kaminosRouteCompositionTrayState = () => routeCompositionTrayState;
 window.kaminosLoadRouteCompositionFixtureTray = loadRouteCompositionFixtureTray;
 window.kaminosClearRouteCompositionTray = clearRouteCompositionTray;
 window.kaminosTrayImportImageFile = trayImportImageFile;
+window.kaminosSimulateSharpKilnLifecycleForWitness = simulateSharpKilnLifecycleForWitness;
 
 // Wire buttons and import handlers
 document.addEventListener('DOMContentLoaded', () => {

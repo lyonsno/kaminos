@@ -390,6 +390,74 @@ try {
       kilnState,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'sharp-kiln-lifecycle') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    const simulated = await evalJson(cdp, `(() => {
+      return window.kaminosSimulateSharpKilnLifecycleForWitness?.('running');
+    })()`);
+    assertWitness(simulated?.simulatedRouteExecution === true, 'SHARP kiln lifecycle witness must be explicitly marked simulated', simulated);
+    await wait(500);
+
+    const lifecycleState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosRouteCompositionTrayKilnWitness?.();
+      const panel = document.getElementById('route-composition-tray-panel');
+      const run = window.kaminosRouteCompositionTrayState?.()?.routeRuns?.find(item => item.runId === 'witness-sharp-kiln-lifecycle') || null;
+      const tile = panel?.querySelector('[data-tray-run-id="witness-sharp-kiln-lifecycle"] .route-composition-tray-kiln-tile');
+      const rect = tile?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          witness
+          && witness.schema === 'kaminos.kiln.activity-tray-witness.v0'
+          && witness.fullBurnRunIds?.includes('witness-sharp-kiln-lifecycle')
+          && run?.requestedRoute === 'adapter.sharp-image-to-splat-live.v0'
+          && run?.effectiveRoute === 'adapter.sharp-image-to-splat-live.v0'
+          && run?.backendClass === 'browser-webgpu'
+          && run?.displayStatus === 'Running'
+          && run?.kilnActivity?.activityState === 'burning'
+          && run?.kilnActivity?.truthMode === 'live'
+          && run?.kilnActivity?.allowsFullBurn === true
+          && tile?.dataset.kilnActivityState === 'burning'
+          && tile?.dataset.kilnTruthMode === 'live'
+          && tile?.dataset.kilnFullBurn === 'true'
+        ),
+        simulatedRouteExecution: true,
+        witness,
+        run,
+        dom: {
+          tileText: tile?.innerText || '',
+          tileDataset: tile ? { ...tile.dataset } : null,
+        },
+        tileRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'SHARP kiln lifecycle tray simulation', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = lifecycleState.tileRect
+      ? await screenshotVisibleProbe(afterPath, lifecycleState.tileRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'SHARP lifecycle kiln tile was not visibly inspectable', {
+      lifecycleState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      simulatedRouteExecution: true,
+      lifecycleState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'specimen-intake') {
     const fixtureButton = await evalJson(cdp, `(() => {
       const button = document.querySelector('#pipeline-specimen-fixture-button');

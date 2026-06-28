@@ -53,6 +53,9 @@ assert.match(witness, /graphExecution/, 'Pipeline UI witness must assert graph e
 assert.match(witness, /previewKind === 'point-cloud'/, 'Pipeline UI witness must assert the loaded graph output rendered through the point-cloud preview path');
 assert.match(witness, /kaminosSplatPreviewDebugState/, 'Pipeline UI witness must inspect the point-cloud preview debug surface after Load Output');
 assert.match(witness, /visiblePixels/, 'Pipeline UI witness must sample the viewport screenshot so imported outputs cannot pass while visually blank');
+assert.match(witness, /sharp-kiln-lifecycle/, 'Pipeline UI witness must include a SHARP kiln lifecycle tray scenario');
+assert.match(witness, /simulatedRouteExecution/, 'SHARP kiln lifecycle witness must explicitly label simulated route execution');
+assert.match(witness, /witness\.fullBurnRunIds\?\.includes\('witness-sharp-kiln-lifecycle'\)/, 'SHARP kiln lifecycle witness must assert full-burn identity from tray witness data');
 assert.match(witness, /SCENE IMPORT/, 'Pipeline UI witness must assert the destination Scene Import receipt');
 assert.match(witness, /visible-scene-row/, 'Pipeline UI witness must require the trustworthy import phase, not just no exception');
 assert.doesNotMatch(witness, /pipeline-route-select/, 'Pipeline UI witness must not drive the removed route dropdown');

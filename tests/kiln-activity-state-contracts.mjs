@@ -28,6 +28,7 @@ const {
   deriveKilnActivityState,
   createTray,
   addRouteRun,
+  updateRouteRun,
   buildFixtureWitnessTray,
   trayWitness,
 } = mod;
@@ -146,6 +147,95 @@ test('route run carries kiln state beside source and route identity', () => {
   assert.equal(run.kilnActivity.backendClass, 'local-command');
   assert.equal(run.kilnActivity.statusBadge, 'real');
   assert.equal(run.kilnActivity.receiptId, 'receipt-burning');
+});
+
+test('route run lifecycle updates progress from SHARP preheat to live burn to cooling output', () => {
+  let tray = createTray({ trayId: 'kiln-lifecycle-test-tray' });
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-001',
+    requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRoute: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+    statusBadge: 'real',
+    routePhase: 'queued',
+    receiptId: 'sharp-run-001',
+    inputArtifactIds: ['source-red-lerm-001'],
+  });
+  assert.equal(tray.routeRuns.length, 1);
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'queued');
+  assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
+
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-001',
+    routePhase: 'running',
+  });
+  assert.equal(tray.routeRuns.length, 1, 'lifecycle update must not duplicate the route run');
+  assert.equal(tray.routeRuns[0].displayStatus, 'Running');
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'burning');
+  assert.equal(tray.routeRuns[0].kilnActivity.truthMode, 'live');
+  assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, true);
+  assert.equal(tray.routeRuns[0].kilnActivity.claimsLiveCompute, true);
+
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-001',
+    routePhase: 'banking',
+    receiptId: '/tmp/kaminos/sharp-run-001/report.json',
+    outputArtifactIds: ['sharp-run-001-splat'],
+  });
+  assert.equal(tray.routeRuns[0].displayStatus, 'Banking');
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'banking');
+  assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
+  assert.deepEqual(tray.routeRuns[0].outputArtifactIds, ['sharp-run-001-splat']);
+
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-001',
+    routePhase: 'completed',
+  });
+  assert.equal(tray.routeRuns[0].displayStatus, 'Completed');
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'cooled');
+  assert.equal(tray.routeRuns[0].kilnActivity.claimsLiveCompute, false);
+});
+
+test('failed lifecycle update snuffs a real SHARP run without live burn authority', () => {
+  let tray = createTray({ trayId: 'kiln-failure-test-tray' });
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-failed',
+    requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRoute: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+    statusBadge: 'real',
+    routePhase: 'running',
+    receiptId: 'sharp-run-failed',
+  });
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'burning');
+
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-failed',
+    statusBadge: 'failed',
+    routePhase: 'failed',
+    receiptId: '/tmp/kaminos/sharp-run-failed/report.json',
+  });
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'failed');
+  assert.equal(tray.routeRuns[0].kilnActivity.truthMode, 'failed');
+  assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
+  assert.ok(tray.routeRuns[0].sourceTruthWarnings.includes('route_execution_failed'));
+  assert.ok(tray.routeRuns[0].sourceTruthWarnings.includes('kiln_route_failed'));
+});
+
+test('non-real lifecycle updates cannot claim full burn while running', () => {
+  let tray = createTray({ trayId: 'kiln-fallback-test-tray' });
+  tray = updateRouteRun(tray, {
+    runId: 'sharp-run-fallback',
+    requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRoute: 'fixture_generator',
+    backendClass: 'fixture',
+    statusBadge: 'fixture',
+    routePhase: 'running',
+    receiptId: 'fixture-run',
+  });
+  assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'fixture');
+  assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
+  assert.equal(tray.routeRuns[0].kilnActivity.claimsLiveCompute, false);
 });
 
 test('fixture witness tray exposes non-live kiln warnings in witness summary', () => {
