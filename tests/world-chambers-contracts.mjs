@@ -52,6 +52,7 @@ const {
   LERMS_PREVIEW_CAMERA_PRESETS,
   createDefaultWorldChambersRegistry,
   createLermsPreviewBenchState,
+  createLermsPreviewActorVisualPrimitives,
   normalizeWorldChamberReceipt,
   worldChamberDebugState,
 } = await import('../world-chambers-core.js');
@@ -193,6 +194,8 @@ const actorMotionReport = {
         species: 'red',
         role: 'carrier_actor',
         state: 'carrying_goin',
+        world: [-0.4, 0.42, 0.15],
+        heading: [1, 0, 0.1],
         terrainSampleId: 'terrain-crown-right',
         selectedCliplet: {
           schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
@@ -203,6 +206,20 @@ const actorMotionReport = {
         },
         motionAdapter: {
           schema: 'lerms.schnoz-motion-adapter.v0',
+          channels: {
+            rootOffset: [0.05, 0.01, 0.02],
+            envelopeRadius: 1.1,
+            bodySquash: 0.92,
+            bodyStretch: 1.14,
+            hitCompression: 0,
+          },
+        },
+        benchChannels: {
+          rootOffset: [0.05, 0.01, 0.02],
+          envelopeRadius: 1.1,
+          bodySquash: 0.92,
+          bodyStretch: 1.14,
+          hitCompression: 0,
         },
       },
       {
@@ -211,6 +228,8 @@ const actorMotionReport = {
         species: 'red',
         role: 'carrier_actor',
         state: 'hit_reacting',
+        world: [0.35, 0.38, -0.25],
+        heading: [-0.7, 0, 0.4],
         terrainSampleId: 'terrain-crown-right',
         selectedCliplet: {
           schema: 'kaminos.generated-motion-cliplet-playback-sample.v0',
@@ -221,6 +240,20 @@ const actorMotionReport = {
         },
         motionAdapter: {
           schema: 'lerms.schnoz-motion-adapter.v0',
+          channels: {
+            rootOffset: [-0.02, -0.01, 0.04],
+            envelopeRadius: 0.9,
+            bodySquash: 0.72,
+            bodyStretch: 1.02,
+            hitCompression: 0.6,
+          },
+        },
+        benchChannels: {
+          rootOffset: [-0.02, -0.01, 0.04],
+          envelopeRadius: 0.9,
+          bodySquash: 0.72,
+          bodyStretch: 1.02,
+          hitCompression: 0.6,
         },
       },
     ],
@@ -273,6 +306,18 @@ assert.ok(actorMotionBenchState.actorMotion.states.includes('hit_reacting'));
 assert.ok(actorMotionBenchState.actorMotion.downgrades.includes('gutterglass_camera_witness_custody_not_claimed'));
 assert.equal(actorMotionBenchState.actorMotion.payloadSource.root, 'lerms-preview');
 assert.equal(actorMotionBenchState.badges.actorMotion, 'live_simulation');
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives.length, 2);
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives[0].schema, 'kaminos.lerms-preview-actor-visual.v0');
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives[0].actorId, 'schnoz-carrier');
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives[0].kind, 'proxy_schnoz_sphere');
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives[0].downgrade, 'proxy_body_visual_only');
+assert.deepEqual(actorMotionBenchState.actorMotion.visualPrimitives[0].position, [-0.35, 0.43, 0.17]);
+assert.ok(actorMotionBenchState.actorMotion.visualPrimitives[0].nosePosition[0] > actorMotionBenchState.actorMotion.visualPrimitives[0].position[0]);
+assert.equal(actorMotionBenchState.actorMotion.visualPrimitives[1].state, 'hit_reacting');
+assert.ok(actorMotionBenchState.actorMotion.visualPrimitives[1].radius < actorMotionBenchState.actorMotion.visualPrimitives[0].radius);
+
+const directVisualPrimitives = createLermsPreviewActorVisualPrimitives(actorMotionBenchState.actorMotion);
+assert.deepEqual(directVisualPrimitives, actorMotionBenchState.actorMotion.visualPrimitives);
 
 const palmDaddyComposerReceipt = structuredClone(LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
 palmDaddyComposerReceipt.phase = 'complete';

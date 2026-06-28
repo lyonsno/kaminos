@@ -6,6 +6,7 @@ export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA = 'lerms.preview-bench-ac
 export const LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-state.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE = 'lerms/preview-bench/actor-motion-payload-file';
 export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
+export const LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA = 'kaminos.lerms-preview-actor-visual.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
 export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
 
@@ -382,6 +383,84 @@ function countFrameArray(frame, key, fallbackKey = null) {
   return 0;
 }
 
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.max(min, Math.min(max, number));
+}
+
+function roundBenchNumber(value) {
+  return Math.round(Number(value) * 1000) / 1000;
+}
+
+function vector3(value, fallback = [0, 0, 0]) {
+  if (!Array.isArray(value) || value.length < 3) return [...fallback];
+  return [
+    Number.isFinite(Number(value[0])) ? Number(value[0]) : fallback[0],
+    Number.isFinite(Number(value[1])) ? Number(value[1]) : fallback[1],
+    Number.isFinite(Number(value[2])) ? Number(value[2]) : fallback[2],
+  ];
+}
+
+function normalizeHorizontalHeading(value) {
+  const heading = vector3(value, [1, 0, 0]);
+  const length = Math.hypot(heading[0], heading[2]) || 1;
+  return [roundBenchNumber(heading[0] / length), 0, roundBenchNumber(heading[2] / length)];
+}
+
+function stateColor(actor) {
+  if (actor?.state === 'hit_reacting' || actor?.state === 'tumbling') return '#ff6b5e';
+  if (actor?.state === 'carrying_goin' || actor?.state === 'fleeing_with_goin') return '#e34b3f';
+  if (actor?.state === 'rerouting_to_goin') return '#f08a4b';
+  return '#d83d37';
+}
+
+export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
+  const actors = Array.isArray(actorMotionState?.actors)
+    ? actorMotionState.actors
+    : Array.isArray(actorMotionState)
+      ? actorMotionState
+      : [];
+  return actors.map((actor, index) => {
+    const channels = actor?.benchChannels || actor?.motionAdapter?.channels || {};
+    const world = vector3(actor?.world, [index * 0.35, 0.35, 0]);
+    const rootOffset = vector3(channels.rootOffset, [0, 0, 0]);
+    const position = [
+      roundBenchNumber(world[0] + rootOffset[0]),
+      roundBenchNumber(world[1] + rootOffset[1]),
+      roundBenchNumber(world[2] + rootOffset[2]),
+    ];
+    const heading = normalizeHorizontalHeading(channels.heading || actor?.heading);
+    const hitCompression = clampNumber(channels.hitCompression || 0, 0, 1);
+    const radius = roundBenchNumber(clampNumber(0.18 * (channels.envelopeRadius || 1) * (1 - hitCompression * 0.28), 0.11, 0.28));
+    const noseReach = roundBenchNumber(radius * 1.45);
+    return {
+      schema: LERMS_PREVIEW_ACTOR_VISUAL_SCHEMA,
+      actorId: actor?.actorId || actor?.id || `lerms-preview-actor-${index}`,
+      state: actor?.state || 'unknown',
+      species: actor?.species || 'red',
+      kind: 'proxy_schnoz_sphere',
+      downgrade: 'proxy_body_visual_only',
+      position,
+      heading,
+      radius,
+      squash: roundBenchNumber(clampNumber(channels.bodySquash || 1, 0.55, 1.35)),
+      stretch: roundBenchNumber(clampNumber(channels.bodyStretch || 1, 0.75, 1.55)),
+      color: stateColor(actor),
+      nosePosition: [
+        roundBenchNumber(position[0] + heading[0] * noseReach),
+        position[1],
+        roundBenchNumber(position[2] + heading[2] * noseReach),
+      ],
+      source: {
+        payloadSchema: actorMotionState?.payloadSchema || LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA,
+        motionAdapterSchema: actor?.motionAdapter?.schema || actorMotionState?.motionAdapterSchema || null,
+        selectedCliplet: actor?.selectedCliplet ? clone(actor.selectedCliplet) : null,
+      },
+    };
+  });
+}
+
 export function normalizeLermsPreviewActorMotionPayloadReport(report, payloadSource = null) {
   assertObject(report, 'LERMS Preview Bench actor-motion report');
   const payload = report.payload || report;
@@ -417,7 +496,7 @@ export function normalizeLermsPreviewActorMotionPayloadReport(report, payloadSou
   const states = [...new Set(payload.actorMotion.map(actor => actor?.state).filter(Boolean))];
   const downgrades = Array.isArray(payload.downgrades) ? payload.downgrades : [];
   const rejectedSurfaces = Array.isArray(payload.rejectedSurfaces) ? payload.rejectedSurfaces : [];
-  return {
+  const normalized = {
     schema: LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
     payloadSchema: payload.schema,
     route: payload.route,
@@ -448,6 +527,8 @@ export function normalizeLermsPreviewActorMotionPayloadReport(report, payloadSou
     custody: payload.custody ? clone(payload.custody) : null,
     outputsVisualPreview: payload.witnessState.outputsVisualPreview === true,
   };
+  normalized.visualPrimitives = createLermsPreviewActorVisualPrimitives(normalized);
+  return normalized;
 }
 
 export function createLermsPreviewBenchState(registry = createDefaultWorldChambersRegistry(), options = {}) {

@@ -1685,6 +1685,8 @@ async function runLermsPreviewBenchActorMotionScenario(ws) {
       return {
         state,
         actorMotionPayload,
+        actorVisuals: window.__kaminosLermsPreviewActorVisuals || null,
+        actorVisualObjects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => child.userData?.kaminosLermsPreviewActor || null).filter(Boolean),
         tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
         panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
         title: document.getElementById('lerms-preview-title')?.textContent?.trim() || null,
@@ -1730,6 +1732,18 @@ async function runLermsPreviewBenchActorMotionScenario(ws) {
   }
   if (evidence.actorMotionBadge !== 'live_simulation') {
     throw new Error(`LERMS actor motion UI badge mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisuals?.schema !== 'kaminos.lerms-preview-actor-visual-layer.v0') {
+    throw new Error(`LERMS actor visual layer schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisuals?.actorVisualCount !== evidence.actorMotionPayload.actorCount) {
+    throw new Error(`LERMS actor visual count does not match payload actor count: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisualObjects?.length !== evidence.actorMotionPayload.actorCount) {
+    throw new Error(`LERMS actor visual objects missing from scene: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorVisualObjects.every(actor => actor.kind === 'proxy_schnoz_sphere' && actor.downgrade === 'proxy_body_visual_only')) {
+    throw new Error(`LERMS actor visual objects lost proxy downgrade identity: ${JSON.stringify(evidence)}`);
   }
 }
 

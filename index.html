@@ -814,6 +814,7 @@ let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
+let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
 let currentEnvName = 'studio';
@@ -4326,6 +4327,107 @@ function updateLermsPreviewBenchState(options = {}) {
 
 window.kaminosLermsPreviewBenchDebugState = () => updateLermsPreviewBenchState();
 
+function disposeLermsPreviewActorVisual(object) {
+  object.traverse?.(child => {
+    if (child.geometry?.dispose) child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      for (const material of child.material) material?.dispose?.();
+    } else {
+      child.material?.dispose?.();
+    }
+  });
+}
+
+function clearLermsPreviewActorVisuals() {
+  if (!lermsPreviewActorsGroup) return;
+  for (const child of [...lermsPreviewActorsGroup.children]) {
+    lermsPreviewActorsGroup.remove(child);
+    disposeLermsPreviewActorVisual(child);
+  }
+}
+
+function ensureLermsPreviewActorsGroup() {
+  if (lermsPreviewActorsGroup) return lermsPreviewActorsGroup;
+  lermsPreviewActorsGroup = new THREE.Group();
+  lermsPreviewActorsGroup.name = 'lerms-preview-actor-visuals';
+  lermsPreviewActorsGroup.userData.kaminosLermsPreviewActorVisuals = {
+    schema: 'kaminos.lerms-preview-actor-visual-layer.v0',
+    actorVisualCount: 0,
+  };
+  scene?.add(lermsPreviewActorsGroup);
+  window.__kaminosLermsPreviewActorsGroup = lermsPreviewActorsGroup;
+  return lermsPreviewActorsGroup;
+}
+
+function makeLermsPreviewActorVisualMesh(primitive) {
+  const actorGroup = new THREE.Group();
+  actorGroup.name = `lerms-preview-actor-${primitive.actorId || 'unknown'}`;
+  actorGroup.userData.kaminosLermsPreviewActor = {
+    schema: primitive.schema,
+    actorId: primitive.actorId,
+    state: primitive.state,
+    kind: primitive.kind,
+    downgrade: primitive.downgrade,
+  };
+  const radius = primitive.radius || 0.18;
+  const color = new THREE.Color(primitive.color || '#d83d37');
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.58,
+      metalness: 0.02,
+      emissive: color,
+      emissiveIntensity: primitive.state === 'hit_reacting' ? 0.24 : 0.12,
+    }),
+  );
+  body.name = `${actorGroup.name}-body`;
+  body.scale.set(radius * (primitive.stretch || 1), radius * (primitive.squash || 1), radius);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  actorGroup.add(body);
+
+  const heading = Array.isArray(primitive.heading) ? primitive.heading : [1, 0, 0];
+  const noseDistance = radius * 1.45;
+  const nose = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 0.36, 16, 10),
+    new THREE.MeshStandardMaterial({
+      color: 0xffd9a6,
+      roughness: 0.4,
+      emissive: 0x442000,
+      emissiveIntensity: 0.1,
+    }),
+  );
+  nose.name = `${actorGroup.name}-schnoz`;
+  nose.position.set(heading[0] * noseDistance, 0, heading[2] * noseDistance);
+  nose.castShadow = true;
+  actorGroup.add(nose);
+
+  const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.35, 0];
+  actorGroup.position.set(position[0], position[1] - 0.85, position[2]);
+  return actorGroup;
+}
+
+function renderLermsPreviewActorVisuals(previewState) {
+  if (!scene) return null;
+  const group = ensureLermsPreviewActorsGroup();
+  clearLermsPreviewActorVisuals();
+  const primitives = previewState?.actorMotion?.visualPrimitives || [];
+  for (const primitive of primitives) {
+    group.add(makeLermsPreviewActorVisualMesh(primitive));
+  }
+  const state = {
+    schema: 'kaminos.lerms-preview-actor-visual-layer.v0',
+    actorVisualCount: primitives.length,
+    actorIds: primitives.map(primitive => primitive.actorId),
+    kinds: [...new Set(primitives.map(primitive => primitive.kind))],
+    downgrades: [...new Set(primitives.map(primitive => primitive.downgrade))],
+  };
+  group.userData.kaminosLermsPreviewActorVisuals = state;
+  window.__kaminosLermsPreviewActorVisuals = state;
+  return state;
+}
+
 function worldChamberReceiptSourceLabel(receiptSource) {
   if (!receiptSource) return 'receipt unavailable';
   if (receiptSource.label) return receiptSource.label;
@@ -4353,6 +4455,7 @@ function lermsActorMotionPayloadUrlFromRoute(params) {
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
+  renderLermsPreviewActorVisuals(previewState);
   const chamber = debug.activeChamber;
   const summary = debug.summary || {};
   document.getElementById('world-chamber-title').textContent = chamber?.title || 'Unknown chamber';
