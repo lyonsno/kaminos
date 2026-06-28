@@ -72,6 +72,7 @@ assert.match(webgpuCoreSource, /wgsl-particle-support-budget-v0/, 'WebGPU solver
 assert.match(webgpuCoreSource, /wgsl-density-continuity-projection-v0/, 'WebGPU solver names the density continuity projection contract');
 assert.match(webgpuCoreSource, /wgsl-sampled-neighborhood-density-v0/, 'WebGPU solver names the sampled particle-neighborhood density contract');
 assert.match(webgpuCoreSource, /wgsl-deep-density-continuity-projection-v0/, 'WebGPU solver names the deeper density continuity projection contract');
+assert.match(webgpuCoreSource, /wgsl-local-pair-density-projection-v0/, 'WebGPU solver names the local same-chemistry pair density projection contract');
 assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
@@ -107,6 +108,7 @@ assert.match(webgpuCoreSource, /applyDensityPositionSolve/, 'WebGPU solver appli
 assert.match(webgpuCoreSource, /applyDensityContinuityProjection/, 'WebGPU solver applies a spatial density continuity projection pass');
 assert.match(webgpuCoreSource, /applySampledNeighborhoodDensity/, 'WebGPU solver applies a sampled particle-neighborhood density pass');
 assert.match(webgpuCoreSource, /applyDeepDensityContinuityProjection/, 'WebGPU solver applies a deeper multi-ring density continuity projection pass');
+assert.match(webgpuCoreSource, /applyLocalPairDensityProjection/, 'WebGPU solver applies a local same-chemistry pair density projection pass');
 assert.match(webgpuCoreSource, /applySurfaceStabilityDamping/, 'WebGPU solver damps high-density surface relaxation before the next density solve');
 assert.match(webgpuCoreSource, /applyVisualStreakBeadDamping/, 'WebGPU solver damps visually obvious streaks and detached bead chains');
 assert.match(webgpuCoreSource, /densityPositionSolveStats/, 'WebGPU solver reports density/position solve diagnostics');
@@ -119,6 +121,9 @@ assert.match(webgpuCoreSource, /averageSampledNeighborCount/, 'sampled neighborh
 assert.match(webgpuCoreSource, /neighborhoodDensityCorrectionCandidateCount/, 'sampled neighborhood diagnostics report correction candidates');
 assert.match(webgpuCoreSource, /deepDensityContinuityStats/, 'WebGPU solver reports deeper density continuity diagnostics');
 assert.match(webgpuCoreSource, /deepContinuityProjectionCandidateCount/, 'deeper continuity diagnostics report correction candidates');
+assert.match(webgpuCoreSource, /localPairDensityStats/, 'WebGPU solver reports local same-chemistry pair density diagnostics');
+assert.match(webgpuCoreSource, /localPairProjectionCandidateCount/, 'local pair diagnostics report projection candidate count');
+assert.match(webgpuCoreSource, /averageLocalPairNeighbors/, 'local pair diagnostics report average same-chemistry pair support');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
@@ -179,6 +184,7 @@ assert.match(pageSource, /spatialSurfaceRelaxationStats/, 'prototype displays sp
 assert.match(pageSource, /densityPositionSolveStats/, 'prototype displays density/position solve diagnostics');
 assert.match(pageSource, /densityContinuityProjectionStats/, 'prototype displays density continuity projection diagnostics');
 assert.match(pageSource, /sampledNeighborhoodDensityStats/, 'prototype displays sampled particle-neighborhood density diagnostics');
+assert.match(pageSource, /localPairDensityStats/, 'prototype displays local pair density projection diagnostics');
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
@@ -271,6 +277,9 @@ assert.match(witnessSource, /wgsl-sampled-neighborhood-density-v0/, 'witness rec
 assert.match(witnessSource, /averageSampledNeighborCount/, 'witness records sampled neighborhood density support');
 assert.match(witnessSource, /wgsl-deep-density-continuity-projection-v0/, 'witness records deeper density continuity projection contract');
 assert.match(witnessSource, /deepDensityContinuityStats/, 'witness requires deeper density continuity diagnostics');
+assert.match(witnessSource, /wgsl-local-pair-density-projection-v0/, 'witness records local pair density projection contract');
+assert.match(witnessSource, /localPairDensityStats/, 'witness requires local pair density projection diagnostics');
+assert.match(witnessSource, /averageLocalPairNeighbors/, 'witness records local same-chemistry pair support');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
@@ -324,6 +333,7 @@ assert.match(tabWitnessSource, /kaminos-finger-juice-tab-embed-v0/, 'Kaminos tab
 assert.match(tabWitnessSource, /fullViewportActivityMetrics/, 'Kaminos tab witness records full-viewport activity metrics');
 assert.match(tabWitnessSource, /blank frame/i, 'Kaminos tab witness fails loudly on blank visual output');
 assert.match(tabWitnessSource, /childReady/, 'Kaminos tab witness refuses to pass before the child smoke route is live');
+assert.match(tabWitnessSource, /failure_phase:\s*null/, 'Kaminos tab witness clears failure_phase in successful reports');
 
 const mod = await import(corePath);
 const webgpuMod = await import(webgpuCorePath);
@@ -344,6 +354,7 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SURFACE_COHESION_CONTRACT, 'wgs
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SURFACE_RELAXATION_CONTRACT, 'wgsl-spatial-surface-relaxation-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT, 'wgsl-stability-damped-relaxation-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT, 'wgsl-visual-streak-bead-damping-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT, 'wgsl-local-pair-density-projection-v0');
 assert.equal(webgpuMod.LERMS_SOURCE_TRUTH_SCHEMA, 'lerms.source-truth.v0');
 assert.equal(webgpuMod.LERMS_JUICE_HIT_EVENT_SCHEMA, 'lerms.juice-hit-event.v0');
 

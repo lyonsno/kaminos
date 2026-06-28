@@ -694,6 +694,9 @@ async function run() {
     assert.equal(state.sampledNeighborhoodDensityStats?.pressureContract, 'wgsl-sampled-neighborhood-density-v0', 'sampled neighborhood stats do not identify density contract');
     assert.ok(Number.isFinite(state.sampledNeighborhoodDensityStats?.averageSampledNeighborCount), 'route did not expose sampled neighborhood density support');
     assert.ok(state.sampledNeighborhoodDensityStats?.neighborhoodDensityCorrectionCandidateCount > 0, 'route did not expose sampled neighborhood correction candidates');
+    assert.equal(state.localPairDensityStats?.pressureContract, 'wgsl-local-pair-density-projection-v0', 'local pair density stats do not identify projection contract');
+    assert.ok(Number.isFinite(state.localPairDensityStats?.averageLocalPairNeighbors), 'route did not expose local pair density support');
+    assert.ok(state.localPairDensityStats?.localPairProjectionCandidateCount > 0, 'route did not expose local pair projection candidates');
     assert.equal(state.deepDensityContinuityStats?.pressureContract, 'wgsl-deep-density-continuity-projection-v0', 'deep density continuity stats do not identify projection contract');
     assert.ok(state.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount > 0, 'route did not expose deeper continuity projection candidates');
     assert.equal(state.fingerJuiceCamera?.cameraControlContract, 'orbit-camera-controls-v0', 'route did not expose orbit camera controls');
@@ -780,6 +783,11 @@ async function run() {
         sampledNeighborhoodDensityContract: stress?.sampledNeighborhoodDensityStats?.pressureContract || null,
         averageSampledNeighborCount: stress?.sampledNeighborhoodDensityStats?.averageSampledNeighborCount || 0,
         neighborhoodDensityCorrectionCandidateCount: stress?.sampledNeighborhoodDensityStats?.neighborhoodDensityCorrectionCandidateCount || 0,
+        localPairDensityProjectionContract: stress?.localPairDensityStats?.pressureContract || null,
+        averageLocalPairNeighbors: stress?.localPairDensityStats?.averageLocalPairNeighbors || 0,
+        localPairProjectionCandidateCount: stress?.localPairDensityStats?.localPairProjectionCandidateCount || 0,
+        localPairClosePairCount: stress?.localPairDensityStats?.localPairClosePairCount || 0,
+        averageLocalPairOverlap: stress?.localPairDensityStats?.averageLocalPairOverlap || 0,
         deepDensityContinuityProjectionContract: stress?.deepDensityContinuityStats?.pressureContract || null,
         deepContinuityProjectionCandidateCount: stress?.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount || 0,
         deepContinuityPeakOccupancyRatio: stress?.deepDensityContinuityStats?.deepContinuityPeakOccupancyRatio || 0,
@@ -835,6 +843,9 @@ async function run() {
     assert.equal(extendedFlowProbe.sampledNeighborhoodDensityContract, 'wgsl-sampled-neighborhood-density-v0', 'expanded witness phase lost sampled neighborhood density contract');
     assert.ok(extendedFlowProbe.averageSampledNeighborCount > 0, 'expanded witness phase did not measure sampled neighborhood support');
     assert.ok(extendedFlowProbe.neighborhoodDensityCorrectionCandidateCount >= 160, 'expanded witness phase did not exercise enough sampled neighborhood correction candidates');
+    assert.equal(extendedFlowProbe.localPairDensityProjectionContract, 'wgsl-local-pair-density-projection-v0', 'expanded witness phase lost local pair density projection contract');
+    assert.ok(extendedFlowProbe.averageLocalPairNeighbors > 0, 'expanded witness phase did not measure local pair density support');
+    assert.ok(extendedFlowProbe.localPairProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough local pair projection candidates');
     assert.equal(extendedFlowProbe.deepDensityContinuityProjectionContract, 'wgsl-deep-density-continuity-projection-v0', 'expanded witness phase lost deeper density continuity contract');
     assert.ok(extendedFlowProbe.deepContinuityProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough deeper continuity projection candidates');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
@@ -1037,6 +1048,7 @@ async function run() {
       densityPositionSolveStats: state.densityPositionSolveStats,
       densityContinuityProjectionStats: state.densityContinuityProjectionStats,
       sampledNeighborhoodDensityStats: state.sampledNeighborhoodDensityStats,
+      localPairDensityStats: state.localPairDensityStats,
       deepDensityContinuityStats: state.deepDensityContinuityStats,
       particleSupportBudgetStats: state.particleSupportBudgetStats,
       settleRestEnergyStats: state.settleRestEnergyStats,
