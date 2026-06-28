@@ -479,6 +479,10 @@ const requestedPlumeHeight = Number(routeParams.get('volume_plume_height'));
 const expectedPlumeHeight = routeParams.has('volume_plume_height') && Number.isFinite(requestedPlumeHeight)
   ? Math.max(0.7, Math.min(2.2, requestedPlumeHeight))
   : canonicalMacroPreset.plumeHeight ?? scenePreset.plumeHeight ?? 1.45;
+const requestedFlameLife = Number(routeParams.get('volume_flame_life'));
+const expectedFlameLife = routeParams.has('volume_flame_life') && Number.isFinite(requestedFlameLife)
+  ? Math.max(0.35, Math.min(1.8, requestedFlameLife))
+  : 1;
 const requestedCurl = Number(routeParams.get('volume_curl'));
 const expectedCurl = routeParams.has('volume_curl') && Number.isFinite(requestedCurl)
   ? Math.max(0, Math.min(5, requestedCurl))
@@ -841,6 +845,8 @@ async function main() {
     }
     assert.ok(Math.abs((state.controls?.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'plume height route/control did not apply');
     assert.ok(Math.abs((state.plumeHeight ?? 0) - expectedPlumeHeight) < 0.001, 'effective plume height state did not match route/control');
+    assert.ok(Math.abs((state.controls?.flameLife ?? 0) - expectedFlameLife) < 0.001, 'flame life route/control did not apply');
+    assert.ok(Math.abs((state.flameLife ?? 0) - expectedFlameLife) < 0.001, 'effective flame life state did not match route/control');
     assert.ok(Math.abs((state.controls?.curl ?? 0) - expectedCurl) < 0.001, 'curl route/control did not apply');
     assert.ok(Math.abs((state.controls?.speed ?? 0) - expectedSpeed) < 0.001, 'speed route/control did not apply');
     assert.ok(Math.abs((state.controls?.microdetail ?? 0) - expectedMicrodetail) < 0.001, 'microdetail route/control did not apply');
@@ -1679,11 +1685,13 @@ async function main() {
       tallPlumeDetailFrequencySource: sample.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       reactionFuelScale: sample.reactionFuelScale,
+      flameLife: sample.flameLife,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
       tallPlumeFlameHeightLawContract: sample.tallPlumeFlameHeightLawContract,
       plumeHeight: sample.plumeHeight,
+      expectedFlameLife,
       speed: state.controls?.speed,
       windStrength: sample.windStrength,
       windAngle: sample.windAngle,
@@ -1747,6 +1755,7 @@ async function main() {
       majorantLastBuiltFrame: sample.majorantLastBuiltFrame,
       majorantSkippedFrameCount: sample.majorantSkippedFrameCount,
       pressureProjectionEnabled: sample.pressureProjectionEnabled,
+      pressureEffectiveLabel: sample.pressureEffectiveLabel,
       pressureProjectionIterations: sample.pressureProjectionIterations,
       pressureIterationDefault: sample.pressureIterationDefault,
       pressureIterationRequested: sample.pressureIterationRequested,

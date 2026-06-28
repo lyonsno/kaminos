@@ -416,6 +416,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-plume-height-val">1.45</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Flame Life</span>
+      <input type="range" id="volume-flame-life" min="0.35" max="1.8" step="0.05" value="1">
+      <span class="slider-val" id="volume-flame-life-val">1.00</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Wind Strength</span>
       <input type="range" id="volume-wind-strength" min="0" max="1.5" step="0.05" value="0">
       <span class="slider-val" id="volume-wind-strength-val">0.00</span>
@@ -668,7 +673,7 @@ import * as THREE from 'three';
 let pass; // loaded lazily after renderer init
 import { GTAOComputePipeline } from './ao-pipeline.js';
 import { AOCompositePass } from './ao-composite.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=tall-flow-shelf-mitigated-0624';
+import { createKaminosVolumePrototype } from './volume-core.js?v=flame-life-pressure-label-0628';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1638,6 +1643,7 @@ let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
 let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
+let routedVolumeFlameLife = 1;
 let routedVolumeMajorantCadence = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
@@ -1657,6 +1663,10 @@ let routedBonfireAblationControls = { ...DEFAULT_BONFIRE_ABLATION_CONTROLS };
 
 function clampVolumeValue(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
+}
+
+function normalizeVolumeFlameLife(value) {
+  return clampVolumeValue(Number.isFinite(Number(value)) ? Number(value) : 1, 0.35, 1.8);
 }
 
 function normalizeBonfireAblationControls(partial = {}) {
@@ -1703,6 +1713,13 @@ function normalizeVolumePressureMode(value) {
   return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1'].includes(mode) ? mode : 'auto';
 }
 
+function defaultVolumePressureIterationsForScene(scene) {
+  const normalized = String(scene || '').toLowerCase();
+  if (normalized === 'tall_plume') return 2;
+  if (normalized === 'bonfire_plume') return 8;
+  return 4;
+}
+
 function volumePressureModeFromRoute(strategy, iterations) {
   if (String(strategy || '').toLowerCase() === 'spatial_tiers') return 'spatial-tiers';
   const count = Number(iterations);
@@ -1712,28 +1729,39 @@ function volumePressureModeFromRoute(strategy, iterations) {
   return 'global-p2';
 }
 
-function volumePressureConfigForMode(mode) {
+function volumePressureConfigForMode(mode, scene) {
+  const defaultIterations = defaultVolumePressureIterationsForScene(scene);
   switch (normalizeVolumePressureMode(mode)) {
     case 'spatial-tiers':
-      return { pressureMode: 'spatial-tiers', pressureStrategy: 'spatial_tiers', pressureIterations: 3 };
+      return { pressureMode: 'spatial-tiers', pressureStrategy: 'spatial_tiers', pressureIterations: 3, effectivePressureIterations: 3, pressureEffectiveLabel: 'Tiered P3' };
     case 'global-p3':
-      return { pressureMode: 'global-p3', pressureStrategy: 'global', pressureIterations: 3 };
+      return { pressureMode: 'global-p3', pressureStrategy: 'global', pressureIterations: 3, effectivePressureIterations: 3, pressureEffectiveLabel: 'Full P3' };
     case 'global-p2':
-      return { pressureMode: 'global-p2', pressureStrategy: 'global', pressureIterations: 2 };
+      return { pressureMode: 'global-p2', pressureStrategy: 'global', pressureIterations: 2, effectivePressureIterations: 2, pressureEffectiveLabel: 'Full P2' };
     case 'global-p1':
-      return { pressureMode: 'global-p1', pressureStrategy: 'global', pressureIterations: 1 };
+      return { pressureMode: 'global-p1', pressureStrategy: 'global', pressureIterations: 1, effectivePressureIterations: 1, pressureEffectiveLabel: 'Full P1' };
     default:
-      return { pressureMode: 'auto', pressureStrategy: routedVolumePressureStrategy, pressureIterations: routedVolumePressureIterations };
+      {
+        const effectiveIterations = routedVolumePressureIterations ?? defaultIterations;
+        const effectiveStrategy = routedVolumePressureStrategy || 'global';
+        return {
+          pressureMode: 'auto',
+          pressureStrategy: effectiveStrategy,
+          pressureIterations: routedVolumePressureIterations,
+          effectivePressureIterations: effectiveStrategy === 'spatial_tiers' ? 3 : effectiveIterations,
+          pressureEffectiveLabel: effectivePressureModeLabel('auto', effectiveStrategy === 'spatial_tiers' ? 3 : effectiveIterations),
+        };
+      }
   }
 }
 
-function pressureModeLabel(mode) {
+function effectivePressureModeLabel(mode, effectiveIterations) {
   switch (normalizeVolumePressureMode(mode)) {
-    case 'spatial-tiers': return 'Tiered';
+    case 'spatial-tiers': return 'Tiered P3';
     case 'global-p3': return 'Full P3';
     case 'global-p2': return 'Full P2';
     case 'global-p1': return 'Full P1';
-    default: return 'Default';
+    default: return `Default P${effectiveIterations}`;
   }
 }
 
@@ -1876,9 +1904,10 @@ function applyRayBudgetPreset(name, options = {}) {
 }
 
 function readVolumeControls() {
-  const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value);
+  const volumeScene = document.getElementById('volume-scene').value;
+  const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   return {
-    volumeScene: document.getElementById('volume-scene').value,
+    volumeScene,
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
     radiance: parseFloat(document.getElementById('volume-radiance').value),
@@ -1903,6 +1932,7 @@ function readVolumeControls() {
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
     detailScale: parseFloat(document.getElementById('volume-detail-scale').value),
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
+    flameLife: parseFloat(document.getElementById('volume-flame-life').value),
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
     windHeight: parseFloat(document.getElementById('volume-wind-height').value),
@@ -1914,6 +1944,7 @@ function readVolumeControls() {
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
     pressureMode: pressureConfig.pressureMode,
+    pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -1970,6 +2001,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
   document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
+  document.getElementById('volume-flame-life-val').textContent = c.flameLife.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
@@ -1982,7 +2014,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
-  document.getElementById('volume-pressure-mode-val').textContent = pressureModeLabel(pressureMode);
+  document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
   if (pressureTierControls.heroMin !== c.pressureTierHeroMin) setVolumeControlValue('volume-pressure-tier-hero-min', pressureTierControls.heroMin.toFixed(2));
@@ -2095,6 +2127,11 @@ async function initKaminosVolumeRoute() {
   const routeReactionFuelScale = Number(params.get('volume_reaction_fuel'));
   if (params.has('volume_reaction_fuel') && Number.isFinite(routeReactionFuelScale)) {
     routedVolumeReactionFuelScale = Math.max(0, Math.min(1.5, routeReactionFuelScale));
+  }
+  const routeFlameLife = Number(params.get('volume_flame_life'));
+  if (params.has('volume_flame_life') && Number.isFinite(routeFlameLife)) {
+    routedVolumeFlameLife = normalizeVolumeFlameLife(routeFlameLife);
+    setVolumeControlValue('volume-flame-life', routedVolumeFlameLife.toFixed(2));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
@@ -2315,7 +2352,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-flame-life', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

@@ -384,6 +384,7 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_fire_scale', run.fireScale);
   applyNumberParam(url, 'volume_detail_scale', run.detailScale);
   applyNumberParam(url, 'volume_plume_height', run.plumeHeight);
+  applyNumberParam(url, 'volume_flame_life', run.flameLife);
   applyNumberParam(url, 'volume_radiance', run.radiance);
   applyNumberParam(url, 'volume_absorption', run.absorption);
   applyNumberParam(url, 'volume_wind_strength', run.windStrength);
@@ -495,6 +496,7 @@ function effectiveConfig(witness) {
     reactionFuelScale: witness.reactionFuelScale ?? controls.reactionFuelScale ?? controls.reactionFuel,
     fireScale: witness.fireScale ?? controls.fireScale,
     detailScale: witness.detailScale ?? controls.detailScale,
+    flameLife: witness.flameLife ?? controls.flameLife,
     microdetail: witness.microdetail ?? controls.microdetail,
     interfaceShred: witness.interfaceShred ?? controls.interfaceShred,
     fireLicks: witness.fireLicks ?? controls.fireLicks,
@@ -512,6 +514,7 @@ function effectiveConfig(witness) {
     majorantLastBuiltFrame: witness.majorantLastBuiltFrame || witness.simCostLedger?.majorantLastBuiltFrame,
     majorantSkippedFrameCount: witness.majorantSkippedFrameCount || witness.simCostLedger?.majorantSkippedFrameCount,
     pressureProjectionEnabled: witness.pressureProjectionEnabled ?? controls.pressureProjectionEnabled,
+    pressureEffectiveLabel: witness.pressureEffectiveLabel ?? controls.pressureEffectiveLabel,
     pressureProjectionIterations: witness.pressureProjectionIterations ?? controls.pressureProjectionIterations ?? controls.pressureIterations,
     pressureIterationRequested: witness.pressureIterationRequested ?? controls.pressureIterationRequested,
     pressureIterationDefault: witness.pressureIterationDefault ?? controls.pressureIterationDefault,
@@ -1141,6 +1144,7 @@ for (let i = 0; i < runs.length; i += 1) {
       pressureJacobiPasses: simCostLedger?.pressureJacobiPasses,
       pressureJacobiInlineDivergencePasses: simCostLedger?.pressureJacobiInlineDivergencePasses,
       pressureJacobiFullGridEquivalentPasses: simCostLedger?.pressureJacobiFullGridEquivalentPasses,
+      pressureEffectiveLabel: witness.pressureEffectiveLabel,
       tallPlumePressureIterationStrategy: simCostLedger?.tallPlumePressureIterationStrategy,
       tallPlumePressureIterationTarget: simCostLedger?.tallPlumePressureIterationTarget,
       tallPlumePressureTierStrategy: simCostLedger?.tallPlumePressureTierStrategy,

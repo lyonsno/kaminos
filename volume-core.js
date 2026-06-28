@@ -101,6 +101,10 @@ function normalizeReactionFuelScale(value) {
   return clampFinite(value, 0, 1.5, 1);
 }
 
+function normalizeFlameLife(value) {
+  return clampFinite(value, 0.35, 1.8, 1);
+}
+
 function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
   return clampFinite(value, 0, max, fallback);
 }
@@ -1801,6 +1805,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
+  let flameLife = clamp(u.canonical_render_motion_controls.w, 0.35, 1.80);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
@@ -2739,14 +2744,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeHeightCurve = tallPlumeNormalizedFlameHeight * tallPlumeNormalizedFlameHeight * (0.65 + tallPlumeNormalizedFlameHeight * 0.55);
   let tallPlumeFlowHeightDemand = 1.0 + smoothstep(0.28, 0.62, inputFlow) * tallPlumeNormalizedFlameHeight * 1.35;
   let tallPlumeFlameHeightDemand = mix(0.012, 0.315, tallPlumeHeightCurve) * tallPlumeFlowHeightDemand;
+  let tallPlumeFlameLifeHeightDemand = tallPlumeFlameHeightDemand / mix(1.0, flameLife, tallPlumeScene);
   let tallPlumeFuelSurvival = smoothstep(
     0.001,
     0.092,
     fuel + tallPlumeFuelHeatReaction * 1.65 + fuelConsumption * 4.8 + tallPlumeBurnoutTail * 0.85
   );
   let tallPlumeReactionSurvival = smoothstep(
-    tallPlumeFlameHeightDemand * 0.42,
-    tallPlumeFlameHeightDemand,
+    tallPlumeFlameLifeHeightDemand * 0.42,
+    tallPlumeFlameLifeHeightDemand,
     tallPlumeFireSurvivalSignal + tallPlumeReactionMemory * 0.018 + tallPlumeBurnoutTail * 0.55
   );
   let tallPlumeFlameContourSurvival = clamp(
@@ -3210,6 +3216,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
     visibleDetailOverlayGain: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene) ? 0.35 : 1,
     reactionFuelScale: normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale),
+    flameLife: normalizeFlameLife(controlsSnapshot.flameLife),
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
@@ -3222,6 +3229,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     bonfireReferenceConfinement: bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene),
     minimalPlumeProof: minimalPlumeProofDebug(controlsSnapshot.volumeScene),
     pressureProjectionEnabled: false,
+    pressureEffectiveLabel: controlsSnapshot.pressureEffectiveLabel || '',
     pressureProjectionIterations: 0,
     pressureIterationDefault: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
     pressureIterationRequested: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
@@ -4264,7 +4272,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
     uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
     uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
-    uniforms[75] = 0;
+    uniforms[75] = normalizeFlameLife(controlsSnapshot.flameLife);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
     uniforms[76] = pressureTierControls.lowerMax;
     uniforms[77] = pressureTierControls.heroMin;
@@ -4290,11 +4298,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.tallPlumeDetailFrequencySource = state.volumeScene === 'tall_plume' ? 'fire-scale-decoupled-v0' : 'scale-controls';
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.reactionFuelScale = uniforms[71];
+    state.flameLife = uniforms[75];
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
     state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
     state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
     state.plumeHeight = Math.max(0.7, Math.min(2.2, uniforms[50]));
+    state.pressureEffectiveLabel = controlsSnapshot.pressureEffectiveLabel || '';
     state.windStrength = uniforms[53];
     state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
     state.windHeight = uniforms[55];
@@ -5712,6 +5722,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
+        flameLife: state.flameLife,
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
         tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -5736,6 +5747,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         temporalHistoryResetReason: state.temporalHistoryResetReason,
         temporalHistoryValid: state.temporalHistoryValid,
         pressureProjectionEnabled: state.pressureProjectionEnabled,
+        pressureEffectiveLabel: state.pressureEffectiveLabel,
         pressureProjectionIterations: state.pressureProjectionIterations,
         pressureIterationDefault: state.pressureIterationDefault,
         pressureIterationRequested: state.pressureIterationRequested,
@@ -6007,6 +6019,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
+      flameLife: state.flameLife,
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -6044,6 +6057,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       temporalHistoryResetReason: state.temporalHistoryResetReason,
       temporalHistoryValid: state.temporalHistoryValid,
       pressureProjectionEnabled: state.pressureProjectionEnabled,
+      pressureEffectiveLabel: state.pressureEffectiveLabel,
       pressureProjectionIterations: state.pressureProjectionIterations,
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested: state.pressureIterationRequested,
@@ -6159,11 +6173,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
       state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
       state.reactionFuelScale = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
+      state.flameLife = normalizeFlameLife(controlsSnapshot.flameLife);
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
       state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
       state.tallPlumeFlameHeightLawContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flame-height-law-v2' : 'inactive';
       state.plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
+      state.pressureEffectiveLabel = controlsSnapshot.pressureEffectiveLabel || '';
       state.windStrength = normalizeWindStrength(controlsSnapshot.windStrength);
       state.windAngle = normalizeWindAngle(controlsSnapshot.windAngle);
       state.windHeight = normalizeWindHeight(controlsSnapshot.windHeight);
