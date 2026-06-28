@@ -11730,6 +11730,7 @@ const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0'
 const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
 const KILN_ACTIVITY_STATE_SCHEMA_BROWSER = 'kaminos.kiln.activity-state.v0';
 const SHARP_KILN_LIVE_ROUTE_ID_BROWSER = 'adapter.sharp-image-to-splat-live.v0';
+const MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER = 'moge.depth-normal.webgpu-local.v0';
 const SPECIMEN_PACKET_COCKPIT_SCHEMA_BROWSER = 'kaminos.kiln.specimen-packet-cockpit.v0';
 
 const TRAY_CONDITIONING_LINK_ROLES = ['source-image', 'mask', 'matte', 'depth', 'normal', 'scribble', 'reference', 'negative-law', 'canny', 'segmentation'];
@@ -11774,10 +11775,13 @@ function trayHumanizeRoute(id) {
   return id.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
 }
 
-function traySourceTruthWarningsForEntry(sourceKind) {
-  const warnings = [];
+function traySourceTruthWarningsForEntry(sourceKind, opts = {}) {
+  const warnings = [...(opts.sourceTruthWarnings || [])];
   if (sourceKind === 'fixture') warnings.push('fixture_not_live_generated_output');
   if (sourceKind === 'failed') warnings.push('failed_artifact_no_usable_output');
+  if (opts.packetBindingRole === 'truth-layer' && opts.routeReceipt?.schema === 'kaminos.webgpu-route-receipt.v0') {
+    if ((opts.routeReceipt.outputs || []).some(output => output.status === 'partial')) warnings.push('anonymous_imagedata_receipt_partial');
+  }
   return [...new Set(warnings)];
 }
 
@@ -11875,7 +11879,7 @@ function createBrowserTray(trayId) {
 }
 
 function trayMakeArtifactEntry(opts) {
-  const warnings = traySourceTruthWarningsForEntry(opts.sourceKind);
+  const warnings = traySourceTruthWarningsForEntry(opts.sourceKind, opts);
   return {
     schema: TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER,
     artifactId: opts.artifactId,
@@ -11886,6 +11890,13 @@ function trayMakeArtifactEntry(opts) {
     source: opts.source || null,
     routeRunId: opts.routeRunId || null,
     conditioningRoles: opts.conditioningRoles || [],
+    viewKind: opts.viewKind || null,
+    packetBindingRole: opts.packetBindingRole || null,
+    routeReceipt: opts.routeReceipt || null,
+    sha256: opts.sha256 || null,
+    shape: Array.isArray(opts.shape) ? [...opts.shape] : null,
+    outputRole: opts.outputRole || opts.viewKind || null,
+    status: opts.status || null,
     sourceTruthWarnings: warnings,
   };
 }
@@ -11918,6 +11929,7 @@ function trayMakeRouteRun(opts) {
     statusBadge: opts.statusBadge,
     routePhase: opts.routePhase || 'completed',
     receiptId: opts.receiptId || null,
+    routeReceipt: opts.routeReceipt || null,
     inputArtifactIds: opts.inputArtifactIds || [],
     conditioningArtifactIds: opts.conditioningArtifactIds || [],
     outputArtifactIds: opts.outputArtifactIds || [],
@@ -11948,6 +11960,7 @@ function trayUpdateRouteRun(tray, opts) {
     statusBadge: opts.statusBadge ?? existing?.statusBadge,
     routePhase: opts.routePhase ?? existing?.routePhase ?? 'completed',
     receiptId: opts.receiptId ?? existing?.receiptId ?? null,
+    routeReceipt: opts.routeReceipt ?? existing?.routeReceipt ?? null,
   };
   const run = trayMakeRouteRun(merged);
   if (!existing) return { ...tray, routeRuns: [...(tray.routeRuns || []), run] };
@@ -12093,7 +12106,7 @@ function browserUnique(values) {
 
 function buildBrowserSpecimenPacketCockpit({ packetId, checkpoint, viewArtifacts, routeRequests = [], tray = null, failureTags = [], negativeLawPatch = { added: [] } }) {
   if (!checkpoint?.specimenId) throw new Error('Specimen checkpoint required before packet cockpit');
-  const truthLayers = SPECIMEN_VIEW_KINDS.map(viewKind => {
+  const checkpointTruthLayers = SPECIMEN_VIEW_KINDS.map(viewKind => {
     const artifact = (viewArtifacts || []).find(item => item.viewKind === viewKind);
     if (!artifact) return null;
     return {
@@ -12105,15 +12118,55 @@ function buildBrowserSpecimenPacketCockpit({ packetId, checkpoint, viewArtifacts
       sourceTruthWarnings: artifact.sourceTruthWarnings || artifact.imageArtifact?.sourceTruthWarnings || [],
     };
   }).filter(Boolean);
+  const routeTruthLayers = (tray?.outputArtifacts || [])
+    .filter(artifact => artifact.packetBindingRole === 'truth-layer')
+    .map(artifact => ({
+      truthLayerId: artifact.artifactId,
+      viewKind: artifact.viewKind || artifact.outputRole,
+      artifactId: artifact.artifactId,
+      sourceKind: artifact.sourceKind || null,
+      conditioningRoles: artifact.conditioningRoles || [],
+      routeReceipt: artifact.routeReceipt || null,
+      sourceTruthWarnings: artifact.sourceTruthWarnings || [],
+      shape: artifact.shape || null,
+      sha256: artifact.sha256 || null,
+      status: artifact.status || null,
+    }))
+    .filter(layer => layer.viewKind);
+  const truthLayers = [...checkpointTruthLayers, ...routeTruthLayers];
   const routeRuns = tray?.routeRuns || [];
-  const candidateArtifacts = (tray?.outputArtifacts || []).map(artifact => ({
-    candidateArtifactId: artifact.artifactId,
-    title: artifact.title || artifact.artifactId,
-    sourceKind: artifact.sourceKind,
-    routeRunId: artifact.routeRunId || null,
-    sourceTruthWarnings: artifact.sourceTruthWarnings || [],
-  }));
+  const candidateArtifacts = (tray?.outputArtifacts || [])
+    .filter(artifact => artifact.packetBindingRole !== 'truth-layer')
+    .map(artifact => ({
+      candidateArtifactId: artifact.artifactId,
+      title: artifact.title || artifact.artifactId,
+      sourceKind: artifact.sourceKind,
+      routeRunId: artifact.routeRunId || null,
+      sourceTruthWarnings: artifact.sourceTruthWarnings || [],
+    }));
   const activityStates = routeRuns.map(run => run.kilnActivity).filter(Boolean);
+  const lineageReceipts = browserUnique([
+    checkpoint.routeReceipt?.requestedRoute,
+    ...routeRequests.map(request => request.routeReceipt?.requestedRoute),
+    ...routeRuns.map(run => run.receiptId || run.runId),
+    ...routeRuns.map(run => run.routeReceipt?.requestedRouteId),
+    ...truthLayers.map(layer => layer.routeReceipt?.requestedRouteId),
+  ].filter(value => value !== undefined && value !== null && value !== '')).map(receiptId => ({ receiptId }));
+  for (const run of routeRuns) {
+    if (run.routeReceipt?.schema === 'kaminos.webgpu-route-receipt.v0') {
+      lineageReceipts.push({
+        schema: run.routeReceipt.schema,
+        receiptId: run.receiptId || `${run.routeReceipt.requestedRouteId}:${run.routeReceipt.createdAt || 'unversioned'}`,
+        requestedRoute: run.routeReceipt.requestedRouteId,
+        effectiveRoute: run.routeReceipt.effectiveRouteId,
+        runtime: [run.routeReceipt.backend?.kind, run.routeReceipt.backend?.runtime].filter(Boolean).join(':') || null,
+        sourceTruthWarnings: browserUnique([
+          ...(run.routeReceipt.sourceTruthWarnings || []),
+          ...((run.routeReceipt.outputs || []).some(output => output.status === 'partial') ? ['anonymous_imagedata_receipt_partial'] : []),
+        ]),
+      });
+    }
+  }
   const sourceTruthWarnings = browserUnique([
     ...(checkpoint.sourceTruthWarnings || []),
     ...truthLayers.flatMap(layer => layer.sourceTruthWarnings || []),
@@ -12138,11 +12191,7 @@ function buildBrowserSpecimenPacketCockpit({ packetId, checkpoint, viewArtifacts
     activityStates,
     promotionState: 'bench_evidence',
     negativeLawPatch: { added: browserUnique(negativeLawPatch.added || []) },
-    lineageReceipts: browserUnique([
-      checkpoint.routeReceipt?.requestedRoute,
-      ...routeRequests.map(request => request.routeReceipt?.requestedRoute),
-      ...routeRuns.map(run => run.receiptId || run.runId),
-    ]).map(receiptId => ({ receiptId })),
+    lineageReceipts,
     sourceTruthWarnings,
   };
   packet.cockpitSummary = {
@@ -12414,6 +12463,108 @@ async function kaminosRunSpecimenPacketApiRouteEvidence({
     routeEvidenceId: specimenPacketCockpitState?.candidateArtifacts?.at(-1)?.candidateArtifactId
       || specimenPacketCockpitState?.routeRuns?.filter(item => item.receiptId && item.requestedRoute !== 'image_conditioned_generation').at(-1)?.receiptId
       || null,
+  };
+}
+
+function kaminosSimulateSpecimenPacketMogeRouteEvidence() {
+  if (!specimenPacketCockpitState) kaminosLoadFixtureSpecimenPacketCockpit();
+  const request = specimenPacketCockpitSourceState?.routeRequests?.[0] || specimenPacketCockpitState?.routeRequests?.[0] || null;
+  const runId = 'packet-moge-depth-normal-route-001';
+  const sourceArtifactId = request?.inputArtifactIds?.[0] || 'fixture-red-lerm-primitive-001-beauty';
+  const routeReceipt = {
+    schema: 'kaminos.webgpu-route-receipt.v0',
+    requestedRouteId: MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER,
+    effectiveRouteId: MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER,
+    status: 'real',
+    fallbackReason: null,
+    backend: {
+      kind: 'webgpu-local',
+      runtime: 'browser',
+      adapterName: 'Apple M4 Max',
+      browser: 'Chrome Headless',
+      features: ['shader-f16'],
+      requestedFeatures: [],
+      limits: { maxBufferSize: 4294967296 },
+      timestampQuery: 'unavailable',
+    },
+    model: {
+      id: 'Ruicheng/moge-2-vitl-normal',
+      revision: 'local-vitl-normal',
+      weightsHash: 'sha256:weights-fixture',
+      dtype: 'fp16',
+    },
+    kernel: {
+      kitVersion: '0.0.0',
+      profile: 'conv-transpose2d-stride2',
+      commit: '15d2dea',
+    },
+    inputs: [
+      { role: 'source-image', artifactId: sourceArtifactId, sha256: 'sha256:source-fixture', shape: [518, 518, 3] },
+    ],
+    outputs: [
+      { role: 'depth', artifactId: 'packet-moge-depth-001', sha256: 'sha256:depth-fixture', shape: [592, 592], status: 'partial' },
+      { role: 'normal', artifactId: 'packet-moge-normal-001', sha256: 'sha256:normal-fixture', shape: [3, 592, 592], status: 'partial' },
+      { role: 'pointmap', artifactId: 'packet-moge-pointmap-001', sha256: 'sha256:pointmap-fixture', shape: [3, 592, 592], status: 'partial' },
+    ],
+    timings: {
+      source: 'queue-submit-wait',
+      totalMs: 1853.8,
+      stages: [
+        { name: 'backbone', ms: 997.6 },
+        { name: 'decoder-heads', ms: 854.3 },
+        { name: 'output-readback', ms: 1.9 },
+      ],
+    },
+    createdAt: new Date().toISOString(),
+  };
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-packet-moge-${runId}`);
+  tray = trayUpdateRouteRun(tray, {
+    runId,
+    requestedRoute: MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER,
+    effectiveRoute: MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER,
+    backendClass: 'webgpu-local',
+    statusBadge: 'partial',
+    routePhase: 'completed',
+    receiptId: `${runId}-receipt`,
+    inputArtifactIds: [sourceArtifactId],
+    conditioningArtifactIds: [],
+    outputArtifactIds: routeReceipt.outputs.map(output => output.artifactId),
+    routeReceipt,
+  });
+  const existing = new Set((tray.outputArtifacts || []).map(artifact => artifact.artifactId));
+  for (const output of routeReceipt.outputs) {
+    if (existing.has(output.artifactId)) continue;
+    tray = trayAppendOutput(tray, {
+      artifactId: output.artifactId,
+      title: `MoGE ${output.role}`,
+      sourceKind: 'browser-local',
+      routeRunId: runId,
+      mimeType: output.role === 'pointmap' ? 'application/x-kaminos-pointmap' : 'image/png',
+      conditioningRoles: output.role === 'depth'
+        ? ['depth_source']
+        : output.role === 'normal'
+          ? ['normal_source']
+          : ['pointmap_source'],
+      viewKind: output.role,
+      packetBindingRole: 'truth-layer',
+      routeReceipt,
+      sha256: output.sha256,
+      shape: output.shape,
+      outputRole: output.role,
+      status: output.status,
+      sourceTruthWarnings: ['anonymous_imagedata_receipt_partial'],
+    });
+    existing.add(output.artifactId);
+  }
+  routeCompositionTrayState = tray;
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
+  renderRouteCompositionTray();
+  renderPipelineDock();
+  return {
+    schema: 'kaminos.kiln.specimen-packet-moge-route-evidence.v0',
+    receipt: routeReceipt,
+    packet: specimenPacketCockpitState,
+    routeRun: specimenPacketCockpitState?.routeRuns?.find(run => run.runId === runId) || null,
   };
 }
 
@@ -12833,6 +12984,7 @@ window.kaminosTagSpecimenPacketFailure = tagBrowserSpecimenPacketFailure;
 window.kaminosRefreshSpecimenPacketCockpitFromRouteEvidence = refreshBrowserSpecimenPacketCockpitFromRouteEvidence;
 window.kaminosSimulateSpecimenPacketLiveRouteEvidence = kaminosSimulateSpecimenPacketLiveRouteEvidence;
 window.kaminosRunSpecimenPacketApiRouteEvidence = kaminosRunSpecimenPacketApiRouteEvidence;
+window.kaminosSimulateSpecimenPacketMogeRouteEvidence = kaminosSimulateSpecimenPacketMogeRouteEvidence;
 window.kaminosSpecimenPacketCockpitState = () => specimenPacketCockpitState;
 window.kaminosSpecimenPacketNextRouteRequest = () => specimenPacketNextRouteRequestState;
 window.kaminosSpecimenPacketCockpitWitness = specimenPacketCockpitWitness;

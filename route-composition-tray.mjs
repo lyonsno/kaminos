@@ -106,10 +106,14 @@ function unique(values) {
   return [...new Set((values || []).map(v => String(v)).filter(Boolean))];
 }
 
-function sourceTruthWarningsForEntry({ sourceKind, routeRunId }) {
-  const warnings = [];
+function sourceTruthWarningsForEntry({ sourceKind, packetBindingRole, routeReceipt, sourceTruthWarnings = [] }) {
+  const warnings = [...(sourceTruthWarnings || [])];
   if (sourceKind === 'fixture') warnings.push('fixture_not_live_generated_output');
   if (sourceKind === 'failed') warnings.push('failed_artifact_no_usable_output');
+  if (packetBindingRole === 'truth-layer' && routeReceipt?.schema === 'kaminos.webgpu-route-receipt.v0') {
+    const hasPartialOutput = (routeReceipt.outputs || []).some(output => output.status === 'partial');
+    if (hasPartialOutput) warnings.push('anonymous_imagedata_receipt_partial');
+  }
   return unique(warnings);
 }
 
@@ -209,8 +213,26 @@ export function createTray({ trayId = `tray-${Date.now().toString(36)}` } = {}) 
   };
 }
 
-function makeArtifactEntry({ artifactId, title, sourceKind, mimeType, source, width, height, routeRunId, conditioningRoles }) {
-  const warnings = sourceTruthWarningsForEntry({ sourceKind, routeRunId });
+function makeArtifactEntry({
+  artifactId,
+  title,
+  sourceKind,
+  mimeType,
+  source,
+  width,
+  height,
+  routeRunId,
+  conditioningRoles,
+  viewKind,
+  packetBindingRole,
+  routeReceipt,
+  sha256,
+  shape,
+  outputRole,
+  status,
+  sourceTruthWarnings,
+}) {
+  const warnings = sourceTruthWarningsForEntry({ sourceKind, packetBindingRole, routeReceipt, sourceTruthWarnings });
   return {
     schema: TRAY_ARTIFACT_ENTRY_SCHEMA,
     artifactId,
@@ -223,6 +245,13 @@ function makeArtifactEntry({ artifactId, title, sourceKind, mimeType, source, wi
     height: height || null,
     routeRunId: routeRunId || null,
     conditioningRoles: conditioningRoles || [],
+    viewKind: viewKind || null,
+    packetBindingRole: packetBindingRole || null,
+    routeReceipt: routeReceipt || null,
+    sha256: sha256 || null,
+    shape: Array.isArray(shape) ? [...shape] : null,
+    outputRole: outputRole || viewKind || null,
+    status: status || null,
     sourceTruthWarnings: warnings,
   };
 }
@@ -261,6 +290,7 @@ export function addRouteRun(tray, {
   inputArtifactIds = [],
   conditioningArtifactIds = [],
   outputArtifactIds = [],
+  routeReceipt = null,
 }) {
   const run = makeRouteRun({
     runId,
@@ -273,6 +303,7 @@ export function addRouteRun(tray, {
     inputArtifactIds,
     conditioningArtifactIds,
     outputArtifactIds,
+    routeReceipt,
   });
   return {
     ...tray,
@@ -291,6 +322,7 @@ function makeRouteRun({
   inputArtifactIds = [],
   conditioningArtifactIds = [],
   outputArtifactIds = [],
+  routeReceipt = null,
 }) {
   const warnings = sourceTruthWarningsForRun({ statusBadge, requestedRoute, effectiveRoute });
   const kilnActivity = deriveKilnActivityState({
@@ -313,6 +345,7 @@ function makeRouteRun({
     inputArtifactIds,
     conditioningArtifactIds,
     outputArtifactIds,
+    routeReceipt,
     displayRoute: humanizeRouteId(effectiveRoute),
     displayStatus: routeRunDisplayStatus(statusBadge, routePhase),
     kilnActivity,
@@ -336,6 +369,7 @@ export function updateRouteRun(tray, opts) {
     statusBadge: opts.statusBadge ?? existing?.statusBadge,
     routePhase: opts.routePhase ?? existing?.routePhase ?? 'completed',
     receiptId: opts.receiptId ?? existing?.receiptId ?? null,
+    routeReceipt: opts.routeReceipt ?? existing?.routeReceipt ?? null,
   };
   const run = makeRouteRun(merged);
   if (!existing) {
@@ -350,8 +384,8 @@ export function updateRouteRun(tray, opts) {
   };
 }
 
-export function appendOutputArtifact(tray, { artifactId, title, sourceKind, routeRunId, mimeType, source, width, height }) {
-  const entry = makeArtifactEntry({ artifactId, title, sourceKind, mimeType, source, width, height, routeRunId });
+export function appendOutputArtifact(tray, opts) {
+  const entry = makeArtifactEntry(opts);
   return {
     ...tray,
     outputArtifacts: [...tray.outputArtifacts, entry],

@@ -5,9 +5,14 @@ import {
 } from '../conditioning-route-request.mjs';
 import {
   addRouteRun,
+  appendOutputArtifact,
   updateRouteRun,
   createTray,
 } from '../route-composition-tray.mjs';
+import {
+  MOGE_DEPTH_NORMAL_ROUTE_ID,
+  createMogeDepthNormalRouteReceipt,
+} from '../webgpu-inference-kit/src/index.js';
 import {
   createFixturePrimitiveSpecimenCheckpoint,
   exportSpecimenCheckpointViews,
@@ -160,3 +165,94 @@ assert.ok(livePacket.candidateArtifacts.some(candidate => candidate.candidateArt
 assert.ok(livePacket.lineageReceipts.some(receipt => receipt.receiptId === '/tmp/kaminos/sharp-live-run-001/report.json'));
 assert.ok(livePacket.failureTags.some(tag => tag.tag === 'added_face'), 'live route refresh must not erase prior failure tags');
 assert.ok(livePacket.negativeLawPatch.added.includes('do_not_install_face'), 'live route refresh must preserve strengthened law');
+
+const mogeReceipt = createMogeDepthNormalRouteReceipt({
+  input: {
+    artifactId: request.inputArtifactIds[0],
+    sha256: 'sha256:source-image',
+    shape: [518, 518, 3],
+  },
+  outputs: {
+    depth: { artifactId: 'moge-depth-red-lerm-001', sha256: 'sha256:depth', shape: [592, 592], status: 'partial' },
+    normal: { artifactId: 'moge-normal-red-lerm-001', sha256: 'sha256:normal', shape: [3, 592, 592], status: 'partial' },
+    pointMap: { artifactId: 'moge-pointmap-red-lerm-001', sha256: 'sha256:pointmap', shape: [3, 592, 592], status: 'partial' },
+  },
+  backend: {
+    kind: 'webgpu-local',
+    runtime: 'browser',
+    adapterName: 'Apple M4 Max',
+    browser: 'Chrome Headless',
+    features: ['shader-f16'],
+    requestedFeatures: [],
+    limits: { maxBufferSize: 4294967296 },
+    timestampQuery: 'unavailable',
+  },
+  model: {
+    revision: 'local-vitl-normal',
+    weightsHash: 'sha256:weights',
+    dtype: 'fp16',
+  },
+  kernel: {
+    profile: 'conv-transpose2d-stride2',
+    commit: '15d2dea',
+  },
+  profile: {
+    schema: 'kaminos.webgpu-staged-profile.v0',
+    route: 'staged-submits',
+    timingSource: 'queue-submit-wait',
+    requiredStages: ['backbone', 'decoder-heads', 'output-readback'],
+    stages: [
+      { name: 'backbone', ms: 997.6 },
+      { name: 'decoder-heads', ms: 854.3 },
+      { name: 'output-readback', ms: 1.9 },
+    ],
+    stageNames: ['backbone', 'decoder-heads', 'output-readback'],
+    totalMs: 1853.8,
+  },
+});
+
+let mogeTray = updateRouteRun(tray, {
+  runId: 'moge-depth-normal-red-lerm-001',
+  requestedRoute: MOGE_DEPTH_NORMAL_ROUTE_ID,
+  effectiveRoute: MOGE_DEPTH_NORMAL_ROUTE_ID,
+  backendClass: 'webgpu-local',
+  statusBadge: 'partial',
+  routePhase: 'completed',
+  receiptId: 'moge-depth-normal-red-lerm-001-receipt',
+  inputArtifactIds: [request.inputArtifactIds[0]],
+  outputArtifactIds: ['moge-depth-red-lerm-001', 'moge-normal-red-lerm-001', 'moge-pointmap-red-lerm-001'],
+  routeReceipt: mogeReceipt,
+});
+for (const artifact of mogeReceipt.outputs) {
+  mogeTray = appendOutputArtifact(mogeTray, {
+    artifactId: artifact.artifactId,
+    title: `MoGE ${artifact.role}`,
+    sourceKind: 'browser-local',
+    routeRunId: 'moge-depth-normal-red-lerm-001',
+    mimeType: artifact.role === 'pointmap' ? 'application/x-kaminos-pointmap' : 'image/png',
+    conditioningRoles: artifact.role === 'depth'
+      ? ['depth_source']
+      : artifact.role === 'normal'
+        ? ['normal_source']
+        : ['pointmap_source'],
+    viewKind: artifact.role,
+    packetBindingRole: 'truth-layer',
+    routeReceipt: mogeReceipt,
+    sourceTruthWarnings: ['anonymous_imagedata_receipt_partial'],
+  });
+}
+
+const mogePacket = refreshSpecimenPacketCockpitFromRouteEvidence(failed, {
+  checkpoint,
+  viewArtifacts,
+  routeRequests: [nextRequest],
+  tray: mogeTray,
+});
+
+assert.ok(mogePacket.routeRuns.some(run => run.requestedRoute === MOGE_DEPTH_NORMAL_ROUTE_ID && run.backendClass === 'webgpu-local'));
+assert.ok(mogePacket.truthLayers.some(layer => layer.viewKind === 'depth' && layer.artifactId === 'moge-depth-red-lerm-001'));
+assert.ok(mogePacket.truthLayers.some(layer => layer.viewKind === 'normal' && layer.artifactId === 'moge-normal-red-lerm-001'));
+assert.ok(mogePacket.truthLayers.some(layer => layer.viewKind === 'pointmap' && layer.artifactId === 'moge-pointmap-red-lerm-001'));
+assert.ok(!mogePacket.candidateArtifacts.some(candidate => candidate.candidateArtifactId === 'moge-depth-red-lerm-001'), 'MoGE truth-layer outputs must not masquerade as candidate concept artifacts');
+assert.ok(mogePacket.lineageReceipts.some(receipt => receipt.schema === 'kaminos.webgpu-route-receipt.v0' && receipt.requestedRoute === MOGE_DEPTH_NORMAL_ROUTE_ID));
+assert.ok(mogePacket.sourceTruthWarnings.includes('anonymous_imagedata_receipt_partial'));

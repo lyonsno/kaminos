@@ -40,6 +40,20 @@ function unique(values) {
 
 function receiptFromRouteReceipt(receipt, fallbackId) {
   if (!receipt) return null;
+  if (receipt.schema === 'kaminos.webgpu-route-receipt.v0') {
+    return {
+      schema: receipt.schema,
+      receiptId: fallbackId || receipt.receiptId || `${receipt.requestedRouteId}:${receipt.createdAt || 'unversioned'}`,
+      requestedRoute: receipt.requestedRouteId || null,
+      effectiveRoute: receipt.effectiveRouteId || null,
+      runtime: [receipt.backend?.kind, receipt.backend?.runtime].filter(Boolean).join(':') || null,
+      fallbackReason: receipt.fallbackReason || null,
+      sourceTruthWarnings: [
+        ...(receipt.sourceTruthWarnings || []),
+        ...((receipt.outputs || []).some(output => output.status === 'partial') ? ['anonymous_imagedata_receipt_partial'] : []),
+      ],
+    };
+  }
   return {
     schema: receipt.schema || null,
     receiptId: receipt.receiptId || fallbackId || receipt.requestedRoute || null,
@@ -66,7 +80,12 @@ function lineageReceipts({ checkpoint, viewArtifacts, routeRequests, routeRuns }
     pushReceipt(request.routeReceipt, request.requestId, 'route-request');
   }
   for (const run of routeRuns || []) {
-    receipts.push({
+    const normalized = receiptFromRouteReceipt(run.routeReceipt, run.receiptId || run.runId);
+    receipts.push(normalized ? {
+      ...normalized,
+      kind: 'route-run',
+      sourceTruthWarnings: unique([...(normalized.sourceTruthWarnings || []), ...(run.sourceTruthWarnings || [])]),
+    } : {
       kind: 'route-run',
       receiptId: run.receiptId || run.runId,
       requestedRoute: run.requestedRoute || null,
@@ -102,14 +121,35 @@ function truthLayersFromViews(viewArtifacts) {
   }).filter(Boolean);
 }
 
+function truthLayersFromTrayOutputs(tray) {
+  return (tray?.outputArtifacts || [])
+    .filter(artifact => artifact.packetBindingRole === 'truth-layer')
+    .map(artifact => ({
+      truthLayerId: artifact.artifactId,
+      viewKind: artifact.viewKind || artifact.outputRole || null,
+      sourceKind: artifact.sourceKind || null,
+      artifactId: artifact.artifactId,
+      imageArtifactId: artifact.artifactId,
+      conditioningRoles: artifact.conditioningRoles || [],
+      routeReceipt: artifact.routeReceipt || null,
+      sourceTruthWarnings: artifact.sourceTruthWarnings || [],
+      shape: artifact.shape || null,
+      sha256: artifact.sha256 || null,
+      status: artifact.status || null,
+    }))
+    .filter(layer => layer.viewKind);
+}
+
 function candidateArtifactsFromTray(tray) {
-  return (tray?.outputArtifacts || []).map(artifact => ({
-    candidateArtifactId: artifact.artifactId,
-    title: artifact.title || artifact.artifactId,
-    sourceKind: artifact.sourceKind || null,
-    routeRunId: artifact.routeRunId || null,
-    sourceTruthWarnings: artifact.sourceTruthWarnings || [],
-  }));
+  return (tray?.outputArtifacts || [])
+    .filter(artifact => artifact.packetBindingRole !== 'truth-layer')
+    .map(artifact => ({
+      candidateArtifactId: artifact.artifactId,
+      title: artifact.title || artifact.artifactId,
+      sourceKind: artifact.sourceKind || null,
+      routeRunId: artifact.routeRunId || null,
+      sourceTruthWarnings: artifact.sourceTruthWarnings || [],
+    }));
 }
 
 function activityStatesFromRuns(routeRuns) {
@@ -141,7 +181,10 @@ export function buildSpecimenPacketCockpit({
 } = {}) {
   if (!packetId) throw new Error('packetId is required');
   if (checkpoint?.schema !== SPECIMEN_CHECKPOINT_SCHEMA) throw new Error('valid specimen checkpoint is required');
-  const truthLayers = truthLayersFromViews(viewArtifacts);
+  const truthLayers = [
+    ...truthLayersFromViews(viewArtifacts),
+    ...truthLayersFromTrayOutputs(tray),
+  ];
   const runs = routeRuns || tray?.routeRuns || [];
   const candidates = candidateArtifacts || candidateArtifactsFromTray(tray);
   const sourceArtifacts = truthLayers

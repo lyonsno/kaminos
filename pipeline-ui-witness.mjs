@@ -702,6 +702,94 @@ try {
       packetState,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'specimen-packet-moge-route') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    const mogeEvidence = await evalJson(cdp, `(() => {
+      const packet = window.kaminosLoadFixtureSpecimenPacketCockpit?.();
+      window.kaminosTagSpecimenPacketFailure?.('added_face', null, 'Operator marked face failure before MoGE truth-layer pass.');
+      const evidence = window.kaminosSimulateSpecimenPacketMogeRouteEvidence?.();
+      return {
+        packetOk: packet?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0',
+        evidence,
+      };
+    })()`);
+    assertWitness(mogeEvidence?.evidence?.schema === 'kaminos.kiln.specimen-packet-moge-route-evidence.v0', 'MoGE route evidence function did not return packet evidence', mogeEvidence);
+
+    const packetState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosSpecimenPacketCockpitWitness?.();
+      const panel = document.querySelector('[data-specimen-packet-cockpit]');
+      const evidence = panel?.querySelector('[data-specimen-packet-route-evidence]');
+      const patch = panel?.querySelector('[data-specimen-packet-negative-law-patch]');
+      const rect = panel?.getBoundingClientRect();
+      const packet = witness?.packet;
+      const hasMogeRun = packet?.routeRuns?.some(run => run.requestedRoute === 'moge.depth-normal.webgpu-local.v0' && run.backendClass === 'webgpu-local');
+      const hasDepth = packet?.truthLayers?.some(layer => layer.viewKind === 'depth' && layer.artifactId === 'packet-moge-depth-001');
+      const hasNormal = packet?.truthLayers?.some(layer => layer.viewKind === 'normal' && layer.artifactId === 'packet-moge-normal-001');
+      const hasPointmap = packet?.truthLayers?.some(layer => layer.viewKind === 'pointmap' && layer.artifactId === 'packet-moge-pointmap-001');
+      const depthCandidate = packet?.candidateArtifacts?.some(candidate => candidate.candidateArtifactId === 'packet-moge-depth-001');
+      const hasWebGpuReceipt = packet?.lineageReceipts?.some(receipt => receipt.schema === 'kaminos.webgpu-route-receipt.v0' && receipt.requestedRoute === 'moge.depth-normal.webgpu-local.v0');
+      const lineageHasMissingIdentity = packet?.lineageReceipts?.some(receipt => !receipt.receiptId || receipt.receiptId === 'undefined');
+      return {
+        ok: Boolean(
+          witness?.ok === true
+          && hasMogeRun
+          && hasDepth
+          && hasNormal
+          && hasPointmap
+          && !depthCandidate
+          && hasWebGpuReceipt
+          && !lineageHasMissingIdentity
+          && packet?.sourceTruthWarnings?.includes('anonymous_imagedata_receipt_partial')
+          && patch?.dataset.specimenPacketNegativeLawPatch?.includes('do_not_install_face')
+          && evidence?.dataset.specimenPacketRouteEvidence
+        ),
+        witness,
+        hasMogeRun,
+        hasDepth,
+        hasNormal,
+        hasPointmap,
+        depthCandidate,
+        hasWebGpuReceipt,
+        lineageHasMissingIdentity,
+        dom: {
+          panelDataset: panel ? { ...panel.dataset } : null,
+          panelText: panel?.innerText || '',
+          evidenceText: evidence?.innerText || '',
+          evidenceDataset: evidence ? { ...evidence.dataset } : null,
+          patchText: patch?.innerText || '',
+        },
+        panelRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'Specimen packet MoGE WebGPU truth-layer route loop', graphExecuteTimeoutMs);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = packetState.panelRect
+      ? await screenshotVisibleProbe(afterPath, packetState.panelRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 200 && screenshotProbe.saturatedPixels >= 20, 'Specimen packet MoGE route cockpit was not visibly inspectable', {
+      mogeEvidence,
+      packetState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      mogeEvidence,
+      packetState,
+      screenshotProbe,
+    }, null, 2));
   } else if (scenario === 'specimen-intake') {
     const fixtureButton = await evalJson(cdp, `(() => {
       const button = document.querySelector('#pipeline-specimen-fixture-button');

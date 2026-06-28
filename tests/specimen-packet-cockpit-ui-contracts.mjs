@@ -9,6 +9,9 @@ assert.match(index, /kaminos\.kiln\.specimen-packet-cockpit\.v0/, 'Browser cockp
 assert.match(index, /function buildBrowserSpecimenPacketCockpit/, 'Browser must aggregate existing specimen/checkpoint/request/tray state into one packet');
 assert.match(index, /function refreshBrowserSpecimenPacketCockpitFromRouteEvidence/, 'Browser must refresh the current packet from route tray evidence');
 assert.match(index, /async function kaminosRunSpecimenPacketApiRouteEvidence/, 'Browser must run real API route evidence into the current specimen packet');
+assert.match(index, /MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER/, 'Browser must name the MoGE WebGPU depth-normal route id for packet evidence');
+assert.match(index, /function kaminosSimulateSpecimenPacketMogeRouteEvidence/, 'Browser must be able to bind MoGE depth-normal route evidence into the current packet');
+assert.match(index, /packetBindingRole:\s*'truth-layer'/, 'MoGE output artifacts must bind as packet truth layers, not candidate concepts');
 assert.match(index, /function tagBrowserSpecimenPacketFailure/, 'Browser must support failure tags on the current specimen packet');
 assert.match(index, /function buildBrowserNextSpecimenPacketRouteRequest/, 'Browser must build a next request from packet failure law');
 assert.match(index, /refreshBrowserSpecimenPacketCockpitFromRouteEvidence\(\)/, 'Route tray lifecycle updates must refresh the current packet instead of leaving stale packet state');
@@ -25,9 +28,11 @@ assert.match(index, /window\.kaminosSpecimenPacketCockpitWitness/, 'Browser witn
 assert.match(witness, /scenario === 'specimen-packet-cockpit'/, 'Pipeline UI witness must include a specimen-packet-cockpit scenario');
 assert.match(witness, /scenario === 'specimen-packet-live-route'/, 'Pipeline UI witness must include a specimen-packet-live-route scenario');
 assert.match(witness, /scenario === 'specimen-packet-api-route'/, 'Pipeline UI witness must include a real API run-pipeline packet scenario');
+assert.match(witness, /scenario === 'specimen-packet-moge-route'/, 'Pipeline UI witness must include a MoGE local WebGPU packet route scenario');
 assert.match(witness, /kaminosLoadFixtureSpecimenPacketCockpit/, 'Witness must load the packet through the browser API');
 assert.match(witness, /kaminosSpecimenPacketCockpitWitness/, 'Witness must inspect packet cockpit source truth');
 assert.match(witness, /kaminosSimulateSpecimenPacketLiveRouteEvidence/, 'Witness must drive route evidence through the browser refresh path');
 assert.match(witness, /kaminosRunSpecimenPacketApiRouteEvidence/, 'Witness must drive real API run-pipeline evidence through the packet refresh path');
+assert.match(witness, /kaminosSimulateSpecimenPacketMogeRouteEvidence/, 'Witness must drive MoGE WebGPU receipt evidence through the packet refresh path');
 assert.match(witness, /nextRequestCarriesFailureLaw/, 'Witness must prove failure tags strengthen the next request');
 assert.match(witness, /data-specimen-packet-cockpit/, 'Witness must inspect the visible packet cockpit DOM');
