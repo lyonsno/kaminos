@@ -26,6 +26,7 @@ const cdpRequestTimeoutMs = Math.max(10000, framePacingMs + 5000);
 const viewportWidth = Number(args.get('--viewport-width') || 2048);
 const viewportHeight = Number(args.get('--viewport-height') || 1124);
 const largeViewportSmokeWitness = 'large-operator-viewport-2048x1124-v0';
+const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 
 let phase = 'initializing';
 let stderr = '';
@@ -487,7 +488,7 @@ async function run() {
     browser = spawn(chrome, [
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${userDataDir}`,
-      '--headless=new',
+      ...(headless ? ['--headless=new'] : []),
       '--enable-unsafe-webgpu',
       '--disable-gpu-sandbox',
       '--disable-extensions',

@@ -2,6 +2,9 @@ export const LERMS_WORLD_FINGER_JUICE_EMITTERS_SCHEMA = 'lerms.world-finger-juic
 export const LERMS_WORLD_FINGER_JUICE_ROUTE = 'world-space-ballistic-surface-flow-particles-v0';
 export const LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT = 'hill-of-hills-heightfield-collision-v0';
 export const LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT = 'finger-aim-ballistic-arc-range-v0';
+export const FINGER_JUICE_SUPPORT_FRAME_SCHEMA = 'big-papa-finger-juice.support-frame.v0';
+export const FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA = 'big-papa-finger-juice.substrate-reservoir-diagnostics.v0';
+export const FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'big-papa-finger-juice.preview-bench-payload.v0';
 export const LERMS_WORLD_FINGER_JUICE_AUTHORITY_VALUES = [
   'live_simulation',
   'synthetic_fixture',
@@ -25,6 +28,13 @@ const DEFAULT_TIP_INDEX = {
   ring: 16,
   pinky: 20,
 };
+const SUPPORT_GRID_X = 80;
+const SUPPORT_GRID_Z = 120;
+const SUPPORT_WORLD_BOUNDS = Object.freeze({
+  x: Object.freeze({ min: -0.75, max: 0.75 }),
+  z: Object.freeze({ min: -0.95, max: 2.25 }),
+});
+const SUPPORT_TILE_CELLS = Object.freeze({ x: 8, z: 8 });
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -94,6 +104,252 @@ function optionalVec2(value) {
 
 function stringOrNull(value) {
   return value === undefined || value === null || value === '' ? null : String(value);
+}
+
+function checksumString(input) {
+  let hash = 2166136261;
+  const text = String(input);
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `fnv1a32:${hash.toString(16).padStart(8, '0')}`;
+}
+
+function supportCellForWorld(position) {
+  const p = vec3(position);
+  const u = clamp((p[0] - SUPPORT_WORLD_BOUNDS.x.min) / (SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min), 0, 1);
+  const v = clamp((p[2] - SUPPORT_WORLD_BOUNDS.z.min) / (SUPPORT_WORLD_BOUNDS.z.max - SUPPORT_WORLD_BOUNDS.z.min), 0, 1);
+  return {
+    x: Math.max(0, Math.min(SUPPORT_GRID_X - 1, Math.floor(u * SUPPORT_GRID_X))),
+    z: Math.max(0, Math.min(SUPPORT_GRID_Z - 1, Math.floor(v * SUPPORT_GRID_Z))),
+    u: round(u, 5),
+    v: round(v, 5),
+  };
+}
+
+function domainBoundsFromCells(cells) {
+  const xs = cells.map(cell => cell.x);
+  const zs = cells.map(cell => cell.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  return {
+    u: {
+      min: round(minX / SUPPORT_GRID_X, 5),
+      max: round((maxX + 1) / SUPPORT_GRID_X, 5),
+    },
+    v: {
+      min: round(minZ / SUPPORT_GRID_Z, 5),
+      max: round((maxZ + 1) / SUPPORT_GRID_Z, 5),
+    },
+  };
+}
+
+function worldBoundsFromDomain(domainBounds) {
+  return {
+    x: {
+      min: round(SUPPORT_WORLD_BOUNDS.x.min + domainBounds.u.min * (SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min), 4),
+      max: round(SUPPORT_WORLD_BOUNDS.x.min + domainBounds.u.max * (SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min), 4),
+    },
+    z: {
+      min: round(SUPPORT_WORLD_BOUNDS.z.min + domainBounds.v.min * (SUPPORT_WORLD_BOUNDS.z.max - SUPPORT_WORLD_BOUNDS.z.min), 4),
+      max: round(SUPPORT_WORLD_BOUNDS.z.min + domainBounds.v.max * (SUPPORT_WORLD_BOUNDS.z.max - SUPPORT_WORLD_BOUNDS.z.min), 4),
+    },
+  };
+}
+
+export function createFingerJuiceSupportFrame(options = {}) {
+  const stepCount = Math.max(0, Math.floor(finite(options.stepCount, 0)));
+  const cellSize = {
+    x: round((SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min) / SUPPORT_GRID_X, 5),
+    z: round((SUPPORT_WORLD_BOUNDS.z.max - SUPPORT_WORLD_BOUNDS.z.min) / SUPPORT_GRID_Z, 5),
+  };
+  const supportFrameSeed = JSON.stringify({
+    schema: FINGER_JUICE_SUPPORT_FRAME_SCHEMA,
+    supportClass: 'single_valued_heightfield',
+    mappingMode: 'static_domain_to_world',
+    stepCount,
+    grid: [SUPPORT_GRID_X, SUPPORT_GRID_Z],
+    bounds: SUPPORT_WORLD_BOUNDS,
+  });
+  return {
+    schema: FINGER_JUICE_SUPPORT_FRAME_SCHEMA,
+    supportClass: 'single_valued_heightfield',
+    mappingMode: 'static_domain_to_world',
+    domainBounds: { u: { min: 0, max: 1 }, v: { min: 0, max: 1 } },
+    worldBounds: SUPPORT_WORLD_BOUNDS,
+    supportEpoch: stepCount,
+    topologyEpoch: 0,
+    substrateCellCount: SUPPORT_GRID_X * SUPPORT_GRID_Z,
+    substrateGrid: { x: SUPPORT_GRID_X, z: SUPPORT_GRID_Z, cellSize },
+    substrateTileSize: SUPPORT_TILE_CELLS,
+    substrateTileCount: Math.ceil(SUPPORT_GRID_X / SUPPORT_TILE_CELLS.x) * Math.ceil(SUPPORT_GRID_Z / SUPPORT_TILE_CELLS.z),
+    dirtySubstrateTileCount: 0,
+    dirtySubstrateSampleCount: 0,
+    dirtySubstrateRegionChecksum: 'none',
+    minSupportWavelength: round(Math.max(cellSize.x, cellSize.z) * 3, 5),
+    maxHeightDelta: 0,
+    maxSurfaceSpeed: 0,
+    motionClassCounts: { stable: SUPPORT_GRID_X * SUPPORT_GRID_Z, phase_morph: 0, shock_reset: 0 },
+    shockClassCounts: { none: SUPPORT_GRID_X * SUPPORT_GRID_Z, shock_reset: 0 },
+    supportFrameChecksum: checksumString(supportFrameSeed),
+  };
+}
+
+export function createReservoirDomainDiagnostics(particles = [], supportFrame = createFingerJuiceSupportFrame()) {
+  const surfaceParticles = (particles || [])
+    .filter(particle => particle?.surface_flow || particle?.phase === 'surface_flow')
+    .filter(particle => Array.isArray(particle.position));
+  const occupied = new Map();
+  for (const particle of surfaceParticles) {
+    const cell = supportCellForWorld(particle.position);
+    const key = `${cell.x},${cell.z}`;
+    const entry = occupied.get(key) || {
+      x: cell.x,
+      z: cell.z,
+      particles: [],
+      chemistryCounts: {},
+    };
+    entry.particles.push(particle);
+    const chemistry = particle.chemistry || 'unknown';
+    entry.chemistryCounts[chemistry] = (entry.chemistryCounts[chemistry] || 0) + 1;
+    occupied.set(key, entry);
+  }
+  const visited = new Set();
+  const componentEntries = [];
+  for (const [startKey, startCell] of occupied) {
+    if (visited.has(startKey)) continue;
+    const queue = [startCell];
+    const cells = [];
+    visited.add(startKey);
+    while (queue.length) {
+      const cell = queue.shift();
+      cells.push(cell);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const key = `${cell.x + dx},${cell.z + dz}`;
+        if (!occupied.has(key) || visited.has(key)) continue;
+        visited.add(key);
+        queue.push(occupied.get(key));
+      }
+    }
+    const componentParticles = cells.flatMap(cell => cell.particles);
+    const domainBounds = domainBoundsFromCells(cells);
+    const chemistryCounts = {};
+    for (const particle of componentParticles) {
+      const chemistry = particle.chemistry || 'unknown';
+      chemistryCounts[chemistry] = (chemistryCounts[chemistry] || 0) + 1;
+    }
+    const estimatedFluidVolume = componentParticles.reduce((sum, particle) => {
+      const radius = Math.max(0.004, finite(particle.radius, 0.04));
+      return sum + (4 / 3) * Math.PI * radius ** 3;
+    }, 0);
+    componentEntries.push({
+      id: `reservoir-domain-${componentEntries.length}`,
+      particleCount: componentParticles.length,
+      occupiedCellCount: cells.length,
+      estimatedFluidVolume: round(estimatedFluidVolume, 6),
+      domainBounds,
+      worldBounds: worldBoundsFromDomain(domainBounds),
+      chemistryCounts,
+    });
+  }
+  componentEntries.sort((a, b) => b.particleCount - a.particleCount || b.occupiedCellCount - a.occupiedCellCount);
+  const occupiedTiles = new Set([...occupied.values()].map(cell => {
+    const tileX = Math.floor(cell.x / SUPPORT_TILE_CELLS.x);
+    const tileZ = Math.floor(cell.z / SUPPORT_TILE_CELLS.z);
+    return `${tileX},${tileZ}`;
+  }));
+  const checksumSeed = JSON.stringify({
+    supportFrameChecksum: supportFrame.supportFrameChecksum,
+    cells: [...occupied.keys()].sort(),
+    components: componentEntries.map(component => [component.particleCount, component.occupiedCellCount, component.domainBounds]),
+  });
+  return {
+    schema: FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA,
+    supportFrameChecksum: supportFrame.supportFrameChecksum,
+    supportFrameSchema: supportFrame.schema,
+    reservoirMode: 'surface_particle_domain_components_v0',
+    occupiedCellCount: occupied.size,
+    activeSubstrateTileCount: occupiedTiles.size,
+    surfaceParticleCount: surfaceParticles.length,
+    estimatedFluidVolume: round(componentEntries.reduce((sum, component) => sum + component.estimatedFluidVolume, 0), 6),
+    reservoirChecksum: checksumString(checksumSeed),
+    activeReservoirDomains: {
+      componentCount: componentEntries.length,
+      largestComponent: componentEntries[0] || null,
+      components: componentEntries.slice(0, 8),
+    },
+  };
+}
+
+export function createFingerJuicePreviewBenchPayload(debugState = {}, options = {}) {
+  const supportFrame = debugState.supportFrame || createFingerJuiceSupportFrame({ stepCount: debugState.stepCount || 0 });
+  const substrateReservoirDiagnostics = debugState.substrateReservoirDiagnostics
+    || createReservoirDomainDiagnostics(debugState.particles || [], supportFrame);
+  const source = debugState.sourceTruth || {
+    schema: 'lerms.source-truth.v0',
+    authority: debugState.sourceDiagnostics?.authority || debugState.simulation_authority || 'synthetic_fixture',
+    route: debugState.source_route || 'kaminos.lerms-finger-juice.synthetic-caster',
+    frameId: debugState.source_frame_id || debugState.packet_id || null,
+    backend: debugState.source_backend || debugState.solver_backend || null,
+    configId: debugState.activeWitnessEmitterConfig || debugState.route_identity || null,
+  };
+  const largest = substrateReservoirDiagnostics.activeReservoirDomains?.largestComponent || null;
+  return {
+    ok: true,
+    schema: 'kaminos.preview-bench.payload-report.v0',
+    route: 'kaminos/preview-bench/payload-file',
+    reportPath: options.reportPath || null,
+    payload: {
+      schema: FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA,
+      route: 'big-papa-finger-juice/support-reservoir-preview-bench-v0',
+      label: 'Big Papa Finger Juice support reservoirs',
+      acceptanceSurface: {
+        kind: 'kaminos_preview_bench_payload',
+        worldChamberId: 'lerms-underhill',
+        posture: 'inspect',
+        bench: 'terrain-preview',
+        routeQuery: 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview',
+        sourceOwnsPayloadTruth: true,
+        hostOwnsVisualization: true,
+      },
+      source,
+      summary: {
+        particleCount: debugState.particleCount || 0,
+        surfaceFlowCount: substrateReservoirDiagnostics.surfaceParticleCount || debugState.surfaceFlowCount || 0,
+        supportFrameChecksum: supportFrame.supportFrameChecksum,
+        activeDomains: substrateReservoirDiagnostics.activeReservoirDomains?.componentCount || 0,
+        occupiedCellCount: substrateReservoirDiagnostics.occupiedCellCount || 0,
+        largestDomainParticleCount: largest?.particleCount || 0,
+        estimatedFluidVolume: substrateReservoirDiagnostics.estimatedFluidVolume || 0,
+      },
+      fields: [
+        { label: 'Active domains', value: String(substrateReservoirDiagnostics.activeReservoirDomains?.componentCount || 0) },
+        { label: 'Occupied cells', value: String(substrateReservoirDiagnostics.occupiedCellCount || 0) },
+        { label: 'Largest domain particles', value: String(largest?.particleCount || 0) },
+        { label: 'Support checksum', value: supportFrame.supportFrameChecksum },
+      ],
+      supportFrame,
+      reservoir: substrateReservoirDiagnostics,
+      custody: {
+        sourceOwns: ['fluid reservoir/domain truth', 'support-frame checksum', 'source authority and freshness'],
+        kaminosOwns: ['Preview Bench host display', 'route badges', 'fallback/rejection surfacing'],
+      },
+      downgrades: [
+        'local_procedural_support_frame_not_live_hill',
+        'host_visualization_not_source_truth',
+      ],
+      rejectedSurfaces: [
+        {
+          surface: 'direct_lerms_finger_juice_debug_route',
+          acceptanceSurface: false,
+          reason: 'debug route is useful evidence but not a Kaminos Preview Bench acceptance surface',
+        },
+      ],
+    },
+  };
 }
 
 function normalizeHandSampleSpace(packet) {
@@ -458,6 +714,8 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     const airborneBreadcrumbCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'airborne').length;
     const impactRingCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'impact').length;
     const surfaceSmearCount = trailSamples.filter(sample => sample.phase === 'surface_flow').length;
+    const supportFrame = createFingerJuiceSupportFrame({ stepCount, particles });
+    const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(particles, supportFrame);
     return {
       schema: 'lerms.world-finger-juice-debug.v0',
       effectiveRoute: LERMS_WORLD_FINGER_JUICE_ROUTE,
@@ -493,6 +751,9 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       lerms_world_frame: emitters.lerms_world_frame,
       authority: emitters.authority,
       activeEmitterCount: emitters.active_emitter_count,
+      supportFrame,
+      substrateReservoirDiagnostics,
+      activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
       heightfieldSamples: [-0.75, -0.35, 0, 0.35, 0.75].map(x => ({ x, z: 0, y: round(terrainHeightAt(x, 0), 4) })),
       particles: particles.slice(0, 96).map(particle => ({
         id: particle.id,

@@ -9,6 +9,7 @@ const pagePath = join(root, 'lerms-finger-juice.html');
 const witnessPath = join(root, 'lerms-finger-juice-witness.mjs');
 const tabWitnessPath = join(root, 'kaminos-finger-juice-tab-witness.mjs');
 const indexPath = join(root, 'index.html');
+const previewBenchDocsPath = join(root, 'docs', 'preview-bench-adapters.md');
 
 assert.ok(existsSync(corePath), 'world finger-juice core module exists');
 assert.ok(existsSync(webgpuCorePath), 'WebGPU finger-juice core module exists');
@@ -16,6 +17,7 @@ assert.ok(existsSync(pagePath), 'world finger-juice prototype page exists');
 assert.ok(existsSync(witnessPath), 'world finger-juice route witness exists');
 assert.ok(existsSync(tabWitnessPath), 'Kaminos Finger Juice tab witness exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
+assert.ok(existsSync(previewBenchDocsPath), 'Kaminos Preview Bench adapter docs exist for generic payload smokes');
 
 const coreSource = readFileSync(corePath, 'utf8');
 const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
@@ -23,6 +25,7 @@ const pageSource = readFileSync(pagePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
 const tabWitnessSource = existsSync(tabWitnessPath) ? readFileSync(tabWitnessPath, 'utf8') : '';
 const indexSource = readFileSync(indexPath, 'utf8');
+const previewBenchDocsSource = readFileSync(previewBenchDocsPath, 'utf8');
 
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_EMITTERS_SCHEMA\s*=\s*'lerms\.world-finger-juice-emitters\.v0'/, 'emitter packet schema is explicit');
 assert.match(coreSource, /LERMS_WORLD_FINGER_JUICE_ROUTE\s*=\s*'world-space-ballistic-surface-flow-particles-v0'/, 'transport route identity is explicit');
@@ -51,6 +54,15 @@ assert.match(coreSource, /velocity_hint/, 'trail debug state carries velocity hi
 assert.match(coreSource, /lerm_impulse/, 'particle hit records lerm impulse events');
 assert.match(coreSource, /goin_impulse/, 'particle hit records goin impulse events');
 assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame identity');
+assert.match(coreSource, /FINGER_JUICE_SUPPORT_FRAME_SCHEMA\s*=\s*'big-papa-finger-juice\.support-frame\.v0'/, 'finger juice names its Hill-compatible support-frame schema');
+assert.match(coreSource, /FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA\s*=\s*'big-papa-finger-juice\.substrate-reservoir-diagnostics\.v0'/, 'finger juice names substrate reservoir diagnostics');
+assert.match(coreSource, /FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA\s*=\s*'big-papa-finger-juice\.preview-bench-payload\.v0'/, 'finger juice names its source-owned Preview Bench payload schema');
+assert.match(coreSource, /createFingerJuiceSupportFrame/, 'core creates a Hill-compatible support frame for reservoir state');
+assert.match(coreSource, /createReservoirDomainDiagnostics/, 'core creates active-domain reservoir diagnostics in support coordinates');
+assert.match(coreSource, /createFingerJuicePreviewBenchPayload/, 'core exports a source-owned Preview Bench payload wrapper');
+assert.match(coreSource, /supportFrameChecksum/, 'support-frame diagnostics expose checksum identity');
+assert.match(coreSource, /activeReservoirDomains/, 'reservoir diagnostics expose active domains instead of only scalar metrics');
+assert.match(coreSource, /host_visualization_not_source_truth/, 'Preview Bench payload downgrades host visuals explicitly');
 assert.match(coreSource, /export function normalizeWorldFingerJuiceEmitterPacket/, 'core exports packet normalizer');
 assert.match(coreSource, /export function createWorldFingerJuiceTransportPrototype/, 'core exports deterministic transport prototype');
 
@@ -146,6 +158,10 @@ assert.match(webgpuCoreSource, /iterativeDensityConvergenceRatio/, 'iterative de
 assert.match(webgpuCoreSource, /iterativeDensityClampCount/, 'iterative density diagnostics report clamped corrections');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
+assert.match(webgpuCoreSource, /supportFrame/, 'WebGPU summaries expose support-frame identity');
+assert.match(webgpuCoreSource, /substrateReservoirDiagnostics/, 'WebGPU summaries expose substrate reservoir diagnostics');
+assert.match(webgpuCoreSource, /activeReservoirDomains/, 'WebGPU summaries expose active reservoir domains');
+assert.match(webgpuCoreSource, /supportFrameChecksum/, 'WebGPU support diagnostics preserve checksum identity');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
 assert.match(webgpuCoreSource, /averageSupportNeighborCount/, 'support diagnostics report average neighbor support');
 assert.match(webgpuCoreSource, /unsupportedCorrectionRatio/, 'support diagnostics report unsupported correction ratio');
@@ -215,6 +231,10 @@ assert.match(pageSource, /iterativeDensityContinuityStats/, 'prototype displays 
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
+assert.match(pageSource, /drawReservoirDomains/, 'prototype visibly draws active support/reservoir domains, not only sidebar metrics');
+assert.match(pageSource, /support-domain-renderer-v0/, 'prototype names the support-domain visual renderer contract');
+assert.match(pageSource, /__lermsFingerJuicePreviewBenchPayload/, 'prototype exposes source-owned Preview Bench payload evidence');
+assert.match(pageSource, /supportFrameChecksum/, 'prototype HUD/witness state exposes support-frame checksum');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceFreezeForWitness/, 'prototype exposes a frozen capture hook so screenshot and state cannot drift');
 assert.match(pageSource, /witness-frozen-state-capture-v0/, 'prototype names the frozen witness capture contract');
@@ -251,6 +271,11 @@ assert.match(indexSource, /id="tab-finger-juice"/, 'Kaminos app shell contains F
 assert.match(indexSource, /kaminos_lerms_finger_juice=1/, 'Kaminos route can open directly into the Finger Juice primitive tab');
 assert.match(indexSource, /id="finger-juice-viewport-frame"/, 'Finger Juice tab embeds the existing smoke route in an inspectable viewport frame');
 assert.match(indexSource, /lerms-finger-juice\.html\?lerms_world_finger_juice=1/, 'Finger Juice tab embeds the source-honest standalone smoke route instead of duplicating solver code');
+assert.match(indexSource, /preview_bench_payload_root/, 'Kaminos Preview Bench supports generic source payload file roots');
+assert.match(indexSource, /preview_bench_payload_path/, 'Kaminos Preview Bench supports generic source payload file paths');
+assert.match(indexSource, /kaminos\.preview-bench\.payload-state\.v0/, 'Kaminos Preview Bench preserves source payload state identity');
+assert.match(previewBenchDocsSource, /kaminos\.preview-bench\.payload-report\.v0/, 'Preview Bench docs define the generic payload report envelope');
+assert.match(previewBenchDocsSource, /preview_bench_payload_root/, 'Preview Bench docs name generic root/path route params');
 assert.match(indexSource, /kaminos-finger-juice-tab-embed-v0/, 'Finger Juice tab names its Kaminos embed route identity');
 assert.match(indexSource, /window\.kaminosFingerJuiceTabDebugState/, 'Kaminos exposes Finger Juice tab state for browser witnesses');
 assert.match(indexSource, /fingerJuiceFrame\.contentWindow\.__lermsFingerJuiceDebug/, 'Kaminos tab reads child smoke debug state through a same-origin debug bridge');
@@ -498,6 +523,28 @@ assert.ok(settled.impactRingCount > 0, 'late state preserves contact/impact ring
 assert.ok(settled.surfaceSmearCount > 0, 'late state preserves phase-aware surface smear evidence');
 assert.ok(settled.trails.some(trail => trail.samples.some(sample => Array.isArray(sample.velocity_hint))), 'trail samples carry velocity hints');
 assert.ok(settled.heightfieldSamples.length >= 5, 'debug state records heightfield samples');
+assert.equal(settled.supportFrame.schema, 'big-papa-finger-juice.support-frame.v0', 'debug state carries Big Papa support frame schema');
+assert.equal(settled.supportFrame.supportClass, 'single_valued_heightfield', 'support frame declares Hill-compatible single-valued support');
+assert.equal(settled.supportFrame.mappingMode, 'static_domain_to_world', 'support frame declares current static domain mapping');
+assert.equal(settled.supportFrame.domainBounds.u.min, 0, 'support domain u begins at zero');
+assert.equal(settled.supportFrame.domainBounds.u.max, 1, 'support domain u ends at one');
+assert.ok(settled.supportFrame.supportFrameChecksum, 'support frame exposes checksum identity');
+assert.equal(settled.substrateReservoirDiagnostics.schema, 'big-papa-finger-juice.substrate-reservoir-diagnostics.v0', 'debug state carries reservoir diagnostics schema');
+assert.equal(settled.substrateReservoirDiagnostics.supportFrameChecksum, settled.supportFrame.supportFrameChecksum, 'reservoir diagnostics bind to the sampled support frame checksum');
+assert.ok(settled.substrateReservoirDiagnostics.occupiedCellCount > 0, 'reservoir diagnostics count occupied support cells');
+assert.ok(settled.substrateReservoirDiagnostics.activeReservoirDomains.componentCount > 0, 'reservoir diagnostics expose active component count');
+assert.ok(settled.substrateReservoirDiagnostics.activeReservoirDomains.largestComponent.particleCount > 0, 'largest active domain reports particle count');
+assert.ok(settled.substrateReservoirDiagnostics.activeReservoirDomains.largestComponent.domainBounds.u.min >= 0, 'largest domain reports normalized support bounds');
+const previewPayload = mod.createFingerJuicePreviewBenchPayload(settled, {
+  reportPath: '/private/tmp/big-papa-finger-juice-preview-bench-payload-test.json',
+});
+assert.equal(previewPayload.schema, 'kaminos.preview-bench.payload-report.v0', 'Preview Bench export uses Kaminos report envelope');
+assert.equal(previewPayload.payload.schema, 'big-papa-finger-juice.preview-bench-payload.v0', 'Preview Bench payload preserves Big Papa source schema');
+assert.equal(previewPayload.payload.source.authority, 'synthetic_fixture', 'Preview Bench payload preserves source authority');
+assert.equal(previewPayload.payload.summary.supportFrameChecksum, settled.supportFrame.supportFrameChecksum, 'Preview Bench payload summarizes support-frame checksum');
+assert.ok(previewPayload.payload.fields.some(field => field.label === 'Active domains'), 'Preview Bench payload exposes active domain field for operator inspection');
+assert.ok(previewPayload.payload.downgrades.includes('local_procedural_support_frame_not_live_hill'), 'Preview Bench payload declares local support frame downgrade');
+assert.ok(previewPayload.payload.rejectedSurfaces.some(surface => surface.acceptanceSurface === false), 'Preview Bench payload rejects debug/visual surfaces explicitly');
 
 const hitPrototype = mod.createWorldFingerJuiceTransportPrototype({
   maxParticles: 64,
@@ -529,6 +576,9 @@ assert.equal(oracleHitState.sourceTruth.schema, 'lerms.source-truth.v0', 'WebGPU
 assert.equal(oracleHitState.sourceTruth.authority, 'synthetic_fixture', 'WebGPU summary preserves packet authority');
 assert.ok(oracleHitState.sourceDiagnostics.sourcePacketId, 'WebGPU summary reports source packet identity');
 assert.ok(Array.isArray(oracleHitState.emitterDiagnostics) && oracleHitState.emitterDiagnostics.length >= 2, 'WebGPU summary reports emitter diagnostics');
+assert.equal(oracleHitState.supportFrame.supportClass, 'single_valued_heightfield', 'WebGPU summary carries Hill-compatible support frame');
+assert.equal(oracleHitState.substrateReservoirDiagnostics.supportFrameChecksum, oracleHitState.supportFrame.supportFrameChecksum, 'WebGPU reservoir diagnostics bind to support-frame checksum');
+assert.ok(oracleHitState.substrateReservoirDiagnostics.activeReservoirDomains.componentCount > 0, 'WebGPU summary reports active reservoir domains');
 assert.ok(oracleHitState.pressureDensityStats.pressureNeighborWindow > 0, 'WebGPU summary reports bounded pressure neighbor scope');
 assert.equal(oracleHitState.spatialPressureStats.pressureContract, 'wgsl-spatial-cell-pressure-v0', 'WebGPU summary reports spatial pressure contract');
 assert.ok(oracleHitState.spatialPressureStats.spatialCellCount > 0, 'WebGPU summary reports spatial pressure cell count');

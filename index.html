@@ -804,6 +804,7 @@ import {
   planSceneRestore,
 } from './scene-persistence-core.js';
 import {
+  KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA,
   LERMS_UNDERHILL_CHAMBER_ID,
   createLermsPreviewBenchState,
   createDefaultWorldChambersRegistry,
@@ -859,6 +860,7 @@ let lermsActorMotionTimelineReport = null;
 let lermsActorMotionTimelineSource = null;
 let previewBenchPayloadReports = [];
 let previewBenchPayloadSources = [];
+const previewBenchPayloadStateSchema = KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA || 'kaminos.preview-bench.payload-state.v0';
 let lermsPreviewTimelinePlaybackStartMs = 0;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
@@ -4115,6 +4117,10 @@ function updateLermsPreviewBenchState(options = {}) {
     previewPayloadSources: previewBenchPayloadSources,
   });
   window.__kaminosLermsPreviewState = lermsPreviewBenchState;
+  window.__kaminosPreviewBenchPayloadState = {
+    schema: previewBenchPayloadStateSchema,
+    previewPayloads: lermsPreviewBenchState.previewPayloads || [],
+  };
   window.__kaminosPreviewBenchPayloads = lermsPreviewBenchState.previewPayloads || [];
   return lermsPreviewBenchState;
 }
