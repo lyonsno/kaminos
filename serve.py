@@ -29,6 +29,10 @@ KAMINOS_SPLAT_PRODUCTION_DIR = Path(os.environ.get(
     "KAMINOS_SPLAT_PRODUCTION_DIR",
     str(KAMINOS_ASSETS_DIR / "splats" / "production"),
 )).expanduser()
+KAMINOS_MOTION_TAKES_DIR = Path(os.environ.get(
+    "KAMINOS_MOTION_TAKES_DIR",
+    str(KAMINOS_ASSETS_DIR / "motion-takes"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
@@ -47,6 +51,8 @@ GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+MOTION_TAKE_SCHEMA = "kaminos.motion-take.v0"
+MOTION_TAKE_STORAGE_SCHEMA = "kaminos.motion-take-storage.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -95,6 +101,11 @@ def runtime_config():
 
 def splat_asset_root_allows_pointer(root_name):
     return any(root.get("id") == root_name and root.get("kind") == "splat" for root in ASSET_ROOTS)
+
+
+def _slugify_motion_take(value, fallback="motion-take"):
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").lower()).strip("-")
+    return slug[:64].strip("-") or fallback
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -392,6 +403,155 @@ def save_splat_asset_correction(root_id, rel_path, payload):
     return document
 
 
+def motion_take_storage_dir():
+    KAMINOS_MOTION_TAKES_DIR.mkdir(parents=True, exist_ok=True)
+    return KAMINOS_MOTION_TAKES_DIR.resolve()
+
+
+def motion_take_path(take_id):
+    safe_id = _slugify_motion_take(take_id)
+    if not safe_id:
+        raise ValueError("motion take id required")
+    root = motion_take_storage_dir()
+    target = (root / f"{safe_id}.kaminos-motion-take.json").resolve()
+    if not target.is_relative_to(root):
+        raise PermissionError("Path traversal")
+    return target
+
+
+def _motion_take_source_route(payload, clip):
+    source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+    return source.get("route") or clip.get("sourceRoute") or payload.get("sourceRoute")
+
+
+def normalize_motion_take(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("motion take payload must be an object")
+    if payload.get("schema") != MOTION_TAKE_SCHEMA:
+        raise ValueError(f"motion take schema must be {MOTION_TAKE_SCHEMA}")
+    clip = payload.get("clip")
+    if not isinstance(clip, dict) or clip.get("schema") != "kaminos.generated-pose-temporal.v0":
+        raise ValueError("motion take clip must be a generated-pose temporal clip")
+    temporal_samples = clip.get("temporalSamples")
+    if not isinstance(temporal_samples, list) or not temporal_samples:
+        raise ValueError("motion take clip temporalSamples are required")
+    source_route = _motion_take_source_route(payload, clip)
+    if not source_route:
+        raise ValueError("motion take source route is required")
+    cliplets = payload.get("cliplets")
+    if not isinstance(cliplets, dict) or cliplets.get("schema") != "kaminos.generated-motion-cliplets.v0":
+        raise ValueError("motion take generated motion cliplets are required")
+    if not isinstance(cliplets.get("segments"), list) or not cliplets["segments"]:
+        raise ValueError("motion take phrase segments are required")
+    title = str(payload.get("title") or payload.get("label") or clip.get("label") or payload.get("prompt") or clip.get("id") or "Motion Take").strip()
+    prompt = str(payload.get("prompt") or clip.get("intent") or title).strip()
+    if not title:
+        raise ValueError("motion take title is required")
+    take_id = _slugify_motion_take(payload.get("id") or title or clip.get("id"))
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+    settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+    document = {
+        **payload,
+        "schema": MOTION_TAKE_SCHEMA,
+        "id": take_id,
+        "title": title,
+        "prompt": prompt,
+        "source": {
+            "schema": "kaminos.motion-take-source.v0",
+            **source,
+            "route": source_route,
+            "model": source.get("model") or clip.get("sourceModel"),
+            "status": source.get("status") or clip.get("sourceStatus"),
+            "format": source.get("format") or clip.get("sourceFormat"),
+        },
+        "settings": {
+            "schema": "kaminos.motion-take-settings.v0",
+            **settings,
+        },
+        "clip": clip,
+        "cliplets": cliplets,
+        "savedAt": payload.get("savedAt") or now,
+    }
+    return document
+
+
+def save_motion_take(payload):
+    document = normalize_motion_take(payload)
+    root = motion_take_storage_dir()
+    base_id = document["id"]
+    target = motion_take_path(base_id)
+    if target.exists() and not payload.get("id"):
+        suffix = 2
+        while True:
+            candidate_id = f"{base_id}-{suffix}"
+            candidate = motion_take_path(candidate_id)
+            if not candidate.exists():
+                document["id"] = candidate_id
+                target = candidate
+                break
+            suffix += 1
+    rel_name = target.name
+    document["storage"] = {
+        "schema": MOTION_TAKE_STORAGE_SCHEMA,
+        "root": str(root),
+        "filename": rel_name,
+        "source": f"/api/motion-takes?id={document['id']}",
+        "listedBy": "/api/motion-takes",
+    }
+    target.write_text(json.dumps(document, indent=2))
+    return document
+
+
+def _motion_take_summary(document):
+    clip = document.get("clip") if isinstance(document, dict) else {}
+    cliplets = document.get("cliplets") if isinstance(document.get("cliplets"), dict) else {}
+    return {
+        "schema": "kaminos.motion-take-summary.v0",
+        "id": document.get("id"),
+        "title": document.get("title"),
+        "prompt": document.get("prompt"),
+        "source": document.get("source"),
+        "savedAt": document.get("savedAt"),
+        "clipId": clip.get("id"),
+        "frameCount": len(clip.get("temporalSamples") or []),
+        "rawFrameCount": clip.get("rawFrameCount"),
+        "fps": clip.get("fps"),
+        "duration": clip.get("duration"),
+        "phraseCount": len(cliplets.get("segments") or []),
+        "rawSegmentCount": len(cliplets.get("rawSegments") or []),
+        "storage": document.get("storage"),
+    }
+
+
+def load_motion_take(take_id):
+    target = motion_take_path(take_id)
+    if not target.is_file():
+        raise FileNotFoundError("motion take not found")
+    document = json.loads(target.read_text())
+    if document.get("schema") != MOTION_TAKE_SCHEMA:
+        raise ValueError("stored motion take has invalid schema")
+    return document
+
+
+def list_motion_takes():
+    root = motion_take_storage_dir()
+    takes = []
+    for path in sorted(root.glob("*.kaminos-motion-take.json"), key=lambda entry: entry.stat().st_mtime, reverse=True):
+        try:
+            document = json.loads(path.read_text())
+            if document.get("schema") == MOTION_TAKE_SCHEMA:
+                takes.append(_motion_take_summary(document))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return {
+        "schema": "kaminos.motion-take-index.v0",
+        "root": str(root),
+        "count": len(takes),
+        "takes": takes,
+    }
+
+
 def splat_inbox_root():
     for root in ASSET_ROOTS:
         if root.get("id") == "splat-inbox" and root.get("kind") == "splat":
@@ -506,6 +666,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/motion-takes":
+            self.handle_motion_takes_get(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -529,6 +691,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/motion-takes":
+            self.handle_motion_takes_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -653,6 +817,42 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         except FileNotFoundError as error:
             self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
+
+    def handle_motion_takes_get(self, params):
+        take_id = params.get("id", [""])[0]
+        try:
+            document = load_motion_take(take_id) if take_id else list_motion_takes()
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        self.send_json(document)
+
+    def handle_motion_takes_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            document = save_motion_take(payload)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
             return
         self.send_json(document)
 

@@ -339,6 +339,109 @@ def test_splat_asset_correction_roundtrips_as_sidecar_metadata():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_motion_take_save_list_load_roundtrips_full_generated_payload():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        motion_takes = Path(tmp) / "motion-takes"
+        previous_dir = serve.KAMINOS_MOTION_TAKES_DIR
+        serve.KAMINOS_MOTION_TAKES_DIR = motion_takes
+        try:
+            payload = {
+                "schema": "kaminos.motion-take.v0",
+                "title": "Startled Jump Turn",
+                "prompt": "a man looks behind himself then startles and jumps",
+                "source": {
+                    "schema": "kaminos.motion-take-source.v0",
+                    "route": "motion-server:http://127.0.0.1:8098/generate",
+                    "model": "kimodo",
+                    "status": "live-generated",
+                },
+                "settings": {
+                    "schema": "kaminos.motion-take-settings.v0",
+                    "duration": 6,
+                    "steps": 100,
+                    "sourceOrientationRemap": {"upAxis": "auto", "forwardAxis": "auto"},
+                },
+                "clip": {
+                    "schema": "kaminos.generated-pose-temporal.v0",
+                    "id": "panel_startled_jump_turn_temporal_v0",
+                    "label": "Startled Jump Turn",
+                    "sourceKind": "motion-panel-generated-pose-temporal",
+                    "sourceStatus": "live-generated",
+                    "sourceRoute": "motion-server:http://127.0.0.1:8098/generate",
+                    "sourceModel": "kimodo",
+                    "fps": 30,
+                    "duration": 6,
+                    "rawFrameCount": 2,
+                    "temporalSamples": [
+                        {"frame": 0, "sourceFrame": 0, "time": 0, "phaseLabel": "enter", "root": [0, 0, 0]},
+                        {"frame": 1, "sourceFrame": 1, "time": 0.03333, "phaseLabel": "notice", "root": [0, 0, 0.1]},
+                    ],
+                },
+                "cliplets": {
+                    "schema": "kaminos.generated-motion-cliplets.v0",
+                    "segmentation": {"outputLayer": "phrase"},
+                    "rawSegments": [
+                        {"id": "raw_000", "labelGuess": "enter / approach"},
+                        {"id": "raw_001", "labelGuess": "startle / notice"},
+                    ],
+                    "segments": [
+                        {
+                            "id": "phrase_000",
+                            "labelGuess": "startle-recoil / escape",
+                            "rawSegmentIds": ["raw_000", "raw_001"],
+                            "coalescing": {"reasons": ["named-startle-recoil"]},
+                        },
+                    ],
+                },
+            }
+
+            saved = serve.save_motion_take(payload)
+            listed = serve.list_motion_takes()
+            loaded = serve.load_motion_take(saved["id"])
+            saved_path = motion_takes / f"{saved['id']}.kaminos-motion-take.json"
+
+            assert saved["schema"] == "kaminos.motion-take.v0"
+            assert saved["id"].startswith("startled-jump-turn")
+            assert saved["storage"]["schema"] == "kaminos.motion-take-storage.v0"
+            assert saved["storage"]["source"] == f"/api/motion-takes?id={saved['id']}"
+            assert saved_path.is_file()
+            assert listed["schema"] == "kaminos.motion-take-index.v0"
+            assert listed["count"] == 1
+            assert listed["takes"][0]["id"] == saved["id"]
+            assert listed["takes"][0]["title"] == "Startled Jump Turn"
+            assert loaded["id"] == saved["id"]
+            assert loaded["source"]["route"].endswith("/generate")
+            assert loaded["clip"]["temporalSamples"][1]["phaseLabel"] == "notice"
+            assert loaded["cliplets"]["segments"][0]["rawSegmentIds"] == ["raw_000", "raw_001"]
+        finally:
+            serve.KAMINOS_MOTION_TAKES_DIR = previous_dir
+
+
+def test_motion_take_save_rejects_empty_or_fixture_fallback_payload():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_dir = serve.KAMINOS_MOTION_TAKES_DIR
+        serve.KAMINOS_MOTION_TAKES_DIR = Path(tmp) / "motion-takes"
+        try:
+            try:
+                serve.save_motion_take({
+                    "schema": "kaminos.motion-take.v0",
+                    "title": "Empty",
+                    "prompt": "",
+                    "clip": {
+                        "schema": "kaminos.generated-pose-temporal.v0",
+                        "id": "empty_temporal_v0",
+                        "sourceStatus": "fixture",
+                        "temporalSamples": [],
+                    },
+                })
+            except ValueError as error:
+                assert "temporalSamples" in str(error) or "source route" in str(error)
+            else:
+                raise AssertionError("empty/default motion take payload should not be saved")
+        finally:
+            serve.KAMINOS_MOTION_TAKES_DIR = previous_dir
+
+
 def test_runtime_config_exposes_hybrid_overlay_module_url_env():
     previous = os.environ.get("KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL")
     os.environ["KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"] = "http://127.0.0.1:5174/src/splatOverlay.ts"
@@ -365,4 +468,6 @@ if __name__ == "__main__":
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()
     test_splat_asset_correction_roundtrips_as_sidecar_metadata()
+    test_motion_take_save_list_load_roundtrips_full_generated_payload()
+    test_motion_take_save_rejects_empty_or_fixture_fallback_payload()
     test_runtime_config_exposes_hybrid_overlay_module_url_env()

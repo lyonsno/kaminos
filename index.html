@@ -631,6 +631,10 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
       </div>
       <div id="motion-panel-temporal-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
       <div class="field" style="margin-top: 8px;"><span class="field-key">Takes</span><span class="field-val" id="motion-panel-take-count">0</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="motion-panel-promote-take">Promote Take</button>
+        <button class="btn" id="motion-panel-load-durable-takes">Load Saved</button>
+      </div>
       <div id="motion-panel-take-shelf" style="display: flex; flex-direction: column; gap: 5px; margin-top: 6px;"></div>
       <div class="field" style="margin-top: 8px;"><span class="field-key">Exports</span><span class="field-val" id="motion-panel-export-count">0</span></div>
       <div id="motion-panel-export-tray" style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;"></div>
@@ -5909,6 +5913,7 @@ function motionPreviewNumberFromInputs(panelId, legacyId, fallback) {
 
 const motionPanelTakes = [];
 const motionPanelExportTray = [];
+let motionPanelDurableTakeSummaries = [];
 let motionPanelNextTakeId = 1;
 let motionPanelSelectedTakeId = null;
 let motionPanelNextExportId = 1;
@@ -5931,6 +5936,7 @@ function motionPanelTakeMetadata({ clip, sourceResult = null, options = {} }) {
     fps: clip.fps || sourceResult?.fps || null,
     duration: clip.duration || sourceResult?.duration || null,
     generatedAt: createdAt,
+    durableTakeId: options.durableTakeId || null,
   };
 }
 
@@ -5940,6 +5946,7 @@ function motionPanelSelectedTakeEvidence() {
   return {
     schema: 'kaminos.motion-panel-selected-take.v0',
     ...take.metadata,
+    durableTakeId: take.metadata.durableTakeId || take.durableTake?.id || null,
   };
 }
 
@@ -5973,7 +5980,7 @@ function motionPanelSourceGhostExportEvidence() {
 function renderMotionPanelTakeShelf() {
   const shelf = document.getElementById('motion-panel-take-shelf');
   const count = document.getElementById('motion-panel-take-count');
-  if (count) count.textContent = String(motionPanelTakes.length);
+  if (count) count.textContent = `${motionPanelTakes.length} / ${motionPanelDurableTakeSummaries.length}`;
   if (!shelf) return;
   shelf.innerHTML = '';
   for (const take of motionPanelTakes.slice().reverse()) {
@@ -5984,7 +5991,7 @@ function renderMotionPanelTakeShelf() {
     row.style.padding = '6px';
     row.innerHTML = `
       <span style="display: block; color: #ddd;">${escapeHtml(take.metadata.label)}</span>
-      <span style="display: block; color: #777; font-size: 10px;">${escapeHtml(take.metadata.clipId)} · ${take.metadata.frameCount}f · ${escapeHtml(take.metadata.sourceModel || take.metadata.sourceFormat || 'motion')}</span>
+      <span style="display: block; color: #777; font-size: 10px;">${escapeHtml(take.metadata.clipId)} · ${take.metadata.frameCount}f · ${escapeHtml(take.metadata.sourceModel || take.metadata.sourceFormat || 'motion')}${take.metadata.durableTakeId ? ` · saved ${escapeHtml(take.metadata.durableTakeId)}` : ''}</span>
       <span style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
         <button class="btn${take.metadata.id === motionPanelSelectedTakeId ? ' active' : ''}" data-motion-panel-take-current="${escapeHtml(take.metadata.id)}" type="button">Current</button>
         <button class="btn" data-motion-panel-take-preview="${escapeHtml(take.metadata.id)}" type="button">Preview</button>
@@ -5999,6 +6006,23 @@ function renderMotionPanelTakeShelf() {
       if (label != null) renameMotionPanelTake(take.metadata.id, label);
     });
     row.querySelector('[data-motion-panel-take-delete]')?.addEventListener('click', () => deleteMotionPanelTake(take.metadata.id));
+    shelf.appendChild(row);
+  }
+  for (const summary of motionPanelDurableTakeSummaries) {
+    const alreadyLoaded = motionPanelTakes.some(take => take.metadata.durableTakeId === summary.id);
+    const row = document.createElement('div');
+    row.style.border = '1px solid #4a3d22';
+    row.style.background = alreadyLoaded ? 'rgba(94, 75, 33, 0.16)' : '#201f1b';
+    row.style.borderRadius = '6px';
+    row.style.padding = '6px';
+    row.innerHTML = `
+      <span style="display: block; color: #f0d28a;">${escapeHtml(summary.title || summary.id)}</span>
+      <span style="display: block; color: #777; font-size: 10px;">saved ${escapeHtml(summary.id)} · ${summary.frameCount || 0}f · ${summary.phraseCount || 0} phrases</span>
+      <span style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
+        <button class="btn" data-motion-panel-durable-preview="${escapeHtml(summary.id)}" type="button">${alreadyLoaded ? 'Repreview' : 'Load'}</button>
+      </span>
+    `;
+    row.querySelector('[data-motion-panel-durable-preview]')?.addEventListener('click', () => void previewDurableMotionPanelTake(summary.id));
     shelf.appendChild(row);
   }
 }
@@ -6046,6 +6070,8 @@ function recordMotionPanelTake({ clip, sourceResult: result, options = {} }) {
     metadata: motionPanelTakeMetadata({ clip, sourceResult: result, options }),
     clip,
     sourceResult: result,
+    cliplets: options.cliplets || null,
+    durableTake: options.durableTake || null,
   };
   motionPanelTakes.push(take);
   motionPanelSelectedTakeId = take.metadata.id;
@@ -6062,6 +6088,11 @@ async function previewMotionPanelTake(takeId) {
     generatedInput: take.clip,
     sourceResult: take.sourceResult,
   });
+  if (take.cliplets?.schema === 'kaminos.generated-motion-cliplets.v0') {
+    motionTemporalState.generatedMotionCliplets = take.cliplets;
+    motionTemporalState.clipletPlaybackOptions = renderMotionPanelClipletPlaybackOptions(take.cliplets);
+    renderMotionPanelPhrasePreview(take.cliplets);
+  }
   renderMotionPanelTakeShelf();
   setMotionPanelTemporalStatus(`Previewing take ${take.metadata.label}`, '#66bb6a');
   return {
@@ -6070,6 +6101,127 @@ async function previewMotionPanelTake(takeId) {
     state: state?.schema || null,
   };
 }
+
+function motionPanelSelectedTakeRecord() {
+  return motionPanelTakes.find(entry => entry.metadata.id === motionPanelSelectedTakeId) || null;
+}
+
+function motionPanelTakeCliplets(take) {
+  if (take?.cliplets?.schema === 'kaminos.generated-motion-cliplets.v0') return take.cliplets;
+  if (take?.metadata?.id === motionPanelSelectedTakeId && motionTemporalState?.generatedMotionCliplets?.schema === 'kaminos.generated-motion-cliplets.v0') {
+    return motionTemporalState.generatedMotionCliplets;
+  }
+  if (take?.clip?.schema === 'kaminos.generated-pose-temporal.v0') return buildGeneratedPoseTemporalCliplets(take.clip);
+  return null;
+}
+
+function buildDurableMotionPanelTake(take = motionPanelSelectedTakeRecord()) {
+  if (!take?.clip) throw new Error('No generated motion take is selected');
+  const cliplets = motionPanelTakeCliplets(take);
+  if (!cliplets?.segments?.length) throw new Error('Selected motion take has no phrase cliplet evidence');
+  const prompt = take.metadata.prompt || take.clip.intent || take.metadata.label || take.clip.label || take.clip.id;
+  return {
+    schema: 'kaminos.motion-take.v0',
+    title: take.metadata.label || prompt,
+    prompt,
+    source: {
+      schema: 'kaminos.motion-take-source.v0',
+      route: take.metadata.sourceRoute || take.clip.sourceRoute,
+      model: take.metadata.sourceModel || take.clip.sourceModel || null,
+      status: take.metadata.sourceStatus || take.clip.sourceStatus || null,
+      format: take.metadata.sourceFormat || take.clip.sourceFormat || null,
+    },
+    settings: {
+      schema: 'kaminos.motion-take-settings.v0',
+      duration: motionPreviewNumberFromInputs('motion-panel-duration', 'motion-duration', take.metadata.duration || 6),
+      steps: motionPreviewNumberFromInputs('motion-panel-steps', 'motion-steps', 100),
+      sourceOrientationRemap: take.clip.sourceOrientationRemap || motionPanelSourceOrientationRemapFromInputs(),
+      sourceGhostMode: motionPanelSourceGhostModeFromInputs(),
+      sourceOpacity: Number(document.getElementById('motion-panel-source-opacity')?.value) || null,
+      sourceSizeMultiplier: Number(document.getElementById('motion-panel-source-overlay-size')?.value) || null,
+    },
+    clip: take.clip,
+    cliplets,
+    sourceResult: take.sourceResult || null,
+    volatileTake: take.metadata,
+  };
+}
+
+async function promoteMotionPanelSelectedTake() {
+  const take = motionPanelSelectedTakeRecord();
+  const button = document.getElementById('motion-panel-promote-take');
+  if (button) button.disabled = true;
+  try {
+    const document = buildDurableMotionPanelTake(take);
+    setMotionPanelTemporalStatus(`Promoting take ${document.title}...`, '#42a5f5');
+    const response = await fetch('/api/motion-takes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(document),
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok || saved.error) throw new Error(saved.error || `motion take save returned ${response.status}`);
+    take.metadata.durableTakeId = saved.id;
+    take.durableTake = saved;
+    take.cliplets = saved.cliplets || document.cliplets;
+    await loadDurableMotionPanelTakes({ silent: true });
+    renderMotionPanelTakeShelf();
+    setMotionPanelTemporalStatus(`Promoted take ${saved.title || saved.id}`, '#66bb6a');
+    return {
+      schema: 'kaminos.motion-panel-take-promotion.v0',
+      saved,
+      selectedTake: motionPanelSelectedTakeEvidence(),
+    };
+  } catch (error) {
+    setMotionPanelTemporalStatus(`Promote failed: ${error.message}`, '#ef5350');
+    throw error;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function loadDurableMotionPanelTakes({ silent = false } = {}) {
+  const response = await fetch('/api/motion-takes');
+  const index = await response.json().catch(() => ({}));
+  if (!response.ok || index.error) throw new Error(index.error || `motion take list returned ${response.status}`);
+  motionPanelDurableTakeSummaries = Array.isArray(index.takes) ? index.takes : [];
+  renderMotionPanelTakeShelf();
+  if (!silent) setMotionPanelTemporalStatus(`Loaded ${motionPanelDurableTakeSummaries.length} saved take${motionPanelDurableTakeSummaries.length === 1 ? '' : 's'}`, '#66bb6a');
+  return index;
+}
+
+async function previewDurableMotionPanelTake(durableTakeId) {
+  const response = await fetch(`/api/motion-takes?id=${encodeURIComponent(durableTakeId)}`);
+  const document = await response.json().catch(() => ({}));
+  if (!response.ok || document.error) throw new Error(document.error || `motion take load returned ${response.status}`);
+  const existing = motionPanelTakes.find(take => take.metadata.durableTakeId === document.id);
+  const take = existing || recordMotionPanelTake({
+    clip: document.clip,
+    sourceResult: document.sourceResult || null,
+    options: {
+      label: document.title,
+      sourceRoute: document.source?.route,
+      sourceModel: document.source?.model,
+      durableTakeId: document.id,
+      cliplets: document.cliplets,
+      durableTake: document,
+    },
+  });
+  take.metadata.durableTakeId = document.id;
+  take.durableTake = document;
+  take.cliplets = document.cliplets;
+  await previewMotionPanelTake(take.metadata.id);
+  setMotionPanelTemporalStatus(`Loaded saved take ${document.title || document.id}`, '#66bb6a');
+  return {
+    schema: 'kaminos.motion-panel-durable-take-preview.v0',
+    durableTake: document,
+    selectedTake: motionPanelSelectedTakeEvidence(),
+  };
+}
+
+window.promoteMotionPanelSelectedTake = promoteMotionPanelSelectedTake;
+window.loadDurableMotionPanelTakes = loadDurableMotionPanelTakes;
+window.previewDurableMotionPanelTake = previewDurableMotionPanelTake;
 
 function renderMotionPanelExportTray() {
   const tray = document.getElementById('motion-panel-export-tray');
@@ -6136,9 +6288,11 @@ window.kaminosMotionPanelTakeShelfDebugState = function() {
   return {
     schema: 'kaminos.motion-panel-take-shelf.v0',
     takeCount: motionPanelTakes.length,
+    durableTakeCount: motionPanelDurableTakeSummaries.length,
     selectedTakeId: motionPanelSelectedTakeId,
     selectedTake: motionPanelSelectedTakeEvidence(),
     takes: motionPanelTakes.map(take => take.metadata),
+    durableTakes: motionPanelDurableTakeSummaries,
   };
 };
 
@@ -6603,6 +6757,8 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-gen-btn')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
+  document.getElementById('motion-panel-promote-take')?.addEventListener('click', () => void promoteMotionPanelSelectedTake());
+  document.getElementById('motion-panel-load-durable-takes')?.addEventListener('click', () => void loadDurableMotionPanelTakes());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());
   document.getElementById('motion-panel-export-selected-cliplet')?.addEventListener('click', () => void exportMotionPanelSelectedClipletFilmstrip());
   const resetMotionClipletSelection = () => {
@@ -6648,6 +6804,9 @@ function initKaminosMotionAgencyRoute() {
   if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
+    void loadDurableMotionPanelTakes({ silent: true }).catch(error => {
+      setMotionPanelTemporalStatus(`Saved takes unavailable: ${error.message}`, '#f0b85a');
+    });
     if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();
     else if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
     else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();

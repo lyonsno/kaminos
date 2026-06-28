@@ -14,6 +14,8 @@ assert.match(witness, /--columns/, 'live witness exposes filmstrip grid columns 
 assert.match(witness, /--export-current-view/, 'live witness can exercise the in-page current-view export path');
 assert.match(witness, /--export-selected-cliplet/, 'live witness can exercise the in-page selected-cliplet export path');
 assert.match(witness, /--focus-phrase-preview/, 'live witness can frame the Motion panel phrase preview for visual smoke');
+assert.match(witness, /--focus-take-shelf/, 'live witness can frame the Motion panel take shelf for visual smoke');
+assert.match(witness, /--promote-take/, 'live witness can exercise durable motion-take promotion');
 assert.match(witness, /BOOLEAN_ARGS/, 'live witness parser distinguishes boolean flags from valued flags');
 assert.match(witness, /i \+= BOOLEAN_ARGS\.has/, 'live witness boolean flags must not shift later valued arguments such as report and filmstrip paths');
 assert.match(witness, /--export-reference-mode/, 'live witness can force an export-only reference skeleton mode');
@@ -22,6 +24,10 @@ assert.match(witness, /window\.exportMotionPanelSelectedClipletFilmstrip/, 'live
 assert.match(witness, /kaminos\.motion-panel-live-current-view-export\.v0/, 'live witness records current-view export evidence with a stable schema');
 assert.match(witness, /kaminos\.motion-panel-live-selected-cliplet-export\.v0/, 'live witness records selected-cliplet export evidence with a stable schema');
 assert.match(witness, /kaminos\.motion-panel-live-phrase-preview-focus\.v0/, 'live witness records phrase preview focus evidence with a stable schema');
+assert.match(witness, /kaminos\.motion-panel-live-take-shelf-focus\.v0/, 'live witness records take shelf focus evidence with a stable schema');
+assert.match(witness, /kaminos\.motion-panel-live-take-promotion\.v0/, 'live witness records durable take promotion evidence with a stable schema');
+assert.match(witness, /window\.promoteMotionPanelSelectedTake/, 'live witness invokes the actual Motion panel take promotion path');
+assert.match(witness, /window\.previewDurableMotionPanelTake/, 'live witness verifies promoted takes can be loaded back without regeneration');
 assert.match(witness, /exportReferenceMode/, 'live witness records requested export reference mode in report evidence');
 assert.match(witness, /sourceModeAfterExport/, 'live witness records source mode after export to catch failed restoration');
 assert.match(witness, /takeShelf/, 'live witness records the motion take shelf after generation');

@@ -17,6 +17,15 @@ assert.match(index, /function selectMotionPanelTake/, 'take shelf has explicit c
 assert.match(index, /function motionPanelSelectedTakeEvidence/, 'export can identify the selected take');
 assert.match(index, /window\.kaminosMotionPanelTakeShelfDebugState/, 'take shelf exposes debug state for smoke automation');
 assert.match(index, /window\.kaminosMotionPanelExportTrayDebugState/, 'motion panel exposes local export tray debug state');
+assert.match(index, /kaminos\.motion-take\.v0/, 'Motion panel can promote generated takes to durable motion-take artifacts');
+assert.match(index, /id="motion-panel-promote-take"/, 'Motion panel exposes a Promote Take action');
+assert.match(index, /id="motion-panel-load-durable-takes"/, 'Motion panel exposes a durable take refresh/load action');
+assert.match(index, /function buildDurableMotionPanelTake/, 'promoted takes are built as explicit durable artifacts');
+assert.match(index, /function promoteMotionPanelSelectedTake/, 'selected generated takes can be promoted to durable storage');
+assert.match(index, /function loadDurableMotionPanelTakes/, 'Motion panel can list durable takes from the app server');
+assert.match(index, /function previewDurableMotionPanelTake/, 'Motion panel can rehydrate a durable take without regenerating');
+assert.match(index, /\/api\/motion-takes/, 'durable take flow uses the app-server motion-takes API');
+assert.match(index, /durableTakeId/, 'debug/export evidence distinguishes durable take identity from volatile shelf identity');
 assert.match(index, /recordMotionPanelTake\(\{\s*clip,\s*sourceResult: result/s, 'preview bridge records generated server results as takes');
 assert.match(index, /data-motion-panel-take-preview/, 'take shelf rows expose a re-preview action');
 assert.match(index, /data-motion-panel-take-current/, 'take shelf rows expose an explicit current-take action');

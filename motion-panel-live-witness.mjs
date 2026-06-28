@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
-const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet', '--focus-phrase-preview']);
+const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet', '--focus-phrase-preview', '--focus-take-shelf', '--promote-take']);
 for (let i = 2; i < process.argv.length;) {
   const key = process.argv[i];
   if (!String(key || '').startsWith('--')) throw new Error(`Unexpected positional argument: ${key}`);
@@ -41,6 +41,8 @@ const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
 const exportSelectedCliplet = args.has('--export-selected-cliplet');
 const focusPhrasePreview = args.has('--focus-phrase-preview');
+const focusTakeShelf = args.has('--focus-take-shelf');
+const promoteTake = args.has('--promote-take');
 const exportReferenceMode = exportReferenceModeFromArgs(args.get('--export-reference-mode'));
 const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
@@ -116,6 +118,8 @@ function writeReport(report) {
     exportCurrentView,
     exportSelectedCliplet,
     focusPhrasePreview,
+    focusTakeShelf,
+    promoteTake,
     exportReferenceMode,
     cameraPosition,
     cameraTarget,
@@ -317,6 +321,35 @@ async function generateMotion(ws) {
   }))`, { timeoutMs: 240000 });
 }
 
+async function promoteAndReloadMotionTake(ws) {
+  return evaluate(ws, `(async () => {
+    if (typeof window.promoteMotionPanelSelectedTake !== 'function') throw new Error('missing window.promoteMotionPanelSelectedTake');
+    if (typeof window.loadDurableMotionPanelTakes !== 'function') throw new Error('missing window.loadDurableMotionPanelTakes');
+    if (typeof window.previewDurableMotionPanelTake !== 'function') throw new Error('missing window.previewDurableMotionPanelTake');
+    const promotion = await window.promoteMotionPanelSelectedTake();
+    const savedId = promotion?.saved?.id;
+    if (!savedId) throw new Error('take promotion did not return a saved id: ' + JSON.stringify(promotion));
+    const listed = await window.loadDurableMotionPanelTakes();
+    if (!listed?.takes?.some(take => take.id === savedId)) throw new Error('promoted take did not appear in durable take list: ' + JSON.stringify(listed));
+    const preview = await window.previewDurableMotionPanelTake(savedId);
+    const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
+    const selected = shelf?.selectedTake || null;
+    if (selected?.durableTakeId !== savedId) throw new Error('loaded durable take did not become selected: ' + JSON.stringify({ savedId, selected }));
+    return {
+      schema: 'kaminos.motion-panel-live-take-promotion.v0',
+      savedId,
+      promotion,
+      listed,
+      preview,
+      takeShelf: shelf,
+    };
+  })().catch(error => ({
+    schema: 'kaminos.motion-panel-live-take-promotion.v0',
+    ok: false,
+    error: String(error?.message || error),
+  }))`, { timeoutMs: 60000 });
+}
+
 async function configureClipletPlayback(ws) {
   return evaluate(ws, `(() => {
     const requested = ${JSON.stringify(clipletPlayback)};
@@ -372,6 +405,27 @@ async function focusMotionPanelPhrasePreview(ws) {
       schema: 'kaminos.motion-panel-live-phrase-preview-focus.v0',
       chipCount: chips.length,
       chips,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    };
+  })()`, { timeoutMs: 20000 });
+}
+
+async function focusMotionPanelTakeShelf(ws) {
+  return evaluate(ws, `(() => {
+    const host = document.getElementById('motion-panel-take-shelf');
+    if (!host) throw new Error('missing motion panel take shelf');
+    host.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const shelf = window.kaminosMotionPanelTakeShelfDebugState?.();
+    const rows = [...host.children].map(row => ({
+      text: (row.textContent || '').replace(/\\s+/g, ' ').trim(),
+      buttonCount: row.querySelectorAll('button').length,
+    }));
+    const rect = host.getBoundingClientRect();
+    return {
+      schema: 'kaminos.motion-panel-live-take-shelf-focus.v0',
+      rowCount: rows.length,
+      rows,
+      shelf,
       rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     };
   })()`, { timeoutMs: 20000 });
@@ -728,12 +782,23 @@ try {
   const generated = await generateMotion(ws);
   if (!generated?.ok) throw new Error(`window.generateMotion() failed: ${JSON.stringify(generated)}`);
   if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
+  let promotedTake = null;
+  if (promoteTake) {
+    phase = 'promoting-motion-take';
+    promotedTake = await promoteAndReloadMotionTake(ws);
+    if (promotedTake?.ok === false || !promotedTake?.savedId) throw new Error(`motion take promotion failed: ${JSON.stringify(promotedTake)}`);
+  }
   phase = 'configuring-cliplet-playback';
   const configuredClipletPlayback = await configureClipletPlayback(ws);
   let phrasePreviewFocus = null;
   if (focusPhrasePreview) {
     phase = 'focusing-phrase-preview';
     phrasePreviewFocus = await focusMotionPanelPhrasePreview(ws);
+  }
+  let takeShelfFocus = null;
+  if (focusTakeShelf) {
+    phase = 'focusing-take-shelf';
+    takeShelfFocus = await focusMotionPanelTakeShelf(ws);
   }
   await delay(settleMs);
 
@@ -787,8 +852,10 @@ try {
     configured,
     configuredClipletPlayback,
     phrasePreviewFocus,
+    takeShelfFocus,
+    promotedTake,
     generated,
-    takeShelf: generated?.takeShelf || null,
+    takeShelf: promotedTake?.takeShelf || generated?.takeShelf || null,
     frames,
     filmstrip,
   });
