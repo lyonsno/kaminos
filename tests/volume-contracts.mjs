@@ -104,10 +104,12 @@ assert.match(index, /routedVolumePressureStrategy/, 'Volume controls carry route
 assert.match(index, /pressureStrategy/, 'Volume controls expose effective pressure strategy to the renderer');
 assert.match(index, /volume-pressure-mode/, 'Volume cockpit exposes a live pressure mode selector for tier/global comparison');
 assert.match(index, /global-p3/, 'Volume pressure mode selector can switch to full global pressure3');
+assert.match(index, /routed-global/, 'Volume pressure mode preserves non-selector routed global counts such as pressure4');
 assert.match(index, /pressureMode/, 'Volume controls derive pressure strategy and iterations from the live pressure mode selector');
 assert.match(index, /effectivePressureModeLabel/, 'Pressure selector has an effective label path that exposes resolved default pressure count');
 assert.match(index, /pressureEffectiveLabel/, 'Volume controls carry the visible effective pressure label into renderer debug state');
 assert.match(index, /Default P\$\{effectiveIterations\}/, 'Default pressure mode label prints the resolved pressure iteration count');
+assert.match(index, /Route P\$\{effectiveIterations\}/, 'Routed global pressure mode label prints the exact routed pressure iteration count');
 assert.match(index, /volume-pressure-tier-overlay/, 'Volume cockpit exposes a pressure-tier overlay opacity slider');
 assert.match(index, /volume-pressure-tier-lower-max/, 'Volume cockpit exposes the pressure2 lower-slab max threshold');
 assert.match(index, /volume-pressure-tier-hero-min/, 'Volume cockpit exposes the pressure3 hero-band min threshold');
@@ -1244,6 +1246,10 @@ assert.match(sweep, /pressureSourceStrategy/, 'sweep aggregate preserves pressur
 assert.match(sweep, /pressureDivergencePasses/, 'sweep aggregate preserves pressure divergence cost');
 assert.match(sweep, /pressureJacobiPasses/, 'sweep aggregate preserves pressure projection cost');
 assert.match(sweep, /pressureJacobiInlineDivergencePasses/, 'sweep aggregate preserves Jacobi inline-divergence pressure cost');
+assert.match(sweep, /expectedFlameLifeForRun/, 'sweep derives expected flame-life identity from each requested run');
+assert.match(sweep, /checkNumber\(checks, run, effective, 'flameLife'\)/, 'sweep validation fails loudly when routed flame life does not reach effective state');
+assert.match(sweep, /pressureEffectiveLabelForRun/, 'sweep derives the expected pressure label for default, tiered, full, and routed-global pressure modes');
+assert.match(sweep, /pressure-effective-label-mismatch/, 'sweep validation fails loudly when the visible pressure label does not match effective route identity');
 assert.match(sweep, /fullGridPassBreakdown/, 'sweep aggregate preserves pass-level full-grid breakdown');
 assert.match(sweep, /majorantBuildCadence/, 'sweep aggregate preserves majorant build cadence');
 assert.match(sweep, /performanceMatrixId/, 'sweep aggregate preserves the performance matrix identity');

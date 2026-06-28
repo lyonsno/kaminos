@@ -507,6 +507,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <option value="global-p3">Full P3</option>
         <option value="global-p2">Full P2</option>
         <option value="global-p1">Full P1</option>
+        <option value="routed-global">Route</option>
       </select>
       <span class="slider-val" id="volume-pressure-mode-val">Default</span>
     </div>
@@ -1710,7 +1711,7 @@ function normalizeVolumePressureTierControls(values = {}) {
 
 function normalizeVolumePressureMode(value) {
   const mode = String(value || 'auto').toLowerCase();
-  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1'].includes(mode) ? mode : 'auto';
+  return ['auto', 'spatial-tiers', 'global-p3', 'global-p2', 'global-p1', 'routed-global'].includes(mode) ? mode : 'auto';
 }
 
 function defaultVolumePressureIterationsForScene(scene) {
@@ -1725,7 +1726,8 @@ function volumePressureModeFromRoute(strategy, iterations) {
   const count = Number(iterations);
   if (!Number.isFinite(count)) return 'auto';
   if (count <= 1) return 'global-p1';
-  if (count >= 3) return 'global-p3';
+  if (count === 3) return 'global-p3';
+  if (count > 3) return 'routed-global';
   return 'global-p2';
 }
 
@@ -1740,6 +1742,17 @@ function volumePressureConfigForMode(mode, scene) {
       return { pressureMode: 'global-p2', pressureStrategy: 'global', pressureIterations: 2, effectivePressureIterations: 2, pressureEffectiveLabel: 'Full P2' };
     case 'global-p1':
       return { pressureMode: 'global-p1', pressureStrategy: 'global', pressureIterations: 1, effectivePressureIterations: 1, pressureEffectiveLabel: 'Full P1' };
+    case 'routed-global':
+      {
+        const effectiveIterations = routedVolumePressureIterations ?? defaultIterations;
+        return {
+          pressureMode: 'routed-global',
+          pressureStrategy: 'global',
+          pressureIterations: effectiveIterations,
+          effectivePressureIterations: effectiveIterations,
+          pressureEffectiveLabel: effectivePressureModeLabel('routed-global', effectiveIterations),
+        };
+      }
     default:
       {
         const effectiveIterations = routedVolumePressureIterations ?? defaultIterations;
@@ -1761,6 +1774,7 @@ function effectivePressureModeLabel(mode, effectiveIterations) {
     case 'global-p3': return 'Full P3';
     case 'global-p2': return 'Full P2';
     case 'global-p1': return 'Full P1';
+    case 'routed-global': return `Route P${effectiveIterations}`;
     default: return `Default P${effectiveIterations}`;
   }
 }
