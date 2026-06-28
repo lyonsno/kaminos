@@ -530,6 +530,7 @@ export function createLermsPreviewActorVisualPrimitives(actorMotionState) {
       squash: roundBenchNumber(clampNumber(channels.bodySquash || 1, 0.55, 1.35)),
       stretch: roundBenchNumber(clampNumber(channels.bodyStretch || 1, 0.75, 1.55)),
       color: stateColor(actor),
+      statusCue: actor?.statusCue ? clone(actor.statusCue) : null,
       nosePosition: [
         roundBenchNumber(position[0] + heading[0] * noseReach),
         position[1],
@@ -551,12 +552,30 @@ function goinColor(goin) {
   return '#f5c542';
 }
 
-export function createLermsPreviewGoinVisualPrimitives(frameOrGoins) {
+function possessionCueForGoin(goin, possessionEvents) {
+  const events = (possessionEvents || []).filter(event => event?.goinId === goin?.id);
+  const event = events.find(candidate => candidate.event === 'possession-released')
+    || events.find(candidate => candidate.event === 'possession-gained')
+    || events.find(candidate => candidate.event === 'loose-target-noticed')
+    || events[0];
+  if (!event) return null;
+  return {
+    schema: 'kaminos.lerms-preview-possession-cue.v0',
+    event: event.event || null,
+    actorId: event.actorId || event.carrierActorId || event.droppedByActorId || null,
+    label: event.label || null,
+    visibleMarker: event.visibleMarker === true,
+    world: Array.isArray(event.world) ? vector3(event.world) : null,
+  };
+}
+
+export function createLermsPreviewGoinVisualPrimitives(frameOrGoins, possessionEvents = null) {
   const goins = Array.isArray(frameOrGoins?.goins)
     ? frameOrGoins.goins
     : Array.isArray(frameOrGoins)
       ? frameOrGoins
       : [];
+  const framePossessionEvents = possessionEvents || frameOrGoins?.possessionEvents || [];
   return goins.map((goin, index) => {
     const position = vector3(goin?.world, [index * 0.24, 0.45, 0]);
     const custodyRole = goin?.custodyRole || (goin?.state === 'carried' ? 'carried_attachment' : 'hoard_source');
@@ -570,6 +589,7 @@ export function createLermsPreviewGoinVisualPrimitives(frameOrGoins) {
       targetedByActorIds: Array.isArray(goin?.targetedByActorIds) ? [...goin.targetedByActorIds] : [],
       kind: 'proxy_goin_marker',
       downgrade: 'proxy_goin_visual_only',
+      possessionCue: possessionCueForGoin(goin, framePossessionEvents),
       position: [
         roundBenchNumber(position[0]),
         roundBenchNumber(position[1]),
@@ -615,6 +635,7 @@ function interpolateActorVisualPrimitives(currentFrame, nextFrame, blend) {
     return {
       ...clone(primitive),
       state: blend >= 0.5 ? next.state : primitive.state,
+      statusCue: blend >= 0.5 ? clone(next.statusCue || null) : clone(primitive.statusCue || null),
       position: interpolateVec3(primitive.position, next.position, blend),
       heading: interpolateVec3(primitive.heading, next.heading, blend),
       radius: interpolateNumber(primitive.radius, next.radius, blend),
@@ -640,6 +661,7 @@ function interpolateGoinVisualPrimitives(currentFrame, nextFrame, blend) {
       carrierActorId: blend >= 0.5 ? next.carrierActorId : primitive.carrierActorId,
       droppedByActorId: blend >= 0.5 ? next.droppedByActorId : primitive.droppedByActorId,
       targetedByActorIds: blend >= 0.5 ? clone(next.targetedByActorIds || []) : clone(primitive.targetedByActorIds || []),
+      possessionCue: blend >= 0.5 ? clone(next.possessionCue || null) : clone(primitive.possessionCue || null),
       position: interpolateVec3(primitive.position, next.position, blend),
       radius: interpolateNumber(primitive.radius, next.radius, blend),
       color: blend >= 0.5 ? next.color : primitive.color,
@@ -740,6 +762,44 @@ function goinCustodyProof(frames, sourceCustody = null) {
   };
 }
 
+function possessionEventIdentity(event) {
+  return [
+    event?.frameIndex ?? '',
+    event?.event ?? '',
+    event?.goinId ?? '',
+    event?.actorId ?? event?.carrierActorId ?? event?.droppedByActorId ?? '',
+  ].join(':');
+}
+
+function latestPossessionEventForGoin(sourcePossessionEvents, frameIndex, goinId, eventName) {
+  return [...sourcePossessionEvents]
+    .filter(event => event?.goinId === goinId && event?.event === eventName && Number(event?.frameIndex) <= Number(frameIndex))
+    .sort((a, b) => Number(b.frameIndex) - Number(a.frameIndex))[0] || null;
+}
+
+function possessionEventsForTimelineFrame(frame, sourcePossessionEvents) {
+  const frameEvents = [
+    ...sourcePossessionEvents.filter(event => Number(event?.frameIndex) === Number(frame.frameIndex)),
+    ...(Array.isArray(frame.possessionEvents) ? frame.possessionEvents : []),
+  ];
+  const byIdentity = new Map(frameEvents.map(event => [possessionEventIdentity(event), event]));
+  for (const goin of frame.goins || []) {
+    const custodyRole = goin?.custodyRole || '';
+    const eventName = custodyRole === 'reroute_target'
+      ? 'loose-target-noticed'
+      : ['dropped_marker', 'rolling_drop'].includes(custodyRole)
+        ? 'possession-released'
+        : custodyRole === 'carried_attachment'
+          ? 'possession-gained'
+          : null;
+    if (!eventName) continue;
+    const event = latestPossessionEventForGoin(sourcePossessionEvents, frame.frameIndex, goin.id, eventName);
+    if (!event) continue;
+    byIdentity.set(possessionEventIdentity(event), event);
+  }
+  return [...byIdentity.values()];
+}
+
 export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSource = null) {
   assertObject(report, 'LERMS Preview Bench actor-motion timeline report');
   const timeline = report.timeline || report;
@@ -769,6 +829,7 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
       throw new Error('actor-motion timeline frame times must strictly increase');
     }
   }
+  const sourcePossessionEvents = Array.isArray(timeline.goinCustody?.possessionEvents) ? timeline.goinCustody.possessionEvents : [];
   const frames = timeline.timeline.map((frame) => {
     if (!Array.isArray(frame.actorMotion) || frame.actorMotion.length === 0) {
       throw new Error(`actor-motion timeline frame ${frame.label || frame.frameIndex} has no actors`);
@@ -779,18 +840,20 @@ export function normalizeLermsPreviewActorMotionTimelineReport(report, payloadSo
       motionAdapterSchema: 'lerms.schnoz-motion-adapter.v0',
       actors: clone(frame.actorMotion),
     };
+    const framePossessionEvents = possessionEventsForTimelineFrame(frame, sourcePossessionEvents);
     return {
       schema: frame.schema || 'lerms.preview-bench-actor-motion-timeline-frame.v0',
       frameIndex: frame.frameIndex,
       label: frame.label,
       timeMs: Number(frame.timeMs),
       events: clone(frame.events || []),
+      possessionEvents: clone(framePossessionEvents),
       actors: clone(frame.actorMotion),
       goins: clone(frame.goins || []),
       hitFlash: frame.hitFlash ? clone(frame.hitFlash) : null,
       reroute: frame.reroute ? clone(frame.reroute) : null,
       visualPrimitives: createLermsPreviewActorVisualPrimitives(actorState),
-      goinVisualPrimitives: createLermsPreviewGoinVisualPrimitives(frame),
+      goinVisualPrimitives: createLermsPreviewGoinVisualPrimitives(frame, framePossessionEvents),
     };
   });
   const proof = movementProof(frames);

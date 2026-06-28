@@ -23,9 +23,12 @@ assert.match(index, /world_chamber_receipt_path/, 'URL route can select a server
 assert.match(index, /preview_bench_payload_url/, 'URL route can load a generic Preview Bench payload by URL');
 assert.match(index, /preview_bench_payload_root/, 'URL route can select a generic server-backed Preview Bench payload root');
 assert.match(index, /preview_bench_payload_path/, 'URL route can select a generic server-backed Preview Bench payload path');
+assert.match(index, /lerms_timeline_start_ms/, 'URL route can start LERMS timeline smoke on an explicit elapsed beat');
 assert.match(index, /preview-bench-adapter-list/, 'Worlds tab displays generic Preview Bench adapter payloads');
 assert.match(index, /world-chamber-receipt-source/, 'Worlds tab displays effective receipt source identity');
 assert.match(index, /world-chamber-load-error/, 'Worlds tab displays receipt load failures instead of silently falling back');
+assert.match(index, /applyLermsPreviewCameraPreset/, 'Preview Bench camera presets drive the actual Three viewport camera');
+assert.match(index, /controls\.target\.fromArray/, 'Preview Bench camera preset application retargets OrbitControls');
 
 assert.match(previewBenchDocs, /preview_bench_payload_root/, 'Preview Bench adapter docs show the generic root/path route');
 assert.match(previewBenchDocs, /source owns payload semantics/i, 'Preview Bench adapter docs preserve source-lane ownership');
@@ -449,6 +452,17 @@ const actorMotionTimelineReport = {
         timeMs: 0,
         events: ['carrier-fleeing'],
         actorMotion: actorMotionReport.payload.actorMotion,
+        possessionEvents: [
+          {
+            frameIndex: 0,
+            event: 'possession-gained',
+            goinId: 'goin-hoard-001',
+            actorId: 'schnoz-carrier',
+            label: 'CARRY',
+            world: [-0.22, 0.48, 0.2],
+            visibleMarker: true,
+          },
+        ],
         goins: [
           {
             id: 'goin-hoard-001',
@@ -466,8 +480,31 @@ const actorMotionTimelineReport = {
         timeMs: 240,
         events: ['carrier-fleeing'],
         actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-carrier'
-          ? { ...actor, state: 'fleeing_with_goin', world: [0.1, 0.44, 0.3], heading: [-1, 0, 0.2] }
+          ? {
+              ...actor,
+              state: 'fleeing_with_goin',
+              world: [0.1, 0.44, 0.3],
+              heading: [-1, 0, 0.2],
+              statusCue: {
+                schema: 'lerms.preview-bench-actor-status-cue.v0',
+                cue: 'carrying_goin',
+                label: 'CARRY',
+                targetGoinId: 'goin-hoard-001',
+                visibleAboveActor: true,
+              },
+            }
           : actor),
+        possessionEvents: [
+          {
+            frameIndex: 1,
+            event: 'possession-gained',
+            goinId: 'goin-hoard-001',
+            actorId: 'schnoz-carrier',
+            label: 'CARRY',
+            world: [0.04, 0.5, 0.32],
+            visibleMarker: true,
+          },
+        ],
         goins: [
           {
             id: 'goin-hoard-001',
@@ -485,8 +522,39 @@ const actorMotionTimelineReport = {
         timeMs: 480,
         events: ['juice-hit-carrier'],
         actorMotion: actorMotionReport.payload.actorMotion.map((actor) => actor.actorId === 'schnoz-hit-carrier'
-          ? { ...actor, state: 'tumbling', world: [-0.2, 0.5, -0.45] }
+          ? {
+              ...actor,
+              state: 'tumbling',
+              world: [-0.2, 0.5, -0.45],
+              statusCue: {
+                schema: 'lerms.preview-bench-actor-status-cue.v0',
+                cue: 'noticing_loose_goin',
+                label: '?',
+                targetGoinId: 'goin-hoard-001',
+                visibleAboveActor: true,
+              },
+            }
           : actor),
+        possessionEvents: [
+          {
+            frameIndex: 2,
+            event: 'possession-released',
+            goinId: 'goin-hoard-001',
+            actorId: 'schnoz-carrier',
+            label: 'LOOSE',
+            world: [-0.2, 0.46, -0.45],
+            visibleMarker: true,
+          },
+          {
+            frameIndex: 2,
+            event: 'loose-target-noticed',
+            goinId: 'goin-hoard-001',
+            actorId: 'schnoz-hit-carrier',
+            label: 'TARGET',
+            world: [-0.2, 0.46, -0.45],
+            visibleMarker: true,
+          },
+        ],
         goins: [
           {
             id: 'goin-hoard-001',
@@ -545,6 +613,35 @@ const actorMotionTimelineReport = {
           actorId: 'schnoz-hit-carrier',
           world: [-0.2, 0.46, -0.45],
           visibleTargetPull: true,
+        },
+      ],
+      possessionEvents: [
+        {
+          frameIndex: 0,
+          event: 'possession-gained',
+          goinId: 'goin-hoard-001',
+          actorId: 'schnoz-carrier',
+          label: 'CARRY',
+          world: [-0.22, 0.48, 0.2],
+          visibleMarker: true,
+        },
+        {
+          frameIndex: 2,
+          event: 'possession-released',
+          goinId: 'goin-hoard-001',
+          actorId: 'schnoz-carrier',
+          label: 'LOOSE',
+          world: [-0.2, 0.46, -0.45],
+          visibleMarker: true,
+        },
+        {
+          frameIndex: 2,
+          event: 'loose-target-noticed',
+          goinId: 'goin-hoard-001',
+          actorId: 'schnoz-hit-carrier',
+          label: 'TARGET',
+          world: [-0.2, 0.46, -0.45],
+          visibleMarker: true,
         },
       ],
     },
@@ -612,14 +709,21 @@ assert.deepEqual(actorMotionTimelineState.goinCustody.goinIds, ['goin-hoard-001'
 assert.equal(actorMotionTimelineState.goinCustody.attachments.length, 2);
 assert.equal(actorMotionTimelineState.goinCustody.drops.length, 1);
 assert.equal(actorMotionTimelineState.goinCustody.rerouteTargets.length, 1);
+assert.equal(actorMotionTimelineState.goinCustody.possessionEvents.length, 3);
 assert.ok(actorMotionTimelineState.movingActorIds.includes('schnoz-carrier'));
 assert.ok(actorMotionTimelineState.stateTransitions.some((transition) => transition.actorId === 'schnoz-carrier' && transition.to === 'fleeing_with_goin'));
 assert.equal(actorMotionTimelineState.frames[0].visualPrimitives.length, 2);
 assert.equal(actorMotionTimelineState.frames[0].visualPrimitives[0].kind, 'proxy_schnoz_sphere');
+assert.equal(actorMotionTimelineState.frames[1].visualPrimitives[0].statusCue.schema, 'lerms.preview-bench-actor-status-cue.v0');
+assert.equal(actorMotionTimelineState.frames[1].visualPrimitives[0].statusCue.label, 'CARRY');
+assert.equal(actorMotionTimelineState.frames[2].visualPrimitives[1].statusCue.label, '?');
+assert.equal(actorMotionTimelineState.frames[2].visualPrimitives[1].statusCue.targetGoinId, 'goin-hoard-001');
 assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives.length, 1);
 assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].schema, 'kaminos.lerms-preview-goin-visual.v0');
 assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].kind, 'proxy_goin_marker');
 assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].custodyRole, 'carried_attachment');
+assert.equal(actorMotionTimelineState.frames[0].goinVisualPrimitives[0].possessionCue.label, 'CARRY');
+assert.equal(actorMotionTimelineState.frames[2].goinVisualPrimitives[0].possessionCue.label, 'LOOSE');
 assert.equal(actorMotionTimelineState.payloadSource.root, 'lerms-preview');
 
 const directGoinVisualPrimitives = createLermsPreviewGoinVisualPrimitives(actorMotionTimelineState.frames[0]);
@@ -633,10 +737,12 @@ assert.ok(interpolatedTimelineFrame.blend > 0.49 && interpolatedTimelineFrame.bl
 const interpolatedCarrier = interpolatedTimelineFrame.visualPrimitives.find((primitive) => primitive.actorId === 'schnoz-carrier');
 assert.ok(interpolatedCarrier);
 assert.ok(interpolatedCarrier.position[0] > -0.35 && interpolatedCarrier.position[0] < 0.15);
+assert.equal(interpolatedCarrier.statusCue.label, 'CARRY');
 const interpolatedGoin = interpolatedTimelineFrame.goinVisualPrimitives.find((primitive) => primitive.goinId === 'goin-hoard-001');
 assert.ok(interpolatedGoin);
 assert.ok(interpolatedGoin.position[0] > -0.23 && interpolatedGoin.position[0] < 0.05);
 assert.equal(interpolatedGoin.custodyRole, 'carried_attachment');
+assert.equal(interpolatedGoin.possessionCue.label, 'CARRY');
 
 const timelineBenchState = createLermsPreviewBenchState(registry, {
   posture: 'inspect',

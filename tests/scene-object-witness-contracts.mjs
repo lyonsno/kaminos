@@ -32,6 +32,10 @@ assert.match(witness, /playbackSamples/, 'witness records timeline playback samp
 assert.match(witness, /stableActorIdentities/, 'witness verifies stable actor identity continuity during timeline playback');
 assert.match(witness, /goinVisuals/, 'witness records goin visual evidence during LERMS timeline playback');
 assert.match(witness, /visibleGoinPlayback/, 'witness verifies visible goin custody during LERMS timeline playback');
+assert.match(witness, /statusCue/, 'witness records LERM actor status cue evidence during timeline playback');
+assert.match(witness, /possessionCue/, 'witness records goin possession cue evidence during timeline playback');
+assert.match(witness, /visibleAboveActor/, 'witness requires above-actor status indicators in LERMS timeline playback');
+assert.match(witness, /possessionEvents/, 'witness verifies source possession-change events during LERMS timeline playback');
 assert.match(indexHtml, /lerms-preview-goin-custody/, 'Preview Bench sidebar exposes goin custody playback status');
 assert.match(witness, /splat-asset-inbox/, 'witness supports a Splat Asset Inbox import scenario');
 assert.match(witness, /splat-direct-drop-ingest/, 'witness supports a direct splat drop ingest scenario');

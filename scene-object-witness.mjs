@@ -27,6 +27,7 @@ let lastEvidence = {};
 let effectiveUrl = null;
 let effectiveServerRoots = null;
 let browserVersion = null;
+let scenarioShot = null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -1846,16 +1847,23 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
           position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
         })),
       });
-      const first = sample();
-      await wait(520);
-      const second = sample();
-      await wait(520);
-      const third = sample();
+      const sampleAt = async (elapsedMs) => {
+        window.kaminosLermsPreviewSetTimelineWitnessElapsed?.(elapsedMs);
+        await wait(80);
+        return { requestedElapsedMs: elapsedMs, ...sample() };
+      };
+      const first = await sampleAt(0);
+      const second = await sampleAt(650);
+      const third = await sampleAt(2550);
+      const fourth = await sampleAt(3150);
+      const witnessScreenshotFrame = window.kaminosLermsPreviewSetTimelineWitnessElapsed?.(2550) || null;
+      await wait(120);
       state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
       return {
         state,
         actorTimeline: state.actorMotionTimeline || null,
-        playbackSamples: [first, second, third],
+        playbackSamples: [first, second, third, fourth],
+        witnessScreenshotFrame,
         tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
         panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
         actorTimelineBadge: document.getElementById('lerms-preview-actor-timeline-badge')?.textContent?.trim() || null,
@@ -1898,6 +1906,15 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   if (!evidence.actorTimeline?.goinCustody?.attachments?.length || !evidence.actorTimeline?.goinCustody?.drops?.length || !evidence.actorTimeline?.goinCustody?.rerouteTargets?.length) {
     throw new Error(`LERMS actor timeline goin custody lacks attachment/drop/reroute proof: ${JSON.stringify(evidence)}`);
   }
+  if (!evidence.actorTimeline?.goinCustody?.possessionEvents?.length) {
+    throw new Error(`LERMS actor timeline goin custody lacks possessionEvents proof: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.frames?.some(frame => (frame.visualPrimitives || []).some(primitive => primitive.statusCue?.visibleAboveActor === true))) {
+    throw new Error(`LERMS actor timeline source frames lack visibleAboveActor statusCue proof: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.frames?.some(frame => (frame.goinVisualPrimitives || []).some(primitive => primitive.possessionCue?.visibleMarker === true))) {
+    throw new Error(`LERMS actor timeline source frames lack possessionCue marker proof: ${JSON.stringify(evidence)}`);
+  }
   if (!evidence.actorTimeline?.downgrades?.includes('timevarying_payload_not_live_socket_stream')) {
     throw new Error(`LERMS actor timeline lost live-stream downgrade: ${JSON.stringify(evidence)}`);
   }
@@ -1905,8 +1922,11 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
     throw new Error(`LERMS actor timeline UI badge mismatch: ${JSON.stringify(evidence)}`);
   }
   const samples = evidence.playbackSamples || [];
-  if (samples.length !== 3 || !samples.every(sample => sample.playbackFrame?.schema === 'kaminos.lerms-preview-timeline-playback-frame.v0')) {
+  if (samples.length !== 4 || !samples.every(sample => sample.playbackFrame?.schema === 'kaminos.lerms-preview-timeline-playback-frame.v0')) {
     throw new Error(`LERMS actor timeline playback samples missing: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.witnessScreenshotFrame?.current?.label !== 'drop') {
+    throw new Error(`LERMS actor timeline witness screenshot frame did not seek to drop beat: ${JSON.stringify(evidence)}`);
   }
   const samplePositions = samples.map(sample => JSON.stringify((sample.actorObjects || []).map(actor => [actor.actorId, actor.position])));
   if (new Set(samplePositions).size < 2) {
@@ -1924,6 +1944,16 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   if (!samples.some(sample => (sample.goinObjects || []).some(goin => ['dropped_marker', 'rolling_drop', 'reroute_target'].includes(goin.custodyRole)))) {
     throw new Error(`LERMS actor timeline did not render dropped/reroute goin markers: ${JSON.stringify(evidence)}`);
   }
+  if (!samples.some(sample => (sample.actorObjects || []).some(actor => actor.statusCue?.label && actor.statusCue?.visibleAboveActor === true))) {
+    throw new Error(`LERMS actor timeline did not render actor statusCue labels: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.some(sample => (sample.goinObjects || []).some(goin => goin.possessionCue?.label && goin.possessionCue?.visibleMarker === true))) {
+    throw new Error(`LERMS actor timeline did not render goin possessionCue labels: ${JSON.stringify(evidence)}`);
+  }
+  const dropSample = samples.find(sample => Number(sample.requestedElapsedMs) === 2550);
+  if (!dropSample || !(dropSample.goinObjects || []).some(goin => goin.possessionCue?.label === 'LOOSE')) {
+    throw new Error(`LERMS actor timeline drop sample did not preserve LOOSE possessionCue on the rolling goin: ${JSON.stringify(evidence)}`);
+  }
   if (!evidence.goinCustodyText || evidence.goinCustodyText === 'not loaded') {
     throw new Error(`LERMS actor timeline goin custody UI text missing: ${JSON.stringify(evidence)}`);
   }
@@ -1931,6 +1961,16 @@ async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   if (new Set(sampleActorIdSets).size !== 1) {
     throw new Error(`LERMS actor timeline visual objects lost stable identity set during playback: ${JSON.stringify(evidence)}`);
   }
+  phase = 'scenario-lerms-preview-bench-actor-motion-timeline-capturing-cue-frame';
+  await evaluate(ws, `
+    (async () => {
+      window.kaminosLermsPreviewSetTimelineWitnessElapsed?.(3150);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      window.kaminosLermsPreviewSetTimelineWitnessElapsed?.(3150);
+      return window.__kaminosLermsPreviewTimelinePlaybackFrame || null;
+    })()
+  `, { timeoutMs: 5000 });
+  scenarioShot = await capturePngScreenshot(ws, out);
 }
 
 async function runSelectedDeleteShortcutScenario(ws) {
@@ -4616,7 +4656,7 @@ try {
   }
 
   phase = 'capturing-screenshot';
-  const finalShot = await capturePngScreenshot(ws, out);
+  const finalShot = scenarioShot || await capturePngScreenshot(ws, out);
 
   phase = 'writing-report';
   const report = {

@@ -841,6 +841,7 @@ let lermsPreviewRouteState = {
   benchId: 'terrain-preview',
   posture: 'inspect',
   cameraId: 'overview-oblique',
+  timelineStartMs: 0,
 };
 let lermsActorMotionPayloadReport = null;
 let lermsActorMotionPayloadSource = null;
@@ -849,6 +850,7 @@ let lermsActorMotionTimelineSource = null;
 let previewBenchPayloadReports = [];
 let previewBenchPayloadSources = [];
 let lermsPreviewTimelinePlaybackStartMs = 0;
+let lermsPreviewAppliedCameraId = null;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 window.__kaminosPreviewBenchPayloads = [];
@@ -4353,8 +4355,12 @@ function disposeLermsPreviewActorVisual(object) {
   object.traverse?.(child => {
     if (child.geometry?.dispose) child.geometry.dispose();
     if (Array.isArray(child.material)) {
-      for (const material of child.material) material?.dispose?.();
+      for (const material of child.material) {
+        material?.map?.dispose?.();
+        material?.dispose?.();
+      }
     } else {
+      child.material?.map?.dispose?.();
       child.material?.dispose?.();
     }
   });
@@ -4402,6 +4408,66 @@ function ensureLermsPreviewGoinsGroup() {
   return lermsPreviewGoinsGroup;
 }
 
+function lermsPreviewCueColor(label) {
+  if (label === '?' || label === 'TARGET') return '#baff6a';
+  if (label === '!' || label === 'DROP' || label === 'LOOSE') return '#ffd45a';
+  if (label === 'CARRY') return '#7ee7ff';
+  return '#fff4cc';
+}
+
+function makeLermsPreviewLabelSprite(text, color = '#fff4cc', scale = 0.24) {
+  const label = String(text || '').trim();
+  if (!label) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(18, 16, 14, 0.82)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 5;
+  const x = 12;
+  const y = 12;
+  const width = canvas.width - 24;
+  const height = canvas.height - 24;
+  const radius = 18;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = '700 42px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(label, canvas.width / 2, canvas.height / 2 + 1);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.name = `lerms-preview-cue-label-${label}`;
+  sprite.scale.set(scale * 2.7, scale, 1);
+  sprite.userData.kaminosLermsPreviewCueLabel = {
+    schema: 'kaminos.lerms-preview-cue-label.v0',
+    label,
+    color,
+  };
+  return sprite;
+}
+
 function makeLermsPreviewActorVisualMesh(primitive) {
   const actorGroup = new THREE.Group();
   actorGroup.name = `lerms-preview-actor-${primitive.actorId || 'unknown'}`;
@@ -4411,6 +4477,7 @@ function makeLermsPreviewActorVisualMesh(primitive) {
     state: primitive.state,
     kind: primitive.kind,
     downgrade: primitive.downgrade,
+    statusCue: primitive.statusCue || null,
   };
   const radius = primitive.radius || 0.18;
   const color = new THREE.Color(primitive.color || '#d83d37');
@@ -4446,6 +4513,15 @@ function makeLermsPreviewActorVisualMesh(primitive) {
   nose.castShadow = true;
   actorGroup.add(nose);
 
+  const statusCue = primitive.statusCue || null;
+  if (statusCue?.visibleAboveActor && statusCue.label) {
+    const cueLabel = makeLermsPreviewLabelSprite(statusCue.label, lermsPreviewCueColor(statusCue.label), 0.22);
+    if (cueLabel) {
+      cueLabel.position.set(0, radius * 2.7, 0);
+      actorGroup.add(cueLabel);
+    }
+  }
+
   const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.35, 0];
   actorGroup.position.set(position[0], position[1] - 0.85, position[2]);
   return actorGroup;
@@ -4463,6 +4539,7 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
     carrierActorId: primitive.carrierActorId || null,
     droppedByActorId: primitive.droppedByActorId || null,
     targetedByActorIds: primitive.targetedByActorIds || [],
+    possessionCue: primitive.possessionCue || null,
   };
   const radius = primitive.radius || 0.085;
   const color = new THREE.Color(primitive.color || '#f5c542');
@@ -4493,6 +4570,15 @@ function makeLermsPreviewGoinVisualMesh(primitive) {
   ring.name = `${goinGroup.name}-custody-ring`;
   ring.rotation.x = Math.PI / 2;
   goinGroup.add(ring);
+
+  const possessionCue = primitive.possessionCue || null;
+  if (possessionCue?.visibleMarker && possessionCue.label) {
+    const cueLabel = makeLermsPreviewLabelSprite(possessionCue.label, lermsPreviewCueColor(possessionCue.label), 0.18);
+    if (cueLabel) {
+      cueLabel.position.set(0, radius * 3.6, 0);
+      goinGroup.add(cueLabel);
+    }
+  }
 
   const position = Array.isArray(primitive.position) ? primitive.position : [0, 0.45, 0];
   goinGroup.position.set(position[0], position[1] - 0.58, position[2]);
@@ -4553,6 +4639,21 @@ function updateLermsPreviewTimelinePlaybackFrame(nowMs = performance.now()) {
   renderLermsPreviewGoinVisuals(lermsPreviewBenchState, playbackFrame.goinVisualPrimitives);
   window.__kaminosLermsPreviewTimelinePlaybackFrame = playbackFrame;
   return true;
+}
+
+window.kaminosLermsPreviewSetTimelineWitnessElapsed = (elapsedMs) => {
+  const elapsed = Number(elapsedMs);
+  if (!Number.isFinite(elapsed)) return null;
+  lermsPreviewTimelinePlaybackStartMs = performance.now() - elapsed;
+  updateLermsPreviewTimelinePlaybackFrame(performance.now());
+  window._kaminosDirty?.();
+  renderPipeline?.render?.();
+  return window.__kaminosLermsPreviewTimelinePlaybackFrame || null;
+};
+
+function lermsPreviewTimelineStartMsFromRoute(value, fallback = 0) {
+  const startMs = Number(value);
+  return Number.isFinite(startMs) && startMs >= 0 ? startMs : fallback;
 }
 
 function worldChamberReceiptSourceLabel(receiptSource) {
@@ -4624,9 +4725,25 @@ function sourceFromRoute(route) {
   };
 }
 
+function applyLermsPreviewCameraPreset(previewState) {
+  const preset = previewState?.activeCamera;
+  if (!preset?.id || !camera || !controls) return;
+  if (lermsPreviewAppliedCameraId === preset.id) return;
+  const position = Array.isArray(preset.position) ? preset.position : [7.5, 5.5, 7.5];
+  const target = Array.isArray(preset.target) ? preset.target : [0, 0.4, 0];
+  camera.position.fromArray(position);
+  camera.fov = Number(preset.fov || camera.fov || 40);
+  camera.updateProjectionMatrix();
+  controls.target.fromArray(target);
+  controls.update();
+  lermsPreviewAppliedCameraId = preset.id;
+  window._kaminosDirty?.();
+}
+
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
+  applyLermsPreviewCameraPreset(previewState);
   const timelineFrame = updateLermsPreviewTimelinePlaybackFrame() ? window.__kaminosLermsPreviewTimelinePlaybackFrame : null;
   if (!timelineFrame) {
     renderLermsPreviewActorVisuals(previewState);
@@ -4780,11 +4897,13 @@ async function initWorldChambersRoute() {
   const requestedPosture = params.get('posture');
   const requestedBench = params.get('bench');
   const requestedCamera = params.get('camera');
-  if (requestedPosture || requestedBench || requestedCamera) {
+  const requestedTimelineStartMs = params.get('lerms_timeline_start_ms');
+  if (requestedPosture || requestedBench || requestedCamera || requestedTimelineStartMs) {
     updateLermsPreviewBenchState({
       posture: requestedPosture || lermsPreviewRouteState.posture,
       benchId: requestedBench || lermsPreviewRouteState.benchId,
       cameraId: requestedCamera || lermsPreviewRouteState.cameraId,
+      timelineStartMs: lermsPreviewTimelineStartMsFromRoute(requestedTimelineStartMs, lermsPreviewRouteState.timelineStartMs),
     });
   }
   const receiptRoute = worldChamberReceiptUrlFromRoute(params);
@@ -4858,7 +4977,7 @@ async function initWorldChambersRoute() {
         root: actorTimelineRoute.root,
         path: actorTimelineRoute.path,
       };
-      lermsPreviewTimelinePlaybackStartMs = performance.now();
+      lermsPreviewTimelinePlaybackStartMs = performance.now() - lermsPreviewTimelineStartMsFromRoute(lermsPreviewRouteState.timelineStartMs);
       renderWorldChambersPanel();
       const previewState = window.__kaminosLermsPreviewState;
       setInfo(`LERMS Preview Bench actor timeline loaded: ${previewState.actorMotionTimeline?.frameCount || 0} frames`);
