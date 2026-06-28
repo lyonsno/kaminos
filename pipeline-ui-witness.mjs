@@ -708,6 +708,145 @@ try {
       trayState,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'tray-milestone') {
+    // Comprehensive milestone witness:
+    // 1. Stage Bake populates tray
+    // 2. Probe route adds missing-backend run
+    // 3. Use output as conditioning creates reuse link
+    // All in one flow
+
+    // Step 1: Pipeline → Stage Bake
+    const pipelineTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="pipeline"]');
+      const rect = tab?.getBoundingClientRect();
+      return { point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, pipelineTab.point);
+    await wait(1000);
+
+    const bakeBtn = await waitFor(cdp, `(() => {
+      const btn = document.getElementById('pipeline-conditioning-route-request-button');
+      const rect = btn?.getBoundingClientRect();
+      return { ok: rect?.width > 0, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`, 'Stage Bake button', 12000);
+    await click(cdp, bakeBtn.point);
+    await wait(800);
+
+    // Step 2: Switch to Tray tab
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      const rect = tab.getBoundingClientRect();
+      return { point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    // Step 3: Probe route
+    const probeBtn = await evalJson(cdp, `(() => {
+      const btn = document.getElementById('route-composition-tray-probe-route-button');
+      const rect = btn?.getBoundingClientRect();
+      return { point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, probeBtn.point);
+    await wait(500);
+
+    // Step 4: Use source as reference conditioning (click "Use as reference" on first source)
+    const reuseBtn = await waitFor(cdp, `(() => {
+      const btn = document.querySelector('[data-tray-reuse-role="reference"]');
+      if (!btn) return { ok: false };
+      const rect = btn.getBoundingClientRect();
+      return { ok: rect.width > 0, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`, 'Use as reference button', 8000);
+    await click(cdp, reuseBtn.point);
+    await wait(500);
+
+    await capture(cdp, beforePath);
+
+    // Step 5: Verify full milestone state
+    const milestone = await waitFor(cdp, `(() => {
+      const tray = window.kaminosRouteCompositionTrayState?.();
+      if (!tray) return { ok: false, reason: 'no tray' };
+      const panel = document.getElementById('route-composition-tray-panel');
+      const sourceRows = panel?.querySelectorAll('[data-tray-artifact-id]') || [];
+      const condRows = panel?.querySelectorAll('[data-tray-conditioning-role]') || [];
+      const runRows = panel?.querySelectorAll('[data-tray-run-id]') || [];
+      const reuseButtons = panel?.querySelectorAll('[data-tray-reuse-buttons]') || [];
+      const dropZone = document.getElementById('route-composition-tray-drop-zone');
+
+      // Stage Bake created source + conditioning + fixture run
+      const hasBakeSource = tray.sourceArtifacts.some(a => a.artifactId.includes('beauty'));
+      const hasDepthCond = tray.conditioningLinks.some(l => l.role === 'depth');
+      const hasNormalCond = tray.conditioningLinks.some(l => l.role === 'normal');
+      const hasMaskCond = tray.conditioningLinks.some(l => l.role === 'mask');
+      const hasBakeRun = tray.routeRuns.some(r => r.effectiveRoute === 'request_only');
+
+      // Route probe created missing-backend run
+      const hasProbeRun = tray.routeRuns.some(r => r.requestedRoute === 'sharp_image_to_splat' && r.statusBadge === 'missing-backend');
+
+      // Reuse created a reference conditioning link
+      const hasReuse = tray.conditioningLinks.some(l => l.role === 'reference');
+
+      // No false live claims
+      const noLive = tray.routeRuns.every(r => r.statusBadge !== 'real');
+      const noOutputs = tray.outputArtifacts.length === 0;
+
+      // Import surface exists
+      const hasDropZone = Boolean(dropZone);
+      const hasReuseButtons = reuseButtons.length > 0;
+
+      // Missing-backend run visible with correct display
+      const missingBackendEl = [...runRows].find(el => el.getAttribute('data-tray-run-status') === 'missing-backend');
+
+      const trayIdField = document.getElementById('route-composition-tray-id')?.textContent || '';
+
+      return {
+        ok: Boolean(
+          hasBakeSource && hasDepthCond && hasNormalCond && hasMaskCond && hasBakeRun
+          && hasProbeRun && hasReuse
+          && noLive && noOutputs
+          && hasDropZone && hasReuseButtons
+          && missingBackendEl
+          && trayIdField !== 'empty'
+          && sourceRows.length >= 1
+          && condRows.length >= 6
+          && runRows.length >= 2
+        ),
+        tray: {
+          trayId: tray.trayId,
+          sourceCount: tray.sourceArtifacts.length,
+          conditioningCount: tray.conditioningLinks.length,
+          runCount: tray.routeRuns.length,
+          outputCount: tray.outputArtifacts.length,
+          conditioningRoles: tray.conditioningLinks.map(l => l.role),
+          runBadges: tray.routeRuns.map(r => r.statusBadge),
+          runRoutes: tray.routeRuns.map(r => r.requestedRoute),
+        },
+        dom: {
+          sourceRows: sourceRows.length,
+          condRows: condRows.length,
+          runRows: runRows.length,
+          reuseButtons: reuseButtons.length,
+          hasDropZone,
+          missingBackendVisible: Boolean(missingBackendEl),
+        },
+        checks: {
+          hasBakeSource, hasDepthCond, hasNormalCond, hasMaskCond, hasBakeRun,
+          hasProbeRun, hasReuse, noLive, noOutputs,
+        },
+      };
+    })()`, 'Tray milestone verification', 12000);
+
+    await capture(cdp, afterPath);
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      beforePath,
+      afterPath,
+      milestone,
+    }, null, 2));
   } else if (scenario === 'route-composition-tray') {
     // Click the Tray tab
     const trayTab = await evalJson(cdp, `(() => {

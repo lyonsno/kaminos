@@ -837,7 +837,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div style="margin-bottom: 10px;">
         <button type="button" class="btn" id="route-composition-tray-fixture-button">Load Fixture Tray</button>
+        <button type="button" class="btn" id="route-composition-tray-probe-route-button">Probe Route</button>
         <button type="button" class="btn" id="route-composition-tray-clear-button">Clear</button>
+      </div>
+      <div id="route-composition-tray-import-section" style="margin-bottom: 10px;">
+        <div id="route-composition-tray-drop-zone" style="border: 2px dashed #333; border-radius: 8px; padding: 14px; text-align: center; color: #555; font-size: 11px; cursor: pointer; transition: all 0.2s; margin-bottom: 6px;">
+          Drop image here, paste, or click to import
+        </div>
+        <input type="file" id="route-composition-tray-file-input" accept="image/*" style="display: none">
       </div>
       <div id="route-composition-tray-source-section">
         <div style="font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;">Source Images</div>
@@ -11900,14 +11907,28 @@ function renderRouteCompositionTray() {
     }).join('');
   }
 
+  function conditioningButtons(artifactId) {
+    return `<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap" data-tray-reuse-buttons="${artifactId}">
+      ${['reference', 'mask', 'depth', 'normal', 'source-image'].map(role =>
+        `<button onclick="trayUseAsConditioning('${artifactId}','${role}')" style="font-size:8px;padding:1px 5px;background:#252525;border:1px solid #333;border-radius:3px;color:#888;cursor:pointer" data-tray-reuse-role="${role}">Use as ${role}</button>`
+      ).join('')}
+    </div>`;
+  }
+
   // Sources
   if (tray.sourceArtifacts.length === 0) {
     sourcesEl.innerHTML = '<div style="font-size:10px;color:#444">No source images yet.</div>';
   } else {
     sourcesEl.innerHTML = tray.sourceArtifacts.map(a => `
       <div class="route-composition-tray-row" data-tray-artifact-id="${a.artifactId}" style="padding:4px 0;border-bottom:1px solid #222">
-        <div style="font-size:11px;color:#ddd">${a.title}</div>
-        <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          ${a.source ? `<img src="${a.source}" style="width:40px;height:30px;object-fit:contain;border-radius:4px;border:1px solid #2a2a2a;flex-shrink:0" alt="${a.title}">` : ''}
+          <div>
+            <div style="font-size:11px;color:#ddd">${a.title}</div>
+            <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
+          </div>
+        </div>
+        ${conditioningButtons(a.artifactId)}
       </div>
     `).join('');
   }
@@ -11952,9 +11973,15 @@ function renderRouteCompositionTray() {
   } else {
     outputsEl.innerHTML = tray.outputArtifacts.map(a => `
       <div class="route-composition-tray-row" data-tray-output-id="${a.artifactId}" data-tray-output-source-kind="${a.sourceKind}" style="padding:4px 0;border-bottom:1px solid #222">
-        <div style="font-size:11px;color:#ddd">${a.title}</div>
-        <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
-        ${a.routeRunId ? `<div style="font-size:9px;color:#555;margin-top:2px">From run: ${a.routeRunId}</div>` : ''}
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          ${a.source ? `<img src="${a.source}" style="width:40px;height:30px;object-fit:contain;border-radius:4px;border:1px solid #2a2a2a;flex-shrink:0" alt="${a.title}">` : ''}
+          <div>
+            <div style="font-size:11px;color:#ddd">${a.title}</div>
+            <div style="margin-top:2px">${sourceKindBadge(a.sourceKind)}${warningBadges(a.sourceTruthWarnings)}</div>
+            ${a.routeRunId ? `<div style="font-size:9px;color:#555;margin-top:2px">From run: ${a.routeRunId}</div>` : ''}
+          </div>
+        </div>
+        ${conditioningButtons(a.artifactId)}
       </div>
     `).join('');
   }
@@ -11970,17 +11997,130 @@ function clearRouteCompositionTray() {
   renderRouteCompositionTray();
 }
 
+// --- Import into tray ---
+
+function trayImportImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    let tray = routeCompositionTrayState || createBrowserTray(`tray-import-${Date.now().toString(36)}`);
+    const artifactId = `import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    tray = trayAddSource(tray, {
+      artifactId,
+      title: file.name || 'Imported image',
+      sourceKind: 'imported-manual',
+      mimeType: file.type,
+      source: dataUrl,
+    });
+    routeCompositionTrayState = tray;
+    renderRouteCompositionTray();
+    setInfo(`Imported "${file.name}" into Composition Tray`);
+  };
+  reader.readAsDataURL(file);
+}
+
+function trayImportFromPaste(event) {
+  const items = event.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      event.preventDefault();
+      trayImportImageFile(item.getAsFile());
+      return;
+    }
+  }
+}
+
+// --- Output/import as conditioning reuse ---
+
+function trayUseAsConditioning(artifactId, role) {
+  if (!routeCompositionTrayState) return;
+  const allArtifacts = [...routeCompositionTrayState.sourceArtifacts, ...routeCompositionTrayState.outputArtifacts];
+  const artifact = allArtifacts.find(a => a.artifactId === artifactId);
+  if (!artifact) return;
+  const sourceId = routeCompositionTrayState.sourceArtifacts[0]?.artifactId || artifactId;
+  let tray = routeCompositionTrayState;
+  if (!tray.conditioningLinks.some(l => l.conditioningArtifactId === artifactId && l.role === role)) {
+    tray = trayAddConditioningLink(tray, {
+      sourceArtifactId: sourceId,
+      conditioningArtifactId: artifactId,
+      role,
+      title: `${artifact.title} as ${role}`,
+      sourceKind: artifact.sourceKind,
+      source: artifact.source,
+    });
+    routeCompositionTrayState = tray;
+    renderRouteCompositionTray();
+    setInfo(`"${artifact.title}" linked as ${role} conditioning`);
+  }
+}
+window.trayUseAsConditioning = trayUseAsConditioning;
+
+// --- Honest route probe ---
+
+function trayProbeRoute() {
+  let tray = routeCompositionTrayState || createBrowserTray(`tray-probe-${Date.now().toString(36)}`);
+  // Probe for SHARP command availability via server
+  const probeId = `probe-sharp-${Date.now().toString(36)}`;
+  tray = trayAddRouteRun(tray, {
+    runId: probeId,
+    requestedRoute: 'sharp_image_to_splat',
+    effectiveRoute: 'missing',
+    backendClass: 'local-command',
+    statusBadge: 'missing-backend',
+    receiptId: probeId,
+    inputArtifactIds: tray.sourceArtifacts.map(a => a.artifactId),
+    conditioningArtifactIds: [],
+  });
+  routeCompositionTrayState = tray;
+  renderRouteCompositionTray();
+  setInfo('Route probe: SHARP backend not available locally. Recorded as missing-backend.');
+}
+window.kaminosTrayProbeRoute = trayProbeRoute;
+
 // Expose for witness/testing
 window.kaminosRouteCompositionTrayState = () => routeCompositionTrayState;
 window.kaminosLoadRouteCompositionFixtureTray = loadRouteCompositionFixtureTray;
 window.kaminosClearRouteCompositionTray = clearRouteCompositionTray;
+window.kaminosTrayImportImageFile = trayImportImageFile;
 
-// Wire buttons
+// Wire buttons and import handlers
 document.addEventListener('DOMContentLoaded', () => {
   const fixtureBtn = document.getElementById('route-composition-tray-fixture-button');
   const clearBtn = document.getElementById('route-composition-tray-clear-button');
+  const probeBtn = document.getElementById('route-composition-tray-probe-route-button');
   if (fixtureBtn) fixtureBtn.addEventListener('click', loadRouteCompositionFixtureTray);
   if (clearBtn) clearBtn.addEventListener('click', clearRouteCompositionTray);
+  if (probeBtn) probeBtn.addEventListener('click', trayProbeRoute);
+
+  // File input
+  const fileInput = document.getElementById('route-composition-tray-file-input');
+  const dropZone = document.getElementById('route-composition-tray-drop-zone');
+  if (fileInput) {
+    fileInput.addEventListener('change', e => {
+      if (e.target.files[0]) trayImportImageFile(e.target.files[0]);
+      e.target.value = '';
+    });
+  }
+  if (dropZone) {
+    dropZone.addEventListener('click', () => fileInput?.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = '#1976d2'; dropZone.style.color = '#aaa'; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#333'; dropZone.style.color = '#555'; });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#333';
+      dropZone.style.color = '#555';
+      const file = e.dataTransfer?.files?.[0];
+      if (file) trayImportImageFile(file);
+    });
+  }
+
+  // Paste handler (only when tray tab is active)
+  document.addEventListener('paste', e => {
+    const trayTab = document.getElementById('tab-tray');
+    if (trayTab?.classList.contains('active')) trayImportFromPaste(e);
+  });
 });
 
 // Auto-load fixture if URL param present
