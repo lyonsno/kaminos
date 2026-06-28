@@ -1491,6 +1491,413 @@ async function runStartupEmptyScenario(ws) {
   }
 }
 
+async function runWorldChambersLermsUnderhillScenario(ws) {
+  phase = 'scenario-world-chambers-lerms-underhill';
+  lastEvidence.worldChambersLermsUnderhill = await evaluate(ws, `
+    (() => {
+      if (typeof window.kaminosWorldChambersDebugState !== 'function') {
+        throw new Error('world chambers witness missing kaminosWorldChambersDebugState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      const debug = window.kaminosWorldChambersDebugState();
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        debug,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('world-chamber-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('world-chamber-route')?.textContent?.trim() || null,
+        authorityText: document.getElementById('world-chamber-authority')?.textContent?.trim() || null,
+        evidenceText: document.getElementById('world-chamber-evidence')?.textContent?.trim() || null,
+        absenceRows: [...document.querySelectorAll('#world-chamber-absence-list .world-chamber-row')].map(row => row.textContent.trim()),
+      };
+    })()
+  `);
+  const evidence = lastEvidence.worldChambersLermsUnderhill;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`world chambers tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.activeChamberId !== 'lerms-underhill') {
+    throw new Error(`world chambers active chamber mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.route !== 'first-vertical-composer/witness-file') {
+    throw new Error(`world chambers route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authority !== 'synthetic_fixture') {
+    throw new Error(`world chambers authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authorityNote !== 'integrated fixture evidence; not a live first vertical') {
+    throw new Error(`world chambers authority note mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.falseLiveClaim !== false) {
+    throw new Error(`world chambers false-live guard did not report false: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.lerms !== 8 || evidence.debug?.summary?.goins !== 2) {
+    throw new Error(`world chambers summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.absenceRows.some(row => row.includes('liveFingerJuicePackets'))) {
+    throw new Error(`world chambers absence rows did not include liveFingerJuicePackets: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runWorldChambersLermsUnderhillReceiptUrlScenario(ws) {
+  phase = 'scenario-world-chambers-lerms-underhill-receipt-url';
+  lastEvidence.worldChambersLermsUnderhillReceiptUrl = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (typeof window.kaminosWorldChambersDebugState !== 'function') {
+        throw new Error('world chambers receipt-url witness missing kaminosWorldChambersDebugState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let debug = window.kaminosWorldChambersDebugState();
+      for (let i = 0; i < 80; i++) {
+        debug = window.kaminosWorldChambersDebugState();
+        if (debug.receiptSource?.mode && debug.receiptSource.mode !== 'embedded_fixture') break;
+        if (debug.receiptLoadError) break;
+        await wait(125);
+      }
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        debug,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('world-chamber-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('world-chamber-route')?.textContent?.trim() || null,
+        authorityText: document.getElementById('world-chamber-authority')?.textContent?.trim() || null,
+        receiptSourceText: document.getElementById('world-chamber-receipt-source')?.textContent?.trim() || null,
+        loadErrorText: document.getElementById('world-chamber-load-error')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.worldChambersLermsUnderhillReceiptUrl;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`world chambers receipt-url tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.receiptLoadError) {
+    throw new Error(`world chambers receipt-url load failed: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.activeChamberId !== 'lerms-underhill') {
+    throw new Error(`world chambers receipt-url active chamber mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.route !== 'first-vertical-composer/witness-file') {
+    throw new Error(`world chambers receipt-url route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.authority !== 'synthetic_fixture') {
+    throw new Error(`world chambers receipt-url authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.receiptSource?.mode !== 'external_url' && evidence.debug?.receiptSource?.mode !== 'server_file') {
+    throw new Error(`world chambers receiptSource was not external: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.usingFixtureFallback !== false) {
+    throw new Error(`world chambers receipt-url used fixture fallback: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.lerms !== 8 || evidence.debug?.summary?.goins !== 2) {
+    throw new Error(`world chambers receipt-url summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.debug?.summary?.carrierDrops !== 1 || evidence.debug?.summary?.juiceHits !== 1) {
+    throw new Error(`world chambers receipt-url event summary mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.receiptSourceText || evidence.receiptSourceText === 'embedded Kaminos fixture receipt') {
+    throw new Error(`world chambers receipt source UI did not show external source: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runLermsPreviewBenchTerrainScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-terrain';
+  lastEvidence.lermsPreviewBenchTerrain = await evaluate(ws, `
+    (() => {
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS Preview Bench witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      const state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        state,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('lerms-preview-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('lerms-preview-route')?.textContent?.trim() || null,
+        benchText: document.getElementById('lerms-preview-bench-id')?.textContent?.trim() || null,
+        postureText: document.getElementById('lerms-preview-posture')?.textContent?.trim() || null,
+        cameraText: document.getElementById('lerms-preview-camera')?.textContent?.trim() || null,
+        sourceBadgeText: document.getElementById('lerms-preview-source-badge')?.textContent?.trim() || null,
+        fallbackBadgeText: document.getElementById('lerms-preview-fallback-badge')?.textContent?.trim() || null,
+        freshnessBadgeText: document.getElementById('lerms-preview-freshness-badge')?.textContent?.trim() || null,
+        terrainText: document.getElementById('lerms-preview-terrain-count')?.textContent?.trim() || null,
+        cameraChips: [...document.querySelectorAll('#lerms-preview-camera-list .lerms-preview-camera')].map(chip => chip.textContent.trim()),
+      };
+    })()
+  `);
+  const evidence = lastEvidence.lermsPreviewBenchTerrain;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`LERMS Preview Bench witness schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.hostDescriptor !== 'kaminos.world-chamber.preview-bench.v0') {
+    throw new Error(`LERMS Preview Bench host descriptor mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`LERMS Preview Bench route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.route !== 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview') {
+    throw new Error(`LERMS Preview Bench route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.badges?.source !== 'synthetic_fixture' || evidence.state?.badges?.fallback !== 'embedded_fixture') {
+    throw new Error(`LERMS Preview Bench source/fallback badges mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.activeCamera?.id !== 'overview-oblique') {
+    throw new Error(`LERMS Preview Bench camera mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.terrain?.sampleCount !== 16) {
+    throw new Error(`LERMS Preview Bench terrain sample count mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const cameraIds = ['overview-oblique', 'topographic-top', 'route-follow', 'actor-close', 'terrain-cross-section', 'operator-free-camera'];
+  for (const cameraId of cameraIds) {
+    if (!evidence.cameraChips.includes(cameraId)) {
+      throw new Error(`LERMS Preview Bench missing camera chip ${cameraId}: ${JSON.stringify(evidence)}`);
+    }
+  }
+}
+
+async function runLermsPreviewBenchActorMotionScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-actor-motion';
+  lastEvidence.lermsPreviewBenchActorMotion = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS actor motion witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if (state.actorMotion?.actorCount) break;
+        await wait(125);
+      }
+      const actorMotionPayload = state.actorMotion || null;
+      return {
+        state,
+        actorMotionPayload,
+        actorVisuals: window.__kaminosLermsPreviewActorVisuals || null,
+        actorVisualObjects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => child.userData?.kaminosLermsPreviewActor || null).filter(Boolean),
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        title: document.getElementById('lerms-preview-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('lerms-preview-route')?.textContent?.trim() || null,
+        actorMotionBadge: document.getElementById('lerms-preview-actor-motion-badge')?.textContent?.trim() || null,
+        actorCountText: document.getElementById('lerms-preview-actor-count')?.textContent?.trim() || null,
+        statesText: document.getElementById('lerms-preview-actor-states')?.textContent?.trim() || null,
+        motionSourceText: document.getElementById('lerms-preview-motion-source')?.textContent?.trim() || null,
+        downgradeText: document.getElementById('lerms-preview-motion-downgrade')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.lermsPreviewBenchActorMotion;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS actor motion Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`LERMS actor motion witness state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`LERMS actor motion route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.payloadSchema !== 'lerms.preview-bench-actor-motion-payload.v0') {
+    throw new Error(`LERMS actor motion payload schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.route !== 'lerms/preview-bench/actor-motion-payload-file') {
+    throw new Error(`LERMS actor motion payload route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.source?.authority !== 'live_simulation') {
+    throw new Error(`LERMS actor motion source authority mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.actorCount < 6) {
+    throw new Error(`LERMS actor motion actor count too low: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorMotionPayload?.states?.includes('hit_reacting') || !evidence.actorMotionPayload?.states?.includes('rerouting_to_goin')) {
+    throw new Error(`LERMS actor motion state coverage missing hit/reroute: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionPayload?.selectedClipletSource?.model !== 'kimodo') {
+    throw new Error(`LERMS actor motion cliplet model mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorMotionPayload?.downgrades?.includes('gutterglass_camera_witness_custody_not_claimed')) {
+    throw new Error(`LERMS actor motion payload did not preserve custody downgrade: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorMotionBadge !== 'live_simulation') {
+    throw new Error(`LERMS actor motion UI badge mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisuals?.schema !== 'kaminos.lerms-preview-actor-visual-layer.v0') {
+    throw new Error(`LERMS actor visual layer schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisuals?.actorVisualCount !== evidence.actorMotionPayload.actorCount) {
+    throw new Error(`LERMS actor visual count does not match payload actor count: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorVisualObjects?.length !== evidence.actorMotionPayload.actorCount) {
+    throw new Error(`LERMS actor visual objects missing from scene: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorVisualObjects.every(actor => actor.kind === 'proxy_schnoz_sphere' && actor.downgrade === 'proxy_body_visual_only')) {
+    throw new Error(`LERMS actor visual objects lost proxy downgrade identity: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runPreviewBenchPayloadContractScenario(ws) {
+  phase = 'scenario-preview-bench-payload-contract';
+  lastEvidence.previewBenchPayloadContract = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('Preview Bench payload witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if ((state.previewPayloads || []).length) break;
+        await wait(125);
+      }
+      const previewBenchPayloads = window.__kaminosPreviewBenchPayloads || state.previewPayloads || [];
+      return {
+        state,
+        previewBenchPayloads,
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        adapterCountText: document.getElementById('lerms-preview-adapter-count')?.textContent?.trim() || null,
+        adapterRows: [...document.querySelectorAll('#preview-bench-adapter-list .world-chamber-row')].map(row => ({
+          text: row.textContent?.trim() || '',
+          schema: row.dataset.previewBenchPayloadSchema || row.dataset.previewBenchPayloadField || null,
+          route: row.dataset.previewBenchPayloadRoute || null,
+          authority: row.dataset.previewBenchPayloadAuthority || null,
+        })),
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.previewBenchPayloadContract;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`Preview Bench payload tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`Preview Bench payload host state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.hostDescriptor !== 'kaminos.world-chamber.preview-bench.v0') {
+    throw new Error(`Preview Bench payload host descriptor mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`Preview Bench payload route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const payload = evidence.previewBenchPayloads?.[0];
+  if (payload?.schema !== 'kaminos.preview-bench.payload-state.v0') {
+    throw new Error(`Preview Bench payload state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.payloadSchema || payload.payloadSchema.startsWith('kaminos.')) {
+    throw new Error(`Preview Bench payload did not preserve source-owned schema: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.route || payload.route === 'kaminos/preview-bench/payload-file') {
+    throw new Error(`Preview Bench payload did not preserve source-owned route: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.source?.authority) {
+    throw new Error(`Preview Bench payload source authority missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!Array.isArray(payload.rejectedSurfaces) || payload.rejectedSurfaces.length === 0) {
+    throw new Error(`Preview Bench payload rejected debug surfaces missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.custody?.sourceOwns?.length || !payload.custody?.kaminosOwns?.length) {
+    throw new Error(`Preview Bench payload custody split missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.adapterRows?.some(row => row.schema === payload.payloadSchema && row.authority === payload.source.authority)) {
+    throw new Error(`Preview Bench payload UI row missing schema/authority identity: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.adapterCountText !== String(evidence.previewBenchPayloads.length)) {
+    throw new Error(`Preview Bench payload UI count mismatch: ${JSON.stringify(evidence)}`);
+  }
+}
+
+async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-actor-motion-timeline';
+  lastEvidence.lermsPreviewBenchActorMotionTimeline = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS actor timeline witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if (state.actorMotionTimeline?.frameCount) break;
+        await wait(125);
+      }
+      const sample = () => ({
+        playbackFrame: window.__kaminosLermsPreviewTimelinePlaybackFrame || null,
+        actorVisuals: window.__kaminosLermsPreviewActorVisuals || null,
+        actorObjects: [...(window.__kaminosLermsPreviewActorsGroup?.children || [])].map(child => ({
+          ...(child.userData?.kaminosLermsPreviewActor || {}),
+          position: child.position ? [Number(child.position.x.toFixed(3)), Number(child.position.y.toFixed(3)), Number(child.position.z.toFixed(3))] : null,
+        })),
+      });
+      const first = sample();
+      await wait(520);
+      const second = sample();
+      await wait(520);
+      const third = sample();
+      state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      return {
+        state,
+        actorTimeline: state.actorMotionTimeline || null,
+        playbackSamples: [first, second, third],
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        actorTimelineBadge: document.getElementById('lerms-preview-actor-timeline-badge')?.textContent?.trim() || null,
+        timelineFrameText: document.getElementById('lerms-preview-timeline-frame')?.textContent?.trim() || null,
+        actorCountText: document.getElementById('lerms-preview-actor-count')?.textContent?.trim() || null,
+        statesText: document.getElementById('lerms-preview-actor-states')?.textContent?.trim() || null,
+        downgradeText: document.getElementById('lerms-preview-motion-downgrade')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 20000 });
+  const evidence = lastEvidence.lermsPreviewBenchActorMotionTimeline;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS actor timeline Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.payloadSchema !== 'lerms.preview-bench-actor-motion-timeline.v0') {
+    throw new Error(`LERMS actor timeline payload schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.route !== 'lerms/preview-bench/actor-motion-timeline-file') {
+    throw new Error(`LERMS actor timeline route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.actorTimeline?.frameCount < 6 || evidence.actorTimeline?.durationMs < 1200) {
+    throw new Error(`LERMS actor timeline duration/frame count too low: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.requiresMotionWitness || evidence.actorTimeline?.staticActorPayloadAcceptedAsLoop !== false) {
+    throw new Error(`LERMS actor timeline did not require motion witness: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.movingActorIds?.length || !evidence.actorTimeline?.stateTransitions?.length) {
+    throw new Error(`LERMS actor timeline lacks motion/state-transition proof: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimeline?.downgrades?.includes('timevarying_payload_not_live_socket_stream')) {
+    throw new Error(`LERMS actor timeline lost live-stream downgrade: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.actorTimelineBadge?.startsWith('timeline:')) {
+    throw new Error(`LERMS actor timeline UI badge mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const samples = evidence.playbackSamples || [];
+  if (samples.length !== 3 || !samples.every(sample => sample.playbackFrame?.schema === 'kaminos.lerms-preview-timeline-playback-frame.v0')) {
+    throw new Error(`LERMS actor timeline playback samples missing: ${JSON.stringify(evidence)}`);
+  }
+  const samplePositions = samples.map(sample => JSON.stringify((sample.actorObjects || []).map(actor => [actor.actorId, actor.position])));
+  if (new Set(samplePositions).size < 2) {
+    throw new Error(`LERMS actor timeline visual objects did not move between samples: ${JSON.stringify(evidence)}`);
+  }
+  if (!samples.every(sample => sample.actorVisuals?.actorVisualCount > 0)) {
+    throw new Error(`LERMS actor timeline visual layer missing during playback: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -3755,6 +4162,18 @@ try {
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
+  } else if (scenario === 'world-chambers-lerms-underhill') {
+    await runWorldChambersLermsUnderhillScenario(ws);
+  } else if (scenario === 'world-chambers-lerms-underhill-receipt-url') {
+    await runWorldChambersLermsUnderhillReceiptUrlScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-terrain') {
+    await runLermsPreviewBenchTerrainScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-actor-motion') {
+    await runLermsPreviewBenchActorMotionScenario(ws);
+  } else if (scenario === 'preview-bench-payload-contract') {
+    await runPreviewBenchPayloadContractScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-actor-motion-timeline') {
+    await runLermsPreviewBenchActorMotionTimelineScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {
