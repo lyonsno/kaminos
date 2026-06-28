@@ -113,6 +113,15 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
 .motion-control-panel[data-motion-controls-applicable="false"] .btn { opacity: 0.45; cursor: not-allowed; }
 .select-input { flex: 1; background: #202020; border: 1px solid #333; color: #bbb; border-radius: 5px; padding: 4px 8px; font-size: 11px; outline: none; }
 .select-input:focus { border-color: #1976d2; }
+.motion-panel-phrase-preview { display: grid; gap: 6px; margin: 7px 0 8px 68px; }
+.motion-panel-phrase-preview-empty { font: 10px 'SF Mono', monospace; color: #555; }
+.motion-panel-phrase-chip { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; width: 100%; text-align: left; padding: 7px 8px; background: #202020; border: 1px solid #333; border-radius: 6px; color: #cfcfcf; cursor: pointer; }
+.motion-panel-phrase-chip:hover, .motion-panel-phrase-chip.active { border-color: #6f5b2a; background: #25231c; color: #fff2cc; }
+.motion-panel-phrase-title { font-size: 11px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.motion-panel-phrase-range { justify-self: end; font: 10px 'SF Mono', monospace; color: #d7bd72; }
+.motion-panel-phrase-rawbar { grid-column: 1 / -1; display: grid; gap: 2px; grid-auto-flow: column; grid-auto-columns: minmax(10px, 1fr); height: 4px; }
+.motion-panel-phrase-rawtick { min-width: 10px; border-radius: 2px; background: rgba(240, 210, 138, 0.28); }
+.motion-panel-phrase-meta { grid-column: 1 / -1; font: 9px 'SF Mono', monospace; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
@@ -558,6 +567,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { background: #555; cursor: n
           <option value="full" selected>Full source</option>
         </select>
       </div>
+      <div id="motion-panel-phrase-preview" class="motion-panel-phrase-preview" aria-live="polite"></div>
       <div class="slider-row">
         <span class="slider-label">Interrupt</span>
         <select id="motion-panel-cliplet-interrupt" class="select-input">
@@ -973,7 +983,7 @@ import {
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
-} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627';
+} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627-smart-phrase-20260627';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
@@ -4676,6 +4686,78 @@ function motionPanelSpeedFromInputs() {
   return Math.max(0.05, Math.min(5, Number.isFinite(speed) ? speed : 1));
 }
 
+function motionPanelPhrasePreviewSummary(cliplets) {
+  const segments = Array.isArray(cliplets?.segments) ? cliplets.segments : [];
+  const rawSegments = Array.isArray(cliplets?.rawSegments) ? cliplets.rawSegments : [];
+  return {
+    schema: 'kaminos.motion-panel-phrase-preview.v0',
+    outputLayer: cliplets?.segmentation?.outputLayer || 'phrase',
+    phraseCount: segments.length,
+    rawSegmentCount: rawSegments.length,
+    phrases: segments.map(segment => ({
+      id: segment.id,
+      index: segment.index,
+      labelGuess: segment.labelGuess,
+      startSourceFrame: segment.startSourceFrame,
+      endSourceFrame: segment.endSourceFrame,
+      rawSegmentIds: Array.isArray(segment.rawSegmentIds) ? [...segment.rawSegmentIds] : [],
+      rawSegmentRange: segment.rawSegmentRange || null,
+      reasons: Array.isArray(segment.coalescing?.reasons) ? [...segment.coalescing.reasons] : [],
+    })),
+  };
+}
+
+function renderMotionPanelPhrasePreview(cliplets) {
+  const host = document.getElementById('motion-panel-phrase-preview');
+  if (!host) return null;
+  const summary = motionPanelPhrasePreviewSummary(cliplets);
+  const selectedId = String(document.getElementById('motion-panel-cliplet-playback')?.value || 'full');
+  host.innerHTML = '';
+  if (!summary.phrases.length) {
+    const empty = document.createElement('div');
+    empty.className = 'motion-panel-phrase-preview-empty';
+    empty.textContent = 'No phrases';
+    host.appendChild(empty);
+    return summary;
+  }
+  for (const phrase of summary.phrases) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `motion-panel-phrase-chip${phrase.id === selectedId ? ' active' : ''}`;
+    chip.dataset.segmentId = phrase.id;
+    const start = Number.isFinite(Number(phrase.startSourceFrame)) ? Number(phrase.startSourceFrame).toFixed(0) : '?';
+    const end = Number.isFinite(Number(phrase.endSourceFrame)) ? Number(phrase.endSourceFrame).toFixed(0) : '?';
+    const rawCount = Math.max(1, phrase.rawSegmentIds.length || 1);
+    const title = document.createElement('div');
+    title.className = 'motion-panel-phrase-title';
+    title.textContent = phrase.labelGuess || `phrase ${phrase.index}`;
+    const range = document.createElement('div');
+    range.className = 'motion-panel-phrase-range';
+    range.textContent = `${start}-${end}`;
+    const rawbar = document.createElement('div');
+    rawbar.className = 'motion-panel-phrase-rawbar';
+    for (let index = 0; index < rawCount; index++) {
+      const tick = document.createElement('span');
+      tick.className = 'motion-panel-phrase-rawtick';
+      rawbar.appendChild(tick);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'motion-panel-phrase-meta';
+    meta.textContent = `${summary.outputLayer} raw x${rawCount}${phrase.reasons.length ? ` / ${phrase.reasons.join('+')}` : ''}`;
+    chip.append(title, range, rawbar, meta);
+    chip.addEventListener('click', () => {
+      const select = document.getElementById('motion-panel-cliplet-playback');
+      if (select) {
+        select.value = phrase.id;
+        select.dispatchEvent(new Event('change'));
+      }
+      renderMotionPanelPhrasePreview(cliplets);
+    });
+    host.appendChild(chip);
+  }
+  return summary;
+}
+
 function renderMotionPanelClipletPlaybackOptions(cliplets) {
   const select = document.getElementById('motion-panel-cliplet-playback');
   if (!select) return null;
@@ -4694,6 +4776,7 @@ function renderMotionPanelClipletPlaybackOptions(cliplets) {
     select.appendChild(option);
   }
   select.value = [...select.options].some(option => option.value === previous) ? previous : 'full';
+  const phrasePreview = renderMotionPanelPhrasePreview(cliplets);
   return {
     schema: 'kaminos.motion-panel-cliplet-playback-options.v0',
     selected: select.value,
@@ -4701,6 +4784,7 @@ function renderMotionPanelClipletPlaybackOptions(cliplets) {
     segmentCount: segments.length,
     outputLayer: cliplets?.segmentation?.outputLayer || 'phrase',
     rawSegmentCount: Array.isArray(cliplets?.rawSegments) ? cliplets.rawSegments.length : null,
+    phrasePreview,
   };
 }
 
@@ -6529,6 +6613,7 @@ function initKaminosMotionAgencyRoute() {
     motionTemporalState.lastClipletInterrupt = null;
     motionTemporalState.lastClipletInterruptTimeline = null;
     updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+    renderMotionPanelPhrasePreview(motionTemporalState.generatedMotionCliplets);
   };
   document.getElementById('motion-panel-cliplet-playback')?.addEventListener('change', resetMotionClipletSelection);
   document.getElementById('motion-panel-cliplet-interrupt')?.addEventListener('change', resetMotionClipletSelection);

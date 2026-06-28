@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const args = new Map();
-const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet']);
+const BOOLEAN_ARGS = new Set(['--export-current-view', '--export-selected-cliplet', '--focus-phrase-preview']);
 for (let i = 2; i < process.argv.length;) {
   const key = process.argv[i];
   if (!String(key || '').startsWith('--')) throw new Error(`Unexpected positional argument: ${key}`);
@@ -40,6 +40,7 @@ const tileWidth = positiveInt(args.get('--tile-width'), 420, '--tile-width');
 const columns = positiveInt(args.get('--columns'), frameTotal, '--columns');
 const exportCurrentView = args.has('--export-current-view');
 const exportSelectedCliplet = args.has('--export-selected-cliplet');
+const focusPhrasePreview = args.has('--focus-phrase-preview');
 const exportReferenceMode = exportReferenceModeFromArgs(args.get('--export-reference-mode'));
 const cameraPosition = args.get('--camera-position') || '';
 const cameraTarget = args.get('--camera-target') || '';
@@ -114,6 +115,7 @@ function writeReport(report) {
     columns,
     exportCurrentView,
     exportSelectedCliplet,
+    focusPhrasePreview,
     exportReferenceMode,
     cameraPosition,
     cameraTarget,
@@ -354,6 +356,27 @@ async function configureClipletPlayback(ws) {
   })()`, { timeoutMs: 20000 });
 }
 
+async function focusMotionPanelPhrasePreview(ws) {
+  return evaluate(ws, `(() => {
+    const host = document.getElementById('motion-panel-phrase-preview');
+    if (!host) throw new Error('missing motion panel phrase preview');
+    host.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const chips = [...host.querySelectorAll('.motion-panel-phrase-chip')].map(chip => ({
+      text: chip.textContent || '',
+      segmentId: chip.dataset.segmentId || null,
+      active: chip.classList.contains('active'),
+    }));
+    if (!chips.length) throw new Error('motion panel phrase preview has no chips');
+    const rect = host.getBoundingClientRect();
+    return {
+      schema: 'kaminos.motion-panel-live-phrase-preview-focus.v0',
+      chipCount: chips.length,
+      chips,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    };
+  })()`, { timeoutMs: 20000 });
+}
+
 async function captureFrame(ws, index) {
   const debug = await evaluate(ws, `(() => {
     const state = window.kaminosGeneratedPoseTemporalDebugState?.();
@@ -384,6 +407,7 @@ async function captureFrame(ws, index) {
       sourceFrameTotal: sourceGhost?.sourceFrameTotal ?? null,
       sourceOrientationRemap: sourceGhost?.sourceOrientationRemap || state?.sourceOrientationRemap || null,
       phraseControlApplicability: window.motionPhraseControlApplicabilityDebugState?.() || null,
+      phrasePreview: state?.clipletPlaybackOptions?.phrasePreview || null,
       sourceInterpolation: actor?.sourceInterpolation ?? null,
       sourceGhost,
     };
@@ -706,6 +730,11 @@ try {
   if (!generated?.takeShelf?.selectedTake) throw new Error(`motion take shelf did not select generated take: ${JSON.stringify(generated?.takeShelf || null)}`);
   phase = 'configuring-cliplet-playback';
   const configuredClipletPlayback = await configureClipletPlayback(ws);
+  let phrasePreviewFocus = null;
+  if (focusPhrasePreview) {
+    phase = 'focusing-phrase-preview';
+    phrasePreviewFocus = await focusMotionPanelPhrasePreview(ws);
+  }
   await delay(settleMs);
 
   let filmstrip = null;
@@ -757,6 +786,7 @@ try {
     preflight,
     configured,
     configuredClipletPlayback,
+    phrasePreviewFocus,
     generated,
     takeShelf: generated?.takeShelf || null,
     frames,

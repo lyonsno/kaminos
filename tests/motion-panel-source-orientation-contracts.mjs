@@ -63,7 +63,7 @@ assert.ok(Math.abs(clip.temporalSamples.at(-1).root[1]) < 0.02, 'explicit +Z up 
 
 assert.match(index, /id="motion-panel-source-up-axis"/, 'Motion panel exposes a source up-axis selector');
 assert.match(index, /id="motion-panel-source-forward-axis"/, 'Motion panel exposes a source forward-axis selector');
-assert.match(index, /from '\.\/motion-core\.js\?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627'/, 'motion route preserves the source-orientation cache-bust marker while adding the cliplet, interrupt, and phrase-cliplet module markers');
+assert.match(index, /from '\.\/motion-core\.js\?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627-smart-phrase-20260627'/, 'motion route preserves the source-orientation cache-bust marker while adding the cliplet, interrupt, phrase-cliplet, and smart-phrase module markers');
 assert.match(index, /function motionPanelSourceOrientationRemapFromInputs/, 'browser reads source orientation controls through a helper');
 assert.match(index, /sourceOrientationRemap: motionPanelSourceOrientationRemapFromInputs\(\)/, 'preview bridge passes source orientation remap into the adapter');
 assert.match(index, /sourceOrientationRemap: normalizeMotionSourceOrientationRemap/, 'source ghost normalizes source orientation remap evidence');

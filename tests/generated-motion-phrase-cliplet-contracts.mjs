@@ -80,13 +80,12 @@ assert.ok(
 
 const coalesced = cliplets.segments.find(segment => (
   Array.isArray(segment.rawSegmentIds)
-  && segment.rawSegmentIds.length >= 3
-  && String(segment.labelGuess).includes('approach')
-  && String(segment.labelGuess).includes('brake')
+  && segment.labelGuess === 'approach-impact / compress'
 ));
 assert.ok(coalesced, 'rapid approach/brake alternation becomes one operator-facing phrase cliplet');
 assert.equal(coalesced.schema, 'kaminos.generated-motion-phrase-cliplet-segment.v0');
 assert.equal(coalesced.layer, 'phrase');
+assert.ok(coalesced.rawSegmentIds.length >= 2, 'merged phrase preserves multiple raw approach/brake children');
 assert.ok(coalesced.rawSegmentRange.startIndex <= coalesced.rawSegmentRange.endIndex, 'merged phrase records raw child index range');
 assert.deepEqual(
   coalesced.rawSegmentIds,
@@ -95,7 +94,7 @@ assert.deepEqual(
     .map(raw => raw.id),
   'merged phrase raw child ids match the raw child range',
 );
-assert.ok(coalesced.coalescing.reasons.includes('short-compatible-phrase'), 'merged phrase records a coalescing reason');
+assert.ok(coalesced.coalescing.reasons.includes('named-approach-impact'), 'merged phrase records a named coalescing reason');
 assert.equal(coalesced.startSourceFrame, cliplets.rawSegments[coalesced.rawSegmentRange.startIndex].startSourceFrame);
 assert.equal(coalesced.endSourceFrame, cliplets.rawSegments[coalesced.rawSegmentRange.endIndex].endSourceFrame);
 

@@ -66,9 +66,13 @@ assert.ok(cliplets.rawSegments.length >= 4, 'fixture preserves multiple raw sour
 assert.ok(cliplets.segments.length >= 2, 'fixture produces multiple phrase cliplets for playback');
 assert.ok(cliplets.segments.length <= cliplets.rawSegments.length, 'phrase cliplets coalesce raw source crumbs');
 
-const brake = cliplets.segments.find(segment => segment.labelGuess.includes('brake'));
+const brake = cliplets.segments.find(segment => segment.labelGuess === 'approach-impact / compress');
 const escape = cliplets.segments.find(segment => segment.labelGuess.includes('escape'));
-assert.ok(brake, 'fixture includes a brake cliplet');
+assert.ok(brake, 'fixture includes an approach-impact phrase cliplet with raw brake children');
+assert.ok(
+  brake.rawSegmentIds.some(id => cliplets.rawSegments.find(raw => raw.id === id)?.labelGuess.includes('brake')),
+  'approach-impact phrase preserves raw brake evidence',
+);
 assert.ok(escape, 'fixture includes an escape cliplet');
 
 const playback = buildGeneratedPoseClipletPlayback({

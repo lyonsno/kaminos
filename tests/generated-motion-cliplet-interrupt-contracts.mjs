@@ -62,8 +62,8 @@ const generatedClip = {
 };
 
 const cliplets = buildGeneratedPoseTemporalCliplets(generatedClip);
-const brake = cliplets.segments.find(segment => segment.labelGuess.includes('brake'));
-assert.ok(brake, 'fixture includes a brake cliplet');
+const brake = cliplets.segments.find(segment => segment.labelGuess === 'approach-impact / compress');
+assert.ok(brake, 'fixture includes an approach-impact phrase cliplet with raw brake children');
 const triggerRawBrake = cliplets.rawSegments.find(segment => (
   brake.rawSegmentIds?.includes(segment.id)
   && segment.labelGuess.includes('brake')

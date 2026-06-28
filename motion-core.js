@@ -1865,6 +1865,13 @@ function summarizeGeneratedPoseTemporalSegment(input, edges, startIndex, endInde
 
 function generatedPoseClipletLabelCategory(segment) {
   const label = String(segment?.labelGuess || '').toLowerCase();
+  const phases = new Set((segment?.phaseLabels || []).map(value => String(value || '').toLowerCase()));
+  const hasPhase = value => phases.has(value);
+  if (hasPhase('escape')) return 'escape';
+  if (hasPhase('settle') || hasPhase('recover') || hasPhase('return')) return 'settle';
+  if (hasPhase('notice') || hasPhase('anticipate')) return 'hesitate';
+  if (hasPhase('brake')) return 'brake';
+  if (hasPhase('commit') || hasPhase('enter')) return 'approach';
   if (label.includes('escape') || label.includes('sprint')) return 'escape';
   if (label.includes('settle') || label.includes('recover') || label.includes('return')) return 'settle';
   if (label.includes('hesitate') || label.includes('notice')) return 'hesitate';
@@ -1895,6 +1902,9 @@ function generatedPoseClipletGroupCanAbsorb(group, next) {
 
 function generatedPosePhraseClipletLabel(rawSegments) {
   const categories = generatedPoseClipletCategories(rawSegments);
+  if ((categories.has('hesitate') || categories.has('brake')) && categories.has('escape')) return 'startle-recoil / escape';
+  if (categories.has('approach') && categories.has('brake')) return 'approach-impact / compress';
+  if (categories.has('settle')) return 'recover-settle / return';
   if (categories.has('approach') && categories.has('brake')) return 'approach-brake / commit-compress';
   if (categories.has('escape')) return 'escape / sprint';
   if (categories.has('settle')) return 'settle / recover';
@@ -1904,7 +1914,10 @@ function generatedPosePhraseClipletLabel(rawSegments) {
   return rawSegments[0]?.labelGuess || 'source motion';
 }
 
-function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, phraseCount) {
+function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, phraseCount, {
+  labelGuess = null,
+  reasons = null,
+} = {}) {
   const first = rawSegments[0];
   const last = rawSegments.at(-1);
   const phaseLabels = [...new Set(rawSegments.flatMap(segment => segment.phaseLabels || []))];
@@ -1926,7 +1939,7 @@ function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, ph
     layer: 'phrase',
     id: `${idRoot}_phrase_${String(phraseIndex).padStart(3, '0')}`,
     index: phraseIndex,
-    labelGuess: generatedPosePhraseClipletLabel(rawSegments),
+    labelGuess: labelGuess || generatedPosePhraseClipletLabel(rawSegments),
     sourceClipId: input.id,
     startIndex: first.startIndex,
     endIndex: last.endIndex,
@@ -1948,7 +1961,7 @@ function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, ph
     coalescing: {
       schema: 'kaminos.generated-motion-phrase-cliplet-coalescing.v0',
       method: 'duration-compatible-raw-preserving-v0',
-      reasons: rawSegments.length > 1 ? ['short-compatible-phrase'] : ['single-raw-segment'],
+      reasons: reasons || (rawSegments.length > 1 ? ['short-compatible-phrase'] : ['single-raw-segment']),
       rawSegmentCount: rawSegments.length,
       phraseIndex,
       phraseCount,
@@ -1956,17 +1969,116 @@ function summarizeGeneratedPosePhraseCliplet(input, rawSegments, phraseIndex, ph
   };
 }
 
+function findGeneratedPoseStartleRecoilEnd(rawSegments, start) {
+  const firstCategory = generatedPoseClipletLabelCategory(rawSegments[start]);
+  if (firstCategory !== 'hesitate' && firstCategory !== 'brake') return null;
+  let sawAnticipation = firstCategory === 'hesitate';
+  let sawBrake = firstCategory === 'brake';
+  let escapeEnd = null;
+  let shockEnd = start;
+  let shockCount = firstCategory === 'hesitate' || firstCategory === 'brake' ? 1 : 0;
+  let sawApproachBridge = false;
+  for (let index = start + 1; index < Math.min(rawSegments.length, start + 6); index++) {
+    const category = generatedPoseClipletLabelCategory(rawSegments[index]);
+    if (category === 'settle') break;
+    if (category === 'approach' && sawAnticipation && !escapeEnd) {
+      sawApproachBridge = true;
+      continue;
+    }
+    if (category === 'hesitate') sawAnticipation = true;
+    if (category === 'brake') sawBrake = true;
+    if (category === 'hesitate' || category === 'brake') {
+      shockEnd = index;
+      shockCount++;
+    }
+    if (category === 'escape') escapeEnd = index;
+    if (escapeEnd !== null && category !== 'escape') break;
+  }
+  if (escapeEnd !== null && (sawAnticipation || sawBrake)) {
+    const totalDuration = Number(rawSegments[escapeEnd].endTime) - Number(rawSegments[start].startTime);
+    return totalDuration <= 1.25 ? escapeEnd : null;
+  }
+  if (sawAnticipation && sawBrake && (shockCount >= 3 || sawApproachBridge)) {
+    const totalDuration = Number(rawSegments[shockEnd].endTime) - Number(rawSegments[start].startTime);
+    return totalDuration <= 5.5 ? shockEnd : null;
+  }
+  return null;
+}
+
+function findGeneratedPoseApproachImpactEnd(rawSegments, start) {
+  if (generatedPoseClipletLabelCategory(rawSegments[start]) !== 'approach') return null;
+  let sawBrake = false;
+  let end = start;
+  for (let index = start + 1; index < rawSegments.length; index++) {
+    const category = generatedPoseClipletLabelCategory(rawSegments[index]);
+    if (category !== 'approach' && category !== 'brake') break;
+    if (category === 'brake') sawBrake = true;
+    end = index;
+  }
+  if (!sawBrake || end === start) return null;
+  const totalDuration = Number(rawSegments[end].endTime) - Number(rawSegments[start].startTime);
+  return totalDuration <= 1.2 ? end : null;
+}
+
+function findGeneratedPoseRecoverSettleEnd(rawSegments, start) {
+  if (generatedPoseClipletLabelCategory(rawSegments[start]) !== 'settle') return null;
+  let end = start;
+  while (end + 1 < rawSegments.length && generatedPoseClipletLabelCategory(rawSegments[end + 1]) === 'settle') end++;
+  return end;
+}
+
 function buildGeneratedPosePhraseCliplets(input, rawSegments) {
   const groups = [];
-  for (const segment of rawSegments) {
-    const current = groups.at(-1);
-    if (current && generatedPoseClipletGroupCanAbsorb(current, segment)) {
-      current.push(segment);
-    } else {
-      groups.push([segment]);
+  for (let index = 0; index < rawSegments.length;) {
+    const startleEnd = findGeneratedPoseStartleRecoilEnd(rawSegments, index);
+    if (startleEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, startleEnd + 1),
+        labelGuess: 'startle-recoil / escape',
+        reasons: ['named-startle-recoil'],
+      });
+      index = startleEnd + 1;
+      continue;
     }
+    const impactEnd = findGeneratedPoseApproachImpactEnd(rawSegments, index);
+    if (impactEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, impactEnd + 1),
+        labelGuess: 'approach-impact / compress',
+        reasons: ['named-approach-impact'],
+      });
+      index = impactEnd + 1;
+      continue;
+    }
+    const recoverEnd = findGeneratedPoseRecoverSettleEnd(rawSegments, index);
+    if (recoverEnd !== null) {
+      groups.push({
+        segments: rawSegments.slice(index, recoverEnd + 1),
+        labelGuess: 'recover-settle / return',
+        reasons: ['named-recover-settle'],
+      });
+      index = recoverEnd + 1;
+      continue;
+    }
+    const segment = rawSegments[index];
+    const current = groups.at(-1);
+    if (current && generatedPoseClipletGroupCanAbsorb(current.segments, segment)) {
+      current.segments.push(segment);
+      current.labelGuess = current.labelGuess || generatedPosePhraseClipletLabel(current.segments);
+      current.reasons = current.reasons || ['short-compatible-phrase'];
+    } else {
+      groups.push({
+        segments: [segment],
+        labelGuess: null,
+        reasons: null,
+      });
+    }
+    index++;
   }
-  return groups.map((group, index) => summarizeGeneratedPosePhraseCliplet(input, group, index, groups.length));
+  return groups.map((group, index) => summarizeGeneratedPosePhraseCliplet(input, group.segments, index, groups.length, {
+    labelGuess: group.labelGuess,
+    reasons: group.reasons,
+  }));
 }
 
 export function generatedPoseClipletForSourceFrame(cliplets, sourceFrame = 0) {
