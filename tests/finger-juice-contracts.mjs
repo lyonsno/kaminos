@@ -73,6 +73,7 @@ assert.match(webgpuCoreSource, /wgsl-density-continuity-projection-v0/, 'WebGPU 
 assert.match(webgpuCoreSource, /wgsl-sampled-neighborhood-density-v0/, 'WebGPU solver names the sampled particle-neighborhood density contract');
 assert.match(webgpuCoreSource, /wgsl-deep-density-continuity-projection-v0/, 'WebGPU solver names the deeper density continuity projection contract');
 assert.match(webgpuCoreSource, /wgsl-local-pair-density-projection-v0/, 'WebGPU solver names the local same-chemistry pair density projection contract');
+assert.match(webgpuCoreSource, /wgsl-neighbor-support-substrate-v0/, 'WebGPU solver names the GPU neighbor-support substrate contract');
 assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
 assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
@@ -124,6 +125,11 @@ assert.match(webgpuCoreSource, /deepContinuityProjectionCandidateCount/, 'deeper
 assert.match(webgpuCoreSource, /localPairDensityStats/, 'WebGPU solver reports local same-chemistry pair density diagnostics');
 assert.match(webgpuCoreSource, /localPairProjectionCandidateCount/, 'local pair diagnostics report projection candidate count');
 assert.match(webgpuCoreSource, /averageLocalPairNeighbors/, 'local pair diagnostics report average same-chemistry pair support');
+assert.match(webgpuCoreSource, /neighborSupportSubstrateStats/, 'WebGPU solver reports GPU neighbor-support substrate diagnostics');
+assert.match(webgpuCoreSource, /neighborSupportSubstrateMode/, 'neighbor-support diagnostics report the substrate construction mode');
+assert.match(webgpuCoreSource, /averageSubstrateNeighborSupport/, 'neighbor-support diagnostics report average substrate support');
+assert.match(webgpuCoreSource, /unsupportedSubstrateParticleCount/, 'neighbor-support diagnostics report unsupported particles from the substrate');
+assert.match(webgpuCoreSource, /neighborSupportBuffer/, 'WebGPU solver owns a neighbor-support storage buffer');
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
@@ -187,6 +193,7 @@ assert.match(pageSource, /densityPositionSolveStats/, 'prototype displays densit
 assert.match(pageSource, /densityContinuityProjectionStats/, 'prototype displays density continuity projection diagnostics');
 assert.match(pageSource, /sampledNeighborhoodDensityStats/, 'prototype displays sampled particle-neighborhood density diagnostics');
 assert.match(pageSource, /localPairDensityStats/, 'prototype displays local pair density projection diagnostics');
+assert.match(pageSource, /neighborSupportSubstrateStats/, 'prototype displays neighbor-support substrate diagnostics');
 assert.match(pageSource, /particleSupportBudgetStats/, 'prototype displays support budget diagnostics');
 assert.match(pageSource, /settleRestEnergyStats/, 'prototype displays settle/rest energy diagnostics');
 assert.match(pageSource, /visualStreakBeadStats/, 'prototype displays visual streak/bead damping diagnostics');
@@ -285,6 +292,10 @@ assert.match(witnessSource, /deepDensityContinuityStats/, 'witness requires deep
 assert.match(witnessSource, /wgsl-local-pair-density-projection-v0/, 'witness records local pair density projection contract');
 assert.match(witnessSource, /localPairDensityStats/, 'witness requires local pair density projection diagnostics');
 assert.match(witnessSource, /averageLocalPairNeighbors/, 'witness records local same-chemistry pair support');
+assert.match(witnessSource, /wgsl-neighbor-support-substrate-v0/, 'witness records neighbor-support substrate contract');
+assert.match(witnessSource, /neighborSupportSubstrateStats/, 'witness requires neighbor-support substrate diagnostics');
+assert.match(witnessSource, /averageSubstrateNeighborSupport/, 'witness records average GPU substrate support');
+assert.match(witnessSource, /unsupportedSubstrateParticleCount/, 'witness records unsupported substrate particle counts');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');

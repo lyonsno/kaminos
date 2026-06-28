@@ -709,6 +709,10 @@ async function run() {
     assert.equal(state.localPairDensityStats?.pressureContract, 'wgsl-local-pair-density-projection-v0', 'local pair density stats do not identify projection contract');
     assert.ok(Number.isFinite(state.localPairDensityStats?.averageLocalPairNeighbors), 'route did not expose local pair density support');
     assert.ok(state.localPairDensityStats?.localPairProjectionCandidateCount > 0, 'route did not expose local pair projection candidates');
+    assert.equal(state.neighborSupportSubstrateStats?.pressureContract, 'wgsl-neighbor-support-substrate-v0', 'neighbor support stats do not identify substrate contract');
+    assert.equal(state.neighborSupportSubstrateStats?.neighborSupportSubstrateMode, 'gpu_hash_sampled_same_chemistry_support_buffer_v0', 'neighbor support stats do not identify construction mode');
+    assert.ok(state.neighborSupportSubstrateStats?.averageSubstrateNeighborSupport > 0, 'route did not expose GPU substrate support');
+    assert.ok(Number.isFinite(state.neighborSupportSubstrateStats?.unsupportedSubstrateParticleCount), 'route did not expose unsupported substrate particle counts');
     assert.equal(state.deepDensityContinuityStats?.pressureContract, 'wgsl-deep-density-continuity-projection-v0', 'deep density continuity stats do not identify projection contract');
     assert.ok(state.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount > 0, 'route did not expose deeper continuity projection candidates');
     assert.equal(state.fingerJuiceCamera?.cameraControlContract, 'orbit-camera-controls-v0', 'route did not expose orbit camera controls');
@@ -800,6 +804,12 @@ async function run() {
         localPairProjectionCandidateCount: stress?.localPairDensityStats?.localPairProjectionCandidateCount || 0,
         localPairClosePairCount: stress?.localPairDensityStats?.localPairClosePairCount || 0,
         averageLocalPairOverlap: stress?.localPairDensityStats?.averageLocalPairOverlap || 0,
+        neighborSupportSubstrateContract: stress?.neighborSupportSubstrateStats?.pressureContract || null,
+        neighborSupportSubstrateMode: stress?.neighborSupportSubstrateStats?.neighborSupportSubstrateMode || null,
+        averageSubstrateNeighborSupport: stress?.neighborSupportSubstrateStats?.averageSubstrateNeighborSupport || 0,
+        p95SubstrateNeighborSupport: stress?.neighborSupportSubstrateStats?.p95SubstrateNeighborSupport || 0,
+        unsupportedSubstrateParticleCount: stress?.neighborSupportSubstrateStats?.unsupportedSubstrateParticleCount || 0,
+        substrateAdequacyRatio: stress?.neighborSupportSubstrateStats?.substrateAdequacyRatio || 0,
         deepDensityContinuityProjectionContract: stress?.deepDensityContinuityStats?.pressureContract || null,
         deepContinuityProjectionCandidateCount: stress?.deepDensityContinuityStats?.deepContinuityProjectionCandidateCount || 0,
         deepContinuityPeakOccupancyRatio: stress?.deepDensityContinuityStats?.deepContinuityPeakOccupancyRatio || 0,
@@ -858,6 +868,10 @@ async function run() {
     assert.equal(extendedFlowProbe.localPairDensityProjectionContract, 'wgsl-local-pair-density-projection-v0', 'expanded witness phase lost local pair density projection contract');
     assert.ok(extendedFlowProbe.averageLocalPairNeighbors > 0, 'expanded witness phase did not measure local pair density support');
     assert.ok(extendedFlowProbe.localPairProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough local pair projection candidates');
+    assert.equal(extendedFlowProbe.neighborSupportSubstrateContract, 'wgsl-neighbor-support-substrate-v0', 'expanded witness phase lost neighbor support substrate contract');
+    assert.equal(extendedFlowProbe.neighborSupportSubstrateMode, 'gpu_hash_sampled_same_chemistry_support_buffer_v0', 'expanded witness phase lost neighbor support substrate mode');
+    assert.ok(extendedFlowProbe.averageSubstrateNeighborSupport > 0, 'expanded witness phase did not exercise GPU neighbor support substrate');
+    assert.ok(extendedFlowProbe.substrateAdequacyRatio > 0.05, 'expanded witness phase has too little supported substrate coverage');
     assert.equal(extendedFlowProbe.deepDensityContinuityProjectionContract, 'wgsl-deep-density-continuity-projection-v0', 'expanded witness phase lost deeper density continuity contract');
     assert.ok(extendedFlowProbe.deepContinuityProjectionCandidateCount >= 160, 'expanded witness phase did not exercise enough deeper continuity projection candidates');
     assert.equal(extendedFlowProbe.stabilityContract, 'wgsl-stability-damped-relaxation-v0', 'expanded witness phase lost stability damping contract');
@@ -1061,6 +1075,7 @@ async function run() {
       densityContinuityProjectionStats: state.densityContinuityProjectionStats,
       sampledNeighborhoodDensityStats: state.sampledNeighborhoodDensityStats,
       localPairDensityStats: state.localPairDensityStats,
+      neighborSupportSubstrateStats: state.neighborSupportSubstrateStats,
       deepDensityContinuityStats: state.deepDensityContinuityStats,
       particleSupportBudgetStats: state.particleSupportBudgetStats,
       settleRestEnergyStats: state.settleRestEnergyStats,
