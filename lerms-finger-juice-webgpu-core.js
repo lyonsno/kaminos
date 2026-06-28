@@ -7,6 +7,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0
 export const LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE = 'wgsl-ballistic-heightfield-surface-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_renderer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-splat-renderer-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT = 'nonzero_webgpu_canvas_extent_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_buffer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
@@ -61,6 +62,32 @@ const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
 function finite(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+export function resolveNonzeroWebGPUCanvasExtent(canvas, {
+  width = 0,
+  height = 0,
+  pixelRatio = globalThis.devicePixelRatio || 1,
+} = {}) {
+  const ratio = Math.max(1, finite(pixelRatio, globalThis.devicePixelRatio || 1));
+  const rect = canvas?.getBoundingClientRect?.();
+  const cssWidth = finite(width, 0)
+    || finite(canvas?.clientWidth, 0)
+    || finite(rect?.width, 0)
+    || finite(canvas?.width, 0) / ratio;
+  const cssHeight = finite(height, 0)
+    || finite(canvas?.clientHeight, 0)
+    || finite(rect?.height, 0)
+    || finite(canvas?.height, 0) / ratio;
+  if (cssWidth <= 0 || cssHeight <= 0) return null;
+  return {
+    extentContract: LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT,
+    cssWidth,
+    cssHeight,
+    ratio,
+    targetWidth: Math.max(1, Math.floor(cssWidth * ratio)),
+    targetHeight: Math.max(1, Math.floor(cssHeight * ratio)),
+  };
 }
 
 function round(value, digits = 4) {
@@ -3286,11 +3313,23 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       };
     }
     const format = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({
-      device,
-      format,
-      alphaMode: 'premultiplied',
-    });
+    let configuredCanvasExtent = null;
+    function configureCanvasContextForExtent(extent) {
+      if (!extent || extent.targetWidth <= 0 || extent.targetHeight <= 0) return false;
+      if (canvas.width !== extent.targetWidth) canvas.width = extent.targetWidth;
+      if (canvas.height !== extent.targetHeight) canvas.height = extent.targetHeight;
+      const nextKey = `${extent.targetWidth}x${extent.targetHeight}`;
+      if (configuredCanvasExtent !== nextKey) {
+        context.configure({
+          device,
+          format,
+          alphaMode: 'premultiplied',
+        });
+        configuredCanvasExtent = nextKey;
+      }
+      return true;
+    }
+    configureCanvasContextForExtent(resolveNonzeroWebGPUCanvasExtent(canvas, { width: canvas.width, height: canvas.height, pixelRatio: 1 }));
     const renderParamsBuffer = device.createBuffer({
       label: 'lerms-finger-juice-render-params',
       size: 48,
@@ -3350,19 +3389,21 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       pixelRatio = globalThis.devicePixelRatio || 1,
       camera = {},
     } = {}) {
-      const cssWidth = Math.max(1, finite(width, 1));
-      const cssHeight = Math.max(1, finite(height, 1));
-      const ratio = Math.max(1, finite(pixelRatio, 1));
-      const targetWidth = Math.max(1, Math.floor(cssWidth * ratio));
-      const targetHeight = Math.max(1, Math.floor(cssHeight * ratio));
-      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
+      const extent = resolveNonzeroWebGPUCanvasExtent(canvas, { width, height, pixelRatio });
+      if (!configureCanvasContextForExtent(extent)) {
+        return {
+          render_backend: 'webgpu_render_deferred',
+          renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+          renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+          renderExtentContract: LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT,
+          renderDeferReason: 'empty_canvas_extent_deferred_v0',
+          renderFrameCount,
+        };
       }
       const params = new Float32Array([
-        cssWidth,
-        cssHeight,
-        ratio,
+        extent.cssWidth,
+        extent.cssHeight,
+        extent.ratio,
         maxParticles,
         finite(camera.yaw, 0),
         finite(camera.pitch, 0),
@@ -3375,26 +3416,42 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       ]);
       device.queue.writeBuffer(renderParamsBuffer, 0, params);
       const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-direct-render' });
-      const pass = encoder.beginRenderPass({
-        label: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-      });
-      pass.setPipeline(renderPipeline);
-      pass.setBindGroup(0, renderBindGroup);
-      pass.draw(6, maxParticles);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-      renderFrameCount += 1;
+      try {
+        const pass = encoder.beginRenderPass({
+          label: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+          colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          }],
+        });
+        pass.setPipeline(renderPipeline);
+        pass.setBindGroup(0, renderBindGroup);
+        pass.draw(6, maxParticles);
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+        renderFrameCount += 1;
+      } catch (error) {
+        configuredCanvasExtent = null;
+        return {
+          render_backend: 'webgpu_render_deferred',
+          renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
+          renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
+          renderExtentContract: LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT,
+          renderDeferReason: 'empty_canvas_extent_deferred_v0',
+          reason: error.message || String(error),
+          renderFrameCount,
+        };
+      }
       return {
         render_backend: 'webgpu_direct_render',
         renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
         renderShaderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE,
         renderScaleContract: PARTICLE_BUDGET_RENDER_SCALE_CONTRACT,
+        renderExtentContract: LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT,
+        renderCanvasWidth: extent.targetWidth,
+        renderCanvasHeight: extent.targetHeight,
         renderFrameCount,
       };
     }
