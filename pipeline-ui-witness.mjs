@@ -311,7 +311,86 @@ try {
   await click(cdp, imagePaletteTab);
   await wait(1000);
 
-  if (scenario === 'specimen-intake') {
+  if (scenario === 'kiln-activity-tray') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    await evalJson(cdp, `(() => {
+      window.kaminosLoadRouteCompositionFixtureTray?.();
+      return { ok: true };
+    })()`);
+    await wait(500);
+
+    const kilnState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosRouteCompositionTrayKilnWitness?.();
+      const panel = document.getElementById('route-composition-tray-panel');
+      const kilnTiles = [...(panel?.querySelectorAll('.route-composition-tray-kiln-tile') || [])];
+      const firstTileRect = kilnTiles[0]?.getBoundingClientRect();
+      const runRows = [...(panel?.querySelectorAll('[data-tray-run-id]') || [])];
+      const hasFixtureTile = kilnTiles.some(tile =>
+        tile.dataset.kilnActivityState === 'fixture'
+        && tile.dataset.kilnTruthMode === 'fixture'
+        && tile.dataset.kilnFullBurn === 'false'
+      );
+      const hasUnavailableTile = kilnTiles.some(tile =>
+        tile.dataset.kilnActivityState === 'unavailable'
+        && tile.dataset.kilnTruthMode === 'unavailable'
+        && tile.dataset.kilnFullBurn === 'false'
+      );
+      const noFalseFullBurn = kilnTiles.every(tile =>
+        tile.dataset.kilnActivityState === 'burning'
+          ? tile.dataset.kilnFullBurn === 'true'
+          : tile.dataset.kilnFullBurn === 'false'
+      );
+      return {
+        ok: Boolean(
+          witness
+          && witness.schema === 'kaminos.kiln.activity-tray-witness.v0'
+          && witness.kilnActivityStateCounts?.fixture >= 1
+          && witness.kilnActivityStateCounts?.unavailable >= 1
+          && hasFixtureTile
+          && hasUnavailableTile
+          && noFalseFullBurn
+          && runRows.length >= 2
+        ),
+        witness,
+        dom: {
+          kilnTiles: kilnTiles.length,
+          runRows: runRows.length,
+          hasFixtureTile,
+          hasUnavailableTile,
+          noFalseFullBurn,
+          tileTexts: kilnTiles.map(tile => tile.innerText),
+        },
+        firstTileRect: firstTileRect ? { x: firstTileRect.x, y: firstTileRect.y, width: firstTileRect.width, height: firstTileRect.height } : null,
+      };
+    })()`, 'Kiln activity tray fixture', 12000);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = kilnState.firstTileRect
+      ? await screenshotVisibleProbe(afterPath, kilnState.firstTileRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 50 && screenshotProbe.saturatedPixels >= 10, 'Kiln activity tile was not visibly inspectable', {
+      kilnState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      kilnState,
+      screenshotProbe,
+    }, null, 2));
+  } else if (scenario === 'specimen-intake') {
     const fixtureButton = await evalJson(cdp, `(() => {
       const button = document.querySelector('#pipeline-specimen-fixture-button');
       const intake = document.querySelector('#pipeline-specimen-intake');

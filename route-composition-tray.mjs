@@ -1,6 +1,7 @@
 export const ROUTE_COMPOSITION_TRAY_SCHEMA = 'kaminos.kiln.route-composition-tray.v0';
 export const TRAY_ARTIFACT_ENTRY_SCHEMA = 'kaminos.kiln.tray-artifact-entry.v0';
 export const TRAY_ROUTE_RUN_SCHEMA = 'kaminos.kiln.tray-route-run.v0';
+export const KILN_ACTIVITY_STATE_SCHEMA = 'kaminos.kiln.activity-state.v0';
 
 export const CONDITIONING_LINK_ROLES = [
   'source-image',
@@ -34,6 +35,29 @@ export const ROUTE_STATUS_BADGES = [
   'failed',
   'partial',
   'stale',
+];
+
+export const KILN_ACTIVITY_STATES = [
+  'cold',
+  'queued',
+  'warming',
+  'burning',
+  'banking',
+  'cooled',
+  'failed',
+  'cached',
+  'fixture',
+  'fallback',
+  'unavailable',
+];
+
+export const KILN_TRUTH_MODES = [
+  'live',
+  'cached',
+  'fixture',
+  'fallback',
+  'unavailable',
+  'failed',
 ];
 
 const SOURCE_KIND_DISPLAY = {
@@ -87,6 +111,79 @@ function sourceTruthWarningsForRun({ statusBadge, requestedRoute, effectiveRoute
     warnings.push('route_requested_effective_mismatch');
   }
   return unique(warnings);
+}
+
+export function deriveKilnActivityState({
+  statusBadge,
+  routePhase = 'completed',
+  backendClass,
+  requestedRoute,
+  effectiveRoute,
+  receiptId,
+}) {
+  let activityState = 'cooled';
+  let truthMode = 'live';
+  let visualAuthority = 'settled-output';
+  let allowsFullBurn = false;
+  let claimsLiveCompute = false;
+  const warnings = [];
+
+  if (statusBadge === 'fixture') {
+    activityState = 'fixture';
+    truthMode = 'fixture';
+    visualAuthority = 'demo-fixture';
+    warnings.push('fixture_kiln_not_live_compute');
+  } else if (statusBadge === 'cached') {
+    activityState = 'cached';
+    truthMode = 'cached';
+    visualAuthority = 'warm-recall';
+    warnings.push('cached_not_fresh_compute');
+  } else if (statusBadge === 'fallback') {
+    activityState = 'fallback';
+    truthMode = 'fallback';
+    visualAuthority = 'degraded-fallback';
+    warnings.push('fallback_kiln_not_requested_route');
+  } else if (statusBadge === 'missing-backend') {
+    activityState = 'unavailable';
+    truthMode = 'unavailable';
+    visualAuthority = 'none';
+    warnings.push('kiln_backend_unavailable');
+  } else if (statusBadge === 'failed') {
+    activityState = 'failed';
+    truthMode = 'failed';
+    visualAuthority = 'failure-snuff';
+    warnings.push('kiln_route_failed');
+  } else if (routePhase === 'queued') {
+    activityState = 'queued';
+    visualAuthority = 'preheat';
+  } else if (routePhase === 'warming' || routePhase === 'preparing') {
+    activityState = 'warming';
+    visualAuthority = 'low-heat';
+  } else if (routePhase === 'running') {
+    activityState = 'burning';
+    visualAuthority = 'live-compute';
+    allowsFullBurn = true;
+    claimsLiveCompute = true;
+  } else if (routePhase === 'banking' || routePhase === 'settling' || routePhase === 'importing') {
+    activityState = 'banking';
+    visualAuthority = 'coals-settling';
+  }
+
+  return {
+    schema: KILN_ACTIVITY_STATE_SCHEMA,
+    activityState,
+    routePhase,
+    truthMode,
+    visualAuthority,
+    allowsFullBurn,
+    claimsLiveCompute,
+    requestedRoute: requestedRoute || null,
+    effectiveRoute: effectiveRoute || null,
+    backendClass: backendClass || null,
+    statusBadge: statusBadge || null,
+    receiptId: receiptId || null,
+    sourceTruthWarnings: unique(warnings),
+  };
 }
 
 export function createTray({ trayId = `tray-${Date.now().toString(36)}` } = {}) {
@@ -147,11 +244,20 @@ export function addRouteRun(tray, {
   effectiveRoute,
   backendClass,
   statusBadge,
+  routePhase = 'completed',
   receiptId,
   inputArtifactIds = [],
   conditioningArtifactIds = [],
 }) {
   const warnings = sourceTruthWarningsForRun({ statusBadge, requestedRoute, effectiveRoute });
+  const kilnActivity = deriveKilnActivityState({
+    statusBadge,
+    routePhase,
+    backendClass,
+    requestedRoute,
+    effectiveRoute,
+    receiptId,
+  });
   const run = {
     schema: TRAY_ROUTE_RUN_SCHEMA,
     runId,
@@ -159,12 +265,14 @@ export function addRouteRun(tray, {
     effectiveRoute,
     backendClass,
     statusBadge,
+    routePhase,
     receiptId: receiptId || null,
     inputArtifactIds,
     conditioningArtifactIds,
     displayRoute: humanizeRouteId(effectiveRoute),
     displayStatus: STATUS_BADGE_DISPLAY[statusBadge] || statusBadge,
-    sourceTruthWarnings: warnings,
+    kilnActivity,
+    sourceTruthWarnings: unique([...warnings, ...kilnActivity.sourceTruthWarnings]),
   };
   return {
     ...tray,
@@ -251,6 +359,11 @@ export function buildFixtureWitnessTray() {
 }
 
 export function trayWitness(tray) {
+  const kilnActivityStateCounts = {};
+  for (const run of tray?.routeRuns || []) {
+    const state = run.kilnActivity?.activityState || 'unknown';
+    kilnActivityStateCounts[state] = (kilnActivityStateCounts[state] || 0) + 1;
+  }
   const ok = tray?.schema === ROUTE_COMPOSITION_TRAY_SCHEMA
     && tray.sourceArtifacts?.length >= 1
     && tray.conditioningLinks?.length >= 2
@@ -264,9 +377,11 @@ export function trayWitness(tray) {
     conditioningLinkCount: tray?.conditioningLinks?.length || 0,
     routeRunCount: tray?.routeRuns?.length || 0,
     outputArtifactCount: tray?.outputArtifacts?.length || 0,
+    kilnActivityStateCounts,
     sourceTruthWarnings: unique([
       ...(tray?.sourceArtifacts || []).flatMap(a => a.sourceTruthWarnings || []),
       ...(tray?.routeRuns || []).flatMap(r => r.sourceTruthWarnings || []),
+      ...(tray?.routeRuns || []).flatMap(r => r.kilnActivity?.sourceTruthWarnings || []),
       ...(tray?.outputArtifacts || []).flatMap(a => a.sourceTruthWarnings || []),
     ]),
   };

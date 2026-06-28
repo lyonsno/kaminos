@@ -11670,8 +11670,11 @@ window.addEventListener('keydown', e => {
 const ROUTE_COMPOSITION_TRAY_SCHEMA_BROWSER = 'kaminos.kiln.route-composition-tray.v0';
 const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0';
 const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
+const KILN_ACTIVITY_STATE_SCHEMA_BROWSER = 'kaminos.kiln.activity-state.v0';
 
 const TRAY_CONDITIONING_LINK_ROLES = ['source-image', 'mask', 'matte', 'depth', 'normal', 'scribble', 'reference', 'negative-law', 'canny', 'segmentation'];
+const KILN_ACTIVITY_STATES_BROWSER = ['cold', 'queued', 'warming', 'burning', 'banking', 'cooled', 'failed', 'cached', 'fixture', 'fallback', 'unavailable'];
+const KILN_TRUTH_MODES_BROWSER = ['live', 'cached', 'fixture', 'fallback', 'unavailable', 'failed'];
 
 const TRAY_SOURCE_KIND_DISPLAY = {
   'fixture': 'Fixture',
@@ -11714,6 +11717,73 @@ function traySourceTruthWarningsForRun(statusBadge, requestedRoute, effectiveRou
   if (statusBadge === 'failed') warnings.push('route_execution_failed');
   if (requestedRoute && effectiveRoute && requestedRoute !== effectiveRoute) warnings.push('route_requested_effective_mismatch');
   return [...new Set(warnings)];
+}
+
+function deriveBrowserKilnActivityState(opts) {
+  const routePhase = opts.routePhase || 'completed';
+  let activityState = 'cooled';
+  let truthMode = 'live';
+  let visualAuthority = 'settled-output';
+  let allowsFullBurn = false;
+  let claimsLiveCompute = false;
+  const warnings = [];
+
+  if (opts.statusBadge === 'fixture') {
+    activityState = 'fixture';
+    truthMode = 'fixture';
+    visualAuthority = 'demo-fixture';
+    warnings.push('fixture_kiln_not_live_compute');
+  } else if (opts.statusBadge === 'cached') {
+    activityState = 'cached';
+    truthMode = 'cached';
+    visualAuthority = 'warm-recall';
+    warnings.push('cached_not_fresh_compute');
+  } else if (opts.statusBadge === 'fallback') {
+    activityState = 'fallback';
+    truthMode = 'fallback';
+    visualAuthority = 'degraded-fallback';
+    warnings.push('fallback_kiln_not_requested_route');
+  } else if (opts.statusBadge === 'missing-backend') {
+    activityState = 'unavailable';
+    truthMode = 'unavailable';
+    visualAuthority = 'none';
+    warnings.push('kiln_backend_unavailable');
+  } else if (opts.statusBadge === 'failed') {
+    activityState = 'failed';
+    truthMode = 'failed';
+    visualAuthority = 'failure-snuff';
+    warnings.push('kiln_route_failed');
+  } else if (routePhase === 'queued') {
+    activityState = 'queued';
+    visualAuthority = 'preheat';
+  } else if (routePhase === 'warming' || routePhase === 'preparing') {
+    activityState = 'warming';
+    visualAuthority = 'low-heat';
+  } else if (routePhase === 'running') {
+    activityState = 'burning';
+    visualAuthority = 'live-compute';
+    allowsFullBurn = true;
+    claimsLiveCompute = true;
+  } else if (routePhase === 'banking' || routePhase === 'settling' || routePhase === 'importing') {
+    activityState = 'banking';
+    visualAuthority = 'coals-settling';
+  }
+
+  return {
+    schema: KILN_ACTIVITY_STATE_SCHEMA_BROWSER,
+    activityState,
+    routePhase,
+    truthMode,
+    visualAuthority,
+    allowsFullBurn,
+    claimsLiveCompute,
+    requestedRoute: opts.requestedRoute || null,
+    effectiveRoute: opts.effectiveRoute || null,
+    backendClass: opts.backendClass || null,
+    statusBadge: opts.statusBadge || null,
+    receiptId: opts.receiptId || null,
+    sourceTruthWarnings: [...new Set(warnings)],
+  };
 }
 
 let routeCompositionTrayState = null;
@@ -11763,6 +11833,7 @@ function trayAddConditioningLink(tray, opts) {
 
 function trayAddRouteRun(tray, opts) {
   const warnings = traySourceTruthWarningsForRun(opts.statusBadge, opts.requestedRoute, opts.effectiveRoute);
+  const kilnActivity = deriveBrowserKilnActivityState(opts);
   const run = {
     schema: TRAY_ROUTE_RUN_SCHEMA_BROWSER,
     runId: opts.runId,
@@ -11770,12 +11841,14 @@ function trayAddRouteRun(tray, opts) {
     effectiveRoute: opts.effectiveRoute,
     backendClass: opts.backendClass,
     statusBadge: opts.statusBadge,
+    routePhase: opts.routePhase || 'completed',
     receiptId: opts.receiptId || null,
     inputArtifactIds: opts.inputArtifactIds || [],
     conditioningArtifactIds: opts.conditioningArtifactIds || [],
     displayRoute: trayHumanizeRoute(opts.effectiveRoute),
     displayStatus: TRAY_STATUS_BADGE_DISPLAY[opts.statusBadge] || opts.statusBadge,
-    sourceTruthWarnings: warnings,
+    kilnActivity,
+    sourceTruthWarnings: [...new Set([...warnings, ...kilnActivity.sourceTruthWarnings])],
   };
   return { ...tray, routeRuns: [...tray.routeRuns, run] };
 }
@@ -11907,6 +11980,59 @@ function renderRouteCompositionTray() {
     }).join('');
   }
 
+  function kilnLabel(kiln) {
+    if (!kiln) return 'Cold';
+    if (kiln.truthMode === 'live' && kiln.claimsLiveCompute) return 'Live compute';
+    if (kiln.truthMode === 'fixture') return 'Fixture';
+    if (kiln.truthMode === 'cached') return 'Cached';
+    if (kiln.truthMode === 'fallback') return 'Fallback';
+    if (kiln.truthMode === 'unavailable') return 'Unavailable';
+    if (kiln.truthMode === 'failed') return 'Failed';
+    return kiln.activityState ? kiln.activityState.replace(/-/g, ' ') : 'Cold';
+  }
+
+  function kilnColor(kiln) {
+    if (!kiln) return '#555';
+    if (kiln.activityState === 'burning') return '#ffcc66';
+    if (kiln.activityState === 'warming' || kiln.activityState === 'queued') return '#e79545';
+    if (kiln.activityState === 'banking' || kiln.activityState === 'cached') return '#8fb4ff';
+    if (kiln.activityState === 'fixture' || kiln.activityState === 'fallback') return '#f0b85a';
+    if (kiln.activityState === 'failed' || kiln.activityState === 'unavailable') return '#ef5350';
+    return '#66bb6a';
+  }
+
+  function kilnTile(kiln) {
+    const state = kiln || deriveBrowserKilnActivityState({ statusBadge: 'real', routePhase: 'completed' });
+    const color = kilnColor(state);
+    const label = kilnLabel(state);
+    const glow = state.allowsFullBurn ? `0 0 18px ${color}88` : `0 0 8px ${color}44`;
+    return `<div class="route-composition-tray-kiln-tile"
+      data-kiln-activity-state="${state.activityState}"
+      data-kiln-truth-mode="${state.truthMode}"
+      data-kiln-full-burn="${state.allowsFullBurn ? 'true' : 'false'}"
+      style="margin-top:5px;border:1px solid ${color}66;background:linear-gradient(135deg,${color}22,#151515 55%);box-shadow:${glow};border-radius:6px;padding:5px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:9px;color:${color};font-family:'SF Mono',monospace">Kiln</span>
+        <span style="font-size:10px;color:#ddd">${label}</span>
+        <span style="font-size:8px;color:#777;font-family:'SF Mono',monospace">${state.visualAuthority}</span>
+      </div>`;
+  }
+
+  function kilnWitness(tray) {
+    const counts = {};
+    for (const run of tray?.routeRuns || []) {
+      const state = run.kilnActivity?.activityState || 'unknown';
+      counts[state] = (counts[state] || 0) + 1;
+    }
+    return {
+      schema: 'kaminos.kiln.activity-tray-witness.v0',
+      trayId: tray?.trayId || null,
+      routeRunCount: tray?.routeRuns?.length || 0,
+      kilnActivityStateCounts: counts,
+      fullBurnRunIds: (tray?.routeRuns || []).filter(r => r.kilnActivity?.allowsFullBurn).map(r => r.runId),
+      truthModes: [...new Set((tray?.routeRuns || []).map(r => r.kilnActivity?.truthMode).filter(Boolean))],
+    };
+  }
+
   function conditioningButtons(artifactId) {
     return `<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap" data-tray-reuse-buttons="${artifactId}">
       ${['reference', 'mask', 'depth', 'normal', 'source-image'].map(role =>
@@ -11962,10 +12088,13 @@ function renderRouteCompositionTray() {
           ${r.requestedRoute !== r.effectiveRoute ? `<span style="color:#f0b85a" title="Requested: ${r.requestedRoute}">Requested: ${trayHumanizeRoute(r.requestedRoute)}</span> ` : ''}
           Backend: ${r.backendClass}
         </div>
+        ${kilnTile(r.kilnActivity)}
         ${r.sourceTruthWarnings.length > 0 ? `<div style="margin-top:2px">${warningBadges(r.sourceTruthWarnings)}</div>` : ''}
       </div>
     `).join('');
   }
+
+  window.kaminosRouteCompositionTrayKilnWitness = () => kilnWitness(routeCompositionTrayState);
 
   // Outputs
   if (tray.outputArtifacts.length === 0) {
