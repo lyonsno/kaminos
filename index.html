@@ -631,6 +631,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <div class="field"><span class="field-key">Source</span><span class="field-val" id="lerms-preview-source-badge">synthetic_fixture</span></div>
           <div class="field"><span class="field-key">Fallback</span><span class="field-val" id="lerms-preview-fallback-badge">embedded_fixture</span></div>
           <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="lerms-preview-freshness-badge">fixture</span></div>
+          <div class="field"><span class="field-key">Adapters</span><span class="field-val" id="lerms-preview-adapter-count">0</span></div>
+        </div>
+        <div class="world-chamber-list" id="preview-bench-adapter-list"></div>
+        <div class="world-chamber-readout">
           <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="lerms-preview-terrain-count">16 samples</span></div>
           <div class="field"><span class="field-key">Actor Motion</span><span class="field-val" id="lerms-preview-actor-motion-badge">not loaded</span></div>
           <div class="field"><span class="field-key">Actor Timeline</span><span class="field-val" id="lerms-preview-actor-timeline-badge">not loaded</span></div>
@@ -840,9 +844,12 @@ let lermsActorMotionPayloadReport = null;
 let lermsActorMotionPayloadSource = null;
 let lermsActorMotionTimelineReport = null;
 let lermsActorMotionTimelineSource = null;
+let previewBenchPayloadReports = [];
+let previewBenchPayloadSources = [];
 let lermsPreviewTimelinePlaybackStartMs = 0;
 let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
 window.__kaminosLermsPreviewState = lermsPreviewBenchState;
+window.__kaminosPreviewBenchPayloads = [];
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -4330,8 +4337,11 @@ function updateLermsPreviewBenchState(options = {}) {
     actorMotionPayloadSource: lermsActorMotionPayloadSource,
     actorMotionTimelineReport: lermsActorMotionTimelineReport,
     actorMotionTimelineSource: lermsActorMotionTimelineSource,
+    previewPayloadReports: previewBenchPayloadReports,
+    previewPayloadSources: previewBenchPayloadSources,
   });
   window.__kaminosLermsPreviewState = lermsPreviewBenchState;
+  window.__kaminosPreviewBenchPayloads = lermsPreviewBenchState.previewPayloads || [];
   return lermsPreviewBenchState;
 }
 
@@ -4492,6 +4502,34 @@ function lermsActorMotionTimelineUrlFromRoute(params) {
   return null;
 }
 
+function previewBenchPayloadUrlFromRoute(params) {
+  const directUrl = params.get('preview_bench_payload_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('preview_bench_payload_root');
+  const path = params.get('preview_bench_payload_path');
+  if (root && path) {
+    const query = new URLSearchParams({ root, path }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      root,
+      path,
+    };
+  }
+  return null;
+}
+
+function sourceFromRoute(route) {
+  return {
+    mode: route.mode,
+    label: route.mode === 'server_file' ? `${route.root}/${route.path}` : route.url,
+    requestedUrl: route.url,
+    effectiveUrl: new URL(route.url, window.location.href).href,
+    root: route.root,
+    path: route.path,
+  };
+}
+
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
   const previewState = updateLermsPreviewBenchState();
@@ -4562,6 +4600,33 @@ function renderWorldChambersPanel() {
       ? 'timeline / lerms-owned behavior truth'
       : 'none';
   document.getElementById('lerms-preview-motion-downgrade').textContent = actorMotion?.downgrades?.[0] || actorTimeline?.downgrades?.[0] || 'none';
+  document.getElementById('lerms-preview-adapter-count').textContent = String(previewState.previewPayloads?.length || 0);
+  const adapterList = document.getElementById('preview-bench-adapter-list');
+  adapterList.innerHTML = '';
+  for (const payload of previewState.previewPayloads || []) {
+    const row = document.createElement('div');
+    row.className = 'world-chamber-row';
+    row.dataset.previewBenchPayloadSchema = payload.payloadSchema;
+    row.dataset.previewBenchPayloadRoute = payload.route;
+    row.dataset.previewBenchPayloadAuthority = payload.source?.authority || '';
+    const name = document.createElement('span');
+    name.textContent = payload.label || payload.payloadSchema;
+    const status = document.createElement('span');
+    status.textContent = [payload.source?.authority, payload.downgrades?.[0]].filter(Boolean).join(' / ') || 'authority unavailable';
+    row.append(name, status);
+    adapterList.append(row);
+    for (const field of payload.fields || []) {
+      const fieldRow = document.createElement('div');
+      fieldRow.className = 'world-chamber-row';
+      fieldRow.dataset.previewBenchPayloadField = payload.payloadSchema;
+      const fieldName = document.createElement('span');
+      fieldName.textContent = field.label;
+      const fieldValue = document.createElement('span');
+      fieldValue.textContent = field.value;
+      fieldRow.append(fieldName, fieldValue);
+      adapterList.append(fieldRow);
+    }
+  }
   const cameraList = document.getElementById('lerms-preview-camera-list');
   cameraList.innerHTML = '';
   for (const preset of previewState.cameraPresets) {
@@ -4623,9 +4688,10 @@ async function initWorldChambersRoute() {
     });
   }
   const receiptRoute = worldChamberReceiptUrlFromRoute(params);
+  const previewPayloadRoute = previewBenchPayloadUrlFromRoute(params);
   const actorMotionRoute = lermsActorMotionPayloadUrlFromRoute(params);
   const actorTimelineRoute = lermsActorMotionTimelineUrlFromRoute(params);
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || actorMotionRoute || actorTimelineRoute || requestedBench) {
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || previewPayloadRoute || actorMotionRoute || actorTimelineRoute || requestedBench) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
@@ -4633,24 +4699,37 @@ async function initWorldChambersRoute() {
     const previewState = window.__kaminosLermsPreviewState;
     const loadingLabel = receiptRoute
       ? `World Chamber: loading receipt ${receiptRoute.url}`
-      : actorMotionRoute
-        ? `LERMS Preview Bench: loading actor motion ${actorMotionRoute.url}`
-        : actorTimelineRoute
-          ? `LERMS Preview Bench: loading actor timeline ${actorTimelineRoute.url}`
-          : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
+      : previewPayloadRoute
+        ? `Preview Bench: loading adapter payload ${previewPayloadRoute.url}`
+        : actorMotionRoute
+          ? `LERMS Preview Bench: loading actor motion ${actorMotionRoute.url}`
+          : actorTimelineRoute
+            ? `LERMS Preview Bench: loading actor timeline ${actorTimelineRoute.url}`
+            : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`;
     setInfo(loadingLabel);
+  }
+  if (previewPayloadRoute) {
+    try {
+      const report = await loadWorldChamberReceiptFromUrl(previewPayloadRoute.url);
+      previewBenchPayloadReports = [report];
+      previewBenchPayloadSources = [sourceFromRoute(previewPayloadRoute)];
+      renderWorldChambersPanel();
+      const payload = window.__kaminosPreviewBenchPayloads?.[0];
+      setInfo(`Preview Bench adapter payload loaded: ${payload?.label || payload?.payloadSchema || 'payload'}`);
+    } catch (error) {
+      previewBenchPayloadReports = [];
+      previewBenchPayloadSources = [{
+        ...sourceFromRoute(previewPayloadRoute),
+        error: error.message || String(error),
+      }];
+      renderWorldChambersPanel();
+      setInfo(`Preview Bench adapter payload load failed: ${error.message || error}`);
+    }
   }
   if (actorMotionRoute) {
     try {
       lermsActorMotionPayloadReport = await loadWorldChamberReceiptFromUrl(actorMotionRoute.url);
-      lermsActorMotionPayloadSource = {
-        mode: actorMotionRoute.mode,
-        label: actorMotionRoute.mode === 'server_file' ? `${actorMotionRoute.root}/${actorMotionRoute.path}` : actorMotionRoute.url,
-        requestedUrl: actorMotionRoute.url,
-        effectiveUrl: new URL(actorMotionRoute.url, window.location.href).href,
-        root: actorMotionRoute.root,
-        path: actorMotionRoute.path,
-      };
+      lermsActorMotionPayloadSource = sourceFromRoute(actorMotionRoute);
       renderWorldChambersPanel();
       const previewState = window.__kaminosLermsPreviewState;
       setInfo(`LERMS Preview Bench actor motion loaded: ${previewState.actorMotion?.actorCount || 0} actors`);

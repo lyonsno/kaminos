@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const previewBenchDocs = readFileSync(join(root, 'docs/preview-bench-adapters.md'), 'utf8');
 
 assert.match(index, /data-tab="worlds"/, 'sidebar exposes a Worlds tab');
 assert.match(index, /id="tab-worlds"/, 'Worlds tab content is present');
@@ -19,8 +20,16 @@ assert.match(index, /world_chamber/, 'URL route can open a world chamber without
 assert.match(index, /world_chamber_receipt_url/, 'URL route can load an external world chamber receipt by URL');
 assert.match(index, /world_chamber_receipt_root/, 'URL route can select a server-backed receipt root');
 assert.match(index, /world_chamber_receipt_path/, 'URL route can select a server-backed receipt path');
+assert.match(index, /preview_bench_payload_url/, 'URL route can load a generic Preview Bench payload by URL');
+assert.match(index, /preview_bench_payload_root/, 'URL route can select a generic server-backed Preview Bench payload root');
+assert.match(index, /preview_bench_payload_path/, 'URL route can select a generic server-backed Preview Bench payload path');
+assert.match(index, /preview-bench-adapter-list/, 'Worlds tab displays generic Preview Bench adapter payloads');
 assert.match(index, /world-chamber-receipt-source/, 'Worlds tab displays effective receipt source identity');
 assert.match(index, /world-chamber-load-error/, 'Worlds tab displays receipt load failures instead of silently falling back');
+
+assert.match(previewBenchDocs, /preview_bench_payload_root/, 'Preview Bench adapter docs show the generic root/path route');
+assert.match(previewBenchDocs, /source owns payload semantics/i, 'Preview Bench adapter docs preserve source-lane ownership');
+assert.match(previewBenchDocs, /Kaminos owns host display/i, 'Preview Bench adapter docs preserve Kaminos host ownership');
 
 const corePath = join(root, 'world-chambers-core.js');
 assert.ok(existsSync(corePath), 'world-chambers-core.js exists');
@@ -42,6 +51,9 @@ const {
   WORLD_CHAMBER_DESCRIPTOR_SCHEMA,
   WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
   WORLD_CHAMBER_REGISTRY_SCHEMA,
+  KAMINOS_PREVIEW_BENCH_PAYLOAD_ROUTE,
+  KAMINOS_PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA,
+  KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA,
   LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE,
   LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA,
   LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA,
@@ -56,6 +68,7 @@ const {
   createDefaultWorldChambersRegistry,
   createLermsPreviewBenchState,
   createLermsPreviewActorVisualPrimitives,
+  normalizePreviewBenchPayloadReport,
   normalizeLermsPreviewActorMotionTimelineReport,
   normalizeWorldChamberReceipt,
   selectLermsPreviewTimelineFrame,
@@ -65,6 +78,9 @@ const {
 assert.equal(WORLD_CHAMBER_REGISTRY_SCHEMA, 'kaminos.world-chambers.registry.v0');
 assert.equal(WORLD_CHAMBER_DESCRIPTOR_SCHEMA, 'kaminos.world-chamber.descriptor.v0');
 assert.equal(WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA, 'kaminos.world-chamber.preview-bench.v0');
+assert.equal(KAMINOS_PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA, 'kaminos.preview-bench.payload-report.v0');
+assert.equal(KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA, 'kaminos.preview-bench.payload-state.v0');
+assert.equal(KAMINOS_PREVIEW_BENCH_PAYLOAD_ROUTE, 'kaminos/preview-bench/payload-file');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA, 'lerms.preview-bench-actor-motion-payload.v0');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA, 'lerms.preview-bench-actor-motion-state.v0');
 assert.equal(LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE, 'lerms/preview-bench/actor-motion-payload-file');
@@ -147,6 +163,84 @@ assert.equal(benchState.terrain.sampleCount, 16);
 assert.equal(benchState.schemaPreservation.frame, 'lerms.first-vertical-frame.v0');
 assert.equal(benchState.schemaPreservation.terrain, 'lerms.terrain-sample.v0');
 assert.equal(benchState.actorMotion, null);
+assert.deepEqual(benchState.previewPayloads, []);
+
+const genericPreviewPayloadReport = {
+  ok: true,
+  schema: 'kaminos.preview-bench.payload-report.v0',
+  route: 'kaminos/preview-bench/payload-file',
+  reportPath: '/tmp/big-papa-finger-juice-preview.json',
+  payload: {
+    schema: 'big-papa-finger-juice.preview-bench-payload.v0',
+    route: 'big-papa-finger-juice/preview-bench/payload-file',
+    label: 'Big Papa Finger Juice packets',
+    acceptanceSurface: {
+      kind: 'kaminos_preview_bench_payload',
+      worldChamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+      routeQuery: 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview',
+      expectedHost: 'kaminos_workbench_kiln_preview_bench',
+    },
+    source: {
+      authority: 'live_packet',
+      diaulos: 'big-papa-finger-juice-fucker',
+      route: 'big-papa-finger-juice/live-packet-summary',
+    },
+    fields: [
+      { label: 'Packets', value: 3 },
+      { label: 'Route', value: 'finger-juice/live' },
+    ],
+    summary: {
+      packetCount: 3,
+      latestFrame: 'juice-frame-009',
+    },
+    downgrades: ['host_visualization_not_source_truth'],
+    rejectedSurfaces: [{
+      route: 'browser/?finger_juice=1',
+      acceptanceSurface: false,
+      reason: 'debug route is not Kaminos Preview Bench acceptance',
+    }],
+    custody: {
+      sourceOwns: ['payload semantics', 'packet freshness'],
+      kaminosOwns: ['host display', 'route/source/fallback badges', 'witness capture'],
+    },
+  },
+};
+
+const genericPreviewPayloadState = normalizePreviewBenchPayloadReport(genericPreviewPayloadReport, {
+  mode: 'server_file',
+  root: 'lerms-preview',
+  path: 'big-papa-finger-juice-preview.json',
+});
+assert.equal(genericPreviewPayloadState.schema, 'kaminos.preview-bench.payload-state.v0');
+assert.equal(genericPreviewPayloadState.reportSchema, 'kaminos.preview-bench.payload-report.v0');
+assert.equal(genericPreviewPayloadState.payloadSchema, 'big-papa-finger-juice.preview-bench-payload.v0');
+assert.equal(genericPreviewPayloadState.route, 'big-papa-finger-juice/preview-bench/payload-file');
+assert.equal(genericPreviewPayloadState.label, 'Big Papa Finger Juice packets');
+assert.equal(genericPreviewPayloadState.source.authority, 'live_packet');
+assert.equal(genericPreviewPayloadState.source.diaulos, 'big-papa-finger-juice-fucker');
+assert.equal(genericPreviewPayloadState.fields[0].value, '3');
+assert.equal(genericPreviewPayloadState.summary.packetCount, 3);
+assert.equal(genericPreviewPayloadState.downgrades[0], 'host_visualization_not_source_truth');
+assert.equal(genericPreviewPayloadState.rejectedSurfaces[0].acceptanceSurface, false);
+assert.equal(genericPreviewPayloadState.payloadSource.root, 'lerms-preview');
+assert.deepEqual(genericPreviewPayloadState.custody.kaminosOwns, ['host display', 'route/source/fallback badges', 'witness capture']);
+
+const genericPayloadBenchState = createLermsPreviewBenchState(registry, {
+  posture: 'inspect',
+  benchId: 'terrain-preview',
+  previewPayloadReports: [genericPreviewPayloadReport],
+  previewPayloadSources: [{
+    mode: 'server_file',
+    root: 'lerms-preview',
+    path: 'big-papa-finger-juice-preview.json',
+  }],
+});
+assert.equal(genericPayloadBenchState.previewPayloads.length, 1);
+assert.equal(genericPayloadBenchState.previewPayloads[0].payloadSchema, 'big-papa-finger-juice.preview-bench-payload.v0');
+assert.equal(genericPayloadBenchState.badges.previewPayloads, '1 payload');
+assert.equal(genericPayloadBenchState.previewPayloads[0].acceptanceSurface.routeQuery, 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview');
 
 const actorMotionReport = {
   ok: true,

@@ -1747,6 +1747,77 @@ async function runLermsPreviewBenchActorMotionScenario(ws) {
   }
 }
 
+async function runPreviewBenchPayloadContractScenario(ws) {
+  phase = 'scenario-preview-bench-payload-contract';
+  lastEvidence.previewBenchPayloadContract = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('Preview Bench payload witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      let state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      for (let i = 0; i < 80; i++) {
+        state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+        if ((state.previewPayloads || []).length) break;
+        await wait(125);
+      }
+      const previewBenchPayloads = window.__kaminosPreviewBenchPayloads || state.previewPayloads || [];
+      return {
+        state,
+        previewBenchPayloads,
+        tabActive: !!document.querySelector('[data-tab="worlds"]')?.classList.contains('active'),
+        panelActive: !!document.getElementById('tab-worlds')?.classList.contains('active'),
+        adapterCountText: document.getElementById('lerms-preview-adapter-count')?.textContent?.trim() || null,
+        adapterRows: [...document.querySelectorAll('#preview-bench-adapter-list .world-chamber-row')].map(row => ({
+          text: row.textContent?.trim() || '',
+          schema: row.dataset.previewBenchPayloadSchema || row.dataset.previewBenchPayloadField || null,
+          route: row.dataset.previewBenchPayloadRoute || null,
+          authority: row.dataset.previewBenchPayloadAuthority || null,
+        })),
+      };
+    })()
+  `, { timeoutMs: 15000 });
+  const evidence = lastEvidence.previewBenchPayloadContract;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`Preview Bench payload tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`Preview Bench payload host state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.hostDescriptor !== 'kaminos.world-chamber.preview-bench.v0') {
+    throw new Error(`Preview Bench payload host descriptor mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`Preview Bench payload route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const payload = evidence.previewBenchPayloads?.[0];
+  if (payload?.schema !== 'kaminos.preview-bench.payload-state.v0') {
+    throw new Error(`Preview Bench payload state schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.payloadSchema || payload.payloadSchema.startsWith('kaminos.')) {
+    throw new Error(`Preview Bench payload did not preserve source-owned schema: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.route || payload.route === 'kaminos/preview-bench/payload-file') {
+    throw new Error(`Preview Bench payload did not preserve source-owned route: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.source?.authority) {
+    throw new Error(`Preview Bench payload source authority missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!Array.isArray(payload.rejectedSurfaces) || payload.rejectedSurfaces.length === 0) {
+    throw new Error(`Preview Bench payload rejected debug surfaces missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!payload.custody?.sourceOwns?.length || !payload.custody?.kaminosOwns?.length) {
+    throw new Error(`Preview Bench payload custody split missing: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.adapterRows?.some(row => row.schema === payload.payloadSchema && row.authority === payload.source.authority)) {
+    throw new Error(`Preview Bench payload UI row missing schema/authority identity: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.adapterCountText !== String(evidence.previewBenchPayloads.length)) {
+    throw new Error(`Preview Bench payload UI count mismatch: ${JSON.stringify(evidence)}`);
+  }
+}
+
 async function runLermsPreviewBenchActorMotionTimelineScenario(ws) {
   phase = 'scenario-lerms-preview-bench-actor-motion-timeline';
   lastEvidence.lermsPreviewBenchActorMotionTimeline = await evaluate(ws, `
@@ -4458,6 +4529,8 @@ try {
     await runLermsPreviewBenchTerrainScenario(ws);
   } else if (scenario === 'lerms-preview-bench-actor-motion') {
     await runLermsPreviewBenchActorMotionScenario(ws);
+  } else if (scenario === 'preview-bench-payload-contract') {
+    await runPreviewBenchPayloadContractScenario(ws);
   } else if (scenario === 'lerms-preview-bench-actor-motion-timeline') {
     await runLermsPreviewBenchActorMotionTimelineScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {

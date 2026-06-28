@@ -2,6 +2,9 @@ export const WORLD_CHAMBER_REGISTRY_SCHEMA = 'kaminos.world-chambers.registry.v0
 export const WORLD_CHAMBER_DESCRIPTOR_SCHEMA = 'kaminos.world-chamber.descriptor.v0';
 export const WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA = 'kaminos.world-chamber.preview-bench.v0';
 export const WORLD_CHAMBER_RECEIPT_SCHEMA = 'kaminos.world-chamber.receipt.v0';
+export const KAMINOS_PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA = 'kaminos.preview-bench.payload-report.v0';
+export const KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA = 'kaminos.preview-bench.payload-state.v0';
+export const KAMINOS_PREVIEW_BENCH_PAYLOAD_ROUTE = 'kaminos/preview-bench/payload-file';
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_SCHEMA = 'lerms.preview-bench-actor-motion-payload.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_STATE_SCHEMA = 'lerms.preview-bench-actor-motion-state.v0';
 export const LERMS_PREVIEW_ACTOR_MOTION_PAYLOAD_ROUTE = 'lerms/preview-bench/actor-motion-payload-file';
@@ -371,6 +374,23 @@ function routeStringForPreviewBench(chamberId, posture, benchId) {
   return `world_chamber=${chamberId}&posture=${posture}&bench=${benchId}`;
 }
 
+function assertPreviewBenchAcceptanceSurface(surface, label, target = {}) {
+  assertObject(surface, `${label} acceptance surface`);
+  const chamberId = target.chamberId || LERMS_UNDERHILL_CHAMBER_ID;
+  const posture = target.posture || 'inspect';
+  const benchId = target.benchId || LERMS_TERRAIN_PREVIEW_BENCH_ID;
+  const expectedRoute = routeStringForPreviewBench(chamberId, posture, benchId);
+  if (surface.kind !== 'kaminos_preview_bench_payload') {
+    throw new Error(`${label} acceptance surface kind mismatch: ${surface.kind || 'missing'}`);
+  }
+  if (surface.worldChamberId !== chamberId || surface.posture !== posture || surface.bench !== benchId) {
+    throw new Error(`${label} does not target the active Preview Bench: ${JSON.stringify(surface)}`);
+  }
+  if (surface.routeQuery !== expectedRoute) {
+    throw new Error(`${label} route query mismatch: ${surface.routeQuery || 'missing'}`);
+  }
+}
+
 function findPreviewBench(chamber, benchId) {
   const benches = Array.isArray(chamber?.previewBenches) ? chamber.previewBenches : [];
   return benches.find(bench => bench.id === benchId) || benches[0] || null;
@@ -384,6 +404,64 @@ function countFrameArray(frame, key, fallbackKey = null) {
   if (Array.isArray(frame?.[key])) return frame[key].length;
   if (fallbackKey && Array.isArray(frame?.[fallbackKey])) return frame[fallbackKey].length;
   return 0;
+}
+
+function normalizePreviewPayloadFields(payload) {
+  if (Array.isArray(payload.fields)) {
+    return payload.fields.map((field) => {
+      assertObject(field, 'Preview Bench payload field');
+      return {
+        label: String(field.label || field.key || 'Field'),
+        value: field.value === undefined || field.value === null ? '' : String(field.value),
+      };
+    });
+  }
+  if (payload.summary && typeof payload.summary === 'object' && !Array.isArray(payload.summary)) {
+    return Object.entries(payload.summary).map(([key, value]) => ({
+      label: key,
+      value: value === undefined || value === null ? '' : String(value),
+    }));
+  }
+  return [];
+}
+
+export function normalizePreviewBenchPayloadReport(report, payloadSource = null, target = {}) {
+  assertObject(report, 'Preview Bench payload report');
+  const payload = report.payload || report;
+  assertObject(payload, 'Preview Bench payload');
+  if (report.payload) {
+    if (report.schema !== KAMINOS_PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA) {
+      throw new Error(`Preview Bench payload report schema mismatch: expected ${KAMINOS_PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA} but got ${report.schema || 'missing'}`);
+    }
+    if (report.route !== KAMINOS_PREVIEW_BENCH_PAYLOAD_ROUTE) {
+      throw new Error(`Preview Bench payload report route mismatch: expected ${KAMINOS_PREVIEW_BENCH_PAYLOAD_ROUTE} but got ${report.route || 'missing'}`);
+    }
+  }
+  if (!payload.schema) throw new Error('Preview Bench payload must preserve a source-owned schema');
+  if (!payload.route) throw new Error('Preview Bench payload must preserve a source-owned route');
+  assertPreviewBenchAcceptanceSurface(payload.acceptanceSurface, 'Preview Bench payload', target);
+  assertObject(payload.source, 'Preview Bench payload source');
+  if (!payload.source.authority) {
+    throw new Error('Preview Bench payload source must include authority');
+  }
+  return {
+    schema: KAMINOS_PREVIEW_BENCH_PAYLOAD_STATE_SCHEMA,
+    reportSchema: report.schema || null,
+    reportRoute: report.route || null,
+    reportPath: report.reportPath || null,
+    payloadSchema: payload.schema,
+    route: payload.route,
+    label: payload.label || payload.title || payload.route,
+    acceptanceSurface: clone(payload.acceptanceSurface),
+    payloadSource: normalizeReceiptSource(payloadSource),
+    source: clone(payload.source),
+    fields: normalizePreviewPayloadFields(payload),
+    summary: payload.summary ? clone(payload.summary) : null,
+    downgrades: clone(Array.isArray(payload.downgrades) ? payload.downgrades : []),
+    rejectedSurfaces: clone(Array.isArray(payload.rejectedSurfaces) ? payload.rejectedSurfaces : []),
+    custody: payload.custody ? clone(payload.custody) : null,
+    rawPayload: clone(payload),
+  };
 }
 
 function clampNumber(value, min, max) {
@@ -725,6 +803,19 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
   const actorMotionTimeline = options.actorMotionTimelineReport
     ? normalizeLermsPreviewActorMotionTimelineReport(options.actorMotionTimelineReport, options.actorMotionTimelineSource)
     : null;
+  const previewPayloadReports = [
+    ...(Array.isArray(options.previewPayloadReports) ? options.previewPayloadReports : []),
+    ...(options.previewPayloadReport ? [options.previewPayloadReport] : []),
+  ];
+  const previewPayloadSources = [
+    ...(Array.isArray(options.previewPayloadSources) ? options.previewPayloadSources : []),
+    ...(options.previewPayloadSource ? [options.previewPayloadSource] : []),
+  ];
+  const previewPayloads = previewPayloadReports.map((report, index) => normalizePreviewBenchPayloadReport(report, previewPayloadSources[index] || null, {
+    chamberId: chamber.id,
+    posture,
+    benchId: bench.id,
+  }));
   return {
     schema: LERMS_PREVIEW_WITNESS_SCHEMA,
     hostDescriptor: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
@@ -746,6 +837,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
       fallback: receiptMode,
       actorMotion: actorMotion?.source?.authority || null,
       actorMotionTimeline: actorMotionTimeline ? `timeline:${actorMotionTimeline.frameCount}` : null,
+      previewPayloads: previewPayloads.length ? `${previewPayloads.length} payload${previewPayloads.length === 1 ? '' : 's'}` : null,
     },
     activeCamera: clone(activeCamera),
     cameraPresets: clone(LERMS_PREVIEW_CAMERA_PRESETS),
@@ -770,6 +862,7 @@ export function createLermsPreviewBenchState(registry = createDefaultWorldChambe
     forgeRail: chamber.forgeRail ? clone(chamber.forgeRail) : null,
     intentionallyAbsent: debug.intentionallyAbsent ? clone(debug.intentionallyAbsent) : null,
     receiptLoadError: debug.receiptLoadError ? clone(debug.receiptLoadError) : null,
+    previewPayloads,
     actorMotion,
     actorMotionTimeline,
   };
