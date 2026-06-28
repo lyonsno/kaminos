@@ -196,6 +196,7 @@
     const webgpuMaxFrameSteps = 8;
     const webgpuReadbackPeriod = 0.55;
     const liveReadbackContract = 'live_readback_decoupled_v0';
+    const nonzeroWebgpuCanvasExtentContract = 'nonzero_webgpu_canvas_extent_v0';
 
     function clampCamera(camera = fingerJuiceCamera) {
       camera.yaw = Math.max(-0.92, Math.min(0.92, Number(camera.yaw) || 0));
@@ -408,13 +409,44 @@
       };
     };
 
+    function measureViewportExtent() {
+      const ratio = Math.max(1, Number(window.devicePixelRatio) || 1);
+      const visualViewport = window.visualViewport;
+      const width = Math.max(1, Math.floor(
+        Number(window.innerWidth)
+        || Number(visualViewport?.width)
+        || Number(document.documentElement.clientWidth)
+        || Number(document.body?.clientWidth)
+        || Number(canvas.clientWidth)
+        || Number(canvas.width) / ratio
+        || 1,
+      ));
+      const height = Math.max(1, Math.floor(
+        Number(window.innerHeight)
+        || Number(visualViewport?.height)
+        || Number(document.documentElement.clientHeight)
+        || Number(document.body?.clientHeight)
+        || Number(canvas.clientHeight)
+        || Number(canvas.height) / ratio
+        || 1,
+      ));
+      return {
+        extentContract: nonzeroWebgpuCanvasExtentContract,
+        width,
+        height,
+        ratio,
+        targetWidth: Math.max(1, Math.floor(width * ratio)),
+        targetHeight: Math.max(1, Math.floor(height * ratio)),
+      };
+    }
+
     function resize() {
-      const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(window.innerWidth * ratio);
-      canvas.height = Math.floor(window.innerHeight * ratio);
-      gpuCanvas.width = Math.floor(window.innerWidth * ratio);
-      gpuCanvas.height = Math.floor(window.innerHeight * ratio);
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const extent = measureViewportExtent();
+      canvas.width = extent.targetWidth;
+      canvas.height = extent.targetHeight;
+      gpuCanvas.width = extent.targetWidth;
+      gpuCanvas.height = extent.targetHeight;
+      ctx.setTransform(extent.ratio, 0, 0, extent.ratio, 0, 0);
     }
 
     function responsiveSmokeProjection(width = window.innerWidth, height = window.innerHeight) {
@@ -878,10 +910,11 @@
 
     function renderWebGPUDirectLayer() {
       if (webgpuRenderer?.render && webgpuState?.render_backend === 'webgpu_direct_render') {
+        const extent = measureViewportExtent();
         const renderState = webgpuRenderer.render({
-          width: window.innerWidth,
-          height: window.innerHeight,
-          pixelRatio: window.devicePixelRatio || 1,
+          width: extent.width,
+          height: extent.height,
+          pixelRatio: extent.ratio,
           camera: cameraSnapshot(),
         });
         webgpuRenderFrameCount = renderState.renderFrameCount;
@@ -990,12 +1023,13 @@
             webgpuFramePending = true;
             const readbackStartedAt = performance.now();
             webgpuSolver.step(submittedSteps, webgpuFrameStepDt).then(() => {
-              webgpuLastComputeMs = performance.now() - readbackStartedAt;
+            webgpuLastComputeMs = performance.now() - readbackStartedAt;
               if (webgpuRenderer?.render) {
+                const extent = measureViewportExtent();
                 const renderState = webgpuRenderer.render({
-                  width: window.innerWidth,
-                  height: window.innerHeight,
-                  pixelRatio: window.devicePixelRatio || 1,
+                  width: extent.width,
+                  height: extent.height,
+                  pixelRatio: extent.ratio,
                   camera: cameraSnapshot(),
                 });
                 webgpuRenderFrameCount = renderState.renderFrameCount;

@@ -104,6 +104,10 @@ assert.match(webgpuCoreSource, /createComputePipeline/, 'WebGPU solver advances 
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'WebGPU solver renders particles through a render pipeline');
 assert.match(webgpuCoreSource, /GPUCanvasContext/, 'WebGPU renderer configures a canvas context');
 assert.match(webgpuCoreSource, /createRenderer/, 'WebGPU solver exposes a direct renderer');
+assert.match(webgpuCoreSource, /nonzero_webgpu_canvas_extent_v0/, 'WebGPU renderer names the nonzero canvas extent guard contract');
+assert.match(webgpuCoreSource, /resolveNonzeroWebGPUCanvasExtent/, 'WebGPU renderer exposes a testable nonzero canvas extent resolver');
+assert.match(webgpuCoreSource, /configureCanvasContextForExtent/, 'WebGPU renderer configures the canvas context with an explicit nonzero extent');
+assert.match(webgpuCoreSource, /empty_canvas_extent_deferred_v0/, 'WebGPU renderer defers rendering instead of requesting a zero-size swapchain texture');
 assert.match(webgpuCoreSource, /createWebGPUEmitterBufferData/, 'WebGPU solver serializes emitters into a GPU buffer');
 assert.match(webgpuCoreSource, /@binding\(2\)\s+var<storage,\s*read>\s+emitters/, 'WebGPU solver shader reads a storage emitter buffer');
 assert.match(webgpuCoreSource, /spawn_jitter_hash_v0/, 'WebGPU respawn path uses deterministic spawn jitter');
@@ -205,6 +209,8 @@ assert.match(pageSource, /window\.__lermsFingerJuiceDebug/, 'prototype exposes r
 assert.match(pageSource, /window\.__lermsFingerJuiceStepForWitness/, 'prototype exposes deterministic witness stepping');
 assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates WebGPU finger-juice solver');
 assert.match(pageSource, /juice-gpu-layer/, 'prototype includes a WebGPU juice overlay canvas');
+assert.match(pageSource, /nonzero_webgpu_canvas_extent_v0/, 'prototype names its nonzero WebGPU canvas extent contract');
+assert.match(pageSource, /measureViewportExtent/, 'prototype measures a nonzero viewport extent before resizing render canvases');
 assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
 assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
 assert.match(pageSource, /particleSupportBudget\s*=\s*36000/, 'prototype uses the 36k particle support budget');
@@ -415,6 +421,45 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE, 'webgpu_particle_
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE, 'wgsl-ballistic-heightfield-surface-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE, 'webgpu_particle_splat_renderer_v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE, 'wgsl-particle-splat-renderer-v0');
+assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT, 'nonzero_webgpu_canvas_extent_v0');
+assert.equal(
+  webgpuMod.resolveNonzeroWebGPUCanvasExtent(
+    { width: 0, height: 0, clientWidth: 0, clientHeight: 0, getBoundingClientRect: () => ({ width: 0, height: 0 }) },
+    { width: 0, height: 0, pixelRatio: 2 },
+  ),
+  null,
+  'zero CSS and drawing-buffer extents are rejected before getCurrentTexture',
+);
+assert.deepEqual(
+  webgpuMod.resolveNonzeroWebGPUCanvasExtent(
+    { width: 0, height: 0, clientWidth: 640, clientHeight: 360, getBoundingClientRect: () => ({ width: 0, height: 0 }) },
+    { width: 0, height: 0, pixelRatio: 2 },
+  ),
+  {
+    extentContract: 'nonzero_webgpu_canvas_extent_v0',
+    cssWidth: 640,
+    cssHeight: 360,
+    ratio: 2,
+    targetWidth: 1280,
+    targetHeight: 720,
+  },
+  'client extents produce a nonzero WebGPU drawing buffer',
+);
+assert.deepEqual(
+  webgpuMod.resolveNonzeroWebGPUCanvasExtent(
+    { width: 1280, height: 720, clientWidth: 0, clientHeight: 0, getBoundingClientRect: () => ({ width: 0, height: 0 }) },
+    { width: 0, height: 0, pixelRatio: 2 },
+  ),
+  {
+    extentContract: 'nonzero_webgpu_canvas_extent_v0',
+    cssWidth: 640,
+    cssHeight: 360,
+    ratio: 2,
+    targetWidth: 1280,
+    targetHeight: 720,
+  },
+  'existing drawing-buffer extents can recover a transient zero client extent',
+);
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE, 'webgpu_emitter_buffer_v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT, 'wgsl-gpu-emitter-respawn-v0');
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT, 'wgsl-local-density-pressure-v0');
