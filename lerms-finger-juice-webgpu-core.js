@@ -17,6 +17,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_DENSITY_CONTINUITY_CONTRACT = 'wgsl-densi
 export const LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT = 'wgsl-sampled-neighborhood-density-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT = 'wgsl-deep-density-continuity-projection-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT = 'wgsl-local-pair-density-projection-v0';
+export const LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT = 'wgsl-neighbor-support-substrate-v0';
 export const LERMS_SOURCE_TRUTH_SCHEMA = 'lerms.source-truth.v0';
 export const LERMS_JUICE_HIT_EVENT_SCHEMA = 'lerms.juice-hit-event.v0';
 export const LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE = 'live_lightweight_readback_v0';
@@ -43,6 +44,7 @@ const DENSITY_CONTINUITY_TARGET_OCCUPANCY = 96;
 const CONTINUITY_BIN_REFRESH_CHUNK = 16;
 const SAMPLED_NEIGHBORHOOD_SAMPLE_COUNT = 16;
 const LOCAL_PAIR_DENSITY_SAMPLE_COUNT = 8;
+const NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT = 32;
 const DENSITY_POSITION_SOLVE_REST_DISTANCE = PRESSURE_RADIUS * 0.62;
 const PARTICLE_BUDGET_RENDER_SCALE_CONTRACT = 'particle_budget_render_scale_v0';
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
@@ -1027,6 +1029,49 @@ function localPairDensityStats(particles, sampledNeighborhoodStats = null) {
   };
 }
 
+function neighborSupportSubstrateStats(particles, substrateData = null) {
+  const surfaceParticles = particles.filter(particle => particle.surface_flow);
+  const supportRadius = Math.max(0.036, viscosityRadiusForBudget(particles.length) * 0.95);
+  const closeRadius = Math.max(0.024, densityRestDistanceForBudget(particles.length) * 1.04);
+  const base = {
+    pressureContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
+    neighborSupportSubstrateMode: 'gpu_hash_sampled_same_chemistry_support_buffer_v0',
+    substrateReadbackMode: substrateData ? 'gpu_neighbor_support_buffer_readback_v0' : 'missing_neighbor_support_buffer_readback_v0',
+    substrateSampleCount: NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT,
+    supportRadius: round(supportRadius, 4),
+    closeRadius: round(closeRadius, 4),
+    particleCount: particles.length,
+    surfaceParticleCount: surfaceParticles.length,
+  };
+  if (!surfaceParticles.length || !substrateData) {
+    return {
+      ...base,
+      averageSubstrateNeighborSupport: 0,
+      maxSubstrateNeighborSupport: 0,
+      p95SubstrateNeighborSupport: 0,
+      supportedSubstrateParticleCount: 0,
+      unsupportedSubstrateParticleCount: surfaceParticles.length,
+      substrateAdequacyRatio: 0,
+    };
+  }
+
+  const supportValues = surfaceParticles
+    .map(particle => Math.max(0, finite(substrateData[Number(String(particle.id).replace('wgpu-', ''))], 0)))
+    .sort((a, b) => a - b);
+  const supportTotal = supportValues.reduce((sum, value) => sum + value, 0);
+  const supportedSubstrateParticleCount = supportValues.filter(value => value >= 2).length;
+  const unsupportedSubstrateParticleCount = supportValues.length - supportedSubstrateParticleCount;
+  return {
+    ...base,
+    averageSubstrateNeighborSupport: round(supportTotal / supportValues.length, 4),
+    maxSubstrateNeighborSupport: round(supportValues[supportValues.length - 1] || 0, 4),
+    p95SubstrateNeighborSupport: round(percentile(supportValues, 0.95), 4),
+    supportedSubstrateParticleCount,
+    unsupportedSubstrateParticleCount,
+    substrateAdequacyRatio: round(supportedSubstrateParticleCount / supportValues.length, 4),
+  };
+}
+
 function deepDensityContinuityStats(particles) {
   const surfaceParticles = particles.filter(particle => particle.surface_flow);
   const bins = new Uint32Array(SPATIAL_PRESSURE_CELL_COUNT);
@@ -1328,17 +1373,26 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     let surfaceFlowCount = 0;
     let maxParticleAge = 0;
     let gpuRespawnCount = 0;
+    const substrateSupportValues = [];
     for (let i = 0; i < buffer.length / PARTICLE_FLOATS; i += 1) {
       const particle = readParticle(buffer, i);
       gpuRespawnCount += finite(particle.respawnCount, 0);
       if (!particle.active || particle.age < 0 || particle.age >= particle.life) continue;
       activeParticleCount += 1;
-      if (particle.phase >= 0.5) surfaceFlowCount += 1;
+      if (particle.phase >= 0.5) {
+        surfaceFlowCount += 1;
+        if (options.neighborSupportData) {
+          substrateSupportValues.push(Math.max(0, finite(options.neighborSupportData[i], 0)));
+        }
+      }
       maxParticleAge = Math.max(maxParticleAge, finite(particle.age, 0));
       const source = options.sources?.find(item => item.emitterIndex === particle.emitterIndex);
       const emitterId = source?.emitter_id || `emitter-${particle.emitterIndex}`;
       particlesPerEmitter[emitterId] = (particlesPerEmitter[emitterId] || 0) + 1;
     }
+    substrateSupportValues.sort((a, b) => a - b);
+    const substrateSupportTotal = substrateSupportValues.reduce((sum, value) => sum + value, 0);
+    const substrateSupportedCount = substrateSupportValues.filter(value => value >= 2).length;
     return {
       solver_backend: options.solver_backend || 'webgpu_compute',
       solverRoute: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
@@ -1354,6 +1408,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
       localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
       deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+      neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
       visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
@@ -1361,6 +1416,19 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       sourceTruth,
       sourceDiagnostics: createSourceDiagnostics(options.emitterPacket || {}, sourceTruth, options.sources || []),
       emitterDiagnostics: createEmitterDiagnostics(options.sources || [], particlesPerEmitter, null),
+      neighborSupportSubstrateStats: {
+        pressureContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
+        neighborSupportSubstrateMode: 'gpu_hash_sampled_same_chemistry_support_buffer_v0',
+        substrateReadbackMode: options.neighborSupportData ? 'gpu_neighbor_support_buffer_readback_v0' : 'missing_neighbor_support_buffer_readback_v0',
+        substrateSampleCount: NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT,
+        surfaceParticleCount: substrateSupportValues.length,
+        averageSubstrateNeighborSupport: substrateSupportValues.length ? round(substrateSupportTotal / substrateSupportValues.length, 4) : 0,
+        maxSubstrateNeighborSupport: round(substrateSupportValues[substrateSupportValues.length - 1] || 0, 4),
+        p95SubstrateNeighborSupport: round(percentile(substrateSupportValues, 0.95), 4),
+        supportedSubstrateParticleCount: substrateSupportedCount,
+        unsupportedSubstrateParticleCount: substrateSupportValues.length - substrateSupportedCount,
+        substrateAdequacyRatio: substrateSupportValues.length ? round(substrateSupportedCount / substrateSupportValues.length, 4) : 0,
+      },
       particleCount: activeParticleCount,
       surfaceFlowCount,
       maxParticleAge: round(maxParticleAge, 4),
@@ -1480,6 +1548,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const densityContinuityStats = densityContinuityProjectionStats(particles);
   const sampledNeighborhoodStats = sampledNeighborhoodDensityStats(particles);
   const localPairStats = localPairDensityStats(particles, sampledNeighborhoodStats);
+  const neighborSupportStats = neighborSupportSubstrateStats(particles, options.neighborSupportData || null);
   const deepDensityStats = deepDensityContinuityStats(particles);
   const supportBudgetStats = particleSupportBudgetStats(particles);
   const restEnergyStats = settleRestEnergyStats(particles);
@@ -1503,6 +1572,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
     localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
     deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+    neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
     particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     stabilityContract: LERMS_FINGER_JUICE_WEBGPU_STABILITY_CONTRACT,
     visualDampingContract: LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT,
@@ -1518,6 +1588,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     densityContinuityProjectionStats: densityContinuityStats,
     sampledNeighborhoodDensityStats: sampledNeighborhoodStats,
     localPairDensityStats: localPairStats,
+    neighborSupportSubstrateStats: neighborSupportStats,
     deepDensityContinuityStats: deepDensityStats,
     particleSupportBudgetStats: supportBudgetStats,
     settleRestEnergyStats: restEnergyStats,
@@ -1598,6 +1669,7 @@ struct Params {
 @group(0) @binding(1) var<uniform> params: Params;
 @group(0) @binding(2) var<storage, read> emitters: array<Emitter>;
 @group(0) @binding(3) var<storage, read_write> pressureBins: array<atomic<u32>>;
+@group(0) @binding(4) var<storage, read_write> neighborSupportBuffer: array<f32>;
 
 const SPATIAL_PRESSURE_GRID_X: u32 = ${SPATIAL_PRESSURE_GRID_X}u;
 const SPATIAL_PRESSURE_GRID_Z: u32 = ${SPATIAL_PRESSURE_GRID_Z}u;
@@ -1610,6 +1682,7 @@ const DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY: f32 = ${DENSITY_POSITION_SOLVE_TA
 const DENSITY_CONTINUITY_TARGET_OCCUPANCY: f32 = ${DENSITY_CONTINUITY_TARGET_OCCUPANCY.toFixed(1)};
 const SAMPLED_NEIGHBORHOOD_SAMPLE_COUNT: u32 = ${SAMPLED_NEIGHBORHOOD_SAMPLE_COUNT}u;
 const LOCAL_PAIR_DENSITY_SAMPLE_COUNT: u32 = ${LOCAL_PAIR_DENSITY_SAMPLE_COUNT}u;
+const NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT: u32 = ${NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT}u;
 const DENSITY_POSITION_SOLVE_REST_DISTANCE: f32 = ${DENSITY_POSITION_SOLVE_REST_DISTANCE.toFixed(4)};
 const BASELINE_PARTICLE_SUPPORT_BUDGET: f32 = ${BASELINE_PARTICLE_SUPPORT_BUDGET.toFixed(1)};
 const MIN_PARTICLE_SUPPORT_SCALE: f32 = ${MIN_PARTICLE_SUPPORT_SCALE.toFixed(4)};
@@ -1689,6 +1762,17 @@ fn pressureCellCountAt(cellX: i32, cellZ: i32) -> f32 {
   }
   let index = u32(cellZ) * SPATIAL_PRESSURE_GRID_X + u32(cellX);
   return f32(atomicLoad(&pressureBins[index]));
+}
+
+fn particleIsLiveSurface(particle: Particle) -> bool {
+  return particle.flags.y > 0.5 && particle.posPhase.w >= 0.5 && particle.misc.z >= 0.0 && particle.misc.z < particle.misc.w;
+}
+
+fn substrateNeighborSupport(index: u32) -> f32 {
+  if (index >= params.particleCount) {
+    return 0.0;
+  }
+  return neighborSupportBuffer[index];
 }
 
 fn pressureCellCenter(cellX: i32, cellZ: i32) -> vec3f {
@@ -1839,7 +1923,7 @@ fn applySpatialSurfaceRelaxation(position: vec3f, velocity: vec3f, radius: f32, 
   return vec3f(relaxed.x, position.y, relaxed.z);
 }
 
-fn applyDensityPositionSolve(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32) -> vec3f {
+fn applyDensityPositionSolve(index: u32, position: vec3f, velocity: vec3f, radius: f32, chemistry: f32, substrateSupport: f32) -> vec3f {
   var pairCorrection = vec3f(0.0, 0.0, 0.0);
   var pairWeight = 0.0;
   let restDistance = max(DENSITY_POSITION_SOLVE_REST_DISTANCE * particleSupportScale(), radius * 0.62);
@@ -1887,8 +1971,9 @@ fn applyDensityPositionSolve(index: u32, position: vec3f, velocity: vec3f, radiu
   );
   let overDensity = max(0.0, center - DENSITY_POSITION_SOLVE_TARGET_OCCUPANCY);
   let pairDirection = select(vec3f(0.0, 0.0, 0.0), pairCorrection / max(pairWeight, 0.0001), pairWeight > 0.0001);
-  let pairStep = min(radius * 0.34, pairWeight * select(select(0.0018, 0.0015, chemistry > 2.5), 0.0022, chemistry > 1.5 && chemistry < 2.5));
-  let cellStep = min(radius * 0.42, overDensity * select(select(0.00024, 0.00020, chemistry > 2.5), 0.00028, chemistry > 1.5 && chemistry < 2.5));
+  let substrateScale = clamp(substrateSupport / 8.0, 0.0, 1.0);
+  let pairStep = min(radius * 0.38, pairWeight * select(select(0.0018, 0.0015, chemistry > 2.5), 0.0022, chemistry > 1.5 && chemistry < 2.5) * (0.82 + substrateScale * 0.38));
+  let cellStep = min(radius * 0.45, overDensity * select(select(0.00024, 0.00020, chemistry > 2.5), 0.00028, chemistry > 1.5 && chemistry < 2.5) * (0.88 + substrateScale * 0.28));
   let correction = pairDirection * pairStep + cellDirection * cellStep;
   let correctionLength = length(correction);
   if (correctionLength <= 0.00001) {
@@ -1953,7 +2038,7 @@ fn applyDensityContinuityProjection(index: u32, position: vec3f, radius: f32, ch
   return vec3f(position.x + baseDirection.x * projectedStep, position.y, position.z + baseDirection.z * projectedStep);
 }
 
-fn applySampledNeighborhoodDensity(index: u32, position: vec3f, radius: f32, chemistry: f32) -> vec3f {
+fn applySampledNeighborhoodDensity(index: u32, position: vec3f, radius: f32, chemistry: f32, substrateSupport: f32) -> vec3f {
   var correction = vec3f(0.0, 0.0, 0.0);
   var closeWeight = 0.0;
   var supportWeight = 0.0;
@@ -1991,13 +2076,13 @@ fn applySampledNeighborhoodDensity(index: u32, position: vec3f, radius: f32, che
   if (correctionLength <= 0.00001) {
     return position;
   }
-  let crowdScale = min(1.0, supportWeight / 8.0);
+  let crowdScale = min(1.0, max(supportWeight, substrateSupport * 0.72) / 8.0);
   let chemistryScale = select(select(0.76, 0.70, chemistry > 2.5), 0.62, chemistry > 1.5 && chemistry < 2.5);
   let projectedStep = min(radius * 0.42, (closeWeight * 0.0022 + crowdScale * 0.0012) * chemistryScale);
   return vec3f(position.x + correction.x / correctionLength * projectedStep, position.y, position.z + correction.z / correctionLength * projectedStep);
 }
 
-fn applyLocalPairDensityProjection(index: u32, position: vec3f, radius: f32, chemistry: f32) -> vec3f {
+fn applyLocalPairDensityProjection(index: u32, position: vec3f, radius: f32, chemistry: f32, substrateSupport: f32) -> vec3f {
   let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
   let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
   let center = pressureCellCountAt(cellX, cellZ);
@@ -2038,7 +2123,7 @@ fn applyLocalPairDensityProjection(index: u32, position: vec3f, radius: f32, che
     return position;
   }
   let crowdScale = min(1.0, max(0.0, center - 1.0) / 18.0);
-  let supportScale = min(1.0, supportWeight / 10.0);
+  let supportScale = min(1.0, max(supportWeight, substrateSupport * 0.62) / 10.0);
   let chemistryScale = select(select(0.66, 0.72, chemistry > 2.5), 0.54, chemistry > 1.5 && chemistry < 2.5);
   let projectedStep = min(radius * 0.34, (closeWeight * 0.00155 + crowdScale * supportScale * 0.00095) * chemistryScale);
   return vec3f(position.x + correction.x / correctionLength * projectedStep, position.y, position.z + correction.z / correctionLength * projectedStep);
@@ -2258,6 +2343,52 @@ fn accumulate_pressure_bins(@builtin(global_invocation_id) global_id: vec3u) {
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
+fn build_neighbor_support_substrate(@builtin(global_invocation_id) global_id: vec3u) {
+  let index = global_id.x;
+  if (index >= params.particleCount) {
+    return;
+  }
+  let particle = particles[index];
+  if (!particleIsLiveSurface(particle)) {
+    neighborSupportBuffer[index] = 0.0;
+    return;
+  }
+
+  let position = particle.posPhase.xyz;
+  let chemistry = particle.velChem.w;
+  let radius = particle.misc.x;
+  let supportRadius = max(radius * 2.65, SURFACE_VISCOSITY_RADIUS_BASE * particleSupportScale() * 0.95);
+  let closeRadius = max(radius * 1.12, DENSITY_POSITION_SOLVE_REST_DISTANCE * particleSupportScale() * 1.04);
+  let cellX = i32(pressureCellAxis(position.x, SPATIAL_PRESSURE_MIN_X, SPATIAL_PRESSURE_MAX_X, SPATIAL_PRESSURE_GRID_X));
+  let cellZ = i32(pressureCellAxis(position.z, SPATIAL_PRESSURE_MIN_Z, SPATIAL_PRESSURE_MAX_Z, SPATIAL_PRESSURE_GRID_Z));
+  let center = pressureCellCountAt(cellX, cellZ);
+  let localOccupancyBias = clamp((center - 1.0) / 24.0, 0.0, 2.0);
+  var support = localOccupancyBias;
+  var closeSupport = 0.0;
+  let particleCount = max(1u, params.particleCount);
+  for (var sampleOffset: u32 = 1u; sampleOffset <= NEIGHBOR_SUPPORT_SUBSTRATE_SAMPLE_COUNT; sampleOffset = sampleOffset + 1u) {
+    let phaseSeed = ((params.stepCount + 29u) * 747796405u) ^ ((index + 19u) * 2891336453u) ^ (sampleOffset * 1597334677u);
+    let stride = 1u + (phaseSeed % max(1u, particleCount - 1u));
+    let neighborIndex = (index + stride) % particleCount;
+    let neighbor = particles[neighborIndex];
+    if (!particleIsLiveSurface(neighbor) || abs(neighbor.velChem.w - chemistry) >= 0.25) {
+      continue;
+    }
+    let delta = position - neighbor.posPhase.xyz;
+    let distance = length(delta);
+    if (distance <= 0.0001 || distance >= supportRadius) {
+      continue;
+    }
+    let supportWeight = (supportRadius - distance) / supportRadius;
+    support = support + supportWeight;
+    if (distance < closeRadius) {
+      closeSupport = closeSupport + (closeRadius - distance) / closeRadius;
+    }
+  }
+  neighborSupportBuffer[index] = support + closeSupport * 0.72;
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
   let index = global_id.x;
   if (index >= params.particleCount) {
@@ -2301,6 +2432,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
         velocity = slideVelocityOnTerrain(velocity, terrainNormalAt(position.x, position.z), chemistry);
       }
     } else {
+      let substrateSupport = substrateNeighborSupport(index);
       velocity = slideVelocityOnTerrain(velocity, terrainNormalAt(position.x, position.z), chemistry);
       velocity = applyLocalDensityPressure(index, position, velocity, radius, chemistry);
       velocity = applySpatialCellPressure(position, velocity, chemistry);
@@ -2311,10 +2443,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       velocity = applyVisualStreakBeadDamping(index, position, velocity, radius, chemistry, phase, age);
       position = position + velocity * params.dt;
       position = applySpatialSurfaceRelaxation(position, velocity, radius, chemistry);
-      position = applyDensityPositionSolve(index, position, velocity, radius, chemistry);
+      position = applyDensityPositionSolve(index, position, velocity, radius, chemistry, substrateSupport);
       position = applyDensityContinuityProjection(index, position, radius, chemistry);
-      position = applySampledNeighborhoodDensity(index, position, radius, chemistry);
-      position = applyLocalPairDensityProjection(index, position, radius, chemistry);
+      position = applySampledNeighborhoodDensity(index, position, radius, chemistry, substrateSupport);
+      position = applyLocalPairDensityProjection(index, position, radius, chemistry, substrateSupport);
       position = applyDeepDensityContinuityProjection(index, position, radius, chemistry);
       position = applySurfaceBasinContainment(position, radius, chemistry);
       velocity = applySurfaceStabilityDamping(position, velocity, chemistry);
@@ -2500,9 +2632,19 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: SPATIAL_PRESSURE_CELL_COUNT * 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
+  const neighborSupportBuffer = device.createBuffer({
+    label: 'lerms-finger-juice-neighborSupportBuffer',
+    size: maxParticles * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  });
   const readbackBuffer = device.createBuffer({
     label: 'lerms-finger-juice-particle-readback',
     size: byteLength,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+  const neighborSupportReadbackBuffer = device.createBuffer({
+    label: 'lerms-finger-juice-neighbor-support-readback',
+    size: maxParticles * 4,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const paramsBuffer = device.createBuffer({
@@ -2523,6 +2665,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({
@@ -2532,6 +2675,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   let pipeline;
   let clearPressurePipeline;
   let accumulatePressurePipeline;
+  let neighborSupportPipeline;
   try {
     clearPressurePipeline = await device.createComputePipelineAsync({
       label: `${LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT}:clear_pressure_bins`,
@@ -2542,6 +2686,11 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       label: `${LERMS_FINGER_JUICE_WEBGPU_SPATIAL_PRESSURE_CONTRACT}:accumulate_pressure_bins`,
       layout: computePipelineLayout,
       compute: { module: shaderModule, entryPoint: 'accumulate_pressure_bins' },
+    });
+    neighborSupportPipeline = await device.createComputePipelineAsync({
+      label: `${LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT}:build_neighbor_support_substrate`,
+      layout: computePipelineLayout,
+      compute: { module: shaderModule, entryPoint: 'build_neighbor_support_substrate' },
     });
     pipeline = await device.createComputePipelineAsync({
       label: LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE,
@@ -2559,6 +2708,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       { binding: 1, resource: { buffer: paramsBuffer } },
       { binding: 2, resource: { buffer: emitterBuffer } },
       { binding: 3, resource: { buffer: pressureBinBuffer } },
+      { binding: 4, resource: { buffer: neighborSupportBuffer } },
     ],
   });
   let stepCount = 0;
@@ -2580,6 +2730,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     pass.setPipeline(clearPressurePipeline);
     pass.dispatchWorkgroups(Math.ceil(SPATIAL_PRESSURE_CELL_COUNT / WORKGROUP_SIZE));
     pass.setPipeline(accumulatePressurePipeline);
+    pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
+    pass.setPipeline(neighborSupportPipeline);
     pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
     pass.setPipeline(pipeline);
     pass.dispatchWorkgroups(Math.ceil(maxParticles / WORKGROUP_SIZE));
@@ -2618,6 +2770,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
         localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
         deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+        neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
         particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
         continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
         stepCount,
@@ -2640,6 +2793,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
       localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
       deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+      neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount,
@@ -2658,11 +2812,15 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     }
     const encoder = device.createCommandEncoder({ label: 'lerms-finger-juice-step-readback' });
     encoder.copyBufferToBuffer(particleBuffer, 0, readbackBuffer, 0, byteLength);
+    encoder.copyBufferToBuffer(neighborSupportBuffer, 0, neighborSupportReadbackBuffer, 0, maxParticles * 4);
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
     await readbackBuffer.mapAsync(GPUMapMode.READ);
     const result = new Float32Array(readbackBuffer.getMappedRange()).slice();
     readbackBuffer.unmap();
+    await neighborSupportReadbackBuffer.mapAsync(GPUMapMode.READ);
+    const neighborSupportData = new Float32Array(neighborSupportReadbackBuffer.getMappedRange()).slice();
+    neighborSupportReadbackBuffer.unmap();
     stepCount += safeSteps;
     const cpuOracle = shouldRunCpuOracle
       ? runCpuFingerJuiceOracle(data, {
@@ -2682,6 +2840,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       goins: options.goins || [],
       solver_backend: 'webgpu_compute',
       summaryMode: readOptions.summaryMode || null,
+      neighborSupportData,
     });
     return {
       ...summary,
@@ -2699,6 +2858,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
       localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
       deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+      neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount: safeSteps > 0 ? Math.ceil(safeSteps / CONTINUITY_BIN_REFRESH_CHUNK) : 0,
@@ -2899,6 +3059,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     sampledNeighborhoodDensityContract: LERMS_FINGER_JUICE_WEBGPU_SAMPLED_NEIGHBORHOOD_DENSITY_CONTRACT,
     localPairDensityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT,
     deepDensityContinuityProjectionContract: LERMS_FINGER_JUICE_WEBGPU_DEEP_DENSITY_CONTINUITY_CONTRACT,
+    neighborSupportSubstrateContract: LERMS_FINGER_JUICE_WEBGPU_NEIGHBOR_SUPPORT_SUBSTRATE_CONTRACT,
     particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
     render_backend: 'webgpu_direct_render',
     renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
