@@ -40,17 +40,29 @@ assert.match(coreSource, /cc\/palm-daddy-first-vertical-composer-0627@98a100f/, 
 
 const {
   WORLD_CHAMBER_DESCRIPTOR_SCHEMA,
+  WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
   WORLD_CHAMBER_REGISTRY_SCHEMA,
+  LERMS_PREVIEW_WITNESS_SCHEMA,
+  LERMS_TERRAIN_PREVIEW_BENCH_ID,
   LERMS_UNDERHILL_CHAMBER_ID,
   LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT,
+  LERMS_PREVIEW_CAMERA_PRESETS,
   createDefaultWorldChambersRegistry,
+  createLermsPreviewBenchState,
   normalizeWorldChamberReceipt,
   worldChamberDebugState,
 } = await import('../world-chambers-core.js');
 
 assert.equal(WORLD_CHAMBER_REGISTRY_SCHEMA, 'kaminos.world-chambers.registry.v0');
 assert.equal(WORLD_CHAMBER_DESCRIPTOR_SCHEMA, 'kaminos.world-chamber.descriptor.v0');
+assert.equal(WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA, 'kaminos.world-chamber.preview-bench.v0');
+assert.equal(LERMS_PREVIEW_WITNESS_SCHEMA, 'kaminos.lerms-preview-witness.v0');
 assert.equal(LERMS_UNDERHILL_CHAMBER_ID, 'lerms-underhill');
+assert.equal(LERMS_TERRAIN_PREVIEW_BENCH_ID, 'terrain-preview');
+assert.deepEqual(
+  LERMS_PREVIEW_CAMERA_PRESETS.map(preset => preset.id),
+  ['overview-oblique', 'topographic-top', 'route-follow', 'actor-close', 'terrain-cross-section', 'operator-free-camera'],
+);
 
 const registry = createDefaultWorldChambersRegistry();
 assert.equal(registry.schema, WORLD_CHAMBER_REGISTRY_SCHEMA);
@@ -69,6 +81,16 @@ assert.ok(underhill.acceptedSchemas.includes('lerms.first-vertical-frame.v0'));
 assert.ok(underhill.acceptedSchemas.includes('lerms.first-vertical-summary.v0'));
 assert.ok(underhill.acceptedSchemas.includes('lerms.source-truth.v0'));
 assert.equal(underhill.forgeRail.id, 'forge-rail');
+assert.equal(underhill.previewBenches.length, 1);
+assert.equal(underhill.previewBenches[0].schema, WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA);
+assert.equal(underhill.previewBenches[0].id, 'terrain-preview');
+assert.equal(underhill.previewBenches[0].operatorLabel, 'LERMS Preview Bench');
+assert.equal(underhill.previewBenches[0].posture, 'inspect');
+assert.deepEqual(underhill.previewBenches[0].routeParams, {
+  world_chamber: 'lerms-underhill',
+  posture: 'inspect',
+  bench: 'terrain-preview',
+});
 
 const normalized = normalizeWorldChamberReceipt(underhill, LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
 assert.equal(normalized.chamberId, 'lerms-underhill');
@@ -87,6 +109,28 @@ assert.equal(normalized.intentionallyAbsent.liveFingerJuicePackets, true);
 assert.equal(normalized.intentionallyAbsent.liveGoinPhysics, true);
 assert.equal(normalized.intentionallyAbsent.liveCrowdAi, true);
 assert.equal(normalized.intentionallyAbsent.generatedLermMotion, true);
+
+const benchState = createLermsPreviewBenchState(registry, {
+  posture: 'inspect',
+  benchId: 'terrain-preview',
+  cameraId: 'overview-oblique',
+});
+assert.equal(benchState.schema, LERMS_PREVIEW_WITNESS_SCHEMA);
+assert.equal(benchState.hostDescriptor, 'kaminos.world-chamber.preview-bench.v0');
+assert.equal(benchState.chamberId, 'lerms-underhill');
+assert.equal(benchState.benchId, 'terrain-preview');
+assert.equal(benchState.posture, 'inspect');
+assert.equal(benchState.route, 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview');
+assert.equal(benchState.source.authority, 'synthetic_fixture');
+assert.equal(benchState.source.fallbackMode, 'embedded_fixture');
+assert.equal(benchState.badges.source, 'synthetic_fixture');
+assert.equal(benchState.badges.freshness, 'fixture');
+assert.equal(benchState.badges.fallback, 'embedded_fixture');
+assert.equal(benchState.activeCamera.id, 'overview-oblique');
+assert.deepEqual(benchState.cameraPresets.map(preset => preset.id), LERMS_PREVIEW_CAMERA_PRESETS.map(preset => preset.id));
+assert.equal(benchState.terrain.sampleCount, 16);
+assert.equal(benchState.schemaPreservation.frame, 'lerms.first-vertical-frame.v0');
+assert.equal(benchState.schemaPreservation.terrain, 'lerms.terrain-sample.v0');
 
 const palmDaddyComposerReceipt = structuredClone(LERMS_UNDERHILL_COMPOSER_FIXTURE_RECEIPT);
 palmDaddyComposerReceipt.phase = 'complete';
@@ -203,6 +247,8 @@ const witnessPath = join(root, 'scene-object-witness.mjs');
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /world-chambers-lerms-underhill/, 'scene witness exposes the LERMS Underhill world chamber scenario');
 assert.match(witness, /world-chambers-lerms-underhill-receipt-url/, 'scene witness exposes the external receipt URL world chamber scenario');
+assert.match(witness, /lerms-preview-bench-terrain/, 'scene witness exposes the LERMS terrain preview bench scenario');
+assert.match(witness, /__kaminosLermsPreviewState/, 'scene witness reads the LERMS Preview Bench state surface');
 assert.match(witness, /kaminosWorldChambersDebugState/, 'scene witness reads the world chamber debug state');
 assert.match(witness, /first-vertical-composer\/witness-file/, 'scene witness verifies the effective composer witness route');
 assert.match(witness, /synthetic_fixture/, 'scene witness verifies the fixture authority');

@@ -1605,6 +1605,67 @@ async function runWorldChambersLermsUnderhillReceiptUrlScenario(ws) {
   }
 }
 
+async function runLermsPreviewBenchTerrainScenario(ws) {
+  phase = 'scenario-lerms-preview-bench-terrain';
+  lastEvidence.lermsPreviewBenchTerrain = await evaluate(ws, `
+    (() => {
+      if (!window.__kaminosLermsPreviewState) {
+        throw new Error('LERMS Preview Bench witness missing window.__kaminosLermsPreviewState');
+      }
+      document.querySelector('[data-tab="worlds"]')?.click();
+      const state = window.kaminosLermsPreviewBenchDebugState?.() || window.__kaminosLermsPreviewState;
+      const tab = document.querySelector('[data-tab="worlds"]');
+      const panel = document.getElementById('tab-worlds');
+      return {
+        state,
+        tabActive: !!tab && tab.classList.contains('active'),
+        panelActive: !!panel && panel.classList.contains('active'),
+        title: document.getElementById('lerms-preview-title')?.textContent?.trim() || null,
+        routeText: document.getElementById('lerms-preview-route')?.textContent?.trim() || null,
+        benchText: document.getElementById('lerms-preview-bench-id')?.textContent?.trim() || null,
+        postureText: document.getElementById('lerms-preview-posture')?.textContent?.trim() || null,
+        cameraText: document.getElementById('lerms-preview-camera')?.textContent?.trim() || null,
+        sourceBadgeText: document.getElementById('lerms-preview-source-badge')?.textContent?.trim() || null,
+        fallbackBadgeText: document.getElementById('lerms-preview-fallback-badge')?.textContent?.trim() || null,
+        freshnessBadgeText: document.getElementById('lerms-preview-freshness-badge')?.textContent?.trim() || null,
+        terrainText: document.getElementById('lerms-preview-terrain-count')?.textContent?.trim() || null,
+        cameraChips: [...document.querySelectorAll('#lerms-preview-camera-list .lerms-preview-camera')].map(chip => chip.textContent.trim()),
+      };
+    })()
+  `);
+  const evidence = lastEvidence.lermsPreviewBenchTerrain;
+  if (!evidence.tabActive || !evidence.panelActive) {
+    throw new Error(`LERMS Preview Bench tab did not activate: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.schema !== 'kaminos.lerms-preview-witness.v0') {
+    throw new Error(`LERMS Preview Bench witness schema mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.hostDescriptor !== 'kaminos.world-chamber.preview-bench.v0') {
+    throw new Error(`LERMS Preview Bench host descriptor mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.chamberId !== 'lerms-underhill' || evidence.state?.benchId !== 'terrain-preview') {
+    throw new Error(`LERMS Preview Bench route identity mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.route !== 'world_chamber=lerms-underhill&posture=inspect&bench=terrain-preview') {
+    throw new Error(`LERMS Preview Bench route mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.badges?.source !== 'synthetic_fixture' || evidence.state?.badges?.fallback !== 'embedded_fixture') {
+    throw new Error(`LERMS Preview Bench source/fallback badges mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.activeCamera?.id !== 'overview-oblique') {
+    throw new Error(`LERMS Preview Bench camera mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.state?.terrain?.sampleCount !== 16) {
+    throw new Error(`LERMS Preview Bench terrain sample count mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const cameraIds = ['overview-oblique', 'topographic-top', 'route-follow', 'actor-close', 'terrain-cross-section', 'operator-free-camera'];
+  for (const cameraId of cameraIds) {
+    if (!evidence.cameraChips.includes(cameraId)) {
+      throw new Error(`LERMS Preview Bench missing camera chip ${cameraId}: ${JSON.stringify(evidence)}`);
+    }
+  }
+}
+
 async function runSelectedDeleteShortcutScenario(ws) {
   phase = 'scenario-selected-delete-shortcut';
   lastEvidence.selectedDeleteSetup = await evaluate(ws, `
@@ -4231,6 +4292,8 @@ try {
     await runWorldChambersLermsUnderhillScenario(ws);
   } else if (scenario === 'world-chambers-lerms-underhill-receipt-url') {
     await runWorldChambersLermsUnderhillReceiptUrlScenario(ws);
+  } else if (scenario === 'lerms-preview-bench-terrain') {
+    await runLermsPreviewBenchTerrainScenario(ws);
   } else if (scenario === 'append-select-remove-keyboard') {
     await runAppendSelectRemoveKeyboardScenario(ws);
   } else if (scenario === 'selected-delete-shortcut') {

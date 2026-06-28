@@ -206,6 +206,15 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .world-chamber-error[hidden] { display: none; }
 .world-chamber-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .world-chamber-row { display: flex; justify-content: space-between; gap: 8px; color: #8d7f66; font: 10px 'SF Mono', monospace; border-top: 1px solid #30291c; padding-top: 5px; }
+.lerms-preview-bench { margin-top: 10px; border-top: 1px solid #30291c; padding-top: 10px; }
+.lerms-preview-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 7px; }
+.lerms-preview-title { color: #efd18b; font-size: 11px; font-weight: 700; }
+.lerms-preview-route { color: #7f755f; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.lerms-preview-bench .world-chamber-readout { grid-template-columns: 1fr; gap: 4px; }
+.lerms-preview-bench .world-chamber-readout .field { grid-column: 1 / -1; }
+.lerms-preview-camera-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.lerms-preview-camera { border: 1px solid #403520; border-radius: 5px; padding: 3px 6px; color: #9f8c63; background: #17130d; font: 9px 'SF Mono', monospace; }
+.lerms-preview-camera.active { color: #ffe7a3; border-color: #72592c; background: #251b0d; }
 </style>
 </head>
 <body>
@@ -609,6 +618,23 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <div class="world-chamber-row"><span>liveCrowdAi</span><span>empty</span></div>
         <div class="world-chamber-row"><span>generatedLermMotion</span><span>empty</span></div>
       </div>
+      <div class="lerms-preview-bench" id="lerms-preview-bench" data-host-descriptor="kaminos.world-chamber.preview-bench.v0">
+        <div class="lerms-preview-head">
+          <div class="lerms-preview-title" id="lerms-preview-title">LERMS Preview Bench</div>
+          <div class="lerms-preview-route" id="lerms-preview-route">world_chamber=lerms-underhill&amp;posture=inspect&amp;bench=terrain-preview</div>
+        </div>
+        <div class="world-chamber-readout">
+          <div class="field"><span class="field-key">Bench</span><span class="field-val" id="lerms-preview-bench-id">terrain-preview</span></div>
+          <div class="field"><span class="field-key">Posture</span><span class="field-val" id="lerms-preview-posture">inspect</span></div>
+          <div class="field"><span class="field-key">Camera</span><span class="field-val" id="lerms-preview-camera">overview-oblique</span></div>
+          <div class="field"><span class="field-key">Host</span><span class="field-val" id="lerms-preview-host">kaminos.world-chamber.preview-bench.v0</span></div>
+          <div class="field"><span class="field-key">Source</span><span class="field-val" id="lerms-preview-source-badge">synthetic_fixture</span></div>
+          <div class="field"><span class="field-key">Fallback</span><span class="field-val" id="lerms-preview-fallback-badge">embedded_fixture</span></div>
+          <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="lerms-preview-freshness-badge">fixture</span></div>
+          <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="lerms-preview-terrain-count">16 samples</span></div>
+        </div>
+        <div class="lerms-preview-camera-list" id="lerms-preview-camera-list"></div>
+      </div>
       <div class="volume-actions">
         <button class="btn" id="world-chamber-focus">Focus</button>
       </div>
@@ -749,6 +775,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
   LERMS_UNDERHILL_CHAMBER_ID,
+  createLermsPreviewBenchState,
   createDefaultWorldChambersRegistry,
   worldChamberDebugState,
 } from './world-chambers-core.js';
@@ -795,6 +822,13 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let worldChambersRegistry = createDefaultWorldChambersRegistry();
+let lermsPreviewRouteState = {
+  benchId: 'terrain-preview',
+  posture: 'inspect',
+  cameraId: 'overview-oblique',
+};
+let lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
+window.__kaminosLermsPreviewState = lermsPreviewBenchState;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
@@ -4272,6 +4306,15 @@ function currentWorldChambersDebugState() {
 
 window.kaminosWorldChambersDebugState = currentWorldChambersDebugState;
 
+function updateLermsPreviewBenchState(options = {}) {
+  lermsPreviewRouteState = { ...lermsPreviewRouteState, ...options };
+  lermsPreviewBenchState = createLermsPreviewBenchState(worldChambersRegistry, lermsPreviewRouteState);
+  window.__kaminosLermsPreviewState = lermsPreviewBenchState;
+  return lermsPreviewBenchState;
+}
+
+window.kaminosLermsPreviewBenchDebugState = () => updateLermsPreviewBenchState();
+
 function worldChamberReceiptSourceLabel(receiptSource) {
   if (!receiptSource) return 'receipt unavailable';
   if (receiptSource.label) return receiptSource.label;
@@ -4281,6 +4324,7 @@ function worldChamberReceiptSourceLabel(receiptSource) {
 
 function renderWorldChambersPanel() {
   const debug = currentWorldChambersDebugState();
+  const previewState = updateLermsPreviewBenchState();
   const chamber = debug.activeChamber;
   const summary = debug.summary || {};
   document.getElementById('world-chamber-title').textContent = chamber?.title || 'Unknown chamber';
@@ -4314,6 +4358,24 @@ function renderWorldChambersPanel() {
     status.textContent = isEmpty ? 'empty' : 'present';
     row.append(name, status);
     absenceList.append(row);
+  }
+  document.getElementById('lerms-preview-title').textContent = previewState.operatorLabel || 'LERMS Preview Bench';
+  document.getElementById('lerms-preview-route').textContent = previewState.route;
+  document.getElementById('lerms-preview-bench-id').textContent = previewState.benchId;
+  document.getElementById('lerms-preview-posture').textContent = previewState.posture;
+  document.getElementById('lerms-preview-camera').textContent = previewState.activeCamera?.id || 'camera unavailable';
+  document.getElementById('lerms-preview-host').textContent = previewState.hostDescriptor;
+  document.getElementById('lerms-preview-source-badge').textContent = previewState.badges.source;
+  document.getElementById('lerms-preview-fallback-badge').textContent = previewState.badges.fallback;
+  document.getElementById('lerms-preview-freshness-badge').textContent = previewState.badges.freshness;
+  document.getElementById('lerms-preview-terrain-count').textContent = `${previewState.terrain.sampleCount} samples`;
+  const cameraList = document.getElementById('lerms-preview-camera-list');
+  cameraList.innerHTML = '';
+  for (const preset of previewState.cameraPresets) {
+    const chip = document.createElement('span');
+    chip.className = `lerms-preview-camera${preset.id === previewState.activeCamera?.id ? ' active' : ''}`;
+    chip.textContent = preset.id;
+    cameraList.append(chip);
   }
 }
 
@@ -4357,13 +4419,24 @@ async function initWorldChambersRoute() {
   });
   const params = new URLSearchParams(window.location.search);
   const requestedChamber = params.get('world_chamber');
+  const requestedPosture = params.get('posture');
+  const requestedBench = params.get('bench');
+  const requestedCamera = params.get('camera');
+  if (requestedPosture || requestedBench || requestedCamera) {
+    updateLermsPreviewBenchState({
+      posture: requestedPosture || lermsPreviewRouteState.posture,
+      benchId: requestedBench || lermsPreviewRouteState.benchId,
+      cameraId: requestedCamera || lermsPreviewRouteState.cameraId,
+    });
+  }
   const receiptRoute = worldChamberReceiptUrlFromRoute(params);
-  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute) {
+  if (requestedChamber === LERMS_UNDERHILL_CHAMBER_ID || receiptRoute || requestedBench) {
     worldChambersRegistry.activeChamberId = LERMS_UNDERHILL_CHAMBER_ID;
     renderWorldChambersPanel();
     setActiveTab('worlds');
     const debug = currentWorldChambersDebugState();
-    setInfo(receiptRoute ? `World Chamber: loading receipt ${receiptRoute.url}` : `World Chamber: ${debug.activeChamber.title} - ${debug.authorityNote}`);
+    const previewState = window.__kaminosLermsPreviewState;
+    setInfo(receiptRoute ? `World Chamber: loading receipt ${receiptRoute.url}` : `LERMS Preview Bench: ${previewState?.benchId || debug.activeChamber.title} - ${debug.authorityNote}`);
   }
   if (!receiptRoute) return;
 

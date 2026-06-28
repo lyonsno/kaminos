@@ -1,7 +1,10 @@
 export const WORLD_CHAMBER_REGISTRY_SCHEMA = 'kaminos.world-chambers.registry.v0';
 export const WORLD_CHAMBER_DESCRIPTOR_SCHEMA = 'kaminos.world-chamber.descriptor.v0';
+export const WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA = 'kaminos.world-chamber.preview-bench.v0';
 export const WORLD_CHAMBER_RECEIPT_SCHEMA = 'kaminos.world-chamber.receipt.v0';
+export const LERMS_PREVIEW_WITNESS_SCHEMA = 'kaminos.lerms-preview-witness.v0';
 export const LERMS_UNDERHILL_CHAMBER_ID = 'lerms-underhill';
+export const LERMS_TERRAIN_PREVIEW_BENCH_ID = 'terrain-preview';
 
 const LERMS_ACCEPTED_SCHEMAS = [
   'lerms.source-truth.v0',
@@ -20,6 +23,73 @@ const REQUIRED_INTENTIONAL_ABSENCES = [
   'liveCrowdAi',
   'generatedLermMotion',
 ];
+
+export const LERMS_PREVIEW_CAMERA_PRESETS = [
+  {
+    id: 'overview-oblique',
+    label: 'Overview Oblique',
+    position: [7.5, 5.5, 7.5],
+    target: [0, 0.4, 0],
+    fov: 45,
+  },
+  {
+    id: 'topographic-top',
+    label: 'Topographic Top',
+    position: [0, 9, 0.01],
+    target: [0, 0, 0],
+    fov: 38,
+  },
+  {
+    id: 'route-follow',
+    label: 'Route Follow',
+    position: [-5.5, 2.1, 4.5],
+    target: [0.9, 0.3, -0.8],
+    fov: 42,
+  },
+  {
+    id: 'actor-close',
+    label: 'Actor Close',
+    position: [2.2, 1.6, 2.8],
+    target: [0.25, 0.35, 0.1],
+    fov: 36,
+  },
+  {
+    id: 'terrain-cross-section',
+    label: 'Terrain Cross Section',
+    position: [5.8, 1.2, 0],
+    target: [0, 0.15, 0],
+    fov: 32,
+  },
+  {
+    id: 'operator-free-camera',
+    label: 'Operator Free Camera',
+    position: [4.5, 3.2, 5.5],
+    target: [0, 0.35, 0],
+    fov: 45,
+    operatorControlled: true,
+  },
+];
+
+const LERMS_TERRAIN_PREVIEW_BENCH = {
+  schema: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
+  id: LERMS_TERRAIN_PREVIEW_BENCH_ID,
+  operatorLabel: 'LERMS Preview Bench',
+  label: 'Terrain Preview',
+  posture: 'inspect',
+  routeParams: {
+    world_chamber: LERMS_UNDERHILL_CHAMBER_ID,
+    posture: 'inspect',
+    bench: LERMS_TERRAIN_PREVIEW_BENCH_ID,
+  },
+  hostDescriptor: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
+  witnessSchema: LERMS_PREVIEW_WITNESS_SCHEMA,
+  cameraPresets: LERMS_PREVIEW_CAMERA_PRESETS.map(preset => preset.id),
+  authority: {
+    sourceBadge: 'synthetic_fixture',
+    freshnessBadge: 'fixture',
+    fallbackBadge: 'embedded_fixture',
+  },
+};
 
 export const LERMS_UNDERHILL_DESCRIPTOR = {
   schema: WORLD_CHAMBER_DESCRIPTOR_SCHEMA,
@@ -53,6 +123,7 @@ export const LERMS_UNDERHILL_DESCRIPTOR = {
     metadataFields: ['route', 'authority', 'source', 'intentionallyAbsent'],
   },
   postures: ['inspect', 'stage', 'inhabit', 'forge'],
+  previewBenches: [LERMS_TERRAIN_PREVIEW_BENCH],
   forgeRail: {
     id: 'forge-rail',
     label: 'Forge Rail',
@@ -289,6 +360,83 @@ export function createDefaultWorldChambersRegistry(options = {}) {
   };
 }
 
+function routeStringForPreviewBench(chamberId, posture, benchId) {
+  return `world_chamber=${chamberId}&posture=${posture}&bench=${benchId}`;
+}
+
+function findPreviewBench(chamber, benchId) {
+  const benches = Array.isArray(chamber?.previewBenches) ? chamber.previewBenches : [];
+  return benches.find(bench => bench.id === benchId) || benches[0] || null;
+}
+
+function previewCameraPreset(cameraId) {
+  return LERMS_PREVIEW_CAMERA_PRESETS.find(preset => preset.id === cameraId) || LERMS_PREVIEW_CAMERA_PRESETS[0];
+}
+
+export function createLermsPreviewBenchState(registry = createDefaultWorldChambersRegistry(), options = {}) {
+  const debug = worldChamberDebugState(registry);
+  const chamber = debug.activeChamber;
+  if (!chamber || chamber.id !== LERMS_UNDERHILL_CHAMBER_ID) {
+    throw new Error(`LERMS Preview Bench requires active chamber ${LERMS_UNDERHILL_CHAMBER_ID}`);
+  }
+  const benchId = options.benchId || options.bench || LERMS_TERRAIN_PREVIEW_BENCH_ID;
+  const bench = findPreviewBench(chamber, benchId);
+  if (!bench || bench.id !== LERMS_TERRAIN_PREVIEW_BENCH_ID) {
+    throw new Error(`unknown LERMS preview bench: ${benchId || 'missing'}`);
+  }
+  const posture = options.posture || bench.posture || 'inspect';
+  const activeCamera = previewCameraPreset(options.cameraId || options.camera || 'overview-oblique');
+  const frame = debug.receipt?.frame || null;
+  const terrainSamples = terrainSamplesFromFrame(frame);
+  const primaryTerrain = terrainSamples[0] || null;
+  const receiptMode = debug.receiptSource?.mode || (debug.usingFixtureFallback ? 'embedded_fixture' : 'unknown');
+  const freshness = debug.usingFixtureFallback || receiptMode === 'embedded_fixture' ? 'fixture' : 'external';
+  return {
+    schema: LERMS_PREVIEW_WITNESS_SCHEMA,
+    hostDescriptor: WORLD_CHAMBER_PREVIEW_BENCH_SCHEMA,
+    chamberId: chamber.id,
+    benchId: bench.id,
+    posture,
+    route: routeStringForPreviewBench(chamber.id, posture, bench.id),
+    operatorLabel: bench.operatorLabel,
+    source: {
+      authority: debug.authority,
+      fallbackMode: receiptMode,
+      evidenceStatus: chamber.evidenceStatus,
+      receiptSource: debug.receiptSource,
+      branch: chamber.source?.branch || null,
+    },
+    badges: {
+      source: debug.authority || 'authority unavailable',
+      freshness,
+      fallback: receiptMode,
+    },
+    activeCamera: clone(activeCamera),
+    cameraPresets: clone(LERMS_PREVIEW_CAMERA_PRESETS),
+    terrain: {
+      schema: 'lerms.terrain-sample.v0',
+      source: primaryTerrain?.source || debug.authority || null,
+      sampleCount: Number(primaryTerrain?.sampleCount ?? debug.summary?.terrainSamples ?? terrainSamples.length),
+      underhillBand: primaryTerrain?.underhillBand || null,
+      samples: clone(terrainSamples),
+    },
+    summary: debug.summary ? clone(debug.summary) : null,
+    schemaPreservation: {
+      source: 'lerms.source-truth.v0',
+      terrain: 'lerms.terrain-sample.v0',
+      lerm: 'lerms.lerm-state.v0',
+      goin: 'lerms.goin-state.v0',
+      juiceHit: 'lerms.juice-hit-event.v0',
+      carrierDrop: 'lerms.carrier-drop-event.v0',
+      frame: chamber.frameSchema,
+      summary: chamber.summarySchema,
+    },
+    forgeRail: chamber.forgeRail ? clone(chamber.forgeRail) : null,
+    intentionallyAbsent: debug.intentionallyAbsent ? clone(debug.intentionallyAbsent) : null,
+    receiptLoadError: debug.receiptLoadError ? clone(debug.receiptLoadError) : null,
+  };
+}
+
 export function worldChamberDebugState(registry = createDefaultWorldChambersRegistry()) {
   const active = registry.chambers.find(chamber => chamber.id === registry.activeChamberId) || registry.chambers[0] || null;
   const receipt = active ? registry.receipts?.[active.id] || null : null;
@@ -309,6 +457,7 @@ export function worldChamberDebugState(registry = createDefaultWorldChambersRegi
     sourceTruth: receipt?.source || null,
     summary: receipt?.summary || null,
     intentionallyAbsent: receipt?.intentionallyAbsent || null,
+    previewBenches: active?.previewBenches || [],
     forgeRail: active?.forgeRail || null,
     falseLiveClaim: receipt?.falseLiveClaim ?? null,
   };
