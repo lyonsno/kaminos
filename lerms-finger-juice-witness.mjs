@@ -728,8 +728,8 @@ async function run() {
     assert.ok(Number.isFinite(state.fingerJuiceCamera?.panY), 'route did not expose camera pan y');
     assert.equal(state.particleSupportBudgetStats?.pressureContract, 'wgsl-particle-support-budget-v0', 'particle support stats do not identify budget contract');
     assert.equal(state.particleSupportBudgetStats?.supportMeasurementMode, 'spatial_cell_radius_support_v0', 'particle support stats do not measure spatial radius support');
-    assert.ok(state.particleSupportBudgetStats?.particleBudget >= 24000, 'route did not use the 24k particle support budget');
-    assert.ok(state.particleSupportBudgetStats?.supportGridCellCount >= 4096, 'route did not expose a denser support grid');
+    assert.ok(state.particleSupportBudgetStats?.particleBudget >= 36000, 'route did not use the 36k particle support budget');
+    assert.ok(state.particleSupportBudgetStats?.supportGridCellCount >= 9600, 'route did not expose the finer 80x120 support grid');
     assert.ok(Number.isFinite(state.particleSupportBudgetStats?.averageSupportNeighborCount), 'route did not expose average support neighbor count');
     assert.ok(Number.isFinite(state.particleSupportBudgetStats?.unsupportedCorrectionRatio), 'route did not expose unsupported correction ratio');
     assert.ok(state.settleRestEnergyStats?.pressureContract === 'wgsl-particle-support-budget-v0', 'settle rest stats do not identify support budget contract');
@@ -871,8 +871,8 @@ async function run() {
     assert.equal(extendedFlowProbe.densityPositionSolveContract, 'wgsl-density-position-solve-v0', 'expanded witness phase lost density/position solve contract');
     assert.equal(extendedFlowProbe.particleSupportBudgetContract, 'wgsl-particle-support-budget-v0', 'expanded witness phase lost particle support budget contract');
     assert.equal(extendedFlowProbe.supportMeasurementMode, 'spatial_cell_radius_support_v0', 'expanded witness phase used non-spatial support measurement');
-    assert.ok(extendedFlowProbe.particleBudget >= 24000, 'expanded witness phase did not use the 24k support budget');
-    assert.ok(extendedFlowProbe.supportGridCellCount >= 4096, 'expanded witness phase did not expose a denser support grid');
+    assert.ok(extendedFlowProbe.particleBudget >= 36000, 'expanded witness phase did not use the 36k support budget');
+    assert.ok(extendedFlowProbe.supportGridCellCount >= 9600, 'expanded witness phase did not expose the finer 80x120 support grid');
     assert.ok(extendedFlowProbe.averageSupportNeighborCount >= 1.2, 'expanded witness phase has too little measured support');
     assert.ok(extendedFlowProbe.unsupportedCorrectionRatio < 0.42, 'expanded witness phase has too many unsupported density corrections');
     assert.ok(extendedFlowProbe.p95SettledSurfaceSpeed < 0.95, 'expanded witness phase has too much rest energy after settle');

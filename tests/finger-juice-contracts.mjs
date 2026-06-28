@@ -75,9 +75,10 @@ assert.match(webgpuCoreSource, /wgsl-deep-density-continuity-projection-v0/, 'We
 assert.match(webgpuCoreSource, /wgsl-local-pair-density-projection-v0/, 'WebGPU solver names the local same-chemistry pair density projection contract');
 assert.match(webgpuCoreSource, /wgsl-neighbor-support-substrate-v0/, 'WebGPU solver names the GPU neighbor-support substrate contract');
 assert.match(webgpuCoreSource, /wgsl-substrate-density-constraint-solve-v0/, 'WebGPU solver names the substrate-driven density constraint solve contract');
-assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*24000/, 'WebGPU solver names the 24k first support budget');
-assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*64/, 'WebGPU support grid has enough horizontal cells for 24k support smoke');
-assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*96/, 'WebGPU support grid has enough forward cells for 24k support smoke');
+assert.match(webgpuCoreSource, /DEFAULT_PARTICLE_SUPPORT_BUDGET\s*=\s*36000/, 'WebGPU solver names the 36k support budget after 96k/48k witness evidence');
+assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_X\s*=\s*80/, 'WebGPU support grid has enough horizontal cells for 36k support smoke');
+assert.match(webgpuCoreSource, /SPATIAL_PRESSURE_GRID_Z\s*=\s*120/, 'WebGPU support grid has enough forward cells for 36k support smoke');
+assert.match(webgpuCoreSource, /MIN_PARTICLE_SUPPORT_SCALE\s*=\s*0\.26/, 'WebGPU support scale floor shrinks for 36k particle sampling');
 assert.match(webgpuCoreSource, /lerms\.source-truth\.v0/, 'WebGPU route emits LERMS source-truth envelopes');
 assert.match(webgpuCoreSource, /lerms\.juice-hit-event\.v0/, 'WebGPU route emits LERMS juice-hit events');
 assert.match(webgpuCoreSource, /solver_backend/, 'WebGPU solver reports effective backend');
@@ -190,11 +191,13 @@ assert.match(pageSource, /createWebGPUFingerJuiceSolver/, 'prototype integrates 
 assert.match(pageSource, /juice-gpu-layer/, 'prototype includes a WebGPU juice overlay canvas');
 assert.match(pageSource, /webgpu_particle_solver_v0/, 'prototype displays WebGPU solver route identity');
 assert.match(pageSource, /webgpu_particle_splat_renderer_v0/, 'prototype displays WebGPU render route identity');
-assert.match(pageSource, /particleSupportBudget\s*=\s*24000/, 'prototype uses the 24k particle support budget');
+assert.match(pageSource, /particleSupportBudget\s*=\s*36000/, 'prototype uses the 36k particle support budget');
 assert.match(pageSource, /live_readback_decoupled_v0/, 'prototype names the live readback decoupling contract');
 assert.match(pageSource, /summaryMode:\s*'live_lightweight_readback_v0'/, 'prototype uses lightweight summaries for live animation readbacks');
 assert.match(pageSource, /liveReadbackSkippedCount/, 'prototype records skipped live debug readbacks instead of blocking frames');
 assert.match(pageSource, /cpuOracle:\s*false/, 'prototype disables CPU oracle during live animation readbacks');
+assert.match(pageSource, /webgpuMaxFrameSteps\s*=\s*8/, 'prototype caps per-frame WebGPU catch-up work for high particle budgets');
+assert.match(pageSource, /dropped_catchup_steps_total/, 'prototype exposes dropped catch-up steps instead of silently hitching');
 assert.match(pageSource, /sourceDiagnostics/, 'prototype displays source diagnostics');
 assert.match(pageSource, /emitterDiagnostics/, 'prototype displays live emitter diagnostics');
 assert.match(pageSource, /pressureDensityStats/, 'prototype displays pressure density diagnostics');
@@ -321,6 +324,8 @@ assert.match(witnessSource, /iterativeDensityContinuityCandidateCount/, 'witness
 assert.match(witnessSource, /averageIterativeDensityResidual/, 'witness records iterative density continuity residual');
 assert.match(witnessSource, /iterativeDensityConvergenceRatio/, 'witness records iterative density convergence ratio');
 assert.match(witnessSource, /wgsl-particle-support-budget-v0/, 'witness records particle support budget contract');
+assert.match(witnessSource, /particleBudget\s*>=\s*36000/, 'witness requires the 36k particle support budget');
+assert.match(witnessSource, /supportGridCellCount\s*>=\s*9600/, 'witness requires the finer 80x120 support grid');
 assert.match(witnessSource, /particleSupportBudgetStats/, 'witness requires support budget diagnostics');
 assert.match(witnessSource, /settleRestEnergyStats/, 'witness requires settle/rest energy diagnostics');
 assert.match(witnessSource, /averageSupportNeighborCount/, 'witness records average support neighbor count');
