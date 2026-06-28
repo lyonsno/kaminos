@@ -303,8 +303,13 @@ async function main() {
     if (state?.selectedMacroAssemblageIds?.includes('lower-socket-keel')) {
       assert.equal(state?.LowerSocketKeelAnatomyLaw?.schema, 'LowerSocketKeelAnatomyLaw', 'selected lower socket must preserve anatomy law in witness state');
       assert.equal(state?.lowerSocketKeelAnatomyVerdict, 'procedural-lower-socket-anatomy-law-applied', 'selected lower socket must record applied anatomy-law verdict');
+      if (state?.selectedMacroAssemblageIds?.includes('equatorial-cupping-whorl')) {
+        assert.equal(state?.LowerSocketEquatorialSocketJointLaw?.schema, 'LowerSocketEquatorialSocketJointLaw', 'selected lower/equatorial pair must preserve shared socket joint law in witness state');
+        assert.equal(state?.lowerSocketEquatorialSocketJointVerdict, 'shared-seam-law-applied', 'selected lower/equatorial pair must record shared seam-law verdict');
+      }
     } else {
       assert.equal(state?.LowerSocketKeelAnatomyLaw, null, 'retired lower socket must not expose stale anatomy law');
+      assert.equal(state?.LowerSocketEquatorialSocketJointLaw, null, 'retired lower socket must not expose stale lower/equatorial seam law');
     }
     if (focus === 'macro-contact-map') {
       assert.equal(macroContactMapWitness?.schema, 'MacroContactMapWitnessState', 'macro contact map witness did not activate');
@@ -499,6 +504,9 @@ async function main() {
       macroInterlockGraph: state.macroInterlockGraph,
       macroInterlockActiveRelationCount: state.macroInterlockActiveRelationCount,
       macroInterlockAffectedMacroIds: state.macroInterlockAffectedMacroIds,
+      LowerSocketEquatorialSocketJointLaw: state.LowerSocketEquatorialSocketJointLaw,
+      lowerSocketEquatorialSocketJointLaw: state.lowerSocketEquatorialSocketJointLaw,
+      lowerSocketEquatorialSocketJointVerdict: state.lowerSocketEquatorialSocketJointVerdict,
       MacroContactMap: state.MacroContactMap,
       macroContactMap: state.macroContactMap,
       MacroContactSample: state.MacroContactSample,
