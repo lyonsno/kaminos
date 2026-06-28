@@ -1,6 +1,7 @@
 from http import HTTPStatus
 import os
 from pathlib import Path
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
@@ -485,6 +486,50 @@ def test_pipeline_run_resolves_api_read_source_and_returns_bundle():
         assert any(artifact["id"] == "sidecar" for artifact in result["bundle"]["document"]["artifacts"])
 
 
+def test_pipeline_run_timeout_returns_schema_and_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "images"
+        source_root.mkdir()
+        source = source_root / "source.jpg"
+        source.write_bytes(b"not important for timeout test")
+        out_dir = root / "pipeline-run"
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_run = serve.subprocess.run
+        BROWSE_ROOTS["pipeline-timeout-test"] = source_root
+
+        def timeout_run(command, cwd=None, capture_output=None, text=None, timeout=None):
+            raise subprocess.TimeoutExpired(
+                cmd=command,
+                timeout=timeout,
+                output="partial stdout",
+                stderr="partial stderr",
+            )
+
+        serve.subprocess.run = timeout_run
+        try:
+            result = serve.run_pipeline_witness({
+                "pipelineId": "sharp-image-to-splat-live-v0",
+                "source": "/api/read?root=pipeline-timeout-test&path=source.jpg",
+                "outDir": str(out_dir),
+            })
+        finally:
+            serve.subprocess.run = previous_run
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert result["schema"] == "kaminos.pipeline-run-result.v0"
+        assert result["ok"] is False
+        assert result["error"] == "pipeline witness timed out"
+        assert result["report"]["path"] == str(out_dir / "pipeline-witness.json")
+        assert result["report"]["document"]["schema"] == "kaminos.pipeline-witness.v0"
+        assert result["report"]["document"]["ok"] is False
+        assert result["report"]["document"]["phase"] == "pipeline-witness-timeout"
+        assert result["report"]["document"]["lastTrustworthyEvidence"]["pipelineId"] == "sharp-image-to-splat-live-v0"
+        assert (out_dir / "pipeline-witness.json").exists()
+
+
 def test_pipeline_run_rejects_sources_outside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         outside = Path(tmp) / "outside.ply"
@@ -517,4 +562,5 @@ if __name__ == "__main__":
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
+    test_pipeline_run_timeout_returns_schema_and_report()
     test_pipeline_run_rejects_sources_outside_declared_roots()

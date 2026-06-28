@@ -70,14 +70,14 @@ function connect(wsUrl) {
   });
   return {
     opened,
-    send(method, params = {}) {
+    send(method, params = {}, timeoutMs = 15000) {
       const id = ++seq;
       ws.send(JSON.stringify({ id, method, params }));
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id);
           reject(new Error(`${method}: CDP request timed out`));
-        }, 15000);
+        }, timeoutMs);
         pending.set(id, {
           resolve: result => {
             clearTimeout(timer);
@@ -96,12 +96,12 @@ function connect(wsUrl) {
   };
 }
 
-async function evalJson(cdp, expression) {
+async function evalJson(cdp, expression, timeoutMs = 15000) {
   const result = await cdp.send('Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
-  });
+  }, timeoutMs);
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   }
@@ -609,6 +609,96 @@ try {
       scenario,
       url: appUrl,
       afterPath,
+      packetState,
+      screenshotProbe,
+    }, null, 2));
+  } else if (scenario === 'specimen-packet-api-route') {
+    const trayTab = await evalJson(cdp, `(() => {
+      const tab = document.querySelector('[data-tab="tray"]');
+      if (!tab) throw new Error('Tray tab not found');
+      const rect = tab.getBoundingClientRect();
+      return { text: tab.textContent, point: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } };
+    })()`);
+    await click(cdp, trayTab.point);
+    await wait(500);
+
+    const apiEvidence = await evalJson(cdp, `(async () => {
+      const packet = window.kaminosLoadFixtureSpecimenPacketCockpit?.();
+      window.kaminosTagSpecimenPacketFailure?.('added_face', null, 'Operator marked face failure before API retry.');
+      const evidence = await window.kaminosRunSpecimenPacketApiRouteEvidence?.({
+        pipelineId: ${JSON.stringify(pipelineId)},
+        assetNeedle: ${JSON.stringify(assetNeedle)},
+      });
+      return {
+        packetOk: packet?.schema === 'kaminos.kiln.specimen-packet-cockpit.v0',
+        evidence,
+      };
+    })()`, graphExecuteTimeoutMs);
+    assertWitness(apiEvidence?.evidence?.schema === 'kaminos.kiln.specimen-packet-api-route-evidence.v0', 'API route evidence function did not return packet evidence', apiEvidence);
+    assertWitness(apiEvidence.evidence.run?.schema === 'kaminos.pipeline-run-result.v0', 'API route evidence did not preserve pipeline-run-result schema', apiEvidence);
+    assertWitness(apiEvidence.evidence.run?.report?.path, 'API route evidence did not preserve a report path', apiEvidence);
+    await wait(500);
+
+    const packetState = await waitFor(cdp, `(() => {
+      const witness = window.kaminosSpecimenPacketCockpitWitness?.();
+      const panel = document.querySelector('[data-specimen-packet-cockpit]');
+      const evidence = panel?.querySelector('[data-specimen-packet-route-evidence]');
+      const patch = panel?.querySelector('[data-specimen-packet-negative-law-patch]');
+      const next = panel?.querySelector('[data-specimen-packet-next-request]');
+      const rect = panel?.getBoundingClientRect();
+      const state = window.kaminosPipelineDockDebugState?.();
+      const run = state?.lastRun || null;
+      const routeRun = witness?.packet?.routeRuns?.find(item => item.runId === run?.runId) || null;
+      const candidate = routeRun?.outputArtifactIds?.length
+        ? witness?.packet?.candidateArtifacts?.find(item => routeRun.outputArtifactIds.includes(item.candidateArtifactId)) || null
+        : null;
+      return {
+        ok: Boolean(
+          witness?.ok === true
+          && run?.schema === 'kaminos.pipeline-run-result.v0'
+          && run?.report?.path
+          && routeRun
+          && routeRun.receiptId === run.report.path
+          && witness?.packet?.lineageReceipts?.some(receipt => receipt.receiptId === run.report.path)
+          && witness?.packet?.failureTags?.some(tag => tag.tag === 'added_face')
+          && witness?.nextRequestCarriesFailureLaw === true
+          && patch?.dataset.specimenPacketNegativeLawPatch?.includes('do_not_install_face')
+          && evidence?.dataset.specimenPacketRouteEvidence
+          && next?.dataset.specimenPacketNextRequest
+        ),
+        witness,
+        run,
+        routeRun,
+        candidate,
+        dom: {
+          panelDataset: panel ? { ...panel.dataset } : null,
+          panelText: panel?.innerText || '',
+          evidenceText: evidence?.innerText || '',
+          evidenceDataset: evidence ? { ...evidence.dataset } : null,
+          patchText: patch?.innerText || '',
+          nextText: next?.innerText || '',
+        },
+        panelRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'Specimen packet real API route evidence loop', graphExecuteTimeoutMs);
+
+    await capture(cdp, afterPath);
+    const screenshotProbe = packetState.panelRect
+      ? await screenshotVisibleProbe(afterPath, packetState.panelRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 200 && screenshotProbe.saturatedPixels >= 20, 'Specimen packet API route cockpit was not visibly inspectable', {
+      apiEvidence,
+      packetState,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      apiEvidence,
       packetState,
       screenshotProbe,
     }, null, 2));

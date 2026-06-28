@@ -38,6 +38,9 @@ assert.match(witness, /pendingGeneratedOutput/, 'Pipeline UI witness must observ
 assert.match(witness, /graphExecuteTimeoutMs/, 'Pipeline UI witness must expose a configurable graph execution timeout for native model routes');
 assert.match(witness, /graph-execute-timeout-ms/, 'Pipeline UI witness must accept a CLI timeout override for slow native model routes');
 assert.match(witness, /240000/, 'Pipeline UI witness must give native SHARP longer than the generic 90s graph execution window');
+assert.match(witness, /send\(method, params = \{\}, timeoutMs = 15000\)/, 'Pipeline UI witness CDP helper must allow long route evaluations to override the default request timeout');
+assert.match(witness, /evalJson\(cdp, expression, timeoutMs = 15000\)/, 'Pipeline UI witness eval helper must carry route execution timeout overrides into CDP');
+assert.match(witness, /const apiEvidence = await evalJson\(cdp,[\s\S]*kaminosRunSpecimenPacketApiRouteEvidence[\s\S]*\}\)\(\)`, graphExecuteTimeoutMs\);/, 'Specimen packet API route witness must not let the default CDP timeout preempt live route evidence');
 assert.match(witness, /runTimeline/, 'Pipeline UI witness must assert generated output records carry status timeline evidence');
 assert.match(witness, /routeSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable route snapshots');
 assert.match(witness, /graphSnapshot/, 'Pipeline UI witness must assert generated output records carry immutable graph snapshots');

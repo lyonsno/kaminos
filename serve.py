@@ -192,6 +192,14 @@ def _default_pipeline_out_dir(pipeline_id):
     return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
 
 
+def _tail_text(value, limit=4000):
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    return str(value)[-limit:]
+
+
 def run_pipeline_witness(payload):
     pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
     if not pipeline_id:
@@ -211,7 +219,55 @@ def run_pipeline_witness(payload):
         "--report", str(report_path),
     ]
     timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    try:
+        proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        report = {
+            "schema": "kaminos.pipeline-witness.v0",
+            "ok": False,
+            "requestedPipelineId": pipeline_id,
+            "effectivePipelineId": pipeline_id,
+            "phase": "pipeline-witness-timeout",
+            "effectiveRouteConfig": {
+                "manifestPath": str(PIPELINE_MANIFEST_PATH),
+                "outputRoot": str(out_dir),
+            },
+            "artifacts": {
+                "input": {
+                    "role": "source",
+                    "status": "requested",
+                    "path": source["path"],
+                },
+            },
+            "lastTrustworthyEvidence": {
+                "pipelineId": pipeline_id,
+                "sourcePath": source["path"],
+                "manifestPath": str(PIPELINE_MANIFEST_PATH),
+                "timeoutSeconds": timeout,
+            },
+            "error": "pipeline witness timed out",
+        }
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        return {
+            "schema": "kaminos.pipeline-run-result.v0",
+            "ok": False,
+            "pipelineId": pipeline_id,
+            "source": source,
+            "command": command,
+            "exitCode": None,
+            "timeoutSeconds": timeout,
+            "stdoutTail": _tail_text(error.output),
+            "stderrTail": _tail_text(error.stderr),
+            "error": "pipeline witness timed out",
+            "report": {
+                "path": str(report_path),
+                "document": report,
+            },
+            "bundle": {
+                "path": None,
+                "document": None,
+            },
+        }
     report = json.loads(report_path.read_text()) if report_path.exists() else None
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
     bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None

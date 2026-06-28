@@ -7102,6 +7102,7 @@ async function pipelineExecuteGraphRouteNode(node) {
   pipelineDockState.selectedGraphNodeId = pendingRecord?.id || node?.id || 'source';
   pipelineSetGraphInspectorStatus(`Queued ${pipeline?.label || requestedPipelineId} from graph node ${node?.id || 'route'} with ${source.label || source.source}...`, 'running');
   renderPipelineDock();
+  let apiRunAlreadyHandled = false;
   try {
     pipelineUpdateGeneratedOutputStatus(pendingRecord.id, 'running', 'running inference', 'Backend request is in flight');
     pipelineUpdateRouteKilnRun(pendingRecord.runId, {
@@ -7125,8 +7126,11 @@ async function pipelineExecuteGraphRouteNode(node) {
         pendingRecord,
         run,
       });
+      apiRunAlreadyHandled = true;
       pipelineFailGeneratedOutputNode(pendingRecord.id, run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`, run);
-      throw new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
+      const error = new Error(run?.error || `Pipeline graph execution failed: ${requestedPipelineId}`);
+      error.pipelineRun = run;
+      throw error;
     }
     pipelineUpdateRouteKilnRun(run.runId || pendingRecord.runId, {
       ...pipelineRouteKilnBasePatch({ routeNode: node, source, requestedPipelineId, pipeline, pendingRecord, run }),
@@ -7150,15 +7154,17 @@ async function pipelineExecuteGraphRouteNode(node) {
     renderPipelineDock();
     return run;
   } catch (err) {
-    pipelineFailRouteKilnRun({
-      routeNode: node,
-      source,
-      requestedPipelineId,
-      pipeline,
-      pendingRecord,
-      error: err,
-    });
-    pipelineFailGeneratedOutputNode(pendingRecord?.id, err.message || String(err), null);
+    if (!apiRunAlreadyHandled) {
+      pipelineFailRouteKilnRun({
+        routeNode: node,
+        source,
+        requestedPipelineId,
+        pipeline,
+        pendingRecord,
+        error: err,
+      });
+      pipelineFailGeneratedOutputNode(pendingRecord?.id, err.message || String(err), err.pipelineRun || null);
+    }
     renderPipelineDock();
     throw err;
   }
@@ -12234,6 +12240,15 @@ function renderSpecimenPacketCockpit() {
     ? nextRequestId.replace(`${packet.packetId}-`, '')
     : '';
   const latestCandidate = packet.candidateArtifacts?.at(-1) || null;
+  const latestRouteRun = packet.routeRuns?.filter(run => run.receiptId && run.requestedRoute !== 'image_conditioned_generation').at(-1) || null;
+  const routeEvidenceId = latestCandidate?.candidateArtifactId || latestRouteRun?.receiptId || '';
+  const routeEvidenceLabel = latestCandidate
+    ? `${latestCandidate.sourceKind || 'generated'} candidate`
+    : latestRouteRun?.statusBadge === 'failed'
+      ? 'failure report'
+      : latestRouteRun
+        ? `${latestRouteRun.statusBadge || 'route'} report`
+        : 'no route evidence yet';
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr;gap:6px;font-family:'SF Mono',monospace;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
@@ -12264,8 +12279,8 @@ function renderSpecimenPacketCockpit() {
     <div style="margin-top:7px;color:${patch.length ? '#f0b85a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-negative-law-patch="${patch.join(',')}">
       Next pass blocks: ${patch.length ? patch.map(escapeHtml).join(', ') : 'none yet'}
     </div>
-    <div style="margin-top:5px;color:${latestCandidate ? '#8fc7d6' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-route-evidence="${latestCandidate?.candidateArtifactId || ''}">
-      Route evidence: ${latestCandidate ? `${escapeHtml(latestCandidate.sourceKind || 'generated')} candidate` : 'no candidate yet'}
+    <div style="margin-top:5px;color:${routeEvidenceId ? '#8fc7d6' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-route-evidence="${routeEvidenceId}">
+      Route evidence: ${escapeHtml(routeEvidenceLabel)}
     </div>
     <div style="margin-top:5px;color:${nextRequestId ? '#66bb6a' : '#666'};font-family:'SF Mono',monospace;overflow-wrap:anywhere;" data-specimen-packet-next-request="${nextRequestId}">
       Next request: ${nextRequestLabel ? escapeHtml(nextRequestLabel) : 'mark a failure to strengthen law'}
@@ -12342,6 +12357,64 @@ function kaminosSimulateSpecimenPacketLiveRouteEvidence() {
   refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
   renderRouteCompositionTray();
   return specimenPacketCockpitState;
+}
+
+async function kaminosRunSpecimenPacketApiRouteEvidence({
+  pipelineId = 'sharp-image-to-splat-live-v0',
+  assetNeedle = '',
+} = {}) {
+  if (!specimenPacketCockpitState) kaminosLoadFixtureSpecimenPacketCockpit();
+  if (!pipelineManifest) await loadPipelineManifest();
+  pipelineDockState.activeAssetPalette = 'image';
+  await loadPipelineAssetBrowser();
+  const imageAssets = pipelineDockState.browserAssetsByKind?.image || pipelineDockState.browserAssets || [];
+  const asset = imageAssets.find(item => (
+    item.kind === 'image'
+    && item.source
+    && (!assetNeedle || `${item.id} ${item.path || ''} ${item.title || ''} ${item.name || ''}`.includes(assetNeedle))
+  )) || imageAssets.find(item => item.kind === 'image' && item.source);
+  if (!asset) throw new Error('No API image asset available for specimen packet route evidence');
+  const pipeline = pipelineManifest?.pipelines?.find(route => route.id === pipelineId);
+  if (!pipeline) throw new Error(`Pipeline route not found: ${pipelineId}`);
+  const generator = pipelineGeneratorForPipelineId(pipelineId) || selectedPipelineGeneratorRecord();
+  const imageNode = createPipelineGraphImageNode(asset, { x: 28, y: 430 });
+  const routeRecord = pipelineGraphRouteNodeRecord(`specimen-packet-api-route-${Date.now().toString(36)}`, generator, pipeline);
+  pipelineDockState.graphRouteNodes = [
+    ...(pipelineDockState.graphRouteNodes || []).filter(node => node.id !== routeRecord.id),
+    routeRecord,
+  ];
+  pipelineDockState.graphNodePositions[routeRecord.id] = { x: 202, y: 430 };
+  pipelineDockState.graphEdges = [
+    ...(pipelineDockState.graphEdges || []).filter(edge => edge.to !== routeRecord.id),
+    { id: `${imageNode.id}-to-${routeRecord.id}`, from: imageNode.id, to: routeRecord.id },
+  ];
+  const routeNode = pipelineRouteGraphNodeFromRecord(routeRecord);
+  const routeSource = pipelineGraphRouteInputSource(routeNode.id);
+  if (!routeSource?.source) throw new Error('Specimen packet API route source was not graph-connected');
+  pipelineDockState.selectedPipelineId = pipelineId;
+  if (generator?.id) pipelineDockState.selectedGeneratorId = generator.id;
+  let run = null;
+  let error = null;
+  try {
+    run = await pipelineExecuteGraphRouteNode(routeNode);
+  } catch (err) {
+    error = err;
+    run = err.pipelineRun || pipelineDockState.lastRun || null;
+  }
+  refreshBrowserSpecimenPacketCockpitFromRouteEvidence();
+  renderRouteCompositionTray();
+  renderPipelineDock();
+  if (!run) throw error || new Error('Specimen packet API route did not return run evidence');
+  return {
+    schema: 'kaminos.kiln.specimen-packet-api-route-evidence.v0',
+    ok: Boolean(run.ok),
+    run,
+    error: error ? (error.message || String(error)) : null,
+    packet: specimenPacketCockpitState,
+    routeEvidenceId: specimenPacketCockpitState?.candidateArtifacts?.at(-1)?.candidateArtifactId
+      || specimenPacketCockpitState?.routeRuns?.filter(item => item.receiptId && item.requestedRoute !== 'image_conditioned_generation').at(-1)?.receiptId
+      || null,
+  };
 }
 
 function specimenPacketCockpitWitness() {
@@ -12759,6 +12832,7 @@ window.kaminosLoadFixtureSpecimenPacketCockpit = kaminosLoadFixtureSpecimenPacke
 window.kaminosTagSpecimenPacketFailure = tagBrowserSpecimenPacketFailure;
 window.kaminosRefreshSpecimenPacketCockpitFromRouteEvidence = refreshBrowserSpecimenPacketCockpitFromRouteEvidence;
 window.kaminosSimulateSpecimenPacketLiveRouteEvidence = kaminosSimulateSpecimenPacketLiveRouteEvidence;
+window.kaminosRunSpecimenPacketApiRouteEvidence = kaminosRunSpecimenPacketApiRouteEvidence;
 window.kaminosSpecimenPacketCockpitState = () => specimenPacketCockpitState;
 window.kaminosSpecimenPacketNextRouteRequest = () => specimenPacketNextRouteRequestState;
 window.kaminosSpecimenPacketCockpitWitness = specimenPacketCockpitWitness;
