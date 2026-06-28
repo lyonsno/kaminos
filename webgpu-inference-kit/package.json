@@ -1,0 +1,13 @@
+{
+  "name": "@kaminos/webgpu-inference-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Native WebGPU inference route substrate for Kaminos.",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node tests/receipt-contracts.mjs && node tests/tensor-manifest-contracts.mjs"
+  }
+}
