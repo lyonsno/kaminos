@@ -14,6 +14,7 @@ assert.match(index, /orbShellCompositionWitness\.setVariation\(readOrbShellCompo
 assert.match(index, /params\.has\('orb_shell_variation_seed'\)[\s\S]+orb-shell-seed/, 'variation seed URL param must hydrate the visible seed control');
 assert.match(index, /orb-shell-composition-variant[\s\S]+pressure-\$\{state\?\.variationLeafCount/, 'visible composition readout must expose seed plus density pressure');
 assert.match(index, /function orbShellCompositionStatusText\(state\)[\s\S]+density pressure \$\{state\?\.variationLeafCount/, 'Macro Grounding status must describe UI leaves as density pressure');
+assert.match(index, /function orbShellCompositionStatusText\(state\)[\s\S]+child strips \$\{state\?\.macroFamilySubstripCount/, 'Macro Grounding status must expose actual child strip count');
 assert.doesNotMatch(index, /orb-shell-composition-variant'\)\.textContent = `\$\{state\?\.variantId \|\| 'baseline'\}:\$\{state\?\.variationSeed \?\? 0\}\/leaves-/, 'Macro Grounding readout must not imply literal leaves');
 
 assert.match(core, /variationLeafCount/, 'composition core must carry variation leaf count through the descriptor');

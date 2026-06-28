@@ -25,11 +25,16 @@ assert.match(witness, /macroFamilyObjecthoodVerdict/, 'composition witness repor
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
 
 const fixture = createTargetOrbShellCompositionFixture({ variantId: 'wide-cup', variationSeed: 7 });
+const denseFixture = createTargetOrbShellCompositionFixture({ variantId: 'wide-cup', variationSeed: 12, variationLeafCount: 14 });
 const plan = fixture.macroFamilySubstripPlan;
+const densePlan = denseFixture.macroFamilySubstripPlan;
 
 assert.equal(plan?.schema, 'MacroFamilySubstripPlan', 'fixture exposes a macro family substrip plan');
 assert.equal(plan.mode, 'parent-owned-lamellar-substrip-decomposition-v0', 'plan records the accepted parent-owned substrip mode');
 assert.equal(plan.scope, 'limited-two-family-proof-slice', 'first slice stays limited instead of decomposing the whole shell');
+assert.equal(plan.substripCountLaw?.schema, 'MacroFamilySubstripCountLaw', 'plan exposes the generative substrip count law');
+assert.equal(plan.substripCountLaw?.mode, 'density-and-seed-driven-substrip-count-v0', 'plan records the density/seed count mode');
+assert.equal(plan.substripCountLaw?.macroFamilyCountPreserved, true, 'substrip count law preserves macro family count');
 assert.ok(plan.parentAssemblageIds.includes('north-west-dominant-thrust'), 'plan decomposes the dominant north-west family');
 assert.ok(plan.parentAssemblageIds.includes('north-east-counter-thrust'), 'plan decomposes the counter-thrust family');
 assert.ok(plan.parentAssemblageIds.length <= 2, 'first substrip slice stays bounded to two parent families');
@@ -44,6 +49,31 @@ assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentPromotedBodie
 assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentSideWallsVisible, false, 'normal smoke hides selected parent sidewalls');
 assert.equal(plan.visibleParentRetirementPolicy?.normalRenderParentTerminalCapsVisible, false, 'normal smoke hides selected parent terminal caps');
 assert.equal(plan.macroFamilyObjecthoodVerdict, 'parent-families-remain-nameable-after-subdivision', 'plan preserves macro family objecthood');
+assert.equal(densePlan?.substripCountLaw?.schema, 'MacroFamilySubstripCountLaw', 'dense fixture exposes the count law');
+assert.equal(
+  densePlan.parentAssemblageIds.length,
+  plan.parentAssemblageIds.length,
+  'density-driven substrip count preserves decomposed macro parent count',
+);
+assert.notEqual(
+  densePlan.substripCount,
+  plan.substripCount,
+  'changing seed/density must change literal visible substrip count',
+);
+assert.notDeepEqual(
+  densePlan.substripCountLaw.perParentCounts,
+  plan.substripCountLaw.perParentCounts,
+  'changing seed/density must change per-parent substrip count allocation',
+);
+assert.ok(
+  densePlan.substripCountLaw.perParentCounts.some(item => item.actualCount > item.minimumCount),
+  'dense count law adds at least one sibling lane beyond minimum anatomy',
+);
+assert.equal(
+  densePlan.apertureTangencyWitnessPlan.verdictCounts['counter-curve-request-not-yet-geometrically-proven'] || 0,
+  0,
+  'dense optional sibling lanes must still inherit measured counter-curve refusal instead of unproven endpoint drift',
+);
 
 const byParent = new Map();
 for (const substrip of plan.substrips) {
