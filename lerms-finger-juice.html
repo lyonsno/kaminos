@@ -180,6 +180,7 @@
     let liveReadbackCompletedCount = 0;
     let liveReadbackSkippedCount = 0;
     let liveReadbackCpuOracleMode = null;
+    let liveReadbackSummaryMode = null;
     let witnessCaptureFrozen = false;
     let witnessFrozenCaptureState = null;
     const orbitCameraControlContract = 'orbit-camera-controls-v0';
@@ -341,6 +342,7 @@
           live_readback_completed_count: liveReadbackCompletedCount,
           live_readback_skipped_count: liveReadbackSkippedCount,
           last_cpu_oracle_mode: liveReadbackCpuOracleMode || webgpuState?.cpuOracleMode || null,
+          last_live_readback_summary_mode: liveReadbackSummaryMode || webgpuState?.summaryMode || null,
         },
       };
     }
@@ -815,8 +817,8 @@
           emitter.origin_world[1] + emitter.aim_world[1] * 0.28,
           emitter.origin_world[2] + emitter.aim_world[2] * 0.28,
         ]);
-        ctx.strokeStyle = emitter.chemistry === 'knockback' ? '#ff6756' : emitter.chemistry === 'pooling' ? '#48dec6' : '#d8a8ff';
-        ctx.lineWidth = 6;
+        ctx.strokeStyle = 'rgba(182, 188, 150, 0.28)';
+        ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(origin.x, origin.y);
@@ -960,11 +962,14 @@
               webgpuSolver.stepAndRead(0, webgpuFrameStepDt, {
                 cpuOracle: false,
                 reason: 'live_animation_debug_readback',
+                summaryMode: 'live_lightweight_readback_v0',
               }).then(state => {
                 webgpuLastReadbackMs = performance.now() - readbackStartedAt;
                 liveReadbackCompletedCount += 1;
                 liveReadbackCpuOracleMode = state.cpuOracleMode || liveReadbackCpuOracleMode;
+                liveReadbackSummaryMode = state.summaryMode || liveReadbackSummaryMode;
                 webgpuState = {
+                  ...webgpuState,
                   ...state,
                   render_backend: webgpuState.render_backend,
                   renderRoute: webgpuState.renderRoute,
