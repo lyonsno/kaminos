@@ -13,6 +13,10 @@ import {
 import {
   volumeUrlForBridge,
 } from './kiln-volume-fire-bench.mjs';
+import {
+  computeRouteFirePayloadFromReport,
+  computeRouteFireSmokeUrl,
+} from './compute-route-fire-bench.mjs';
 
 export const COMPUTE_ROUTE_FIRE_WITNESS_SCHEMA = 'kaminos.compute-route-fire-witness.v0';
 export const COMPUTE_ROUTE_FIRE_VISUAL_REPORT_SCHEMA = 'kaminos.compute-route-fire-visual-report.v0';
@@ -332,6 +336,8 @@ async function main() {
     volumeWitnessReportPath: volumeReportPath,
     activeWitness: null,
     finalWitness: null,
+    smokePayload: null,
+    smokeUrl: null,
     pipelineExit: null,
     pipelineReport: null,
     visualWitnessReport: null,
@@ -377,6 +383,11 @@ async function main() {
 
     if (args.dryRun) {
       report.phase = 'dry-run';
+      report.smokePayload = computeRouteFirePayloadFromReport(report);
+      report.smokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
+        baseUrl: `http://127.0.0.1:${args.serverPort}/`,
+        volumeWitnessUrl: report.activeWitness.volumeWitnessUrl,
+      });
       writeJson(reportPath, report);
       console.log(reportPath);
       return;
@@ -424,6 +435,13 @@ async function main() {
       else report.phase = 'complete';
     } else {
       report.phase = 'complete';
+    }
+    if (report.activeWitness) {
+      report.smokePayload = computeRouteFirePayloadFromReport(report);
+      report.smokeUrl = computeRouteFireSmokeUrl(report.smokePayload, {
+        baseUrl: `http://127.0.0.1:${args.serverPort}/`,
+        volumeWitnessUrl: report.activeWitness.volumeWitnessUrl,
+      });
     }
     writeJson(reportPath, report);
     console.log(reportPath);

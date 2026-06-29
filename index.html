@@ -189,7 +189,17 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
+#route-fire-bench .field,
+#compute-route-fire-evidence .field { gap: 12px; min-width: 0; }
+#route-fire-bench .field-key,
+#compute-route-fire-evidence .field-key { flex: 0 0 auto; }
 .route-fire-field-long { max-width: 290px; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; text-align: right; line-height: 1.35; }
+.compute-route-fire-panel[hidden] { display: none; }
+.compute-route-fire-artifacts { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.compute-route-fire-artifact { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: start; padding: 5px 0; border-top: 1px solid #2a2a2a; }
+.compute-route-fire-artifact:first-child { border-top: 0; }
+.compute-route-fire-artifact-role { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.compute-route-fire-artifact-path { color: #777; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; text-align: right; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -677,6 +687,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div id="route-fire-route-rows" data-route-fire-field="routeRows"></div>
     </div>
+    <div
+      class="panel compute-route-fire-panel"
+      id="compute-route-fire-evidence"
+      data-compute-route-fire-bench-schema="kaminos.compute-route-fire-bench.v0"
+      data-compute-route-fire-active="0"
+      hidden
+    >
+      <div class="field"><span class="field-key">Compute route</span><span class="route-chip" data-compute-route-fire-field="route" id="compute-route-fire-route">--</span></div>
+      <div class="field"><span class="field-key">State</span><span class="field-val" data-compute-route-fire-field="state" id="compute-route-fire-state">--</span></div>
+      <div class="field"><span class="field-key">Report</span><span class="field-val route-fire-field-long" data-compute-route-fire-field="pipelineReportPath" id="compute-route-fire-report">--</span></div>
+      <div class="field"><span class="field-key">Input</span><span class="field-val route-fire-field-long" data-compute-route-fire-field="inputPath" id="compute-route-fire-input">--</span></div>
+      <div class="field"><span class="field-key">Autocrop</span><span class="field-val route-fire-field-long" data-compute-route-fire-field="autoCropEvidence" id="compute-route-fire-autocrop">--</span></div>
+      <div class="field"><span class="field-key">Truth</span><span class="field-val route-fire-field-long" data-compute-route-fire-field="sourceTruthSummary" id="compute-route-fire-summary">--</span></div>
+      <div class="field"><span class="field-key">Warnings</span><span class="field-val route-fire-field-long" data-compute-route-fire-field="warnings" id="compute-route-fire-warnings">--</span></div>
+      <div class="compute-route-fire-artifacts" id="compute-route-fire-artifacts" data-compute-route-fire-field="artifacts"></div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
@@ -1081,6 +1107,10 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=routed-pressure-label-0628';
 import { buildKilnVolumeFireBenchModel } from './kiln-volume-fire-bench.mjs';
+import {
+  buildComputeRouteFireBenchModel,
+  computeRouteFirePayloadFromSearch,
+} from './compute-route-fire-bench.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -7702,6 +7732,7 @@ function updateVolumeControlLabels() {
 }
 
 let routeFireBenchModel = null;
+let computeRouteFireBenchModel = null;
 
 function volumeRouteFireBaseUrl() {
   return `${window.location.origin}${window.location.pathname}`;
@@ -7709,6 +7740,13 @@ function volumeRouteFireBaseUrl() {
 
 function routeFireTextList(values, fallback = '--') {
   return Array.isArray(values) && values.length ? values.join(', ') : fallback;
+}
+
+function compactPathTail(path) {
+  if (!path) return '--';
+  const parts = String(path).split('/');
+  if (parts.length <= 3) return String(path);
+  return `.../${parts.slice(-3).join('/')}`;
 }
 
 function renderRouteFireBench() {
@@ -7757,7 +7795,103 @@ function renderRouteFireBench() {
   return bench;
 }
 
+function renderComputeRouteFireBench() {
+  const root = document.getElementById('compute-route-fire-evidence');
+  if (!root) return null;
+  const payload = computeRouteFirePayloadFromSearch(window.location.search);
+  if (!payload) {
+    root.hidden = true;
+    root.dataset.computeRouteFireActive = '0';
+    computeRouteFireBenchModel = null;
+    return null;
+  }
+
+  computeRouteFireBenchModel = buildComputeRouteFireBenchModel({
+    payload,
+    launchUrl: window.location.href,
+  });
+  const bench = computeRouteFireBenchModel;
+  root.hidden = false;
+  root.dataset.computeRouteFireActive = '1';
+  root.dataset.computeRouteFireRoute = bench.routeLabel;
+  root.dataset.computeRouteFireBackend = bench.backendClass || '';
+  root.dataset.computeRouteFireActivePhase = bench.active.visualPhase || '';
+  root.dataset.computeRouteFireFinalPhase = bench.final.visualPhase || '';
+
+  document.getElementById('compute-route-fire-route').textContent = bench.routeLabel;
+  document.getElementById('compute-route-fire-state').textContent = `active ${bench.active.visualPhase || 'unknown'} / final ${bench.final.visualPhase || 'unknown'}`;
+  document.getElementById('compute-route-fire-report').textContent = compactPathTail(bench.pipelineReportPath);
+  document.getElementById('compute-route-fire-report').title = bench.pipelineReportPath || '';
+  document.getElementById('compute-route-fire-input').textContent = compactPathTail(bench.inputPath);
+  document.getElementById('compute-route-fire-input').title = bench.inputPath || '';
+  const autoCrop = bench.artifactRows.find(row => row.id === 'autoCropEvidence' || row.schema === 'kaminos.splat-autocrop-evidence.v0');
+  document.getElementById('compute-route-fire-autocrop').textContent = compactPathTail(autoCrop?.path);
+  document.getElementById('compute-route-fire-autocrop').title = autoCrop?.path || '';
+  document.getElementById('compute-route-fire-summary').textContent = bench.sourceTruthSummary;
+  const warnings = routeFireTextList(bench.warningRows);
+  document.getElementById('compute-route-fire-warnings').textContent = warnings;
+  document.getElementById('compute-route-fire-warnings').title = warnings;
+
+  const artifacts = document.getElementById('compute-route-fire-artifacts');
+  artifacts.replaceChildren();
+  for (const row of bench.artifactRows) {
+    const item = document.createElement('div');
+    item.className = 'compute-route-fire-artifact';
+    item.dataset.computeRouteFireArtifactId = row.id;
+    item.dataset.computeRouteFireArtifactStatus = row.status;
+    item.dataset.computeRouteFireArtifactSchema = row.schema || '';
+    const role = document.createElement('span');
+    role.className = 'compute-route-fire-artifact-role';
+    role.textContent = `${row.id} · ${row.status}`;
+    const path = document.createElement('span');
+    path.className = 'compute-route-fire-artifact-path';
+    path.textContent = compactPathTail(row.path);
+    path.title = row.path || '';
+    item.append(role, path);
+    artifacts.append(item);
+  }
+
+  const genericRoot = document.getElementById('route-fire-bench');
+  if (genericRoot) {
+    genericRoot.hidden = true;
+    genericRoot.dataset.routeFireRouteActivitySchema = 'kaminos.kiln.route-activity.v0';
+    genericRoot.dataset.routeFireVisualBackend = 'beaming.volume-fire.kiln-v0';
+    genericRoot.dataset.routeFireFullBurnCount = String(bench.active.fullBurnCount);
+    genericRoot.dataset.routeFireFalseAuthorityCount = String(bench.warningRows.length);
+  }
+  document.getElementById('route-fire-primary').textContent = `${bench.active.routeRunId || bench.routeLabel} / ${bench.active.visualPhase || 'unknown'}`;
+  document.getElementById('route-fire-authority').textContent = `${bench.active.fullBurnCount} full burn / ${bench.final.fullBurnCount} after cool`;
+  document.getElementById('route-fire-warnings').textContent = warnings;
+  document.getElementById('route-fire-warnings').title = warnings;
+
+  const rows = document.getElementById('route-fire-route-rows');
+  rows.replaceChildren();
+  for (const row of [
+    { id: bench.active.routeRunId || 'active-compute', truthMode: 'live', phase: bench.active.visualPhase, full: bench.active.allowsFullBurn },
+    { id: `${bench.routeLabel}-final`, truthMode: bench.final.statusBadge || 'settled', phase: bench.final.visualPhase, full: bench.final.allowsFullBurn },
+  ]) {
+    const item = document.createElement('div');
+    item.className = 'field';
+    item.dataset.routeFireRunId = row.id;
+    item.dataset.routeFireTruthMode = row.truthMode;
+    item.dataset.routeFireVisualPhase = row.phase || '';
+    item.dataset.routeFireAllowsFullBurn = String(row.full);
+    item.dataset.routeFireEffectiveRoute = bench.effectiveRoute || '';
+    const key = document.createElement('span');
+    key.className = 'field-key';
+    key.textContent = row.id;
+    const val = document.createElement('span');
+    val.className = 'field-val';
+    val.textContent = `${row.truthMode} / ${row.phase || 'unknown'} / ${row.full ? 'full burn' : 'limited'}`;
+    item.append(key, val);
+    rows.append(item);
+  }
+
+  return bench;
+}
+
 window.kaminosRouteFireBenchDebugState = () => routeFireBenchModel || renderRouteFireBench();
+window.kaminosComputeRouteFireBenchDebugState = () => computeRouteFireBenchModel || renderComputeRouteFireBench();
 
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
@@ -7877,6 +8011,7 @@ function createVolumeMainRendererBridge() {
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
   renderRouteFireBench();
+  renderComputeRouteFireBench();
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
