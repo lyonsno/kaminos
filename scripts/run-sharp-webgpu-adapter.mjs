@@ -40,6 +40,8 @@ const timeoutMs = Number(process.env.KAMINOS_SHARP_WEBGPU_TIMEOUT_MS || 420000);
 const outputDir = output ? dirname(output) : null;
 const depthPath = outputDir ? join(outputDir, 'sharp-webgpu-depth.png') : null;
 const metadataPath = outputDir ? join(outputDir, 'sharp-webgpu-metadata.json') : null;
+const artifactPaths = parseArtifactPaths(process.env.KAMINOS_PIPELINE_ARTIFACT_PATHS);
+const autoCropEvidencePath = resolveArtifactPath(args.get('--autocrop-evidence') || process.env.KAMINOS_PIPELINE_AUTOCROP_EVIDENCE || artifactPaths.autoCropEvidence || (outputDir ? join(outputDir, 'sharp-output.splat-autocrop-evidence.json') : null));
 const downloadDir = outputDir ? join(outputDir, '.sharp-webgpu-download') : null;
 const url = `http://127.0.0.1:${port}/`;
 
@@ -51,6 +53,21 @@ const lastTrustworthyEvidence = {};
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function parseArtifactPaths(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function resolveArtifactPath(value) {
+  return value ? resolve(value) : null;
 }
 
 function fileEvidence(path) {
@@ -186,6 +203,219 @@ function dataUrlToBuffer(dataUrl) {
   return Buffer.from(match[1], 'base64');
 }
 
+function pngDimensions(path) {
+  const bytes = readFileSync(path);
+  const signature = bytes.subarray(0, 8).toString('hex');
+  if (signature !== '89504e470d0a1a0a' || bytes.length < 24) return null;
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  };
+}
+
+const plyTypeReaders = {
+  char: { bytes: 1, read: (buffer, offset) => buffer.readInt8(offset) },
+  int8: { bytes: 1, read: (buffer, offset) => buffer.readInt8(offset) },
+  uchar: { bytes: 1, read: (buffer, offset) => buffer.readUInt8(offset) },
+  uint8: { bytes: 1, read: (buffer, offset) => buffer.readUInt8(offset) },
+  short: { bytes: 2, read: (buffer, offset) => buffer.readInt16LE(offset) },
+  int16: { bytes: 2, read: (buffer, offset) => buffer.readInt16LE(offset) },
+  ushort: { bytes: 2, read: (buffer, offset) => buffer.readUInt16LE(offset) },
+  uint16: { bytes: 2, read: (buffer, offset) => buffer.readUInt16LE(offset) },
+  int: { bytes: 4, read: (buffer, offset) => buffer.readInt32LE(offset) },
+  int32: { bytes: 4, read: (buffer, offset) => buffer.readInt32LE(offset) },
+  uint: { bytes: 4, read: (buffer, offset) => buffer.readUInt32LE(offset) },
+  uint32: { bytes: 4, read: (buffer, offset) => buffer.readUInt32LE(offset) },
+  float: { bytes: 4, read: (buffer, offset) => buffer.readFloatLE(offset) },
+  float32: { bytes: 4, read: (buffer, offset) => buffer.readFloatLE(offset) },
+  double: { bytes: 8, read: (buffer, offset) => buffer.readDoubleLE(offset) },
+  float64: { bytes: 8, read: (buffer, offset) => buffer.readDoubleLE(offset) },
+};
+
+function parsePlyHeader(buffer) {
+  const headerText = buffer.toString('utf8', 0, Math.min(buffer.length, 65536));
+  const headerMatch = headerText.match(/[\s\S]*?end_header\r?\n/);
+  if (!headerMatch) throw new Error('generated PLY is missing an end_header marker');
+  const header = headerMatch[0];
+  const lines = header.split(/\r?\n/).filter(Boolean);
+  const formatLine = lines.find(line => line.startsWith('format '));
+  const format = formatLine?.split(/\s+/)[1] || null;
+  const vertexElementIndex = lines.findIndex(line => line.startsWith('element vertex '));
+  if (vertexElementIndex < 0) throw new Error('generated PLY is missing element vertex');
+  const vertexCount = Number(lines[vertexElementIndex].split(/\s+/)[2]);
+  if (!Number.isFinite(vertexCount) || vertexCount <= 0) throw new Error(`generated PLY has invalid vertex count: ${vertexCount}`);
+  const properties = [];
+  for (let i = vertexElementIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.startsWith('element ')) break;
+    const parts = line.split(/\s+/);
+    if (parts[0] !== 'property' || parts[1] === 'list') continue;
+    properties.push({ type: parts[1], name: parts[2] });
+  }
+  for (const axis of ['x', 'y', 'z']) {
+    if (!properties.some(property => property.name === axis)) throw new Error(`generated PLY is missing ${axis} vertex property`);
+  }
+  return {
+    format,
+    vertexCount,
+    properties,
+    headerBytes: Buffer.byteLength(header),
+  };
+}
+
+function updateBounds(bounds, x, y, z) {
+  bounds.min.x = Math.min(bounds.min.x, x);
+  bounds.min.y = Math.min(bounds.min.y, y);
+  bounds.min.z = Math.min(bounds.min.z, z);
+  bounds.max.x = Math.max(bounds.max.x, x);
+  bounds.max.y = Math.max(bounds.max.y, y);
+  bounds.max.z = Math.max(bounds.max.z, z);
+}
+
+function roundCoord(value) {
+  return Number(value.toFixed(6));
+}
+
+function finalizePlyBounds(header, bounds, sums, observed) {
+  if (observed <= 0) throw new Error('generated PLY had no readable vertices');
+  return {
+    format: header.format,
+    vertexCount: header.vertexCount,
+    observedVertexCount: observed,
+    bounds: {
+      min: {
+        x: roundCoord(bounds.min.x),
+        y: roundCoord(bounds.min.y),
+        z: roundCoord(bounds.min.z),
+      },
+      max: {
+        x: roundCoord(bounds.max.x),
+        y: roundCoord(bounds.max.y),
+        z: roundCoord(bounds.max.z),
+      },
+    },
+    centroid: {
+      x: roundCoord(sums.x / observed),
+      y: roundCoord(sums.y / observed),
+      z: roundCoord(sums.z / observed),
+    },
+  };
+}
+
+function computePlyBounds(path) {
+  const buffer = readFileSync(path);
+  const header = parsePlyHeader(buffer);
+  const bounds = {
+    min: { x: Infinity, y: Infinity, z: Infinity },
+    max: { x: -Infinity, y: -Infinity, z: -Infinity },
+  };
+  const sums = { x: 0, y: 0, z: 0 };
+  let observed = 0;
+
+  if (header.format === 'ascii') {
+    const body = buffer.toString('utf8', header.headerBytes);
+    const lines = body.split(/\r?\n/).filter(Boolean);
+    for (let i = 0; i < header.vertexCount; i += 1) {
+      const parts = lines[i]?.trim().split(/\s+/).map(Number);
+      if (!parts || parts.some(value => !Number.isFinite(value))) continue;
+      const row = Object.fromEntries(header.properties.map((property, index) => [property.name, parts[index]]));
+      const { x, y, z } = row;
+      if (![x, y, z].every(Number.isFinite)) continue;
+      updateBounds(bounds, x, y, z);
+      sums.x += x;
+      sums.y += y;
+      sums.z += z;
+      observed += 1;
+    }
+    return finalizePlyBounds(header, bounds, sums, observed);
+  }
+
+  if (header.format !== 'binary_little_endian') throw new Error(`unsupported generated PLY format for autocrop evidence: ${header.format}`);
+  const propertyReaders = header.properties.map(property => {
+    const reader = plyTypeReaders[property.type];
+    if (!reader) throw new Error(`unsupported PLY vertex property type: ${property.type}`);
+    return { name: property.name, ...reader };
+  });
+  const stride = propertyReaders.reduce((total, property) => total + property.bytes, 0);
+  const requiredBytes = header.headerBytes + stride * header.vertexCount;
+  if (buffer.length < requiredBytes) throw new Error(`generated PLY is truncated: expected at least ${requiredBytes} bytes, saw ${buffer.length}`);
+  const propertyOffsets = [];
+  let cursor = 0;
+  for (const property of propertyReaders) {
+    propertyOffsets.push({ ...property, offset: cursor });
+    cursor += property.bytes;
+  }
+  for (let i = 0; i < header.vertexCount; i += 1) {
+    const base = header.headerBytes + i * stride;
+    const row = Object.fromEntries(propertyOffsets.map(property => [property.name, property.read(buffer, base + property.offset)]));
+    const { x, y, z } = row;
+    if (![x, y, z].every(Number.isFinite)) continue;
+    updateBounds(bounds, x, y, z);
+    sums.x += x;
+    sums.y += y;
+    sums.z += z;
+    observed += 1;
+  }
+  return finalizePlyBounds(header, bounds, sums, observed);
+}
+
+function writeAutoCropEvidence(outputPath, context) {
+  if (!autoCropEvidencePath) throw new Error('missing autocrop evidence output path');
+  const pointCloud = computePlyBounds(outputPath);
+  const depthDimensions = pngDimensions(depthPath);
+  const downgrades = [];
+  if (!artifactPaths.sidecar && !process.env.KAMINOS_PIPELINE_SIDECAR) downgrades.push('sidecar-path-not-provided-at-adapter-phase');
+  if (!depthDimensions) downgrades.push('depth-image-dimensions-unreadable');
+  writeJson(autoCropEvidencePath, {
+    schema: 'kaminos.splat-autocrop-evidence.v0',
+    status: 'complete',
+    authority: {
+      producer: 'kaminos.pipeline.sharp-webgpu-adapter',
+      freshness: 'fresh',
+      evidenceMode: 'derived-from-generated-ply-and-sharp-depth',
+      routeIdentity: {
+        pipelineId: process.env.KAMINOS_PIPELINE_ID || null,
+        routeId: process.env.KAMINOS_PIPELINE_ROUTE_ID || null,
+        stageId: process.env.KAMINOS_PIPELINE_STAGE_ID || null,
+      },
+      downgrades,
+    },
+    sourceImage: fileEvidence(input),
+    generated: {
+      ply: fileEvidence(outputPath),
+      sidecar: {
+        path: process.env.KAMINOS_PIPELINE_SIDECAR || artifactPaths.sidecar || null,
+        routeIdentity: process.env.KAMINOS_PIPELINE_ID || null,
+        status: 'path-reserved-by-pipeline-witness',
+      },
+    },
+    sharp: {
+      depthMap: {
+        ...fileEvidence(depthPath),
+        dimensions: depthDimensions,
+      },
+      metadata: fileEvidence(metadataPath),
+      inference: context.result || null,
+    },
+    cropSignal: {
+      provenance: 'generated PLY vertex bounds plus SHARP depth output captured in the same adapter run',
+      pointCloud,
+      bounds: pointCloud.bounds,
+      suggestedPivot: pointCloud.centroid,
+      candidateCrop: {
+        min: { x: pointCloud.bounds.min.x, y: pointCloud.bounds.min.y },
+        max: { x: pointCloud.bounds.max.x, y: pointCloud.bounds.max.y },
+        units: 'splat-local-xy',
+      },
+      mask: {
+        path: null,
+        reason: 'mask surface not emitted by SHARP-WebGPU adapter v0',
+      },
+    },
+    rejectedDebugSurfaces: [],
+  });
+}
+
 async function runBrowserInference() {
   const { default: puppeteer } = await loadPuppeteer();
   const browser = await puppeteer.launch({
@@ -274,6 +504,7 @@ async function runBrowserInference() {
       depthMap: fileEvidence(depthPath),
     };
     writeJson(metadataPath, metadata);
+    writeAutoCropEvidence(output, { result, metadata });
     return { result, metadata };
   } finally {
     await browser.close().catch(() => {});
@@ -301,6 +532,7 @@ try {
   const sideArtifacts = [
     { id: 'depthMap', role: 'depth-map', ...fileEvidence(depthPath) },
     { id: 'metadata', role: 'sharp-webgpu-metadata', ...fileEvidence(metadataPath) },
+    { id: 'autoCropEvidence', role: 'splat-autocrop-evidence', schema: 'kaminos.splat-autocrop-evidence.v0', ...fileEvidence(autoCropEvidencePath) },
   ];
   writeReport({
     ok: true,
@@ -314,10 +546,12 @@ try {
       splat: { id: 'splat', role: 'splat-candidate', ...fileEvidence(output) },
       depthMap: sideArtifacts[0],
       metadata: sideArtifacts[1],
+      autoCropEvidence: sideArtifacts[2],
     },
     inference: browserResult.result,
     metadataPath,
     depthPath,
+    autoCropEvidencePath,
   });
 } catch (error) {
   fail(error);
