@@ -145,12 +145,12 @@ assert.ok(
   'lower socket carries geometry effects for a smooth single-direction tuck tongue',
 );
 assert.ok(
-  lowerSocket.macroPromotedBody.promotedBodyScale <= 0.84,
-  'tuck tongue role keeps the lower socket narrower than a full macro body',
+  lowerSocket.lowerSocketPlateBodyHonestyLaw?.schema === 'LowerSocketPlateBodyHonestyLaw',
+  'plate-body honesty law is present before the tuck tongue role may shrink the visible lower socket body',
 );
 assert.ok(
-  lowerSocket.macroPromotedBody.promotedBodyScale <= 0.56,
-  'post-smoke tuck tongue role demotes the lower socket below small-macro objecthood',
+  lowerSocket.macroPromotedBody.promotedBodyScale >= lowerSocket.lowerSocketPlateBodyHonestyLaw.promotedBodyScaleFloor,
+  'plate-body honesty overrides the old small-macro demotion until bottom ownership or occlusion is solved',
 );
 assert.equal(
   lowerSocket.macroPromotedBody.sideSilhouettePolicy.mode,
@@ -158,9 +158,9 @@ assert.equal(
   'side silhouette policy names the tuck tongue role instead of only generic lower-socket smoothing',
 );
 assert.equal(
-  lowerSocket.macroPromotedBody.sideSilhouettePolicy.terminalBehavior,
-  'persist-terminal-absorption-through-mesh-end',
-  'promoted lower socket side silhouette keeps terminal absorption active through the tail rows',
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.tuckDisappearancePolicy,
+  'defer-until-bottom-ownership-or-occlusion-solved',
+  'promoted lower socket side silhouette defers terminal disappearance until a receiving owner exists',
 );
 assert.ok(
   lowerSocket.macroPromotedBody.sideSilhouettePolicy.visibleArcLimitT <= 0.52,
