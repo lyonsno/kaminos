@@ -40,6 +40,9 @@ assert.match(witness, /source ghost overlay display bounds are not credible/, 'l
 assert.match(witness, /--overlay-size/, 'live witness can drive the overlay-size control');
 assert.match(witness, /source ghost overlay size did not reach requested multiplier/, 'live witness rejects stale or ignored overlay size controls');
 assert.match(witness, /sourceFrameTotal/, 'live witness records original source animation frame totals in frame evidence');
+assert.match(witness, /actorGrounding/, 'live witness records grounded-display evidence for generated temporal actors');
+assert.match(witness, /actorRawRoot/, 'live witness records raw source root beside grounded display root');
+assert.match(witness, /actorSourceVerticalPolicy/, 'live witness records the source vertical display policy');
 assert.match(witness, /sheetFrameLabel/, 'live witness contact-sheet labels expose sheet frame denominator');
 assert.match(witness, /sourceFrameLabel/, 'live witness contact-sheet labels expose source frame denominator');
 assert.match(witness, /exportTray/, 'live witness records the motion panel export tray after current-view export');

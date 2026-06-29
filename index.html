@@ -1043,6 +1043,7 @@ import {
   interpolateGeneratedPoseTemporalSample,
   motionClipById,
   motionPhraseBodyScale,
+  mapGeneratedPoseTemporalGroundedDisplaySample,
   normalizeMotionSourceOrientationRemap,
   normalizeMotionPhraseControls,
   sampleGeneratedPoseTemporalMotion,
@@ -1051,7 +1052,7 @@ import {
   sampleMotionClip,
   sampleMotionPlan,
   sampleMotionTrack,
-} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627-smart-phrase-20260627';
+} from './motion-core.js?v=source-orientation-remap-20260627-generated-motion-cliplets-20260627-cliplet-playback-20260627-path-interrupt-20260627-phrase-cliplets-20260627-smart-phrase-20260627-grounded-display-20260628';
 import {
   SCENE_SCHEMA,
   buildSceneDocument,
@@ -5717,7 +5718,16 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   const compression = Number(temporalSample?.bowCompression || 0);
   const horizontalDisplayScale = Number(state.horizontalDisplayScale || 2.2);
   const verticalDisplayScale = Number(state.verticalDisplayScale || 5.0);
-  const rootPosition = new THREE.Vector3(sample.root[0] * horizontalDisplayScale, sample.root[1] * verticalDisplayScale + 0.24, sample.root[2] * horizontalDisplayScale);
+  const displayGroundingOptions = {
+    horizontalDisplayScale,
+    verticalDisplayScale,
+    attentionVerticalScale: Math.min(2.2, verticalDisplayScale),
+    baseY: 0.24,
+    floorY: 0,
+    minCenterY: 0.18,
+  };
+  const displayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(sample, displayGroundingOptions);
+  const rootPosition = new THREE.Vector3(...displayGrounding.root);
   if (visual.interruptTrigger) {
     if (clipletInterruptTimeline?.trigger?.root) {
       const trigger = clipletInterruptTimeline.trigger;
@@ -5736,7 +5746,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
       visual.interruptTrigger.material.opacity = 0;
     }
   }
-  const sampleAttention = new THREE.Vector3(sample.attention[0] * horizontalDisplayScale, sample.attention[1] * Math.min(2.2, verticalDisplayScale) + 0.24, sample.attention[2] * horizontalDisplayScale);
+  const sampleAttention = new THREE.Vector3(...displayGrounding.attention);
   const attentionTarget = motionAttentionTargetForSample(sampleAttention, state.targetContext);
   const attention = attentionTarget.position;
   state.lastAttentionTargetContext = attentionTarget.context || state.targetContext;
@@ -5745,25 +5755,32 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   visual.group.position.copy(rootPosition);
   visual.group.lookAt(attention);
   visual.group.rotation.z += (temporalSample?.chestRoot?.[0] || 0) * 1.8;
-  visual.body.scale.set(1 + compression * 0.18, 1.14 - compression * 0.34, 1 + compression * 0.46);
+  const displayCompression = Math.max(compression, Number(displayGrounding.groundedCompression || 0));
+  const groundedCompression = Number(displayGrounding.groundedCompression || 0);
+  visual.body.scale.set(
+    1 + displayCompression * 0.18 + groundedCompression * 0.18,
+    Math.max(0.42, 1.14 - displayCompression * 0.34 - groundedCompression * 0.28),
+    1 + displayCompression * 0.46 + groundedCompression * 0.26,
+  );
   visual.group.updateMatrixWorld(true);
   const faceCueWorld = rootPosition.clone().add(displayedFacing.multiplyScalar(0.22 + sample.effort * 0.02));
   visual.eye.position.copy(visual.group.worldToLocal(faceCueWorld));
   visual.body.material.emissive.copy(visual.baseColor).multiplyScalar(0.12 + sample.effort * 0.22 + compression * 0.24);
   visual.target.position.copy(attention);
-  visual.target.material.opacity = 0.34 + compression * 0.58;
-  visual.target.scale.setScalar(0.68 + compression * 1.1);
-  visual.compressionRing.scale.setScalar(0.75 + compression * 1.7);
-  visual.compressionRing.material.opacity = 0.18 + compression * 0.58;
+  visual.target.material.opacity = 0.34 + displayCompression * 0.58;
+  visual.target.scale.setScalar(0.68 + displayCompression * 1.1);
+  visual.compressionRing.scale.setScalar(0.75 + displayCompression * 1.7 + groundedCompression * 0.45);
+  visual.compressionRing.material.opacity = 0.18 + displayCompression * 0.58;
   for (let i = 0; i < visual.trail.length; i++) {
     const trailTime = Math.max(0, localTime - (i + 1) * 0.12);
     const trailSample = sampleGeneratedPoseTemporalMotion(state.track, trailTime);
+    const trailDisplayGrounding = mapGeneratedPoseTemporalGroundedDisplaySample(trailSample, displayGroundingOptions);
     const dot = visual.trail[i];
     dot.visible = true;
     dot.position.set(
-      trailSample.root[0] * horizontalDisplayScale - sample.root[0] * horizontalDisplayScale,
-      trailSample.root[1] * verticalDisplayScale - sample.root[1] * verticalDisplayScale,
-      trailSample.root[2] * horizontalDisplayScale - sample.root[2] * horizontalDisplayScale,
+      trailDisplayGrounding.root[0] - displayGrounding.root[0],
+      trailDisplayGrounding.root[1] - displayGrounding.root[1],
+      trailDisplayGrounding.root[2] - displayGrounding.root[2],
     );
     dot.material.opacity = Math.max(0.04, 0.32 - i * 0.03);
   }
@@ -5775,6 +5792,7 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
   state.lastClipletPlaybackTimeline = clipletPlaybackTimeline;
   state.lastClipletInterrupt = clipletInterruptEnvelope?.interrupt || null;
   state.lastClipletInterruptTimeline = clipletInterruptTimeline;
+  state.lastDisplayGrounding = displayGrounding;
   const behaviorState = buildGeneratedPoseTemporalBehaviorState({
     track: state.track,
     sample,
@@ -5819,14 +5837,19 @@ function updateGeneratedPoseTemporalFrame(nowSeconds = performance.now() / 1000)
     behaviorStateLabel: behaviorState.state,
     phase: sample.phase,
     root: rootPosition.toArray().map(value => Number(value.toFixed(5))),
+    rawRoot: displayGrounding.rawRoot,
     facing: sample.facing.map(value => Number(value.toFixed(5))),
     displayFacing: displayedFacing.toArray().map(value => Number(value.toFixed(5))),
     attention: attention.toArray().map(value => Number(value.toFixed(5))),
+    rawAttention: displayGrounding.rawAttention,
     attentionTargetMode: attentionTarget.evidence.mode,
     attentionTargetEvidence: attentionTarget.evidence,
     effort: Number(sample.effort.toFixed(5)),
     scale: Number(sample.scale.toFixed(5)),
     bowCompression: Number(compression.toFixed(5)),
+    displayCompression: Number(displayCompression.toFixed(5)),
+    grounding: displayGrounding,
+    sourceVerticalPolicy: displayGrounding.sourceVerticalPolicy,
     cliplet: activeCliplet,
     clipletId: activeCliplet?.id || null,
     clipletLabel: activeCliplet?.labelGuess || null,

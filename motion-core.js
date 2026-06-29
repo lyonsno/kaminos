@@ -2714,6 +2714,57 @@ export function sampleGeneratedPoseTemporalMotion(trackOrInput = DEFAULT_KIMODO_
   };
 }
 
+export function mapGeneratedPoseTemporalGroundedDisplaySample(sample = {}, options = {}) {
+  const horizontalDisplayScale = Number.isFinite(Number(options.horizontalDisplayScale)) ? Number(options.horizontalDisplayScale) : 1;
+  const verticalDisplayScale = Number.isFinite(Number(options.verticalDisplayScale)) ? Number(options.verticalDisplayScale) : 1;
+  const attentionVerticalScale = Number.isFinite(Number(options.attentionVerticalScale))
+    ? Number(options.attentionVerticalScale)
+    : Math.min(2.2, verticalDisplayScale);
+  const baseY = Number.isFinite(Number(options.baseY)) ? Number(options.baseY) : 0.24;
+  const floorY = Number.isFinite(Number(options.floorY)) ? Number(options.floorY) : 0;
+  const minCenterY = Number.isFinite(Number(options.minCenterY)) ? Number(options.minCenterY) : floorY + 0.18;
+  const root = vec3(sample.root);
+  const attention = vec3(sample.attention || sample.head || sample.root);
+  const rawRootY = root[1] * verticalDisplayScale;
+  const unclampedRootY = baseY + rawRootY;
+  const belowFloorDepth = Math.max(0, minCenterY - unclampedRootY);
+  const groundedRootY = belowFloorDepth > 0
+    ? minCenterY + Math.min(0.035, belowFloorDepth * 0.08)
+    : unclampedRootY;
+  const attentionRelativeY = (attention[1] - root[1]) * attentionVerticalScale;
+  const groundedAttentionY = Math.max(floorY + 0.08, groundedRootY + attentionRelativeY);
+  const groundedCompression = clamp(belowFloorDepth / 0.54, 0, 1);
+  const verticalLift = Math.max(0, unclampedRootY - minCenterY);
+  return {
+    schema: 'kaminos.generated-pose-temporal-grounded-display.v0',
+    mode: 'grounded-default',
+    sourceVerticalPolicy: 'ground-negative-preserve-positive',
+    horizontalDisplayScale: Number(horizontalDisplayScale.toFixed(5)),
+    verticalDisplayScale: Number(verticalDisplayScale.toFixed(5)),
+    attentionVerticalScale: Number(attentionVerticalScale.toFixed(5)),
+    baseY: Number(baseY.toFixed(5)),
+    floorY: Number(floorY.toFixed(5)),
+    minCenterY: Number(minCenterY.toFixed(5)),
+    rawRootY: Number(rawRootY.toFixed(5)),
+    unclampedRootY: Number(unclampedRootY.toFixed(5)),
+    belowFloorDepth: Number(belowFloorDepth.toFixed(5)),
+    verticalLift: Number(verticalLift.toFixed(5)),
+    groundedCompression: Number(groundedCompression.toFixed(5)),
+    root: [
+      Number((root[0] * horizontalDisplayScale).toFixed(5)),
+      Number(groundedRootY.toFixed(5)),
+      Number((root[2] * horizontalDisplayScale).toFixed(5)),
+    ],
+    attention: [
+      Number((attention[0] * horizontalDisplayScale).toFixed(5)),
+      Number(groundedAttentionY.toFixed(5)),
+      Number((attention[2] * horizontalDisplayScale).toFixed(5)),
+    ],
+    rawRoot: root.map(value => Number(value.toFixed(5))),
+    rawAttention: attention.map(value => Number(value.toFixed(5))),
+  };
+}
+
 function generatedTemporalBehaviorLabel(track, sample, temporalSample) {
   const phase = String(sample?.phase || temporalSample?.phaseLabel || 'carry');
   const intent = String(track?.intent || track?.label || '').toLowerCase();
