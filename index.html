@@ -1197,6 +1197,7 @@ const PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA = 'kaminos.preview-bench.terrai
 const PREVIEW_BENCH_TERRAIN_SAMPLE_ROUTE = 'kaminos/preview-bench/terrain-sample-file';
 const PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA = 'kaminos.preview-bench.smoke-offer-state.v0';
 const PREVIEW_BENCH_SMOKE_OFFER_ROUTE = 'kaminos/preview-bench/smoke-offer-file';
+const PREVIEW_BENCH_SMOKE_OFFER_VISUAL_STATE_SCHEMA = 'kaminos.preview-bench.smoke-offer-visual-state.v0';
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -1219,6 +1220,15 @@ let previewBenchSmokeOfferState = {
   source: null,
   error: null,
   loadedAt: null,
+};
+let previewBenchVisualRoot = null;
+let previewBenchVisualState = {
+  schema: PREVIEW_BENCH_SMOKE_OFFER_VISUAL_STATE_SCHEMA,
+  visible: false,
+  markerCount: 0,
+  markerKinds: [],
+  source: 'none',
+  offerIds: [],
 };
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
@@ -7075,6 +7085,303 @@ function previewBenchSurfaceLabel(surface, fallback = 'surface unset') {
   );
 }
 
+function previewBenchNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function previewBenchVector3(value, fallback = null) {
+  if (Array.isArray(value) && value.length >= 3) {
+    return [
+      previewBenchNumber(value[0], fallback?.[0] ?? 0),
+      previewBenchNumber(value[1], fallback?.[1] ?? 0),
+      previewBenchNumber(value[2], fallback?.[2] ?? 0),
+    ];
+  }
+  if (value && typeof value === 'object') {
+    return [
+      previewBenchNumber(value.x, fallback?.[0] ?? 0),
+      previewBenchNumber(value.y, fallback?.[1] ?? 0),
+      previewBenchNumber(value.z, fallback?.[2] ?? 0),
+    ];
+  }
+  return fallback ? [...fallback] : null;
+}
+
+function previewBenchMarkerColor(kind = '', authority = '') {
+  const text = `${kind} ${authority}`.toLowerCase();
+  if (text.includes('carrier') || text.includes('drop') || text.includes('hit')) return 0xff5a3d;
+  if (text.includes('rolling') || text.includes('goin')) return 0x41d7ff;
+  if (text.includes('desire') || text.includes('reroute') || text.includes('lure')) return 0xffd166;
+  if (text.includes('terrain') || text.includes('sample')) return 0x7bd88f;
+  if (text.includes('fixture') || text.includes('synthetic')) return 0xb99cff;
+  return 0x9ee7ff;
+}
+
+function previewBenchValueMagnitude(value) {
+  if (value === null || value === undefined) return 1;
+  const numeric = typeof value === 'number' ? value : Number(String(value).replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(0.75, Math.min(2.8, Math.log10(Math.abs(numeric) + 1) + 0.75));
+}
+
+function previewBenchFindObjectMarkers(value, markers = []) {
+  if (!value || typeof value !== 'object') return markers;
+  if (Array.isArray(value.objectMarkers)) markers.push(...value.objectMarkers);
+  if (Array.isArray(value.markers)) markers.push(...value.markers);
+  for (const child of Object.values(value)) {
+    if (child && typeof child === 'object') previewBenchFindObjectMarkers(child, markers);
+  }
+  return markers;
+}
+
+function previewBenchSyntheticMarkerPosition(offerIndex, fieldIndex, totalFields) {
+  const total = Math.max(1, totalFields);
+  const angle = (fieldIndex / total) * Math.PI * 2 + offerIndex * 0.42;
+  const radius = 0.72 + offerIndex * 0.22;
+  return [
+    Math.cos(angle) * radius,
+    -0.25 + (fieldIndex % 3) * 0.22,
+    Math.sin(angle) * radius,
+  ];
+}
+
+function previewBenchSmokeOfferMarkerSpecs(offer, offerIndex = 0) {
+  const specs = [];
+  const sourceMarkers = previewBenchFindObjectMarkers(offer.rawOffer);
+  for (const [index, marker] of sourceMarkers.entries()) {
+    const value = previewBenchObject(marker);
+    const world = previewBenchVector3(value.world || value.position || value.point || value.location, null);
+    if (!world) continue;
+    specs.push({
+      id: previewBenchText(value.id || value.markerId || value.label, `${offer.id}-marker-${index + 1}`),
+      label: previewBenchText(value.label || value.name || value.id, `marker ${index + 1}`),
+      kind: previewBenchText(value.kind || value.type || value.route, 'object-marker'),
+      authority: previewBenchText(value.authority || offer.sourceAuthority, offer.sourceAuthority),
+      route: previewBenchText(value.route || offer.sourceRoute, offer.sourceRoute),
+      world,
+      scale: previewBenchValueMagnitude(value.weight ?? value.value ?? 1),
+      source: 'producer-bench-hints',
+    });
+  }
+  if (specs.length) return specs;
+
+  const fieldSpecs = previewBenchArray(offer.fields);
+  const sourceFields = fieldSpecs.length
+    ? fieldSpecs
+    : Object.entries(previewBenchObject(offer.summary)).map(([label, value]) => ({ label, value: previewBenchText(value, '') }));
+  for (const [index, field] of sourceFields.entries()) {
+    if (!previewBenchText(field.value, '')) continue;
+    const label = previewBenchText(field.label || field.name || field.key, `field ${index + 1}`);
+    specs.push({
+      id: `${offer.id}-field-${index + 1}`,
+      label,
+      kind: label,
+      authority: offer.sourceAuthority,
+      route: offer.sourceRoute,
+      world: previewBenchSyntheticMarkerPosition(offerIndex, index, sourceFields.length),
+      scale: previewBenchValueMagnitude(field.value),
+      source: 'host-summary-fallback',
+    });
+  }
+  if (!specs.length) {
+    specs.push({
+      id: `${offer.id}-host-anchor`,
+      label: offer.label,
+      kind: offer.payloadSchema || 'preview-bench-offer',
+      authority: offer.sourceAuthority,
+      route: offer.sourceRoute,
+      world: [offerIndex * 0.42, 0, 0],
+      scale: 1,
+      source: 'host-empty-offer-anchor',
+    });
+  }
+  return specs;
+}
+
+function previewBenchCreateLabelSprite(text, color = '#9ee7ff') {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = '600 32px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textBaseline = 'middle';
+  const label = previewBenchText(text, 'preview marker').slice(0, 44);
+  const metrics = ctx.measureText(label);
+  const width = Math.min(488, Math.max(132, metrics.width + 48));
+  ctx.fillStyle = 'rgba(2, 9, 16, 0.76)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(12, 32, width, 64, 12);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillText(label, 36, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(width / 430, 0.18, 1);
+  return sprite;
+}
+
+function previewBenchCreateMarkerMesh(spec, index, total) {
+  const group = new THREE.Group();
+  group.name = `preview-bench-marker-${spec.id || index + 1}`;
+  group.userData.kaminosPreviewBenchMarker = previewBenchCloneJson(spec, {});
+  const color = previewBenchMarkerColor(spec.kind, spec.authority);
+  const scale = Math.max(0.72, Math.min(2.4, spec.scale || 1));
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.45,
+    roughness: 0.38,
+    metalness: 0.08,
+    transparent: true,
+    opacity: spec.source === 'producer-bench-hints' ? 0.92 : 0.74,
+    depthWrite: false,
+  });
+  const kind = previewBenchText(spec.kind).toLowerCase();
+  let geometry;
+  if (kind.includes('carrier') || kind.includes('drop') || kind.includes('hit')) {
+    geometry = new THREE.BoxGeometry(0.18 * scale, 0.18 * scale, 0.18 * scale);
+  } else if (kind.includes('desire') || kind.includes('reroute') || kind.includes('lure')) {
+    geometry = new THREE.TorusGeometry(0.13 * scale, 0.024 * scale, 10, 36);
+  } else if (kind.includes('terrain') || kind.includes('sample')) {
+    geometry = new THREE.CylinderGeometry(0.14 * scale, 0.14 * scale, 0.06 * scale, 6);
+  } else {
+    geometry = new THREE.SphereGeometry(0.12 * scale, 24, 16);
+  }
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  const sourceWorld = previewBenchVector3(spec.world, [0, 0, 0]);
+  group.position.set(
+    sourceWorld[0] * 0.55,
+    sourceWorld[1] * 0.55 - 0.35,
+    sourceWorld[2] * 0.55 - 1.1,
+  );
+  if (kind.includes('desire') || kind.includes('reroute') || kind.includes('lure')) {
+    mesh.rotation.x = Math.PI / 2;
+  }
+  group.add(mesh);
+
+  const stemGeometry = new THREE.CylinderGeometry(0.008, 0.008, 0.34, 8);
+  const stemMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.54, depthWrite: false });
+  const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+  stem.position.y = -0.18;
+  group.add(stem);
+
+  if (index === 0 || total <= 8) {
+    const sprite = previewBenchCreateLabelSprite(spec.label || spec.kind || spec.id, `#${color.toString(16).padStart(6, '0')}`);
+    sprite.position.set(group.position.x > 0.35 ? -0.46 : 0.32, 0.22, 0);
+    group.add(sprite);
+  }
+  return group;
+}
+
+function clearPreviewBenchSmokeOfferVisuals() {
+  if (previewBenchVisualRoot && scene) {
+    scene.remove(previewBenchVisualRoot);
+    disposeObjectTree(previewBenchVisualRoot);
+  }
+  previewBenchVisualRoot = null;
+  previewBenchVisualState = {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_VISUAL_STATE_SCHEMA,
+    visible: false,
+    markerCount: 0,
+    markerKinds: [],
+    source: 'none',
+    offerIds: [],
+  };
+  if (previewBenchSmokeOfferState && typeof previewBenchSmokeOfferState === 'object') {
+    previewBenchSmokeOfferState.visualState = previewBenchCloneJson(previewBenchVisualState, {});
+  }
+}
+
+function renderPreviewBenchSmokeOfferVisuals(state) {
+  clearPreviewBenchSmokeOfferVisuals();
+  if (!scene || !state?.offers?.length) return previewBenchVisualState;
+
+  const root = new THREE.Group();
+  root.name = 'preview-bench-smoke-offer-visual-root';
+  root.userData.kaminosPreviewBenchSmokeOfferVisual = {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_VISUAL_STATE_SCHEMA,
+    stateRoute: state.route,
+  };
+
+  const markerSpecs = state.offers.flatMap((offer, offerIndex) => (
+    previewBenchSmokeOfferMarkerSpecs(offer, offerIndex).map(spec => ({
+      ...spec,
+      offerId: offer.id,
+      offerLabel: offer.label,
+    }))
+  ));
+
+  const baseMaterial = new THREE.MeshBasicMaterial({
+    color: 0x17364c,
+    transparent: true,
+    opacity: 0.32,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const base = new THREE.Mesh(new THREE.CircleGeometry(1.35 + state.offers.length * 0.12, 64), baseMaterial);
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = -0.72;
+  base.name = 'preview-bench-smoke-offer-visual-base';
+  root.add(base);
+
+  const ring = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(2.7 + state.offers.length * 0.24, 1.3, 2.7 + state.offers.length * 0.24)),
+    new THREE.LineBasicMaterial({ color: 0x8feaff, transparent: true, opacity: 0.38 })
+  );
+  ring.position.y = -0.05;
+  ring.name = 'preview-bench-smoke-offer-visual-frame';
+  root.add(ring);
+
+  for (const [index, spec] of markerSpecs.entries()) {
+    root.add(previewBenchCreateMarkerMesh(spec, index, markerSpecs.length));
+  }
+
+  const offerLabel = state.offers.length === 1 ? state.offers[0].label : `${state.offers.length} Preview Bench offers`;
+  const title = previewBenchCreateLabelSprite(offerLabel, '#9ee7ff');
+  title.position.set(-1.32, 0.92, 0);
+  root.add(title);
+
+  scene.add(root);
+  previewBenchVisualRoot = root;
+
+  const markerKinds = previewBenchUniqueStrings(markerSpecs.map(spec => spec.kind));
+  previewBenchVisualState = {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_VISUAL_STATE_SCHEMA,
+    visible: true,
+    markerCount: markerSpecs.length,
+    markerKinds,
+    source: markerSpecs.some(spec => spec.source === 'producer-bench-hints') ? 'producer-bench-hints' : markerSpecs[0]?.source || 'host-fallback',
+    offerIds: previewBenchUniqueStrings(state.offers.map(offer => offer.id)),
+    route: state.route || null,
+    targetSurface: previewBenchSurfaceLabel(state.targetSurface || state.acceptanceSurface, 'surface unset'),
+  };
+  state.visualState = previewBenchCloneJson(previewBenchVisualState, {});
+
+  if (camera && controls) {
+    const box = new THREE.Box3().setFromObject(root);
+    const center = box.getCenter(new THREE.Vector3());
+    controls.target.copy(center);
+    camera.position.set(center.x + 2.2, center.y + 1.25, center.z + 3.15);
+    controls.update();
+  }
+  window._kaminosDirty?.();
+  return previewBenchVisualState;
+}
+
 function previewBenchSmokeOfferUrlFromRoute(params) {
   const directUrl = params.get('smoke_offer_url') || params.get('preview_bench_smoke_offer_url');
   if (directUrl) return { url: directUrl, mode: 'external_url', kind: 'smoke-offer' };
@@ -7542,6 +7849,7 @@ function renderPreviewBenchSmokeOfferState() {
     empty.className = 'preview-bench-empty';
     empty.textContent = state.error ? 'Smoke offer failed to mount.' : 'No source lane smoke offer is mounted.';
     list.append(empty);
+    clearPreviewBenchSmokeOfferVisuals();
     window._kaminosDirty?.();
     return;
   }
@@ -7637,6 +7945,7 @@ function renderPreviewBenchSmokeOfferState() {
     }
     list.append(row);
   }
+  renderPreviewBenchSmokeOfferVisuals(state);
   window._kaminosDirty?.();
 }
 
@@ -7730,6 +8039,7 @@ window.kaminosMountPreviewBenchSmokeOffer = mountPreviewBenchSmokeOffer;
 window.kaminosMountPreviewBenchPayloadReport = mountPreviewBenchPayloadReport;
 window.kaminosMountPreviewBenchTerrainSamplePacket = mountPreviewBenchTerrainSamplePacket;
 window.kaminosPreviewBenchSmokeOfferDebugState = function() {
+  previewBenchSmokeOfferState.visualState = previewBenchCloneJson(previewBenchVisualState, {});
   return previewBenchCloneJson(previewBenchSmokeOfferState, {});
 };
 

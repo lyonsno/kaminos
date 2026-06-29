@@ -4308,6 +4308,7 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
         sourceText: document.getElementById('preview-bench-smoke-offer-source')?.textContent || null,
         targetText: document.getElementById('preview-bench-smoke-offer-target')?.textContent || null,
         smokeOfferState,
+        visualState: smokeOfferState?.visualState || null,
         rows,
         rejectedDebugSurfaces,
         sourceAuthority: smokeOfferState?.offers?.[0]?.sourceAuthority || null,
@@ -4351,6 +4352,12 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
       || typeof evidence.rejectedDebugSurfaces[0].id !== 'string'
       || !evidence.rejectedDebugSurfaces[0].id.length) {
     throw new Error(`Preview Bench smoke-offer witness lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.visualState
+      || evidence.visualState.schema !== 'kaminos.preview-bench.smoke-offer-visual-state.v0'
+      || evidence.visualState.visible !== true
+      || Number(evidence.visualState.markerCount || 0) < 1) {
+    throw new Error(`Preview Bench smoke-offer witness did not prove a viewport visual target: ${JSON.stringify(evidence)}`);
   }
   lastEvidence.previewBenchSmokeOffer = {
     schema: 'kaminos.preview-bench.smoke-offer-witness.v0',

@@ -167,6 +167,9 @@ assert.match(index, /preview_bench_terrain_sample_path/, 'Preview Bench terrain 
 assert.match(index, /function normalizePreviewBenchSmokeOffer\(/, 'Preview Bench smoke offers normalize into a machine-readable host state');
 assert.match(index, /function previewBenchUniqueStrings\(/, 'Preview Bench smoke offers dedupe repeated downgrade badges from nested producer envelopes');
 assert.match(index, /function previewBenchUniqueSurfaces\(/, 'Preview Bench smoke offers dedupe repeated rejected debug surfaces from nested producer envelopes');
+assert.match(index, /function renderPreviewBenchSmokeOfferVisuals\(/, 'Preview Bench smoke offers render a viewport visual, not only sidebar evidence cards');
+assert.match(index, /function previewBenchSmokeOfferMarkerSpecs\(/, 'Preview Bench smoke offers synthesize visual marker specs from producer hints or summary fields');
+assert.match(index, /previewBenchVisualState/, 'Preview Bench smoke-offer debug state exposes viewport visual evidence');
 assert.match(index, /function normalizePreviewBenchPayloadReport\(/, 'Preview Bench generic payload reports normalize into the same machine-readable host state');
 assert.match(index, /function normalizePreviewBenchTerrainSamplePacket\(/, 'Preview Bench terrain samples normalize into the same machine-readable host state');
 assert.match(index, /previewBenchPayload/, 'Preview Bench host can extract embedded previewBenchPayload reports from lane-local witness files');
