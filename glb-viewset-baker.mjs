@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -25,9 +25,18 @@ const atlasPath = resolve(args.get('--atlas') || `${outDir}/viewset-atlas.png`);
 const impostorManifestPath = resolve(args.get('--impostor-manifest') || `${outDir}/impostor-manifest.json`);
 const maskThreshold = clamp01(Number(args.get('--mask-threshold') || 0.08));
 const maskMode = args.get('--mask-mode') || 'dual-background';
-const angles = parseAngles(args.get('--angles') || '0,45,90,135,180,225,270,315');
+const chromaKeyColor = args.get('--chroma-key-color') || '#ff00ff';
+const angles = parseNumberList(args.get('--angles') || '0,45,90,135,180,225,270,315');
 const elevation = Number(args.get('--elevation') || 18);
+const elevations = args.has('--elevations') ? parseNumberList(args.get('--elevations')) : [elevation].filter(value => Number.isFinite(value));
 const radius = Number(args.get('--radius') || 3.2);
+const renderConditions = {
+  environment: args.get('--environment') || null,
+  exposure: optionalNumber(args.get('--exposure')),
+  envIntensity: optionalNumber(args.get('--env-intensity')),
+  envRotation: optionalNumber(args.get('--env-rotation')),
+  captureBackground: args.get('--capture-background') || 'transparent',
+};
 const width = Math.max(64, Math.floor(Number(args.get('--width') || 1024)));
 const height = Math.max(64, Math.floor(Number(args.get('--height') || 1024)));
 const settleMs = Math.max(0, Math.floor(Number(args.get('--settle-ms') || 450)));
@@ -52,7 +61,13 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-function parseAngles(value) {
+function optionalNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseNumberList(value) {
   return String(value)
     .split(',')
     .map(part => Number(part.trim()))
@@ -97,14 +112,25 @@ function assertPngScreenshot(buffer) {
   return magic;
 }
 
-function viewsetFramePath(index, angle) {
-  const normalized = String(Math.round(angle)).padStart(3, '0');
-  return resolve(outDir, `view-${String(index).padStart(2, '0')}-az${normalized}.png`);
+function formatAngleLabel(value) {
+  const rounded = Math.round(value);
+  const sign = rounded < 0 ? 'm' : 'p';
+  return `${sign}${String(Math.abs(rounded)).padStart(3, '0')}`;
 }
 
-function cameraForAngle(angleDeg) {
+function viewsetFramePath(index, angle, elevationDeg) {
+  const normalizedAzimuth = String(Math.round(normalizeAngle(angle))).padStart(3, '0');
+  const normalizedElevation = formatAngleLabel(elevationDeg);
+  return resolve(outDir, `view-${String(index).padStart(2, '0')}-az${normalizedAzimuth}-el${normalizedElevation}.png`);
+}
+
+function normalizeAngle(angle) {
+  return ((Number(angle) % 360) + 360) % 360;
+}
+
+function cameraForAngle(angleDeg, elevationDeg = elevation) {
   const az = angleDeg * Math.PI / 180;
-  const el = elevation * Math.PI / 180;
+  const el = elevationDeg * Math.PI / 180;
   const horizontal = Math.cos(el) * radius;
   return {
     position: [
@@ -114,6 +140,33 @@ function cameraForAngle(angleDeg) {
     ],
     target: [0, 0, 0],
   };
+}
+
+function normalizedVector(from, to = [0, 0, 0]) {
+  const vector = [
+    Number(from[0] || 0) - Number(to[0] || 0),
+    Number(from[1] || 0) - Number(to[1] || 0),
+    Number(from[2] || 0) - Number(to[2] || 0),
+  ];
+  const length = Math.hypot(vector[0], vector[1], vector[2]) || 1;
+  return vector.map(value => Number((value / length).toFixed(6)));
+}
+
+function viewVectorLocalForCamera(camera) {
+  return normalizedVector(camera.position || [0, 0, radius], camera.target || [0, 0, 0]);
+}
+
+function chromaKeyRgb(color) {
+  const text = String(color || '#ff00ff').trim();
+  const hex = text.startsWith('#') ? text.slice(1) : text;
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+  return { r: 255, g: 0, b: 255 };
 }
 
 function writeManifest(report) {
@@ -131,7 +184,9 @@ function writeManifest(report) {
     manifestPath,
     angles,
     elevation,
+    elevations,
     radius,
+    renderConditions,
     width,
     height,
     settleMs,
@@ -141,6 +196,7 @@ function writeManifest(report) {
     impostorManifestPath,
     maskThreshold,
     maskMode,
+    chromaKeyColor,
     debugPort: port,
     chrome,
     userDataDir,
@@ -243,8 +299,24 @@ async function viewportClip(ws) {
   })()`);
 }
 
-async function rawPngScreenshot(ws, clip) {
-  const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true, omitBackground: true, clip: clip || undefined }, { timeoutMs: 10000 });
+async function rawPngScreenshot(ws, clip, options = {}) {
+  if (lastEvidence.activeCapture) {
+    lastEvidence.activeCapture = {
+      ...lastEvidence.activeCapture,
+      subphase: 'rendering-capture-frame',
+    };
+  }
+  await evaluate(ws, `window.kaminosViewsetRenderCaptureFrame && window.kaminosViewsetRenderCaptureFrame(${JSON.stringify({
+    captureBackground: options.captureBackground,
+  })})`, { timeoutMs: 60000 });
+  if (lastEvidence.activeCapture) {
+    lastEvidence.activeCapture = {
+      ...lastEvidence.activeCapture,
+      subphase: 'page-capture-screenshot',
+    };
+  }
+  const omitBackground = options.omitBackground ?? true;
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true, omitBackground, clip: clip || undefined }, { timeoutMs: 60000 });
   const png = Buffer.from(shot.data, 'base64');
   assertPngScreenshot(png);
   return { dataBase64: shot.data, png };
@@ -253,6 +325,9 @@ async function rawPngScreenshot(ws, clip) {
 async function capturePngScreenshot(ws, screenshotPath, clip) {
   if (maskMode === 'dual-background') {
     return captureDualBackgroundMatte(ws, screenshotPath, clip);
+  }
+  if (maskMode === 'chroma-key') {
+    return captureChromaKeyMatte(ws, screenshotPath, clip);
   }
   const shot = await rawPngScreenshot(ws, clip);
   const png = shot.png;
@@ -263,17 +338,103 @@ async function capturePngScreenshot(ws, screenshotPath, clip) {
   return { path: screenshotPath, bytes: png.length, dataBase64: shot.dataBase64, ...info, ...alpha };
 }
 
+async function captureChromaKeyMatte(ws, screenshotPath, clip) {
+  const keyed = await rawPngScreenshot(ws, clip, { omitBackground: false, captureBackground: chromaKeyColor });
+  await setCaptureBackground(ws, 'transparent');
+  const matte = await synthesizeChromaKeyMatte(ws, keyed.dataBase64, chromaKeyColor, maskThreshold);
+  const png = Buffer.from(matte.dataBase64, 'base64');
+  assertPngScreenshot(png);
+  const info = pngInfo(png);
+  mkdirSync(dirname(screenshotPath), { recursive: true });
+  writeFileSync(screenshotPath, png);
+  return {
+    path: screenshotPath,
+    bytes: png.length,
+    dataBase64: matte.dataBase64,
+    ...info,
+    alphaMode: 'chroma-key-matte',
+    alphaCoverage: matte.alphaCoverage,
+    opaqueCoverage: matte.opaqueCoverage,
+    transparentPixels: matte.transparentPixels,
+    opaquePixels: matte.opaquePixels,
+    maskThreshold,
+    chromaKeyColor,
+    objectBounds: matte.objectBounds,
+  };
+}
+
+async function synthesizeChromaKeyMatte(ws, sourceBase64, keyColor, threshold) {
+  const keyRgb = chromaKeyRgb(keyColor);
+  return evaluate(ws, `(() => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(image, 0, 0);
+        const pixels = ctx.getImageData(0, 0, width, height);
+        const kr = ${keyRgb.r};
+        const kg = ${keyRgb.g};
+        const kb = ${keyRgb.b};
+        const thresholdDistance = Math.max(0, Math.min(1, ${JSON.stringify(threshold)})) * Math.sqrt(3) * 255;
+        let transparent = 0;
+        let opaque = 0;
+        let minX = width;
+        let minY = height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let offset = 0, pixel = 0; offset < pixels.data.length; offset += 4, pixel += 1) {
+          const dr = pixels.data[offset] - kr;
+          const dg = pixels.data[offset + 1] - kg;
+          const db = pixels.data[offset + 2] - kb;
+          const distance = Math.hypot(dr, dg, db);
+          if (distance <= thresholdDistance) {
+            transparent += 1;
+            pixels.data[offset] = 0;
+            pixels.data[offset + 1] = 0;
+            pixels.data[offset + 2] = 0;
+            pixels.data[offset + 3] = 0;
+            continue;
+          }
+          opaque += 1;
+          pixels.data[offset + 3] = 255;
+          const x = pixel % width;
+          const y = Math.floor(pixel / width);
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+        ctx.putImageData(pixels, 0, 0);
+        const total = width * height;
+        resolve({
+          dataBase64: canvas.toDataURL('image/png').split(',')[1],
+          alphaCoverage: Number((transparent / total).toFixed(6)),
+          opaqueCoverage: Number((opaque / total).toFixed(6)),
+          transparentPixels: transparent,
+          opaquePixels: opaque,
+          objectBounds: opaque > 0 ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null,
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => reject(new Error('chroma-key source failed to decode'));
+    image.src = 'data:image/png;base64,' + ${JSON.stringify(sourceBase64)};
+  }))()`, { timeoutMs: 20000 });
+}
+
 async function setCaptureBackground(ws, color) {
   return evaluate(ws, `window.kaminosSetViewsetCaptureBackground(${JSON.stringify(color)})`);
 }
 
 async function captureDualBackgroundMatte(ws, screenshotPath, clip) {
-  await setCaptureBackground(ws, '#000000');
-  await delay(80);
-  const black = await rawPngScreenshot(ws, clip);
-  await setCaptureBackground(ws, '#ffffff');
-  await delay(80);
-  const white = await rawPngScreenshot(ws, clip);
+  const black = await rawPngScreenshot(ws, clip, { omitBackground: false, captureBackground: '#000000' });
+  const white = await rawPngScreenshot(ws, clip, { omitBackground: false, captureBackground: '#ffffff' });
   await setCaptureBackground(ws, 'transparent');
   const matte = await synthesizeDualBackgroundMatte(ws, black.dataBase64, white.dataBase64, maskThreshold);
   const png = Buffer.from(matte.dataBase64, 'base64');
@@ -426,12 +587,64 @@ async function analyzePngAlpha(ws, dataBase64, threshold, info) {
   }))()`, { timeoutMs: 20000 });
 }
 
-async function composeAtlasPng(ws, frameCaptures) {
-  if (!frameCaptures.length) throw new Error('Cannot compose atlas with no frames');
-  const columns = Math.ceil(Math.sqrt(frameCaptures.length));
-  const rows = Math.ceil(frameCaptures.length / columns);
-  const cellWidth = Math.max(...frameCaptures.map(frame => frame.pngWidth || width));
-  const cellHeight = Math.max(...frameCaptures.map(frame => frame.pngHeight || height));
+function composeAtlasWithFfmpeg(frameCaptures, columns, rows, cellWidth, cellHeight) {
+  const atlasWidth = columns * cellWidth;
+  const atlasHeight = rows * cellHeight;
+  const args = [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    `color=c=black@0.0:s=${atlasWidth}x${atlasHeight},format=rgba`,
+  ];
+  for (const frame of frameCaptures) args.push('-i', frame.path);
+
+  let prior = '[0:v]';
+  const filters = [];
+  for (let index = 0; index < frameCaptures.length; index += 1) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const out = index === frameCaptures.length - 1 ? '[out]' : `[tmp${index}]`;
+    filters.push(`${prior}[${index + 1}:v]overlay=x=${column * cellWidth}:y=${row * cellHeight}:format=auto${out}`);
+    prior = out;
+  }
+
+  mkdirSync(dirname(atlasPath), { recursive: true });
+  const result = spawnSync('ffmpeg', [
+    ...args,
+    '-filter_complex',
+    filters.join(';'),
+    '-map',
+    '[out]',
+    '-frames:v',
+    '1',
+    '-pix_fmt',
+    'rgba',
+    atlasPath,
+  ], { encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(`ffmpeg atlas composition failed: ${(result.stderr || result.stdout || '').trim()}`);
+  }
+  const png = readFileSync(atlasPath);
+  assertPngScreenshot(png);
+  return {
+    atlasPath,
+    atlasBytes: png.length,
+    atlasPngMagic: pngMagic(png),
+    atlasColumns: columns,
+    atlasRows: rows,
+    atlasCellWidth: cellWidth,
+    atlasCellHeight: cellHeight,
+    atlasWidth,
+    atlasHeight,
+    atlasComposer: 'ffmpeg-overlay',
+  };
+}
+
+async function composeAtlasInBrowser(ws, frameCaptures, columns, rows, cellWidth, cellHeight) {
   const atlasBase64 = await evaluate(ws, `(() => new Promise((resolve, reject) => {
     const sources = ${JSON.stringify(frameCaptures.map(frame => frame.dataBase64))};
     const columns = ${columns};
@@ -456,7 +669,7 @@ async function composeAtlasPng(ws, frameCaptures) {
       });
       resolve(canvas.toDataURL('image/png').split(',')[1]);
     }).catch(reject);
-  }))()`, { timeoutMs: 30000 });
+  }))()`, { timeoutMs: 60000 });
   const png = Buffer.from(atlasBase64, 'base64');
   assertPngScreenshot(png);
   mkdirSync(dirname(atlasPath), { recursive: true });
@@ -471,7 +684,22 @@ async function composeAtlasPng(ws, frameCaptures) {
     atlasCellHeight: cellHeight,
     atlasWidth: columns * cellWidth,
     atlasHeight: rows * cellHeight,
+    atlasComposer: 'browser-canvas',
   };
+}
+
+async function composeAtlasPng(ws, frameCaptures) {
+  if (!frameCaptures.length) throw new Error('Cannot compose atlas with no frames');
+  const columns = Math.ceil(Math.sqrt(frameCaptures.length));
+  const rows = Math.ceil(frameCaptures.length / columns);
+  const cellWidth = Math.max(...frameCaptures.map(frame => frame.pngWidth || width));
+  const cellHeight = Math.max(...frameCaptures.map(frame => frame.pngHeight || height));
+  try {
+    return composeAtlasWithFfmpeg(frameCaptures, columns, rows, cellWidth, cellHeight);
+  } catch (error) {
+    lastEvidence.atlasComposerFallback = error instanceof Error ? error.message : String(error);
+    return composeAtlasInBrowser(ws, frameCaptures, columns, rows, cellWidth, cellHeight);
+  }
 }
 
 function writeImpostorManifest(report) {
@@ -491,8 +719,11 @@ function writeImpostorManifest(report) {
     atlas: report.atlas || null,
     alphaMode: report.alphaMode,
     maskThreshold,
+    chromaKeyColor: maskMode === 'chroma-key' ? chromaKeyColor : null,
     elevation,
+    elevations,
     radius,
+    renderConditions: report.renderConditions || lastEvidence.renderConditions || renderConditions,
     frames: report.frames || frames,
     sourceManifestPath: manifestPath,
   };
@@ -504,6 +735,7 @@ async function main() {
   phase = 'validating-args';
   if (!requestedSource) throw new Error('Missing --source');
   if (!angles.length) throw new Error('No valid --angles values');
+  if (!elevations.length) throw new Error('No valid --elevations values');
 
   phase = 'checking-debug-port';
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
@@ -574,43 +806,74 @@ async function main() {
         opaque: true
       })
     `, { timeoutMs: 60000 });
+    lastEvidence.renderConditions = await evaluate(ws, `
+      window.kaminosSetViewsetRenderConditions(${JSON.stringify(renderConditions)})
+    `, { timeoutMs: 60000 });
     await delay(Math.max(settleMs, 250));
 
     phase = 'capturing-viewset';
     mkdirSync(outDir, { recursive: true });
     const frameCaptures = [];
-    for (let index = 0; index < angles.length; index += 1) {
-      const angle = angles[index];
-      const camera = cameraForAngle(angle);
-      const pose = await evaluate(ws, `
-        window.kaminosSetCameraDebugPose(${JSON.stringify(camera)})
-      `);
-      await delay(settleMs);
-      const framePath = viewsetFramePath(index, angle);
-      const clip = await viewportClip(ws);
-      const screenshot = await capturePngScreenshot(ws, framePath, clip);
-      frameCaptures.push(screenshot);
-      frames.push({
-        index,
-        angle,
-        path: framePath,
-        bytes: screenshot.bytes,
-        pngMagic: screenshot.pngMagic,
-        pngWidth: screenshot.pngWidth,
-        pngHeight: screenshot.pngHeight,
-        pngColorType: screenshot.pngColorType,
-        hasAlphaChannel: screenshot.hasAlphaChannel,
-        alphaMode: screenshot.alphaMode,
-        alphaCoverage: screenshot.alphaCoverage,
-        opaqueCoverage: screenshot.opaqueCoverage,
-        transparentPixels: screenshot.transparentPixels,
-        opaquePixels: screenshot.opaquePixels,
-        maskThreshold: screenshot.maskThreshold,
-        objectBounds: screenshot.objectBounds,
-        cellRect: null,
-        viewportClip: clip,
-        camera: pose || camera,
-      });
+    let frameIndex = 0;
+    for (const elevationDeg of elevations) {
+      for (const angle of angles) {
+        const camera = cameraForAngle(angle, elevationDeg);
+        lastEvidence.activeCapture = {
+          frameIndex,
+          angle: normalizeAngle(angle),
+          azimuth: normalizeAngle(angle),
+          elevation: elevationDeg,
+          subphase: 'setting-camera',
+        };
+        const pose = await evaluate(ws, `
+          window.kaminosSetCameraDebugPose(${JSON.stringify(camera)})
+        `);
+        await delay(settleMs);
+        const framePath = viewsetFramePath(frameIndex, angle, elevationDeg);
+        lastEvidence.activeCapture = {
+          ...lastEvidence.activeCapture,
+          path: framePath,
+          subphase: 'reading-viewport-clip',
+        };
+        const clip = await viewportClip(ws);
+        lastEvidence.activeCapture = {
+          ...lastEvidence.activeCapture,
+          viewportClip: clip,
+          subphase: 'capturing-screenshot',
+        };
+        const screenshot = await capturePngScreenshot(ws, framePath, clip);
+        frameCaptures.push(screenshot);
+        frames.push({
+          index: frameIndex,
+          angle: normalizeAngle(angle),
+          azimuth: normalizeAngle(angle),
+          elevation: elevationDeg,
+          viewVectorLocal: viewVectorLocalForCamera(camera),
+          path: framePath,
+          bytes: screenshot.bytes,
+          pngMagic: screenshot.pngMagic,
+          pngWidth: screenshot.pngWidth,
+          pngHeight: screenshot.pngHeight,
+          pngColorType: screenshot.pngColorType,
+          hasAlphaChannel: screenshot.hasAlphaChannel,
+          alphaMode: screenshot.alphaMode,
+          alphaCoverage: screenshot.alphaCoverage,
+          opaqueCoverage: screenshot.opaqueCoverage,
+          transparentPixels: screenshot.transparentPixels,
+          opaquePixels: screenshot.opaquePixels,
+          maskThreshold: screenshot.maskThreshold,
+          objectBounds: screenshot.objectBounds,
+          cellRect: null,
+          viewportClip: clip,
+          camera: pose || camera,
+        });
+        frameIndex += 1;
+        lastEvidence.activeCapture = {
+          frameIndex,
+          completedFrames: frames.length,
+          subphase: 'frame-complete',
+        };
+      }
     }
 
     phase = 'composing-atlas';
@@ -632,6 +895,7 @@ async function main() {
       frames,
       atlas,
       alphaMode: lastEvidence.alphaMode,
+      renderConditions: lastEvidence.renderConditions,
     });
 
     phase = 'complete';

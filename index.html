@@ -941,6 +941,7 @@ let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
+let viewsetCaptureBackdrop = null;
 let currentMesh = null;
 let groundPlane = null;
 let loadedFiles = {};
@@ -3052,6 +3053,7 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   controls.update();
   camera.updateMatrixWorld?.();
   updateHybridSplatOverlayFrame();
+  updateViewsetCaptureBackdrop();
   return window.kaminosCameraDebugState();
 };
 
@@ -8066,21 +8068,146 @@ async function greenroomViewMesh(url, fileName, display) {
 }
 
 window.kaminosViewsetCaptureReady = function() {
-  return Boolean(scene && renderer && camera && window.kaminosViewGLBDebugRoute && window.kaminosSetCameraDebugPose);
+  return Boolean(scene && renderer && camera && window.kaminosViewGLBDebugRoute && window.kaminosSetCameraDebugPose && window.kaminosSetViewsetRenderConditions);
 };
 
-window.kaminosSetViewsetCaptureBackground = async function(color = 'transparent') {
+function updateViewsetCaptureBackdrop() {
+  if (!viewsetCaptureBackdrop?.visible || !camera || !controls) return;
+  camera.updateMatrixWorld?.();
+  const target = controls.target || new THREE.Vector3();
+  const direction = target.clone().sub(camera.position).normalize();
+  viewsetCaptureBackdrop.position.copy(target).add(direction.multiplyScalar(8));
+  viewsetCaptureBackdrop.quaternion.copy(camera.quaternion);
+  viewsetCaptureBackdrop.scale.setScalar(Math.max(18, camera.position.distanceTo(target) * 8));
+}
+
+function setViewsetCaptureBackdrop(color) {
+  if (!color || color === 'transparent') {
+    if (viewsetCaptureBackdrop) viewsetCaptureBackdrop.visible = false;
+    return;
+  }
+  if (!viewsetCaptureBackdrop) {
+    viewsetCaptureBackdrop = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        depthTest: true,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    viewsetCaptureBackdrop.name = 'viewset-capture-backdrop';
+    viewsetCaptureBackdrop.renderOrder = -100000;
+    scene.add(viewsetCaptureBackdrop);
+  }
+  viewsetCaptureBackdrop.material.color.set(color);
+  viewsetCaptureBackdrop.material.needsUpdate = true;
+  viewsetCaptureBackdrop.visible = true;
+  updateViewsetCaptureBackdrop();
+}
+
+function applyViewsetCaptureBackground(color = 'transparent') {
   const transparent = color === 'transparent';
   const resolvedColor = transparent ? 0x000000 : new THREE.Color(color);
   scene.background = transparent ? null : resolvedColor;
   renderer.setClearColor?.(resolvedColor, transparent ? 0 : 1);
   renderer.setClearAlpha?.(transparent ? 0 : 1);
+  setViewsetCaptureBackdrop(transparent ? null : resolvedColor);
   document.body.style.background = transparent ? 'transparent' : color;
   const viewport = document.getElementById('viewport');
   if (viewport) viewport.style.background = transparent ? 'transparent' : color;
   window._kaminosDirty?.();
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   return { ok: true, color, transparent };
+}
+
+window.kaminosSetViewsetCaptureBackground = async function(color = 'transparent') {
+  const result = applyViewsetCaptureBackground(color);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return result;
+};
+
+window.kaminosViewsetRenderCaptureFrame = async function(options = {}) {
+  if (!renderer || !scene || !camera) throw new Error('Kaminos capture renderer unavailable');
+  if (options.captureBackground !== undefined) {
+    applyViewsetCaptureBackground(options.captureBackground);
+  }
+  updateViewsetCaptureBackdrop();
+  renderer.render(scene, camera);
+  return {
+    ok: true,
+    schema: 'kaminos.viewset-render-capture-frame.v0',
+    renderer: 'raw-scene-render',
+    environment: currentEnvName,
+    exposure: renderer.toneMappingExposure,
+    envIntensity: scene.environmentIntensity,
+    captureBackground: options.captureBackground ?? null,
+  };
+};
+
+function setEnvIntensityForObjectTree(root, intensity) {
+  if (!root || !Number.isFinite(intensity)) return;
+  root.traverse?.(child => {
+    if (!child.material) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      material.envMapIntensity = intensity;
+      material.needsUpdate = true;
+    }
+  });
+}
+
+window.kaminosSetViewsetRenderConditions = async function(conditions = {}) {
+  const requested = { ...conditions };
+  const environment = String(conditions.environment || '').trim();
+  if (environment) await loadEnvironment(environment);
+
+  const exposure = Number(conditions.exposure);
+  if (Number.isFinite(exposure)) {
+    renderer.toneMappingExposure = exposure;
+    document.getElementById('exposure-slider').value = String(exposure);
+    document.getElementById('exposure-val').textContent = exposure.toFixed(1);
+  }
+
+  const envIntensity = Number(conditions.envIntensity ?? conditions.environmentIntensity);
+  if (Number.isFinite(envIntensity)) {
+    scene.environmentIntensity = envIntensity;
+    document.getElementById('env-intensity-slider').value = String(envIntensity);
+    document.getElementById('env-intensity-val').textContent = envIntensity.toFixed(1);
+    setEnvIntensityForObjectTree(scene, envIntensity);
+  }
+
+  const envRotation = Number(conditions.envRotation ?? conditions.environmentRotation);
+  if (Number.isFinite(envRotation)) {
+    const euler = new THREE.Euler(0, envRotation, 0);
+    scene.environmentRotation = euler;
+    if (showEnvBg) scene.backgroundRotation = euler;
+    document.getElementById('env-rotation-slider').value = String(envRotation);
+    document.getElementById('env-rotation-val').textContent = envRotation.toFixed(1);
+  }
+
+  const captureBackground = conditions.captureBackground || 'transparent';
+  if (captureBackground === 'environment') {
+    showEnvBg = true;
+    updateBackground();
+  } else {
+    const color = captureBackground === 'neutral' ? '#777777' : captureBackground;
+    applyViewsetCaptureBackground(color);
+  }
+
+  window._kaminosDirty?.();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return {
+    schema: 'kaminos.viewset-render-conditions.v0',
+    requested,
+    environment: currentEnvName,
+    exposure: renderer.toneMappingExposure,
+    envIntensity: scene.environmentIntensity,
+    envRotation: scene.environmentRotation?.y ?? 0,
+    captureBackground,
+    toneMapping: renderer.toneMapping === THREE.ACESFilmicToneMapping ? 'ACESFilmicToneMapping' : String(renderer.toneMapping ?? 'unknown'),
+  };
 };
 
 window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaque = true } = {}) {
@@ -8091,7 +8218,7 @@ window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaq
   if (groundPlane) groundPlane.visible = false;
   showEnvBg = false;
   scene.backgroundBlurriness = 0;
-  window.kaminosSetViewsetCaptureBackground('transparent');
+  applyViewsetCaptureBackground('transparent');
   glbFileName = fileName || source.split('/').pop()?.split('?')[0] || 'viewset-source.glb';
   const metadata = {
     schema: 'kaminos.glb-viewset-debug-load.v0',
@@ -8164,6 +8291,46 @@ function selectImpostorFrameForCamera(frames, cameraAngle) {
   })[0] || null;
 }
 
+function normalizeImpostorViewVector(value) {
+  if (!Array.isArray(value) || value.length !== 3) return null;
+  const x = Number(value[0]);
+  const y = Number(value[1]);
+  const z = Number(value[2]);
+  const length = Math.hypot(x, y, z);
+  if (!Number.isFinite(length) || length <= 0) return null;
+  return [x / length, y / length, z / length];
+}
+
+function currentImpostorViewVectorLocal(state = impostorDebugState) {
+  if (!camera || !state?.objectRoot) return null;
+  camera.updateMatrixWorld?.();
+  state.objectRoot.updateMatrixWorld?.();
+  const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
+  const cameraLocal = cameraWorld.clone().applyMatrix4(new THREE.Matrix4().copy(state.objectRoot.matrixWorld).invert());
+  return normalizeImpostorViewVector(cameraLocal.toArray());
+}
+
+function selectImpostorFrameForViewVector(frames, viewVectorLocal) {
+  const requested = normalizeImpostorViewVector(viewVectorLocal);
+  if (!requested) return { frame: null, bestDot: null, mode: 'missing-view-vector' };
+  let bestFrame = null;
+  let bestDot = -Infinity;
+  for (const frame of frames || []) {
+    const frameVector = normalizeImpostorViewVector(frame.viewVectorLocal);
+    if (!frameVector) continue;
+    const dot = frameVector[0] * requested[0] + frameVector[1] * requested[1] + frameVector[2] * requested[2];
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestFrame = frame;
+    }
+  }
+  return {
+    frame: bestFrame,
+    bestDot: bestFrame ? Number(bestDot.toFixed(6)) : null,
+    mode: bestFrame ? 'object-local-view-vector' : 'legacy-azimuth',
+  };
+}
+
 function currentImpostorCameraAzimuth() {
   camera?.updateMatrixWorld?.();
   const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
@@ -8187,21 +8354,38 @@ function applyImpostorFrameCell(state, frame) {
   atlasTexture.needsUpdate = true;
   state.currentFrame = {
     index: Number(frame.index || 0),
-    angle: normalizeImpostorAngle(frame.angle),
+    angle: normalizeImpostorAngle(frame.angle ?? frame.azimuth ?? 0),
+    azimuth: normalizeImpostorAngle(frame.azimuth ?? frame.angle ?? 0),
+    elevation: Number(frame.elevation ?? 0),
+    viewVectorLocal: normalizeImpostorViewVector(frame.viewVectorLocal),
     cellRect: { ...cell },
     cameraAngle: Number(currentImpostorCameraAzimuth().toFixed(3)),
+    cameraViewVectorLocal: state.lastCameraViewVectorLocal || null,
+    bestDot: state.lastSelection?.bestDot ?? null,
+    selectionMode: state.lastSelection?.mode || null,
   };
 }
 
 function updateImpostorDebugFrame() {
   if (!impostorDebugState?.active || !impostorDebugState.mesh) return false;
   const cameraAngle = currentImpostorCameraAzimuth();
-  const frame = selectImpostorFrameForCamera(impostorDebugState.frames, cameraAngle);
+  const cameraViewVectorLocal = currentImpostorViewVectorLocal(impostorDebugState);
+  let selection = selectImpostorFrameForViewVector(impostorDebugState.frames, cameraViewVectorLocal);
+  let frame = selection.frame;
+  if (!frame) {
+    frame = selectImpostorFrameForCamera(impostorDebugState.frames, cameraAngle);
+    selection = { frame, bestDot: null, mode: 'legacy-azimuth' };
+  }
   if (!frame) return false;
+  impostorDebugState.lastCameraViewVectorLocal = cameraViewVectorLocal;
+  impostorDebugState.lastSelection = selection;
   if (!impostorDebugState.currentFrame || Number(impostorDebugState.currentFrame.index) !== Number(frame.index)) {
     applyImpostorFrameCell(impostorDebugState, frame);
   } else {
     impostorDebugState.currentFrame.cameraAngle = Number(cameraAngle.toFixed(3));
+    impostorDebugState.currentFrame.cameraViewVectorLocal = cameraViewVectorLocal;
+    impostorDebugState.currentFrame.bestDot = selection.bestDot;
+    impostorDebugState.currentFrame.selectionMode = selection.mode;
   }
   impostorDebugState.mesh.lookAt(camera.position);
   return true;
@@ -8230,7 +8414,7 @@ window.kaminosLoadImpostorDebugRoute = async function({ manifestUrl, manifestPat
   if (groundPlane) groundPlane.visible = false;
   showEnvBg = false;
   scene.backgroundBlurriness = 0;
-  await window.kaminosSetViewsetCaptureBackground('transparent');
+  applyViewsetCaptureBackground('transparent');
 
   const resp = await fetch(sourceUrl);
   if (!resp.ok) throw new Error(`Failed to load impostor manifest: ${resp.status}`);
@@ -8259,9 +8443,11 @@ window.kaminosLoadImpostorDebugRoute = async function({ manifestUrl, manifestPat
     depthWrite: false,
     side: THREE.DoubleSide,
   });
+  const objectRoot = new THREE.Group();
+  objectRoot.name = label || 'kaminos-impostor-live-debug-root';
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = label || 'kaminos-impostor-live-debug';
-  mesh.userData.kaminosSceneObject = {
+  objectRoot.userData.kaminosSceneObject = {
     schema: 'kaminos.glb-impostor-live-debug.v0',
     source: sourceUrl,
     atlasUrl,
@@ -8269,12 +8455,14 @@ window.kaminosLoadImpostorDebugRoute = async function({ manifestUrl, manifestPat
     fileName: sourceUrl.split('/').pop()?.split('?')[0] || 'impostor-manifest.json',
     label: label || 'Live impostor atlas',
   };
-  scene.add(mesh);
-  currentMesh = mesh;
+  objectRoot.add(mesh);
+  scene.add(objectRoot);
+  currentMesh = objectRoot;
   impostorDebugState = {
     schema: 'kaminos.glb-impostor-live-debug.v0',
     route: 'kaminos.glb-impostor-live-debug.v0',
     active: true,
+    objectRoot,
     mesh,
     manifest,
     manifestUrl: sourceUrl,
