@@ -128,8 +128,13 @@ assert.match(indexHtml, /native-greenroom-route-tray/, 'Green Room tab exposes a
 assert.match(indexHtml, /grBrowseRouteJobs/, 'Green Room tab has a route-job refresh path');
 assert.match(indexHtml, /data-greenroom-route-job-id/, 'Native Greenroom route tray preserves route job identity on rows');
 assert.match(indexHtml, /data-greenroom-route-status/, 'Native Greenroom route tray preserves route status on rows');
+assert.match(indexHtml, /data-greenroom-route-resumability/, 'Native Greenroom route tray preserves route resumability kind on rows');
+assert.match(indexHtml, /data-greenroom-route-completed-stage/, 'Native Greenroom route tray preserves checkpoint completed stage on rows');
+assert.match(indexHtml, /data-greenroom-route-resume-supported/, 'Native Greenroom route tray preserves checkpoint resume support on rows');
+assert.match(indexHtml, /checkpoint_paused/, 'Native Greenroom route tray recognizes checkpoint_paused status');
+assert.match(indexHtml, /cooperative-checkpoint/, 'Native Greenroom route tray recognizes cooperative checkpoint resumability');
 assert.match(indexHtml, /window\.kaminosRouteJobDebugState/, 'Native Greenroom route tray exposes explicit debug state');
-assert.match(indexHtml, /No checkpoint resume yet/, 'Native Greenroom route tray warns instead of claiming pause/resume');
+assert.match(indexHtml, /Checkpoint pause metadata only/, 'Native Greenroom route tray warns instead of claiming pause/resume controls');
 assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');
 assert.match(witness, /greenroom picker mesh route was not fetchable/, 'Green Room picker witness proves visible mesh actions can fetch the advertised route');
 assert.match(witness, /greenroom View did not enter temporary preview mode/, 'Green Room action witness proves View enters temporary preview mode');

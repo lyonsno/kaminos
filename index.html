@@ -139,9 +139,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .native-greenroom-route-tray { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .native-greenroom-route-summary { color: #777; font: 9px 'SF Mono', monospace; margin: -2px 0 4px; overflow-wrap: anywhere; }
 .native-greenroom-route-note { color: #8a774d; font: 9px 'SF Mono', monospace; margin-bottom: 6px; }
-.native-greenroom-route-row { align-items: flex-start; border: 1px solid transparent; }
+.native-greenroom-route-row { align-items: flex-start; border: 1px solid transparent; flex-wrap: wrap; }
 .native-greenroom-route-row:hover { border-color: #333; }
 .native-greenroom-route-row .gr-status { margin-top: 1px; }
+.native-greenroom-route-row .btn { padding: 5px 8px; font-size: 10px; flex-shrink: 0; }
 .route-warning { color: #f0b85a; font: 9px 'SF Mono', monospace; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Scene objects */
@@ -941,7 +942,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <h2 style="display:flex; align-items:center; gap:8px;">Native Greenroom Routes <button class="btn" onclick="grBrowseRouteJobs()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
     <div id="native-greenroom-route-tray" class="native-greenroom-route-tray">
       <div id="native-greenroom-route-summary" class="native-greenroom-route-summary">No route index loaded</div>
-      <div id="native-greenroom-route-note" class="native-greenroom-route-note">No checkpoint resume yet</div>
+      <div id="native-greenroom-route-note" class="native-greenroom-route-note">Checkpoint pause metadata only</div>
       <div id="native-greenroom-route-list"></div>
     </div>
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -9885,13 +9886,20 @@ function renderGreenroomEntryIdentity(container, entry, options = {}) {
 function routeJobDisplay(row = {}) {
   const routeJob = row.route_job || {};
   const display = row.display || {};
+  const resumability = routeJob.resumability || {};
   const routeId = routeJob.routeId || row.job_id || 'unknown';
   const status = routeJob.status || 'degraded';
   const priority = routeJob.priorityClass || 'normal';
   const executor = routeJob.executor?.kind || 'unknown';
+  const checkpointBits = resumability.kind === 'cooperative-checkpoint'
+    ? [
+        resumability.completedStage ? `stage ${resumability.completedStage}` : null,
+        resumability.resumeSupported ? 'resume supported' : (resumability.resumeBlocker ? 'resume blocked' : null),
+      ].filter(Boolean)
+    : [];
   return {
     title: display.title || greenroomHumanizeName(routeId, routeId),
-    subtitle: [routeId, executor, priority, status].filter(Boolean).join(' / '),
+    subtitle: [routeId, executor, priority, status, ...checkpointBits].filter(Boolean).join(' / '),
     meta: display.meta || `raw ${routeJob.id || row.job_id || ''}`,
     raw_name: routeJob.id || row.job_id || '',
     load_label: 'Open',
@@ -9913,16 +9921,20 @@ function renderRouteJobLinkButton(container, label, url, title) {
 
 function renderGreenroomRouteJobRow(row) {
   const routeJob = row.route_job || {};
+  const resumability = routeJob.resumability || {};
   const div = document.createElement('div');
   div.className = 'gr-entry native-greenroom-route-row';
   div.setAttribute('data-greenroom-route-job-id', routeJob.id || row.job_id || '');
   div.setAttribute('data-greenroom-route-status', routeJob.status || 'degraded');
   div.setAttribute('data-greenroom-route-id', routeJob.routeId || '');
   div.setAttribute('data-greenroom-route-executor', routeJob.executor?.kind || '');
+  div.setAttribute('data-greenroom-route-resumability', resumability.kind || 'unknown');
+  div.setAttribute('data-greenroom-route-completed-stage', resumability.completedStage || '');
+  div.setAttribute('data-greenroom-route-resume-supported', String(!!resumability.resumeSupported));
 
   const icon = document.createElement('span');
   icon.className = 'gr-icon';
-  icon.textContent = routeJob.status === 'running' ? '\u25B6' : '\u25A3';
+  icon.textContent = routeJob.status === 'running' ? '\u25B6' : (routeJob.status === 'checkpoint_paused' ? '\u25EB' : '\u25A3');
   div.appendChild(icon);
 
   renderGreenroomEntryIdentity(div, { ...row, display: routeJobDisplay(row), name: routeJob.id || row.job_id }, { forceSubtitle: true });
@@ -9938,6 +9950,17 @@ function renderGreenroomRouteJobRow(row) {
   priority.title = 'priority class';
   div.appendChild(priority);
 
+  if (resumability.kind === 'cooperative-checkpoint') {
+    const checkpoint = document.createElement('span');
+    checkpoint.className = 'gr-meta checkpoint-meta';
+    checkpoint.textContent = [
+      resumability.completedStage || 'checkpoint',
+      resumability.resumeSupported ? 'resume supported' : 'resume blocked',
+    ].filter(Boolean).join(' / ');
+    checkpoint.title = resumability.resumeBlocker || resumability.checkpointReceipt || '';
+    div.appendChild(checkpoint);
+  }
+
   if (row.parse_error || row.warnings?.length) {
     const warning = document.createElement('span');
     warning.className = 'route-warning';
@@ -9947,6 +9970,7 @@ function renderGreenroomRouteJobRow(row) {
   }
 
   renderRouteJobLinkButton(div, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
+  renderRouteJobLinkButton(div, 'Checkpoint', row.checkpoint_receipt_link, 'Open checkpoint-yield receipt');
   for (const link of (row.output_links || []).slice(0, 2)) {
     renderRouteJobLinkButton(div, link.kind === 'mesh' ? 'Output' : 'File', link.path, link.name);
   }

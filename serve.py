@@ -43,7 +43,7 @@ BROWSE_ROOTS = {
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }
 
-GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
+GREENROOM_STATUS_DIRS = ("done", "failed", "checkpoint_paused", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
@@ -54,6 +54,7 @@ ROUTE_JOB_STATUSES = {
     "reserved",
     "running",
     "checkpointing",
+    "checkpoint_paused",
     "paused_at_checkpoint",
     "done",
     "failed",
@@ -525,6 +526,54 @@ def _greenroom_output_links(job_id, receipt):
     return links
 
 
+def _greenroom_read_link_for_path(path):
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if not greenroom or not path:
+        return None
+    try:
+        root = Path(greenroom).expanduser().resolve()
+        resolved = Path(path).expanduser().resolve()
+    except OSError:
+        return None
+    if not resolved.is_file() or not resolved.is_relative_to(root):
+        return None
+    return "/api/read?" + urlencode({
+        "root": "greenroom",
+        "path": str(resolved.relative_to(root)),
+    })
+
+
+def _greenroom_resumability(state):
+    checkpoint_yield = (state or {}).get("checkpoint_yield")
+    if isinstance(checkpoint_yield, dict) and checkpoint_yield.get("schema") == "trellis2mlx.checkpoint_yield.v1":
+        resumability = {
+            "kind": "cooperative-checkpoint",
+            "state": checkpoint_yield.get("status"),
+            "completedStage": checkpoint_yield.get("completed_stage"),
+            "nextStage": checkpoint_yield.get("next_stage"),
+            "resumeSupported": bool(checkpoint_yield.get("resume_supported")),
+            "checkpointReceipt": checkpoint_yield.get("receipt_path"),
+        }
+        if checkpoint_yield.get("resume_blocker"):
+            resumability["resumeBlocker"] = checkpoint_yield.get("resume_blocker")
+        if checkpoint_yield.get("resume_command_hint"):
+            resumability["resumeCommandHint"] = checkpoint_yield.get("resume_command_hint")
+        return resumability
+    return {"kind": "unknown"}
+
+
+def _greenroom_native_checkpoint_fields(state):
+    fields = {}
+    if (state or {}).get("checkpoint_dir"):
+        fields["checkpoint_dir"] = state.get("checkpoint_dir")
+    if (state or {}).get("checkpoint_stop_file"):
+        fields["checkpoint_stop_file"] = state.get("checkpoint_stop_file")
+    checkpoint_yield = (state or {}).get("checkpoint_yield")
+    if isinstance(checkpoint_yield, dict) and checkpoint_yield.get("receipt_path"):
+        fields["checkpoint_yield_receipt"] = checkpoint_yield.get("receipt_path")
+    return fields
+
+
 def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir):
     input_path = (state or {}).get("input_path") or (state or {}).get("inputPath")
     output_dir = (state or {}).get("output_dir") or (state or {}).get("outputDir")
@@ -544,12 +593,13 @@ def _native_greenroom_route_job(job_id, job_type, status, schedule, state, statu
         "status": normalize_route_job_status(status),
         "inputArtifacts": input_artifacts,
         "outputPolicy": {"root": output_dir, "mode": "caller-owned"} if output_dir else None,
-        "resumability": {"kind": "unknown"},
+        "resumability": _greenroom_resumability(state),
         "native": {
             "greenroom_job_id": job_id,
             "status_dir": status_dir,
             "job_dir": str(job_dir),
             "output_dir": output_dir,
+            **_greenroom_native_checkpoint_fields(state),
         },
     }
 
@@ -616,6 +666,11 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
             "process_group_id": raw.get("process_group_id") or raw.get("processGroupId"),
         },
         "receipt_link": _greenroom_receipt_link(status_dir, job_id) if (job_dir / "receipt.json").exists() else None,
+        "checkpoint_receipt_link": _greenroom_read_link_for_path(
+            (raw.get("checkpoint_yield") or {}).get("receipt_path")
+            if isinstance(raw.get("checkpoint_yield"), dict)
+            else None
+        ),
         "output_links": _greenroom_output_links(job_id, receipt or raw),
         "controls": [],
         "warnings": warnings,

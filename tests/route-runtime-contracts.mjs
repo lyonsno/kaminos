@@ -101,6 +101,7 @@ function testReceiptRecordsRequestedAndEffectiveExecutorIdentity() {
 
 function testStatusNormalizerPreservesDegradedEvidence() {
   assert.equal(normalizeRouteJobStatus('done'), 'done');
+  assert.equal(normalizeRouteJobStatus('checkpoint_paused'), 'checkpoint_paused');
   assert.equal(normalizeRouteJobStatus('paused_at_checkpoint'), 'paused_at_checkpoint');
   assert.equal(normalizeRouteJobStatus('legacy-camelcase-row'), 'degraded');
 }

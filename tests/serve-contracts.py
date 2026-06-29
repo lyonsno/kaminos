@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import json
 import os
 from pathlib import Path
 import sys
@@ -209,6 +210,70 @@ def test_native_greenroom_route_provider_projects_route_job_rows():
     assert row["output_links"][0]["path"] == "/api/job-output?job_id=hero123&file=seed-42.glb"
     assert row["process"]["worker_pid"] == 111
     assert row["process"]["child_pid"] == 222
+
+
+def test_native_greenroom_route_provider_projects_checkpoint_paused_rows():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        job_dir = greenroom / "checkpoint_paused" / "yield123"
+        output_dir = greenroom / "outputs" / "yield123"
+        checkpoint_dir = output_dir / "checkpoints"
+        checkpoint_receipt = checkpoint_dir / "_control" / "checkpoint_yield.json"
+        stop_file = output_dir / "_control" / "checkpoint-stop"
+        job_dir.mkdir(parents=True)
+        checkpoint_receipt.parent.mkdir(parents=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_yield = {
+            "schema": "trellis2mlx.checkpoint_yield.v1",
+            "status": "paused_at_checkpoint",
+            "completed_stage": "texture",
+            "next_stage": "texture_bake",
+            "checkpoint_dir": str(checkpoint_dir),
+            "receipt_path": str(checkpoint_receipt),
+            "exit_code": 75,
+            "resume_supported": True,
+            "resume_command_hint": ["python", "generate.py", "--resume", str(checkpoint_dir)],
+        }
+        checkpoint_receipt.write_text(json.dumps(checkpoint_yield))
+        status = {
+            "job_id": "yield123",
+            "status": "checkpoint_paused",
+            "job_type": "trellis2mlx",
+            "input_path": "/tmp/source.png",
+            "output_dir": str(output_dir),
+            "submitted_at": 10,
+            "started_at": 20,
+            "finished_at": 30,
+            "exit_code": 75,
+            "checkpoint_dir": str(checkpoint_dir),
+            "checkpoint_stop_file": str(stop_file),
+            "checkpoint_yield": checkpoint_yield,
+        }
+        (job_dir / "status.json").write_text(json.dumps(status))
+        (job_dir / "receipt.json").write_text(json.dumps({
+            **status,
+            "effective_route": "python generate.py --checkpoint-stop-file",
+        }))
+
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            index = build_greenroom_route_provider_index()
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    assert index["summary"]["checkpoint_paused"] == 1
+    [row] = index["rows"]
+    assert row["status_dir"] == "checkpoint_paused"
+    assert row["route_job"]["status"] == "checkpoint_paused"
+    assert row["route_job"]["resumability"]["kind"] == "cooperative-checkpoint"
+    assert row["route_job"]["resumability"]["completedStage"] == "texture"
+    assert row["route_job"]["resumability"]["resumeSupported"] is True
+    assert row["route_job"]["native"]["checkpoint_yield_receipt"] == str(checkpoint_receipt)
+    assert row["checkpoint_receipt_link"].endswith(
+        "outputs%2Fyield123%2Fcheckpoints%2F_control%2Fcheckpoint_yield.json"
+    )
+    assert row["controls"] == []
 
 
 def test_native_greenroom_route_provider_preserves_degraded_legacy_rows():
@@ -455,6 +520,7 @@ if __name__ == "__main__":
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_native_greenroom_route_provider_projects_route_job_rows()
+    test_native_greenroom_route_provider_projects_checkpoint_paused_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()

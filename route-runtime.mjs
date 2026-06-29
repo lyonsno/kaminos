@@ -16,6 +16,7 @@ const ROUTE_JOB_STATUSES = new Set([
   'reserved',
   'running',
   'checkpointing',
+  'checkpoint_paused',
   'paused_at_checkpoint',
   'done',
   'failed',
