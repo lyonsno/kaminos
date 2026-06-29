@@ -495,10 +495,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div class="forge-actions">
         <button type="button" class="btn" id="forge-host-enable">Spawn Stations</button>
+        <button type="button" class="btn" id="forge-host-live-enable">Load Live</button>
         <button type="button" class="btn" id="forge-host-frame-camera">Frame</button>
       </div>
       <div id="forge-host-empty" class="forge-empty">No Forge Host stations spawned</div>
-      <div id="forge-host-station-list" class="forge-station-list" data-forge-host-attention-schema="kaminos.forge-host.station-attention.v0"></div>
+      <div id="forge-host-station-list" class="forge-station-list" data-forge-host-attention-schema="kaminos.forge-host.station-attention.v0" data-forge-host-registry-schema="kaminos.forge-host.registry-snapshot.v0"></div>
     </div>
 
     <h2>Smoke Offers</h2>
@@ -1143,7 +1144,9 @@ import {
   planSceneRestore,
 } from './scene-persistence-core.js';
 import {
+  FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
+  buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
   deriveForgeStationAttention,
   validateForgeHostStationManifest,
@@ -4051,7 +4054,29 @@ function updateForgeHostReadout() {
   renderForgeHostOfferList();
 }
 
-function createForgeHostStationScene({ force = false } = {}) {
+async function loadForgeHostRegistrySnapshot() {
+  const response = await fetch('/api/forge-host/registry');
+  const snapshot = await response.json();
+  if (!response.ok || snapshot.error) {
+    throw new Error(`Forge Host registry snapshot failed: ${snapshot.error || response.status}`);
+  }
+  if (snapshot.schema !== FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA) {
+    throw new Error(`Forge Host registry snapshot schema mismatch: ${snapshot.schema || 'missing'}`);
+  }
+  return snapshot;
+}
+
+async function buildForgeHostManifestForSource(source = 'fixture') {
+  if (source === 'live_registry') {
+    const registrySnapshot = await loadForgeHostRegistrySnapshot();
+    return buildForgeHostManifestFromRegistrySnapshot(registrySnapshot, {
+      fixtureManifest: buildForgeHostFixture(),
+    });
+  }
+  return buildForgeHostFixture();
+}
+
+async function createForgeHostStationScene({ force = false, source = 'fixture' } = {}) {
   if (forgeHostState?.active && !force) return forgeHostState;
   disposeForgeHostStationScene();
   disposeMotionTemporalScene();
@@ -4060,16 +4085,18 @@ function createForgeHostStationScene({ force = false } = {}) {
   disposeMotionDecisionScene();
   disposeMotionPhraseControlScene();
   disposeMotionTrackScene();
-  const manifest = buildForgeHostFixture();
+  const manifest = await buildForgeHostManifestForSource(source);
   const validation = validateForgeHostStationManifest(manifest);
   if (!validation.ok) {
-    throw new Error(`Forge Host fixture false authority: ${validation.falseAuthorityViolations.join('; ')}`);
+    throw new Error(`Forge Host station false authority: ${validation.falseAuthorityViolations.join('; ')}`);
   }
   const root = new THREE.Group();
   root.name = 'forge-host-station-root';
   root.userData.kaminosForgeHost = {
     schema: manifest.schema,
     fixtureSource: manifest.fixtureSource,
+    sourceAuthority: manifest.sourceAuthority,
+    registrySource: manifest.registrySource || null,
     validation,
   };
 
@@ -4092,6 +4119,7 @@ function createForgeHostStationScene({ force = false } = {}) {
   forgeHostState = {
     schema: manifest.schema,
     active: true,
+    source,
     manifest,
     validation,
     root,
@@ -4106,7 +4134,7 @@ function createForgeHostStationScene({ force = false } = {}) {
   updateForgeHostStationFrame(performance.now() / 1000);
   updateForgeHostReadout();
   frameForgeHostCamera();
-  setInfo('Forge Host stations spawned');
+  setInfo(source === 'live_registry' ? 'Forge Host live registry loaded' : 'Forge Host stations spawned');
   return forgeHostState;
 }
 
@@ -4160,6 +4188,12 @@ window.kaminosForgeHostDebugState = function() {
     callSign: visual.station.callSign,
     role: visual.station.role,
     status: visual.station.status,
+    sourceAuthority: visual.station.sourceAuthority || state?.manifest?.sourceAuthority || 'fixture',
+    displayState: visual.station.displayState || state?.manifest?.sourceAuthority || 'fixture',
+    diaulosId: visual.station.diaulosId || null,
+    endpoint: visual.station.endpoint || null,
+    observedAt: visual.station.observedAt || null,
+    sourceTopoi: visual.station.sourceTopoi || [],
     anchor: visual.station.anchor,
     visual: visual.station.visual,
     smokeOffers: visual.station.smokeOffers,
@@ -4171,8 +4205,11 @@ window.kaminosForgeHostDebugState = function() {
   return {
     schema: 'kaminos.forge-host.debug-state.v0',
     active: !!state?.active,
+    source: state?.source || null,
     manifestSchema: state?.manifest?.schema || null,
+    sourceAuthority: state?.manifest?.sourceAuthority || 'fixture',
     fixtureSource: state?.manifest?.fixtureSource || null,
+    registrySource: state?.manifest?.registrySource || null,
     validation: state?.validation || null,
     stationCount: stations.length,
     smokeOfferCount: stations.reduce((total, station) => total + station.smokeOffers.length, 0),
@@ -6171,7 +6208,8 @@ function initKaminosMotionAgencyRoute() {
   wireMotionPanelSlider('motion-panel-steps');
   wireMotionPanelSlider('motion-panel-source-opacity', value => `${Math.max(0.02, Math.min(0.95, value || 0)).toFixed(2)}`);
   wireMotionPanelSlider('motion-panel-speed', value => `${Math.max(0.05, Math.min(5, value || 1)).toFixed(2)}x`);
-  document.getElementById('forge-host-enable')?.addEventListener('click', () => createForgeHostStationScene({ force: true }));
+  document.getElementById('forge-host-enable')?.addEventListener('click', () => void createForgeHostStationScene({ force: true, source: 'fixture' }));
+  document.getElementById('forge-host-live-enable')?.addEventListener('click', () => void createForgeHostStationScene({ force: true, source: 'live_registry' }));
   document.getElementById('forge-host-frame-camera')?.addEventListener('click', frameForgeHostCamera);
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
@@ -6199,7 +6237,8 @@ function initKaminosMotionAgencyRoute() {
   }
   const params = new URLSearchParams(window.location.search);
   if (params.has('kaminos_forge_host')) {
-    createForgeHostStationScene({ force: true });
+    const forgeSource = params.get('kaminos_forge_host') === 'live' ? 'live_registry' : 'fixture';
+    void createForgeHostStationScene({ force: true, source: forgeSource });
   } else if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
     setActiveTab('motion');
     if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();

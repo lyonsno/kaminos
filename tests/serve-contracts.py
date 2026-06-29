@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import json
 import os
 from pathlib import Path
 import sys
@@ -22,6 +23,77 @@ def test_http_status_404_log_does_not_crash():
         HTTPStatus.NOT_FOUND,
         "File not found",
     )
+
+
+def test_forge_host_registry_snapshot_preserves_endpoint_identity():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        endpoint_registry = root / "directive-alert-endpoints.json"
+        diaulos_registry = root / "diauloi.json"
+        endpoint_registry.write_text(json.dumps({
+            "schema": "epistaxis.directive_alert_endpoints.v1",
+            "endpoints": [
+                {
+                    "diaulos": "wake-and-bake-pit-boss",
+                    "status": "active",
+                    "observed_at": "2026-06-29T04:19:00Z",
+                    "endpoint": {
+                        "cwd": "/Users/noahlyons/dev/lerms",
+                        "kind": "wezterm-pane",
+                        "pane_id": "37",
+                        "resume": "codex resume wake-thread",
+                        "thread_id": "wake-thread",
+                        "tool": "codex",
+                    },
+                },
+                {
+                    "diaulos": "old-dead-lane",
+                    "status": "inactive",
+                    "observed_at": "2026-06-20T00:00:00Z",
+                    "endpoint": {"cwd": "/tmp/old", "tool": "codex"},
+                },
+            ],
+        }))
+        diaulos_registry.write_text(json.dumps({
+            "schema": "epistaxis.diaulos-registry.v1",
+            "diauloi": [
+                {
+                    "handle": "wake-and-bake-pit-boss",
+                    "id": "dia-wake-fixture",
+                    "status": "active",
+                    "source_topoi": ["projects/lerms/topoi/codex-wake-and-bake-pit-boss-0627.md"],
+                },
+            ],
+        }))
+
+        snapshot = serve.build_forge_host_registry_snapshot(
+            endpoint_registry_path=endpoint_registry,
+            diaulos_registry_path=diaulos_registry,
+        )
+
+    assert snapshot["schema"] == "kaminos.forge-host.registry-snapshot.v0"
+    assert snapshot["sourceAuthority"] == "live_registry"
+    assert snapshot["endpointRegistry"]["path"] == str(endpoint_registry)
+    assert snapshot["endpointRegistry"]["loaded"] is True
+    assert snapshot["diaulosRegistry"]["loaded"] is True
+    assert len(snapshot["endpoints"]) == 1
+    assert snapshot["endpoints"][0]["diaulos"] == "wake-and-bake-pit-boss"
+    assert snapshot["endpoints"][0]["diaulosId"] == "dia-wake-fixture"
+    assert snapshot["endpoints"][0]["endpoint"]["thread_id"] == "wake-thread"
+    assert snapshot["endpoints"][0]["sourceTopoi"] == ["projects/lerms/topoi/codex-wake-and-bake-pit-boss-0627.md"]
+
+
+def test_forge_host_registry_snapshot_fallback_is_not_live():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        missing = Path(tmp) / "missing-endpoints.json"
+        snapshot = serve.build_forge_host_registry_snapshot(endpoint_registry_path=missing)
+
+    assert snapshot["schema"] == "kaminos.forge-host.registry-snapshot.v0"
+    assert snapshot["sourceAuthority"] == "fallback"
+    assert snapshot["endpointRegistry"]["exists"] is False
+    assert snapshot["endpointRegistry"]["loaded"] is False
+    assert snapshot["endpoints"] == []
+    assert snapshot["warnings"], "missing registry should be visible to the browser instead of silently falling back"
 
 
 def test_volume_only_scene_save_name_uses_scene_fallback():
@@ -356,6 +428,8 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
+    test_forge_host_registry_snapshot_preserves_endpoint_identity()
+    test_forge_host_registry_snapshot_fallback_is_not_live()
     test_volume_only_scene_save_name_uses_scene_fallback()
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()

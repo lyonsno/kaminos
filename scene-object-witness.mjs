@@ -275,6 +275,59 @@ async function runForgeHostSmokeOffersScenario(ws) {
   `, { timeoutMs: 20000 });
 }
 
+async function runForgeHostLiveRegistryScenario(ws) {
+  phase = 'scenario-forge-host-live-registry';
+  lastEvidence.forgeHostLiveRegistry = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host live registry scene did not activate');
+      if (initial.registrySource?.schema !== 'kaminos.forge-host.registry-snapshot.v0') {
+        throw new Error('Forge Host live scene did not preserve registry snapshot identity: ' + JSON.stringify(initial));
+      }
+      if (initial.sourceAuthority !== 'live_registry') {
+        throw new Error('live registry scene used fallback authority: ' + JSON.stringify(initial.registrySource));
+      }
+      if (initial.validation?.falseAuthorityViolations?.length) {
+        throw new Error('live registry scene false authority: ' + JSON.stringify(initial.validation.falseAuthorityViolations));
+      }
+      const liveStations = initial.stations.filter(station => station.sourceAuthority === 'live_registry');
+      if (!liveStations.length) throw new Error('Forge Host live registry produced no live stations: ' + JSON.stringify(initial));
+      const minion = initial.stations.find(station => station.diaulos === 'minion-spawnfucker');
+      if (!minion) throw new Error('Forge Host live registry did not include this Minion endpoint: ' + JSON.stringify(initial.stations.map(station => station.diaulos)));
+      if (!minion.endpoint?.thread_id) throw new Error('Forge Host live registry station lost endpoint thread id: ' + JSON.stringify(minion));
+      if (minion.smokeOffers?.[0]?.displayState !== 'live') {
+        throw new Error('Forge Host live endpoint offer did not display as live: ' + JSON.stringify(minion.smokeOffers?.[0]));
+      }
+      const stationRows = [...document.querySelectorAll('[data-forge-station-actor-id]')].map(row => ({
+        actorId: row.dataset.forgeStationActorId,
+        text: row.textContent.trim(),
+      }));
+      if (stationRows.length !== initial.stationCount) {
+        throw new Error('Forge Host live station rows did not match debug state: ' + JSON.stringify({ stationRows, initial }));
+      }
+      window.selectForgeHostStation(minion.actorId);
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState();
+      const opened = window.kaminosOpenForgeHostSmokeOffer(selected.selectedStation.smokeOffers[0].id);
+      if (opened.authority !== 'live' || opened.displayState !== 'live') {
+        throw new Error('Forge Host live smoke offer lost live authority: ' + JSON.stringify(opened));
+      }
+      return {
+        initial,
+        stationRows,
+        selectedActorId: selected.selectedActorId,
+        openedOffer: opened,
+      };
+    })()
+  `, { timeoutMs: 25000 });
+}
+
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   const rows = evidence || [];
   const activeRows = rows.filter(row => row.active && row.pressed === 'true');
@@ -4222,6 +4275,8 @@ try {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'forge-host-smoke-offers') {
     await runForgeHostSmokeOffersScenario(ws);
+  } else if (scenario === 'forge-host-live-registry') {
+    await runForgeHostLiveRegistryScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

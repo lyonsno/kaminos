@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {
+  FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+  buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
   deriveForgeStationAttention,
   validateForgeHostStationManifest,
@@ -61,3 +63,72 @@ const idleAttention = deriveForgeStationAttention(manifest.stations[1], {
   timeSeconds: 2.5,
 });
 assert.ok(['bench', 'wander', 'offer'].includes(idleAttention.primaryLookTarget), 'idle stations look around instead of staring at the camera');
+
+const registrySnapshot = {
+  schema: FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+  sourceAuthority: 'live_registry',
+  loadedAt: '2026-06-29T04:20:00Z',
+  endpointRegistry: {
+    path: '/tmp/directive-alert-endpoints.json',
+    schema: 'epistaxis.directive_alert_endpoints.v1',
+    exists: true,
+    loaded: true,
+  },
+  diaulosRegistry: {
+    path: '/tmp/diauloi.json',
+    schema: 'epistaxis.diaulos-registry.v1',
+    exists: true,
+    loaded: true,
+  },
+  endpoints: [
+    {
+      diaulos: 'wake-and-bake-pit-boss',
+      diaulosId: 'dia-wake-fixture',
+      status: 'active',
+      observedAt: '2026-06-29T04:19:00Z',
+      endpoint: {
+        cwd: '/Users/noahlyons/dev/lerms',
+        kind: 'wezterm-pane',
+        pane_id: '37',
+        resume: 'codex resume wake-thread',
+        thread_id: 'wake-thread',
+        tool: 'codex',
+      },
+      registryStatus: 'active',
+      sourceTopoi: ['projects/lerms/topoi/codex-wake-and-bake-pit-boss-0627.md'],
+    },
+  ],
+  warnings: [],
+};
+
+const liveManifest = buildForgeHostManifestFromRegistrySnapshot(registrySnapshot, { fixtureManifest: manifest });
+assert.equal(liveManifest.schema, 'kaminos.forge-host.station-manifest.v0');
+assert.equal(liveManifest.sourceAuthority, 'live_registry');
+assert.equal(liveManifest.registrySource.schema, FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA);
+assert.equal(liveManifest.stations.length, 1, 'live registry manifest should not promote every fixture row');
+assert.equal(liveManifest.stations[0].actorId, 'forge-station:wake-and-bake-pit-boss');
+assert.equal(liveManifest.stations[0].sourceAuthority, 'live_registry');
+assert.equal(liveManifest.stations[0].diaulosId, 'dia-wake-fixture');
+assert.equal(liveManifest.stations[0].status, 'active');
+assert.equal(liveManifest.stations[0].anchor.authority, 'host_static_fixture_overlay');
+assert.equal(liveManifest.stations[0].smokeOffers[0].authority, 'live');
+assert.equal(liveManifest.stations[0].smokeOffers[0].displayState, 'live');
+assert.match(liveManifest.stations[0].smokeOffers[0].sourceRef, /directive-alert-endpoints\.json/);
+assert.deepEqual(validateForgeHostStationManifest(liveManifest).falseAuthorityViolations, []);
+assert.equal(deriveForgeStationAttention(liveManifest.stations[0]).source, 'live_registry');
+
+const fallbackSnapshot = structuredClone(registrySnapshot);
+fallbackSnapshot.sourceAuthority = 'fallback';
+fallbackSnapshot.endpoints[0].status = 'fallback';
+const fallbackManifest = buildForgeHostManifestFromRegistrySnapshot(fallbackSnapshot, { fixtureManifest: manifest });
+assert.equal(fallbackManifest.sourceAuthority, 'fallback');
+assert.notEqual(fallbackManifest.stations[0].smokeOffers[0].displayState, 'live', 'fallback registry rows must not display as live');
+
+const lyingSnapshot = structuredClone(registrySnapshot);
+lyingSnapshot.sourceAuthority = 'fallback';
+lyingSnapshot.endpoints[0].displayState = 'live';
+assert.throws(
+  () => buildForgeHostManifestFromRegistrySnapshot(lyingSnapshot, { fixtureManifest: manifest }),
+  /fallback.*live/i,
+  'registry ingestion must fail loud when fallback rows claim live display authority',
+);

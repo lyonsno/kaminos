@@ -49,6 +49,15 @@ SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
+FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
+FORGE_HOST_ENDPOINT_REGISTRY_PATH = Path(os.environ.get(
+    "KAMINOS_FORGE_HOST_ENDPOINT_REGISTRY",
+    os.path.expanduser("~/.local/state/epistaxis/directive-alert-endpoints.json"),
+)).expanduser()
+FORGE_HOST_DIAULOS_REGISTRY_PATH = Path(os.environ.get(
+    "KAMINOS_FORGE_HOST_DIAULOS_REGISTRY",
+    os.path.expanduser("~/.local/state/epistaxis/directive-state/epistaxis/metadosis/diaulos-registry/diauloi.json"),
+)).expanduser()
 ASSET_ROOTS = [
     {
         "id": "splat-inbox",
@@ -90,6 +99,95 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+    }
+
+
+def _read_json_file(path):
+    with Path(path).expanduser().open() as handle:
+        return json.load(handle)
+
+
+def _registry_file_status(path):
+    resolved = Path(path).expanduser()
+    return {
+        "path": str(resolved),
+        "exists": resolved.exists(),
+        "loaded": False,
+        "schema": None,
+    }
+
+
+def _diaulos_registry_index(diaulos_registry):
+    rows = diaulos_registry.get("diauloi") if isinstance(diaulos_registry, dict) else None
+    index = {}
+    for row in rows or []:
+        handle = row.get("handle")
+        if handle:
+            index[str(handle)] = row
+        for alias in row.get("aliases") or []:
+            index[str(alias)] = row
+    return index
+
+
+def build_forge_host_registry_snapshot(
+    endpoint_registry_path=FORGE_HOST_ENDPOINT_REGISTRY_PATH,
+    diaulos_registry_path=FORGE_HOST_DIAULOS_REGISTRY_PATH,
+):
+    """Build a source-honest Forge Host view over live Epistaxis registries."""
+    loaded_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    warnings = []
+    endpoint_status = _registry_file_status(endpoint_registry_path)
+    diaulos_status = _registry_file_status(diaulos_registry_path)
+    endpoint_registry = None
+    diaulos_registry = None
+
+    try:
+        endpoint_registry = _read_json_file(endpoint_registry_path)
+        endpoint_status["loaded"] = True
+        endpoint_status["schema"] = endpoint_registry.get("schema")
+    except FileNotFoundError:
+        warnings.append(f"endpoint registry missing: {endpoint_status['path']}")
+    except json.JSONDecodeError as error:
+        warnings.append(f"endpoint registry invalid JSON: {endpoint_status['path']}: {error}")
+
+    try:
+        diaulos_registry = _read_json_file(diaulos_registry_path)
+        diaulos_status["loaded"] = True
+        diaulos_status["schema"] = diaulos_registry.get("schema")
+    except FileNotFoundError:
+        warnings.append(f"diaulos registry missing: {diaulos_status['path']}")
+    except json.JSONDecodeError as error:
+        warnings.append(f"diaulos registry invalid JSON: {diaulos_status['path']}: {error}")
+
+    diauloi = _diaulos_registry_index(diaulos_registry or {})
+    endpoints = []
+    for row in (endpoint_registry or {}).get("endpoints", []):
+        if row.get("status") != "active":
+            continue
+        diaulos = str(row.get("diaulos") or "").strip()
+        if not diaulos:
+            warnings.append("active endpoint row missing diaulos handle")
+            continue
+        registry_row = diauloi.get(diaulos) or {}
+        endpoints.append({
+            "diaulos": diaulos,
+            "diaulosId": registry_row.get("id"),
+            "status": row.get("status"),
+            "observedAt": row.get("observed_at"),
+            "endpoint": row.get("endpoint") or {},
+            "registryStatus": registry_row.get("status"),
+            "sourceTopoi": registry_row.get("source_topoi") or [],
+        })
+
+    source_authority = "live_registry" if endpoint_status["loaded"] else "fallback"
+    return {
+        "schema": FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+        "sourceAuthority": source_authority,
+        "loadedAt": loaded_at,
+        "endpointRegistry": endpoint_status,
+        "diaulosRegistry": diaulos_status,
+        "endpoints": endpoints,
+        "warnings": warnings,
     }
 
 
@@ -506,6 +604,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/forge-host/registry":
+            self.handle_forge_host_registry()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -534,6 +634,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_forge_host_registry(self):
+        self.send_json(build_forge_host_registry_snapshot())
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

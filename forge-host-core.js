@@ -3,6 +3,17 @@ export const FORGE_HOST_STATION_ANCHOR_SCHEMA = 'kaminos.forge-host.station-anch
 export const FORGE_HOST_STATION_VISUAL_SCHEMA = 'kaminos.forge-host.station-visual.v0';
 export const FORGE_HOST_SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
 export const FORGE_HOST_STATION_ATTENTION_SCHEMA = 'kaminos.forge-host.station-attention.v0';
+export const FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = 'kaminos.forge-host.registry-snapshot.v0';
+
+const STATUS_COLORS = {
+  active: '#9fe6bd',
+  current: '#f0d28a',
+  promoted: '#8fc7d6',
+  recent: '#aab0ff',
+  inactive: '#7d7d7d',
+  stale: '#c78a5b',
+  fallback: '#a05a5a',
+};
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -32,6 +43,70 @@ function offer({
     freshness,
     displayState,
     downgrades,
+  };
+}
+
+function titleFromDiaulos(diaulos) {
+  return String(diaulos || 'unknown-diaulos')
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map(part => part.length <= 4 && part === part.toUpperCase()
+      ? part
+      : part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(' ') || 'Unknown Diaulos';
+}
+
+function stationLabel(diaulos) {
+  const words = titleFromDiaulos(diaulos).split(/\s+/).filter(Boolean);
+  if (!words.length) return 'Live';
+  const useful = words.filter(word => !/^(and|the|of)$/i.test(word));
+  return (useful[0] || words[0]).slice(0, 9);
+}
+
+function fallbackAnchorForIndex(index, diaulos) {
+  const slots = [
+    [-1.72, -0.58, -0.82],
+    [-1.05, -0.58, -1.08],
+    [-0.36, -0.58, -1.22],
+    [0.36, -0.58, -1.22],
+    [1.05, -0.58, -1.08],
+    [1.72, -0.58, -0.82],
+    [-1.66, -0.58, 0.78],
+    [1.66, -0.58, 0.78],
+    [-0.58, -0.58, 1.24],
+    [0.58, -0.58, 1.24],
+  ];
+  const base = slots[index % slots.length];
+  const cycle = Math.floor(index / slots.length);
+  const x = Number((base[0] + cycle * 0.18).toFixed(3));
+  const z = Number((base[2] + cycle * 0.12).toFixed(3));
+  return {
+    schema: FORGE_HOST_STATION_ANCHOR_SCHEMA,
+    id: `anchor:live-registry:${diaulos || index}`,
+    authority: 'host_generated_live_registry_overlay',
+    position: [x, base[1], z],
+    benchLookTarget: [Number((x * 1.18).toFixed(3)), -0.32, Number((z - 0.55).toFixed(3))],
+    offerLookTarget: [Number((x * 0.72).toFixed(3)), -0.22, Number((z + 0.38).toFixed(3))],
+  };
+}
+
+function fixtureStationByDiaulos(fixtureManifest) {
+  return new Map((fixtureManifest?.stations || []).map(station => [station.diaulos, station]));
+}
+
+function registryDisplayAuthority(snapshotAuthority, endpointRow = {}) {
+  const rowAuthority = endpointRow.sourceAuthority || snapshotAuthority || 'fallback';
+  const displayState = endpointRow.displayState || (rowAuthority === 'live_registry' || rowAuthority === 'live' ? 'live' : rowAuthority);
+  if (['fixture', 'fallback', 'seeded', 'stale'].includes(rowAuthority) && displayState === 'live') {
+    throw new Error(`${rowAuthority} registry row claimed live display authority for ${endpointRow.diaulos || 'unknown diaulos'}`);
+  }
+  if (snapshotAuthority !== 'live_registry' && displayState === 'live') {
+    throw new Error(`${snapshotAuthority || 'unknown'} registry snapshot claimed live display authority for ${endpointRow.diaulos || 'unknown diaulos'}`);
+  }
+  return {
+    rowAuthority,
+    offerAuthority: rowAuthority === 'live_registry' ? 'live' : rowAuthority,
+    displayState,
   };
 }
 
@@ -212,6 +287,96 @@ export function buildForgeHostFixture() {
   };
 }
 
+export function buildForgeHostManifestFromRegistrySnapshot(snapshot, {
+  fixtureManifest = buildForgeHostFixture(),
+} = {}) {
+  if (snapshot?.schema !== FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA) {
+    throw new Error(`Forge Host registry snapshot schema mismatch: ${snapshot?.schema || 'missing'}`);
+  }
+  const fixtureByDiaulos = fixtureStationByDiaulos(fixtureManifest);
+  const stations = [];
+  const endpointPath = snapshot.endpointRegistry?.path || 'unknown-endpoint-registry';
+  let generatedAnchorIndex = 0;
+  for (const [index, endpointRow] of (snapshot.endpoints || []).entries()) {
+    const diaulos = endpointRow.diaulos || `unknown-diaulos-${index}`;
+    const fixtureStation = fixtureByDiaulos.get(diaulos);
+    const { rowAuthority, offerAuthority, displayState } = registryDisplayAuthority(snapshot.sourceAuthority, endpointRow);
+    const sourceLive = offerAuthority === 'live' && displayState === 'live';
+    const status = endpointRow.status || endpointRow.registryStatus || (sourceLive ? 'active' : displayState);
+    const anchor = fixtureStation?.anchor
+      ? {
+          ...cloneJson(fixtureStation.anchor),
+          authority: 'host_static_fixture_overlay',
+        }
+      : fallbackAnchorForIndex(generatedAnchorIndex++, diaulos);
+    const visual = fixtureStation?.visual
+      ? cloneJson(fixtureStation.visual)
+      : {
+          schema: FORGE_HOST_STATION_VISUAL_SCHEMA,
+          shape: 'schnoz_orb_proxy',
+          ringLabel: stationLabel(diaulos),
+          radius: 0.19,
+          color: STATUS_COLORS[status] || '#9fe6bd',
+        };
+    const callSign = endpointRow.callSign || titleFromDiaulos(diaulos);
+    stations.push({
+      actorId: `forge-station:${diaulos}`,
+      diaulos,
+      diaulosId: endpointRow.diaulosId || null,
+      callSign,
+      role: endpointRow.role || fixtureStation?.role || 'Live Diaulos',
+      status,
+      sourceAuthority: rowAuthority,
+      displayState,
+      registryStatus: endpointRow.registryStatus || null,
+      observedAt: endpointRow.observedAt || null,
+      sourceTopoi: endpointRow.sourceTopoi || [],
+      endpoint: endpointRow.endpoint || {},
+      statusColor: fixtureStation?.statusColor || STATUS_COLORS[status] || STATUS_COLORS.active,
+      anchor,
+      visual,
+      attention: fixtureStation?.attention
+        ? cloneJson(fixtureStation.attention)
+        : {
+            schema: FORGE_HOST_STATION_ATTENTION_SCHEMA,
+            mode: sourceLive ? 'aware' : 'fallback',
+            primaryLookTarget: sourceLive ? 'camera' : 'bench',
+            dwellMs: 740,
+            jitter: 0.16,
+          },
+      smokeOffers: [
+        offer({
+          id: `offer:${diaulos}:live-endpoint`,
+          producerDiaulos: diaulos,
+          title: sourceLive ? 'Live Endpoint' : 'Registry Placeholder',
+          targetSurface: 'diaulos-endpoint',
+          sourceRef: `${endpointPath}#${diaulos}`,
+          targetUrl: endpointRow.endpoint?.resume || endpointRow.endpoint?.cwd || `#forge-station:${diaulos}`,
+          authority: offerAuthority,
+          freshness: endpointRow.observedAt || snapshot.loadedAt || 'unknown',
+          displayState,
+          downgrades: sourceLive
+            ? ['endpoint_registry_presence_only', 'not_chat_bridge', 'not_domain_truth']
+            : ['registry_not_live', 'not_chat_bridge', 'not_domain_truth'],
+        }),
+      ],
+    });
+  }
+  return {
+    schema: FORGE_HOST_STATION_MANIFEST_SCHEMA,
+    sourceAuthority: snapshot.sourceAuthority || 'fallback',
+    fixtureSource: fixtureManifest?.fixtureSource || null,
+    registrySource: {
+      schema: snapshot.schema,
+      endpointRegistry: snapshot.endpointRegistry || null,
+      diaulosRegistry: snapshot.diaulosRegistry || null,
+      warnings: snapshot.warnings || [],
+    },
+    builtAt: snapshot.loadedAt || new Date().toISOString(),
+    stations,
+  };
+}
+
 function distance(a, b) {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
@@ -270,7 +435,7 @@ export function deriveForgeStationAttention(station, {
     offerFreshness: station.smokeOffers?.[0]?.freshness || 'unknown',
     dwellMs: station.attention?.dwellMs || 800,
     jitter: station.attention?.jitter || 0,
-    source: 'fixture',
+    source: station.sourceAuthority || 'fixture',
   };
 }
 
@@ -283,6 +448,9 @@ export function validateForgeHostStationManifest(manifest) {
   for (const station of manifest?.stations || []) {
     if (stationIds.has(station.actorId)) falseAuthorityViolations.push(`duplicate station actor id: ${station.actorId}`);
     stationIds.add(station.actorId);
+    if (['fixture', 'fallback', 'seeded', 'stale'].includes(station.sourceAuthority) && station.displayState === 'live') {
+      falseAuthorityViolations.push(`${station.actorId}: ${station.sourceAuthority} station claimed live display authority`);
+    }
     for (const offerRecord of station.smokeOffers || []) {
       if (offerRecord.schema !== FORGE_HOST_SMOKE_OFFER_SCHEMA) {
         falseAuthorityViolations.push(`${offerRecord.id || station.actorId}: smoke offer schema mismatch`);

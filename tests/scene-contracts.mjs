@@ -40,8 +40,11 @@ assert.match(index, /data-tab="forge"/, 'Kaminos exposes a Forge Host tab for em
 assert.match(index, /id="forge-host-station-list"/, 'Forge Host tab exposes station list rows');
 assert.match(index, /id="forge-host-offer-list"/, 'Forge Host tab exposes selected station smoke offers');
 assert.match(index, /function createForgeHostStationScene\(/, 'Forge Host stations render through an explicit scene creation path');
+assert.match(index, /\/api\/forge-host\/registry/, 'Forge Host can request the live Epistaxis registry snapshot through the Kaminos server');
+assert.match(index, /buildForgeHostManifestFromRegistrySnapshot/, 'Forge Host browser route can build station manifests from live registry snapshots');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
 assert.match(index, /kaminos\.forge-host\.station-attention\.v0/, 'Forge Host UI preserves station-attention schema identity');
+assert.match(index, /kaminos\.forge-host\.registry-snapshot\.v0/, 'Forge Host UI preserves registry snapshot schema identity');
 assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect Forge Host station state without DOM inference');
 assert.match(index, /data-scene-group-create/, 'Assets tab exposes a grouping command for authored objects');
 assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');
