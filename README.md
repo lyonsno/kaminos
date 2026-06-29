@@ -18,7 +18,7 @@ This kiln language is a product target as well as an interface contract. Live co
 
 The kiln is not only a status effect. Kaminos organizes spatial work into chambers and benches:
 
-- **World Chambers** hold a coherent world, route, or generated space with its own identity.
+- **World Chambers** frame a coherent world, route, or generated space with its own identity.
 - **Workbench/Kiln surfaces** are where artifacts are staged, conditioned, inspected, and promoted.
 - **Preview Benches** are smoke surfaces for lane-owned payloads before they become part of a chamber or scene.
 - **Smoke Offers** are the operator-facing handoff from a producing lane or station: "I have something you can smoke; here is the route, authority, freshness, downgrade state, and target bench."

@@ -64,6 +64,9 @@ A **Workbench/Kiln** surface is where specimens become inspectable. It is the
 operational layer between raw source payloads and inhabited scene/world
 presence.
 
+That presence does not transfer custody over body semantics, embodied motion
+grammar, physics, or behavior truth.
+
 Workbench/Kiln surfaces can stage assets, condition specimens, expose route
 state, show witness receipts, and prepare promotion into a chamber or scene.
 They should make the operator's normal actions cheap: open the evidence, change
@@ -74,6 +77,18 @@ This is where the kiln metaphor becomes useful rather than ornamental. A bench
 can show whether a specimen is live, cached, fixture, fallback, stale, failed,
 or promoted. Those states should be visible beside the specimen rather than
 buried in logs.
+
+## Promotion Membrane
+
+Promotion is a membrane, not a mood. The promotion ladder is scratch output ->
+witnessed payload -> promoted take/asset/sidecar -> chamber or scene placement.
+Each step should say what changed: better source, stronger witness, operator
+acceptance, route correction, sidecar update, or placement into a world chamber.
+
+Promotion does not mean the operator liked a screenshot. It means the artifact
+has crossed a named boundary and kept enough route, camera, source, freshness,
+and downgrade context for later work to understand why it is allowed to sit
+closer to the scene.
 
 ## Preview Benches
 
@@ -95,6 +110,22 @@ but the pattern is meant to generalize. A future material bench, splat
 correction bench, motion bench, or object-interaction bench should be able to
 reuse the same source-honest intake shape without inheriting LERMS-specific
 world law.
+
+## Motion And Body Custody
+
+Kaminos can preview generated motion, store promoted motion takes, display
+cliplet sheets or filmstrips, and place motion payloads into chambers. That is
+host custody: spatial placement, badges, capture, camera, and witness shape.
+
+The source adapter owns payload semantics and freshness. The worldbody and
+motion layers own motion grammar, event assignment, embodied dynamics, and
+behavior truth until explicit source evidence promotes a result. A LERMS actor
+timeline, Mushfinger cliplet sample, or future body-motion payload can be
+hosted in a chamber without becoming Kaminos-owned motion law.
+
+For Forge stations, the same boundary holds. A station may advertise Smoke
+Offers, show status, and receive operator observations; it does not thereby own
+runtime commands, chat authority, body dynamics, or motion semantics.
 
 ## Smoke Offers
 
@@ -146,6 +177,12 @@ That lets a producer receive more than a prose reaction. The reply can carry:
 
 This is the beginning of a shared visual conversation: the operator and the
 producer can talk about the same specimen, not a memory of a smoke.
+
+For example, a motion take can export a filmstrip with prompt, route, model,
+source frame range, camera preset, reference skeleton mode, authority,
+freshness, downgrade state, and the operator's note. The producer receives a
+small visual object both sides can discuss instead of a terminal-only status
+report.
 
 ## Source-Honesty Rules
 

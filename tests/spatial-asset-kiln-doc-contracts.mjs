@@ -28,6 +28,11 @@ assert.match(docs, /Workbench\/Kiln/i, 'architecture doc defines Workbench/Kiln 
 assert.match(docs, /Preview Bench/i, 'architecture doc defines Preview Benches');
 assert.match(docs, /Smoke Offer/i, 'architecture doc defines Smoke Offers');
 assert.match(docs, /operator smoke capture/i, 'architecture doc names operator smoke capture as the return evidence layer');
+assert.match(docs, /Motion And Body Custody/i, 'architecture doc names the motion/body custody boundary');
+assert.match(docs, /body semantics,\s+embodied motion\s+grammar, physics, or behavior truth/i, 'architecture doc says host presence does not transfer motion/body custody');
+assert.match(docs, /Promotion Membrane/i, 'architecture doc defines the promotion membrane');
+assert.match(docs, /scratch output[\s\S]*witnessed[\s\S]*promoted[\s\S]*chamber/i, 'architecture doc states the promotion ladder from scratch output to chamber placement');
+assert.match(docs, /motion take[\s\S]*filmstrip[\s\S]*source frame range/i, 'architecture doc gives a concrete operator smoke capture example');
 assert.match(docs, /source authority/i, 'architecture doc requires source authority to stay visible');
 assert.match(docs, /freshness/i, 'architecture doc requires freshness to stay visible');
 assert.match(docs, /downgrade/i, 'architecture doc requires downgrades to stay visible');
@@ -35,3 +40,5 @@ assert.match(docs, /does not certify domain truth/i, 'architecture doc keeps Kam
 assert.match(docs, /Inhabited Agent Forge/i, 'architecture doc states the internal/future agent-forge relationship');
 assert.match(docs, /not the public headline/i, 'architecture doc keeps the internal agent-forge layer out of the public headline');
 assert.match(docs, /docs\/splat-assets\.md/, 'architecture doc links the splat asset correction doc');
+
+assert.doesNotMatch(readme, /source truth|source-honest|evidence|specimen|specimens|domain truth|certify|provenance/i, 'README keeps the public posture confident and non-clinical');
