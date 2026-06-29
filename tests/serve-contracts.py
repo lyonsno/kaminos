@@ -9,6 +9,7 @@ import serve
 from serve import BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
+from serve import build_greenroom_route_provider_index
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 
 
@@ -143,6 +144,98 @@ def test_greenroom_stray_output_dirs_do_not_get_load_affordance():
             assert display["load_label"] == "Open"
         finally:
             BROWSE_ROOTS["greenroom"] = previous
+
+
+def test_native_greenroom_route_provider_projects_route_job_rows():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        job_dir = greenroom / "done" / "hero123"
+        output_dir = greenroom / "outputs" / "hero123"
+        job_dir.mkdir(parents=True)
+        output_dir.mkdir(parents=True)
+        (output_dir / "seed-42.glb").write_bytes(b"glb")
+        (job_dir / "schedule.json").write_text("""{
+          "schema": "gpu-greenroom.schedule.v1",
+          "priority_class": "preview",
+          "submitted_at": 10
+        }""")
+        (job_dir / "status.json").write_text("""{
+          "job_id": "hero123",
+          "status": "done",
+          "job_type": "trellis2mlx.hero-checkpoint",
+          "input_path": "/tmp/source.png",
+          "output_dir": "",
+          "submitted_at": 10,
+          "started_at": 20,
+          "finished_at": 30,
+          "worker_pid": 111,
+          "child_pid": 222,
+          "process_group_id": 222
+        }""".replace('"output_dir": ""', f'"output_dir": "{output_dir}"'))
+        (job_dir / "receipt.json").write_text("""{
+          "job_id": "hero123",
+          "job_type": "trellis2mlx.hero-checkpoint",
+          "status": "done",
+          "input_path": "/tmp/source.png",
+          "output_dir": "",
+          "effective_route": "python generate.py --image /tmp/source.png",
+          "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+          "started_at": 20,
+          "finished_at": 30
+        }""".replace('"output_dir": ""', f'"output_dir": "{output_dir}"'))
+
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            index = build_greenroom_route_provider_index()
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    assert index["schema"] == "kaminos.route-provider-index.v0"
+    assert index["provider"]["kind"] == "native-greenroom"
+    assert index["provider"]["source"] == "filesystem"
+    assert index["summary"]["done"] == 1
+    [row] = index["rows"]
+    assert row["status_dir"] == "done"
+    assert row["route_job"]["schema"] == "kaminos.route-job.v0"
+    assert row["route_job"]["id"] == "hero123"
+    assert row["route_job"]["routeId"] == "trellis2mlx.hero-checkpoint"
+    assert row["route_job"]["executor"]["kind"] == "native-greenroom"
+    assert row["route_job"]["priorityClass"] == "preview"
+    assert row["route_job"]["status"] == "done"
+    assert row["route_job"]["resumability"]["kind"] == "unknown"
+    assert row["controls"] == []
+    assert row["receipt_link"] == "/api/read?root=greenroom&path=done%2Fhero123%2Freceipt.json"
+    assert row["output_links"][0]["path"] == "/api/job-output?job_id=hero123&file=seed-42.glb"
+    assert row["process"]["worker_pid"] == 111
+    assert row["process"]["child_pid"] == 222
+
+
+def test_native_greenroom_route_provider_preserves_degraded_legacy_rows():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        legacy_dir = greenroom / "failed" / "legacy-provider-route"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "status.json").write_text("""{
+          "jobId": "legacy-provider-route",
+          "jobType": "kaminos.orb-inner-engine.provider-route",
+          "status": "failed"
+        }""")
+
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            index = build_greenroom_route_provider_index()
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    [row] = index["rows"]
+    assert row["route_job"]["id"] == "legacy-provider-route"
+    assert row["route_job"]["status"] == "degraded"
+    assert row["route_job"]["executor"]["kind"] == "native-greenroom"
+    assert row["parse_error"]
+    assert row["warnings"][0]["kind"] == "degraded_greenroom_status"
+    assert row["controls"] == []
 
 
 def test_splat_asset_index_separates_experimental_and_production_roots():
@@ -361,6 +454,8 @@ if __name__ == "__main__":
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
+    test_native_greenroom_route_provider_projects_route_job_rows()
+    test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()

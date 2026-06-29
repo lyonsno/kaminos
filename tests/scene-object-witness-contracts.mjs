@@ -124,6 +124,12 @@ assert.match(witness, /greenroomIdentityKey/, 'Green Room picker witness normali
 assert.match(witness, /replace\(\s*\/\^raw/, 'Green Room picker witness strips raw metadata prefixes before comparing identities');
 assert.match(witness, /titleIdentityKey !== row\.rawIdentityKey/, 'Green Room picker witness rejects case-only and prefix-only raw-id title changes');
 assert.match(witness, /greenroom picker did not expose subtitle and raw metadata/, 'Green Room picker witness requires display subtitle and raw metadata');
+assert.match(indexHtml, /native-greenroom-route-tray/, 'Green Room tab exposes a Native Greenroom route tray');
+assert.match(indexHtml, /grBrowseRouteJobs/, 'Green Room tab has a route-job refresh path');
+assert.match(indexHtml, /data-greenroom-route-job-id/, 'Native Greenroom route tray preserves route job identity on rows');
+assert.match(indexHtml, /data-greenroom-route-status/, 'Native Greenroom route tray preserves route status on rows');
+assert.match(indexHtml, /window\.kaminosRouteJobDebugState/, 'Native Greenroom route tray exposes explicit debug state');
+assert.match(indexHtml, /No checkpoint resume yet/, 'Native Greenroom route tray warns instead of claiming pause/resume');
 assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');
 assert.match(witness, /greenroom picker mesh route was not fetchable/, 'Green Room picker witness proves visible mesh actions can fetch the advertised route');
 assert.match(witness, /greenroom View did not enter temporary preview mode/, 'Green Room action witness proves View enters temporary preview mode');

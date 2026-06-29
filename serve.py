@@ -47,6 +47,19 @@ GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+ROUTE_PROVIDER_INDEX_SCHEMA = "kaminos.route-provider-index.v0"
+ROUTE_JOB_SCHEMA = "kaminos.route-job.v0"
+ROUTE_JOB_STATUSES = {
+    "pending",
+    "reserved",
+    "running",
+    "checkpointing",
+    "paused_at_checkpoint",
+    "done",
+    "failed",
+    "cancelled",
+    "degraded",
+}
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -457,6 +470,193 @@ def list_greenroom_output_files(receipt):
     ]
 
 
+def normalize_route_job_status(status):
+    return status if status in ROUTE_JOB_STATUSES else "degraded"
+
+
+def _read_json_file(path):
+    try:
+        return json.loads(path.read_text()), None
+    except Exception as exc:
+        return None, exc
+
+
+def _greenroom_schedule(job_dir, state=None):
+    schedule, _ = _read_json_file(job_dir / "schedule.json")
+    schedule = schedule if isinstance(schedule, dict) else {}
+    params = (state or {}).get("params") if isinstance(state, dict) else {}
+    params = params if isinstance(params, dict) else {}
+    submitted_at = (
+        schedule.get("submitted_at")
+        or schedule.get("submittedAt")
+        or (state or {}).get("submitted_at")
+        or (state or {}).get("submittedAt")
+        or 0
+    )
+    priority_class = (
+        schedule.get("priority_class")
+        or schedule.get("priorityClass")
+        or params.get("priority_class")
+        or params.get("priorityClass")
+        or "normal"
+    )
+    return {
+        "schema": schedule.get("schema") or "gpu-greenroom.schedule.v1",
+        "priority_class": str(priority_class),
+        "submitted_at": submitted_at,
+    }
+
+
+def _greenroom_receipt_link(status_dir, job_id):
+    return "/api/read?" + urlencode({
+        "root": "greenroom",
+        "path": f"{status_dir}/{job_id}/receipt.json",
+    })
+
+
+def _greenroom_output_links(job_id, receipt):
+    links = []
+    for name in list_greenroom_output_files(receipt):
+        links.append({
+            "name": name,
+            "path": f"/api/job-output?job_id={job_id}&file={name}",
+            "kind": "mesh" if Path(name).suffix.lower() in MESH_EXTENSIONS else "file",
+        })
+    return links
+
+
+def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir):
+    input_path = (state or {}).get("input_path") or (state or {}).get("inputPath")
+    output_dir = (state or {}).get("output_dir") or (state or {}).get("outputDir")
+    input_artifacts = []
+    if input_path:
+        input_artifacts.append({"role": "input", "path": input_path})
+    return {
+        "schema": ROUTE_JOB_SCHEMA,
+        "id": job_id,
+        "routeId": job_type or "unknown",
+        "executor": {
+            "kind": "native-greenroom",
+            "id": "local-greenroom",
+            "nativeQueueDir": str(BROWSE_ROOTS.get("greenroom", "")),
+        },
+        "priorityClass": schedule["priority_class"],
+        "status": normalize_route_job_status(status),
+        "inputArtifacts": input_artifacts,
+        "outputPolicy": {"root": output_dir, "mode": "caller-owned"} if output_dir else None,
+        "resumability": {"kind": "unknown"},
+        "native": {
+            "greenroom_job_id": job_id,
+            "status_dir": status_dir,
+            "job_dir": str(job_dir),
+            "output_dir": output_dir,
+        },
+    }
+
+
+def _greenroom_route_row(greenroom, status_dir, job_dir):
+    raw, exc = _read_json_file(job_dir / "status.json")
+    raw = raw if isinstance(raw, dict) else {}
+    parse_error = None
+    legacy_status = None
+    warnings = []
+    if exc is not None:
+        parse_error = str(exc)
+    try:
+        job_id = raw["job_id"]
+        job_type = raw["job_type"]
+        status = raw["status"]
+    except KeyError as missing:
+        job_id = raw.get("job_id") or raw.get("jobId") or job_dir.name
+        job_type = raw.get("job_type") or raw.get("jobType")
+        status = "degraded"
+        parse_error = parse_error or f"missing current Greenroom status field: {missing.args[0]}"
+        legacy_status = raw
+        warnings.append({
+            "kind": "degraded_greenroom_status",
+            "message": "Greenroom status row did not match the current native executor schema.",
+        })
+
+    if status not in ROUTE_JOB_STATUSES:
+        warnings.append({
+            "kind": "unknown_route_status",
+            "message": f"Unknown route status: {status}",
+        })
+        status = "degraded"
+
+    schedule = _greenroom_schedule(job_dir, raw)
+    receipt, receipt_exc = _read_json_file(job_dir / "receipt.json")
+    receipt = receipt if isinstance(receipt, dict) else {}
+    if receipt_exc and (job_dir / "receipt.json").exists():
+        warnings.append({
+            "kind": "receipt_parse_error",
+            "message": str(receipt_exc),
+        })
+    if receipt:
+        raw = {**raw, **{k: v for k, v in receipt.items() if v is not None}}
+    route_job = _native_greenroom_route_job(job_id, job_type, status, schedule, raw, status_dir, job_dir)
+    display = build_display_metadata(
+        job_id,
+        entry_type="dir",
+        receipt=receipt or raw,
+        output_files=list_greenroom_output_files(receipt or raw),
+    )
+    row = {
+        "schema": "kaminos.route-provider-row.v0",
+        "provider": "native-greenroom",
+        "job_id": job_id,
+        "status_dir": status_dir,
+        "route_job": route_job,
+        "display": display,
+        "schedule": schedule,
+        "process": {
+            "pid": raw.get("pid"),
+            "worker_pid": raw.get("worker_pid") or raw.get("workerPid"),
+            "child_pid": raw.get("child_pid") or raw.get("childPid"),
+            "process_group_id": raw.get("process_group_id") or raw.get("processGroupId"),
+        },
+        "receipt_link": _greenroom_receipt_link(status_dir, job_id) if (job_dir / "receipt.json").exists() else None,
+        "output_links": _greenroom_output_links(job_id, receipt or raw),
+        "controls": [],
+        "warnings": warnings,
+        "parse_error": parse_error,
+    }
+    if legacy_status is not None:
+        row["legacy_status"] = legacy_status
+    return row
+
+
+def build_greenroom_route_provider_index():
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    queue_dir = Path(greenroom).expanduser() if greenroom else None
+    rows = []
+    if queue_dir and queue_dir.exists():
+        for status_dir in GREENROOM_STATUS_DIRS:
+            status_root = queue_dir / status_dir
+            if not status_root.is_dir():
+                continue
+            for job_dir in sorted(path for path in status_root.iterdir() if path.is_dir()):
+                if not (job_dir / "status.json").exists():
+                    continue
+                rows.append(_greenroom_route_row(queue_dir, status_dir, job_dir))
+
+    summary = {}
+    for row in rows:
+        status = row.get("route_job", {}).get("status") or "degraded"
+        summary[status] = summary.get(status, 0) + 1
+    return {
+        "schema": ROUTE_PROVIDER_INDEX_SCHEMA,
+        "provider": {
+            "kind": "native-greenroom",
+            "id": "local-greenroom",
+            "source": "filesystem",
+            "queue_dir": str(queue_dir) if queue_dir else None,
+        },
+        "summary": summary,
+        "rows": rows,
+    }
+
+
 def find_greenroom_receipt(job_id):
     greenroom = BROWSE_ROOTS.get("greenroom")
     if not greenroom or not greenroom.exists():
@@ -504,6 +704,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
+        elif parsed.path == "/api/route-jobs":
+            self.handle_route_jobs(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_get(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
@@ -810,6 +1012,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "roots": roots,
             "entries": list_asset_entries(kind=kind),
         })
+
+    def handle_route_jobs(self, params):
+        """Expose read-only route job rows for route trays."""
+        provider = params.get("provider", ["native-greenroom"])[0]
+        if provider not in {"native-greenroom", "all"}:
+            self.send_json({"error": f"Unsupported route job provider: {provider}"}, 400)
+            return
+        self.send_json(build_greenroom_route_provider_index())
 
     def handle_read(self, params):
         """Read a file's content. ?root=scratch&path=file.json"""
