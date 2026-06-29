@@ -91,6 +91,33 @@ assert.equal(live.volumeParams.volume_render_scale, 0.95);
 assert.equal(Object.hasOwn(live.volumeParams, 'volume_flow_rate'), false);
 assert.equal(Object.hasOwn(live.volumeParams, 'volume_input_radius'), false);
 assert.equal(Object.hasOwn(live.volumeParams, 'volume_reaction_fuel'), false);
+assert.equal(live.lifecycleEffect.kind, 'active_burn');
+assert.equal(live.lifecycleEffect.claimsLiveSpend, true);
+
+const preheat = deriveKilnVolumeFireVisual(routeActivity({
+  activityState: 'queued',
+  routePhase: 'preheating',
+  truthMode: 'live',
+  visualAuthority: 'preheat',
+  fire: {
+    heatClass: 'preheat',
+    fuelClass: 'route-queued',
+    truthClass: 'live',
+    visualAuthority: 'preheat',
+    allowsFullBurn: false,
+    spendIntensity: 0.12,
+  },
+}));
+
+assert.equal(preheat.visualPhase, 'preheat');
+assert.equal(preheat.allowsFullBurn, false);
+assert.equal(preheat.lifecycleEffect.kind, 'preheat');
+assert.equal(preheat.lifecycleEffect.truthClass, 'live');
+assert.equal(preheat.lifecycleEffect.claimsLiveSpend, false);
+assert.ok(preheat.volumeParams.volume_fire > 0, 'preheat keeps a visible low flame');
+assert.ok(preheat.volumeParams.volume_fire < live.volumeParams.volume_fire, 'preheat does not claim full flame authority');
+assert.ok(preheat.volumeParams.volume_glow > preheat.volumeParams.volume_fire, 'preheat reads as warmth before full burn');
+assert.ok(preheat.volumeParams.volume_reaction_fuel > 0, 'preheat has a little ignition fuel');
 
 const cached = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'cached',
@@ -114,6 +141,35 @@ assert.equal(cached.volumeParams.kaminos_volume_smoke, 1);
 assert.ok(cached.volumeParams.volume_fire < live.volumeParams.volume_fire, 'cached glow is weaker than live fire');
 assert.ok(cached.volumeParams.volume_flow_rate <= 0.03, 'cached glow keeps only a tiny retained flow');
 assert.ok(cached.volumeParams.volume_glow > cached.volumeParams.volume_fire, 'cached output keeps warmth as glow');
+assert.equal(cached.lifecycleEffect.kind, 'cached_glow');
+assert.equal(cached.lifecycleEffect.claimsLiveSpend, false);
+
+const completionBlaze = deriveKilnVolumeFireVisual(routeActivity({
+  activityState: 'complete',
+  routePhase: 'completed',
+  truthMode: 'live',
+  visualAuthority: 'completion-blaze',
+  fire: {
+    heatClass: 'completion-blaze',
+    fuelClass: 'settled-output',
+    truthClass: 'live',
+    visualAuthority: 'completion-blaze',
+    allowsFullBurn: false,
+    spendIntensity: 0,
+    outputSlotCount: 1,
+  },
+}));
+
+assert.equal(completionBlaze.visualPhase, 'completion_blaze');
+assert.equal(completionBlaze.allowsFullBurn, false);
+assert.deepEqual(completionBlaze.falseAuthorityViolations, []);
+assert.equal(completionBlaze.lifecycleEffect.kind, 'completion_blaze');
+assert.equal(completionBlaze.lifecycleEffect.truthClass, 'live');
+assert.equal(completionBlaze.lifecycleEffect.claimsLiveSpend, false);
+assert.ok(completionBlaze.volumeParams.volume_fire > cached.volumeParams.volume_fire, 'completion blaze can visibly flare above cached glow');
+assert.ok(completionBlaze.volumeParams.volume_fire < live.volumeParams.volume_fire, 'completion blaze remains below live full-burn fire');
+assert.ok(completionBlaze.volumeParams.volume_radiance > cached.volumeParams.volume_radiance, 'completion blaze gets a visible success flash');
+assert.ok(completionBlaze.volumeParams.volume_smoke < live.volumeParams.volume_smoke, 'completion blaze avoids pretending the route is still burning');
 
 const fixture = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'fixture',
@@ -199,6 +255,9 @@ assert.equal(failed.visualPhase, 'snuff');
 assert.equal(failed.allowsFullBurn, false);
 assert.equal(failed.volumeParams.volume_fire, 0);
 assert.ok(failed.volumeParams.volume_smoke > 0, 'failure snuff can smoke without keeping flame authority');
+assert.equal(failed.lifecycleEffect.kind, 'failure_snuff');
+assert.equal(failed.lifecycleEffect.failureSharpness, 1);
+assert.equal(failed.lifecycleEffect.claimsLiveSpend, false);
 
 const unavailable = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'unavailable',

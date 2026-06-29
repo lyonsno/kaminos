@@ -66,6 +66,23 @@ function routeRun(routeActivityPayload, overrides = {}) {
 
 function fixtureRouteRuns() {
   const live = routeActivity();
+  const queued = routeActivity({
+    activityId: 'queued-run-route-activity',
+    routeRunId: 'queued-run',
+    activityState: 'queued',
+    routePhase: 'preheating',
+    truthMode: 'live',
+    visualAuthority: 'preheat',
+    outputSlots: [{ role: 'output', artifactId: 'mesh-slot-a', status: 'waiting' }],
+    fire: {
+      heatClass: 'preheat',
+      fuelClass: 'route-queued',
+      truthClass: 'live',
+      visualAuthority: 'preheat',
+      allowsFullBurn: false,
+      spendIntensity: 0.12,
+    },
+  });
   const cached = routeActivity({
     activityId: 'cached-run-route-activity',
     routeRunId: 'cached-run',
@@ -84,6 +101,24 @@ function fixtureRouteRuns() {
       allowsFullBurn: false,
       spendIntensity: 0,
       cacheWarmth: 0.8,
+    },
+  });
+  const complete = routeActivity({
+    activityId: 'complete-run-route-activity',
+    routeRunId: 'complete-run',
+    activityState: 'complete',
+    routePhase: 'completed',
+    truthMode: 'live',
+    visualAuthority: 'completion-blaze',
+    outputSlots: [{ role: 'output', artifactId: 'mesh-slot-a', status: 'linked' }],
+    fire: {
+      heatClass: 'completion-blaze',
+      fuelClass: 'settled-output',
+      truthClass: 'live',
+      visualAuthority: 'completion-blaze',
+      allowsFullBurn: false,
+      spendIntensity: 0,
+      outputSlotCount: 1,
     },
   });
   const fallback = routeActivity({
@@ -105,6 +140,23 @@ function fixtureRouteRuns() {
       allowsFullBurn: true,
       spendIntensity: 1,
       warningLoad: 1,
+    },
+  });
+  const failed = routeActivity({
+    activityId: 'failed-run-route-activity',
+    routeRunId: 'failed-run',
+    activityState: 'failed',
+    routePhase: 'failed',
+    truthMode: 'failed',
+    visualAuthority: 'failure-snuff',
+    sourceTruthWarnings: ['route_failed_after_backend_error'],
+    fire: {
+      heatClass: 'snuff',
+      fuelClass: 'failed-route',
+      truthClass: 'failed',
+      visualAuthority: 'failure-snuff',
+      allowsFullBurn: false,
+      failureSharpness: 1,
     },
   });
   const unavailable = routeActivity({
@@ -132,8 +184,11 @@ function fixtureRouteRuns() {
 
   return [
     routeRun(live),
+    routeRun(queued, { statusBadge: 'queued' }),
     routeRun(cached, { statusBadge: 'cached' }),
+    routeRun(complete, { statusBadge: 'complete' }),
     routeRun(fallback, { statusBadge: 'fallback' }),
+    routeRun(failed, { statusBadge: 'failed' }),
     routeRun(unavailable, { statusBadge: 'missing-backend' }),
   ];
 }

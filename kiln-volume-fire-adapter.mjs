@@ -43,6 +43,25 @@ const PHASE_VOLUME_PROFILES = Object.freeze({
     volume_wind_height: -0.80,
     volume_render_scale: 0.95,
   }),
+  completion_blaze: Object.freeze({
+    enabled: true,
+    volume_density: 0.82,
+    volume_fire: 0.08,
+    volume_smoke: 0.62,
+    volume_radiance: 1.65,
+    volume_glow: 1.85,
+    volume_curl: 2.45,
+    volume_microdetail: 1.2,
+    volume_interface_shred: 1.65,
+    volume_fire_licks: 2.35,
+    volume_input_radius: 0.1,
+    volume_flow_rate: 0.045,
+    volume_reaction_fuel: 0.22,
+    volume_absorption: 0.75,
+    volume_steps: 140,
+    volume_adaptive_rays: 0.2,
+    volume_render_scale: 0.9,
+  }),
   preheat: Object.freeze({
     enabled: true,
     volume_density: 0.28,
@@ -191,6 +210,8 @@ const PHASE_VOLUME_PROFILES = Object.freeze({
 
 const HEAT_CLASS_PHASES = Object.freeze({
   burn: 'burn',
+  'completion-blaze': 'completion_blaze',
+  completion_blaze: 'completion_blaze',
   preheat: 'preheat',
   warming: 'preheat',
   ember: 'ember',
@@ -204,6 +225,31 @@ const HEAT_CLASS_PHASES = Object.freeze({
   failed: 'snuff',
   cold: 'cold',
   cooled: 'cooled',
+});
+
+const VISUAL_AUTHORITY_PHASES = Object.freeze({
+  'completion-blaze': 'completion_blaze',
+  completion_blaze: 'completion_blaze',
+  preheat: 'preheat',
+  'low-heat': 'preheat',
+  'failure-snuff': 'snuff',
+  snuffed: 'snuff',
+  cached: 'glow',
+  'warm-recall': 'glow',
+});
+
+const LIFECYCLE_EFFECT_KINDS = Object.freeze({
+  burn: 'active_burn',
+  completion_blaze: 'completion_blaze',
+  preheat: 'preheat',
+  ember: 'banked_ember',
+  bank: 'banked_ember',
+  glow: 'cached_glow',
+  pilot: 'pilot_heat',
+  weak_heat: 'weak_heat',
+  snuff: 'failure_snuff',
+  cooled: 'cooled',
+  cold: 'cold',
 });
 
 const ACTIVITY_PHASES = Object.freeze({
@@ -232,6 +278,7 @@ export function deriveKilnVolumeFireVisual(routeActivity = {}, options = {}) {
   const visualPhase = allowsFullBurn ? 'burn' : phaseFor(routeActivity);
   const profile = PHASE_VOLUME_PROFILES[visualPhase] || PHASE_VOLUME_PROFILES.cold;
   const enabled = profile.enabled;
+  const lifecycleEffect = lifecycleEffectFor(routeActivity, visualPhase, allowsFullBurn);
   const volumeParams = {
     ...BASE_TALL_PLUME_PARAMS,
     ...profile,
@@ -269,6 +316,7 @@ export function deriveKilnVolumeFireVisual(routeActivity = {}, options = {}) {
     },
     truthWarnings: arrayOrEmpty(routeActivity.sourceTruthWarnings),
     falseAuthorityViolations,
+    lifecycleEffect,
     volumeParams,
   };
 }
@@ -277,6 +325,9 @@ function phaseFor(routeActivity) {
   const fire = routeActivity.fire || {};
   const heatPhase = HEAT_CLASS_PHASES[fire.heatClass];
   if (heatPhase && heatPhase !== 'burn') return heatPhase;
+
+  const authorityPhase = VISUAL_AUTHORITY_PHASES[routeActivity.visualAuthority] || VISUAL_AUTHORITY_PHASES[fire.visualAuthority];
+  if (authorityPhase) return authorityPhase;
 
   const activityPhase = ACTIVITY_PHASES[routeActivity.activityState];
   if (activityPhase) return activityPhase;
@@ -291,6 +342,26 @@ function phaseFor(routeActivity) {
   if (routeActivity.truthMode === 'partial') return 'ember';
   if (routeActivity.truthMode === 'failed') return 'snuff';
   return 'cold';
+}
+
+function lifecycleEffectFor(routeActivity, visualPhase, allowsFullBurn) {
+  const fire = routeActivity.fire || {};
+  const kind = LIFECYCLE_EFFECT_KINDS[visualPhase] || visualPhase || 'cold';
+  return {
+    schema: 'beaming.volume-fire.lifecycle-effect.v0',
+    kind,
+    visualPhase,
+    truthClass: routeActivity.truthMode || fire.truthClass || null,
+    visualAuthority: routeActivity.visualAuthority || fire.visualAuthority || null,
+    heatClass: fire.heatClass || null,
+    fuelClass: fire.fuelClass || null,
+    claimsLiveSpend: allowsFullBurn,
+    spendIntensity: finiteOr(fire.spendIntensity, 0),
+    custodyStrength: finiteOr(fire.custodyStrength, 0),
+    cacheWarmth: finiteOr(fire.cacheWarmth, 0),
+    failureSharpness: finiteOr(fire.failureSharpness, 0),
+    outputSlotCount: finiteOr(fire.outputSlotCount, 0),
+  };
 }
 
 function isFullBurnEligible(routeActivity) {

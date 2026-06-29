@@ -34,6 +34,7 @@ export function bridgeKilnRouteRunToVolumeFire(routeRun = {}, options = {}) {
     visualAuthority: sourceRouteActivity.visualAuthority || null,
     heatClass: sourceRouteActivity.fire?.heatClass || null,
     displayAuthority: displayAuthorityFor(visualReceipt),
+    lifecycleEffect: visualReceipt.lifecycleEffect,
     routeIdentity: {
       requestedRoute: sourceRouteActivity.requestedRoute ?? routeRun.requestedRoute ?? null,
       effectiveRoute: sourceRouteActivity.effectiveRoute ?? routeRun.effectiveRoute ?? null,
@@ -55,12 +56,14 @@ export function buildKilnVolumeFireWitness({ witnessId = null, routeRuns = [] } 
   const falseAuthorityViolations = [];
   const truthWarnings = [];
   const phaseCounts = {};
+  const effectCounts = {};
   const truthModeCounts = {};
   let fullBurnCount = 0;
   let enabledCount = 0;
 
   for (const bridge of bridges) {
     increment(phaseCounts, bridge.visualReceipt.visualPhase || 'unknown');
+    increment(effectCounts, bridge.lifecycleEffect?.kind || 'unknown');
     increment(truthModeCounts, bridge.truthMode || 'unknown');
     if (bridge.visualReceipt.allowsFullBurn) fullBurnCount++;
     if (bridge.visualReceipt.enabled) enabledCount++;
@@ -79,6 +82,7 @@ export function buildKilnVolumeFireWitness({ witnessId = null, routeRuns = [] } 
     fullBurnCount,
     enabledCount,
     phaseCounts,
+    effectCounts,
     truthModeCounts,
     truthWarnings: unique(truthWarnings),
     falseAuthorityViolations: unique(falseAuthorityViolations),
