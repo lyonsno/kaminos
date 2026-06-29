@@ -99,7 +99,8 @@ canvas { display: block; }
 body.kaminos-viewset-bake-mode #info-bar,
 body.kaminos-viewset-bake-mode #fps-counter,
 body.kaminos-viewset-bake-mode #greenroom-preview-controls,
-body.kaminos-viewset-bake-mode #splat-correction-mode-badge { display: none !important; }
+body.kaminos-viewset-bake-mode #splat-correction-mode-badge,
+body.kaminos-viewset-bake-mode #sidebar { display: none !important; }
 body.kaminos-viewset-bake-mode,
 body.kaminos-viewset-bake-mode #viewport { background: transparent !important; }
 
@@ -6103,7 +6104,7 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer = new THREE.WebGPURenderer({ antialias: true, alpha: true });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8061,16 +8062,33 @@ async function greenroomViewMesh(url, fileName, display) {
   setInfo(`Greenroom view: ${display?.title || fileName}`);
 }
 
+window.kaminosViewsetCaptureReady = function() {
+  return Boolean(scene && renderer && camera && window.kaminosViewGLBDebugRoute && window.kaminosSetCameraDebugPose);
+};
+
+window.kaminosSetViewsetCaptureBackground = async function(color = 'transparent') {
+  const transparent = color === 'transparent';
+  const resolvedColor = transparent ? 0x000000 : new THREE.Color(color);
+  scene.background = transparent ? null : resolvedColor;
+  renderer.setClearColor?.(resolvedColor, transparent ? 0 : 1);
+  renderer.setClearAlpha?.(transparent ? 0 : 1);
+  document.body.style.background = transparent ? 'transparent' : color;
+  const viewport = document.getElementById('viewport');
+  if (viewport) viewport.style.background = transparent ? 'transparent' : color;
+  window._kaminosDirty?.();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return { ok: true, color, transparent };
+};
+
 window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaque = true } = {}) {
   if (!source) throw new Error('Missing GLB source for debug load');
   document.body.classList.add('kaminos-viewset-bake-mode');
+  window.dispatchEvent(new Event('resize'));
   if (typeof removeBackdrop === 'function') removeBackdrop();
   if (groundPlane) groundPlane.visible = false;
   showEnvBg = false;
-  scene.background = null;
   scene.backgroundBlurriness = 0;
-  renderer.setClearColor?.(0x000000, 0);
-  renderer.setClearAlpha?.(0);
+  window.kaminosSetViewsetCaptureBackground('transparent');
   glbFileName = fileName || source.split('/').pop()?.split('?')[0] || 'viewset-source.glb';
   const metadata = {
     schema: 'kaminos.glb-viewset-debug-load.v0',
@@ -8094,6 +8112,7 @@ window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaq
     transformControls.visible = false;
   }
   document.getElementById('transform-bar')?.classList.remove('visible');
+  window.dispatchEvent(new Event('resize'));
   setInfo(`GLB viewset debug load: ${metadata.label}`);
   return {
     ok: true,

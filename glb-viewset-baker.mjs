@@ -21,6 +21,10 @@ const requestedSource = args.get('--source') || '';
 const url = args.get('--url') || 'http://127.0.0.1:8095/';
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-glb-viewset');
 const manifestPath = resolve(args.get('--manifest') || `${outDir}/viewset-manifest.json`);
+const atlasPath = resolve(args.get('--atlas') || `${outDir}/viewset-atlas.png`);
+const impostorManifestPath = resolve(args.get('--impostor-manifest') || `${outDir}/impostor-manifest.json`);
+const maskThreshold = clamp01(Number(args.get('--mask-threshold') || 0.08));
+const maskMode = args.get('--mask-mode') || 'dual-background';
 const angles = parseAngles(args.get('--angles') || '0,45,90,135,180,225,270,315');
 const elevation = Number(args.get('--elevation') || 18);
 const radius = Number(args.get('--radius') || 3.2);
@@ -41,6 +45,11 @@ let lastEvidence = {};
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 function parseAngles(value) {
@@ -66,6 +75,19 @@ function hashFile(path) {
 
 function pngMagic(buffer) {
   return buffer.subarray(0, 8).toString('hex');
+}
+
+function pngInfo(buffer) {
+  const magic = pngMagic(buffer);
+  if (magic !== '89504e470d0a1a0a') return { pngMagic: magic };
+  return {
+    pngMagic: magic,
+    pngWidth: buffer.readUInt32BE(16),
+    pngHeight: buffer.readUInt32BE(20),
+    pngBitDepth: buffer[24],
+    pngColorType: buffer[25],
+    hasAlphaChannel: buffer[25] === 4 || buffer[25] === 6,
+  };
 }
 
 function assertPngScreenshot(buffer) {
@@ -114,6 +136,11 @@ function writeManifest(report) {
     height,
     settleMs,
     transparentBackground: true,
+    alphaMode: lastEvidence.alphaMode || null,
+    atlasPath,
+    impostorManifestPath,
+    maskThreshold,
+    maskMode,
     debugPort: port,
     chrome,
     userDataDir,
@@ -216,13 +243,261 @@ async function viewportClip(ws) {
   })()`);
 }
 
-async function capturePngScreenshot(ws, screenshotPath, clip) {
+async function rawPngScreenshot(ws, clip) {
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true, omitBackground: true, clip: clip || undefined }, { timeoutMs: 10000 });
   const png = Buffer.from(shot.data, 'base64');
-  const magic = assertPngScreenshot(png);
+  assertPngScreenshot(png);
+  return { dataBase64: shot.data, png };
+}
+
+async function capturePngScreenshot(ws, screenshotPath, clip) {
+  if (maskMode === 'dual-background') {
+    return captureDualBackgroundMatte(ws, screenshotPath, clip);
+  }
+  const shot = await rawPngScreenshot(ws, clip);
+  const png = shot.png;
+  const info = pngInfo(png);
   mkdirSync(dirname(screenshotPath), { recursive: true });
   writeFileSync(screenshotPath, png);
-  return { path: screenshotPath, bytes: png.length, pngMagic: magic };
+  const alpha = await analyzePngAlpha(ws, shot.dataBase64, maskThreshold, info);
+  return { path: screenshotPath, bytes: png.length, dataBase64: shot.dataBase64, ...info, ...alpha };
+}
+
+async function setCaptureBackground(ws, color) {
+  return evaluate(ws, `window.kaminosSetViewsetCaptureBackground(${JSON.stringify(color)})`);
+}
+
+async function captureDualBackgroundMatte(ws, screenshotPath, clip) {
+  await setCaptureBackground(ws, '#000000');
+  await delay(80);
+  const black = await rawPngScreenshot(ws, clip);
+  await setCaptureBackground(ws, '#ffffff');
+  await delay(80);
+  const white = await rawPngScreenshot(ws, clip);
+  await setCaptureBackground(ws, 'transparent');
+  const matte = await synthesizeDualBackgroundMatte(ws, black.dataBase64, white.dataBase64, maskThreshold);
+  const png = Buffer.from(matte.dataBase64, 'base64');
+  assertPngScreenshot(png);
+  const info = pngInfo(png);
+  mkdirSync(dirname(screenshotPath), { recursive: true });
+  writeFileSync(screenshotPath, png);
+  return {
+    path: screenshotPath,
+    bytes: png.length,
+    dataBase64: matte.dataBase64,
+    ...info,
+    alphaMode: 'dual-background-matte',
+    alphaCoverage: matte.alphaCoverage,
+    opaqueCoverage: matte.opaqueCoverage,
+    transparentPixels: matte.transparentPixels,
+    opaquePixels: matte.opaquePixels,
+    maskThreshold,
+    objectBounds: matte.objectBounds,
+  };
+}
+
+async function synthesizeDualBackgroundMatte(ws, blackBase64, whiteBase64, threshold) {
+  return evaluate(ws, `(() => new Promise((resolve, reject) => {
+    function loadImage(source) {
+      return new Promise((resolveImage, rejectImage) => {
+        const image = new Image();
+        image.onload = () => resolveImage(image);
+        image.onerror = () => rejectImage(new Error('dual-background source failed to decode'));
+        image.src = 'data:image/png;base64,' + source;
+      });
+    }
+    Promise.all([loadImage(${JSON.stringify(blackBase64)}), loadImage(${JSON.stringify(whiteBase64)})]).then(([black, white]) => {
+      const width = black.naturalWidth;
+      const height = black.naturalHeight;
+      if (white.naturalWidth !== width || white.naturalHeight !== height) {
+        throw new Error('dual-background frame dimensions differ');
+      }
+      const blackCanvas = document.createElement('canvas');
+      const whiteCanvas = document.createElement('canvas');
+      const outCanvas = document.createElement('canvas');
+      blackCanvas.width = whiteCanvas.width = outCanvas.width = width;
+      blackCanvas.height = whiteCanvas.height = outCanvas.height = height;
+      const blackCtx = blackCanvas.getContext('2d', { willReadFrequently: true });
+      const whiteCtx = whiteCanvas.getContext('2d', { willReadFrequently: true });
+      const outCtx = outCanvas.getContext('2d', { willReadFrequently: true });
+      blackCtx.drawImage(black, 0, 0);
+      whiteCtx.drawImage(white, 0, 0);
+      const blackPixels = blackCtx.getImageData(0, 0, width, height).data;
+      const whitePixels = whiteCtx.getImageData(0, 0, width, height).data;
+      const out = outCtx.createImageData(width, height);
+      const thresholdByte = Math.max(0, Math.min(255, Math.round(${JSON.stringify(threshold)} * 255)));
+      let transparent = 0;
+      let opaque = 0;
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+      for (let offset = 0, pixel = 0; offset < out.data.length; offset += 4, pixel += 1) {
+        const dr = whitePixels[offset] - blackPixels[offset];
+        const dg = whitePixels[offset + 1] - blackPixels[offset + 1];
+        const db = whitePixels[offset + 2] - blackPixels[offset + 2];
+        const backgroundLeak = Math.max(0, Math.min(255, dr, dg, db));
+        let alpha = Math.max(0, Math.min(255, 255 - backgroundLeak));
+        if (alpha <= thresholdByte) alpha = 0;
+        if (alpha === 0) {
+          transparent += 1;
+          out.data[offset] = 0;
+          out.data[offset + 1] = 0;
+          out.data[offset + 2] = 0;
+          out.data[offset + 3] = 0;
+          continue;
+        }
+        opaque += 1;
+        const scale = 255 / alpha;
+        out.data[offset] = Math.max(0, Math.min(255, Math.round(blackPixels[offset] * scale)));
+        out.data[offset + 1] = Math.max(0, Math.min(255, Math.round(blackPixels[offset + 1] * scale)));
+        out.data[offset + 2] = Math.max(0, Math.min(255, Math.round(blackPixels[offset + 2] * scale)));
+        out.data[offset + 3] = alpha;
+        const x = pixel % width;
+        const y = Math.floor(pixel / width);
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+      outCtx.putImageData(out, 0, 0);
+      const total = Math.max(1, transparent + opaque);
+      resolve({
+        dataBase64: outCanvas.toDataURL('image/png').split(',')[1],
+        alphaCoverage: Number((transparent / total).toFixed(6)),
+        opaqueCoverage: Number((opaque / total).toFixed(6)),
+        transparentPixels: transparent,
+        opaquePixels: opaque,
+        objectBounds: opaque > 0 ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null
+      });
+    }).catch(reject);
+  }))()`, { timeoutMs: 30000 });
+}
+
+async function analyzePngAlpha(ws, dataBase64, threshold, info) {
+  return evaluate(ws, `(() => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const thresholdByte = Math.max(0, Math.min(255, Math.round(${JSON.stringify(threshold)} * 255)));
+        let transparent = 0;
+        let opaque = 0;
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let offset = 3, pixel = 0; offset < pixels.length; offset += 4, pixel += 1) {
+          const alpha = pixels[offset];
+          if (alpha <= thresholdByte) {
+            transparent += 1;
+          } else {
+            opaque += 1;
+            const x = pixel % canvas.width;
+            const y = Math.floor(pixel / canvas.width);
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+        const total = Math.max(1, opaque + transparent);
+        resolve({
+          alphaMode: ${JSON.stringify(info.hasAlphaChannel ? 'png-alpha-channel' : 'png-no-alpha-channel')},
+          alphaCoverage: Number((transparent / total).toFixed(6)),
+          opaqueCoverage: Number((opaque / total).toFixed(6)),
+          transparentPixels: transparent,
+          opaquePixels: opaque,
+          maskThreshold: ${JSON.stringify(threshold)},
+          objectBounds: opaque > 0 ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    img.onerror = () => reject(new Error('frame PNG failed to decode for alpha analysis'));
+    img.src = 'data:image/png;base64,${dataBase64}';
+  }))()`, { timeoutMs: 20000 });
+}
+
+async function composeAtlasPng(ws, frameCaptures) {
+  if (!frameCaptures.length) throw new Error('Cannot compose atlas with no frames');
+  const columns = Math.ceil(Math.sqrt(frameCaptures.length));
+  const rows = Math.ceil(frameCaptures.length / columns);
+  const cellWidth = Math.max(...frameCaptures.map(frame => frame.pngWidth || width));
+  const cellHeight = Math.max(...frameCaptures.map(frame => frame.pngHeight || height));
+  const atlasBase64 = await evaluate(ws, `(() => new Promise((resolve, reject) => {
+    const sources = ${JSON.stringify(frameCaptures.map(frame => frame.dataBase64))};
+    const columns = ${columns};
+    const cellWidth = ${cellWidth};
+    const cellHeight = ${cellHeight};
+    const rows = ${rows};
+    Promise.all(sources.map(source => new Promise((resolveImage, rejectImage) => {
+      const image = new Image();
+      image.onload = () => resolveImage(image);
+      image.onerror = () => rejectImage(new Error('atlas source frame failed to decode'));
+      image.src = 'data:image/png;base64,' + source;
+    }))).then(images => {
+      const canvas = document.createElement('canvas');
+      canvas.width = columns * cellWidth;
+      canvas.height = rows * cellHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      images.forEach((image, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        ctx.drawImage(image, column * cellWidth, row * cellHeight);
+      });
+      resolve(canvas.toDataURL('image/png').split(',')[1]);
+    }).catch(reject);
+  }))()`, { timeoutMs: 30000 });
+  const png = Buffer.from(atlasBase64, 'base64');
+  assertPngScreenshot(png);
+  mkdirSync(dirname(atlasPath), { recursive: true });
+  writeFileSync(atlasPath, png);
+  return {
+    atlasPath,
+    atlasBytes: png.length,
+    atlasPngMagic: pngMagic(png),
+    atlasColumns: columns,
+    atlasRows: rows,
+    atlasCellWidth: cellWidth,
+    atlasCellHeight: cellHeight,
+    atlasWidth: columns * cellWidth,
+    atlasHeight: rows * cellHeight,
+  };
+}
+
+function writeImpostorManifest(report) {
+  mkdirSync(dirname(impostorManifestPath), { recursive: true });
+  const sourcePath = sourcePathCandidate(requestedSource);
+  const impostorManifest = {
+    schema: 'kaminos.glb-impostor-atlas.v0',
+    requestedSource,
+    effectiveSource: requestedSource,
+    sourcePath,
+    sourceSha256: hashFile(sourcePath),
+    requestedUrl: url,
+    effectiveUrl,
+    label,
+    atlasPath: report.atlas?.atlasPath || atlasPath,
+    atlasSha256: hashFile(report.atlas?.atlasPath || atlasPath),
+    atlas: report.atlas || null,
+    alphaMode: report.alphaMode,
+    maskThreshold,
+    elevation,
+    radius,
+    frames: report.frames || frames,
+    sourceManifestPath: manifestPath,
+  };
+  writeFileSync(impostorManifestPath, JSON.stringify({ impostorManifest }, null, 2));
+  return { impostorManifestPath, impostorManifest };
 }
 
 async function main() {
@@ -281,7 +556,10 @@ async function main() {
       throw new Error(`effective URL mismatch: requested ${normalizeUrl(url)} got ${effectiveUrl}`);
     }
     for (let i = 0; i < 120; i += 1) {
-      const available = await evaluate(ws, 'Boolean(window.kaminosViewGLBDebugRoute && window.kaminosSetCameraDebugPose)');
+      const available = await evaluate(ws, `Boolean(
+        window.kaminosViewsetCaptureReady &&
+        window.kaminosViewsetCaptureReady()
+      )`);
       if (available) break;
       await delay(125);
       if (i === 119) throw new Error('Kaminos GLB debug/camera surfaces did not become available');
@@ -300,6 +578,7 @@ async function main() {
 
     phase = 'capturing-viewset';
     mkdirSync(outDir, { recursive: true });
+    const frameCaptures = [];
     for (let index = 0; index < angles.length; index += 1) {
       const angle = angles[index];
       const camera = cameraForAngle(angle);
@@ -310,16 +589,50 @@ async function main() {
       const framePath = viewsetFramePath(index, angle);
       const clip = await viewportClip(ws);
       const screenshot = await capturePngScreenshot(ws, framePath, clip);
+      frameCaptures.push(screenshot);
       frames.push({
         index,
         angle,
         path: framePath,
         bytes: screenshot.bytes,
         pngMagic: screenshot.pngMagic,
+        pngWidth: screenshot.pngWidth,
+        pngHeight: screenshot.pngHeight,
+        pngColorType: screenshot.pngColorType,
+        hasAlphaChannel: screenshot.hasAlphaChannel,
+        alphaMode: screenshot.alphaMode,
+        alphaCoverage: screenshot.alphaCoverage,
+        opaqueCoverage: screenshot.opaqueCoverage,
+        transparentPixels: screenshot.transparentPixels,
+        opaquePixels: screenshot.opaquePixels,
+        maskThreshold: screenshot.maskThreshold,
+        objectBounds: screenshot.objectBounds,
+        cellRect: null,
         viewportClip: clip,
         camera: pose || camera,
       });
     }
+
+    phase = 'composing-atlas';
+    const atlas = await composeAtlasPng(ws, frameCaptures);
+    frames.forEach(frame => {
+      const column = frame.index % atlas.atlasColumns;
+      const row = Math.floor(frame.index / atlas.atlasColumns);
+      frame.cellRect = {
+        x: column * atlas.atlasCellWidth,
+        y: row * atlas.atlasCellHeight,
+        width: atlas.atlasCellWidth,
+        height: atlas.atlasCellHeight,
+      };
+    });
+    const alphaModes = new Set(frames.map(frame => frame.alphaMode));
+    lastEvidence.alphaMode = alphaModes.size === 1 ? [...alphaModes][0] : 'mixed';
+    lastEvidence.atlas = atlas;
+    lastEvidence.impostor = writeImpostorManifest({
+      frames,
+      atlas,
+      alphaMode: lastEvidence.alphaMode,
+    });
 
     phase = 'complete';
     writeManifest({ ok: true });
