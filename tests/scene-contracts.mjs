@@ -165,6 +165,8 @@ assert.match(index, /preview_bench_payload_path/, 'Preview Bench payload-report 
 assert.match(index, /preview_bench_terrain_sample_root/, 'Preview Bench terrain sample route accepts server-backed root identity');
 assert.match(index, /preview_bench_terrain_sample_path/, 'Preview Bench terrain sample route accepts server-backed path identity');
 assert.match(index, /function normalizePreviewBenchSmokeOffer\(/, 'Preview Bench smoke offers normalize into a machine-readable host state');
+assert.match(index, /function previewBenchUniqueStrings\(/, 'Preview Bench smoke offers dedupe repeated downgrade badges from nested producer envelopes');
+assert.match(index, /function previewBenchUniqueSurfaces\(/, 'Preview Bench smoke offers dedupe repeated rejected debug surfaces from nested producer envelopes');
 assert.match(index, /function normalizePreviewBenchPayloadReport\(/, 'Preview Bench generic payload reports normalize into the same machine-readable host state');
 assert.match(index, /function normalizePreviewBenchTerrainSamplePacket\(/, 'Preview Bench terrain samples normalize into the same machine-readable host state');
 assert.match(index, /previewBenchPayload/, 'Preview Bench host can extract embedded previewBenchPayload reports from lane-local witness files');

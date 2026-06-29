@@ -7030,6 +7030,31 @@ function previewBenchArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function previewBenchUniqueStrings(values) {
+  const seen = new Set();
+  return values
+    .map(value => previewBenchText(value))
+    .filter(value => {
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+}
+
+function previewBenchUniqueSurfaces(surfaces) {
+  const seen = new Set();
+  return surfaces.filter(surface => {
+    const value = previewBenchObject(surface);
+    const key = previewBenchText(
+      value.id || value.surface || value.route || value.kind || value.label || value.reason,
+      JSON.stringify(value)
+    );
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function previewBenchText(value, fallback = '') {
   if (value === null || value === undefined) return fallback;
   const text = String(value).trim();
@@ -7165,17 +7190,17 @@ function normalizePreviewBenchSmokeOffer(rawDocument, source = null) {
       budgetMs: offer.freshnessBudgetMs ?? document.freshnessBudgetMs ?? offer.freshness_budget_ms ?? document.freshness_budget_ms ?? document.freshness?.budgetMs,
     });
     const sourceAuthority = previewBenchText(offerSource.authority || offer.authority || document.authority, 'authority-unset');
-    const downgrades = [
+    const downgrades = previewBenchUniqueStrings([
       ...documentDowngrades,
       ...previewBenchArray(offer.downgrades),
       ...previewBenchArray(offer.fallbacks).map(item => typeof item === 'string' ? item : item?.reason || item?.label || 'fallback'),
-    ].filter(Boolean);
-    const rejectedDebugSurfaces = [
+    ]);
+    const rejectedDebugSurfaces = previewBenchUniqueSurfaces([
       ...documentRejected,
       ...previewBenchArray(offer.rejectedSurfaces || offer.rejectedDebugSurfaces),
     ].map(surface => typeof surface === 'string'
       ? { id: surface, reason: 'source marked debug/non-acceptance surface' }
-      : previewBenchObject(surface));
+      : previewBenchObject(surface)));
     return {
       schema: SMOKE_OFFER_SCHEMA,
       id: previewBenchText(offer.id || offer.offerId || offer.route || offer.schema, `offer-${index + 1}`),
@@ -7214,7 +7239,7 @@ function normalizePreviewBenchSmokeOffer(rawDocument, source = null) {
     loadedAt: nowIso,
     rawSchema: document.schema || null,
     offers,
-    rejectedDebugSurfaces: offers.flatMap(offer => offer.rejectedDebugSurfaces || []),
+    rejectedDebugSurfaces: previewBenchUniqueSurfaces(offers.flatMap(offer => offer.rejectedDebugSurfaces || [])),
     error: null,
   };
 }

@@ -49,10 +49,10 @@ function buildPreviewBenchSmokeOfferFixture() {
     },
     offers: [
       {
-        id: 'greedy-throw-physics-v1',
-        label: 'Greedy Throw Physics V1',
-        schema: 'lerms.throw-physics-artifact.v1',
-        route: 'lerms/glove-well/throw-physics/v1',
+        id: 'producer-smoke-offer-fixture',
+        label: 'Producer Smoke Offer Fixture',
+        schema: 'lerms.preview-bench-smoke-offer-fixture.v0',
+        route: 'lerms/preview-bench/smoke-offer-fixture',
         source: {
           authority: 'fixture',
           producerDiaulos: 'greedy-glove-fucker',
@@ -76,10 +76,10 @@ function buildPreviewBenchSmokeOfferFixture() {
           { label: 'trajectory', value: 'arc, bounce, desire decay' },
           { label: 'capture', value: 'browser witness screenshot' },
         ],
-        downgrades: ['fixture-live-comparison-pending'],
+        downgrades: ['fixture-preview-bench-transport-not-source-authority'],
         rejectedDebugSurfaces: [
           {
-            id: 'lane-local-debug-canvas',
+            id: 'fixture-lane-local-debug-surface',
             reason: 'debug route is not Kaminos Preview Bench acceptance',
           },
         ],
@@ -4328,7 +4328,8 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
   }
   const offer = state.offers?.[0];
   if (!offer || offer.schema !== 'kaminos.forge-host.smoke-offer.v0'
-      || offer.payloadSchema !== 'lerms.throw-physics-artifact.v1') {
+      || typeof offer.payloadSchema !== 'string'
+      || !offer.payloadSchema.length) {
     throw new Error(`Preview Bench smoke-offer did not preserve source payload schema: ${JSON.stringify(evidence)}`);
   }
   if (evidence.sourceAuthority !== 'fixture' || !Number.isFinite(Number(evidence.freshnessBudget))) {
@@ -4340,11 +4341,15 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
   if (!evidence.rows?.[0]
       || evidence.rows[0].authority !== 'fixture'
       || evidence.rows[0].freshness !== 'fresh-fixture'
-      || evidence.rows[0].downgrade !== 'fixture-live-comparison-pending') {
+      || !evidence.rows[0].schema
+      || evidence.rows[0].schema !== offer.payloadSchema
+      || typeof evidence.rows[0].downgrade !== 'string'
+      || !evidence.rows[0].downgrade.length) {
     throw new Error(`Preview Bench smoke-offer UI did not expose authority/freshness/downgrade badges: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.rejectedDebugSurfaces?.length
-      || evidence.rejectedDebugSurfaces[0].id !== 'lane-local-debug-canvas') {
+      || typeof evidence.rejectedDebugSurfaces[0].id !== 'string'
+      || !evidence.rejectedDebugSurfaces[0].id.length) {
     throw new Error(`Preview Bench smoke-offer witness lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
   }
   lastEvidence.previewBenchSmokeOffer = {
