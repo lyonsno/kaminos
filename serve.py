@@ -87,6 +87,14 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
+HAND_CONTROL_SIDECAR_EVENT_SCHEMA = "kaminos.hand-control-sidecar-event-cache.v0"
+PERCEPTASIA_HAND_CONTROL_SCHEMA = "perceptasia.hand-control.v0"
+HAND_CONTROL_EVENT_LOCK = threading.Lock()
+HAND_CONTROL_EVENT_CACHE = {
+    "event": None,
+    "stored_at_ms": None,
+    "sequence": 0,
+}
 
 
 def runtime_config():
@@ -596,7 +604,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/runtime-config":
+        if parsed.path == "/hand-control-sidecar-event":
+            self.handle_hand_control_sidecar_event_get()
+        elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
@@ -623,7 +633,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/save-scene":
+        if parsed.path == "/hand-control-sidecar-event":
+            self.handle_hand_control_sidecar_event_post()
+        elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
@@ -634,6 +646,63 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def hand_control_sidecar_snapshot(self):
+        with HAND_CONTROL_EVENT_LOCK:
+            event = HAND_CONTROL_EVENT_CACHE["event"]
+            stored_at_ms = HAND_CONTROL_EVENT_CACHE["stored_at_ms"]
+            sequence = HAND_CONTROL_EVENT_CACHE["sequence"]
+        now_ms = int(time.time() * 1000)
+        return {
+            "schema": HAND_CONTROL_SIDECAR_EVENT_SCHEMA,
+            "status": "stored" if event else "empty",
+            "sequence": sequence,
+            "stored_at_ms": stored_at_ms,
+            "age_ms": max(0, now_ms - stored_at_ms) if stored_at_ms else None,
+            "event": event,
+        }
+
+    def handle_hand_control_sidecar_event_get(self):
+        self.send_json(self.hand_control_sidecar_snapshot())
+
+    def handle_hand_control_sidecar_event_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+
+        event = payload.get("event") if isinstance(payload, dict) and isinstance(payload.get("event"), dict) else payload
+        if not isinstance(event, dict):
+            self.send_json({"error": "hand control event must be a JSON object"}, 400)
+            return
+        if event.get("schema") != PERCEPTASIA_HAND_CONTROL_SCHEMA:
+            self.send_json({"error": f"hand control event schema must be {PERCEPTASIA_HAND_CONTROL_SCHEMA}"}, 400)
+            return
+        has_landmarks = isinstance(event.get("landmarks_2d"), list) and len(event.get("landmarks_2d")) >= 21
+        mano = event.get("mano") if isinstance(event.get("mano"), dict) else event.get("dense_mano")
+        has_dense_mano = (
+            isinstance(mano, dict)
+            and isinstance(mano.get("vertices"), list)
+            and len(mano.get("vertices")) >= 3
+            and isinstance(mano.get("faces"), list)
+            and len(mano.get("faces")) >= 1
+        )
+        if not has_landmarks and not has_dense_mano:
+            self.send_json({"error": "hand control event must include landmarks_2d[21] or dense MANO vertices/faces"}, 400)
+            return
+
+        stored_at_ms = int(time.time() * 1000)
+        with HAND_CONTROL_EVENT_LOCK:
+            HAND_CONTROL_EVENT_CACHE["event"] = event
+            HAND_CONTROL_EVENT_CACHE["stored_at_ms"] = stored_at_ms
+            HAND_CONTROL_EVENT_CACHE["sequence"] += 1
+        self.send_json(self.hand_control_sidecar_snapshot())
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())

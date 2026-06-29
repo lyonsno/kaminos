@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Hand Surface Compositor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: #060908;
+      color: #d8f3e7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 70%, rgba(52, 124, 104, 0.14), transparent 36%),
+        linear-gradient(180deg, #050706 0%, #0a1110 100%);
+    }
+    #stage {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: stretch;
+    }
+    #stage svg {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    .route-chip {
+      position: fixed;
+      left: 14px;
+      top: 14px;
+      max-width: min(760px, calc(100vw - 28px));
+      padding: 10px 14px;
+      border: 1px solid rgba(97, 209, 177, 0.32);
+      border-radius: 8px;
+      background: rgba(5, 12, 11, 0.72);
+      color: rgba(198, 247, 226, 0.9);
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <main id="stage" data-schema="kaminos.tracked-hand-surface-compositor.v0"></main>
+  <div class="route-chip" id="route-chip">hand surface compositor booting</div>
+  <script type="module">
+    import {
+      DEFAULT_PERCEPTASIA_HAND_ENDPOINT,
+      buildFixturePerceptasiaHandPacket,
+      composeTrackedHandSurface,
+      renderTrackedHandSurfaceWitnessSvg,
+    } from './hand-surface-compositor-core.mjs';
+
+    const params = new URLSearchParams(window.location.search);
+    const stage = document.getElementById('stage');
+    const chip = document.getElementById('route-chip');
+    const requestedEndpoint = params.get('hand_packet_url') || params.get('perceptasia_hand_endpoint') || DEFAULT_PERCEPTASIA_HAND_ENDPOINT;
+    const requestedBackend = params.get('backend') || 'native_wilor_mini_mlx_detector_sidecar_live';
+    const useFixture = params.get('fixture') !== '0';
+    const maxFreshnessMs = Number(params.get('max_freshness_ms') || 180);
+    const pollMs = Math.max(30, Number(params.get('poll_ms') || 80));
+
+    let latestPacket = buildFixturePerceptasiaHandPacket({
+      sourceBackend: useFixture ? 'kaminos_hand_surface_fixture' : requestedBackend,
+      effectiveRoute: useFixture ? 'kaminos_hand_surface_fixture' : requestedBackend,
+      timestampMs: performance.now(),
+    });
+    let latestFetchError = null;
+    let latestReport = null;
+
+    if (!useFixture) {
+      void pollPacketLoop();
+    }
+
+    function attachments() {
+      return [
+        { id: 'red-lerm-palm', kind: 'lerm_placeholder', face: [0, 5, 9], barycentric: [0.22, 0.34, 0.44] },
+        { id: 'yellow-lerm-index', kind: 'lerm_placeholder', face: [5, 6, 10], barycentric: [0.18, 0.48, 0.34] },
+        { id: 'blue-lerm-ring', kind: 'lerm_placeholder', face: [13, 14, 18], barycentric: [0.24, 0.46, 0.3] },
+      ];
+    }
+
+    async function pollPacketLoop() {
+      while (true) {
+        try {
+          const response = await fetch(requestedEndpoint, { cache: 'no-store' });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || `hand packet fetch failed ${response.status}`);
+          latestPacket = body.event || body;
+          latestFetchError = null;
+        } catch (error) {
+          latestFetchError = error instanceof Error ? error.message : String(error);
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      }
+    }
+
+    function render() {
+      if (useFixture) {
+        latestPacket = buildFixturePerceptasiaHandPacket({
+          sourceBackend: 'kaminos_hand_surface_fixture',
+          effectiveRoute: 'kaminos_hand_surface_fixture',
+          timestampMs: performance.now(),
+          palmNormal: { x: 0.04, y: Math.sin(performance.now() / 900) * 0.18, z: 0.98 },
+        });
+      }
+      latestReport = composeTrackedHandSurface(latestPacket, {
+        requestedEndpoint,
+        nowMs: performance.now(),
+        maxFreshnessMs,
+        webcam: {
+          source: useFixture ? 'synthetic_fixture' : 'live_webcam',
+          visible: true,
+          blank: false,
+          frameId: useFixture ? 'synthetic-webcam-gradient' : `perceptasia-endpoint-${Math.floor(performance.now())}`,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+        consumer: {
+          id: 'lerms-hand-surface-field',
+          schema: 'lerms.hand-surface-lerm-witness.v0',
+          ownership: 'consumer',
+        },
+        attachments: attachments(),
+        sceneDepth: { requested: params.get('moge') === '1', effectiveRoute: null, ageMs: null },
+      });
+      window.kaminosTrackedHandSurfaceDebugState = () => ({
+        schema: 'kaminos.tracked-hand-surface-debug-state.v0',
+        requestedEndpoint,
+        useFixture,
+        latestFetchError,
+        report: latestReport,
+      });
+      stage.innerHTML = renderTrackedHandSurfaceWitnessSvg(latestReport, {
+        width: Math.max(420, window.innerWidth),
+        height: Math.max(260, window.innerHeight),
+      });
+      chip.textContent = [
+        'Kaminos hand surface',
+        `authority ${latestReport.authority}`,
+        `backend ${latestReport.sourceTruth.backendIdentity}`,
+        `endpoint ${requestedEndpoint}`,
+        latestFetchError ? `fetch ${latestFetchError}` : null,
+      ].filter(Boolean).join(' | ');
+      requestAnimationFrame(render);
+    }
+
+    render();
+  </script>
+</body>
+</html>
