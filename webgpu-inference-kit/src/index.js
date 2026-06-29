@@ -25,6 +25,14 @@ export {
 } from './staged-profile.js';
 
 export {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+  createRouteTimingMetadata,
+  validateKernelProfileMetadata,
+  validateRouteTimingMetadata,
+} from './kernel-profile.js';
+
+export {
   MOGE_DEPTH_NORMAL_ROUTE_ID,
   createMogeDepthNormalRouteDefinition,
   createMogeDepthNormalRouteReceipt,

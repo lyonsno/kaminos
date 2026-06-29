@@ -1,5 +1,9 @@
 import { defineWebGpuRoute } from './route-boundary.js';
 import {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+} from './kernel-profile.js';
+import {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
@@ -7,6 +11,7 @@ import {
 
 export const SHARP_IMAGE_TO_SPLAT_ROUTE_ID = 'sharp.image-to-splat.webgpu-local.v0';
 const SHARP_MODEL_ID = 'apple/ml-sharp';
+const DEFAULT_KERNEL_PROFILE = 'spn-dinov2l16-monodepth-gaussian-ply';
 const REQUIRED_STAGES = ['spn', 'monodepth', 'gaussian-decoder', 'compose-ply', 'output-capture'];
 const OUTPUT_ROLES = [
   { key: 'splat', role: 'splat-candidate', required: true },
@@ -36,11 +41,7 @@ export function createSharpImageToSplatRouteReceipt(input) {
       weightsHash: input.model?.weightsHash,
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile,
-      commit: input.kernel?.commit || null,
-    },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.input),
     ],
@@ -50,6 +51,12 @@ export function createSharpImageToSplatRouteReceipt(input) {
 }
 
 export function createSharpImageToSplatRouteDefinition(input = {}) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: DEFAULT_KERNEL_PROFILE,
+    requiredStages: REQUIRED_STAGES,
+    timingSource: 'adapter-phase-wall-clock',
+  });
+
   return defineWebGpuRoute({
     routeId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
     backendKind: 'webgpu-local',
@@ -58,11 +65,7 @@ export function createSharpImageToSplatRouteDefinition(input = {}) {
       revision: input.model?.revision || 'local-sharp-webgpu',
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile || 'spn-dinov2l16-monodepth-gaussian-ply',
-      commit: input.kernel?.commit || null,
-    },
+    kernel: routeMetadata.kernel,
     inputs: [
       { role: 'source-image', required: true, artifactRequired: true, hashRequired: true },
     ],
@@ -73,8 +76,8 @@ export function createSharpImageToSplatRouteDefinition(input = {}) {
       { role: 'splat-autocrop-evidence', required: false, artifactRequired: true, hashRequired: true, shape: [1] },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    requiredStages: input.requiredStages || REQUIRED_STAGES,
-    timingSource: input.timingSource || 'adapter-phase-wall-clock',
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
     worker: input.worker || {
       exportName: 'runSharpImageToSplatRoute',
       adapterReportSchema: 'kaminos.sharp-webgpu-adapter-report.v0',

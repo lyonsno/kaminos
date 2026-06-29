@@ -1,5 +1,9 @@
 import { defineWebGpuRoute } from './route-boundary.js';
 import {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+} from './kernel-profile.js';
+import {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
@@ -7,6 +11,8 @@ import {
 
 export const MOGE_DEPTH_NORMAL_ROUTE_ID = 'moge.depth-normal.webgpu-local.v0';
 const MOGE_MODEL_ID = 'Ruicheng/moge-2-vitl-normal';
+const DEFAULT_KERNEL_PROFILE = 'conv-transpose2d-stride2';
+const REQUIRED_STAGES = ['backbone', 'decoder-heads', 'output-readback'];
 const OUTPUT_ROLES = [
   { key: 'depth', role: 'depth', required: true },
   { key: 'normal', role: 'normal', required: true },
@@ -34,11 +40,7 @@ export function createMogeDepthNormalRouteReceipt(input) {
       weightsHash: input.model?.weightsHash,
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile,
-      commit: input.kernel?.commit || null,
-    },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.input),
     ],
@@ -48,6 +50,12 @@ export function createMogeDepthNormalRouteReceipt(input) {
 }
 
 export function createMogeDepthNormalRouteDefinition(input = {}) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: DEFAULT_KERNEL_PROFILE,
+    requiredStages: REQUIRED_STAGES,
+    timingSource: 'queue-submit-wait',
+  });
+
   return defineWebGpuRoute({
     routeId: MOGE_DEPTH_NORMAL_ROUTE_ID,
     backendKind: 'webgpu-local',
@@ -56,11 +64,7 @@ export function createMogeDepthNormalRouteDefinition(input = {}) {
       revision: input.model?.revision || 'local-vitl-normal',
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile || 'conv-transpose2d-stride2',
-      commit: input.kernel?.commit || null,
-    },
+    kernel: routeMetadata.kernel,
     inputs: [
       { role: 'source-image', required: true, artifactRequired: true, hashRequired: true },
     ],
@@ -71,8 +75,8 @@ export function createMogeDepthNormalRouteDefinition(input = {}) {
       { role: 'mask', required: false, artifactRequired: true, hashRequired: true, shape: [592, 592] },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    requiredStages: input.requiredStages || ['backbone', 'decoder-heads', 'output-readback'],
-    timingSource: input.timingSource || 'queue-submit-wait',
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
     worker: input.worker || {
       exportName: 'runMogeDepthNormalRoute',
     },

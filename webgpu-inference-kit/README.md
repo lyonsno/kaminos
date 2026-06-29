@@ -41,6 +41,10 @@ Current surface:
   `finishStagedSubmitProfile(profile)`, and
   `validateStagedSubmitProfile(profile)`: record staged-submit timing evidence
   and reject timestamp-query timing unless it is validated against staged waits.
+- `createKernelProfileMetadata(input)` and
+  `createRouteKernelProfileMetadata(input)`: normalize shared kit version,
+  kernel profile, commit, required stage, and timing-source metadata for route
+  definitions and receipts while keeping route-specific semantics local.
 - `createMogeDepthNormalRouteReceipt(input)`: first concrete `webgpu-local`
   route receipt factory for `moge.depth-normal.webgpu-local.v0`.
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`,
@@ -91,8 +95,11 @@ Near-term extraction order:
 8. Shared route receipt helper. Artifact normalization, backend identity
    validation, staged profile validation, and receipt construction now live in
    one helper consumed by all four concrete route factories.
-9. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-10. Shared kernels only when at least two real routes need them or a measured
+9. Shared kernel/profile metadata helper. Kit version, kernel profile, commit,
+   required stage, and timing-source normalization now live in one helper
+   consumed by all four concrete route factories.
+10. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+11. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:

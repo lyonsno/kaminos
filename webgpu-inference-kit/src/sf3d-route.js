@@ -1,5 +1,9 @@
 import { defineWebGpuRoute } from './route-boundary.js';
 import {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+} from './kernel-profile.js';
+import {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
@@ -7,6 +11,7 @@ import {
 
 export const SF3D_IMAGE_TO_MESH_ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
 const SF3D_MODEL_ID = 'stabilityai/stable-fast-3d';
+const DEFAULT_KERNEL_PROFILE = 'dinov2-two-stream-triplane-marching-tet-texture-bake';
 const REQUIRED_STAGES = [
   'image-preprocess',
   'dinov2-tokenizer',
@@ -44,11 +49,7 @@ export function createSf3dImageToMeshRouteReceipt(input) {
       weightsHash: input.model?.weightsHash,
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile,
-      commit: input.kernel?.commit || null,
-    },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.input),
     ],
@@ -58,6 +59,12 @@ export function createSf3dImageToMeshRouteReceipt(input) {
 }
 
 export function createSf3dImageToMeshRouteDefinition(input = {}) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: DEFAULT_KERNEL_PROFILE,
+    requiredStages: REQUIRED_STAGES,
+    timingSource: 'adapter-phase-wall-clock',
+  });
+
   return defineWebGpuRoute({
     routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
     backendKind: 'webgpu-local',
@@ -66,11 +73,7 @@ export function createSf3dImageToMeshRouteDefinition(input = {}) {
       revision: input.model?.revision || 'stable-fast-3d',
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile || 'dinov2-two-stream-triplane-marching-tet-texture-bake',
-      commit: input.kernel?.commit || null,
-    },
+    kernel: routeMetadata.kernel,
     inputs: [
       { role: 'source-image', required: true, artifactRequired: true, hashRequired: true },
     ],
@@ -81,8 +84,8 @@ export function createSf3dImageToMeshRouteDefinition(input = {}) {
       { role: 'mesh-obj', required: false, artifactRequired: true, hashRequired: true, shape: [1] },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    requiredStages: input.requiredStages || REQUIRED_STAGES,
-    timingSource: input.timingSource || 'adapter-phase-wall-clock',
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
     worker: input.worker || {
       exportName: 'runSf3dImageToMeshRoute',
       meshFormat: 'glb',

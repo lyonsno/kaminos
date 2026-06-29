@@ -1,5 +1,9 @@
 import { defineWebGpuRoute } from './route-boundary.js';
 import {
+  createKernelProfileMetadata,
+  createRouteKernelProfileMetadata,
+} from './kernel-profile.js';
+import {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,
@@ -7,6 +11,7 @@ import {
 
 export const KIMODO_TEXT_TO_MOTION_ROUTE_ID = 'kimodo.text-to-motion.webgpu-local.v0';
 const KIMODO_MODEL_ID = 'NVIDIA/Kimodo-SOMA-RP-v1.1';
+const DEFAULT_KERNEL_PROFILE = 'twostage-denoiser-ddim50-fk';
 const REQUIRED_STAGES = ['text-embedding', 'ddim-sampling', 'fk-decode', 'output-capture'];
 const OUTPUT_ROLES = [
   { key: 'soma77Joints', role: 'soma77-joints', required: true },
@@ -34,11 +39,7 @@ export function createKimodoTextToMotionRouteReceipt(input) {
       weightsHash: input.model?.weightsHash,
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile,
-      commit: input.kernel?.commit || null,
-    },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('text-prompt', input.input),
     ],
@@ -48,6 +49,12 @@ export function createKimodoTextToMotionRouteReceipt(input) {
 }
 
 export function createKimodoTextToMotionRouteDefinition(input = {}) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: DEFAULT_KERNEL_PROFILE,
+    requiredStages: REQUIRED_STAGES,
+    timingSource: 'adapter-phase-wall-clock',
+  });
+
   return defineWebGpuRoute({
     routeId: KIMODO_TEXT_TO_MOTION_ROUTE_ID,
     backendKind: 'webgpu-local',
@@ -56,11 +63,7 @@ export function createKimodoTextToMotionRouteDefinition(input = {}) {
       revision: input.model?.revision || 'SOMA-RP-v1.1',
       dtype: input.model?.dtype || 'fp16',
     },
-    kernel: {
-      kitVersion: input.kernel?.kitVersion || '0.0.0',
-      profile: input.kernel?.profile || 'twostage-denoiser-ddim50-fk',
-      commit: input.kernel?.commit || null,
-    },
+    kernel: routeMetadata.kernel,
     inputs: [
       { role: 'text-prompt', required: true, artifactRequired: true, hashRequired: true },
     ],
@@ -70,8 +73,8 @@ export function createKimodoTextToMotionRouteDefinition(input = {}) {
       { role: 'filmstrip', required: false, artifactRequired: true, hashRequired: true },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    requiredStages: input.requiredStages || REQUIRED_STAGES,
-    timingSource: input.timingSource || 'adapter-phase-wall-clock',
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
     worker: input.worker || {
       exportName: 'runKimodoTextToMotionRoute',
       textEmbedding: 'external-llama3-8b',
