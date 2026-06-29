@@ -1,0 +1,19 @@
+import { WEBGPU_ROUTE_RECEIPT_SCHEMA } from './route-receipt.js';
+import {
+  WEBGPU_ROUTE_DEFINITION_SCHEMA,
+  WEBGPU_ROUTE_REQUEST_SCHEMA,
+  WEBGPU_ROUTE_RESULT_SCHEMA,
+} from './route-boundary.js';
+
+export function createWebGpuRouteSchemaContract(input = {}) {
+  return {
+    schema: 'kaminos.webgpu-route-schema-contract.v0',
+    kitVersion: input.kitVersion || '0.0.0',
+    definitionSchema: WEBGPU_ROUTE_DEFINITION_SCHEMA,
+    requestSchema: WEBGPU_ROUTE_REQUEST_SCHEMA,
+    resultSchema: WEBGPU_ROUTE_RESULT_SCHEMA,
+    receiptSchema: WEBGPU_ROUTE_RECEIPT_SCHEMA,
+    authoritativeReceiptStatuses: ['real'],
+    nonAuthoritativeReceiptStatuses: ['fallback', 'partial', 'cached'],
+  };
+}

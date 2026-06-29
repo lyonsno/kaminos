@@ -2,6 +2,7 @@ export {
   assertAuthoritativeRouteReceipt,
   createWebGpuLocalRouteReceipt,
   validateRouteReceipt,
+  WEBGPU_ROUTE_RECEIPT_SCHEMA,
 } from './route-receipt.js';
 
 export {
@@ -36,6 +37,22 @@ export {
 } from './sharp-route.js';
 
 export {
+  KIMODO_TEXT_TO_MOTION_ROUTE_ID,
+  createKimodoTextToMotionRouteDefinition,
+  createKimodoTextToMotionRouteReceipt,
+} from './kimodo-route.js';
+
+export {
+  SF3D_IMAGE_TO_MESH_ROUTE_ID,
+  createSf3dImageToMeshRouteDefinition,
+  createSf3dImageToMeshRouteReceipt,
+} from './sf3d-route.js';
+
+export {
+  createWebGpuRouteSchemaContract,
+} from './route-schema-contract.js';
+
+export {
   assertAuthoritativeRouteWorkerResult,
   createRouteInvocationRequest,
   createRouteWorkerResult,
@@ -44,4 +61,7 @@ export {
   validateRouteDefinition,
   validateRouteInvocationRequest,
   validateRouteWorkerResult,
+  WEBGPU_ROUTE_DEFINITION_SCHEMA,
+  WEBGPU_ROUTE_REQUEST_SCHEMA,
+  WEBGPU_ROUTE_RESULT_SCHEMA,
 } from './route-boundary.js';

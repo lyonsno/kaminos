@@ -4,9 +4,9 @@ import {
   validateRouteReceipt,
 } from './route-receipt.js';
 
-const ROUTE_DEFINITION_SCHEMA = 'kaminos.webgpu-route-definition.v0';
-const ROUTE_REQUEST_SCHEMA = 'kaminos.webgpu-route-request.v0';
-const ROUTE_RESULT_SCHEMA = 'kaminos.webgpu-route-result.v0';
+export const WEBGPU_ROUTE_DEFINITION_SCHEMA = 'kaminos.webgpu-route-definition.v0';
+export const WEBGPU_ROUTE_REQUEST_SCHEMA = 'kaminos.webgpu-route-request.v0';
+export const WEBGPU_ROUTE_RESULT_SCHEMA = 'kaminos.webgpu-route-result.v0';
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -134,7 +134,7 @@ export function defineWebGpuRoute(input) {
   const outputRoles = normalizeRoles(input.outputs || input.outputRoles, { defaultRequired: true });
 
   return {
-    schema: ROUTE_DEFINITION_SCHEMA,
+    schema: WEBGPU_ROUTE_DEFINITION_SCHEMA,
     routeId: input.routeId,
     backendKind: input.backendKind || 'webgpu-local',
     model: clone(input.model),
@@ -158,7 +158,7 @@ export function validateRouteDefinition(route) {
     return { ok: false, errors: ['route must be an object'] };
   }
 
-  if (route.schema !== ROUTE_DEFINITION_SCHEMA) errors.push(`schema must be ${ROUTE_DEFINITION_SCHEMA}`);
+  if (route.schema !== WEBGPU_ROUTE_DEFINITION_SCHEMA) errors.push(`schema must be ${WEBGPU_ROUTE_DEFINITION_SCHEMA}`);
   requireString(errors, route.routeId, 'routeId');
   if (route.backendKind !== 'webgpu-local') errors.push('backendKind must be webgpu-local');
 
@@ -236,7 +236,7 @@ export function createRouteInvocationRequest(route, input) {
   if (!isNonEmptyString(input.requestId)) throw new Error('requestId must be a non-empty string');
 
   return {
-    schema: ROUTE_REQUEST_SCHEMA,
+    schema: WEBGPU_ROUTE_REQUEST_SCHEMA,
     requestId: input.requestId,
     routeId: route.routeId,
     backendKind: route.backendKind,
@@ -262,7 +262,7 @@ export function validateRouteInvocationRequest(request, route) {
   if (!request || typeof request !== 'object') {
     return { ok: false, errors: ['request must be an object'] };
   }
-  if (request.schema !== ROUTE_REQUEST_SCHEMA) errors.push(`schema must be ${ROUTE_REQUEST_SCHEMA}`);
+  if (request.schema !== WEBGPU_ROUTE_REQUEST_SCHEMA) errors.push(`schema must be ${WEBGPU_ROUTE_REQUEST_SCHEMA}`);
   requireString(errors, request.requestId, 'requestId');
   if (request.routeId !== route?.routeId) errors.push('routeId must match route definition');
   if (request.backendKind !== 'webgpu-local') errors.push('backendKind must be webgpu-local');
@@ -281,7 +281,7 @@ export function createRouteWorkerResult(route, input) {
   const receipt = input.receipt;
 
   return {
-    schema: ROUTE_RESULT_SCHEMA,
+    schema: WEBGPU_ROUTE_RESULT_SCHEMA,
     requestId: request.requestId,
     routeId: route.routeId,
     status: receipt?.status || 'unknown',
@@ -303,7 +303,7 @@ export function validateRouteWorkerResult(result, route) {
     return { ok: false, errors: ['result must be an object'] };
   }
 
-  if (result.schema !== ROUTE_RESULT_SCHEMA) errors.push(`schema must be ${ROUTE_RESULT_SCHEMA}`);
+  if (result.schema !== WEBGPU_ROUTE_RESULT_SCHEMA) errors.push(`schema must be ${WEBGPU_ROUTE_RESULT_SCHEMA}`);
   requireString(errors, result.requestId, 'requestId');
   if (result.routeId !== route?.routeId) errors.push('routeId must match route definition');
 

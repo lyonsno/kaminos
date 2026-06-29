@@ -10,6 +10,10 @@ Current surface:
 
 - `createWebGpuLocalRouteReceipt(input)`: creates a
   `kaminos.webgpu-route-receipt.v0` receipt for a `webgpu-local` route.
+- `createWebGpuRouteSchemaContract(input)`: exposes the kit-owned route
+  definition/request/result/receipt schema strings as a compact contract object
+  so route repos can run conformance checks instead of manually mirroring hidden
+  constants.
 - `validateRouteReceipt(receipt)`: validates requested/effective route identity,
   backend/model/kernel identity, input/output artifact ids, timings, and
   fallback status.
@@ -48,6 +52,16 @@ Current surface:
   the native SHARP-WebGPU browser adapter surface used by Kaminos Pipeline:
   source image in, splat candidate/depth/metadata out, with optional
   `kaminos.splat-autocrop-evidence.v0` side evidence.
+- `createKimodoTextToMotionRouteReceipt(input)` and
+  `createKimodoTextToMotionRouteDefinition(input)`: browser WebGPU
+  text-to-motion route contract for Kimodo SOMA-RP-v1.1, preserving prompt
+  identity, SOMA77 joint output, motion sidecar output, optional filmstrip, and
+  staged text-embedding/DDIM/FK/output-capture timing.
+- `createSf3dImageToMeshRouteReceipt(input)` and
+  `createSf3dImageToMeshRouteDefinition(input)`: browser WebGPU image-to-mesh
+  route contract for Stable Fast 3D, preserving source image, GLB mesh, albedo
+  texture, normal map, optional OBJ, and DINOv2/two-stream/triplane/marching-tet
+  stage identity.
 
 Near-term extraction order:
 
@@ -61,8 +75,15 @@ Near-term extraction order:
 5. SHARP image-to-splat route contract. First factory and route definition are
    in place for the browser-native SHARP-WebGPU path; runtime emission remains
    owned by SHARP/Pipeline adapter surfaces.
-6. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-7. Shared kernels only when at least two real routes need them or a measured
+6. Kimodo and SF3D route contracts. First factories and route definitions are
+   in place for browser-native text-to-motion and image-to-mesh routes; runtime
+   emission remains owned by those route repos and Kaminos motion/pipeline
+   consumers.
+7. MoGE schema mirror drift reduction. The kit exposes a schema contract object;
+   MoGE has a dev conformance test against that contract while the runtime still
+   avoids a brittle temporary worktree dependency.
+8. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+9. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:
