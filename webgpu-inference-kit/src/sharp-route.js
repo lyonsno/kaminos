@@ -1,41 +1,19 @@
-import { validateWebGpuBackendIdentity } from './gpu-environment.js';
 import { defineWebGpuRoute } from './route-boundary.js';
-import { createWebGpuLocalRouteReceipt } from './route-receipt.js';
-import { finishStagedSubmitProfile, validateStagedSubmitProfile } from './staged-profile.js';
+import {
+  createRouteReceiptArtifacts,
+  createRouteReceiptInputArtifact,
+  createWebGpuRouteReceiptFromArtifacts,
+} from './route-receipt-helper.js';
 
 export const SHARP_IMAGE_TO_SPLAT_ROUTE_ID = 'sharp.image-to-splat.webgpu-local.v0';
 const SHARP_MODEL_ID = 'apple/ml-sharp';
 const REQUIRED_STAGES = ['spn', 'monodepth', 'gaussian-decoder', 'compose-ply', 'output-capture'];
-
-function requireArtifact(value, name) {
-  if (!value || typeof value !== 'object') throw new Error(`${name} output must be an object`);
-  if (typeof value.artifactId !== 'string' || value.artifactId.length === 0) {
-    throw new Error(`${name} output must include artifactId`);
-  }
-  if (typeof value.sha256 !== 'string' || value.sha256.length === 0) {
-    throw new Error(`${name} output must include sha256`);
-  }
-  if (!Array.isArray(value.shape) || value.shape.length === 0) {
-    throw new Error(`${name} output must include shape`);
-  }
-}
-
-function outputArtifact(role, artifact) {
-  return {
-    role,
-    artifactId: artifact.artifactId,
-    sha256: artifact.sha256,
-    shape: [...artifact.shape],
-    status: artifact.status || 'real',
-  };
-}
-
-function finishAndValidateProfile(profile) {
-  const finished = finishStagedSubmitProfile(profile);
-  const result = validateStagedSubmitProfile(finished);
-  if (!result.ok) throw new Error(`invalid staged profile: ${result.errors.join('; ')}`);
-  return finished;
-}
+const OUTPUT_ROLES = [
+  { key: 'splat', role: 'splat-candidate', required: true },
+  { key: 'depthMap', role: 'depth-map', required: true },
+  { key: 'metadata', role: 'sharp-webgpu-metadata', required: true },
+  { key: 'autoCropEvidence', role: 'splat-autocrop-evidence', required: false },
+];
 
 export function createSharpImageToSplatRouteReceipt(input) {
   if (!input || typeof input !== 'object') throw new Error('input must be an object');
@@ -46,27 +24,7 @@ export function createSharpImageToSplatRouteReceipt(input) {
   if (!input.outputs?.depthMap) throw new Error('depthMap output is required');
   if (!input.outputs?.metadata) throw new Error('metadata output is required');
 
-  requireArtifact(input.outputs.splat, 'splat');
-  requireArtifact(input.outputs.depthMap, 'depthMap');
-  requireArtifact(input.outputs.metadata, 'metadata');
-  if (input.outputs.autoCropEvidence) requireArtifact(input.outputs.autoCropEvidence, 'autoCropEvidence');
-
-  const backendResult = validateWebGpuBackendIdentity(input.backend);
-  if (!backendResult.ok) {
-    throw new Error(`invalid WebGPU backend identity: ${backendResult.errors.join('; ')}`);
-  }
-
-  const profile = finishAndValidateProfile(input.profile);
-  const outputs = [
-    outputArtifact('splat-candidate', input.outputs.splat),
-    outputArtifact('depth-map', input.outputs.depthMap),
-    outputArtifact('sharp-webgpu-metadata', input.outputs.metadata),
-  ];
-  if (input.outputs.autoCropEvidence) {
-    outputs.push(outputArtifact('splat-autocrop-evidence', input.outputs.autoCropEvidence));
-  }
-
-  return createWebGpuLocalRouteReceipt({
+  return createWebGpuRouteReceiptFromArtifacts({
     requestedRouteId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
     effectiveRouteId: input.effectiveRouteId || SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
     status: input.status || (input.fallbackReason ? 'fallback' : 'real'),
@@ -84,20 +42,10 @@ export function createSharpImageToSplatRouteReceipt(input) {
       commit: input.kernel?.commit || null,
     },
     inputs: [
-      {
-        role: 'source-image',
-        artifactId: input.input.artifactId,
-        sha256: input.input.sha256,
-        shape: Array.isArray(input.input.shape) ? [...input.input.shape] : undefined,
-      },
+      createRouteReceiptInputArtifact('source-image', input.input),
     ],
-    outputs,
-    timings: {
-      source: profile.timingSource,
-      totalMs: profile.totalMs,
-      stages: profile.stages,
-      profile,
-    },
+    outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: OUTPUT_ROLES }),
+    profile: input.profile,
   });
 }
 

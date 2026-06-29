@@ -14,6 +14,12 @@ Current surface:
   definition/request/result/receipt schema strings as a compact contract object
   so route repos can run conformance checks instead of manually mirroring hidden
   constants.
+- `createWebGpuRouteReceiptFromArtifacts(input)` plus
+  `createRouteReceiptArtifacts`, `createRouteReceiptInputArtifact`,
+  `finishAndValidateRouteProfile`, and validation helpers: shared route receipt
+  substrate used by MoGE, SHARP, Kimodo, and SF3D factories to preserve artifact
+  identity, backend identity, and staged profile requirements without duplicating
+  false-closure-prone boilerplate.
 - `validateRouteReceipt(receipt)`: validates requested/effective route identity,
   backend/model/kernel identity, input/output artifact ids, timings, and
   fallback status.
@@ -82,8 +88,11 @@ Near-term extraction order:
 7. MoGE schema mirror drift reduction. The kit exposes a schema contract object;
    MoGE has a dev conformance test against that contract while the runtime still
    avoids a brittle temporary worktree dependency.
-8. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-9. Shared kernels only when at least two real routes need them or a measured
+8. Shared route receipt helper. Artifact normalization, backend identity
+   validation, staged profile validation, and receipt construction now live in
+   one helper consumed by all four concrete route factories.
+9. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+10. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:

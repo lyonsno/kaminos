@@ -53,6 +53,15 @@ export {
 } from './route-schema-contract.js';
 
 export {
+  createRouteReceiptArtifacts,
+  createRouteReceiptInputArtifact,
+  createWebGpuRouteReceiptFromArtifacts,
+  finishAndValidateRouteProfile,
+  validateRouteReceiptArtifact,
+  validateRouteReceiptBackendIdentity,
+} from './route-receipt-helper.js';
+
+export {
   assertAuthoritativeRouteWorkerResult,
   createRouteInvocationRequest,
   createRouteWorkerResult,
