@@ -48,11 +48,58 @@
       text-overflow: ellipsis;
       pointer-events: none;
     }
+    .live-panel {
+      position: fixed;
+      right: 14px;
+      top: 14px;
+      width: min(360px, calc(100vw - 28px));
+      padding: 12px;
+      border: 1px solid rgba(97, 209, 177, 0.28);
+      border-radius: 8px;
+      background: rgba(5, 12, 11, 0.72);
+      color: rgba(198, 247, 226, 0.88);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .live-panel[hidden] { display: none; }
+    .live-panel button {
+      width: 100%;
+      min-height: 34px;
+      margin: 0 0 8px;
+      border: 1px solid rgba(143, 222, 198, 0.32);
+      border-radius: 6px;
+      background: rgba(17, 35, 31, 0.92);
+      color: rgba(218, 255, 239, 0.95);
+      font: inherit;
+      cursor: pointer;
+    }
+    .live-panel button:disabled {
+      cursor: wait;
+      opacity: 0.55;
+    }
+    .live-panel .status {
+      color: rgba(163, 224, 205, 0.72);
+      overflow-wrap: anywhere;
+    }
+    #live-video, #frame-canvas {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <main id="stage" data-schema="kaminos.tracked-hand-surface-compositor.v0"></main>
   <div class="route-chip" id="route-chip">hand surface compositor booting</div>
+  <section class="live-panel" id="live-panel" hidden>
+    <button id="start-live" type="button">Start Live Hand</button>
+    <button id="stop-live" type="button" disabled>Stop Live Hand</button>
+    <div class="status" id="live-status">camera idle</div>
+  </section>
+  <video id="live-video" muted playsinline></video>
+  <canvas id="frame-canvas" width="320" height="240"></canvas>
   <script type="module">
     import {
       DEFAULT_PERCEPTASIA_HAND_ENDPOINT,
@@ -64,11 +111,20 @@
     const params = new URLSearchParams(window.location.search);
     const stage = document.getElementById('stage');
     const chip = document.getElementById('route-chip');
+    const livePanel = document.getElementById('live-panel');
+    const startLiveButton = document.getElementById('start-live');
+    const stopLiveButton = document.getElementById('stop-live');
+    const liveStatus = document.getElementById('live-status');
+    const liveVideo = document.getElementById('live-video');
+    const frameCanvas = document.getElementById('frame-canvas');
+    const frameContext = frameCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
     const requestedEndpoint = params.get('hand_packet_url') || params.get('perceptasia_hand_endpoint') || DEFAULT_PERCEPTASIA_HAND_ENDPOINT;
     const requestedBackend = params.get('backend') || 'native_wilor_mini_mlx_detector_sidecar_live';
     const useFixture = params.get('fixture') !== '0';
     const maxFreshnessMs = Number(params.get('max_freshness_ms') || 180);
     const pollMs = Math.max(30, Number(params.get('poll_ms') || 80));
+    const framePostMs = Math.max(45, Number(params.get('frame_post_ms') || 90));
+    const launchSidecar = params.get('launch_sidecar') !== '0';
 
     let latestPacket = buildFixturePerceptasiaHandPacket({
       sourceBackend: useFixture ? 'kaminos_hand_surface_fixture' : requestedBackend,
@@ -76,7 +132,31 @@
       timestampMs: performance.now(),
     });
     let latestFetchError = null;
+    if (!useFixture) {
+      latestPacket = buildFixturePerceptasiaHandPacket({
+        sourceBackend: 'kaminos_live_waiting_for_packet',
+        effectiveRoute: 'kaminos_live_waiting_for_packet',
+        timestampMs: -100000,
+      });
+      livePanel.hidden = false;
+    }
     let latestReport = null;
+    let liveStream = null;
+    let liveVideoStarted = false;
+    let liveStarting = false;
+    let frameTimer = null;
+    let postingFrame = false;
+    let postedFrameCount = 0;
+    let lastFramePost = null;
+    let sidecarStatus = null;
+    let liveError = null;
+
+    startLiveButton?.addEventListener('click', () => {
+      void startLiveHand();
+    });
+    stopLiveButton?.addEventListener('click', () => {
+      void stopLiveHand();
+    });
 
     if (!useFixture) {
       void pollPacketLoop();
@@ -96,13 +176,128 @@
           const response = await fetch(requestedEndpoint, { cache: 'no-store' });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(body.error || `hand packet fetch failed ${response.status}`);
-          latestPacket = body.event || body;
+          if (body.event) {
+            latestPacket = body.event;
+          } else if (body.schema === 'perceptasia.hand-control.v0') {
+            latestPacket = body;
+          }
           latestFetchError = null;
         } catch (error) {
           latestFetchError = error instanceof Error ? error.message : String(error);
         }
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
+    }
+
+    async function startLiveHand() {
+      if (useFixture || liveStarting || liveVideoStarted) return;
+      liveStarting = true;
+      liveError = null;
+      setLiveStatus('starting camera and sidecar');
+      startLiveButton.disabled = true;
+      try {
+        liveStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+          },
+          audio: false,
+        });
+        liveVideo.srcObject = liveStream;
+        await liveVideo.play();
+        liveVideoStarted = true;
+        stopLiveButton.disabled = false;
+        if (launchSidecar) {
+          const response = await fetch('/hand-control-sidecar-launch', { method: 'POST' });
+          sidecarStatus = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(sidecarStatus?.launch_error || sidecarStatus?.error || `sidecar launch failed ${response.status}`);
+          }
+        }
+        frameTimer = window.setInterval(() => {
+          void postNativeFrame();
+        }, framePostMs);
+        void postNativeFrame();
+        setLiveStatus('camera posting frames');
+      } catch (error) {
+        liveError = error instanceof Error ? error.message : String(error);
+        setLiveStatus(`live start failed: ${liveError}`);
+        await stopLiveHand({ stopSidecar: false });
+      } finally {
+        liveStarting = false;
+        startLiveButton.disabled = liveVideoStarted;
+      }
+    }
+
+    async function stopLiveHand({ stopSidecar = true } = {}) {
+      if (frameTimer) {
+        window.clearInterval(frameTimer);
+        frameTimer = null;
+      }
+      if (liveStream) {
+        for (const track of liveStream.getTracks()) track.stop();
+      }
+      liveStream = null;
+      liveVideo.srcObject = null;
+      liveVideoStarted = false;
+      postingFrame = false;
+      stopLiveButton.disabled = true;
+      startLiveButton.disabled = false;
+      if (stopSidecar && launchSidecar) {
+        try {
+          const response = await fetch('/hand-control-sidecar-stop', { method: 'POST' });
+          sidecarStatus = await response.json().catch(() => sidecarStatus);
+        } catch {
+          // The status chip will keep the last known route; stopping is best-effort.
+        }
+      }
+      setLiveStatus(liveError ? `camera stopped after error: ${liveError}` : 'camera stopped');
+    }
+
+    async function postNativeFrame() {
+      if (!liveVideoStarted || postingFrame || !liveVideo.videoWidth || !liveVideo.videoHeight) return;
+      postingFrame = true;
+      try {
+        const encodedWidth = Number(params.get('frame_width') || 320);
+        const scale = encodedWidth / Math.max(1, liveVideo.videoWidth);
+        const encodedHeight = Math.max(1, Math.round(liveVideo.videoHeight * scale));
+        frameCanvas.width = encodedWidth;
+        frameCanvas.height = encodedHeight;
+        frameContext.drawImage(liveVideo, 0, 0, encodedWidth, encodedHeight);
+        const blob = await new Promise((resolve) => frameCanvas.toBlob(resolve, 'image/jpeg', 0.72));
+        if (!blob) throw new Error('camera frame encode failed');
+        const frameId = String(++postedFrameCount);
+        const response = await fetch('/hand-control-native-frame', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'image/jpeg',
+            'X-Kaminos-Hand-Surface-Client-Build': 'kaminos-hand-surface-live-20260629',
+            'X-Capture-Timestamp-Ms': String(performance.now()),
+            'X-Capture-Epoch-Ms': String(Date.now()),
+            'X-Frame-Id': frameId,
+            'X-Source-Video-Width': String(liveVideo.videoWidth),
+            'X-Source-Video-Height': String(liveVideo.videoHeight),
+            'X-Encoded-Frame-Width': String(encodedWidth),
+            'X-Encoded-Frame-Height': String(encodedHeight),
+          },
+          body: blob,
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `native frame post failed ${response.status}`);
+        lastFramePost = body;
+        liveError = null;
+        setLiveStatus(`posting frame ${frameId} | sidecar ${sidecarStatus?.running ? 'running' : 'launching'}`);
+      } catch (error) {
+        liveError = error instanceof Error ? error.message : String(error);
+        setLiveStatus(`frame post failed: ${liveError}`);
+      } finally {
+        postingFrame = false;
+      }
+    }
+
+    function setLiveStatus(text) {
+      if (liveStatus) liveStatus.textContent = text;
     }
 
     function render() {
@@ -120,11 +315,11 @@
         maxFreshnessMs,
         webcam: {
           source: useFixture ? 'synthetic_fixture' : 'live_webcam',
-          visible: true,
-          blank: false,
-          frameId: useFixture ? 'synthetic-webcam-gradient' : `perceptasia-endpoint-${Math.floor(performance.now())}`,
-          width: window.innerWidth,
-          height: window.innerHeight,
+          visible: useFixture || liveVideoStarted,
+          blank: !useFixture && !liveVideoStarted,
+          frameId: useFixture ? 'synthetic-webcam-gradient' : lastFramePost?.capture_id || `kaminos-live-${postedFrameCount}`,
+          width: useFixture ? window.innerWidth : liveVideo.videoWidth || 0,
+          height: useFixture ? window.innerHeight : liveVideo.videoHeight || 0,
         },
         consumer: {
           id: 'lerms-hand-surface-field',
@@ -138,6 +333,11 @@
         schema: 'kaminos.tracked-hand-surface-debug-state.v0',
         requestedEndpoint,
         useFixture,
+        liveVideoStarted,
+        postedFrameCount,
+        lastFramePost,
+        sidecarStatus,
+        liveError,
         latestFetchError,
         report: latestReport,
       });
@@ -150,7 +350,10 @@
         `authority ${latestReport.authority}`,
         `backend ${latestReport.sourceTruth.backendIdentity}`,
         `endpoint ${requestedEndpoint}`,
+        !useFixture ? `camera ${liveVideoStarted ? 'posting' : 'idle'}` : null,
+        !useFixture && lastFramePost ? `frame ${lastFramePost.capture_id}` : null,
         latestFetchError ? `fetch ${latestFetchError}` : null,
+        liveError ? `live ${liveError}` : null,
       ].filter(Boolean).join(' | ');
       requestAnimationFrame(render);
     }

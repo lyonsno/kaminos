@@ -48,6 +48,36 @@ const { child, output } = startServer();
 try {
   await waitForServer(baseUrl);
 
+  const frameBytes = new Uint8Array([255, 216, 255, 217]);
+  const nativeFrame = await requestJson('/hand-control-native-frame', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'image/jpeg',
+      'X-Kaminos-Hand-Surface-Client-Build': 'kaminos-hand-surface-live-20260629',
+      'X-Capture-Timestamp-Ms': '120.5',
+      'X-Capture-Epoch-Ms': String(Date.now()),
+      'X-Frame-Id': '7',
+      'X-Source-Video-Width': '640',
+      'X-Source-Video-Height': '480',
+      'X-Encoded-Frame-Width': '320',
+      'X-Encoded-Frame-Height': '240',
+    },
+    body: frameBytes,
+  });
+  assert.equal(nativeFrame.response.status, 200);
+  assert.equal(nativeFrame.body.schema, 'kaminos.hand-control-native-frame.v0');
+  assert.equal(nativeFrame.body.ok, true);
+  assert.equal(nativeFrame.body.frame_path, 'latest.jpg');
+  assert.equal(nativeFrame.body.metadata_path, 'latest.json');
+  assert.equal(nativeFrame.body.client_build, 'kaminos-hand-surface-live-20260629');
+
+  const sidecarStatus = await requestJson('/hand-control-sidecar-status');
+  assert.equal(sidecarStatus.response.status, 200);
+  assert.equal(sidecarStatus.body.schema, 'kaminos.hand-control-sidecar-process.v0');
+  assert.equal(sidecarStatus.body.frame_dir, nativeFrame.body.frame_dir);
+  assert.equal(sidecarStatus.body.event_endpoint, '/hand-control-sidecar-event');
+  assert.equal(sidecarStatus.body.native_frame_endpoint, '/hand-control-native-frame');
+
   const empty = await requestJson('/hand-control-sidecar-event');
   assert.equal(empty.response.status, 200);
   assert.equal(empty.body.schema, 'kaminos.hand-control-sidecar-event-cache.v0');

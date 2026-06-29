@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -88,13 +89,56 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
 HAND_CONTROL_SIDECAR_EVENT_SCHEMA = "kaminos.hand-control-sidecar-event-cache.v0"
+HAND_CONTROL_NATIVE_FRAME_SCHEMA = "kaminos.hand-control-native-frame.v0"
+HAND_CONTROL_SIDECAR_PROCESS_SCHEMA = "kaminos.hand-control-sidecar-process.v0"
 PERCEPTASIA_HAND_CONTROL_SCHEMA = "perceptasia.hand-control.v0"
+KAMINOS_HAND_CONTROL_CLIENT_BUILD = "kaminos-hand-surface-live-20260629"
+KAMINOS_NATIVE_FRAME_DIR = Path(os.environ.get(
+    "KAMINOS_HAND_CONTROL_NATIVE_FRAME_DIR",
+    os.path.expanduser("~/.local/state/kaminos/hand-control-native-frames"),
+)).expanduser()
+KAMINOS_WILOR_MLX_ROOT = Path(os.environ.get(
+    "KAMINOS_WILOR_MLX_ROOT",
+    os.path.expanduser("~/dev/wilor-mlx"),
+)).expanduser()
+KAMINOS_SIDECAR_PYTHON = os.environ.get(
+    "KAMINOS_HAND_CONTROL_SIDECAR_PYTHON",
+    str(KAMINOS_WILOR_MLX_ROOT / ".venv" / "bin" / "python"),
+)
+KAMINOS_HAND_CONTROL_SIDECAR_SCRIPT = ROOT / "scripts" / "kaminos_wilor_mlx_handframe_sidecar.py"
 HAND_CONTROL_EVENT_LOCK = threading.Lock()
 HAND_CONTROL_EVENT_CACHE = {
     "event": None,
     "stored_at_ms": None,
     "sequence": 0,
 }
+HAND_CONTROL_NATIVE_FRAME_LOCK = threading.Lock()
+HAND_CONTROL_NATIVE_FRAME_CACHE = {
+    "capture_id": None,
+    "metadata": None,
+    "stored_at_ms": None,
+    "frame_path": None,
+    "metadata_path": None,
+}
+HAND_CONTROL_SIDECAR_LOCK = threading.Lock()
+HAND_CONTROL_SIDECAR_PROCESS = {
+    "process": None,
+    "started_at_ms": None,
+    "launch_error": None,
+    "log_path": None,
+}
+
+
+def _atomic_write_bytes(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    temp.write_bytes(payload)
+    os.replace(temp, path)
+
+
+def _atomic_write_json(path, payload):
+    _atomic_write_bytes(path, json.dumps(payload, indent=2).encode("utf-8"))
 
 
 def runtime_config():
@@ -606,6 +650,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/hand-control-sidecar-event":
             self.handle_hand_control_sidecar_event_get()
+        elif parsed.path == "/hand-control-sidecar-status":
+            self.handle_hand_control_sidecar_status()
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/browse":
@@ -635,6 +681,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/hand-control-sidecar-event":
             self.handle_hand_control_sidecar_event_post()
+        elif parsed.path == "/hand-control-native-frame":
+            self.handle_hand_control_native_frame_post()
+        elif parsed.path == "/hand-control-sidecar-launch":
+            self.handle_hand_control_sidecar_launch()
+        elif parsed.path == "/hand-control-sidecar-stop":
+            self.handle_hand_control_sidecar_stop()
         elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
         elif parsed.path == "/api/ingest-splat":
@@ -653,17 +705,260 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             stored_at_ms = HAND_CONTROL_EVENT_CACHE["stored_at_ms"]
             sequence = HAND_CONTROL_EVENT_CACHE["sequence"]
         now_ms = int(time.time() * 1000)
+        query = parse_qs(urlparse(self.path).query)
+        after_raw = query.get("after", [""])[0]
+        try:
+            after = int(after_raw) if after_raw != "" else None
+        except ValueError:
+            after = None
+        visible_event = event if after is None or sequence > after else None
+        visible_stored_at_ms = stored_at_ms if visible_event else None
         return {
             "schema": HAND_CONTROL_SIDECAR_EVENT_SCHEMA,
-            "status": "stored" if event else "empty",
+            "status": "stored" if visible_event else "empty",
             "sequence": sequence,
-            "stored_at_ms": stored_at_ms,
-            "age_ms": max(0, now_ms - stored_at_ms) if stored_at_ms else None,
-            "event": event,
+            "stored_at_ms": visible_stored_at_ms,
+            "age_ms": max(0, now_ms - visible_stored_at_ms) if visible_stored_at_ms else None,
+            "event": visible_event,
         }
 
     def handle_hand_control_sidecar_event_get(self):
         self.send_json(self.hand_control_sidecar_snapshot())
+
+    def hand_control_native_frame_status(self):
+        with HAND_CONTROL_NATIVE_FRAME_LOCK:
+            metadata = HAND_CONTROL_NATIVE_FRAME_CACHE["metadata"]
+            stored_at_ms = HAND_CONTROL_NATIVE_FRAME_CACHE["stored_at_ms"]
+            capture_id = HAND_CONTROL_NATIVE_FRAME_CACHE["capture_id"]
+            frame_path = HAND_CONTROL_NATIVE_FRAME_CACHE["frame_path"]
+            metadata_path = HAND_CONTROL_NATIVE_FRAME_CACHE["metadata_path"]
+        now_ms = int(time.time() * 1000)
+        return {
+            "schema": HAND_CONTROL_NATIVE_FRAME_SCHEMA,
+            "ok": bool(metadata),
+            "capture_id": capture_id,
+            "stored_at_ms": stored_at_ms,
+            "age_ms": max(0, now_ms - stored_at_ms) if stored_at_ms else None,
+            "frame_dir": str(KAMINOS_NATIVE_FRAME_DIR),
+            "frame_path": Path(frame_path).name if frame_path else None,
+            "metadata_path": Path(metadata_path).name if metadata_path else None,
+            "client_build": metadata.get("client_build") if isinstance(metadata, dict) else None,
+            "metadata": metadata,
+        }
+
+    def handle_hand_control_native_frame_post(self):
+        content_type = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if content_type not in {"image/jpeg", "image/png", "application/octet-stream"}:
+            self.send_json({"error": f"unsupported native frame content type: {content_type or 'missing'}"}, 415)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        if length <= 0:
+            self.send_json({"error": "native frame body is empty"}, 400)
+            return
+        payload = self.rfile.read(length)
+        if not payload:
+            self.send_json({"error": "native frame body is empty"}, 400)
+            return
+
+        now_ms = int(time.time() * 1000)
+        suffix = ".png" if content_type == "image/png" else ".jpg"
+        frame_path = KAMINOS_NATIVE_FRAME_DIR / f"latest{suffix}"
+        metadata_path = KAMINOS_NATIVE_FRAME_DIR / "latest.json"
+        capture_id = self.headers.get("X-Frame-Id") or str(now_ms)
+        try:
+            capture_timestamp_ms = float(self.headers.get("X-Capture-Timestamp-Ms", "nan"))
+        except ValueError:
+            capture_timestamp_ms = None
+        if capture_timestamp_ms != capture_timestamp_ms:
+            capture_timestamp_ms = None
+        try:
+            capture_epoch_ms = float(self.headers.get("X-Capture-Epoch-Ms", "nan"))
+        except ValueError:
+            capture_epoch_ms = None
+        if capture_epoch_ms != capture_epoch_ms:
+            capture_epoch_ms = None
+
+        def int_header(name):
+            try:
+                return int(float(self.headers.get(name, "0")))
+            except ValueError:
+                return 0
+
+        metadata = {
+            "schema": HAND_CONTROL_NATIVE_FRAME_SCHEMA,
+            "capture_id": str(capture_id),
+            "stored_at_ms": now_ms,
+            "capture_timestamp_ms": capture_timestamp_ms,
+            "capture_epoch_ms": capture_epoch_ms,
+            "client_build": self.headers.get("X-Kaminos-Hand-Surface-Client-Build") or "unknown",
+            "content_type": content_type,
+            "content_length": len(payload),
+            "source_video_width": int_header("X-Source-Video-Width"),
+            "source_video_height": int_header("X-Source-Video-Height"),
+            "encoded_frame_width": int_header("X-Encoded-Frame-Width"),
+            "encoded_frame_height": int_header("X-Encoded-Frame-Height"),
+            "frame_filename": frame_path.name,
+        }
+
+        with HAND_CONTROL_NATIVE_FRAME_LOCK:
+            previous = HAND_CONTROL_NATIVE_FRAME_CACHE.get("metadata") or {}
+            previous_epoch = previous.get("capture_epoch_ms")
+            if capture_epoch_ms is not None and previous_epoch is not None and capture_epoch_ms < previous_epoch:
+                self.send_json({
+                    "schema": HAND_CONTROL_NATIVE_FRAME_SCHEMA,
+                    "ok": False,
+                    "status": "stale_frame_rejected",
+                    "frame_dir": str(KAMINOS_NATIVE_FRAME_DIR),
+                    "client_build": metadata["client_build"],
+                    "previous_capture_epoch_ms": previous_epoch,
+                    "capture_epoch_ms": capture_epoch_ms,
+                }, 409)
+                return
+            _atomic_write_bytes(frame_path, payload)
+            _atomic_write_json(metadata_path, metadata)
+            HAND_CONTROL_NATIVE_FRAME_CACHE.update({
+                "capture_id": str(capture_id),
+                "metadata": metadata,
+                "stored_at_ms": now_ms,
+                "frame_path": str(frame_path),
+                "metadata_path": str(metadata_path),
+            })
+
+        self.send_json({
+            "schema": HAND_CONTROL_NATIVE_FRAME_SCHEMA,
+            "ok": True,
+            "capture_id": str(capture_id),
+            "frame_dir": str(KAMINOS_NATIVE_FRAME_DIR),
+            "frame_path": frame_path.name,
+            "metadata_path": metadata_path.name,
+            "client_build": metadata["client_build"],
+            "stored_at_ms": now_ms,
+        })
+
+    def hand_control_sidecar_process_status(self):
+        with HAND_CONTROL_SIDECAR_LOCK:
+            process = HAND_CONTROL_SIDECAR_PROCESS["process"]
+            started_at_ms = HAND_CONTROL_SIDECAR_PROCESS["started_at_ms"]
+            launch_error = HAND_CONTROL_SIDECAR_PROCESS["launch_error"]
+            log_path = HAND_CONTROL_SIDECAR_PROCESS["log_path"]
+            running = process is not None and process.poll() is None
+            returncode = None if process is None else process.poll()
+            pid = None if process is None else process.pid
+        log_tail = None
+        if log_path and Path(log_path).is_file():
+            try:
+                log_tail = Path(log_path).read_text(errors="replace")[-2000:]
+            except OSError:
+                log_tail = None
+        return {
+            "schema": HAND_CONTROL_SIDECAR_PROCESS_SCHEMA,
+            "running": running,
+            "pid": pid,
+            "returncode": returncode,
+            "started_at_ms": started_at_ms,
+            "launch_error": launch_error,
+            "log_path": str(log_path) if log_path else None,
+            "log_tail": log_tail,
+            "frame_dir": str(KAMINOS_NATIVE_FRAME_DIR),
+            "event_endpoint": "/hand-control-sidecar-event",
+            "native_frame_endpoint": "/hand-control-native-frame",
+            "python": KAMINOS_SIDECAR_PYTHON,
+            "mlx_root": str(KAMINOS_WILOR_MLX_ROOT),
+            "script": str(KAMINOS_HAND_CONTROL_SIDECAR_SCRIPT),
+        }
+
+    def handle_hand_control_sidecar_status(self):
+        self.send_json(self.hand_control_sidecar_process_status())
+
+    def handle_hand_control_sidecar_launch(self):
+        params = parse_qs(urlparse(self.path).query)
+        poll_ms = params.get("poll_ms", ["45"])[0]
+        hand_conf = params.get("hand_conf", ["0.18"])[0]
+        include_vertices = params.get("include_vertices", ["1"])[0] != "0"
+        log_path = KAMINOS_NATIVE_FRAME_DIR / "wilor-mlx-sidecar.log"
+        KAMINOS_NATIVE_FRAME_DIR.mkdir(parents=True, exist_ok=True)
+
+        with HAND_CONTROL_SIDECAR_LOCK:
+            process = HAND_CONTROL_SIDECAR_PROCESS["process"]
+            if process is not None and process.poll() is None:
+                already_running = True
+            else:
+                already_running = False
+        if already_running:
+            self.send_json(self.hand_control_sidecar_process_status())
+            return
+
+        with HAND_CONTROL_SIDECAR_LOCK:
+            process = HAND_CONTROL_SIDECAR_PROCESS["process"]
+            if process is not None and process.poll() is None:
+                launched = False
+            else:
+                launched = True
+            command = [
+                KAMINOS_SIDECAR_PYTHON,
+                str(KAMINOS_HAND_CONTROL_SIDECAR_SCRIPT),
+                "--server",
+                f"http://127.0.0.1:{PORT}",
+                "--frame-dir",
+                str(KAMINOS_NATIVE_FRAME_DIR),
+                "--mlx-root",
+                str(KAMINOS_WILOR_MLX_ROOT),
+                "--poll-ms",
+                str(poll_ms),
+                "--hand-conf",
+                str(hand_conf),
+            ]
+            if include_vertices:
+                command.append("--include-vertices")
+            if launched:
+                try:
+                    log_handle = log_path.open("ab")
+                    process = subprocess.Popen(
+                        command,
+                        cwd=str(ROOT),
+                        stdout=log_handle,
+                        stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+                    log_handle.close()
+                    HAND_CONTROL_SIDECAR_PROCESS.update({
+                        "process": process,
+                        "started_at_ms": int(time.time() * 1000),
+                        "launch_error": None,
+                        "log_path": str(log_path),
+                    })
+                except Exception as error:
+                    HAND_CONTROL_SIDECAR_PROCESS.update({
+                        "process": None,
+                        "started_at_ms": None,
+                        "launch_error": str(error),
+                        "log_path": str(log_path),
+                    })
+                    failed = True
+                else:
+                    failed = False
+            else:
+                failed = False
+        if failed:
+            self.send_json(self.hand_control_sidecar_process_status(), 500)
+            return
+        self.send_json(self.hand_control_sidecar_process_status())
+
+    def handle_hand_control_sidecar_stop(self):
+        with HAND_CONTROL_SIDECAR_LOCK:
+            process = HAND_CONTROL_SIDECAR_PROCESS["process"]
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+            HAND_CONTROL_SIDECAR_PROCESS["process"] = None
+        self.send_json(self.hand_control_sidecar_process_status())
 
     def handle_hand_control_sidecar_event_post(self):
         try:
