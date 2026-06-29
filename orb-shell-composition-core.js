@@ -1008,10 +1008,31 @@ function createLowerSocketStripHonestyLaw(composition) {
     requiredInvariants: [
       'single-coherent-lower-socket-strip',
       'continuous-centerline-before-tuck',
+      'directed-socket-return-spine',
       'smooth-side-curves-before-merge',
+      'bounded-repeated-kink-budget',
       'bounded-terminal-width-recovery',
       'no-visible-rim-exit-for-tuck-role',
     ],
+    centerlinePathLaw: {
+      mode: 'law-owned-directed-socket-return-spine-v0',
+      maxLateralWanderRatio: 0.065,
+      sourceClampLateralWanderRatio: 0.055,
+      straighteningStrength: 1,
+      protectedEndpointT: 0.04,
+      reason: 'semantic render inventory showed the promoted body was born as a wandering mini-macro; tuck-tongue must own one directed socket-return spine before tuck/merge solving',
+    },
+    sideCurveSmoothing: {
+      mode: 'law-owned-visible-strip-smoothing-v0',
+      iterations: 14,
+      strength: 0.58,
+      protectedEndpointT: 0.035,
+      smoothingT0: 0.04,
+      smoothingT1: 0.94,
+      repeatedKinkCountLimit: 4,
+      repeatedKinkEnergyLimit: 2.2,
+      reason: 'semantic inventory pinned visible offender to promoted-body/live-sidewall path; smooth that source path rather than editing downstream renderables',
+    },
     deferredSolves: [
       'boolean-or-trim-merge',
       'bottom-lip-ownership',
@@ -1649,6 +1670,65 @@ function continueTerminalPoint(prev2, prev1) {
   return addScaledPoint(prev1, tangent, length);
 }
 
+function smoothLowerSocketStripHonestySideWallSamples(assemblage, samples) {
+  const law = assemblage.lowerSocketStripHonestyLaw
+    || assemblage.macroPromotedBody?.lowerSocketStripHonestyLaw;
+  const smoothing = law?.sideCurveSmoothing;
+  if (!smoothing || samples.length < 5) return samples;
+  const iterations = Math.max(1, Math.round(smoothing.iterations || 1));
+  const strength = clamp(smoothing.strength ?? 0.35, 0, 0.72);
+  const protectedEndpointT = smoothing.protectedEndpointT ?? 0.035;
+  const smoothingT0 = smoothing.smoothingT0 ?? 0.04;
+  const smoothingT1 = smoothing.smoothingT1 ?? 0.94;
+  const next = samples.map(sample => ({
+    ...sample,
+    outer: [...sample.outer],
+    inner: [...sample.inner],
+  }));
+  for (let iteration = 0; iteration < iterations; iteration++) {
+    const previous = next.map(sample => ({
+      outer: [...sample.outer],
+      inner: [...sample.inner],
+    }));
+    for (let index = 1; index < next.length - 1; index++) {
+      const t = next[index].t;
+      if (t < smoothingT0 || t > smoothingT1) continue;
+      if (t <= protectedEndpointT || t >= 1 - protectedEndpointT) continue;
+      const endpointFade = smoothStep(protectedEndpointT, protectedEndpointT + 0.12, t)
+        * (1 - smoothStep(1 - protectedEndpointT - 0.12, 1 - protectedEndpointT, t));
+      const localStrength = strength * endpointFade;
+      for (const key of ['outer', 'inner']) {
+        const neighborAverage = lerpPoint(previous[index - 1][key], previous[index + 1][key], 0.5);
+        next[index][key] = lerpPoint(previous[index][key], neighborAverage, localStrength);
+      }
+      next[index].stripHonestySmoothingMode = smoothing.mode;
+    }
+  }
+  return next.map(sample => ({
+    ...sample,
+    thickness: pointDistance(sample.outer, sample.inner),
+  }));
+}
+
+function applyLowerSocketRenderedEdgePathLaw(assemblage, samples) {
+  if (!lowerSocketCenterlinePathLawFor(assemblage) || samples.length < 4) return samples;
+  const outerPoints = applyLowerSocketCenterlinePathLaw(
+    assemblage,
+    samples.map(sample => sample.outer),
+  );
+  const innerPoints = applyLowerSocketCenterlinePathLaw(
+    assemblage,
+    samples.map(sample => sample.inner),
+  );
+  return samples.map((sample, index) => ({
+    ...sample,
+    outer: outerPoints[index],
+    inner: innerPoints[index],
+    renderedEdgePathLawMode: lowerSocketCenterlinePathLawFor(assemblage).mode,
+    thickness: pointDistance(outerPoints[index], innerPoints[index]),
+  }));
+}
+
 function smoothLowerSocketPlateBodyTerminalSamples(assemblage, samples) {
   const law = assemblage.lowerSocketPlateBodyHonestyLaw
     || assemblage.macroPromotedBody?.lowerSocketPlateBodyHonestyLaw;
@@ -1668,19 +1748,61 @@ function smoothLowerSocketPlateBodyTerminalSamples(assemblage, samples) {
   return next;
 }
 
+function lowerSocketCenterlinePathLawFor(assemblage) {
+  const stripLaw = assemblage.lowerSocketStripHonestyLaw
+    || assemblage.macroPromotedBody?.lowerSocketStripHonestyLaw;
+  return stripLaw?.centerlinePathLaw || null;
+}
+
+function applyLowerSocketCenterlinePathLaw(assemblage, points) {
+  const law = lowerSocketCenterlinePathLawFor(assemblage);
+  if (!law || points.length < 4) return points;
+  const start = points[0];
+  const end = points[points.length - 1];
+  const chord = pointDistance(start, end);
+  if (chord < 1e-6) return points;
+  const axis = normalizePoint(subtractPoints(end, start));
+  const maxLateralWander = chord * (
+    law.sourceClampLateralWanderRatio
+    ?? law.maxLateralWanderRatio
+    ?? 0.065
+  );
+  const protectedEndpointT = law.protectedEndpointT ?? 0.04;
+  const strength = clamp(law.straighteningStrength ?? 1, 0, 1);
+  return points.map((point, index) => {
+    const t = index / (points.length - 1);
+    if (t <= protectedEndpointT || t >= 1 - protectedEndpointT) return point;
+    const relative = subtractPoints(point, start);
+    const progress = dotPoints(relative, axis);
+    const projected = addScaledPoint(start, axis, progress);
+    const lateral = subtractPoints(point, projected);
+    const lateralDistance = Math.hypot(...lateral);
+    if (lateralDistance <= maxLateralWander) return point;
+    const endpointFade = smoothStep(protectedEndpointT, protectedEndpointT + 0.1, t)
+      * (1 - smoothStep(1 - protectedEndpointT - 0.1, 1 - protectedEndpointT, t));
+    const clamped = addScaledPoint(projected, normalizePoint(lateral), maxLateralWander);
+    return lerpPoint(point, clamped, strength * endpointFade);
+  });
+}
+
+function macroPromotedBodyCenterlinePoints(assemblage, rowCount = 72, radius = 1.045) {
+  const rawPoints = [];
+  for (let row = 0; row < rowCount; row++) {
+    const t = row / (rowCount - 1);
+    rawPoints.push(sampleSpinePoint(assemblage, {
+      siblingOffset: 0,
+      layerIntervals: assemblage.layerItinerary.intervals,
+    }, t, radius));
+  }
+  return applyLowerSocketCenterlinePathLaw(assemblage, rawPoints);
+}
+
 function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
   const body = assemblage.territoryBodyOccupancy;
   const promoted = assemblage.macroPromotedBody;
   const cutProfile = body.boundaryCutProfile || [];
   const sideSign = targetEdge === 'right-promoted-body-edge' ? 1 : -1;
-  const centerline = [];
-  for (let row = 0; row < rowCount; row++) {
-    const t = row / (rowCount - 1);
-    centerline.push(sampleSpinePoint(assemblage, {
-      siblingOffset: 0,
-      layerIntervals: assemblage.layerItinerary.intervals,
-    }, t, 1.045));
-  }
+  const centerline = macroPromotedBodyCenterlinePoints(assemblage, rowCount, 1.045);
 
   const samples = centerline.map((center, row) => {
     const t = row / (rowCount - 1);
@@ -1724,7 +1846,13 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
       thickness: pointDistance(outer, inner),
     };
   });
-  return smoothLowerSocketPlateBodyTerminalSamples(assemblage, samples);
+  return smoothLowerSocketPlateBodyTerminalSamples(
+    assemblage,
+    smoothLowerSocketStripHonestySideWallSamples(
+      assemblage,
+      applyLowerSocketRenderedEdgePathLaw(assemblage, samples),
+    ),
+  );
 }
 
 function createLiveMacroSideWall(assemblage, targetEdge = 'left-promoted-body-edge') {
@@ -4253,14 +4381,8 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
   const uvs = [];
   const indices = [];
   const cutProfile = body.boundaryCutProfile || [];
-  const centerline = [];
-  for (let row = 0; row < rowCount; row++) {
-    const t = row / (rowCount - 1);
-    centerline.push(sampleSpine(THREE, assemblage, {
-      siblingOffset: 0,
-      layerIntervals: assemblage.layerItinerary.intervals,
-    }, t, 1.045));
-  }
+  const centerline = macroPromotedBodyCenterlinePoints(assemblage, rowCount, 1.045)
+    .map(point => makeVec3(THREE, point));
 
   for (let row = 0; row < rowCount; row++) {
     const t = row / (rowCount - 1);

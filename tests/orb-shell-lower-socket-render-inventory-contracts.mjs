@@ -16,6 +16,8 @@ assert.match(core, /enableLowerSocketSemanticRenderInventoryWitness/, 'compositi
 assert.match(witness, /lower-socket-semantic-render-inventory/, 'headless witness must know the lower-socket semantic inventory focus');
 assert.match(index, /orb_shell_focus/, 'operator route must expose a focus parameter for semantic inventory smokes');
 assert.match(index, /enableLowerSocketSemanticRenderInventoryWitness/, 'operator route can enter the lower-socket semantic inventory witness without console work');
+assert.match(index, /orb-shell-semantic-legend/, 'semantic inventory route must expose an operator-visible color legend host');
+assert.match(index, /colorLegend/, 'semantic inventory route must render the witness color legend instead of leaving colors implicit');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
 
