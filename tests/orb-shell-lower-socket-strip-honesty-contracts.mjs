@@ -7,6 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const core = readFileSync(join(root, 'orb-shell-composition-core.js'), 'utf8');
 
 assert.match(core, /LowerSocketStripHonestyLaw/, 'composition core must name the lower socket strip honesty law');
+assert.match(core, /LowerSocketPlateBodyHonestyLaw/, 'composition core must name the lower socket plate-body honesty law');
 
 const { createTargetOrbShellCompositionFixture } = await import('../orb-shell-composition-core.js');
 
@@ -21,6 +22,18 @@ function normalize(point) {
 
 function dot(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function distance(a, b) {
+  return Math.hypot(...subtract(a, b));
+}
+
+function summarize(values) {
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values),
+    mean: values.reduce((sum, value) => sum + value, 0) / values.length,
+  };
 }
 
 function tangentTurnAngles(points) {
@@ -106,6 +119,21 @@ assert.equal(
   'normal render may show one smooth lower-socket strip, not a crumpled foot or visible-rim/tuck hybrid',
   'strip-honesty law carries the operator-facing visual contract for the next smoke',
 );
+assert.equal(
+  lowerSocket.lowerSocketPlateBodyHonestyLaw?.schema,
+  'LowerSocketPlateBodyHonestyLaw',
+  'lower socket carries a plate-body honesty law before tuck/merge can shrink the member',
+);
+assert.equal(
+  lowerSocket.lowerSocketPlateBodyHonestyLaw.cordLikeShrinkageForbidden,
+  true,
+  'plate-body honesty law forbids converting the lower socket into a tendril before occlusion',
+);
+assert.equal(
+  lowerSocket.lowerSocketPlateBodyHonestyLaw.tuckDisappearancePolicy,
+  'defer-until-bottom-ownership-or-occlusion-solved',
+  'future tuck intent cannot apply terminal disappearance before a receiving owner exists',
+);
 
 const lowerSocketSideWalls = fiveMacro.liveMacroSideWallPlan.sideWalls.filter(wall => wall.parentAssemblage === 'lower-socket-keel');
 assert.equal(
@@ -119,4 +147,22 @@ const maxSideCurveTurn = Math.max(...lowerSocketSideWalls.flatMap(wall => (
 assert.ok(
   maxSideCurveTurn <= 0.92,
   `lower socket side curves must be smooth enough to read as one strip before tuck/merge solving; max turn ${maxSideCurveTurn.toFixed(3)}`,
+);
+
+const leftWall = lowerSocketSideWalls.find(wall => wall.targetEdge === 'left-promoted-body-edge');
+const rightWall = lowerSocketSideWalls.find(wall => wall.targetEdge === 'right-promoted-body-edge');
+const visiblePlateWidths = leftWall.sideWallSamples
+  .map((leftSample, index) => ({
+    t: leftSample.t,
+    width: distance(leftSample.outer, rightWall.sideWallSamples[index].outer),
+  }))
+  .filter(sample => sample.t >= 0.05 && sample.t <= 0.82);
+const widthStats = summarize(visiblePlateWidths.map(sample => sample.width));
+assert.ok(
+  widthStats.min >= lowerSocket.lowerSocketPlateBodyHonestyLaw.visiblePlateWidthFloor,
+  `lower socket visible pre-tuck body must not collapse into cord/tendril width; min width ${widthStats.min.toFixed(4)}`,
+);
+assert.ok(
+  widthStats.mean >= lowerSocket.lowerSocketPlateBodyHonestyLaw.visiblePlateMeanWidthFloor,
+  `lower socket visible pre-tuck body must retain lamellar plate occupancy; mean width ${widthStats.mean.toFixed(4)}`,
 );

@@ -42,7 +42,15 @@ assert.ok(lowerSocket.macroPromotedBody.lowerSocketKeelAnatomyLaw.requiredAnatom
 assert.ok(lowerSocket.macroPromotedBody.subordinateAnatomy.includes('side-return-lip-as-subordinate-anatomy'), 'side return becomes subordinate anatomy instead of a competing slab');
 assert.equal(lowerSocket.macroPromotedBody.sideSilhouettePolicy.mode, 'lower-socket-tuck-tongue-smooth-side-return-v0', 'lower socket side silhouette policy is specialized by the tuck tongue role law');
 assert.equal(lowerSocket.macroPromotedBody.sideSilhouettePolicy.boundaryCutProfileVisible, false, 'lower socket keeps boundary cuts out of the macro silhouette');
-assert.ok(lowerSocket.macroPromotedBody.sideSilhouettePolicy.terminalWidthScale <= 0.42, 'lower socket terminal width narrows enough to avoid the rectangular foot failure');
+assert.equal(
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.plateBodyHonestyLawId,
+  'lower-socket-plate-body-honesty-law',
+  'plate-body honesty supersedes the old terminal narrowing cure before occlusion is solved',
+);
+assert.ok(
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.terminalWidthScale >= lowerSocket.lowerSocketPlateBodyHonestyLaw.terminalWidthScaleFloor,
+  'lower socket terminal width remains plate-bodied instead of collapsing into the tendril failure',
+);
 assert.ok(lowerSocket.macroPromotedBody.promotedBodyScale <= 1.08, 'lower socket promoted body scale is constrained by anatomy law');
 
 assert.equal(fiveMacro.lowerSocketKeelAnatomyLaw?.schema, 'LowerSocketKeelAnatomyLaw', 'composition exposes selected lower socket anatomy law');

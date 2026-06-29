@@ -926,7 +926,7 @@ function lowerSocketFamilyRoleEffectAt(assemblage, t) {
       active: false,
     };
   }
-  return activeEffects.reduce((total, item) => {
+  const roleTotal = activeEffects.reduce((total, item) => {
     const { effect, influence } = item;
     const terminalAbsorption = smoothStep(effect.terminalAbsorbStartT ?? 1, 1, item.t ?? 0);
     const widthTarget = (effect.widthScale ?? 1)
@@ -957,6 +957,16 @@ function lowerSocketFamilyRoleEffectAt(assemblage, t) {
     activeEffectIds: [],
     active: true,
   });
+  const plateLaw = assemblage.lowerSocketPlateBodyHonestyLaw
+    || assemblage.macroPromotedBody?.lowerSocketPlateBodyHonestyLaw;
+  const plateInfluence = lowerSocketPlateBodyHonestyInfluence(plateLaw, t);
+  if (!plateInfluence) return roleTotal;
+  return {
+    ...roleTotal,
+    widthScale: Math.max(roleTotal.widthScale, plateLaw.roleWidthScaleFloor * plateInfluence),
+    terminalAbsorption: roleTotal.terminalAbsorption * (1 - plateInfluence),
+    activeEffectIds: [...roleTotal.activeEffectIds, plateLaw.id],
+  };
 }
 
 function createLowerSocketStripHonestyLaw(composition) {
@@ -1048,6 +1058,79 @@ function attachLowerSocketStripHonestyLaw(composition) {
   }
 }
 
+function createLowerSocketPlateBodyHonestyLaw(composition) {
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+  const stripLaw = composition.lowerSocketStripHonestyLaw;
+  if (!lowerSocket || stripLaw?.role !== 'tuck-tongue') return null;
+  return {
+    schema: 'LowerSocketPlateBodyHonestyLaw',
+    id: 'lower-socket-plate-body-honesty-law',
+    mode: 'lower-socket-visible-plate-body-before-tuck-v0',
+    targetMacroId: 'lower-socket-keel',
+    visiblePlateT0: 0.05,
+    visiblePlateT1: 1,
+    visiblePlateWidthFloor: 0.045,
+    visiblePlateMeanWidthFloor: 0.065,
+    roleWidthScaleFloor: 0.78,
+    anatomyWidthScaleFloor: 0.72,
+    promotedBodyScaleFloor: 0.92,
+    terminalWidthScaleFloor: 0.62,
+    cordLikeShrinkageForbidden: true,
+    tuckDisappearancePolicy: 'defer-until-bottom-ownership-or-occlusion-solved',
+    generatedBy: [
+      'LowerSocketStripHonestyLaw',
+      'operator-smoke-cord-like-lower-socket-rejection',
+      'five-macro-stress-width-probe',
+    ],
+    deferredUntil: [
+      'bottom-ownership-or-occlusion-solved',
+      'boolean-or-trim-merge',
+      'neighbor-lip-receiver-exists',
+    ],
+    visualContract: 'lower socket reads as a sheet-bodied lamellar plate before any tuck disappearance is allowed',
+  };
+}
+
+function lowerSocketPlateBodyHonestyInfluence(law, t) {
+  if (!law) return 0;
+  const start = law.visiblePlateT0 ?? 0.05;
+  const end = law.visiblePlateT1 ?? 0.82;
+  const fade = 0.08;
+  const inRamp = smoothStep(start - fade, start + fade, t);
+  if (end >= 0.999) return inRamp;
+  const outRamp = 1 - smoothStep(end - fade, end + fade, t);
+  return inRamp * outRamp;
+}
+
+function attachLowerSocketPlateBodyHonestyLaw(composition) {
+  const law = composition.lowerSocketPlateBodyHonestyLaw;
+  if (!law) return;
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === law.targetMacroId);
+  if (!lowerSocket) return;
+  lowerSocket.lowerSocketPlateBodyHonestyLaw = law;
+  lowerSocket.plateBodyHonestyVerdict = 'lower-socket-visible-plate-body-preserved-before-tuck';
+  if (lowerSocket.macroPromotedBody) {
+    lowerSocket.macroPromotedBody.lowerSocketPlateBodyHonestyLaw = law;
+    lowerSocket.macroPromotedBody.promotedBodyScale = Math.max(
+      lowerSocket.macroPromotedBody.promotedBodyScale || 0,
+      law.promotedBodyScaleFloor,
+    );
+    lowerSocket.macroPromotedBody.sideSilhouettePolicy = {
+      ...lowerSocket.macroPromotedBody.sideSilhouettePolicy,
+      plateBodyHonestyLawId: law.id,
+      plateBodyHonestyMode: law.mode,
+      terminalWidthScale: Math.max(
+        lowerSocket.macroPromotedBody.sideSilhouettePolicy?.terminalWidthScale ?? 0,
+        law.terminalWidthScaleFloor,
+      ),
+      visiblePlateWidthFloor: law.visiblePlateWidthFloor,
+      visiblePlateMeanWidthFloor: law.visiblePlateMeanWidthFloor,
+      tuckDisappearancePolicy: law.tuckDisappearancePolicy,
+      plateBodyHonestyContract: law.visualContract,
+    };
+  }
+}
+
 function createLowerSocketKeelAnatomyLaw(assemblage) {
   if (assemblage.id !== 'lower-socket-keel') return null;
   return {
@@ -1106,8 +1189,14 @@ function lowerSocketAnatomyEffectAt(assemblage, t) {
     };
   }
   const profile = Math.pow(Math.sin(Math.PI * clamp(t, 0, 1)), law.widthProfile.terminalTaperPower);
-  const widthScale = law.widthProfile.terminalWidthScale
+  let widthScale = law.widthProfile.terminalWidthScale
     + (law.widthProfile.midScale - law.widthProfile.terminalWidthScale) * profile;
+  const plateLaw = assemblage.lowerSocketPlateBodyHonestyLaw
+    || assemblage.macroPromotedBody?.lowerSocketPlateBodyHonestyLaw;
+  const plateInfluence = lowerSocketPlateBodyHonestyInfluence(plateLaw, t);
+  if (plateInfluence) {
+    widthScale = Math.max(widthScale, plateLaw.anatomyWidthScaleFloor * plateInfluence);
+  }
   const terminalPressure = Math.max(
     1 - smoothStep(0.62, 1, profile),
     smoothStep(law.terminationDecision.terminalCutStartT, 1, t),
@@ -1538,6 +1627,31 @@ function promotedBodySideScale(promoted, side, cutSample) {
     : cutSample?.rightScale ?? 1;
 }
 
+function continueTerminalPoint(prev2, prev1) {
+  const tangent = normalizePoint(subtractPoints(prev1, prev2));
+  const length = pointDistance(prev1, prev2);
+  return addScaledPoint(prev1, tangent, length);
+}
+
+function smoothLowerSocketPlateBodyTerminalSamples(assemblage, samples) {
+  const law = assemblage.lowerSocketPlateBodyHonestyLaw
+    || assemblage.macroPromotedBody?.lowerSocketPlateBodyHonestyLaw;
+  if (!law || samples.length < 4) return samples;
+  const next = samples.map(sample => ({
+    ...sample,
+    outer: [...sample.outer],
+    inner: [...sample.inner],
+  }));
+  const last = next.length - 1;
+  next[last] = {
+    ...next[last],
+    outer: continueTerminalPoint(next[last - 2].outer, next[last - 1].outer),
+    inner: continueTerminalPoint(next[last - 2].inner, next[last - 1].inner),
+    terminalContinuationMode: 'plate-body-honesty-prev-tangent-continuation',
+  };
+  return next;
+}
+
 function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
   const body = assemblage.territoryBodyOccupancy;
   const promoted = assemblage.macroPromotedBody;
@@ -1552,7 +1666,7 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     }, t, 1.045));
   }
 
-  return centerline.map((center, row) => {
+  const samples = centerline.map((center, row) => {
     const t = row / (rowCount - 1);
     const prev = centerline[Math.max(0, row - 1)];
     const next = centerline[Math.min(rowCount - 1, row + 1)];
@@ -1594,6 +1708,7 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
       thickness: pointDistance(outer, inner),
     };
   });
+  return smoothLowerSocketPlateBodyTerminalSamples(assemblage, samples);
 }
 
 function createLiveMacroSideWall(assemblage, targetEdge = 'left-promoted-body-edge') {
@@ -3371,6 +3486,11 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lowerSocketStripHonestyVerdict = next.lowerSocketStripHonestyLaw
     ? 'lower-socket-strip-honesty-law-applied'
     : 'lower-socket-strip-honesty-law-not-active';
+  next.lowerSocketPlateBodyHonestyLaw = createLowerSocketPlateBodyHonestyLaw(next);
+  attachLowerSocketPlateBodyHonestyLaw(next);
+  next.lowerSocketPlateBodyHonestyVerdict = next.lowerSocketPlateBodyHonestyLaw
+    ? 'lower-socket-visible-plate-body-preserved-before-tuck'
+    : 'lower-socket-plate-body-honesty-law-not-active';
   if (next.macroBodyPromotion.lowerCupClosure) {
     next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
   }
@@ -5094,6 +5214,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       LowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
       lowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
       lowerSocketStripHonestyVerdict: composition.lowerSocketStripHonestyVerdict,
+      LowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
+      lowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
+      lowerSocketPlateBodyHonestyVerdict: composition.lowerSocketPlateBodyHonestyVerdict,
       MacroContactMap: composition.macroContactMap,
       macroContactMap: composition.macroContactMap,
       macroContactCount: composition.macroContactMap?.contactCount || 0,
@@ -5525,6 +5648,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
         lowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
         lowerSocketStripHonestyVerdict: composition.lowerSocketStripHonestyVerdict,
+        LowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
+        lowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
+        lowerSocketPlateBodyHonestyVerdict: composition.lowerSocketPlateBodyHonestyVerdict,
         MacroContactMap: composition.macroContactMap,
         macroContactMap: composition.macroContactMap,
         MacroContactSample: composition.macroContactMap?.contacts || [],
