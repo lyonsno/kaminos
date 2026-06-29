@@ -27,12 +27,12 @@ const terrainSamplePath = args.get('--terrain-sample-path') || null;
 function buildPreviewBenchSmokeOfferFixture() {
   return {
     schema: 'kaminos.forge-host.smoke-offer.v0',
-    producerDiaulos: 'greedy-glove-fucker',
+    producerDiaulos: 'neutral-preview-producer',
     source: {
       authority: 'fixture',
-      producerDiaulos: 'greedy-glove-fucker',
-      sourceRef: '/tmp/lerms-glove-well-throw-physics-witness-0628.json',
-      route: 'lerms.throw-physics-v1-support-ask',
+      producerDiaulos: 'neutral-preview-producer',
+      sourceRef: '/tmp/neutral-preview-bench-smoke-offer.json',
+      route: 'neutral/preview-bench-smoke-offer',
     },
     freshness: {
       observedAt: new Date().toISOString(),
@@ -49,14 +49,14 @@ function buildPreviewBenchSmokeOfferFixture() {
     },
     offers: [
       {
-        id: 'producer-smoke-offer-fixture',
-        label: 'Producer Smoke Offer Fixture',
-        schema: 'lerms.preview-bench-smoke-offer-fixture.v0',
-        route: 'lerms/preview-bench/smoke-offer-fixture',
+        id: 'neutral-coincident-marker-offer',
+        label: 'Neutral Coincident Marker Offer',
+        schema: 'neutral.preview-bench-smoke-offer-fixture.v0',
+        route: 'neutral/preview-bench/smoke-offer-fixture',
         source: {
           authority: 'fixture',
-          producerDiaulos: 'greedy-glove-fucker',
-          sourceRef: '/tmp/lerms-glove-well-throw-physics-witness-0628.json',
+          producerDiaulos: 'neutral-preview-producer',
+          sourceRef: '/tmp/neutral-preview-bench-smoke-offer.json',
         },
         freshness: {
           observedAt: new Date().toISOString(),
@@ -72,10 +72,18 @@ function buildPreviewBenchSmokeOfferFixture() {
           route: 'kaminos/preview-bench/smoke-offer-file',
         },
         fields: [
-          { label: 'actors', value: '1 Wilor glove-well hand' },
-          { label: 'trajectory', value: 'arc, bounce, desire decay' },
+          { label: 'markers', value: 'three coincident visual hints plus one separate anchor' },
+          { label: 'layout', value: 'host fan-out preserves source world coordinates' },
           { label: 'capture', value: 'browser witness screenshot' },
         ],
+        benchHints: {
+          objectMarkers: [
+            { id: 'neutral-marker-a', kind: 'neutral_a', label: 'Neutral A', world: [0.2, 1.1, 1.7], authority: 'fixture' },
+            { id: 'neutral-marker-b', kind: 'neutral_b', label: 'Neutral B', world: [0.2, 1.1, 1.7], authority: 'fixture' },
+            { id: 'neutral-marker-c', kind: 'neutral_c', label: 'Neutral C', world: [0.20001, 1.1, 1.7], authority: 'fixture' },
+            { id: 'neutral-marker-d', kind: 'neutral_d', label: 'Neutral D', world: [-0.8, 0.75, 0.65], authority: 'fixture' },
+          ],
+        },
         downgrades: ['fixture-preview-bench-transport-not-source-authority'],
         rejectedDebugSurfaces: [
           {
@@ -4358,6 +4366,11 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
       || evidence.visualState.visible !== true
       || Number(evidence.visualState.markerCount || 0) < 1) {
     throw new Error(`Preview Bench smoke-offer witness did not prove a viewport visual target: ${JSON.stringify(evidence)}`);
+  }
+  if (!Array.isArray(evidence.visualState.coincidentMarkerGroups)
+      || evidence.visualState.coincidentMarkerGroups.length < 1
+      || Number(evidence.visualState.coincidentMarkerGroups[0].count || 0) < 2) {
+    throw new Error(`Preview Bench smoke-offer witness did not prove coincident marker fan-out evidence: ${JSON.stringify(evidence)}`);
   }
   lastEvidence.previewBenchSmokeOffer = {
     schema: 'kaminos.preview-bench.smoke-offer-witness.v0',

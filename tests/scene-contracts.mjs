@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const persistence = readFileSync(join(root, 'scene-persistence-core.js'), 'utf8');
+const smokeOfferToolsPath = join(root, 'preview-bench-smoke-offer-tools.mjs');
 
 assert.match(persistence, /export const SCENE_SCHEMA\s*=\s*'kaminos\.scene\.v1'/, 'scene files declare the multi-object schema in the shared persistence core');
 assert.match(index, /from '\.\/scene-persistence-core\.js'/, 'workbench imports the shared scene persistence core');
@@ -170,6 +171,14 @@ assert.match(index, /function previewBenchUniqueSurfaces\(/, 'Preview Bench smok
 assert.match(index, /function renderPreviewBenchSmokeOfferVisuals\(/, 'Preview Bench smoke offers render a viewport visual, not only sidebar evidence cards');
 assert.match(index, /function previewBenchSmokeOfferMarkerSpecs\(/, 'Preview Bench smoke offers synthesize visual marker specs from producer hints or summary fields');
 assert.match(index, /previewBenchVisualState/, 'Preview Bench smoke-offer debug state exposes viewport visual evidence');
+assert.match(index, /function previewBenchCoincidentMarkerGroups\(/, 'Preview Bench smoke-offer visuals detect coincident markers generically instead of hiding producer facts behind overlap');
+assert.match(index, /function previewBenchApplyCoincidentMarkerLayout\(/, 'Preview Bench smoke-offer visuals fan out coincident marker groups without mutating source world positions');
+assert.match(index, /coincidentMarkerGroups/, 'Preview Bench smoke-offer visual state records coincident marker groups for witness evidence');
+assert.ok(existsSync(smokeOfferToolsPath), 'producer-facing Preview Bench smoke-offer lint tool must exist');
+const smokeOfferTools = readFileSync(smokeOfferToolsPath, 'utf8');
+assert.match(smokeOfferTools, /export function lintPreviewBenchSmokeOffer\(/, 'Preview Bench smoke-offer lint is reusable by producer lanes before pinging Kaminos');
+assert.match(smokeOfferTools, /export function buildPreviewBenchSmokeUrl\(/, 'Preview Bench smoke-offer lint can generate the operator/browser smoke URL');
+assert.match(smokeOfferTools, /export function previewBenchCoincidentMarkerGroups\(/, 'Preview Bench smoke-offer lint reports coincident visual markers before browser smoke');
 assert.match(index, /function normalizePreviewBenchPayloadReport\(/, 'Preview Bench generic payload reports normalize into the same machine-readable host state');
 assert.match(index, /function normalizePreviewBenchTerrainSamplePacket\(/, 'Preview Bench terrain samples normalize into the same machine-readable host state');
 assert.match(index, /previewBenchPayload/, 'Preview Bench host can extract embedded previewBenchPayload reports from lane-local witness files');

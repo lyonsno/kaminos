@@ -1227,6 +1227,7 @@ let previewBenchVisualState = {
   visible: false,
   markerCount: 0,
   markerKinds: [],
+  coincidentMarkerGroups: [],
   source: 'none',
   offerIds: [],
 };
@@ -7110,12 +7111,16 @@ function previewBenchVector3(value, fallback = null) {
 
 function previewBenchMarkerColor(kind = '', authority = '') {
   const text = `${kind} ${authority}`.toLowerCase();
+  const kindText = String(kind || '').toLowerCase();
   if (text.includes('carrier') || text.includes('drop') || text.includes('hit')) return 0xff5a3d;
   if (text.includes('rolling') || text.includes('goin')) return 0x41d7ff;
   if (text.includes('desire') || text.includes('reroute') || text.includes('lure')) return 0xffd166;
   if (text.includes('terrain') || text.includes('sample')) return 0x7bd88f;
-  if (text.includes('fixture') || text.includes('synthetic')) return 0xb99cff;
-  return 0x9ee7ff;
+  if (kindText.includes('fixture') || kindText.includes('synthetic')) return 0xb99cff;
+  const palette = [0x9ee7ff, 0xff8fb3, 0xb99cff, 0x7bd88f, 0xffd166, 0x7cc7ff, 0xffa36b];
+  let hash = 0;
+  for (const char of kindText || text || 'marker') hash = (hash + char.charCodeAt(0)) % palette.length;
+  return palette[hash];
 }
 
 function previewBenchValueMagnitude(value) {
@@ -7133,6 +7138,82 @@ function previewBenchFindObjectMarkers(value, markers = []) {
     if (child && typeof child === 'object') previewBenchFindObjectMarkers(child, markers);
   }
   return markers;
+}
+
+function previewBenchCoincidentMarkerGroups(markerSpecs, epsilon = 0.0001) {
+  const groups = new Map();
+  for (const [index, spec] of previewBenchArray(markerSpecs).entries()) {
+    const world = previewBenchVector3(spec.world, null);
+    if (!world) continue;
+    const key = world.map(axis => Math.round(axis / epsilon)).join(':');
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id: `coincident-marker-group-${groups.size + 1}`,
+        world,
+        markerIndices: [],
+        markerIds: [],
+        markerKinds: [],
+      });
+    }
+    const group = groups.get(key);
+    group.markerIndices.push(index);
+    group.markerIds.push(previewBenchText(spec.id || spec.label, `marker-${index + 1}`));
+    group.markerKinds.push(previewBenchText(spec.kind, 'marker'));
+  }
+  return [...groups.values()]
+    .filter(group => group.markerIds.length > 1)
+    .map((group, index) => ({
+      ...group,
+      id: `coincident-marker-group-${index + 1}`,
+      count: group.markerIds.length,
+    }));
+}
+
+function previewBenchCoincidentDisplayOffset(index, count) {
+  const angle = (index / Math.max(1, count)) * Math.PI * 2 - Math.PI / 2;
+  const radius = 0.68 + Math.max(0, count - 3) * 0.045;
+  return [
+    Math.cos(angle) * radius,
+    0.08 + (index - (count - 1) / 2) * 0.10,
+    Math.sin(angle) * radius,
+  ];
+}
+
+function previewBenchApplyCoincidentMarkerLayout(markerSpecs) {
+  const groups = previewBenchCoincidentMarkerGroups(markerSpecs);
+  const groupByMarkerIndex = new Map();
+  for (const group of groups) {
+    for (const [groupIndex, markerIndex] of group.markerIndices.entries()) {
+      groupByMarkerIndex.set(markerIndex, { group, groupIndex });
+    }
+  }
+  const specs = markerSpecs.map((spec, index) => {
+    const sourceWorld = previewBenchVector3(spec.world, [0, 0, 0]);
+    const membership = groupByMarkerIndex.get(index);
+    if (!membership) {
+      return {
+        ...spec,
+        sourceWorld,
+        displayWorld: [...sourceWorld],
+        coincidentGroupId: null,
+      };
+    }
+    const offset = previewBenchCoincidentDisplayOffset(membership.groupIndex, membership.group.count);
+    return {
+      ...spec,
+      sourceWorld,
+      displayWorld: [
+        sourceWorld[0] + offset[0],
+        sourceWorld[1] + offset[1],
+        sourceWorld[2] + offset[2],
+      ],
+      displayOffset: offset,
+      coincidentGroupId: membership.group.id,
+      coincidentGroupIndex: membership.groupIndex,
+      coincidentGroupCount: membership.group.count,
+    };
+  });
+  return { markerSpecs: specs, coincidentMarkerGroups: groups };
 }
 
 function previewBenchSyntheticMarkerPosition(offerIndex, fieldIndex, totalFields) {
@@ -7262,11 +7343,12 @@ function previewBenchCreateMarkerMesh(spec, index, total) {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  const sourceWorld = previewBenchVector3(spec.world, [0, 0, 0]);
+  const sourceWorld = previewBenchVector3(spec.sourceWorld || spec.world, [0, 0, 0]);
+  const displayWorld = previewBenchVector3(spec.displayWorld || spec.world, sourceWorld);
   group.position.set(
-    sourceWorld[0] * 0.55,
-    sourceWorld[1] * 0.55 - 0.35,
-    sourceWorld[2] * 0.55 - 1.1,
+    displayWorld[0] * 0.55,
+    displayWorld[1] * 0.55 - 0.35,
+    displayWorld[2] * 0.55 - 1.1,
   );
   if (kind.includes('desire') || kind.includes('reroute') || kind.includes('lure')) {
     mesh.rotation.x = Math.PI / 2;
@@ -7279,9 +7361,36 @@ function previewBenchCreateMarkerMesh(spec, index, total) {
   stem.position.y = -0.18;
   group.add(stem);
 
+  if (spec.coincidentGroupId) {
+    const sourcePosition = new THREE.Vector3(
+      sourceWorld[0] * 0.55,
+      sourceWorld[1] * 0.55 - 0.35,
+      sourceWorld[2] * 0.55 - 1.1,
+    );
+    const displayPosition = group.position.clone();
+    const leaderGeometry = new THREE.BufferGeometry().setFromPoints([
+      sourcePosition.sub(displayPosition),
+      new THREE.Vector3(0, 0, 0),
+    ]);
+    const leader = new THREE.Line(
+      leaderGeometry,
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.62 })
+    );
+    leader.name = 'preview-bench-coincident-marker-leader';
+    group.add(leader);
+  }
+
   if (index === 0 || total <= 8) {
     const sprite = previewBenchCreateLabelSprite(spec.label || spec.kind || spec.id, `#${color.toString(16).padStart(6, '0')}`);
-    sprite.position.set(group.position.x > 0.35 ? -0.46 : 0.32, 0.22, 0);
+    if (spec.coincidentGroupId) {
+      const groupIndex = Number.isFinite(spec.coincidentGroupIndex) ? spec.coincidentGroupIndex : 0;
+      const groupCount = Number.isFinite(spec.coincidentGroupCount) ? spec.coincidentGroupCount : 1;
+      const centeredIndex = groupIndex - (groupCount - 1) / 2;
+      sprite.scale.multiplyScalar(0.82);
+      sprite.position.set(0.38 + groupIndex * 0.12, 0.32 + centeredIndex * 0.24, centeredIndex * 0.18);
+    } else {
+      sprite.position.set(group.position.x > 0.35 ? -0.46 : 0.32, 0.22, 0);
+    }
     group.add(sprite);
   }
   return group;
@@ -7298,6 +7407,7 @@ function clearPreviewBenchSmokeOfferVisuals() {
     visible: false,
     markerCount: 0,
     markerKinds: [],
+    coincidentMarkerGroups: [],
     source: 'none',
     offerIds: [],
   };
@@ -7317,13 +7427,16 @@ function renderPreviewBenchSmokeOfferVisuals(state) {
     stateRoute: state.route,
   };
 
-  const markerSpecs = state.offers.flatMap((offer, offerIndex) => (
+  const rawMarkerSpecs = state.offers.flatMap((offer, offerIndex) => (
     previewBenchSmokeOfferMarkerSpecs(offer, offerIndex).map(spec => ({
       ...spec,
       offerId: offer.id,
       offerLabel: offer.label,
     }))
   ));
+  const markerLayout = previewBenchApplyCoincidentMarkerLayout(rawMarkerSpecs);
+  const markerSpecs = markerLayout.markerSpecs;
+  const coincidentMarkerGroups = markerLayout.coincidentMarkerGroups;
 
   const baseMaterial = new THREE.MeshBasicMaterial({
     color: 0x17364c,
@@ -7364,6 +7477,7 @@ function renderPreviewBenchSmokeOfferVisuals(state) {
     visible: true,
     markerCount: markerSpecs.length,
     markerKinds,
+    coincidentMarkerGroups: previewBenchCloneJson(coincidentMarkerGroups, []),
     source: markerSpecs.some(spec => spec.source === 'producer-bench-hints') ? 'producer-bench-hints' : markerSpecs[0]?.source || 'host-fallback',
     offerIds: previewBenchUniqueStrings(state.offers.map(offer => offer.id)),
     route: state.route || null,
