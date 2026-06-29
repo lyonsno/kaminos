@@ -109,7 +109,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .select-input:focus { border-color: #1976d2; }
 
 /* Tabs */
-.tab-bar { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
 .tab { padding: 8px 14px; font-size: 11px; color: #555; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
 .tab:hover { color: #999; }
 .tab.active { color: #fff; border-bottom-color: #1976d2; }
@@ -217,6 +217,28 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .motion-clip-title { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .motion-clip-meta { color: #666; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .motion-clip-intent { color: #a9b8d8; font: 9px 'SF Mono', monospace; border: 1px solid #2d3852; border-radius: 4px; padding: 2px 5px; background: #141a28; white-space: nowrap; }
+
+/* Preview Bench */
+.preview-bench-status { border: 1px solid #2b4543; background: #16201f; color: #9bcfc8; border-radius: 6px; padding: 7px 8px; font: 10px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.preview-bench-status.error { border-color: #5a3030; background: #221818; color: #e0a0a0; }
+.preview-bench-list { display: flex; flex-direction: column; gap: 8px; }
+.preview-bench-offer { border: 1px solid #303030; background: #202020; border-radius: 7px; padding: 9px 10px; display: flex; flex-direction: column; gap: 7px; }
+.preview-bench-offer-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.preview-bench-offer-title { color: #e6e6e6; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-bench-offer-subtitle { color: #777; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.preview-bench-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.preview-bench-badge { padding: 2px 6px; border-radius: 4px; font: 9px 'SF Mono', monospace; border: 1px solid #2d3852; color: #a9b8d8; background: #141a28; white-space: nowrap; }
+.preview-bench-badge.authority { border-color: #2d4a37; color: #93d7a6; background: #132219; }
+.preview-bench-badge.stale, .preview-bench-badge.downgrade { border-color: #5a4823; color: #f0c06a; background: #271f12; }
+.preview-bench-badge.error { border-color: #5a3030; color: #e0a0a0; background: #221818; }
+.preview-bench-field-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.preview-bench-field { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; font-size: 10px; }
+.preview-bench-field span:first-child { color: #666; }
+.preview-bench-field span:last-child { color: #aaa; font-family: 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-bench-empty { color: #555; font-size: 11px; }
+.preview-bench-rejected { border-top: 1px solid #2a2a2a; padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.preview-bench-rejected-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; font: 9px 'SF Mono', monospace; color: #888; }
+.preview-bench-rejected-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -227,6 +249,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="preview">Preview</div>
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
@@ -469,6 +492,27 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="dof-maxblur" min="0" max="0.05" step="0.001" value="0.01">
         <span class="slider-val" id="dof-maxblur-val">0.01</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Preview Bench Tab -->
+  <div class="tab-content" id="tab-preview">
+    <h2>Smoke Offers</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Host Route</span><span class="route-chip">kaminos/preview-bench/smoke-offer-file</span></div>
+      <div class="field"><span class="field-key">State</span><span class="field-val" id="preview-bench-smoke-offer-schema">kaminos.preview-bench.smoke-offer-state.v0</span></div>
+      <div class="preview-bench-status" id="preview-bench-smoke-offer-status">No smoke offer mounted</div>
+      <div class="volume-actions">
+        <button class="btn" id="preview-bench-smoke-offer-reload">Reload Offer</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Offer Count</span><span class="field-val" id="preview-bench-smoke-offer-count">0</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="preview-bench-smoke-offer-source">none</span></div>
+      <div class="field"><span class="field-key">Target</span><span class="field-val" id="preview-bench-smoke-offer-target">none</span></div>
+    </div>
+    <div id="preview-bench-smoke-offer-list" class="preview-bench-list">
+      <div class="preview-bench-empty">No source lane smoke offer is mounted.</div>
     </div>
   </div>
 
@@ -1144,6 +1188,9 @@ let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
+const SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
+const PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA = 'kaminos.preview-bench.smoke-offer-state.v0';
+const PREVIEW_BENCH_SMOKE_OFFER_ROUTE = 'kaminos/preview-bench/smoke-offer-file';
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -1157,6 +1204,16 @@ let viewportPointerDown = null;
 let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
 let splatCorrectionMode = null;
+let previewBenchSmokeOfferState = {
+  schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
+  route: PREVIEW_BENCH_SMOKE_OFFER_ROUTE,
+  mounted: false,
+  status: 'idle',
+  offers: [],
+  source: null,
+  error: null,
+  loadedAt: null,
+};
 const SPLAT_CROP_TARGET_MIN_SIZE = 0.02;
 const SCENE_OBJECT_POINT_PICK_THRESHOLD = 0.025;
 const DEFAULT_HYBRID_SPLAT_OVERLAY_MODULE_URL = 'http://127.0.0.1:5173/src/splatOverlay.ts';
@@ -6950,6 +7007,347 @@ function setInfo(msg) {
   window._kaminosDirty?.();
 }
 
+function previewBenchCloneJson(value, fallback = null) {
+  if (value === undefined) return fallback;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
+}
+
+function previewBenchObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function previewBenchArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function previewBenchText(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function previewBenchSmokeOfferUrlFromRoute(params) {
+  const directUrl = params.get('smoke_offer_url') || params.get('preview_bench_smoke_offer_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('smoke_offer_root') || params.get('preview_bench_smoke_offer_root');
+  const path = params.get('smoke_offer_path') || params.get('preview_bench_smoke_offer_path');
+  if (root && path) {
+    const query = new URLSearchParams({ root, path }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      root,
+      path,
+    };
+  }
+  return null;
+}
+
+function previewBenchSmokeOfferSourceFromRoute(route) {
+  if (!route) return null;
+  return {
+    mode: route.mode,
+    requestedUrl: route.url,
+    effectiveUrl: new URL(route.url, window.location.href).href,
+    root: route.root || null,
+    path: route.path || null,
+    label: route.mode === 'server_file' ? `${route.root}/${route.path}` : route.url,
+  };
+}
+
+function previewBenchNormalizeTimestamp(value) {
+  const text = previewBenchText(value);
+  if (!text) return null;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : text;
+}
+
+function previewBenchFreshnessState(freshness = {}, nowMs = Date.now()) {
+  const generatedAt = previewBenchNormalizeTimestamp(freshness.generatedAt || freshness.generated_at || freshness.observedAt || freshness.observed_at);
+  const observedAt = previewBenchNormalizeTimestamp(freshness.observedAt || freshness.observed_at || freshness.generatedAt || freshness.generated_at);
+  const budgetMs = Number(freshness.budgetMs ?? freshness.freshnessBudgetMs ?? freshness.freshness_budget_ms ?? freshness.maxAgeMs);
+  const observedMs = observedAt ? Date.parse(observedAt) : NaN;
+  const ageMs = Number.isFinite(observedMs) ? Math.max(0, nowMs - observedMs) : null;
+  const stale = Number.isFinite(budgetMs) && ageMs !== null ? ageMs > budgetMs : Boolean(freshness.stale);
+  return {
+    generatedAt,
+    observedAt,
+    budgetMs: Number.isFinite(budgetMs) ? budgetMs : null,
+    ageMs,
+    stale,
+    status: stale ? 'stale' : previewBenchText(freshness.status, observedAt ? 'fresh' : 'unverified'),
+  };
+}
+
+function previewBenchOfferListFromDocument(document) {
+  if (Array.isArray(document?.offers)) return document.offers;
+  if (Array.isArray(document?.smokeOffers)) return document.smokeOffers;
+  if (document?.offer && typeof document.offer === 'object') return [document.offer];
+  if (document?.payload && typeof document.payload === 'object') return [document.payload];
+  if (document && typeof document === 'object') return [document];
+  return [];
+}
+
+function normalizePreviewBenchSmokeOffer(rawDocument, source = null) {
+  const document = previewBenchObject(rawDocument);
+  const nowIso = new Date().toISOString();
+  const envelopeSource = previewBenchObject(document.source);
+  const envelopeTarget = previewBenchObject(document.targetSurface || document.acceptanceSurface);
+  const documentDowngrades = previewBenchArray(document.downgrades);
+  const documentRejected = previewBenchArray(document.rejectedSurfaces || document.rejectedDebugSurfaces);
+  const offers = previewBenchOfferListFromDocument(document).map((rawOffer, index) => {
+    const offer = previewBenchObject(rawOffer);
+    const offerSource = {
+      ...envelopeSource,
+      ...previewBenchObject(offer.source),
+    };
+    const acceptanceSurface = previewBenchObject(offer.acceptanceSurface || document.acceptanceSurface || envelopeTarget);
+    const targetSurface = previewBenchObject(offer.targetSurface || document.targetSurface || acceptanceSurface);
+    const freshness = previewBenchFreshnessState({
+      ...previewBenchObject(document.freshness),
+      ...previewBenchObject(offer.freshness),
+      generatedAt: offer.generatedAt || document.generatedAt || offer.generated_at || document.generated_at || document.freshness?.generatedAt,
+      observedAt: offer.observedAt || document.observedAt || offer.observed_at || document.observed_at || document.freshness?.observedAt,
+      budgetMs: offer.freshnessBudgetMs ?? document.freshnessBudgetMs ?? offer.freshness_budget_ms ?? document.freshness_budget_ms ?? document.freshness?.budgetMs,
+    });
+    const sourceAuthority = previewBenchText(offerSource.authority || offer.authority || document.authority, 'authority-unset');
+    const downgrades = [
+      ...documentDowngrades,
+      ...previewBenchArray(offer.downgrades),
+      ...previewBenchArray(offer.fallbacks).map(item => typeof item === 'string' ? item : item?.reason || item?.label || 'fallback'),
+    ].filter(Boolean);
+    const rejectedDebugSurfaces = [
+      ...documentRejected,
+      ...previewBenchArray(offer.rejectedSurfaces || offer.rejectedDebugSurfaces),
+    ].map(surface => typeof surface === 'string'
+      ? { id: surface, reason: 'source marked debug/non-acceptance surface' }
+      : previewBenchObject(surface));
+    return {
+      schema: SMOKE_OFFER_SCHEMA,
+      id: previewBenchText(offer.id || offer.offerId || offer.route || offer.schema, `offer-${index + 1}`),
+      label: previewBenchText(offer.label || offer.title || offer.name || document.label, `Smoke Offer ${index + 1}`),
+      payloadSchema: previewBenchText(offer.payloadSchema || offer.schema || document.payloadSchema || document.schema, 'source-schema-unset'),
+      sourceRoute: previewBenchText(offer.sourceRoute || offer.route || document.sourceRoute || document.route, 'source-route-unset'),
+      targetSurface,
+      acceptanceSurface,
+      source: {
+        ...previewBenchCloneJson(offerSource, {}),
+        authority: sourceAuthority,
+        producerDiaulos: previewBenchText(offerSource.producerDiaulos || offerSource.producer_diaulos || offer.producerDiaulos || document.producerDiaulos, ''),
+        sourceRef: previewBenchText(offerSource.sourceRef || offerSource.source_ref || offer.sourceRef || document.sourceRef, ''),
+      },
+      freshness,
+      sourceAuthority,
+      freshnessBudget: freshness.budgetMs,
+      downgrades,
+      rejectedDebugSurfaces,
+      summary: previewBenchCloneJson(offer.summary || document.summary, null),
+      fields: previewBenchArray(offer.fields || offer.evidenceFields || document.fields).map(field => ({
+        label: previewBenchText(field?.label || field?.name || field?.key, 'field'),
+        value: previewBenchText(field?.value ?? field?.text ?? field?.route ?? field?.path, ''),
+      })).filter(field => field.value),
+      rawOffer: previewBenchCloneJson(offer, {}),
+    };
+  });
+  return {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
+    route: PREVIEW_BENCH_SMOKE_OFFER_ROUTE,
+    mounted: offers.length > 0,
+    status: offers.length ? 'mounted' : 'empty',
+    source: source ? previewBenchCloneJson(source, {}) : null,
+    targetSurface: previewBenchCloneJson(document.targetSurface || document.acceptanceSurface || offers[0]?.targetSurface, null),
+    acceptanceSurface: previewBenchCloneJson(document.acceptanceSurface || offers[0]?.acceptanceSurface, null),
+    loadedAt: nowIso,
+    rawSchema: document.schema || null,
+    offers,
+    rejectedDebugSurfaces: offers.flatMap(offer => offer.rejectedDebugSurfaces || []),
+    error: null,
+  };
+}
+
+function previewBenchSetSmokeOfferStatus(message, error = false) {
+  const el = document.getElementById('preview-bench-smoke-offer-status');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('error', !!error);
+}
+
+function renderPreviewBenchSmokeOfferState() {
+  const state = previewBenchSmokeOfferState;
+  document.getElementById('preview-bench-smoke-offer-count').textContent = String(state.offers?.length || 0);
+  document.getElementById('preview-bench-smoke-offer-source').textContent = state.source?.label || state.source?.requestedUrl || 'none';
+  document.getElementById('preview-bench-smoke-offer-target').textContent = previewBenchText(state.targetSurface?.id || state.acceptanceSurface?.id, 'none');
+  if (state.error) {
+    previewBenchSetSmokeOfferStatus(`${state.status}: ${state.error}`, true);
+  } else if (state.mounted) {
+    previewBenchSetSmokeOfferStatus(`${state.status} - ${state.offers.length} offer(s) - ${state.source?.label || 'direct mount'}`);
+  } else {
+    previewBenchSetSmokeOfferStatus('No smoke offer mounted');
+  }
+  const list = document.getElementById('preview-bench-smoke-offer-list');
+  list.innerHTML = '';
+  if (!state.offers?.length) {
+    const empty = document.createElement('div');
+    empty.className = 'preview-bench-empty';
+    empty.textContent = state.error ? 'Smoke offer failed to mount.' : 'No source lane smoke offer is mounted.';
+    list.append(empty);
+    window._kaminosDirty?.();
+    return;
+  }
+  for (const offer of state.offers) {
+    const row = document.createElement('div');
+    row.className = 'preview-bench-offer';
+    row.setAttribute('data-smoke-offer-id', offer.id);
+    row.setAttribute('data-smoke-offer-schema', offer.payloadSchema);
+    row.setAttribute('data-smoke-offer-authority', offer.sourceAuthority);
+    row.setAttribute('data-smoke-offer-freshness', offer.freshness?.status || '');
+    row.setAttribute('data-smoke-offer-downgrade', offer.downgrades?.[0] || '');
+    row.setAttribute('data-smoke-offer-target-surface', offer.targetSurface?.id || '');
+    row.setAttribute('data-smoke-offer-acceptance-surface', offer.acceptanceSurface?.id || '');
+
+    const head = document.createElement('div');
+    head.className = 'preview-bench-offer-head';
+    const titleWrap = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'preview-bench-offer-title';
+    title.textContent = offer.label;
+    const subtitle = document.createElement('div');
+    subtitle.className = 'preview-bench-offer-subtitle';
+    subtitle.textContent = offer.sourceRoute;
+    titleWrap.append(title, subtitle);
+    const badges = document.createElement('div');
+    badges.className = 'preview-bench-badges';
+    const badgeSpecs = [
+      ['authority', offer.sourceAuthority],
+      [offer.freshness?.stale ? 'stale' : 'freshness', offer.freshness?.status || 'freshness-unset'],
+      [offer.downgrades?.length ? 'downgrade' : 'downgrade', offer.downgrades?.[0] || 'no downgrade'],
+    ];
+    for (const [kind, label] of badgeSpecs) {
+      const badge = document.createElement('span');
+      badge.className = `preview-bench-badge ${kind}`;
+      badge.textContent = label;
+      badges.append(badge);
+    }
+    head.append(titleWrap, badges);
+    row.append(head);
+
+    const fields = document.createElement('div');
+    fields.className = 'preview-bench-field-grid';
+    const fieldPairs = [
+      ['schema', offer.payloadSchema],
+      ['target', offer.targetSurface?.id || 'target unset'],
+      ['accept', offer.acceptanceSurface?.id || 'acceptance unset'],
+      ['producer', offer.source?.producerDiaulos || offer.source?.diaulos || 'producer unset'],
+      ['source ref', offer.source?.sourceRef || offer.source?.branch || offer.source?.commit || 'source ref unset'],
+      ['observed', offer.freshness?.observedAt || 'observed unset'],
+    ];
+    for (const [key, value] of fieldPairs) {
+      const field = document.createElement('div');
+      field.className = 'preview-bench-field';
+      const left = document.createElement('span');
+      left.textContent = key;
+      const right = document.createElement('span');
+      right.textContent = value;
+      field.append(left, right);
+      fields.append(field);
+    }
+    for (const fieldSpec of offer.fields || []) {
+      const field = document.createElement('div');
+      field.className = 'preview-bench-field';
+      const left = document.createElement('span');
+      left.textContent = fieldSpec.label;
+      const right = document.createElement('span');
+      right.textContent = fieldSpec.value;
+      field.append(left, right);
+      fields.append(field);
+    }
+    row.append(fields);
+
+    if (offer.rejectedDebugSurfaces?.length) {
+      const rejected = document.createElement('div');
+      rejected.className = 'preview-bench-rejected';
+      for (const surface of offer.rejectedDebugSurfaces) {
+        const rejectedRow = document.createElement('div');
+        rejectedRow.className = 'preview-bench-rejected-row';
+        rejectedRow.setAttribute('data-smoke-offer-rejected-surface', surface.id || surface.route || surface.label || 'debug-surface');
+        const name = document.createElement('span');
+        name.textContent = surface.id || surface.route || surface.label || 'debug-surface';
+        const reason = document.createElement('span');
+        reason.textContent = surface.reason || 'rejected debug surface';
+        rejectedRow.append(name, reason);
+        rejected.append(rejectedRow);
+      }
+      row.append(rejected);
+    }
+    list.append(row);
+  }
+  window._kaminosDirty?.();
+}
+
+function mountPreviewBenchSmokeOffer(rawDocument, source = null) {
+  previewBenchSmokeOfferState = normalizePreviewBenchSmokeOffer(rawDocument, source);
+  renderPreviewBenchSmokeOfferState();
+  setInfo(`Preview Bench smoke offer mounted: ${previewBenchSmokeOfferState.offers.length} offer(s)`);
+  return previewBenchSmokeOfferState;
+}
+
+async function loadPreviewBenchSmokeOfferRoute(route) {
+  previewBenchSmokeOfferState = {
+    ...previewBenchSmokeOfferState,
+    status: 'loading',
+    source: previewBenchSmokeOfferSourceFromRoute(route),
+    error: null,
+  };
+  renderPreviewBenchSmokeOfferState();
+  try {
+    const resp = await fetch(route.url);
+    const payload = await resp.json();
+    if (!resp.ok || payload?.error) throw new Error(payload?.error || `HTTP ${resp.status}`);
+    return mountPreviewBenchSmokeOffer(payload, previewBenchSmokeOfferSourceFromRoute(route));
+  } catch (error) {
+    previewBenchSmokeOfferState = {
+      schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
+      route: PREVIEW_BENCH_SMOKE_OFFER_ROUTE,
+      mounted: false,
+      status: 'error',
+      offers: [],
+      source: previewBenchSmokeOfferSourceFromRoute(route),
+      targetSurface: null,
+      acceptanceSurface: null,
+      loadedAt: new Date().toISOString(),
+      error: error.message || String(error),
+    };
+    renderPreviewBenchSmokeOfferState();
+    setInfo(`Preview Bench smoke offer failed: ${previewBenchSmokeOfferState.error}`);
+    return previewBenchSmokeOfferState;
+  }
+}
+
+function initPreviewBenchSmokeOfferRoute() {
+  renderPreviewBenchSmokeOfferState();
+  const params = new URLSearchParams(window.location.search);
+  const route = previewBenchSmokeOfferUrlFromRoute(params);
+  const reloadButton = document.getElementById('preview-bench-smoke-offer-reload');
+  reloadButton?.addEventListener('click', () => {
+    const activeRoute = previewBenchSmokeOfferUrlFromRoute(new URLSearchParams(window.location.search));
+    if (activeRoute) loadPreviewBenchSmokeOfferRoute(activeRoute);
+    else renderPreviewBenchSmokeOfferState();
+  });
+  if (route) {
+    setActiveTab('preview');
+    loadPreviewBenchSmokeOfferRoute(route);
+  }
+}
+
+window.kaminosMountPreviewBenchSmokeOffer = mountPreviewBenchSmokeOffer;
+window.kaminosPreviewBenchSmokeOfferDebugState = function() {
+  return previewBenchCloneJson(previewBenchSmokeOfferState, {});
+};
+
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
@@ -11006,12 +11404,14 @@ initScene().then(() => {
   });
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
+  initPreviewBenchSmokeOfferRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  initPreviewBenchSmokeOfferRoute();
 });
 </script>
 </body>

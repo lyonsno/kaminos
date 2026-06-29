@@ -28,6 +28,14 @@ assert.match(witness, /splat-correction-mode/, 'witness supports viewport-driven
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
+assert.match(witness, /preview-bench-smoke-offer-contract/, 'witness supports a Preview Bench smoke-offer contract scenario');
+assert.match(witness, /kaminos\.preview-bench\.smoke-offer-witness\.v0/, 'Preview Bench smoke-offer witness declares its report schema');
+assert.match(witness, /kaminosPreviewBenchSmokeOfferDebugState/, 'Preview Bench smoke-offer witness reads the browser state surface');
+assert.match(witness, /smokeOfferState/, 'Preview Bench smoke-offer witness records machine-readable state rather than sidebar text alone');
+assert.match(witness, /Page\.captureScreenshot[\s\S]*previewBenchSmokeOffer/, 'Preview Bench smoke-offer witness captures a browser screenshot artifact');
+assert.match(witness, /sourceAuthority/, 'Preview Bench smoke-offer witness records source authority visible at capture time');
+assert.match(witness, /freshnessBudget/, 'Preview Bench smoke-offer witness records freshness budget visible at capture time');
+assert.match(witness, /rejectedDebugSurfaces/, 'Preview Bench smoke-offer witness preserves rejected debug surfaces');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');

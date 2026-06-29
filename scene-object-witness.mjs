@@ -9,7 +9,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8095/';
+let url = args.get('--url') || 'http://127.0.0.1:8095/';
 const out = resolve(args.get('--out') || '/tmp/kaminos-scene-object-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9439);
@@ -20,6 +20,85 @@ const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
+const smokeOfferPath = args.get('--smoke-offer-path') || null;
+
+function buildPreviewBenchSmokeOfferFixture() {
+  return {
+    schema: 'kaminos.forge-host.smoke-offer.v0',
+    producerDiaulos: 'greedy-glove-fucker',
+    source: {
+      authority: 'fixture',
+      producerDiaulos: 'greedy-glove-fucker',
+      sourceRef: '/tmp/lerms-glove-well-throw-physics-witness-0628.json',
+      route: 'lerms.throw-physics-v1-support-ask',
+    },
+    freshness: {
+      observedAt: new Date().toISOString(),
+      budgetMs: 86400000,
+      status: 'fresh-fixture',
+    },
+    targetSurface: {
+      id: 'forge-host-smoke-offer',
+      host: 'Kaminos Preview Bench',
+    },
+    acceptanceSurface: {
+      id: 'preview-bench-smoke-offer-contract',
+      route: 'kaminos/preview-bench/smoke-offer-file',
+    },
+    offers: [
+      {
+        id: 'greedy-throw-physics-v1',
+        label: 'Greedy Throw Physics V1',
+        schema: 'lerms.throw-physics-artifact.v1',
+        route: 'lerms/glove-well/throw-physics/v1',
+        source: {
+          authority: 'fixture',
+          producerDiaulos: 'greedy-glove-fucker',
+          sourceRef: '/tmp/lerms-glove-well-throw-physics-witness-0628.json',
+        },
+        freshness: {
+          observedAt: new Date().toISOString(),
+          budgetMs: 86400000,
+          status: 'fresh-fixture',
+        },
+        targetSurface: {
+          id: 'forge-host-smoke-offer',
+          station: 'throw-physics',
+        },
+        acceptanceSurface: {
+          id: 'preview-bench-smoke-offer-contract',
+          route: 'kaminos/preview-bench/smoke-offer-file',
+        },
+        fields: [
+          { label: 'actors', value: '1 Wilor glove-well hand' },
+          { label: 'trajectory', value: 'arc, bounce, desire decay' },
+          { label: 'capture', value: 'browser witness screenshot' },
+        ],
+        downgrades: ['fixture-live-comparison-pending'],
+        rejectedDebugSurfaces: [
+          {
+            id: 'lane-local-debug-canvas',
+            reason: 'debug route is not Kaminos Preview Bench acceptance',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function ensurePreviewBenchSmokeOfferRoute() {
+  if (scenario !== 'preview-bench-smoke-offer-contract') return;
+  const current = new URL(url);
+  if (current.searchParams.has('smoke_offer_url') || current.searchParams.has('smoke_offer_root')) return;
+  const fixturePath = resolve(smokeOfferPath || 'scratch/preview-bench-smoke-offer-witness.json');
+  mkdirSync(dirname(fixturePath), { recursive: true });
+  writeFileSync(fixturePath, JSON.stringify(buildPreviewBenchSmokeOfferFixture(), null, 2));
+  current.searchParams.set('smoke_offer_root', 'scratch');
+  current.searchParams.set('smoke_offer_path', fixturePath.split('/scratch/').pop() || 'preview-bench-smoke-offer-witness.json');
+  url = current.href;
+}
+
+ensurePreviewBenchSmokeOfferRoute();
 
 let phase = 'initializing';
 let stderr = '';
@@ -4053,6 +4132,84 @@ async function runAoRouteDeltaScenario(ws) {
   };
 }
 
+async function runPreviewBenchSmokeOfferContractScenario(ws) {
+  phase = 'scenario-preview-bench-smoke-offer-contract';
+  lastEvidence.previewBenchSmokeOffer = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 120; i++) {
+        const state = window.kaminosPreviewBenchSmokeOfferDebugState?.();
+        if (state?.mounted || state?.status === 'error') break;
+        await wait(125);
+      }
+      const smokeOfferState = window.kaminosPreviewBenchSmokeOfferDebugState?.() || null;
+      const rows = [...document.querySelectorAll('[data-smoke-offer-id]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-id'),
+        schema: row.getAttribute('data-smoke-offer-schema'),
+        authority: row.getAttribute('data-smoke-offer-authority'),
+        freshness: row.getAttribute('data-smoke-offer-freshness'),
+        downgrade: row.getAttribute('data-smoke-offer-downgrade'),
+        targetSurface: row.getAttribute('data-smoke-offer-target-surface'),
+        acceptanceSurface: row.getAttribute('data-smoke-offer-acceptance-surface'),
+        text: row.textContent,
+      }));
+      const rejectedDebugSurfaces = [...document.querySelectorAll('[data-smoke-offer-rejected-surface]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-rejected-surface'),
+        text: row.textContent,
+      }));
+      return {
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        statusText: document.getElementById('preview-bench-smoke-offer-status')?.textContent || null,
+        countText: document.getElementById('preview-bench-smoke-offer-count')?.textContent || null,
+        sourceText: document.getElementById('preview-bench-smoke-offer-source')?.textContent || null,
+        targetText: document.getElementById('preview-bench-smoke-offer-target')?.textContent || null,
+        smokeOfferState,
+        rows,
+        rejectedDebugSurfaces,
+        sourceAuthority: smokeOfferState?.offers?.[0]?.sourceAuthority || null,
+        freshnessBudget: smokeOfferState?.offers?.[0]?.freshnessBudget || null,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.previewBenchSmokeOffer;
+  if (evidence.activeTab !== 'preview') {
+    throw new Error(`Preview Bench smoke-offer route did not activate Preview tab: ${JSON.stringify(evidence)}`);
+  }
+  const state = evidence.smokeOfferState;
+  if (state?.schema !== 'kaminos.preview-bench.smoke-offer-state.v0'
+      || state?.route !== 'kaminos/preview-bench/smoke-offer-file'
+      || state?.mounted !== true) {
+    throw new Error(`Preview Bench smoke-offer state mismatch: ${JSON.stringify(evidence)}`);
+  }
+  const offer = state.offers?.[0];
+  if (!offer || offer.schema !== 'kaminos.forge-host.smoke-offer.v0'
+      || offer.payloadSchema !== 'lerms.throw-physics-artifact.v1') {
+    throw new Error(`Preview Bench smoke-offer did not preserve source payload schema: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.sourceAuthority !== 'fixture' || !Number.isFinite(Number(evidence.freshnessBudget))) {
+    throw new Error(`Preview Bench smoke-offer witness lost source authority or freshness budget: ${JSON.stringify(evidence)}`);
+  }
+  if (!offer.acceptanceSurface?.id || offer.acceptanceSurface.id !== 'preview-bench-smoke-offer-contract') {
+    throw new Error(`Preview Bench smoke-offer witness lost acceptance surface: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rows?.[0]
+      || evidence.rows[0].authority !== 'fixture'
+      || evidence.rows[0].freshness !== 'fresh-fixture'
+      || evidence.rows[0].downgrade !== 'fixture-live-comparison-pending') {
+    throw new Error(`Preview Bench smoke-offer UI did not expose authority/freshness/downgrade badges: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rejectedDebugSurfaces?.length
+      || evidence.rejectedDebugSurfaces[0].id !== 'lane-local-debug-canvas') {
+    throw new Error(`Preview Bench smoke-offer witness lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
+  }
+  lastEvidence.previewBenchSmokeOffer = {
+    schema: 'kaminos.preview-bench.smoke-offer-witness.v0',
+    ...lastEvidence.previewBenchSmokeOffer,
+    previewBenchSmokeOfferShot: await capturePngScreenshot(ws, siblingPngPath('-previewBenchSmokeOffer')),
+  };
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -4154,6 +4311,8 @@ try {
     await runSplatCropFrameScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
+  } else if (scenario === 'preview-bench-smoke-offer-contract') {
+    await runPreviewBenchSmokeOfferContractScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {
