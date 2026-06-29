@@ -1976,6 +1976,73 @@ try {
       historySelection,
       screenshotProbe,
     }, null, 2));
+  } else if (scenario === 'route-activity-volume-adapter') {
+    const activation = await evalJson(cdp, `(async () => {
+      return window.kaminosActivateRouteActivityVolumeWitness?.('live');
+    })()`, 45000);
+    assertWitness(activation?.schema === 'kaminos.kiln.route-activity-volume-witness.v0', 'Route activity volume witness did not return expected schema', activation);
+    assertWitness(activation?.adapter?.schema === 'kaminos.kiln.route-activity-volume-adapter.v0', 'Route activity volume adapter schema missing', activation);
+    assertWitness(activation?.adapter?.adapterMode === 'volumetric-burn', 'Live route did not derive volumetric burn mode', activation);
+    assertWitness(activation?.adapter?.allowsVolumetricBurn === true, 'Live route did not earn volumetric burn authority', activation);
+    assertWitness(activation?.adapterState?.applied === true, 'Route activity volume adapter was not applied to volume prototype', activation);
+    assertWitness(activation?.adapterState?.volumeDebugState?.active === true, 'Volume prototype is not active after route activity adapter', activation);
+    assertWitness(activation?.adapterState?.volumeDebugState?.volumePrimitiveIds?.includes('witness-sharp-kiln-lifecycle-route-volume'), 'Volume primitive did not preserve route run identity', activation);
+
+    const state = await waitFor(cdp, `(() => {
+      const adapterState = window.__kaminosRouteActivityVolumeAdapterState || null;
+      const tile = document.querySelector('[data-tray-run-id="witness-sharp-kiln-lifecycle"] .route-composition-tray-kiln-tile');
+      const volumeState = window.__kaminosVolumePrototype?.debugState?.() || null;
+      const preview = document.querySelector('#route-activity-volume-preview-canvas');
+      const rect = preview?.getBoundingClientRect();
+      return {
+        ok: Boolean(
+          adapterState?.adapter?.schema === 'kaminos.kiln.route-activity-volume-adapter.v0'
+          && adapterState?.adapter?.adapterMode === 'volumetric-burn'
+          && adapterState?.adapter?.activationState === 'active'
+          && adapterState?.adapter?.allowsVolumetricBurn === true
+          && adapterState?.adapter?.falseAuthorityViolations?.length === 0
+          && adapterState?.preview?.source === 'webgpu-sample-frame-readback'
+          && adapterState?.preview?.fireLikePixels >= 100
+          && adapterState?.preview?.litPixels >= 1000
+          && tile?.getAttribute('data-route-volume-adapter-mode') === 'volumetric-burn'
+          && tile?.getAttribute('data-route-volume-activation-state') === 'active'
+          && tile?.getAttribute('data-route-volume-allows-burn') === 'true'
+          && preview?.dataset.routeVolumeAdapterMode === 'volumetric-burn'
+          && preview?.dataset.routeVolumeSource === 'webgpu-sample-frame-readback'
+          && volumeState?.active === true
+          && volumeState?.simStepCount > 5
+          && volumeState?.lastFrameEnergy > 0.5
+          && volumeState?.controls?.fire >= 1.2
+          && volumeState?.controls?.flowRate >= 0.12
+        ),
+        adapterState,
+        tileDataset: tile ? { ...tile.dataset } : null,
+        previewDataset: preview ? { ...preview.dataset } : null,
+        volumeState,
+        previewRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()`, 'Route activity volume adapter state', 45000);
+
+    await wait(3000);
+    await capture(cdp, afterPath);
+    const screenshotProbe = state.previewRect
+      ? await screenshotVisibleProbe(afterPath, state.previewRect)
+      : { sampled: false, visiblePixels: 0, saturatedPixels: 0 };
+    assertWitness(screenshotProbe.visiblePixels >= 200 && screenshotProbe.saturatedPixels >= 50, 'Route activity volume adapter preview was not visibly inspectable', {
+      state,
+      screenshotProbe,
+    });
+
+    console.log(JSON.stringify({
+      ok: true,
+      schema: 'kaminos.pipeline-ui-witness.v0',
+      scenario,
+      url: appUrl,
+      afterPath,
+      activation,
+      state,
+      screenshotProbe,
+    }, null, 2));
   } else {
   const dragPoints = await evalJson(cdp, `(() => {
     const cards = [...document.querySelectorAll('.pipeline-asset-card')];

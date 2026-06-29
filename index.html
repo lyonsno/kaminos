@@ -1070,6 +1070,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js';
 import {
+  KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA,
+  chooseRouteActivityForVolume,
+  deriveRouteActivityVolumeAdapter,
+} from './route-activity-volume-adapter.mjs';
+import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
@@ -8741,6 +8746,121 @@ function refreshVolumeReadout() {
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
 }
 
+function writeVolumeControlsToInputs(volumeControls = {}) {
+  const mapping = {
+    density: 'volume-density',
+    fire: 'volume-fire',
+    radiance: 'volume-radiance',
+    absorption: 'volume-absorption',
+    glow: 'volume-glow',
+    smoke: 'volume-smoke',
+    curl: 'volume-curl',
+    microdetail: 'volume-microdetail',
+    interfaceShred: 'volume-interface-shred',
+    fireLicks: 'volume-fire-licks',
+    projection: 'volume-projection',
+    speed: 'volume-speed',
+    raySteps: 'volume-steps',
+    adaptiveRays: 'volume-adaptive-rays',
+    inputRadius: 'volume-input-radius',
+    flowRate: 'volume-flow-rate',
+    resolution: 'volume-resolution',
+    gridOverlay: 'volume-grid-overlay',
+    flowDebug: 'volume-flow-debug',
+  };
+  for (const [key, id] of Object.entries(mapping)) {
+    const el = document.getElementById(id);
+    if (!el || volumeControls[key] === undefined) continue;
+    el.value = String(volumeControls[key]);
+  }
+  updateVolumeControlLabels();
+}
+
+async function applyRouteActivityVolumeAdapter(routeActivityOrAdapter, options = {}) {
+  const adapter = routeActivityOrAdapter?.schema === KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA
+    ? routeActivityOrAdapter
+    : deriveRouteActivityVolumeAdapter(routeActivityOrAdapter);
+  const state = {
+    schema: 'kaminos.kiln.route-activity-volume-adapter-witness.v0',
+    applied: false,
+    adapter,
+    volumePrototypePresent: Boolean(volumePrototype),
+    volumeDebugState: null,
+    applyError: null,
+  };
+  window.__kaminosRouteActivityVolumeAdapterState = state;
+  if (!volumePrototype) return state;
+  try {
+    writeVolumeControlsToInputs(adapter.volumeControls);
+    volumePrototype.setControls(adapter.volumeControls);
+    volumePrototype.setVolumePrimitives(adapter.volumePrimitive ? [adapter.volumePrimitive] : []);
+    if (adapter.activationState === 'active') {
+      await volumePrototype.setActive(true);
+    } else {
+      await volumePrototype.setActive(false);
+    }
+    if (options.preview === true && adapter.activationState === 'active') {
+      state.preview = await renderRouteActivityVolumePreview(adapter);
+    }
+    state.applied = true;
+    state.volumeDebugState = volumePrototype.debugState();
+    refreshVolumeReadout();
+    window._kaminosDirty?.();
+  } catch (err) {
+    state.applyError = err?.message || String(err);
+    setInfo(`Route volume adapter: ${state.applyError}`);
+  }
+  return state;
+}
+
+async function renderRouteActivityVolumePreview(adapter) {
+  if (!volumePrototype?.sampleFrame) return null;
+  const sample = await volumePrototype.sampleFrame();
+  if (sample?.ok !== true || !sample.preview?.rgba) return { ok: false, sample };
+  let canvas = document.getElementById('route-activity-volume-preview-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'route-activity-volume-preview-canvas';
+    canvas.style.position = 'absolute';
+    canvas.style.right = '18px';
+    canvas.style.top = '18px';
+    canvas.style.width = '256px';
+    canvas.style.height = 'auto';
+    canvas.style.border = '1px solid rgba(255, 204, 102, 0.7)';
+    canvas.style.borderRadius = '6px';
+    canvas.style.boxShadow = '0 0 22px rgba(255, 190, 90, 0.35)';
+    canvas.style.zIndex = '4';
+    canvas.style.background = '#050607';
+    canvas.style.pointerEvents = 'none';
+    document.getElementById('viewport')?.appendChild(canvas);
+  }
+  canvas.width = sample.preview.width;
+  canvas.height = sample.preview.height;
+  canvas.dataset.routeVolumeAdapterSchema = adapter.schema;
+  canvas.dataset.routeVolumeAdapterMode = adapter.adapterMode;
+  canvas.dataset.routeVolumeSource = 'webgpu-sample-frame-readback';
+  canvas.dataset.routeRunId = adapter.routeRunId || '';
+  const ctx = canvas.getContext('2d');
+  const imageData = new ImageData(new Uint8ClampedArray(sample.preview.rgba), sample.preview.width, sample.preview.height);
+  ctx.putImageData(imageData, 0, 0);
+  return {
+    ok: true,
+    source: 'webgpu-sample-frame-readback',
+    width: sample.width,
+    height: sample.height,
+    previewWidth: sample.preview.width,
+    previewHeight: sample.preview.height,
+    meanLuma: sample.meanLuma,
+    litPixels: sample.litPixels,
+    fireLikePixels: sample.fireLikePixels,
+    emissiveLikePixels: sample.emissiveLikePixels,
+    smokeLikePixels: sample.smokeLikePixels,
+    simStepCount: sample.simStepCount,
+    simGrid: sample.simGrid,
+    simReadback: sample.simReadback,
+  };
+}
+
 function frameVolumeCamera() {
   camera.position.set(1.18, 0.28, 2.05);
   controls.target.set(0, 0.02, 0);
@@ -11730,6 +11850,8 @@ const TRAY_ARTIFACT_ENTRY_SCHEMA_BROWSER = 'kaminos.kiln.tray-artifact-entry.v0'
 const TRAY_ROUTE_RUN_SCHEMA_BROWSER = 'kaminos.kiln.tray-route-run.v0';
 const KILN_ACTIVITY_STATE_SCHEMA_BROWSER = 'kaminos.kiln.activity-state.v0';
 const KILN_ROUTE_ACTIVITY_SCHEMA_BROWSER = 'kaminos.kiln.route-activity.v0';
+const KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA_BROWSER = KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA;
+const ROUTE_ACTIVITY_VOLUME_BLOCKED_WARNING_BROWSER = 'route_activity_false_authority_blocked_volume';
 const SHARP_KILN_LIVE_ROUTE_ID_BROWSER = 'adapter.sharp-image-to-splat-live.v0';
 const MOGE_DEPTH_NORMAL_ROUTE_ID_BROWSER = 'moge.depth-normal.webgpu-local.v0';
 const SPECIMEN_PACKET_COCKPIT_SCHEMA_BROWSER = 'kaminos.kiln.specimen-packet-cockpit.v0';
@@ -11951,6 +12073,10 @@ function deriveBrowserRouteActivity(opts) {
   };
 }
 
+function deriveBrowserRouteActivityVolumeAdapter(routeActivity) {
+  return deriveRouteActivityVolumeAdapter(routeActivity);
+}
+
 let routeCompositionTrayState = null;
 let specimenPacketCockpitState = null;
 let specimenPacketNextRouteRequestState = null;
@@ -12011,6 +12137,7 @@ function trayMakeRouteRun(opts) {
   const kilnActivity = deriveBrowserKilnActivityState(opts);
   const sourceTruthWarnings = [...new Set([...warnings, ...kilnActivity.sourceTruthWarnings])];
   const routeActivity = deriveBrowserRouteActivity({ ...opts, sourceTruthWarnings, kilnActivity });
+  const routeVolumeAdapter = deriveBrowserRouteActivityVolumeAdapter(routeActivity);
   return {
     schema: TRAY_ROUTE_RUN_SCHEMA_BROWSER,
     runId: opts.runId,
@@ -12028,6 +12155,7 @@ function trayMakeRouteRun(opts) {
     displayStatus: trayRouteRunDisplayStatus(opts.statusBadge, opts.routePhase || 'completed'),
     kilnActivity,
     routeActivity,
+    routeVolumeAdapter,
     sourceTruthWarnings,
   };
 }
@@ -12823,12 +12951,13 @@ function renderRouteCompositionTray() {
     return '#66bb6a';
   }
 
-  function kilnTile(routeActivity, kiln) {
+  function kilnTile(routeActivity, kiln, routeVolumeAdapter = null) {
     const activity = routeActivity || deriveBrowserRouteActivity({
       statusBadge: 'real',
       routePhase: 'completed',
       kilnActivity: kiln || deriveBrowserKilnActivityState({ statusBadge: 'real', routePhase: 'completed' }),
     });
+    const volumeAdapter = routeVolumeAdapter || deriveBrowserRouteActivityVolumeAdapter(activity);
     const state = kiln || {
       activityState: activity.activityState,
       truthMode: activity.truthMode,
@@ -12846,10 +12975,14 @@ function renderRouteCompositionTray() {
       data-fire-heat-class="${activity.fire?.heatClass || 'cold'}"
       data-fire-truth-class="${activity.fire?.truthClass || state.truthMode || 'unknown'}"
       data-fire-warning-load="${activity.fire?.warningLoad || 0}"
+      data-route-volume-adapter-schema="${volumeAdapter.schema}"
+      data-route-volume-adapter-mode="${volumeAdapter.adapterMode}"
+      data-route-volume-activation-state="${volumeAdapter.activationState}"
+      data-route-volume-allows-burn="${volumeAdapter.allowsVolumetricBurn ? 'true' : 'false'}"
       style="margin-top:5px;border:1px solid ${color}66;background:linear-gradient(135deg,${color}22,#151515 55%);box-shadow:${glow};border-radius:6px;padding:5px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px">
         <span style="font-size:9px;color:${color};font-family:'SF Mono',monospace">Kiln</span>
         <span style="font-size:10px;color:#ddd">${label}</span>
-        <span style="font-size:8px;color:#777;font-family:'SF Mono',monospace">${activity.fire?.heatClass || activity.visualAuthority}</span>
+        <span style="font-size:8px;color:#777;font-family:'SF Mono',monospace">${volumeAdapter.adapterMode.replace('volumetric-', '')}</span>
       </div>`;
   }
 
@@ -12872,6 +13005,7 @@ function renderRouteCompositionTray() {
       visualAuthorityCounts,
       falseAuthorityViolations,
       routeActivities: (tray?.routeRuns || []).map(run => run.routeActivity).filter(Boolean),
+      routeVolumeAdapters: (tray?.routeRuns || []).map(run => run.routeVolumeAdapter).filter(Boolean),
       fullBurnRunIds: (tray?.routeRuns || []).filter(r => r.routeActivity?.fire?.allowsFullBurn).map(r => r.runId),
       truthModes: [...new Set((tray?.routeRuns || []).map(r => r.kilnActivity?.truthMode).filter(Boolean))],
     };
@@ -12932,7 +13066,7 @@ function renderRouteCompositionTray() {
           ${r.requestedRoute !== r.effectiveRoute ? `<span style="color:#f0b85a" title="Requested: ${r.requestedRoute}">Requested: ${trayHumanizeRoute(r.requestedRoute)}</span> ` : ''}
           Backend: ${r.backendClass}
         </div>
-        ${kilnTile(r.routeActivity, r.kilnActivity)}
+        ${kilnTile(r.routeActivity, r.kilnActivity, r.routeVolumeAdapter)}
         ${r.sourceTruthWarnings.length > 0 ? `<div style="margin-top:2px">${warningBadges(r.sourceTruthWarnings)}</div>` : ''}
       </div>
     `).join('');
@@ -13088,6 +13222,31 @@ function simulateSharpKilnLifecycleForWitness(routePhase = 'running') {
   };
 }
 
+async function kaminosActivateRouteActivityVolumeWitness(kind = 'live') {
+  if (kind === 'partial') {
+    kaminosLoadFixtureSpecimenPacketCockpit();
+    kaminosSimulateSpecimenPacketMogeRouteEvidence();
+  } else if (kind === 'fixture') {
+    loadRouteCompositionFixtureTray();
+  } else {
+    simulateSharpKilnLifecycleForWitness('running');
+  }
+  const witness = window.kaminosRouteCompositionTrayKilnWitness?.();
+  const routeActivity = chooseRouteActivityForVolume(witness?.routeActivities || []);
+  const adapter = deriveBrowserRouteActivityVolumeAdapter(routeActivity);
+  setActiveTab('volume');
+  frameVolumeCamera();
+  const adapterState = await applyRouteActivityVolumeAdapter(adapter, { preview: true });
+  return {
+    schema: 'kaminos.kiln.route-activity-volume-witness.v0',
+    requestedKind: kind,
+    routeActivity,
+    adapter,
+    adapterState,
+    kilnWitness: window.kaminosRouteCompositionTrayKilnWitness?.(),
+  };
+}
+
 // Expose for witness/testing
 window.kaminosRouteCompositionTrayState = () => routeCompositionTrayState;
 window.kaminosLoadRouteCompositionFixtureTray = loadRouteCompositionFixtureTray;
@@ -13103,6 +13262,10 @@ window.kaminosSimulateSpecimenPacketMogeRouteEvidence = kaminosSimulateSpecimenP
 window.kaminosSpecimenPacketCockpitState = () => specimenPacketCockpitState;
 window.kaminosSpecimenPacketNextRouteRequest = () => specimenPacketNextRouteRequestState;
 window.kaminosSpecimenPacketCockpitWitness = specimenPacketCockpitWitness;
+window.KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA_BROWSER = KAMINOS_ROUTE_ACTIVITY_VOLUME_ADAPTER_SCHEMA_BROWSER;
+window.deriveBrowserRouteActivityVolumeAdapter = deriveBrowserRouteActivityVolumeAdapter;
+window.applyRouteActivityVolumeAdapter = applyRouteActivityVolumeAdapter;
+window.kaminosActivateRouteActivityVolumeWitness = kaminosActivateRouteActivityVolumeWitness;
 
 // Wire buttons and import handlers
 document.addEventListener('DOMContentLoaded', () => {
@@ -13198,7 +13361,12 @@ initScene().then(() => {
       }
     }
   });
-  initKaminosVolumeRoute();
+  initKaminosVolumeRoute().then(async () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('kiln_route_activity_volume_witness') === '1') {
+      await kaminosActivateRouteActivityVolumeWitness(params.get('kiln_route_activity_volume_kind') || 'live');
+    }
+  });
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
