@@ -16,6 +16,10 @@ Current docs:
   inference routes such as MoGE depth/normal/pointmap, and how their outputs
   enter the specimen packet as conditioning truth layers rather than candidate
   concept art.
+- [Asset Kiln Fire Language](asset-kiln-fire-language.md) - how Beaming's
+  volumetric fire substrate should become a truthful route-activity/status
+  body for source tiles, route rows, partial outputs, failures, cache recall,
+  and promoted assets.
 - [Splat Assets](splat-assets.md) - declared splat assets, sidecar correction
   metadata, and render-handoff boundaries.
 
@@ -23,4 +27,3 @@ These documents describe current contracts and near-term direction. They should
 not be read as claims that every route already has a live backend. When a route
 is fixture, fallback, partial, failed, or request-only, Kaminos must keep that
 state visible in receipts, UI, witness reports, and downstream packet state.
-

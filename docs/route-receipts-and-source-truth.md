@@ -38,6 +38,10 @@ Receipts are not decorative metadata. They are the compact custody surface that
 lets another part of Kaminos, another agent, or a later operator understand what
 the artifact actually is.
 
+They also drive visible kiln activity. A flame, glow, snuff, or smoke plume is
+only truthful if it is backed by the same receipt fields the packet and witness
+consume.
+
 ## Requested Versus Effective Route
 
 When `requestedRoute` and `effectiveRoute` differ, the receipt must say why.
@@ -175,3 +179,8 @@ For route surfaces, useful witnesses should assert:
 Nonblank output is not enough. A route witness must prove that the visible and
 machine-readable evidence agree about what happened.
 
+For kiln fire surfaces, the witness must also prove that visual authority and
+route authority agree. A fixture cannot display as live compute. A failed route
+cannot leave a candidate artifact. A cached route cannot look like fresh spend.
+Partial anonymous ImageData cannot cool into a promoted artifact without a
+stronger receipt.

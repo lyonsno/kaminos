@@ -143,6 +143,12 @@ Local WebGPU truth-layer routes should occupy the short local pass. They should
 help the operator keep shaping rather than make the operator wait for a whole
 new asset attempt.
 
+In kiln activity terms, local WebGPU truth-layer routes are allowed to show real
+heat when they are actually executing locally. Their outputs should cool as
+truth layers, not as finished concept artifacts. If the route produces partial
+anonymous ImageData, the visual language should remain ember/partial until
+artifact custody becomes stronger.
+
 ## Acceptance For Live Binding
 
 When Kaminos executes the live MoGE worker internally, the acceptance surface
@@ -157,4 +163,3 @@ should prove:
 - the UI shows `webgpu-local` route identity;
 - witness JSON and screenshot agree;
 - no fallback or fixture receipt masquerades as live local inference.
-

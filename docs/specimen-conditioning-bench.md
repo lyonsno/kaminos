@@ -118,6 +118,28 @@ The tray should stay subordinate to the specimen packet. The operator's main
 question is not "what happened in the system history?" It is "what did this
 route teach this specimen, and what should happen next?"
 
+## Kiln Activity
+
+Kiln activity is the visible process layer for the bench. It should make route
+cadence readable without weakening source truth.
+
+A specimen source tile may preheat when selected for a route, burn during live
+compute, bank while outputs settle, glow when cached evidence is recalled, and
+snuff when the route fails. Those states must come from route receipts and
+activity state, not from optimistic UI inference.
+
+The same packet should be able to say:
+
+- this SHARP route failed and produced a timeout report;
+- this MoGE route produced partial WebGPU truth layers;
+- this fixture route proved the UI contract but did not run live compute;
+- this fallback produced an output that is not the requested route;
+- this candidate is promotable only after an explicit promotion decision.
+
+The fire/smoke language belongs beside the route evidence. It should help the
+operator understand which specimen is being worked, what route is spending, and
+how strong the resulting evidence is.
+
 ## Promotion Boundary
 
 A specimen packet can contain strong evidence without containing a promoted
@@ -153,4 +175,3 @@ Specimen Packet cockpit. It currently demonstrates:
 Current boundary: the MoGE route is bound as a receipt and packet truth-layer
 contract. Kaminos does not yet execute the live MoGE worker internally in this
 branch.
-
