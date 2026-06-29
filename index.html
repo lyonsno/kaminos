@@ -240,6 +240,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .forge-chamber-kicker { color: #7f9a86; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
 .forge-chamber-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
 .forge-chamber-actions .btn { padding: 4px 8px; margin: 0; font-size: 10px; color: #888; }
+.forge-chamber-note { width: 100%; min-height: 50px; resize: vertical; margin-top: 7px; padding: 6px 8px; background: #151817; border: 1px solid #303a31; border-radius: 5px; color: #bbb; font: 10px 'SF Mono', monospace; outline: none; }
+.forge-chamber-note:focus { border-color: #5e8267; }
+.forge-chamber-return { width: 100%; min-height: 54px; margin-top: 7px; padding: 6px 8px; background: #121412; border: 1px solid #2a332b; border-radius: 5px; color: #9fb8a4; font: 10px 'SF Mono', monospace; resize: vertical; }
+.forge-chamber-status { color: #7f9a86; font: 9px 'SF Mono', monospace; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -516,7 +520,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
 
     <h2>Smoke Chamber</h2>
-    <div class="panel forge-chamber" id="forge-host-smoke-chamber" data-forge-host-smoke-chamber-schema="kaminos.forge-host.smoke-chamber.v0" data-forge-host-smoke-chamber-active="false">
+    <div class="panel forge-chamber" id="forge-host-smoke-chamber" data-forge-host-smoke-chamber-schema="kaminos.forge-host.smoke-chamber.v0" data-forge-host-smoke-disposition-receipt-schema="kaminos.forge-host.smoke-disposition-receipt.v0" data-forge-host-smoke-chamber-active="false">
       <div class="forge-empty">Open a Smoke Offer</div>
     </div>
 
@@ -1158,6 +1162,8 @@ import {
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
+  FORGE_HOST_SMOKE_DISPOSITIONS,
+  buildForgeHostSmokeDispositionReceipt,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
   deriveForgeStationAttention,
@@ -3868,6 +3874,7 @@ function disposeForgeHostStationScene() {
   });
   forgeHostState.active = false;
   forgeHostState.smokeChamber = null;
+  forgeHostState.smokeDispositionReceipt = null;
   renderForgeHostSmokeChamber();
 }
 
@@ -4023,6 +4030,10 @@ function openForgeHostSmokeOffer(offerId) {
   if (!offerRecord) throw new Error(`No Forge Host smoke offer: ${offerId}`);
   forgeHostState.lastOpenedOffer = offerRecord;
   forgeHostState.smokeChamber = routeForgeHostSmokeOfferToChamber(offerRecord, station);
+  forgeHostState.smokeDisposition = 'observed';
+  forgeHostState.smokeOperatorNote = '';
+  forgeHostState.smokeDispositionReceipt = null;
+  forgeHostState.smokeReceiptStatus = null;
   setInfo(`Smoke chamber: ${offerRecord.title}`);
   renderForgeHostStationList();
   renderForgeHostSmokeChamber();
@@ -4060,6 +4071,81 @@ function renderForgeHostOfferList() {
   }
 }
 
+function setForgeHostSmokeDisposition(value) {
+  if (!forgeHostState?.smokeChamber) return;
+  forgeHostState.smokeDisposition = FORGE_HOST_SMOKE_DISPOSITIONS.includes(value) ? value : 'observed';
+  forgeHostState.smokeDispositionReceipt = null;
+  forgeHostState.smokeReceiptStatus = null;
+  renderForgeHostSmokeChamber();
+}
+
+function setForgeHostSmokeOperatorNote(value) {
+  if (!forgeHostState?.smokeChamber) return;
+  forgeHostState.smokeOperatorNote = String(value || '');
+}
+
+function expectedForgeHostReceiptScreenshotSource(receiptId) {
+  return `/api/read?root=scratch&path=${encodeURIComponent(`smoke-chamber-receipts/${receiptId}/screenshot.png`)}`;
+}
+
+async function captureForgeHostSmokeChamberScreenshot() {
+  const chamber = forgeHostState?.smokeChamber || null;
+  if (!chamber) throw new Error('No Forge Host smoke chamber is open');
+  if (!renderer?.domElement?.toDataURL) throw new Error('Forge Host smoke chamber screenshot capture needs a renderer canvas');
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const screenshotPngDataUrl = renderer.domElement.toDataURL('image/png');
+  if (!String(screenshotPngDataUrl).startsWith('data:image/png;base64,')) {
+    throw new Error('Forge Host smoke chamber screenshot capture did not produce a PNG data URL');
+  }
+  const savedAt = new Date().toISOString();
+  const pendingReceipt = buildForgeHostSmokeDispositionReceipt(chamber, {
+    disposition: forgeHostState.smokeDisposition || 'observed',
+    operatorNote: forgeHostState.smokeOperatorNote || '',
+    savedAt,
+  });
+  const receipt = buildForgeHostSmokeDispositionReceipt(chamber, {
+    disposition: pendingReceipt.disposition,
+    operatorNote: pendingReceipt.operatorNote,
+    savedAt,
+    receiptId: pendingReceipt.receiptId,
+    screenshot: {
+      source: expectedForgeHostReceiptScreenshotSource(pendingReceipt.receiptId),
+      bytes: 0,
+    },
+  });
+  forgeHostState.smokeReceiptStatus = 'saving';
+  renderForgeHostSmokeChamber();
+  const response = await fetch('/api/forge-host/smoke-chamber-receipt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...receipt,
+      screenshotPngDataUrl,
+    }),
+  });
+  const saved = await response.json();
+  if (!response.ok || saved.error) {
+    forgeHostState.smokeReceiptStatus = `failed: ${saved.error || response.status}`;
+    renderForgeHostSmokeChamber();
+    throw new Error(`Forge Host smoke chamber receipt failed: ${saved.error || response.status}`);
+  }
+  forgeHostState.smokeDispositionReceipt = saved.receipt;
+  forgeHostState.smokeReceiptStatus = `saved ${saved.receiptSource}`;
+  renderForgeHostSmokeChamber();
+  setInfo(`Smoke receipt: ${saved.receiptSource}`);
+  window._kaminosDirty?.();
+  return saved.receipt;
+}
+
+async function copyForgeHostSmokeChamberReturnLine() {
+  const line = forgeHostState?.smokeDispositionReceipt?.returnLine
+    || document.getElementById('forge-host-chamber-return-line')?.value
+    || '';
+  if (!line) return false;
+  if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(line);
+  return line;
+}
+
 function renderForgeHostSmokeChamber() {
   const chamberEl = document.getElementById('forge-host-smoke-chamber');
   if (!chamberEl) return;
@@ -4069,8 +4155,12 @@ function renderForgeHostSmokeChamber() {
     chamberEl.innerHTML = '<div class="forge-empty">Open a Smoke Offer</div>';
     return;
   }
-  const affordances = (chamber.captureAffordances || []).map(affordance => (
-    `<button type="button" class="btn" disabled data-forge-chamber-affordance="${escapeHtml(affordance.id)}">${escapeHtml(affordance.label)}</button>`
+  const disposition = forgeHostState.smokeDisposition || 'observed';
+  const receipt = forgeHostState.smokeDispositionReceipt || null;
+  const note = forgeHostState.smokeOperatorNote || '';
+  const previewReceipt = receipt || buildForgeHostSmokeDispositionReceipt(chamber, { disposition, operatorNote: note });
+  const dispositionOptions = FORGE_HOST_SMOKE_DISPOSITIONS.map(item => (
+    `<option value="${escapeHtml(item)}"${item === disposition ? ' selected' : ''}>${escapeHtml(item)}</option>`
   )).join('');
   chamberEl.innerHTML = `
     <div class="forge-chamber-head">
@@ -4088,8 +4178,24 @@ function renderForgeHostSmokeChamber() {
       <div class="field"><span class="field-key">Source</span><span class="field-val">${escapeHtml(chamber.sourceRef)}</span></div>
       <div class="field"><span class="field-key">Warnings</span><span class="field-val">${escapeHtml((chamber.routeWarnings || []).join(', '))}</span></div>
     </div>
-    <div class="forge-chamber-actions">${affordances}</div>
+    <div class="slider-row">
+      <span class="slider-label">Disposition</span>
+      <select id="forge-host-chamber-disposition" class="select-input" data-forge-chamber-disposition>
+        ${dispositionOptions}
+      </select>
+    </div>
+    <textarea id="forge-host-chamber-note" class="forge-chamber-note" spellcheck="false" placeholder="Operator note">${escapeHtml(note)}</textarea>
+    <div class="forge-chamber-actions">
+      <button type="button" class="btn" data-forge-chamber-affordance="screenshot" onclick="captureForgeHostSmokeChamberScreenshot()">Screenshot</button>
+      <button type="button" class="btn" disabled data-forge-chamber-affordance="filmstrip">Filmstrip</button>
+      <button type="button" class="btn" disabled data-forge-chamber-affordance="reply">Reply</button>
+      <button type="button" class="btn" ${receipt ? '' : 'disabled'} onclick="copyForgeHostSmokeChamberReturnLine()">Copy Line</button>
+    </div>
+    <div class="forge-chamber-status">${escapeHtml(forgeHostState.smokeReceiptStatus || (receipt ? 'receipt saved' : 'receipt pending'))}</div>
+    <textarea id="forge-host-chamber-return-line" class="forge-chamber-return" readonly>${escapeHtml(previewReceipt.returnLine)}</textarea>
   `;
+  document.getElementById('forge-host-chamber-disposition')?.addEventListener('change', event => setForgeHostSmokeDisposition(event.target.value));
+  document.getElementById('forge-host-chamber-note')?.addEventListener('input', event => setForgeHostSmokeOperatorNote(event.target.value));
 }
 
 function updateForgeHostReadout() {
@@ -4101,7 +4207,7 @@ function updateForgeHostReadout() {
   setForgeHostText('forge-attention-target', attention?.primaryLookTarget || '-');
   setForgeHostText('forge-attention-proximity', attention ? Number(attention.operatorProximity).toFixed(2) : '-');
   renderForgeHostOfferList();
-  renderForgeHostSmokeChamber();
+  if (!forgeHostState?.smokeChamber) renderForgeHostSmokeChamber();
 }
 
 async function loadForgeHostRegistrySnapshot() {
@@ -4177,6 +4283,10 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
     selectedActorId: manifest.stations[0]?.actorId || null,
     lastOpenedOffer: null,
     smokeChamber: null,
+    smokeDisposition: 'observed',
+    smokeOperatorNote: '',
+    smokeDispositionReceipt: null,
+    smokeReceiptStatus: null,
     startedAt: performance.now() / 1000,
     frameCount: 0,
   };
@@ -4232,6 +4342,8 @@ function updateForgeHostStationFrame(timeSeconds = performance.now() / 1000) {
 window.selectForgeHostStation = setForgeHostSelectedActor;
 window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
 window.kaminosRouteForgeHostSmokeOfferToChamber = routeForgeHostSmokeOfferToChamber;
+window.captureForgeHostSmokeChamberScreenshot = captureForgeHostSmokeChamberScreenshot;
+window.copyForgeHostSmokeChamberReturnLine = copyForgeHostSmokeChamberReturnLine;
 window.kaminosForgeHostDebugState = function() {
   const state = forgeHostState;
   const stations = (state?.visuals || []).map(visual => ({
@@ -4270,6 +4382,10 @@ window.kaminosForgeHostDebugState = function() {
     stations,
     lastOpenedOffer: state?.lastOpenedOffer || null,
     smokeChamber: state?.smokeChamber || null,
+    smokeDisposition: state?.smokeDisposition || null,
+    smokeOperatorNote: state?.smokeOperatorNote || '',
+    smokeDispositionReceipt: state?.smokeDispositionReceipt || null,
+    smokeReceiptStatus: state?.smokeReceiptStatus || null,
     frameCount: state?.frameCount || 0,
   };
 };

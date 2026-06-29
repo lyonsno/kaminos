@@ -2,6 +2,7 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import base64
 import json
 import os
 import re
@@ -50,6 +51,9 @@ SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = "kaminos.forge-host.registry-snapshot.v0"
+FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA = "kaminos.forge-host.smoke-disposition-receipt.v0"
+FORGE_HOST_SMOKE_DISPOSITION_SAVE_SCHEMA = "kaminos.forge-host.smoke-disposition-save.v0"
+FORGE_HOST_SMOKE_RECEIPTS_DIR = BROWSE_ROOTS["scratch"] / "smoke-chamber-receipts"
 FORGE_HOST_ENDPOINT_REGISTRY_PATH = Path(os.environ.get(
     "KAMINOS_FORGE_HOST_ENDPOINT_REGISTRY",
     os.path.expanduser("~/.local/state/epistaxis/directive-alert-endpoints.json"),
@@ -188,6 +192,81 @@ def build_forge_host_registry_snapshot(
         "diaulosRegistry": diaulos_status,
         "endpoints": endpoints,
         "warnings": warnings,
+    }
+
+
+def _safe_receipt_id(value):
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "receipt")).strip(".-")
+    return safe[:120] or "receipt"
+
+
+def _decode_png_data_url(data_url):
+    prefix = "data:image/png;base64,"
+    if not isinstance(data_url, str) or not data_url.startswith(prefix):
+        raise ValueError("screenshotPngDataUrl must be a PNG data URL")
+    try:
+        body = base64.b64decode(data_url[len(prefix):], validate=True)
+    except Exception as error:
+        raise ValueError("screenshotPngDataUrl is not valid base64") from error
+    if not body.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("screenshotPngDataUrl did not decode to a PNG")
+    return body
+
+
+def save_forge_host_smoke_chamber_receipt(payload, receipts_dir=FORGE_HOST_SMOKE_RECEIPTS_DIR):
+    if not isinstance(payload, dict):
+        raise ValueError("receipt payload must be a JSON object")
+    if payload.get("schema") != FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA:
+        raise ValueError("smoke disposition receipt schema mismatch")
+    required = [
+        "receiptId",
+        "chamberId",
+        "sourceOfferId",
+        "stationActorId",
+        "producerDiaulos",
+        "sourceAuthority",
+        "displayState",
+        "sourceRef",
+        "targetUrl",
+        "disposition",
+        "returnLine",
+    ]
+    missing = [key for key in required if not payload.get(key)]
+    if missing:
+        raise ValueError(f"smoke disposition receipt missing fields: {', '.join(missing)}")
+    if payload.get("sourceAuthority") in {"fixture", "fallback", "seeded", "stale"} and payload.get("displayState") == "live":
+        raise ValueError(f"{payload.get('sourceAuthority')} smoke disposition claimed live display authority")
+    png = _decode_png_data_url(payload.get("screenshotPngDataUrl"))
+
+    receipt_id = _safe_receipt_id(payload.get("receiptId"))
+    root = Path(receipts_dir).expanduser().resolve()
+    receipt_dir = (root / receipt_id).resolve()
+    if not receipt_dir.is_relative_to(root):
+        raise PermissionError("Path traversal")
+    receipt_dir.mkdir(parents=True, exist_ok=True)
+    screenshot_path = receipt_dir / "screenshot.png"
+    receipt_path = receipt_dir / "receipt.json"
+    screenshot_path.write_bytes(png)
+    rel_base = f"smoke-chamber-receipts/{receipt_id}"
+    receipt = {
+        key: value
+        for key, value in payload.items()
+        if key != "screenshotPngDataUrl"
+    }
+    receipt["receiptId"] = receipt_id
+    receipt["screenshot"] = {
+        "path": str(screenshot_path),
+        "source": "/api/read?" + urlencode({"root": "scratch", "path": f"{rel_base}/screenshot.png"}),
+        "bytes": len(png),
+    }
+    receipt_path.write_text(json.dumps(receipt, indent=2))
+    return {
+        "schema": FORGE_HOST_SMOKE_DISPOSITION_SAVE_SCHEMA,
+        "receiptId": receipt_id,
+        "receiptPath": str(receipt_path),
+        "receiptSource": "/api/read?" + urlencode({"root": "scratch", "path": f"{rel_base}/receipt.json"}),
+        "screenshot": receipt["screenshot"],
+        "receipt": receipt,
     }
 
 
@@ -629,6 +708,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/forge-host/smoke-chamber-receipt":
+            self.handle_forge_host_smoke_chamber_receipt()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -637,6 +718,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
+
+    def handle_forge_host_smoke_chamber_receipt(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        try:
+            saved = save_forge_host_smoke_chamber_receipt(payload)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+            return
+        self.send_json(saved)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

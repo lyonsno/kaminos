@@ -3,8 +3,11 @@ export const FORGE_HOST_STATION_ANCHOR_SCHEMA = 'kaminos.forge-host.station-anch
 export const FORGE_HOST_STATION_VISUAL_SCHEMA = 'kaminos.forge-host.station-visual.v0';
 export const FORGE_HOST_SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
 export const FORGE_HOST_SMOKE_CHAMBER_SCHEMA = 'kaminos.forge-host.smoke-chamber.v0';
+export const FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA = 'kaminos.forge-host.smoke-disposition-receipt.v0';
 export const FORGE_HOST_STATION_ATTENTION_SCHEMA = 'kaminos.forge-host.station-attention.v0';
 export const FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = 'kaminos.forge-host.registry-snapshot.v0';
+
+export const FORGE_HOST_SMOKE_DISPOSITIONS = ['observed', 'accepted', 'needs-revision', 'blocked', 'parked'];
 
 const STATUS_COLORS = {
   active: '#9fe6bd',
@@ -18,6 +21,14 @@ const STATUS_COLORS = {
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function receiptSlug(value) {
+  return String(value || 'smoke-offer')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96) || 'smoke-offer';
 }
 
 function offer({
@@ -81,6 +92,55 @@ export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
       { id: 'reply', label: 'Reply', status: 'placeholder' },
     ],
     routeWarnings: ['not_chat_bridge', 'not_command_execution'],
+  };
+}
+
+export function buildForgeHostSmokeDispositionReceipt(chamber, {
+  disposition = 'observed',
+  operatorNote = '',
+  savedAt = new Date().toISOString(),
+  screenshot = null,
+  receiptId = null,
+} = {}) {
+  if (!chamber || chamber.schema !== FORGE_HOST_SMOKE_CHAMBER_SCHEMA) {
+    throw new Error(`Forge Host smoke disposition expected ${FORGE_HOST_SMOKE_CHAMBER_SCHEMA}`);
+  }
+  if (!FORGE_HOST_SMOKE_DISPOSITIONS.includes(disposition)) {
+    throw new Error(`Unsupported Smoke Chamber disposition: ${disposition}`);
+  }
+  if (['fixture', 'fallback', 'seeded', 'stale'].includes(chamber.sourceAuthority) && chamber.displayState === 'live') {
+    throw new Error(`${chamber.sourceAuthority} smoke chamber claimed live disposition for ${chamber.id || 'unknown chamber'}`);
+  }
+  const sourceOfferId = chamber.sourceOffer?.id || chamber.id?.replace(/^smoke-chamber:/, '') || 'unknown-offer';
+  const effectiveReceiptId = receiptId || `${receiptSlug(sourceOfferId)}-${savedAt.replace(/[^0-9TZ]/g, '').slice(0, 15)}`;
+  const screenshotRecord = screenshot
+    ? {
+        path: screenshot.path || null,
+        source: screenshot.source || null,
+        bytes: Number(screenshot.bytes || 0),
+      }
+    : null;
+  const evidencePath = screenshotRecord?.path || screenshotRecord?.source || 'pending';
+  const returnLine = `Your Smoke Offer ${sourceOfferId} was dispositioned in Kaminos as ${disposition}; evidence: ${evidencePath}. Let's discuss.`;
+  return {
+    schema: FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA,
+    receiptId: effectiveReceiptId,
+    chamberId: chamber.id,
+    sourceOfferId,
+    stationActorId: chamber.stationActorId,
+    producerDiaulos: chamber.producerDiaulos,
+    sourceAuthority: chamber.sourceAuthority,
+    displayState: chamber.displayState,
+    sourceRef: chamber.sourceRef,
+    targetUrl: chamber.targetUrl,
+    targetSurface: chamber.targetSurface,
+    disposition,
+    operatorNote: String(operatorNote || '').trim(),
+    savedAt,
+    screenshot: screenshotRecord,
+    routeWarnings: cloneJson(chamber.routeWarnings || []),
+    downgrades: cloneJson(chamber.downgrades || []),
+    returnLine,
   };
 }
 

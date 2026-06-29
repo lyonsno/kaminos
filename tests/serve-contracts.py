@@ -96,6 +96,89 @@ def test_forge_host_registry_snapshot_fallback_is_not_live():
     assert snapshot["warnings"], "missing registry should be visible to the browser instead of silently falling back"
 
 
+def test_forge_host_smoke_chamber_receipt_persists_png_and_json():
+    png_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        receipt = serve.save_forge_host_smoke_chamber_receipt({
+            "schema": "kaminos.forge-host.smoke-disposition-receipt.v0",
+            "receiptId": "receipt-live-001",
+            "chamberId": "smoke-chamber:offer:minion-spawnfucker:live-endpoint",
+            "sourceOfferId": "offer:minion-spawnfucker:live-endpoint",
+            "stationActorId": "forge-station:minion-spawnfucker",
+            "producerDiaulos": "minion-spawnfucker",
+            "sourceAuthority": "live",
+            "displayState": "live",
+            "sourceRef": "/Users/noahlyons/.local/state/epistaxis/directive-alert-endpoints.json#minion-spawnfucker",
+            "targetUrl": "codex resume minion-thread",
+            "disposition": "observed",
+            "operatorNote": "Saw the live endpoint chamber.",
+            "returnLine": "Your Smoke Offer offer:minion-spawnfucker:live-endpoint was dispositioned in Kaminos as observed; evidence: pending. Let's discuss.",
+            "screenshotPngDataUrl": png_data_url,
+        }, receipts_dir=Path(tmp))
+
+        receipt_path = Path(receipt["receiptPath"])
+        screenshot_path = Path(receipt["screenshot"]["path"])
+        saved_json = json.loads(receipt_path.read_text())
+        assert receipt_path.name == "receipt.json"
+        assert screenshot_path.name == "screenshot.png"
+        assert screenshot_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+    assert receipt["schema"] == "kaminos.forge-host.smoke-disposition-save.v0"
+    assert receipt["receipt"]["schema"] == "kaminos.forge-host.smoke-disposition-receipt.v0"
+    assert receipt["receipt"]["receiptId"] == "receipt-live-001"
+    assert receipt["receipt"]["screenshot"]["bytes"] > 50
+    assert receipt["receipt"]["screenshot"]["source"] == "/api/read?root=scratch&path=smoke-chamber-receipts%2Freceipt-live-001%2Fscreenshot.png"
+    assert receipt["receiptSource"] == "/api/read?root=scratch&path=smoke-chamber-receipts%2Freceipt-live-001%2Freceipt.json"
+    assert saved_json["returnLine"].endswith("Let's discuss.")
+    assert "screenshotPngDataUrl" not in saved_json
+
+
+def test_forge_host_smoke_chamber_receipt_rejects_false_live_and_bad_png():
+    png_data_url = "data:image/png;base64,bm90LWEtcG5n"
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        try:
+            serve.save_forge_host_smoke_chamber_receipt({
+                "schema": "kaminos.forge-host.smoke-disposition-receipt.v0",
+                "receiptId": "receipt-false-live",
+                "chamberId": "smoke-chamber:offer:minion-spawnfucker:live-endpoint",
+                "sourceOfferId": "offer:minion-spawnfucker:live-endpoint",
+                "stationActorId": "forge-station:minion-spawnfucker",
+                "producerDiaulos": "minion-spawnfucker",
+                "sourceAuthority": "fallback",
+                "displayState": "live",
+                "sourceRef": "fallback#minion",
+                "targetUrl": "codex resume minion-thread",
+                "disposition": "observed",
+                "returnLine": "pending",
+                "screenshotPngDataUrl": png_data_url,
+            }, receipts_dir=Path(tmp))
+        except ValueError as error:
+            assert "fallback" in str(error) and "live" in str(error)
+        else:
+            raise AssertionError("fallback receipt pretending live must fail loud")
+
+        try:
+            serve.save_forge_host_smoke_chamber_receipt({
+                "schema": "kaminos.forge-host.smoke-disposition-receipt.v0",
+                "receiptId": "receipt-bad-png",
+                "chamberId": "smoke-chamber:offer:minion-spawnfucker:live-endpoint",
+                "sourceOfferId": "offer:minion-spawnfucker:live-endpoint",
+                "stationActorId": "forge-station:minion-spawnfucker",
+                "producerDiaulos": "minion-spawnfucker",
+                "sourceAuthority": "live",
+                "displayState": "live",
+                "sourceRef": "live#minion",
+                "targetUrl": "codex resume minion-thread",
+                "disposition": "observed",
+                "returnLine": "pending",
+                "screenshotPngDataUrl": png_data_url,
+            }, receipts_dir=Path(tmp))
+        except ValueError as error:
+            assert "PNG" in str(error)
+        else:
+            raise AssertionError("non-PNG screenshot payload must fail loud")
+
+
 def test_volume_only_scene_save_name_uses_scene_fallback():
     data = {
         "schema": "kaminos.scene.v1",
@@ -430,6 +513,8 @@ if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
     test_forge_host_registry_snapshot_fallback_is_not_live()
+    test_forge_host_smoke_chamber_receipt_persists_png_and_json()
+    test_forge_host_smoke_chamber_receipt_rejects_false_live_and_bad_png()
     test_volume_only_scene_save_name_uses_scene_fallback()
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()

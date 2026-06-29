@@ -402,6 +402,87 @@ async function runForgeHostSmokeChamberRoutingScenario(ws) {
   `, { timeoutMs: 25000 });
 }
 
+async function runForgeHostSmokeChamberReceiptScenario(ws) {
+  phase = 'scenario-forge-host-smoke-chamber-receipt';
+  lastEvidence.forgeHostSmokeChamberReceipt = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host receipt route did not activate');
+      const minion = initial.stations.find(station => station.diaulos === 'minion-spawnfucker');
+      if (!minion) throw new Error('Forge Host receipt route missing minion live endpoint: ' + JSON.stringify(initial.stations.map(station => station.diaulos)));
+      window.selectForgeHostStation(minion.actorId);
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState();
+      const offer = selected.selectedStation.smokeOffers[0];
+      const chamber = window.kaminosOpenForgeHostSmokeOffer(offer.id);
+      await wait(150);
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      if (!panel) throw new Error('Forge Host receipt chamber panel missing from DOM');
+      panel.scrollIntoView({ block: 'center' });
+      await wait(150);
+      const disposition = document.querySelector('#forge-host-chamber-disposition');
+      const note = document.querySelector('#forge-host-chamber-note');
+      if (!disposition) throw new Error('Forge Host receipt chamber lost disposition selector');
+      if (!note) throw new Error('Forge Host receipt chamber lost operator note field');
+      disposition.value = 'needs-revision';
+      disposition.dispatchEvent(new Event('change', { bubbles: true }));
+      note.value = 'Manual bridge smoke witness note.';
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+      const receipt = await window.captureForgeHostSmokeChamberScreenshot();
+      await wait(250);
+      const finalState = window.kaminosForgeHostDebugState();
+      const returnLine = document.querySelector('#forge-host-chamber-return-line')?.value || '';
+      if (receipt.schema !== 'kaminos.forge-host.smoke-disposition-receipt.v0') {
+        throw new Error('Forge Host smoke disposition receipt schema mismatch: ' + JSON.stringify(receipt));
+      }
+      if (receipt.sourceOfferId !== offer.id || receipt.chamberId !== chamber.id) {
+        throw new Error('Forge Host smoke disposition receipt lost offer/chamber identity: ' + JSON.stringify({ offer, chamber, receipt }));
+      }
+      if (receipt.disposition !== 'needs-revision') {
+        throw new Error('Forge Host smoke disposition receipt lost operator disposition: ' + JSON.stringify(receipt));
+      }
+      if (receipt.operatorNote !== 'Manual bridge smoke witness note.') {
+        throw new Error('Forge Host smoke disposition receipt lost operator note: ' + JSON.stringify(receipt));
+      }
+      if (!receipt.screenshot?.path || !receipt.screenshot?.source || receipt.screenshot?.bytes <= 1024) {
+        throw new Error('smoke chamber receipt lost screenshot path: ' + JSON.stringify(receipt));
+      }
+      if (!/Your Smoke Offer/.test(receipt.returnLine) || !/needs-revision/.test(receipt.returnLine) || !/Let's discuss\\./.test(receipt.returnLine)) {
+        throw new Error('Forge Host smoke disposition receipt return line is not source-thread usable: ' + JSON.stringify(receipt.returnLine));
+      }
+      if (returnLine !== receipt.returnLine) {
+        throw new Error('Forge Host smoke disposition return line did not render into the chamber: ' + JSON.stringify({ returnLine, receipt }));
+      }
+      const jsonResp = await fetch(finalState.smokeDispositionReceipt.screenshot.source.replace('screenshot.png', 'receipt.json'));
+      const savedJson = await jsonResp.json();
+      if (savedJson.schema !== 'kaminos.forge-host.smoke-disposition-receipt.v0') {
+        throw new Error('Forge Host saved receipt JSON did not roundtrip through /api/read: ' + JSON.stringify(savedJson));
+      }
+      const imageResp = await fetch(receipt.screenshot.source);
+      const imageBytes = [...new Uint8Array(await imageResp.arrayBuffer()).slice(0, 8)];
+      if (imageBytes.join(',') !== '137,80,78,71,13,10,26,10') {
+        throw new Error('Forge Host saved screenshot is not a PNG: ' + JSON.stringify({ source: receipt.screenshot.source, imageBytes }));
+      }
+      return {
+        initial,
+        selectedActorId: selected.selectedActorId,
+        offer,
+        chamber,
+        receipt,
+        returnLine,
+        savedJson,
+        imageBytes,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+}
+
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   const rows = evidence || [];
   const activeRows = rows.filter(row => row.active && row.pressed === 'true');
@@ -4353,6 +4434,8 @@ try {
     await runForgeHostLiveRegistryScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-routing') {
     await runForgeHostSmokeChamberRoutingScenario(ws);
+  } else if (scenario === 'forge-host-smoke-chamber-receipt') {
+    await runForgeHostSmokeChamberReceiptScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {
