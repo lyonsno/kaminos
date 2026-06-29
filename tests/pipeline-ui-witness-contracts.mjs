@@ -59,6 +59,8 @@ assert.match(witness, /visiblePixels/, 'Pipeline UI witness must sample the view
 assert.match(witness, /sharp-kiln-lifecycle/, 'Pipeline UI witness must include a SHARP kiln lifecycle tray scenario');
 assert.match(witness, /simulatedRouteExecution/, 'SHARP kiln lifecycle witness must explicitly label simulated route execution');
 assert.match(witness, /witness\.fullBurnRunIds\?\.includes\('witness-sharp-kiln-lifecycle'\)/, 'SHARP kiln lifecycle witness must assert full-burn identity from tray witness data');
+assert.match(witness, /data-fire-visual-authority/, 'Pipeline UI witness must inspect route-row fire authority data');
+assert.match(witness, /falseAuthorityViolations/, 'Pipeline UI witness must fail if route fire authority overclaims');
 assert.match(witness, /SCENE IMPORT/, 'Pipeline UI witness must assert the destination Scene Import receipt');
 assert.match(witness, /visible-scene-row/, 'Pipeline UI witness must require the trustworthy import phase, not just no exception');
 assert.doesNotMatch(witness, /pipeline-route-select/, 'Pipeline UI witness must not drive the removed route dropdown');

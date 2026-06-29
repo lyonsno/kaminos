@@ -23,9 +23,11 @@ try {
 
 const {
   KILN_ACTIVITY_STATE_SCHEMA,
+  KILN_ROUTE_ACTIVITY_SCHEMA,
   KILN_ACTIVITY_STATES,
   KILN_TRUTH_MODES,
   deriveKilnActivityState,
+  deriveRouteActivity,
   createTray,
   addRouteRun,
   updateRouteRun,
@@ -35,10 +37,11 @@ const {
 
 test('kiln activity schema and state vocabulary are exported', () => {
   assert.equal(KILN_ACTIVITY_STATE_SCHEMA, 'kaminos.kiln.activity-state.v0');
+  assert.equal(KILN_ROUTE_ACTIVITY_SCHEMA, 'kaminos.kiln.route-activity.v0');
   for (const state of ['cold', 'queued', 'warming', 'burning', 'banking', 'cooled', 'failed', 'cached', 'fixture', 'fallback', 'unavailable']) {
     assert.ok(KILN_ACTIVITY_STATES.includes(state), `missing kiln state ${state}`);
   }
-  for (const mode of ['live', 'cached', 'fixture', 'fallback', 'unavailable', 'failed']) {
+  for (const mode of ['live', 'cached', 'fixture', 'fallback', 'partial', 'unavailable', 'failed']) {
     assert.ok(KILN_TRUTH_MODES.includes(mode), `missing kiln truth mode ${mode}`);
   }
 });
@@ -127,6 +130,70 @@ test('fallback route is visibly weaker than live burn', () => {
   assert.ok(state.sourceTruthWarnings.includes('fallback_kiln_not_requested_route'));
 });
 
+test('partial route is useful ember authority, not full burn', () => {
+  const state = deriveKilnActivityState({
+    statusBadge: 'partial',
+    routePhase: 'completed',
+    backendClass: 'webgpu-local',
+  });
+  assert.equal(state.activityState, 'banking');
+  assert.equal(state.truthMode, 'partial');
+  assert.equal(state.visualAuthority, 'partial-output');
+  assert.equal(state.allowsFullBurn, false);
+  assert.equal(state.claimsLiveCompute, false);
+  assert.ok(state.sourceTruthWarnings.includes('partial_output_not_promoted_artifact'));
+});
+
+test('route activity payload maps live compute to full burn fire authority', () => {
+  const activity = deriveRouteActivity({
+    runId: 'live-run-001',
+    requestedRoute: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRoute: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+    statusBadge: 'real',
+    routePhase: 'running',
+    receiptId: 'live-run-001-receipt',
+    inputArtifactIds: ['source-red-lerm-001'],
+    conditioningArtifactIds: ['depth-001'],
+    outputArtifactIds: ['splat-slot-001'],
+  });
+  assert.equal(activity.schema, KILN_ROUTE_ACTIVITY_SCHEMA);
+  assert.equal(activity.activityId, 'live-run-001-route-activity');
+  assert.equal(activity.visualAuthority, 'live-compute');
+  assert.equal(activity.fire.heatClass, 'burn');
+  assert.equal(activity.fire.truthClass, 'live');
+  assert.equal(activity.fire.allowsFullBurn, true);
+  assert.equal(activity.fire.spendIntensity, 1);
+  assert.equal(activity.sourceArtifactIds[0], 'source-red-lerm-001');
+  assert.deepEqual(activity.outputSlots, [{ role: 'output', artifactId: 'splat-slot-001', status: 'pending' }]);
+});
+
+test('route activity payload maps weak evidence to non-full-burn fire classes', () => {
+  for (const [statusBadge, expected] of [
+    ['fixture', { visualAuthority: 'fixture', heatClass: 'pilot', truthClass: 'fixture' }],
+    ['fallback', { visualAuthority: 'fallback', heatClass: 'weak-heat', truthClass: 'fallback' }],
+    ['failed', { visualAuthority: 'failure-report', heatClass: 'snuff', truthClass: 'failed' }],
+    ['partial', { visualAuthority: 'partial-output', heatClass: 'ember', truthClass: 'partial' }],
+    ['cached', { visualAuthority: 'cached', heatClass: 'glow', truthClass: 'cached' }],
+    ['missing-backend', { visualAuthority: 'none', heatClass: 'cold', truthClass: 'unavailable' }],
+  ]) {
+    const activity = deriveRouteActivity({
+      runId: `${statusBadge}-run`,
+      requestedRoute: 'image_conditioned_generation',
+      effectiveRoute: statusBadge === 'fallback' ? 'fixture_generator' : 'image_conditioned_generation',
+      backendClass: statusBadge,
+      statusBadge,
+      routePhase: 'running',
+      receiptId: `${statusBadge}-receipt`,
+    });
+    assert.equal(activity.visualAuthority, expected.visualAuthority, statusBadge);
+    assert.equal(activity.fire.heatClass, expected.heatClass, statusBadge);
+    assert.equal(activity.fire.truthClass, expected.truthClass, statusBadge);
+    assert.equal(activity.fire.allowsFullBurn, false, `${statusBadge} must not full-burn`);
+    assert.equal(activity.falseAuthorityViolations.length, 0, `${statusBadge} must not produce false-authority violations`);
+  }
+});
+
 test('route run carries kiln state beside source and route identity', () => {
   let tray = createTray({ trayId: 'kiln-test-tray' });
   tray = addRouteRun(tray, {
@@ -147,6 +214,9 @@ test('route run carries kiln state beside source and route identity', () => {
   assert.equal(run.kilnActivity.backendClass, 'local-command');
   assert.equal(run.kilnActivity.statusBadge, 'real');
   assert.equal(run.kilnActivity.receiptId, 'receipt-burning');
+  assert.equal(run.routeActivity.schema, KILN_ROUTE_ACTIVITY_SCHEMA);
+  assert.equal(run.routeActivity.fire.heatClass, 'burn');
+  assert.equal(run.routeActivity.fire.allowsFullBurn, true);
 });
 
 test('route run lifecycle updates progress from SHARP preheat to live burn to cooling output', () => {
@@ -218,6 +288,8 @@ test('failed lifecycle update snuffs a real SHARP run without live burn authorit
   assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'failed');
   assert.equal(tray.routeRuns[0].kilnActivity.truthMode, 'failed');
   assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
+  assert.equal(tray.routeRuns[0].routeActivity.fire.heatClass, 'snuff');
+  assert.equal(tray.routeRuns[0].routeActivity.visualAuthority, 'failure-report');
   assert.ok(tray.routeRuns[0].sourceTruthWarnings.includes('route_execution_failed'));
   assert.ok(tray.routeRuns[0].sourceTruthWarnings.includes('kiln_route_failed'));
 });
@@ -236,6 +308,8 @@ test('non-real lifecycle updates cannot claim full burn while running', () => {
   assert.equal(tray.routeRuns[0].kilnActivity.activityState, 'fixture');
   assert.equal(tray.routeRuns[0].kilnActivity.allowsFullBurn, false);
   assert.equal(tray.routeRuns[0].kilnActivity.claimsLiveCompute, false);
+  assert.equal(tray.routeRuns[0].routeActivity.fire.allowsFullBurn, false);
+  assert.equal(tray.routeRuns[0].routeActivity.visualAuthority, 'fixture');
 });
 
 test('fixture witness tray exposes non-live kiln warnings in witness summary', () => {
@@ -247,6 +321,9 @@ test('fixture witness tray exposes non-live kiln warnings in witness summary', (
   const witness = trayWitness(tray);
   assert.ok(witness.kilnActivityStateCounts.fixture >= 1, 'witness must count fixture kiln states');
   assert.ok(witness.kilnActivityStateCounts.unavailable >= 1, 'witness must count unavailable kiln states');
+  assert.ok(witness.visualAuthorityCounts.fixture >= 1, 'witness must count fixture visual authority');
+  assert.ok(witness.visualAuthorityCounts.none >= 1, 'witness must count unavailable visual authority');
+  assert.deepEqual(witness.falseAuthorityViolations, [], 'fixture witness must not contain false-authority violations');
   assert.ok(witness.sourceTruthWarnings.includes('fixture_kiln_not_live_compute'));
   assert.ok(witness.sourceTruthWarnings.includes('kiln_backend_unavailable'));
 });

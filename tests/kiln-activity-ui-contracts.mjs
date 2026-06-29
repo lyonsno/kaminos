@@ -18,9 +18,12 @@ const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
 test('browser tray defines kiln activity schema and states', () => {
   assert.ok(html.includes('KILN_ACTIVITY_STATE_SCHEMA_BROWSER'), 'missing browser kiln schema constant');
+  assert.ok(html.includes('KILN_ROUTE_ACTIVITY_SCHEMA_BROWSER'), 'missing browser route activity schema constant');
   for (const state of ['cold', 'queued', 'warming', 'burning', 'banking', 'cooled', 'failed', 'cached', 'fixture', 'fallback', 'unavailable']) {
     assert.ok(html.includes(`'${state}'`), `missing browser kiln state ${state}`);
   }
+  assert.ok(html.includes('partial-output'), 'browser route activity must name partial-output visual authority');
+  assert.ok(html.includes('heatClass'), 'browser route activity must expose fire heat class');
 });
 
 test('browser derives kiln state from route truth', () => {
@@ -34,7 +37,9 @@ test('browser derives kiln state from route truth', () => {
 
 test('browser route runs carry kiln activity state', () => {
   assert.ok(html.includes('const kilnActivity = deriveBrowserKilnActivityState'), 'tray route runs must derive kiln activity');
+  assert.ok(html.includes('const routeActivity = deriveBrowserRouteActivity'), 'tray route runs must derive route activity');
   assert.ok(html.includes('kilnActivity,'), 'tray route runs must attach kiln activity');
+  assert.ok(html.includes('routeActivity,'), 'tray route runs must attach route activity');
 });
 
 test('browser tray can update a route run lifecycle without duplicating it', () => {
@@ -59,6 +64,10 @@ test('tray renders kiln activity tile beside route source truth', () => {
   assert.ok(html.includes('data-kiln-activity-state'), 'missing kiln activity state data attribute');
   assert.ok(html.includes('data-kiln-truth-mode'), 'missing kiln truth mode data attribute');
   assert.ok(html.includes('data-kiln-full-burn'), 'missing full-burn data attribute');
+  assert.ok(html.includes('data-route-activity-schema'), 'missing route activity schema data attribute');
+  assert.ok(html.includes('data-fire-visual-authority'), 'missing fire visual authority data attribute');
+  assert.ok(html.includes('data-fire-heat-class'), 'missing fire heat class data attribute');
+  assert.ok(html.includes('data-fire-truth-class'), 'missing fire truth class data attribute');
 });
 
 test('kiln tile preserves operator-facing labels without root ontology leak', () => {
@@ -70,6 +79,7 @@ test('kiln tile preserves operator-facing labels without root ontology leak', ()
 
 test('fixture load exposes kiln witness on window for browser smoke', () => {
   assert.ok(html.includes('window.kaminosRouteCompositionTrayKilnWitness'), 'missing kiln witness window API');
+  assert.ok(html.includes('falseAuthorityViolations'), 'kiln witness must expose false-authority violations');
 });
 
 console.log(`\nkiln activity UI contracts: ${passed} passed, ${failed} failed`);

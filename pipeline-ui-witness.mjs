@@ -337,26 +337,36 @@ try {
         tile.dataset.kilnActivityState === 'fixture'
         && tile.dataset.kilnTruthMode === 'fixture'
         && tile.dataset.kilnFullBurn === 'false'
+        && tile.getAttribute('data-fire-visual-authority') === 'fixture'
+        && tile.getAttribute('data-fire-heat-class') === 'pilot'
       );
       const hasUnavailableTile = kilnTiles.some(tile =>
         tile.dataset.kilnActivityState === 'unavailable'
         && tile.dataset.kilnTruthMode === 'unavailable'
         && tile.dataset.kilnFullBurn === 'false'
+        && tile.getAttribute('data-fire-visual-authority') === 'none'
+        && tile.getAttribute('data-fire-heat-class') === 'cold'
       );
       const noFalseFullBurn = kilnTiles.every(tile =>
         tile.dataset.kilnActivityState === 'burning'
           ? tile.dataset.kilnFullBurn === 'true'
           : tile.dataset.kilnFullBurn === 'false'
       );
+      const routeActivitySchemas = kilnTiles.map(tile => tile.getAttribute('data-route-activity-schema'));
+      const falseAuthorityViolations = witness?.falseAuthorityViolations || [];
       return {
         ok: Boolean(
           witness
           && witness.schema === 'kaminos.kiln.activity-tray-witness.v0'
           && witness.kilnActivityStateCounts?.fixture >= 1
           && witness.kilnActivityStateCounts?.unavailable >= 1
+          && witness.visualAuthorityCounts?.fixture >= 1
+          && witness.visualAuthorityCounts?.none >= 1
+          && falseAuthorityViolations.length === 0
           && hasFixtureTile
           && hasUnavailableTile
           && noFalseFullBurn
+          && routeActivitySchemas.every(schema => schema === 'kaminos.kiln.route-activity.v0')
           && runRows.length >= 2
         ),
         witness,
@@ -366,6 +376,8 @@ try {
           hasFixtureTile,
           hasUnavailableTile,
           noFalseFullBurn,
+          routeActivitySchemas,
+          falseAuthorityViolations,
           tileTexts: kilnTiles.map(tile => tile.innerText),
         },
         firstTileRect: firstTileRect ? { x: firstTileRect.x, y: firstTileRect.y, width: firstTileRect.width, height: firstTileRect.height } : null,
@@ -424,9 +436,18 @@ try {
           && run?.kilnActivity?.activityState === 'burning'
           && run?.kilnActivity?.truthMode === 'live'
           && run?.kilnActivity?.allowsFullBurn === true
+          && run?.routeActivity?.schema === 'kaminos.kiln.route-activity.v0'
+          && run?.routeActivity?.visualAuthority === 'live-compute'
+          && run?.routeActivity?.fire?.heatClass === 'burn'
+          && run?.routeActivity?.falseAuthorityViolations?.length === 0
+          && witness.falseAuthorityViolations?.length === 0
           && tile?.dataset.kilnActivityState === 'burning'
           && tile?.dataset.kilnTruthMode === 'live'
           && tile?.dataset.kilnFullBurn === 'true'
+          && tile?.getAttribute('data-route-activity-schema') === 'kaminos.kiln.route-activity.v0'
+          && tile?.getAttribute('data-fire-visual-authority') === 'live-compute'
+          && tile?.getAttribute('data-fire-heat-class') === 'burn'
+          && tile?.getAttribute('data-fire-truth-class') === 'live'
         ),
         simulatedRouteExecution: true,
         witness,
