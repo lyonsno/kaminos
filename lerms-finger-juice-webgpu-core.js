@@ -1,6 +1,7 @@
 import {
   createFingerJuiceSupportFrame,
   createReservoirDomainDiagnostics,
+  normalizeHillSupportFramePayload,
 } from './lerms-finger-juice-core.js';
 
 export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0';
@@ -477,6 +478,7 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
     lerms: options.lerms || [],
     goins: options.goins || [],
     solver_backend: 'cpu_oracle',
+    hillSupportFramePayload: options.hillSupportFramePayload || options.supportFramePayload || null,
   });
 }
 
@@ -1548,6 +1550,12 @@ function visualStreakBeadStats(particles) {
   };
 }
 
+function supportFrameForSummary(options = {}) {
+  return normalizeHillSupportFramePayload(options.hillSupportFramePayload || options.supportFramePayload, {
+    stepCount: options.stepCount || 0,
+  }) || createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+}
+
 export function summarizeWebGPUParticles(buffer, options = {}) {
   if (options.summaryMode === LERMS_FINGER_JUICE_LIVE_LIGHTWEIGHT_READBACK_MODE) {
     const sourceTruth = createLermsSourceTruth(options.emitterPacket || {}, {
@@ -1592,7 +1600,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     substrateSupportValues.sort((a, b) => a - b);
     const substrateSupportTotal = substrateSupportValues.reduce((sum, value) => sum + value, 0);
     const substrateSupportedCount = substrateSupportValues.filter(value => value >= 2).length;
-    const supportFrame = createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+    const supportFrame = supportFrameForSummary(options);
     const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(liveParticles, supportFrame);
     return {
       solver_backend: options.solver_backend || 'webgpu_compute',
@@ -1800,7 +1808,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const restEnergyStats = settleRestEnergyStats(particles);
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const visualStats = visualStreakBeadStats(particles);
-  const supportFrame = createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+  const supportFrame = supportFrameForSummary(options);
   const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(particles, supportFrame);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
@@ -2975,6 +2983,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   let currentSources = sources;
   let currentEmitterData = emitterData;
   let currentEmitterPacket = options.emitterPacket || {};
+  let currentHillSupportFramePayload = options.hillSupportFramePayload || options.supportFramePayload || null;
   const cpuOracleBase = runCpuFingerJuiceOracle(data, {
     steps: options.oracleSteps || 180,
     dt: options.oracleDt || 1 / 60,
@@ -2982,6 +2991,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     emitterPacket: currentEmitterPacket,
     lerms: options.lerms || [],
     goins: options.goins || [],
+    hillSupportFramePayload: currentHillSupportFramePayload,
   });
   if (!globalThis.navigator?.gpu) {
     return unavailableSolver('navigator.gpu unavailable', { cpuOracle: cpuOracleBase });
@@ -3216,6 +3226,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
           emitterPacket: currentEmitterPacket,
           lerms: options.lerms || [],
           goins: options.goins || [],
+          hillSupportFramePayload: currentHillSupportFramePayload,
         })
       : null;
     const summary = summarizeWebGPUParticles(result, {
@@ -3227,6 +3238,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       solver_backend: 'webgpu_compute',
       summaryMode: readOptions.summaryMode || null,
       neighborSupportData,
+      hillSupportFramePayload: currentHillSupportFramePayload,
     });
     return {
       ...summary,
@@ -3281,6 +3293,27 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       emitterCount: currentEmitterData.emitterCount,
       sourcePacketId: currentEmitterPacket.packet_id || null,
       configId: currentEmitterPacket.route_identity || null,
+    };
+  }
+  function setHillSupportFramePayload(payloadReport = null) {
+    const normalized = normalizeHillSupportFramePayload(payloadReport, { stepCount });
+    if (!normalized) {
+      currentHillSupportFramePayload = null;
+      return {
+        supportFramePayloadStatus: 'invalid',
+        supportFrameSource: 'local_procedural_support_frame_v0',
+        supportFrameChecksum: createFingerJuiceSupportFrame({ stepCount }).supportFrameChecksum,
+      };
+    }
+    currentHillSupportFramePayload = payloadReport;
+    return {
+      supportFramePayloadStatus: 'loaded',
+      supportFrameSource: normalized.supportFrameSource,
+      sourceAuthority: normalized.sourceAuthority,
+      sourceRoute: normalized.sourceRoute,
+      supportFrameChecksum: normalized.supportFrameChecksum,
+      supportFrameIngestionContract: normalized.supportFrameIngestionContract,
+      heightfieldCouplingMode: normalized.heightfieldCouplingMode,
     };
   }
   function step(steps = 1, dt = 1 / 60) {
@@ -3491,6 +3524,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     step,
     stepAndRead,
     setEmitterPacket,
+    setHillSupportFramePayload,
     createRenderer,
   };
 }

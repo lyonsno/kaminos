@@ -57,10 +57,14 @@ assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame ide
 assert.match(coreSource, /FINGER_JUICE_SUPPORT_FRAME_SCHEMA\s*=\s*'big-papa-finger-juice\.support-frame\.v0'/, 'finger juice names its Hill-compatible support-frame schema');
 assert.match(coreSource, /FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA\s*=\s*'big-papa-finger-juice\.substrate-reservoir-diagnostics\.v0'/, 'finger juice names substrate reservoir diagnostics');
 assert.match(coreSource, /FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA\s*=\s*'big-papa-finger-juice\.preview-bench-payload\.v0'/, 'finger juice names its source-owned Preview Bench payload schema');
+assert.match(coreSource, /HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA\s*=\s*'lerms\.hill-of-hills\.preview-bench-payload\.v0'/, 'finger juice names the Hill of Hills Preview Bench payload schema it ingests');
+assert.match(coreSource, /FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT\s*=\s*'hill-preview-bench-support-frame-ingestion-v0'/, 'finger juice names its Hill support-frame ingestion contract');
 assert.match(coreSource, /createFingerJuiceSupportFrame/, 'core creates a Hill-compatible support frame for reservoir state');
+assert.match(coreSource, /normalizeHillSupportFramePayload/, 'core exports Hill support-frame payload normalization');
 assert.match(coreSource, /createReservoirDomainDiagnostics/, 'core creates active-domain reservoir diagnostics in support coordinates');
 assert.match(coreSource, /createFingerJuicePreviewBenchPayload/, 'core exports a source-owned Preview Bench payload wrapper');
 assert.match(coreSource, /supportFrameChecksum/, 'support-frame diagnostics expose checksum identity');
+assert.match(coreSource, /fluid_collision_heightfield_still_local_procedural/, 'Hill support ingestion keeps collision downgrade explicit until raw samples are wired');
 assert.match(coreSource, /activeReservoirDomains/, 'reservoir diagnostics expose active domains instead of only scalar metrics');
 assert.match(coreSource, /host_visualization_not_source_truth/, 'Preview Bench payload downgrades host visuals explicitly');
 assert.match(coreSource, /export function normalizeWorldFingerJuiceEmitterPacket/, 'core exports packet normalizer');
@@ -163,6 +167,8 @@ assert.match(webgpuCoreSource, /iterativeDensityClampCount/, 'iterative density 
 assert.match(webgpuCoreSource, /particleSupportBudgetStats/, 'WebGPU solver reports particle support budget diagnostics');
 assert.match(webgpuCoreSource, /spatial_cell_radius_support_v0/, 'support diagnostics measure physical spatial-cell radius support');
 assert.match(webgpuCoreSource, /supportFrame/, 'WebGPU summaries expose support-frame identity');
+assert.match(webgpuCoreSource, /setHillSupportFramePayload/, 'WebGPU solver accepts live Hill support-frame payload updates after startup');
+assert.match(webgpuCoreSource, /hillSupportFramePayload/, 'WebGPU summaries route Hill support-frame payload identity into readback diagnostics');
 assert.match(webgpuCoreSource, /substrateReservoirDiagnostics/, 'WebGPU summaries expose substrate reservoir diagnostics');
 assert.match(webgpuCoreSource, /activeReservoirDomains/, 'WebGPU summaries expose active reservoir domains');
 assert.match(webgpuCoreSource, /supportFrameChecksum/, 'WebGPU support diagnostics preserve checksum identity');
@@ -241,6 +247,8 @@ assert.match(pageSource, /drawReservoirDomains/, 'prototype visibly draws active
 assert.match(pageSource, /support-domain-renderer-v0/, 'prototype names the support-domain visual renderer contract');
 assert.match(pageSource, /__lermsFingerJuicePreviewBenchPayload/, 'prototype exposes source-owned Preview Bench payload evidence');
 assert.match(pageSource, /supportFrameChecksum/, 'prototype HUD/witness state exposes support-frame checksum');
+assert.match(pageSource, /hill_support_payload_root/, 'prototype accepts a Hill support payload file root for live support-frame ingestion');
+assert.match(pageSource, /hillSupportFramePayloadStatus/, 'prototype exposes Hill support payload load status to witnesses and HUD');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceFreezeForWitness/, 'prototype exposes a frozen capture hook so screenshot and state cannot drift');
 assert.match(pageSource, /witness-frozen-state-capture-v0/, 'prototype names the frozen witness capture contract');
@@ -472,6 +480,102 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT, 'wgsl-
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT, 'wgsl-local-pair-density-projection-v0');
 assert.equal(webgpuMod.LERMS_SOURCE_TRUTH_SCHEMA, 'lerms.source-truth.v0');
 assert.equal(webgpuMod.LERMS_JUICE_HIT_EVENT_SCHEMA, 'lerms.juice-hit-event.v0');
+assert.equal(mod.HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA, 'lerms.hill-of-hills.preview-bench-payload.v0');
+assert.equal(mod.FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT, 'hill-preview-bench-support-frame-ingestion-v0');
+
+const hillPayloadReport = {
+  ok: true,
+  schema: 'kaminos.preview-bench.payload-report.v0',
+  route: 'kaminos/preview-bench/payload-file',
+  payload: {
+    schema: 'lerms.hill-of-hills.preview-bench-payload.v0',
+    route: 'lerms/hill-of-hills/preview-bench-payload-file',
+    acceptanceSurface: {
+      kind: 'kaminos_preview_bench_payload',
+      worldChamberId: 'lerms-underhill',
+      posture: 'inspect',
+      bench: 'terrain-preview',
+    },
+    source: {
+      authority: 'live_simulation',
+      diaulos: 'hill-of-hills-fucker',
+      route: 'hill-of-hills/preview-bench-payload',
+      frameId: 'hill-frame-1',
+      backend: 'deterministic-cpu-heightfield',
+    },
+    sourceTruth: {
+      schema: 'lerms.source-truth.v0',
+      authority: 'live_simulation',
+      route: 'hill-of-hills/preview-bench-payload',
+      frameId: 'hill-frame-1',
+      backend: 'deterministic-cpu-heightfield',
+      configId: 'hill-of-hills-preview-bench-payload-v0',
+    },
+    sourceRef: {
+      repo: 'lerms',
+      path: 'terrain/hill-of-hills-preview-bench-payload.ts',
+    },
+    terrainBuffer: {
+      schema: 'lerms.hill-of-hills-terrain-buffer.v0',
+      sampleSchema: 'lerms.terrain-sample.v0',
+      transport: 'summary_only_typed_arrays_remain_source_owned',
+      gridResolution: { x: 116, z: 148 },
+      sampleCount: 17168,
+      sampleChecksum: '9360a055',
+      topologyChecksum: 'aea2ce25',
+      heightRange: { min: -0.6246, max: 4.4339 },
+    },
+    phase: {
+      mode: 'trail-phase',
+      terrainEpoch: 3,
+      activePhaseCount: 2,
+      phaseChecksum: 'phase-a',
+    },
+    supportFrame: {
+      supportClass: 'single_valued_heightfield',
+      mappingMode: 'static_domain_to_world',
+      supportEpoch: 4,
+      topologyEpoch: 3,
+      substrateTileCount: 1073,
+      dirtySubstrateTileCount: 612,
+      supportFrameChecksum: 'a85a912b',
+      maxHeightDelta: 0.026139946188593447,
+      maxSurfaceSpeed: 1.6337466367870903,
+    },
+    downgrades: [
+      'host_visualization_not_source_truth',
+      'terrain_only_not_full_vertical',
+      'kaminos_preview_bench_not_lerms_world_law',
+    ],
+  },
+};
+const hillSupportFrame = mod.normalizeHillSupportFramePayload(hillPayloadReport, { stepCount: 7 });
+assert.equal(hillSupportFrame.schema, 'big-papa-finger-juice.support-frame.v0', 'Hill support normalization preserves Big Papa support-frame schema');
+assert.equal(hillSupportFrame.supportFrameIngestionContract, 'hill-preview-bench-support-frame-ingestion-v0', 'Hill support normalization names ingestion contract');
+assert.equal(hillSupportFrame.supportFrameSource, 'hill_preview_bench_payload_v0', 'Hill support normalization records source kind');
+assert.equal(hillSupportFrame.sourceAuthority, 'live_simulation', 'Hill support normalization preserves live source authority');
+assert.equal(hillSupportFrame.sourceDiaulos, 'hill-of-hills-fucker', 'Hill support normalization preserves source diaulos');
+assert.equal(hillSupportFrame.supportFrameChecksum, 'a85a912b', 'Hill support normalization preserves source checksum');
+assert.equal(hillSupportFrame.substrateGrid.x, 116, 'Hill support normalization adopts source grid x resolution');
+assert.equal(hillSupportFrame.substrateGrid.z, 148, 'Hill support normalization adopts source grid z resolution');
+assert.equal(hillSupportFrame.terrainBufferTransport, 'summary_only_typed_arrays_remain_source_owned', 'Hill support normalization records metadata-only transport');
+assert.ok(hillSupportFrame.supportFrameDowngrades.includes('fluid_collision_heightfield_still_local_procedural'), 'Hill support normalization states collision remains local until raw samples are wired');
+const hillPreviewPayload = mod.createFingerJuicePreviewBenchPayload({
+  supportFrame: hillSupportFrame,
+  substrateReservoirDiagnostics: {
+    schema: 'big-papa-finger-juice.substrate-reservoir-diagnostics.v0',
+    supportFrameChecksum: hillSupportFrame.supportFrameChecksum,
+    activeReservoirDomains: { componentCount: 0, largestComponent: null, components: [] },
+    occupiedCellCount: 0,
+    surfaceParticleCount: 0,
+    estimatedFluidVolume: 0,
+  },
+  particleCount: 0,
+}, { reportPath: null });
+assert.equal(hillPreviewPayload.payload.summary.supportFrameSource, 'hill_preview_bench_payload_v0', 'Preview Bench payload summarizes Hill support source');
+assert.equal(hillPreviewPayload.payload.summary.sourceAuthority, 'live_simulation', 'Preview Bench payload summarizes Hill source authority');
+assert.ok(hillPreviewPayload.payload.downgrades.includes('fluid_collision_heightfield_still_local_procedural'), 'Preview Bench payload carries honest local-collision downgrade');
+assert.ok(!hillPreviewPayload.payload.downgrades.includes('local_procedural_support_frame_not_live_hill'), 'Preview Bench payload does not claim local support frame after Hill support ingestion');
 
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
   packet_id: 'test-live-packet-1',
