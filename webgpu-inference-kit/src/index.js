@@ -30,6 +30,12 @@ export {
 } from './moge-route.js';
 
 export {
+  SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  createSharpImageToSplatRouteDefinition,
+  createSharpImageToSplatRouteReceipt,
+} from './sharp-route.js';
+
+export {
   assertAuthoritativeRouteWorkerResult,
   createRouteInvocationRequest,
   createRouteWorkerResult,

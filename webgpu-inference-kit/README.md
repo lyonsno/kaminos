@@ -40,6 +40,14 @@ Current surface:
   them as Kaminos evidence.
 - `createMogeDepthNormalRouteDefinition(input)`: first concrete route
   definition for MoGE source-image to depth/normal/pointmap truth-layer output.
+- `createSharpImageToSplatRouteReceipt(input)`: concrete receipt factory for
+  `sharp.image-to-splat.webgpu-local.v0`, preserving source image, browser
+  WebGPU backend identity, PLY splat candidate, depth map, SHARP metadata, and
+  optional splat autocrop evidence.
+- `createSharpImageToSplatRouteDefinition(input)`: route definition aligned to
+  the native SHARP-WebGPU browser adapter surface used by Kaminos Pipeline:
+  source image in, splat candidate/depth/metadata out, with optional
+  `kaminos.splat-autocrop-evidence.v0` side evidence.
 
 Near-term extraction order:
 
@@ -50,8 +58,11 @@ Near-term extraction order:
    runtime emits this receipt from live inference.
 4. Browser route boundary. Route registry, invocation request, worker result,
    browser device request, and MoGE route definition contracts are in place.
-5. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-6. Shared kernels only when at least two real routes need them or a measured
+5. SHARP image-to-splat route contract. First factory and route definition are
+   in place for the browser-native SHARP-WebGPU path; runtime emission remains
+   owned by SHARP/Pipeline adapter surfaces.
+6. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+7. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:
