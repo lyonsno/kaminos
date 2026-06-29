@@ -122,6 +122,11 @@
           "role": "sharp-webgpu-metadata",
           "pathTemplate": "artifacts/sharp-webgpu-metadata.json"
         },
+        "autoCropEvidence": {
+          "role": "splat-autocrop-evidence",
+          "schema": "kaminos.splat-autocrop-evidence.v0",
+          "pathTemplate": "artifacts/sharp-output.splat-autocrop-evidence.json"
+        },
         "sidecar": {
           "role": "kaminos-import-sidecar",
           "pathTemplate": "artifacts/sharp-output.kaminos-pipeline.json"
@@ -143,7 +148,8 @@
             "effectiveBackend": "browser-webgpu"
           },
           "inputArtifact": "input",
-          "outputArtifact": "splat"
+          "outputArtifact": "splat",
+          "requiredSideArtifacts": ["depthMap", "metadata", "autoCropEvidence"]
         },
         {
           "id": "write-live-sharp-sidecar",

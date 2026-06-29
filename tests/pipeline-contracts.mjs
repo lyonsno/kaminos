@@ -30,7 +30,11 @@ assert.equal(liveSharpPipeline.routeId, 'adapter.sharp-image-to-splat-live.v0');
 assert.match(liveSharpPipeline.description, /KAMINOS_SHARP_COMMAND/, 'live SHARP route must name its explicit command configuration');
 assert.ok(liveSharpPipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.commandEnv === 'KAMINOS_SHARP_COMMAND' && stage.route?.executesModel === true), 'live SHARP route must execute an explicit model adapter command');
 assert.ok(liveSharpPipeline.artifacts?.splat?.pathTemplate && !liveSharpPipeline.artifacts.splat.pathTemplate.startsWith('/'), 'live SHARP splat output must be caller-rooted');
+assert.equal(liveSharpPipeline.artifacts?.autoCropEvidence?.role, 'splat-autocrop-evidence', 'live SHARP route must declare autocrop evidence as a first-class artifact');
+assert.equal(liveSharpPipeline.artifacts?.autoCropEvidence?.schema, 'kaminos.splat-autocrop-evidence.v0', 'live SHARP autocrop evidence must carry a schema');
+assert.ok(liveSharpPipeline.artifacts?.autoCropEvidence?.pathTemplate && !liveSharpPipeline.artifacts.autoCropEvidence.pathTemplate.startsWith('/'), 'live SHARP autocrop evidence must be caller-rooted');
 assert.ok(liveSharpPipeline.artifacts?.sidecar?.pathTemplate && !liveSharpPipeline.artifacts.sidecar.pathTemplate.startsWith('/'), 'live SHARP sidecar output must be caller-rooted');
+assert.deepEqual(liveSharpPipeline.stages[0].requiredSideArtifacts, ['depthMap', 'metadata', 'autoCropEvidence'], 'live SHARP stage must fail loud if autocrop evidence is missing');
 
 const preparedPipeline = manifest.pipelines.find(pipeline => pipeline.id === 'prepared-splat-import-sidecar-v0');
 assert.ok(preparedPipeline, 'manifest must include a route for existing splat import sidecar authoring');
@@ -267,6 +271,11 @@ const report = args.get('--report');
 if (!input || !output || !report) throw new Error('mock SHARP expected --input --output --report');
 const bytes = readFileSync(input);
 const hash = createHash('sha256').update(bytes).digest('hex');
+const artifactPaths = JSON.parse(process.env.KAMINOS_PIPELINE_ARTIFACT_PATHS || '{}');
+const depthPath = artifactPaths.depthMap;
+const metadataPath = artifactPaths.metadata;
+const autoCropEvidencePath = artifactPaths.autoCropEvidence;
+if (!depthPath || !metadataPath || !autoCropEvidencePath) throw new Error('mock SHARP expected manifest side artifact paths');
 const points = [];
 for (let y = 0; y < 27; y += 1) {
   for (let x = 0; x < 27; x += 1) {
@@ -297,6 +306,44 @@ writeFileSync(output, [
   ...points,
   ''
 ].join('\\n'));
+mkdirSync(dirname(depthPath), { recursive: true });
+writeFileSync(depthPath, 'mock sharp depth png bytes\\n');
+mkdirSync(dirname(metadataPath), { recursive: true });
+writeFileSync(metadataPath, JSON.stringify({
+  schema: 'kaminos.sharp-webgpu-metadata.v0',
+  input: { path: input, sha256: hash },
+  output: { path: output },
+  depthMap: { path: depthPath }
+}, null, 2) + '\\n');
+mkdirSync(dirname(autoCropEvidencePath), { recursive: true });
+writeFileSync(autoCropEvidencePath, JSON.stringify({
+  schema: 'kaminos.splat-autocrop-evidence.v0',
+  status: 'complete',
+  authority: {
+    freshness: 'fresh',
+    evidenceMode: 'fixture-derived-from-generated-ply-and-depth',
+    downgrades: ['mock-adapter-fixture-not-real-sharp-inference']
+  },
+  sourceImage: { path: input, sha256: hash },
+  generated: {
+    ply: { path: output },
+    sidecar: { path: artifactPaths.sidecar || null, routeIdentity: 'sharp-image-to-splat-live-v0' }
+  },
+  sharp: {
+    depthMap: { path: depthPath },
+    metadata: { path: metadataPath }
+  },
+  cropSignal: {
+    provenance: 'mock adapter generated point bounds',
+    bounds: {
+      min: { x: -1, y: -1, z: -0.18 },
+      max: { x: 1, y: 1, z: 0.18 }
+    },
+    suggestedPivot: { x: 0, y: 0, z: 0 },
+    candidateCrop: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 }, units: 'normalized-image' }
+  },
+  rejectedDebugSurfaces: []
+}, null, 2) + '\\n');
 const stat = statSync(output);
 mkdirSync(dirname(report), { recursive: true });
 writeFileSync(report, JSON.stringify({
@@ -305,7 +352,18 @@ writeFileSync(report, JSON.stringify({
   input,
   output,
   inputSha256: hash,
-  outputBytes: stat.size
+  outputBytes: stat.size,
+  sideArtifacts: [
+    { id: 'depthMap', role: 'depth-map', path: depthPath },
+    { id: 'metadata', role: 'sharp-webgpu-metadata', path: metadataPath },
+    { id: 'autoCropEvidence', role: 'splat-autocrop-evidence', path: autoCropEvidencePath, schema: 'kaminos.splat-autocrop-evidence.v0' }
+  ],
+  outputs: {
+    splat: { id: 'splat', role: 'splat-candidate', path: output },
+    depthMap: { id: 'depthMap', role: 'depth-map', path: depthPath },
+    metadata: { id: 'metadata', role: 'sharp-webgpu-metadata', path: metadataPath },
+    autoCropEvidence: { id: 'autoCropEvidence', role: 'splat-autocrop-evidence', path: autoCropEvidencePath, schema: 'kaminos.splat-autocrop-evidence.v0' }
+  }
 }, null, 2) + '\\n');
 `);
   chmodSync(mockSharpCommand, 0o755);
@@ -340,8 +398,10 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.commandEnv, 'KAMINOS_SHARP_COMMAND');
   assert.equal(liveReport.stages[0].effectiveRoute.executedCommand[0], mockSharpCommand);
   assert.ok(liveReport.artifacts.splat.path.startsWith(liveOutDir), 'live SHARP splat output must use caller out-dir');
+  assert.ok(liveReport.artifacts.autoCropEvidence.path.startsWith(liveOutDir), 'live SHARP autocrop evidence must use caller out-dir');
   assert.ok(liveReport.artifacts.sidecar.path.startsWith(liveOutDir), 'live SHARP sidecar output must use caller out-dir');
   assert.equal(liveReport.artifacts.splat.status, 'fixture');
+  assert.equal(liveReport.artifacts.autoCropEvidence.status, 'fixture');
   assert.equal(liveReport.artifacts.sidecar.status, 'fixture');
   assert.equal(liveReport.artifacts.splat.fixtureSource?.mode, 'mock-adapter');
   assert.match(liveReport.artifacts.splat.fixtureSource?.truthBoundary || '', /mock SHARP(?:-WebGPU)? adapter fixture output/);
@@ -356,6 +416,18 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveSidecar.status.stageMode, 'fixture');
   assert.match(liveSidecar.status.truthBoundary, /mock SHARP(?:-WebGPU)? adapter fixture output/);
   assert.equal(liveSidecar.asset.renderCapabilities.realHybridRender, false);
+  assert.ok(liveSidecar.asset.sideArtifacts.some(artifact => artifact.id === 'autoCropEvidence' && artifact.role === 'splat-autocrop-evidence'), 'live SHARP sidecar must list autocrop evidence as a side artifact');
+  const liveAutoCropEvidence = JSON.parse(readFileSync(liveReport.artifacts.autoCropEvidence.path, 'utf8'));
+  assert.equal(liveAutoCropEvidence.schema, 'kaminos.splat-autocrop-evidence.v0');
+  assert.equal(liveAutoCropEvidence.status, 'complete');
+  assert.equal(liveAutoCropEvidence.sourceImage.path, inputPath);
+  assert.equal(liveAutoCropEvidence.generated.ply.path, liveReport.artifacts.splat.path);
+  assert.equal(liveAutoCropEvidence.generated.sidecar.path, liveReport.artifacts.sidecar.path);
+  assert.equal(liveAutoCropEvidence.sharp.depthMap.path, liveReport.artifacts.depthMap.path);
+  assert.equal(liveAutoCropEvidence.sharp.metadata.path, liveReport.artifacts.metadata.path);
+  assert.deepEqual(liveAutoCropEvidence.cropSignal.suggestedPivot, { x: 0, y: 0, z: 0 });
+  const liveBundle = JSON.parse(readFileSync(liveReport.bundleIndex.path, 'utf8'));
+  assert.ok(liveBundle.artifacts.some(artifact => artifact.id === 'autoCropEvidence' && artifact.role === 'splat-autocrop-evidence'), 'bundle index must list autocrop evidence by role');
 
   const adapterOutDir = join(tempRoot, 'adapter-out');
   const adapterReportPath = join(tempRoot, 'reports', 'adapters.json');

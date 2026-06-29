@@ -60,6 +60,12 @@ function artifactPathFor(artifactId) {
   return resolve(outDir, artifact.pathTemplate);
 }
 
+function artifactPathMap() {
+  return Object.fromEntries(Object.keys(pipeline?.artifacts || {})
+    .map(artifactId => [artifactId, artifactPathFor(artifactId)])
+    .filter(([, path]) => path));
+}
+
 function fileEvidence(path) {
   const stat = statSync(path);
   return {
@@ -432,6 +438,12 @@ function adapterSideArtifactEntries(report) {
   return entries;
 }
 
+function adapterSideArtifactMap(report) {
+  return new Map(adapterSideArtifactEntries(report)
+    .filter(entry => entry?.id || entry?.artifactId)
+    .map(entry => [entry.id || entry.artifactId, entry]));
+}
+
 function recordAdapterSideArtifacts(effectiveRoute, stage) {
   const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
   for (const entry of adapterSideArtifactEntries(adapterReport)) {
@@ -449,6 +461,32 @@ function recordAdapterSideArtifacts(effectiveRoute, stage) {
       ...fileEvidence(outputPath),
     };
   }
+}
+
+function validateRequiredAdapterSideArtifacts(effectiveRoute, stage, outputPath) {
+  const required = Array.isArray(stage.requiredSideArtifacts) ? stage.requiredSideArtifacts : [];
+  if (!required.length) return;
+  const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
+  const byId = adapterSideArtifactMap(adapterReport);
+  const missing = [];
+  for (const artifactId of required) {
+    const manifestArtifact = pipeline.artifacts?.[artifactId];
+    const entry = byId.get(artifactId);
+    const artifactPath = entry?.path || artifactPathFor(artifactId);
+    if (!manifestArtifact || !artifactPath || !existsSync(artifactPath)) {
+      missing.push({
+        id: artifactId,
+        role: manifestArtifact?.role || entry?.role || null,
+        path: artifactPath || null,
+      });
+    }
+  }
+  if (!missing.length) return;
+  const error = new Error(`live model adapter omitted required side artifact(s): ${missing.map(item => item.id).join(', ')}`);
+  effectiveRoute.truthBoundary = 'requested live SHARP adapter omitted required run evidence; no authoritative output was accepted';
+  effectiveRoute.missingRequiredSideArtifacts = missing;
+  recordFailedStage(stage, outputPath, effectiveRoute, error);
+  throw error;
 }
 
 function classifyLiveAdapterOutput(effectiveRoute, stage, artifactId) {
@@ -528,6 +566,7 @@ function runLiveModelAdapter(outputPath, stage) {
     '--output', outputPath,
     '--report', adapterReportPath,
   ];
+  const paths = artifactPathMap();
   effectiveRoute.executedCommand = [command, ...commandArgs];
   const proc = spawnSync(command, commandArgs, {
     cwd: process.cwd(),
@@ -538,6 +577,12 @@ function runLiveModelAdapter(outputPath, stage) {
       KAMINOS_PIPELINE_OUTPUT: outputPath,
       KAMINOS_PIPELINE_ADAPTER_REPORT: adapterReportPath,
       KAMINOS_PIPELINE_OUTPUT_ROOT: outDir,
+      KAMINOS_PIPELINE_ID: pipeline.id,
+      KAMINOS_PIPELINE_ROUTE_ID: pipeline.routeId,
+      KAMINOS_PIPELINE_STAGE_ID: stage.id,
+      KAMINOS_PIPELINE_ARTIFACT_PATHS: JSON.stringify(paths),
+      KAMINOS_PIPELINE_SIDECAR: paths.sidecar || '',
+      KAMINOS_PIPELINE_AUTOCROP_EVIDENCE: paths.autoCropEvidence || '',
     },
   });
   effectiveRoute.exitCode = proc.status;
@@ -563,6 +608,7 @@ function runLiveModelAdapter(outputPath, stage) {
   const classification = classifyLiveAdapterOutput(effectiveRoute, stage, stage.outputArtifact);
   effectiveRoute.stageStatus = classification.status;
   if (classification.fixtureSource) effectiveRoute.fixtureSource = classification.fixtureSource;
+  validateRequiredAdapterSideArtifacts(effectiveRoute, stage, outputPath);
   return effectiveRoute;
 }
 

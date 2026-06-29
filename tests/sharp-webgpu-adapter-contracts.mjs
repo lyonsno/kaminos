@@ -18,18 +18,25 @@ assert.equal(sharpRoute.routeId, 'adapter.sharp-image-to-splat-live.v0');
 assert.equal(sharpRoute.artifacts.splat.role, 'splat-candidate');
 assert.equal(sharpRoute.artifacts.depthMap.role, 'depth-map');
 assert.equal(sharpRoute.artifacts.metadata.role, 'sharp-webgpu-metadata');
+assert.ok(sharpRoute.artifacts.autoCropEvidence, 'SHARP live route must declare autocrop evidence as a first-class artifact');
+assert.equal(sharpRoute.artifacts.autoCropEvidence.role, 'splat-autocrop-evidence');
+assert.equal(sharpRoute.artifacts.autoCropEvidence.schema, 'kaminos.splat-autocrop-evidence.v0');
 assert.equal(sharpRoute.stages[0].route.tool, 'SHARP-WebGPU');
 assert.equal(sharpRoute.stages[0].route.commandDefault, 'scripts/run-sharp-webgpu-adapter.mjs');
 assert.equal(sharpRoute.stages[0].route.effectiveBackend, 'browser-webgpu');
+assert.deepEqual(sharpRoute.stages[0].requiredSideArtifacts, ['depthMap', 'metadata', 'autoCropEvidence']);
 
 const wrapperSource = readFileSync(wrapperPath, 'utf8');
 assert.match(wrapperSource, /kaminos\.sharp-webgpu-adapter-report\.v0/, 'wrapper report must name native SHARP-WebGPU schema');
+assert.match(wrapperSource, /kaminos\.splat-autocrop-evidence\.v0/, 'wrapper must emit the autocrop evidence schema consumed by Gutterglass');
 assert.match(wrapperSource, /--input/, 'wrapper must keep explicit --input CLI contract');
 assert.match(wrapperSource, /--output/, 'wrapper must keep explicit --output CLI contract');
 assert.match(wrapperSource, /--report/, 'wrapper must keep explicit --report CLI contract');
 assert.match(wrapperSource, /#use-spn/, 'wrapper must force the full SHARP SPN path, not the backbone smoke');
 assert.match(wrapperSource, /download-ply/, 'wrapper must harvest the generated PLY download');
 assert.match(wrapperSource, /depth-canvas/, 'wrapper must preserve the depth side output');
+assert.match(wrapperSource, /computePlyBounds/, 'wrapper must derive autocrop evidence from the generated PLY, not from a blind default crop');
+assert.match(wrapperSource, /KAMINOS_PIPELINE_AUTOCROP_EVIDENCE/, 'wrapper must accept a caller-owned autocrop evidence path');
 assert.match(wrapperSource, /Browser\.setDownloadBehavior|setDownloadBehavior/, 'wrapper must write PLY through browser download behavior instead of stdout copy-paste');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');
