@@ -385,6 +385,9 @@ async function configureClipletPlayback(ws) {
       clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
       clipletInterrupt: state?.clipletInterrupt || null,
       clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
+      pathWorld: state?.pathWorld || null,
+      pathWorldInterrupt: state?.pathWorldInterrupt || null,
+      pathWorldActiveSource: state?.pathWorldActiveSource || null,
     };
   })()`, { timeoutMs: 20000 });
 }
@@ -471,6 +474,9 @@ async function captureFrame(ws, index) {
       clipletPlaybackTimeline: state?.clipletPlaybackTimeline || null,
       clipletInterrupt: actor?.clipletInterrupt || state?.clipletInterrupt || null,
       clipletInterruptTimeline: state?.clipletInterruptTimeline || null,
+      pathWorld: actor?.pathWorld || state?.pathWorld || null,
+      pathWorldInterrupt: actor?.pathWorldInterrupt || state?.pathWorldInterrupt || null,
+      pathWorldActiveSource: actor?.pathWorldActiveSource || state?.pathWorldActiveSource || null,
       generatedMotionCliplets: state?.generatedMotionCliplets || state?.generatedPoseTemporalHarness?.generatedMotionCliplets || null,
       attentionTargetEvidence: actor?.attentionTargetEvidence || state?.attentionTargetEvidence || null,
       sourceFrame: actor?.sourceFrame ?? null,
@@ -516,6 +522,8 @@ async function composeFilmstrip(ws, frames) {
       clipletLabel: frame.debug?.clipletLabel || frame.debug?.cliplet?.labelGuess || null,
       clipletId: frame.debug?.clipletId || frame.debug?.cliplet?.id || null,
       clipletInterrupt: frame.debug?.clipletInterrupt || null,
+      pathWorldInterrupt: frame.debug?.pathWorldInterrupt || null,
+      pathWorldActiveSource: frame.debug?.pathWorldActiveSource || null,
       sourceFrame: frame.debug?.sourceFrame ?? null,
       sourceFrameTotal: frame.debug?.sourceFrameTotal ?? null,
       sheetFrameLabel: frame.sheetFrameLabel,
@@ -576,7 +584,11 @@ async function composeFilmstrip(ws, frames) {
       const sourceFrameLabel = frame.sourceFrameLabel || ('source ' + sourceFrame + '/' + sourceFrameTotal);
       ctx.fillText(sheetFrameLabel + ' · ' + sourceFrameLabel, x + 10, y + 7);
       ctx.fillStyle = 'rgba(255, 239, 196, 0.86)';
-      const interruptState = frame.clipletInterrupt?.state ? ('interrupt ' + frame.clipletInterrupt.state) : null;
+      const interruptState = frame.clipletInterrupt?.state
+        ? ('interrupt ' + frame.clipletInterrupt.state)
+        : frame.pathWorldInterrupt?.state
+          ? ('world ' + frame.pathWorldInterrupt.state)
+          : frame.pathWorldActiveSource;
       const state = [frame.clipletLabel || frame.behaviorState, interruptState || frame.behaviorPhase].filter(Boolean).join(' / ') || 'generated motion';
       ctx.fillText(state.slice(0, 42), x + 10, y + 25);
     }
