@@ -36,12 +36,33 @@ function summarize(values) {
   };
 }
 
+function add(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
+function scale(point, scalar) {
+  return point.map(value => value * scalar);
+}
+
 function tangentTurnAngles(points) {
   const turns = [];
   for (let index = 1; index < points.length - 1; index++) {
     const previous = normalize(subtract(points[index], points[index - 1]));
     const next = normalize(subtract(points[index + 1], points[index]));
     turns.push(Math.acos(Math.max(-1, Math.min(1, dot(previous, next)))));
+  }
+  return turns;
+}
+
+function tangentTurnSamples(samples) {
+  const turns = [];
+  for (let index = 1; index < samples.length - 1; index++) {
+    const previous = normalize(subtract(samples[index].outer, samples[index - 1].outer));
+    const next = normalize(subtract(samples[index + 1].outer, samples[index].outer));
+    turns.push({
+      t: samples[index].t,
+      angle: Math.acos(Math.max(-1, Math.min(1, dot(previous, next)))),
+    });
   }
   return turns;
 }
@@ -82,6 +103,11 @@ assert.ok(
 assert.ok(
   lowerSocket.lowerSocketStripHonestyLaw.requiredInvariants.includes('no-visible-rim-exit-for-tuck-role'),
   'strip-honesty law forbids visible rim exit while role is tuck tongue',
+);
+assert.equal(
+  lowerSocket.lowerSocketStripHonestyLaw.centerlinePathLaw?.mode,
+  'law-owned-directed-socket-return-spine-v0',
+  'strip-honesty law owns the lower socket centerline path, not just sidewall cleanup',
 );
 
 const allLayerIntervals = [
@@ -148,9 +174,53 @@ assert.ok(
   maxSideCurveTurn <= 0.92,
   `lower socket side curves must be smooth enough to read as one strip before tuck/merge solving; max turn ${maxSideCurveTurn.toFixed(3)}`,
 );
+const visibleSideCurveTurns = lowerSocketSideWalls.flatMap(wall => (
+  tangentTurnSamples(wall.sideWallSamples)
+    .filter(sample => sample.t >= 0.08 && sample.t <= 0.88)
+));
+const visibleKinkCount = visibleSideCurveTurns.filter(sample => sample.angle >= 0.29).length;
+const visibleKinkEnergy = visibleSideCurveTurns
+  .filter(sample => sample.angle >= 0.18)
+  .reduce((sum, sample) => sum + sample.angle, 0);
+assert.ok(
+  visibleKinkCount <= 4,
+  `lower socket visible side curves must not carry repeated medium kinks; kink count ${visibleKinkCount}`,
+);
+assert.ok(
+  visibleKinkEnergy <= 2.2,
+  `lower socket visible side curves must read as one smooth sheet, not a chain of bends; kink energy ${visibleKinkEnergy.toFixed(3)}`,
+);
 
 const leftWall = lowerSocketSideWalls.find(wall => wall.targetEdge === 'left-promoted-body-edge');
 const rightWall = lowerSocketSideWalls.find(wall => wall.targetEdge === 'right-promoted-body-edge');
+const centerlineSamples = leftWall.sideWallSamples.map((leftSample, index) => ({
+  t: leftSample.t,
+  point: scale(add(leftSample.outer, rightWall.sideWallSamples[index].outer), 0.5),
+}));
+const centerlineStart = centerlineSamples[0].point;
+const centerlineEnd = centerlineSamples[centerlineSamples.length - 1].point;
+const centerlineChord = distance(centerlineEnd, centerlineStart);
+const centerlineAxis = normalize(subtract(centerlineEnd, centerlineStart));
+let lateralWander = 0;
+let backwardStepCount = 0;
+let previousProgress = null;
+for (const sample of centerlineSamples) {
+  const relative = subtract(sample.point, centerlineStart);
+  const progress = dot(relative, centerlineAxis);
+  const projected = add(centerlineStart, scale(centerlineAxis, progress));
+  lateralWander = Math.max(lateralWander, distance(sample.point, projected));
+  if (previousProgress !== null && progress < previousProgress - 0.002) backwardStepCount += 1;
+  previousProgress = progress;
+}
+assert.equal(
+  backwardStepCount,
+  0,
+  'lower socket tuck-tongue centerline must make monotone progress into its socket seam',
+);
+assert.ok(
+  lateralWander / centerlineChord <= lowerSocket.lowerSocketStripHonestyLaw.centerlinePathLaw.maxLateralWanderRatio,
+  `lower socket tuck-tongue centerline must not wander like an independent mini-macro; lateral/chord ${(lateralWander / centerlineChord).toFixed(3)}`,
+);
 const visiblePlateWidths = leftWall.sideWallSamples
   .map((leftSample, index) => ({
     t: leftSample.t,

@@ -96,6 +96,13 @@ canvas { display: block; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
 #info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#orb-shell-semantic-legend { position: absolute; top: 14px; right: 14px; width: min(280px, calc(100% - 28px)); background: rgba(3,8,10,0.78); backdrop-filter: blur(8px); border: 1px solid rgba(170,230,240,0.18); border-radius: 7px; padding: 8px 9px; z-index: 7; color: #d6e9ec; font-family: 'SF Mono', 'Fira Code', monospace; pointer-events: none; }
+#orb-shell-semantic-legend[hidden] { display: none; }
+.orb-shell-semantic-legend-title { font-size: 9px; color: #8fc7d6; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 5px; }
+.orb-shell-semantic-legend-grid { display: grid; gap: 4px; }
+.orb-shell-semantic-legend-row { display: grid; grid-template-columns: 11px 1fr auto; align-items: center; gap: 6px; font-size: 9px; line-height: 1.2; }
+.orb-shell-semantic-legend-swatch { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.35); }
+.orb-shell-semantic-legend-count { color: #8da6aa; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -732,6 +739,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <button class="tb-btn" data-greenroom-preview-action="back" onclick="restoreAuthoredSceneFromPreview()">Back to Scene</button>
     </div>
   </div>
+  <div id="orb-shell-semantic-legend" hidden aria-hidden="true"></div>
   <div id="info-bar">No asset loaded</div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
@@ -4030,6 +4038,36 @@ function setInfo(msg) {
   window._kaminosDirty?.();
 }
 
+function setOrbShellSemanticLegend(witnessState = null) {
+  const host = document.getElementById('orb-shell-semantic-legend');
+  if (!host) return;
+  if (!witnessState?.colorLegend?.length) {
+    host.hidden = true;
+    host.setAttribute('aria-hidden', 'true');
+    host.replaceChildren();
+    return;
+  }
+  const visibleClasses = new Set((witnessState.runtimeRecords || []).map(record => record.renderClass));
+  const rows = witnessState.colorLegend
+    .filter(item => visibleClasses.has(item.renderClass))
+    .map(item => {
+      const count = witnessState.classCounts?.[item.renderClass] || 0;
+      return `
+        <div class="orb-shell-semantic-legend-row">
+          <span class="orb-shell-semantic-legend-swatch" style="background:${item.colorHex};"></span>
+          <span>${escapeHtml(item.renderClass)}</span>
+          <span class="orb-shell-semantic-legend-count">${count}</span>
+        </div>
+      `;
+    }).join('');
+  host.innerHTML = `
+    <div class="orb-shell-semantic-legend-title">Lower Socket Semantic Inventory</div>
+    <div class="orb-shell-semantic-legend-grid">${rows}</div>
+  `;
+  host.hidden = false;
+  host.setAttribute('aria-hidden', 'false');
+}
+
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
@@ -4475,8 +4513,10 @@ function initOrbShellCompositionRoute() {
     orbShellCompositionWitness.setActive(true);
     if (orbShellFocus === 'lower-socket-semantic-render-inventory') {
       const witnessState = orbShellCompositionWitness.enableLowerSocketSemanticRenderInventoryWitness();
+      setOrbShellSemanticLegend(witnessState);
       setInfo(`Orb Shell Macro Grounding lower-socket semantic inventory: ${witnessState.visibleCount} visible meshes`);
     } else {
+      setOrbShellSemanticLegend(null);
       frameOrbShellCompositionCamera();
       setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
     }
