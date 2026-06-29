@@ -168,6 +168,9 @@ Specimen Packet cockpit. It currently demonstrates:
 - fixture specimen loading;
 - failure tagging;
 - stronger next request law;
+- route activity payloads for compact fire/status rendering;
+- fixture, fallback, failed, partial, cached, unavailable, and live visual
+  authority classes;
 - graph API route report ingestion;
 - timeout/failure report custody;
 - MoGE-shaped local WebGPU depth/normal/pointmap truth-layer receipt binding.

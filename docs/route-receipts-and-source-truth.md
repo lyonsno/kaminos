@@ -42,6 +42,12 @@ They also drive visible kiln activity. A flame, glow, snuff, or smoke plume is
 only truthful if it is backed by the same receipt fields the packet and witness
 consume.
 
+The route tray's compact visual bridge is `kaminos.kiln.route-activity.v0`.
+That payload is the handoff between receipt truth and fire rendering. It carries
+route phase, visual authority, backend class, output slots, source-truth
+warnings, and fire-facing genes such as heat class, truth class, spend
+intensity, custody strength, and warning load.
+
 ## Requested Versus Effective Route
 
 When `requestedRoute` and `effectiveRoute` differ, the receipt must say why.
@@ -184,3 +190,7 @@ route authority agree. A fixture cannot display as live compute. A failed route
 cannot leave a candidate artifact. A cached route cannot look like fresh spend.
 Partial anonymous ImageData cannot cool into a promoted artifact without a
 stronger receipt.
+
+The current compact route-row witness exposes `falseAuthorityViolations` so a
+future volumetric renderer can fail on the same contract: better fire is allowed
+only when it preserves the route authority that earned it.

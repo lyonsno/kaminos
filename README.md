@@ -83,11 +83,15 @@ Current implemented surfaces on this branch include:
 - graph `/api/run-pipeline` report ingestion;
 - SHARP timeout/failure report custody;
 - MoGE-shaped WebGPU depth/normal/pointmap truth-layer receipt binding;
+- `kaminos.kiln.route-activity.v0` on tray route rows;
+- compact route-row fire authority labels and witness data;
 - volume route substrate carried from earlier Kaminos work.
 
 Current boundary: this branch binds MoGE WebGPU receipts and truth-layer packet
-state, but it does not yet execute the live MoGE worker internally. The SHARP
-smoke proved timeout/report custody, not successful splat generation.
+state, but it does not yet execute the live MoGE worker internally. The compact
+route-row fire adapter maps route evidence to visual authority and heat classes,
+but it does not yet drive Beaming's volumetric fire substrate from route rows.
+The SHARP smoke proved timeout/report custody, not successful splat generation.
 
 ## Volumetric Fire
 
@@ -97,7 +101,9 @@ pressure-tier controls, route controls, debug overlays, and witness tooling
 that preserves backend identity, effective parameters, visual evidence, and
 route receipts.
 
-The roadmap is to bind that fire substrate to route lifecycle state:
+The current route-activity bridge gives that fire substrate a truthful input
+payload. The next roadmap step is to bind Beaming's volume renderer to those
+route lifecycle states:
 
 - source tile preheat;
 - live compute burn;

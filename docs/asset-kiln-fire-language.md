@@ -92,9 +92,11 @@ Minimum fields:
 }
 ```
 
-The current `kaminos.kiln.activity-state.v0` can feed this shape. As the visual
-adapter matures, the payload should keep route truth and visual tuning separate:
-route state says what happened; fire genes say how it is rendered.
+The current route tray now emits this bridge as
+`kaminos.kiln.route-activity.v0`. It is derived from
+`kaminos.kiln.activity-state.v0`, source-truth warnings, route receipts, output
+slots, and backend class. The payload keeps route truth and visual tuning
+separate: route state says what happened; fire genes say how it is rendered.
 
 ## Visual Authority
 
@@ -135,8 +137,16 @@ The asset kiln needs route-facing genes on top:
 - `warningLoad`: how much source-truth warning should tint or disturb the
   flame.
 
-These genes should be derived from route activity first, then exposed for
-operator tuning only where tuning does not change truth.
+These genes are derived from route activity first, then exposed for operator
+tuning only where tuning does not change truth. The first compact adapter maps:
+
+- live running routes to `live-compute` / `burn`;
+- fixture routes to `fixture` / `pilot`;
+- fallback routes to `fallback` / `weak-heat`;
+- failed routes to `failure-report` / `snuff`;
+- partial outputs to `partial-output` / `ember`;
+- cached outputs to `cached` / `glow`;
+- unavailable routes to `none` / `cold`.
 
 ## Source Tile Ignition
 
@@ -237,18 +247,31 @@ The witness should fail if:
 - a cached route looks like fresh compute;
 - the visual state and route receipt disagree.
 
+The current compact witness records `routeActivities`,
+`visualAuthorityCounts`, `fullBurnRunIds`, and `falseAuthorityViolations`. It
+also exposes route-row DOM attributes for schema, activity state, truth mode,
+visual authority, heat class, truth class, warning load, and full-burn
+permission. That is the acceptance surface for the small route-row adapter. The
+volumetric adapter should consume the same payload rather than inventing a
+separate truth source.
+
 ## Implementation Path
 
-Near-term slices:
+Implemented first slice:
 
-1. Add `kaminos.kiln.route-activity.v0` as the bridge between route receipts
-   and fire state.
-2. Attach route activity to Composition Tray rows and Specimen Packet route
-   evidence.
-3. Build a compact tile-level fire adapter using Beaming's volume substrate.
-4. Add weak/strong visual-authority classes before adding more dramatic fire.
-5. Add snuff, bank/coals, cache glow, and partial-output ember states.
-6. Add a witness that verifies route truth and visual state agree.
+- `kaminos.kiln.route-activity.v0` bridges route receipts and fire state;
+- Composition Tray route rows carry route activity beside kiln activity;
+- weak and strong visual-authority classes are machine-readable;
+- compact route tiles show pilot, cold, burn, snuff, ember, and glow classes;
+- witnesses verify that route truth and visual state agree.
+
+Next slices:
+
+1. Bind Beaming's volume substrate to route-row activity payloads.
+2. Give source tiles preheat rims and output slots distinct heated silhouettes.
+3. Add volumetric snuff, bank/coals, cache glow, and timeout smoke variants.
+4. Preserve the same false-authority guard when the visual language becomes
+   more dramatic.
 
 The final product target is an asset kiln where inference latency has texture,
 but every flame still tells the truth.
