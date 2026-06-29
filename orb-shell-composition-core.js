@@ -5,6 +5,7 @@ export const ORB_SHELL_MACRO_TORSION_MODE = 'macro-torsion-field-v0';
 export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-substrip-decomposition-v0';
 export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
 export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witness-v0';
+export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -23,6 +24,21 @@ const OPTIONAL_MACRO_ASSEMBLAGE_IDS = [
   'polar-crown-lock',
   'lower-socket-keel',
 ];
+const LOWER_SOCKET_RENDER_CLASS_COLORS = {
+  MacroPromotedBody: 0x5bc0eb,
+  LiveMacroSideWall: 0xfde74c,
+  LiveMacroTerminalCap: 0xf45b69,
+  MacroFamilySubstrip: 0x9bc53d,
+  MacroFamilySubstripSideWall: 0xe55934,
+  MacroFamilySubstripTerminalCap: 0xfa7921,
+  BandMember: 0x7b2cbf,
+  TerminationSocketGraph: 0xff8c42,
+  LamellarChannelStripMesh: 0x00bbf9,
+  LamellarPlateLip: 0xfee440,
+  LamellarPlateBoundaryMesh: 0x00f5d4,
+  LamellarInnerReturnSidePlaneMesh: 0x9b5de5,
+  MacroRegionSeamGapDescriptor: 0xf15bb5,
+};
 
 function spherePoint(lat, lon, radius = 1) {
   const c = Math.cos(lat);
@@ -3371,6 +3387,298 @@ function createLamellarInnerReturnPlan(composition) {
   };
 }
 
+function lowerSocketRenderClassLegend() {
+  return Object.entries(LOWER_SOCKET_RENDER_CLASS_COLORS).map(([renderClass, color]) => ({
+    renderClass,
+    color,
+    colorHex: `#${color.toString(16).padStart(6, '0')}`,
+  }));
+}
+
+function lowerSocketInventoryRecord({
+  renderClass,
+  sourceId,
+  meshName = sourceId,
+  parentAssemblage = 'lower-socket-keel',
+  renderRole = null,
+  normalRenderExpected = false,
+  sourcePath = null,
+  sourceState = 'present-in-current-plan',
+  suppressionAuthority = null,
+  lowerSocketRelevance = 'direct-parent',
+  suspiciousIfVisible = false,
+}) {
+  return {
+    schema: 'LowerSocketRenderInventoryRecord',
+    mode: ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE,
+    renderClass,
+    sourceId,
+    meshName,
+    parentAssemblage,
+    renderRole,
+    normalRenderExpected,
+    sourcePath,
+    sourceState,
+    suppressionAuthority,
+    lowerSocketRelevance,
+    suspiciousIfVisible,
+    diagnosticColor: LOWER_SOCKET_RENDER_CLASS_COLORS[renderClass],
+    diagnosticColorHex: `#${LOWER_SOCKET_RENDER_CLASS_COLORS[renderClass].toString(16).padStart(6, '0')}`,
+  };
+}
+
+function lowerSocketAbsenceRecord(renderClass, reason, sourcePath = null) {
+  return lowerSocketInventoryRecord({
+    renderClass,
+    sourceId: `lower-socket-keel-no-current-${renderClass}`,
+    meshName: `lower-socket-keel-no-current-${renderClass}`,
+    renderRole: 'absence-placeholder',
+    normalRenderExpected: false,
+    sourcePath,
+    sourceState: 'absent-in-current-plan',
+    lowerSocketRelevance: reason,
+    suspiciousIfVisible: false,
+  });
+}
+
+function isLowerSocketRelevantRecord(record) {
+  if (!record) return false;
+  return record.parentAssemblage === 'lower-socket-keel'
+    || record.targetBoundaryId === 'lower-cup-socket-join-gap'
+    || record.sourceGapDescriptorId === 'lower-cup-socket-join-gap'
+    || record.id === 'lower-cup-socket-join-gap'
+    || JSON.stringify(record).includes('lower-socket')
+    || JSON.stringify(record).includes('lower-cup-socket');
+}
+
+function createLowerSocketRenderInventoryPlan(composition) {
+  const expectedRecords = [];
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+  const sideWallPlan = composition.liveMacroSideWallPlan;
+  const substripPlan = composition.macroFamilySubstripPlan;
+  const channelPlan = composition.lamellarChannelMeshPlan;
+  const boundaryPlan = composition.lamellarPlateBoundaryPlan;
+  const returnPlan = composition.lamellarInnerReturnPlan;
+  const seamGaps = composition.expandedMacroRegionProxyPlan?.seamGaps || [];
+
+  if (lowerSocket?.macroPromotedBody) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'MacroPromotedBody',
+      sourceId: lowerSocket.macroPromotedBody.id,
+      meshName: 'lower-socket-keel-macro-promoted-body',
+      renderRole: 'promoted-body-surface',
+      normalRenderExpected: !(substripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || []).includes('lower-socket-keel'),
+      sourcePath: 'macroAssemblages.lower-socket-keel.macroPromotedBody',
+      suspiciousIfVisible: false,
+    }));
+  } else {
+    expectedRecords.push(lowerSocketAbsenceRecord('MacroPromotedBody', 'lower-socket-retired-or-not-selected', 'macroAssemblages.lower-socket-keel.macroPromotedBody'));
+  }
+
+  const liveSideWalls = (sideWallPlan?.sideWalls || []).filter(wall => wall.parentAssemblage === 'lower-socket-keel');
+  for (const wall of liveSideWalls) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'LiveMacroSideWall',
+      sourceId: wall.id,
+      meshName: wall.id,
+      renderRole: wall.targetEdge,
+      normalRenderExpected: expectedRecords.find(record => record.renderClass === 'MacroPromotedBody')?.normalRenderExpected || false,
+      sourcePath: 'liveMacroSideWallPlan.sideWalls',
+      suspiciousIfVisible: false,
+    }));
+  }
+  if (!liveSideWalls.length) expectedRecords.push(lowerSocketAbsenceRecord('LiveMacroSideWall', 'no-live-sidewall-for-lower-socket', 'liveMacroSideWallPlan.sideWalls'));
+
+  const terminalCaps = (sideWallPlan?.terminalCaps || []).filter(cap => cap.parentAssemblage === 'lower-socket-keel');
+  for (const cap of terminalCaps) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'LiveMacroTerminalCap',
+      sourceId: cap.id,
+      meshName: cap.id,
+      renderRole: cap.targetEdge,
+      normalRenderExpected: cap.normalRenderVisible !== false,
+      sourcePath: 'liveMacroSideWallPlan.terminalCaps',
+      suppressionAuthority: cap.normalRenderVisible === false ? 'LowerSocketFamilyRoleLaw.hidden-terminal-cap-authority' : null,
+      suspiciousIfVisible: cap.normalRenderVisible === false,
+    }));
+  }
+  if (!terminalCaps.length) expectedRecords.push(lowerSocketAbsenceRecord('LiveMacroTerminalCap', 'no-live-terminal-caps-for-lower-socket', 'liveMacroSideWallPlan.terminalCaps'));
+
+  const substrips = (substripPlan?.substrips || []).filter(strip => strip.parentAssemblage === 'lower-socket-keel');
+  for (const substrip of substrips) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'MacroFamilySubstrip',
+      sourceId: substrip.id,
+      meshName: substrip.id,
+      renderRole: substrip.role,
+      normalRenderExpected: true,
+      sourcePath: 'macroFamilySubstripPlan.substrips',
+    }));
+    for (const sideName of ['left', 'right']) {
+      expectedRecords.push(lowerSocketInventoryRecord({
+        renderClass: 'MacroFamilySubstripSideWall',
+        sourceId: `${substrip.id}-${sideName}-sidewall`,
+        meshName: `${substrip.id}-${sideName}-sidewall`,
+        renderRole: `${substrip.role}:${sideName}`,
+        normalRenderExpected: true,
+        sourcePath: 'macroFamilySubstripPlan.substrips.sideWallSamples',
+      }));
+    }
+    for (const cap of substrip.terminalCaps || []) {
+      expectedRecords.push(lowerSocketInventoryRecord({
+        renderClass: 'MacroFamilySubstripTerminalCap',
+        sourceId: cap.id,
+        meshName: cap.id,
+        renderRole: cap.capRole,
+        normalRenderExpected: true,
+        sourcePath: 'macroFamilySubstripPlan.substrips.terminalCaps',
+      }));
+    }
+  }
+  if (!substrips.length) {
+    expectedRecords.push(lowerSocketAbsenceRecord('MacroFamilySubstrip', 'lower-socket-not-decomposed-by-current-substrip-plan', 'macroFamilySubstripPlan.substrips'));
+    expectedRecords.push(lowerSocketAbsenceRecord('MacroFamilySubstripSideWall', 'lower-socket-not-decomposed-by-current-substrip-plan', 'macroFamilySubstripPlan.substrips.sideWallSamples'));
+    expectedRecords.push(lowerSocketAbsenceRecord('MacroFamilySubstripTerminalCap', 'lower-socket-not-decomposed-by-current-substrip-plan', 'macroFamilySubstripPlan.substrips.terminalCaps'));
+  }
+
+  for (const bandMember of lowerSocket?.childBandPlan || []) {
+    const suppressed = sideWallPlan?.suppressedLegacyRoundBandIds?.includes(bandMember.id) || false;
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'BandMember',
+      sourceId: bandMember.id,
+      meshName: bandMember.id,
+      renderRole: bandMember.role,
+      normalRenderExpected: !suppressed,
+      sourcePath: 'macroAssemblages.lower-socket-keel.childBandPlan',
+      suppressionAuthority: suppressed ? 'LiveMacroSideWallPlan.suppressedLegacyRoundBandIds' : null,
+      suspiciousIfVisible: suppressed || bandMember.role !== 'body',
+    }));
+    for (const endpoint of ['start', 'end']) {
+      const socketId = `${bandMember.id}-${endpoint}-termination-socket`;
+      const socketSuppressed = sideWallPlan?.suppressedLegacyTerminationSocketIds?.includes(socketId) || suppressed;
+      expectedRecords.push(lowerSocketInventoryRecord({
+        renderClass: 'TerminationSocketGraph',
+        sourceId: socketId,
+        meshName: socketId,
+        renderRole: `${bandMember.role}:${endpoint}`,
+        normalRenderExpected: !socketSuppressed,
+        sourcePath: `macroAssemblages.lower-socket-keel.childBandPlan.${endpoint}Termination`,
+        suppressionAuthority: socketSuppressed ? 'LiveMacroSideWallPlan.suppressedLegacyTerminationSocketIds' : null,
+        suspiciousIfVisible: socketSuppressed,
+      }));
+    }
+  }
+  if (!lowerSocket?.childBandPlan?.length) {
+    expectedRecords.push(lowerSocketAbsenceRecord('BandMember', 'lower-socket-retired-or-no-child-bands', 'macroAssemblages.lower-socket-keel.childBandPlan'));
+    expectedRecords.push(lowerSocketAbsenceRecord('TerminationSocketGraph', 'lower-socket-retired-or-no-child-bands', 'macroAssemblages.lower-socket-keel.childBandPlan.*Termination'));
+  }
+
+  const lowerChannelStrips = (channelPlan?.stripMeshes || []).filter(isLowerSocketRelevantRecord);
+  for (const strip of lowerChannelStrips) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'LamellarChannelStripMesh',
+      sourceId: strip.id,
+      meshName: `${strip.id}-flat-lamellar-channel-strip`,
+      parentAssemblage: strip.parentAssemblage || 'lower-socket-keel',
+      renderRole: strip.renderRole,
+      normalRenderExpected: true,
+      sourcePath: 'lamellarChannelMeshPlan.stripMeshes',
+      lowerSocketRelevance: strip.parentAssemblage === 'lower-socket-keel' ? 'direct-parent' : 'lower-socket-adjacent-channel',
+    }));
+    for (const lip of strip.plateLips || []) {
+      expectedRecords.push(lowerSocketInventoryRecord({
+        renderClass: 'LamellarPlateLip',
+        sourceId: lip.id,
+        meshName: lip.id,
+        parentAssemblage: strip.parentAssemblage || 'lower-socket-keel',
+        renderRole: lip.edgeRole,
+        normalRenderExpected: !boundaryPlan?.suppressedProxyFeatureIds?.includes(lip.id),
+        sourcePath: 'lamellarChannelMeshPlan.stripMeshes.plateLips',
+        lowerSocketRelevance: strip.parentAssemblage === 'lower-socket-keel' ? 'direct-parent' : 'lower-socket-adjacent-channel',
+        suppressionAuthority: boundaryPlan?.suppressedProxyFeatureIds?.includes(lip.id) ? 'LamellarPlateBoundaryPlan.suppressedProxyFeatureIds' : null,
+      }));
+    }
+  }
+  if (!lowerChannelStrips.length) {
+    expectedRecords.push(lowerSocketAbsenceRecord('LamellarChannelStripMesh', 'no-current-lower-socket-channel-strip-mesh', 'lamellarChannelMeshPlan.stripMeshes'));
+    expectedRecords.push(lowerSocketAbsenceRecord('LamellarPlateLip', 'no-current-lower-socket-channel-strip-mesh', 'lamellarChannelMeshPlan.stripMeshes.plateLips'));
+  }
+
+  const lowerBoundaries = (boundaryPlan?.boundaryMeshes || []).filter(isLowerSocketRelevantRecord);
+  for (const boundary of lowerBoundaries) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'LamellarPlateBoundaryMesh',
+      sourceId: boundary.id,
+      meshName: boundary.id,
+      parentAssemblage: 'lower-socket-keel',
+      renderRole: boundary.boundaryRole || boundary.boundaryMode,
+      normalRenderExpected: true,
+      sourcePath: 'lamellarPlateBoundaryPlan.boundaryMeshes',
+      lowerSocketRelevance: 'lower-cup-socket-join-gap',
+    }));
+  }
+  if (!lowerBoundaries.length) expectedRecords.push(lowerSocketAbsenceRecord('LamellarPlateBoundaryMesh', 'no-lower-cup-boundary-mesh', 'lamellarPlateBoundaryPlan.boundaryMeshes'));
+
+  const lowerReturnPlanes = (returnPlan?.sidePlaneMeshes || []).filter(isLowerSocketRelevantRecord);
+  for (const sidePlane of lowerReturnPlanes) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'LamellarInnerReturnSidePlaneMesh',
+      sourceId: sidePlane.id,
+      meshName: sidePlane.id,
+      parentAssemblage: 'lower-socket-keel',
+      renderRole: sidePlane.boundaryRole,
+      normalRenderExpected: true,
+      sourcePath: 'lamellarInnerReturnPlan.sidePlaneMeshes',
+      lowerSocketRelevance: 'lower-socket-adjacent-return-plane',
+    }));
+  }
+  if (!lowerReturnPlanes.length) expectedRecords.push(lowerSocketAbsenceRecord('LamellarInnerReturnSidePlaneMesh', 'no-current-lower-socket-inner-return-plane', 'lamellarInnerReturnPlan.sidePlaneMeshes'));
+
+  const lowerSeamGaps = seamGaps.filter(isLowerSocketRelevantRecord);
+  for (const gap of lowerSeamGaps) {
+    expectedRecords.push(lowerSocketInventoryRecord({
+      renderClass: 'MacroRegionSeamGapDescriptor',
+      sourceId: gap.id,
+      meshName: `${gap.id}-future-mesh-boundary-input`,
+      parentAssemblage: 'lower-socket-keel',
+      renderRole: gap.role,
+      normalRenderExpected: !boundaryPlan?.suppressedDecorativeHintIds?.includes(`${gap.id}-future-mesh-boundary-input`),
+      sourcePath: 'expandedMacroRegionProxyPlan.seamGaps',
+      lowerSocketRelevance: 'lower-cup-socket-join-gap',
+      suppressionAuthority: boundaryPlan?.suppressedDecorativeHintIds?.includes(`${gap.id}-future-mesh-boundary-input`)
+        ? 'LamellarPlateBoundaryPlan.suppressedDecorativeHintIds'
+        : null,
+      suspiciousIfVisible: boundaryPlan?.suppressedDecorativeHintIds?.includes(`${gap.id}-future-mesh-boundary-input`) || false,
+    }));
+  }
+  if (!lowerSeamGaps.length) expectedRecords.push(lowerSocketAbsenceRecord('MacroRegionSeamGapDescriptor', 'no-lower-cup-seam-gap-descriptor', 'expandedMacroRegionProxyPlan.seamGaps'));
+
+  const expectedRenderClasses = Array.from(new Set(expectedRecords.map(record => record.renderClass)));
+  return {
+    schema: 'LowerSocketRenderInventoryPlan',
+    mode: ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE,
+    targetAssemblage: 'lower-socket-keel',
+    diagnosticQuestion: 'which concrete render path produced the visible lower-socket appendage',
+    runtimeTraversalRequired: true,
+    isolationWitnessMode: 'lower-socket-semantic-render-inventory-isolated-v0',
+    classColorLegend: lowerSocketRenderClassLegend().filter(entry => expectedRenderClasses.includes(entry.renderClass)),
+    expectedRecords,
+    expectedRecordCount: expectedRecords.length,
+    expectedRenderClasses,
+    normalRenderExpectedVisibleIds: expectedRecords.filter(record => record.normalRenderExpected).map(record => record.meshName),
+    suppressedExpectedIds: expectedRecords.filter(record => record.suppressionAuthority).map(record => record.meshName),
+    absentClassCount: expectedRecords.filter(record => record.sourceState === 'absent-in-current-plan').length,
+    failureClassesIfVisible: [
+      'stale-subordinate-anatomy-visible',
+      'suppressed-legacy-band-or-socket-visible',
+      'hidden-terminal-cap-visible',
+      'decorative-seam-hint-visible-after-boundary-mesh',
+      'wrong-global-render-path-misread-as-lower-socket-body',
+    ],
+    inventoryCompletenessVerdict: 'lower-socket-render-paths-enumerated-before-next-shape-edit',
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -3522,6 +3830,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lamellarChannelMeshPlan = createLamellarChannelMeshPlan(next.channelThroughLinePlan);
   next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
   next.lamellarInnerReturnPlan = createLamellarInnerReturnPlan(next);
+  next.lowerSocketRenderInventoryPlan = createLowerSocketRenderInventoryPlan(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -4814,6 +5123,18 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   });
   const cleanOuterEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xf2f7f8 });
   const cleanInnerEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0x20313a });
+  const lowerSocketInventoryMaterials = new Map(
+    Object.entries(LOWER_SOCKET_RENDER_CLASS_COLORS).map(([renderClass, color]) => ([
+      renderClass,
+      new THREE.MeshBasicMaterial({
+        color,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: true,
+      }),
+    ])),
+  );
   for (const material of [
     bodyMaterial,
     territoryMaterial,
@@ -4845,6 +5166,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     cleanSidePlaneMaterial,
     cleanOuterEdgeMaterial,
     cleanInnerEdgeMaterial,
+    ...lowerSocketInventoryMaterials.values(),
   ]) sharedMaterials.add(material);
 
   function materialForBand(bandMember) {
@@ -4931,6 +5253,166 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       if (parentId && retiredParentIds.includes(parentId)) ids.push(child.name);
     });
     return ids;
+  }
+
+  function lowerSocketSemanticRecordForMesh(mesh) {
+    if (!mesh?.isMesh) return null;
+    const parentGroupName = mesh.parent?.name || null;
+    const promoted = mesh.userData?.MacroPromotedBody;
+    const liveSideWall = mesh.userData?.LiveMacroSideWall;
+    const liveTerminalCap = mesh.userData?.LiveMacroTerminalCap;
+    const substrip = mesh.userData?.MacroFamilySubstrip;
+    const substripSideWall = mesh.userData?.MacroFamilySubstripSideWall;
+    const substripTerminalCap = mesh.userData?.MacroFamilySubstripTerminalCap;
+    const bandMember = mesh.userData?.BandMember;
+    const socket = mesh.userData?.TerminationSocketGraph;
+    const channelStrip = mesh.userData?.LamellarChannelStripMesh;
+    const plateLip = mesh.userData?.LamellarPlateLip;
+    const plateBoundary = mesh.userData?.LamellarPlateBoundaryMesh;
+    const innerReturn = mesh.userData?.LamellarInnerReturnSidePlaneMesh;
+    const seamGap = mesh.userData?.MacroRegionSeamGapDescriptor;
+    let source = null;
+    let renderClass = null;
+    let parentAssemblage = null;
+    let renderRole = null;
+    let sourcePath = null;
+    let lowerSocketRelevance = null;
+    if (substripTerminalCap) {
+      source = substripTerminalCap;
+      renderClass = 'MacroFamilySubstripTerminalCap';
+      parentAssemblage = substrip?.parentAssemblage || promoted?.parentAssemblage || parentGroupName;
+      renderRole = substripTerminalCap.capRole || 'substrip-terminal-cap';
+      sourcePath = 'macroFamilySubstripPlan.substrips.terminalCaps';
+    } else if (substripSideWall) {
+      source = substripSideWall;
+      renderClass = 'MacroFamilySubstripSideWall';
+      parentAssemblage = substrip?.parentAssemblage || promoted?.parentAssemblage || parentGroupName;
+      renderRole = `${substrip?.role || 'substrip'}:${substripSideWall.sideName}`;
+      sourcePath = 'macroFamilySubstripPlan.substrips.sideWallSamples';
+    } else if (substrip) {
+      source = substrip;
+      renderClass = 'MacroFamilySubstrip';
+      parentAssemblage = substrip.parentAssemblage;
+      renderRole = substrip.role;
+      sourcePath = 'macroFamilySubstripPlan.substrips';
+    } else if (liveTerminalCap) {
+      source = liveTerminalCap;
+      renderClass = 'LiveMacroTerminalCap';
+      parentAssemblage = liveTerminalCap.parentAssemblage;
+      renderRole = liveTerminalCap.targetEdge;
+      sourcePath = 'liveMacroSideWallPlan.terminalCaps';
+    } else if (liveSideWall) {
+      source = liveSideWall;
+      renderClass = 'LiveMacroSideWall';
+      parentAssemblage = liveSideWall.parentAssemblage;
+      renderRole = liveSideWall.targetEdge;
+      sourcePath = 'liveMacroSideWallPlan.sideWalls';
+    } else if (bandMember) {
+      source = bandMember;
+      renderClass = 'BandMember';
+      parentAssemblage = bandMember.parentAssemblage || parentGroupName;
+      renderRole = bandMember.role;
+      sourcePath = 'macroAssemblages.childBandPlan';
+    } else if (socket) {
+      source = socket;
+      renderClass = 'TerminationSocketGraph';
+      parentAssemblage = parentGroupName;
+      renderRole = socket.type;
+      sourcePath = 'macroAssemblages.childBandPlan.*Termination';
+    } else if (plateLip) {
+      source = plateLip;
+      renderClass = 'LamellarPlateLip';
+      parentAssemblage = channelStrip?.parentAssemblage || null;
+      renderRole = plateLip.edgeRole;
+      sourcePath = 'lamellarChannelMeshPlan.stripMeshes.plateLips';
+      lowerSocketRelevance = parentAssemblage === 'lower-socket-keel' ? 'direct-parent' : null;
+    } else if (channelStrip) {
+      source = channelStrip;
+      renderClass = 'LamellarChannelStripMesh';
+      parentAssemblage = channelStrip.parentAssemblage;
+      renderRole = channelStrip.renderRole;
+      sourcePath = 'lamellarChannelMeshPlan.stripMeshes';
+      lowerSocketRelevance = parentAssemblage === 'lower-socket-keel' ? 'direct-parent' : null;
+    } else if (plateBoundary) {
+      source = plateBoundary;
+      renderClass = 'LamellarPlateBoundaryMesh';
+      parentAssemblage = 'lower-socket-keel';
+      renderRole = plateBoundary.boundaryMode;
+      sourcePath = 'lamellarPlateBoundaryPlan.boundaryMeshes';
+      lowerSocketRelevance = plateBoundary.targetBoundaryId === 'lower-cup-socket-join-gap' ? 'lower-cup-socket-join-gap' : null;
+    } else if (innerReturn) {
+      source = innerReturn;
+      renderClass = 'LamellarInnerReturnSidePlaneMesh';
+      parentAssemblage = innerReturn.targetBoundaryId === 'lower-cup-socket-join-gap' ? 'lower-socket-keel' : null;
+      renderRole = innerReturn.boundaryRole;
+      sourcePath = 'lamellarInnerReturnPlan.sidePlaneMeshes';
+      lowerSocketRelevance = innerReturn.targetBoundaryId === 'lower-cup-socket-join-gap' ? 'lower-cup-socket-join-gap' : null;
+    } else if (seamGap) {
+      source = seamGap;
+      renderClass = 'MacroRegionSeamGapDescriptor';
+      parentAssemblage = 'lower-socket-keel';
+      renderRole = seamGap.role;
+      sourcePath = 'expandedMacroRegionProxyPlan.seamGaps';
+      lowerSocketRelevance = seamGap.id === 'lower-cup-socket-join-gap' ? 'lower-cup-socket-join-gap' : null;
+    } else if (promoted) {
+      source = promoted;
+      renderClass = 'MacroPromotedBody';
+      parentAssemblage = promoted.parentAssemblage || parentGroupName;
+      renderRole = 'promoted-body-surface';
+      sourcePath = 'macroBodyPromotion.promotedBodies';
+    }
+    if (!renderClass) return null;
+    const isDirectLowerSocket = parentAssemblage === 'lower-socket-keel';
+    const sourceId = source?.id || '';
+    const boundaryId = source?.targetBoundaryId || source?.sourceGapDescriptorId || sourceId;
+    const isRelevantBoundary = lowerSocketRelevance === 'lower-cup-socket-join-gap'
+      || boundaryId === 'lower-cup-socket-join-gap'
+      || mesh.name.startsWith('lower-cup-socket-join-gap-');
+    if (!isDirectLowerSocket && !isRelevantBoundary) return null;
+    const expectedRecord = composition.lowerSocketRenderInventoryPlan?.expectedRecords?.find(record => (
+      record.meshName === mesh.name
+      || record.sourceId === source?.id
+      || record.sourceId === mesh.name
+    ));
+    return {
+      schema: 'LowerSocketSemanticRenderInventoryRuntimeRecord',
+      mode: 'lower-socket-semantic-render-inventory-v0',
+      meshName: mesh.name,
+      renderClass,
+      sourceId: source?.id || mesh.name,
+      parentAssemblage,
+      renderRole,
+      sourcePath,
+      lowerSocketRelevance: lowerSocketRelevance || (isDirectLowerSocket ? 'direct-parent' : 'lower-socket-adjacent'),
+      visibleBeforeIsolation: mesh.visible,
+      normalRenderExpected: expectedRecord?.normalRenderExpected ?? mesh.visible,
+      suppressionAuthority: expectedRecord?.suppressionAuthority || null,
+      suspiciousIfVisible: expectedRecord?.suspiciousIfVisible || false,
+      diagnosticColor: LOWER_SOCKET_RENDER_CLASS_COLORS[renderClass],
+      diagnosticColorHex: `#${LOWER_SOCKET_RENDER_CLASS_COLORS[renderClass].toString(16).padStart(6, '0')}`,
+    };
+  }
+
+  function lowerSocketSemanticRenderInventory() {
+    const records = [];
+    group?.traverse(child => {
+      const record = lowerSocketSemanticRecordForMesh(child);
+      if (record) records.push(record);
+    });
+    const classCounts = {};
+    for (const record of records) classCounts[record.renderClass] = (classCounts[record.renderClass] || 0) + 1;
+    return {
+      schema: 'LowerSocketSemanticRenderInventory',
+      mode: 'lower-socket-semantic-render-inventory-v0',
+      targetAssemblage: 'lower-socket-keel',
+      plan: composition.lowerSocketRenderInventoryPlan,
+      runtimeRecordCount: records.length,
+      classCounts,
+      runtimeRecords: records,
+      visibleRuntimeRecords: records.filter(record => record.visibleBeforeIsolation),
+      suspectVisibleRecords: records.filter(record => record.visibleBeforeIsolation && record.suspiciousIfVisible),
+      inventoryCompletenessVerdict: composition.lowerSocketRenderInventoryPlan?.inventoryCompletenessVerdict,
+    };
   }
 
   function build() {
@@ -5217,6 +5699,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       LowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
       lowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
       lowerSocketPlateBodyHonestyVerdict: composition.lowerSocketPlateBodyHonestyVerdict,
+      LowerSocketRenderInventoryPlan: composition.lowerSocketRenderInventoryPlan,
+      lowerSocketRenderInventoryPlan: composition.lowerSocketRenderInventoryPlan,
+      lowerSocketRenderInventoryExpectedClasses: composition.lowerSocketRenderInventoryPlan?.expectedRenderClasses || [],
+      lowerSocketRenderInventoryExpectedRecordCount: composition.lowerSocketRenderInventoryPlan?.expectedRecordCount || 0,
       MacroContactMap: composition.macroContactMap,
       macroContactMap: composition.macroContactMap,
       macroContactCount: composition.macroContactMap?.contactCount || 0,
@@ -5371,6 +5857,55 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    lowerSocketSemanticRenderInventory,
+    enableLowerSocketSemanticRenderInventoryWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.lowerSocketSemanticRenderInventoryHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleMeshIds = [];
+      const runtimeRecords = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const record = lowerSocketSemanticRecordForMesh(child);
+        if (record) {
+          child.visible = true;
+          child.material = lowerSocketInventoryMaterials.get(record.renderClass) || child.material;
+          child.userData.LowerSocketSemanticRenderInventoryRuntimeRecord = record;
+          visibleCount += 1;
+          visibleMeshIds.push(child.name);
+          runtimeRecords.push({
+            ...record,
+            visibleAfterIsolation: true,
+          });
+        } else {
+          child.visible = false;
+          hiddenCount += 1;
+        }
+      });
+      this.frameLowerSocketAnatomy();
+      const classCounts = {};
+      for (const record of runtimeRecords) classCounts[record.renderClass] = (classCounts[record.renderClass] || 0) + 1;
+      return {
+        schema: 'LowerSocketSemanticRenderInventoryWitnessState',
+        mode: 'lower-socket-semantic-render-inventory-isolated-v0',
+        targetAssemblage: 'lower-socket-keel',
+        materialMode: 'semantic-class-basic-color',
+        plan: composition.lowerSocketRenderInventoryPlan,
+        visibleCount,
+        hiddenCount,
+        visibleMeshIds,
+        classCounts,
+        runtimeRecords,
+        suspectVisibleRecords: runtimeRecords.filter(record => record.suspiciousIfVisible),
+        colorLegend: composition.lowerSocketRenderInventoryPlan?.classColorLegend || [],
+        diagnosticQuestion: composition.lowerSocketRenderInventoryPlan?.diagnosticQuestion,
+      };
+    },
     enableLowerSocketAnatomyWitness() {
       scene.children.forEach(child => {
         if (child !== group) {
@@ -5411,6 +5946,7 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         visibleCount,
         hiddenCount,
         visibleMeshIds,
+        semanticRenderInventory: lowerSocketSemanticRenderInventory(),
         lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
         lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
       };
@@ -5651,6 +6187,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
         lowerSocketPlateBodyHonestyLaw: composition.lowerSocketPlateBodyHonestyLaw,
         lowerSocketPlateBodyHonestyVerdict: composition.lowerSocketPlateBodyHonestyVerdict,
+        LowerSocketRenderInventoryPlan: composition.lowerSocketRenderInventoryPlan,
+        lowerSocketRenderInventoryPlan: composition.lowerSocketRenderInventoryPlan,
+        lowerSocketRenderInventory: lowerSocketSemanticRenderInventory(),
+        lowerSocketRenderInventoryExpectedClasses: composition.lowerSocketRenderInventoryPlan?.expectedRenderClasses || [],
+        lowerSocketRenderInventoryExpectedRecordCount: composition.lowerSocketRenderInventoryPlan?.expectedRecordCount || 0,
         MacroContactMap: composition.macroContactMap,
         macroContactMap: composition.macroContactMap,
         MacroContactSample: composition.macroContactMap?.contacts || [],
