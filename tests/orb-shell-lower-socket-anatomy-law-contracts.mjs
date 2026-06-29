@@ -40,7 +40,7 @@ assert.ok(lowerSocket.macroPromotedBody.lowerSocketKeelAnatomyLaw.forbiddenFailu
 assert.ok(lowerSocket.macroPromotedBody.lowerSocketKeelAnatomyLaw.forbiddenFailureClasses.includes('multi-slab-side-return'), 'anatomy law forbids multi-slab side return');
 assert.ok(lowerSocket.macroPromotedBody.lowerSocketKeelAnatomyLaw.requiredAnatomy.includes('single-lower-socket-body'), 'anatomy law requires one primary lower socket body');
 assert.ok(lowerSocket.macroPromotedBody.subordinateAnatomy.includes('side-return-lip-as-subordinate-anatomy'), 'side return becomes subordinate anatomy instead of a competing slab');
-assert.equal(lowerSocket.macroPromotedBody.sideSilhouettePolicy.mode, 'lower-socket-smooth-keel-side-return-v0', 'lower socket uses a role-specific side silhouette policy');
+assert.equal(lowerSocket.macroPromotedBody.sideSilhouettePolicy.mode, 'lower-socket-tuck-tongue-smooth-side-return-v0', 'lower socket side silhouette policy is specialized by the tuck tongue role law');
 assert.equal(lowerSocket.macroPromotedBody.sideSilhouettePolicy.boundaryCutProfileVisible, false, 'lower socket keeps boundary cuts out of the macro silhouette');
 assert.ok(lowerSocket.macroPromotedBody.sideSilhouettePolicy.terminalWidthScale <= 0.42, 'lower socket terminal width narrows enough to avoid the rectangular foot failure');
 assert.ok(lowerSocket.macroPromotedBody.promotedBodyScale <= 1.08, 'lower socket promoted body scale is constrained by anatomy law');
@@ -50,9 +50,10 @@ assert.equal(fiveMacro.lowerSocketKeelAnatomyVerdict, 'procedural-lower-socket-a
 assert.ok(
   fiveMacro.macroContactMap.geometryCoherenceWatch.some(item => (
     item.macroId === 'lower-socket-keel'
-    && item.diagnosticPolicy === 'trust-after-lower-socket-anatomy-law'
+    && item.diagnosticPolicy === 'trust-after-lower-socket-family-role-law'
+    && item.selectedRole === 'tuck-tongue'
   )),
-  'contact-map geometry watch should know lower socket anatomy has a procedural law rather than raw proxy geometry',
+  'contact-map geometry watch should know lower socket anatomy is now governed by the tuck tongue role law rather than raw proxy geometry',
 );
 
 const alternateLowerSocket = alternateFiveMacro.macroAssemblages.find(item => item.id === 'lower-socket-keel');
