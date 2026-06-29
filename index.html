@@ -189,6 +189,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
+.route-fire-field-long { max-width: 290px; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; text-align: right; line-height: 1.35; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -657,6 +658,25 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="volume-fit-camera">Frame</button>
       </div>
     </div>
+    <div
+      class="panel"
+      id="route-fire-bench"
+      data-route-fire-bench-schema="beaming.volume-fire.route-activity-bench.v0"
+      data-route-fire-route-activity-schema=""
+      data-route-fire-visual-backend=""
+      data-route-fire-full-burn-count="0"
+      data-route-fire-false-authority-count="0"
+    >
+      <div class="field"><span class="field-key">Route fire</span><span class="route-chip" data-route-fire-field="visualBackendId" id="route-fire-visual-backend">--</span></div>
+      <div class="field"><span class="field-key">Activity</span><span class="field-val" data-route-fire-field="routeActivitySchema" id="route-fire-activity-schema">--</span></div>
+      <div class="field"><span class="field-key">Primary</span><span class="field-val" data-route-fire-field="primaryBridge" id="route-fire-primary">--</span></div>
+      <div class="field"><span class="field-key">Authority</span><span class="field-val" data-route-fire-field="fullBurnCount" id="route-fire-authority">--</span></div>
+      <div class="field"><span class="field-key">Warnings</span><span class="field-val route-fire-field-long" data-route-fire-field="falseAuthorityViolations" id="route-fire-warnings">--</span></div>
+      <div class="volume-actions">
+        <a class="btn" id="route-fire-launch" href="#" target="_blank" rel="noreferrer">Open fire</a>
+      </div>
+      <div id="route-fire-route-rows" data-route-fire-field="routeRows"></div>
+    </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
@@ -1060,6 +1080,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=routed-pressure-label-0628';
+import { buildKilnVolumeFireBenchModel } from './kiln-volume-fire-bench.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -7680,6 +7701,64 @@ function updateVolumeControlLabels() {
   syncRayBudgetGamutFromControls();
 }
 
+let routeFireBenchModel = null;
+
+function volumeRouteFireBaseUrl() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function routeFireTextList(values, fallback = '--') {
+  return Array.isArray(values) && values.length ? values.join(', ') : fallback;
+}
+
+function renderRouteFireBench() {
+  routeFireBenchModel = buildKilnVolumeFireBenchModel({
+    baseUrl: volumeRouteFireBaseUrl(),
+  });
+  const bench = routeFireBenchModel;
+  const root = document.getElementById('route-fire-bench');
+  if (!root) return bench;
+
+  root.dataset.routeFireRouteActivitySchema = bench.routeActivitySchema;
+  root.dataset.routeFireVisualBackend = bench.visualBackendId;
+  root.dataset.routeFireFullBurnCount = String(bench.witness.fullBurnCount);
+  root.dataset.routeFireFalseAuthorityCount = String(bench.falseAuthorityViolations.length);
+
+  document.getElementById('route-fire-visual-backend').textContent = bench.visualBackendId;
+  document.getElementById('route-fire-activity-schema').textContent = bench.routeActivitySchema;
+  document.getElementById('route-fire-primary').textContent = `${bench.primaryBridge.routeRunId} / ${bench.primaryBridge.visualReceipt.visualPhase}`;
+  document.getElementById('route-fire-authority').textContent = `${bench.witness.fullBurnCount} full burn / ${bench.witness.routeRunCount} routes`;
+  const warningsText = routeFireTextList(bench.falseAuthorityViolations);
+  document.getElementById('route-fire-warnings').textContent = warningsText;
+  document.getElementById('route-fire-warnings').title = warningsText;
+  document.getElementById('route-fire-launch').href = bench.launchUrl;
+
+  const rows = document.getElementById('route-fire-route-rows');
+  rows.replaceChildren();
+  for (const row of bench.routeRows) {
+    const item = document.createElement('div');
+    item.className = 'field';
+    item.dataset.routeFireRunId = row.routeRunId;
+    item.dataset.routeFireTruthMode = row.truthMode || '';
+    item.dataset.routeFireVisualPhase = row.visualPhase || '';
+    item.dataset.routeFireAllowsFullBurn = String(row.allowsFullBurn);
+    item.dataset.routeFireEffectiveRoute = row.effectiveRoute || '';
+
+    const key = document.createElement('span');
+    key.className = 'field-key';
+    key.textContent = row.routeRunId;
+    const val = document.createElement('span');
+    val.className = 'field-val';
+    val.textContent = `${row.truthMode || 'unknown'} / ${row.visualPhase || 'cold'} / ${row.allowsFullBurn ? 'full burn' : 'limited'}`;
+    item.append(key, val);
+    rows.append(item);
+  }
+
+  return bench;
+}
+
+window.kaminosRouteFireBenchDebugState = () => routeFireBenchModel || renderRouteFireBench();
+
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
@@ -7797,6 +7876,7 @@ function createVolumeMainRendererBridge() {
 
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  renderRouteFireBench();
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),

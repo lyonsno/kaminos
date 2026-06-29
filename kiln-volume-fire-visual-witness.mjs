@@ -3,142 +3,15 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { buildKilnVolumeFireWitness } from './kiln-volume-fire-bridge.mjs';
+import {
+  BEAMING_KILN_ROUTE_FIRE_ACCEPTANCE_SURFACE,
+  BEAMING_KILN_ROUTE_FIRE_DEFAULT_EVIDENCE_MODE,
+  BEAMING_KILN_ROUTE_FIRE_FIXTURE_ID,
+  buildKilnVolumeFireBenchModel,
+} from './kiln-volume-fire-bench.mjs';
 
 const TOOL_ID = 'beaming-kiln-volume-fire-visual-witness-v0';
 const REPORT_SCHEMA = 'beaming.volume-fire.route-activity-visual-witness-report.v0';
-const ACCEPTANCE_SURFACE = 'beaming-volume-witness-current-renderer';
-const EFFECTIVE_FIXTURE = 'wake-route-activity-bridge-fixture-v0';
-
-function routeActivity(overrides = {}) {
-  const fire = {
-    heatClass: 'burn',
-    fuelClass: 'local-webgpu',
-    truthClass: 'live',
-    visualAuthority: 'live-compute',
-    allowsFullBurn: true,
-    spendIntensity: 1,
-    custodyStrength: 0.8,
-    failureSharpness: 0,
-    cacheWarmth: 0,
-    outputSlotCount: 1,
-    warningLoad: 0,
-    ...overrides.fire,
-  };
-  return {
-    schema: 'kaminos.kiln.route-activity.v0',
-    activityId: 'live-run-route-activity',
-    routeRunId: 'live-run',
-    activityState: 'burning',
-    routePhase: 'running',
-    truthMode: 'live',
-    visualAuthority: 'live-compute',
-    requestedRoute: 'adapter.moge-local-webgpu.v0',
-    effectiveRoute: 'adapter.moge-local-webgpu.v0',
-    backendClass: 'browser-webgpu',
-    receiptId: 'receipt-live-001',
-    sourceArtifactIds: ['source-image-a'],
-    conditioningArtifactIds: ['depth-a'],
-    outputSlots: [{ role: 'output', artifactId: 'mesh-slot-a', status: 'pending' }],
-    sourceTruthWarnings: [],
-    falseAuthorityViolations: [],
-    fire,
-    ...overrides,
-  };
-}
-
-function routeRun(routeActivityPayload, overrides = {}) {
-  return {
-    schema: 'kaminos.kiln.tray-route-run.v0',
-    runId: routeActivityPayload.routeRunId,
-    requestedRoute: routeActivityPayload.requestedRoute,
-    effectiveRoute: routeActivityPayload.effectiveRoute,
-    backendClass: routeActivityPayload.backendClass,
-    statusBadge: overrides.statusBadge || 'real',
-    routePhase: routeActivityPayload.routePhase,
-    receiptId: routeActivityPayload.receiptId,
-    inputArtifactIds: routeActivityPayload.sourceArtifactIds,
-    conditioningArtifactIds: routeActivityPayload.conditioningArtifactIds,
-    outputArtifactIds: (routeActivityPayload.outputSlots || []).map(slot => slot.artifactId),
-    routeActivity: routeActivityPayload,
-    sourceTruthWarnings: routeActivityPayload.sourceTruthWarnings,
-    ...overrides,
-  };
-}
-
-function fixtureRouteRuns() {
-  const live = routeActivity();
-  const cached = routeActivity({
-    activityId: 'cached-run-route-activity',
-    routeRunId: 'cached-run',
-    activityState: 'cached',
-    routePhase: 'completed',
-    truthMode: 'cached',
-    visualAuthority: 'cached',
-    backendClass: 'cache',
-    receiptId: 'receipt-cached-001',
-    sourceTruthWarnings: ['cached_not_fresh_compute'],
-    fire: {
-      heatClass: 'glow',
-      fuelClass: 'cached',
-      truthClass: 'cached',
-      visualAuthority: 'cached',
-      allowsFullBurn: false,
-      spendIntensity: 0,
-      cacheWarmth: 0.8,
-    },
-  });
-  const fallback = routeActivity({
-    activityId: 'fallback-run-route-activity',
-    routeRunId: 'fallback-run',
-    activityState: 'fallback',
-    routePhase: 'running',
-    truthMode: 'fallback',
-    visualAuthority: 'fallback',
-    effectiveRoute: 'fixture-generator',
-    backendClass: 'fixture',
-    receiptId: 'receipt-fallback-001',
-    sourceTruthWarnings: ['fallback_kiln_not_requested_route'],
-    fire: {
-      heatClass: 'burn',
-      fuelClass: 'fixture',
-      truthClass: 'fallback',
-      visualAuthority: 'fallback',
-      allowsFullBurn: true,
-      spendIntensity: 1,
-      warningLoad: 1,
-    },
-  });
-  const unavailable = routeActivity({
-    activityId: 'missing-run-route-activity',
-    routeRunId: 'missing-run',
-    activityState: 'unavailable',
-    routePhase: 'queued',
-    truthMode: 'unavailable',
-    visualAuthority: 'none',
-    effectiveRoute: null,
-    backendClass: 'missing',
-    receiptId: null,
-    sourceArtifactIds: [],
-    conditioningArtifactIds: [],
-    outputSlots: [],
-    sourceTruthWarnings: ['kiln_backend_unavailable'],
-    fire: {
-      heatClass: 'cold',
-      fuelClass: 'unknown',
-      truthClass: 'unavailable',
-      visualAuthority: 'none',
-      allowsFullBurn: false,
-    },
-  });
-
-  return [
-    routeRun(live),
-    routeRun(cached, { statusBadge: 'cached' }),
-    routeRun(fallback, { statusBadge: 'fallback' }),
-    routeRun(unavailable, { statusBadge: 'missing-backend' }),
-  ];
-}
 
 function parseArgs(argv) {
   const args = {
@@ -149,7 +22,7 @@ function parseArgs(argv) {
     debugPort: 9438,
     settleMs: 2500,
     windowSize: '1280,960',
-    evidenceMode: 'performance',
+    evidenceMode: BEAMING_KILN_ROUTE_FIRE_DEFAULT_EVIDENCE_MODE,
   };
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
@@ -165,22 +38,12 @@ function parseArgs(argv) {
   return args;
 }
 
-function volumeUrlForBridge(bridge, baseUrl) {
-  const url = new URL(baseUrl);
-  const params = bridge.visualReceipt?.volumeParams || {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null) continue;
-    url.searchParams.set(key, String(value));
-  }
-  return url.toString();
-}
-
 function buildBaseReport({ args, routeActivityWitness, primaryBridge, volumeWitnessUrl }) {
   return {
     schema: REPORT_SCHEMA,
     toolId: TOOL_ID,
-    effectiveFixture: EFFECTIVE_FIXTURE,
-    acceptanceSurface: ACCEPTANCE_SURFACE,
+    effectiveFixture: BEAMING_KILN_ROUTE_FIRE_FIXTURE_ID,
+    acceptanceSurface: BEAMING_KILN_ROUTE_FIRE_ACCEPTANCE_SURFACE,
     dryRun: args.dryRun,
     requestedOut: args.out,
     screenshot: resolve(args.out),
@@ -228,12 +91,14 @@ const args = parseArgs(process.argv.slice(2));
 const out = resolve(args.out);
 const reportPath = resolve(args.report);
 const volumeReportPath = reportPath.replace(/\.json$/i, '.volume-witness.json');
-const routeActivityWitness = buildKilnVolumeFireWitness({
+const bench = buildKilnVolumeFireBenchModel({
+  baseUrl: `http://127.0.0.1:${args.serverPort}/`,
   witnessId: 'route-tray-fire-visual-witness-001',
-  routeRuns: fixtureRouteRuns(),
+  evidenceMode: args.evidenceMode,
 });
-const primaryBridge = routeActivityWitness.primaryBridge;
-const volumeWitnessUrl = volumeUrlForBridge(primaryBridge, `http://127.0.0.1:${args.serverPort}/`);
+const routeActivityWitness = bench.witness;
+const primaryBridge = bench.primaryBridge;
+const volumeWitnessUrl = bench.launchUrl;
 const report = buildBaseReport({ args, routeActivityWitness, primaryBridge, volumeWitnessUrl });
 
 if (args.dryRun) {
