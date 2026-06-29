@@ -799,8 +799,8 @@ function createLowerSocketFamilyRoleLaw(composition) {
       role: hasEquatorialSocket ? 'tuck-tongue' : 'absorbed',
       authority: hasEquatorialSocket ? 'subordinate-socket-insert' : 'hidden-seam-pressure',
       targetMacroId: hasEquatorialSocket ? 'equatorial-cupping-whorl' : null,
-      terminalAbsorbStartT: 0.58,
-      terminalHoldT: 0.68,
+      terminalAbsorbStartT: hasEquatorialSocket ? 0.32 : 0.28,
+      terminalHoldT: hasEquatorialSocket ? 0.38 : 0.34,
       allowedVisibleIf: [
         'smooth-single-direction-socket-taper',
         'terminates-into-shared-socket-seam',
@@ -815,17 +815,40 @@ function createLowerSocketFamilyRoleLaw(composition) {
       schema: 'LowerSocketFamilyRoleGeometryEffect',
       id: 'lower-socket-family-role-tuck-tongue-effect',
       role: hasEquatorialSocket ? 'tuck-tongue' : 'absorbed',
-      interval: { t0: 0.04, t1: 0.74, fade: 0.16 },
-      widthScale: hasEquatorialSocket ? 0.74 : 0.24,
-      terminalWidthScale: hasEquatorialSocket ? 0.16 : 0.05,
-      radialDelta: hasEquatorialSocket ? -0.032 : -0.08,
-      normalLiftDelta: hasEquatorialSocket ? -0.014 : -0.04,
+      interval: { t0: 0.04, t1: 1, fade: 0.14 },
+      widthScale: hasEquatorialSocket ? 0.48 : 0.18,
+      terminalAbsorbStartT: hasEquatorialSocket ? 0.32 : 0.28,
+      terminalWidthScale: hasEquatorialSocket ? 0.04 : 0.025,
+      terminalRadialDelta: hasEquatorialSocket ? -0.132 : -0.15,
+      terminalNormalLiftDelta: hasEquatorialSocket ? -0.064 : -0.08,
+      radialDelta: hasEquatorialSocket ? -0.052 : -0.09,
+      normalLiftDelta: hasEquatorialSocket ? -0.026 : -0.046,
+      socketAlignmentPull: hasEquatorialSocket ? 0.86 : 0.42,
+      maxLateralWander: hasEquatorialSocket ? 0.06 : 0.035,
       topologyRelief: hasEquatorialSocket ? 0.72 : 1,
       geometryContract: 'smooth-single-direction-socket-taper',
     },
+    tuckTongueRefinement: {
+      schema: 'LowerSocketTuckTongueRefinementContract',
+      mode: 'post-smoke-terminal-absorption-v0',
+      visibleArcLimitT: hasEquatorialSocket ? 0.36 : 0.3,
+      maxLateralWander: hasEquatorialSocket ? 0.06 : 0.035,
+      terminalBehavior: 'persist-terminal-absorption-through-mesh-end',
+      terminalCapAuthority: hasEquatorialSocket
+        ? 'hidden-under-shared-socket-seam'
+        : 'absorbed-no-visible-terminal-cap',
+      socketAlignment: hasEquatorialSocket
+        ? 'pull-terminal-rows-under-equatorial-lip'
+        : 'absorb-terminal-rows-into-seam-pressure',
+      forbiddenPostSmokeRead: [
+        'bent-independent-appendage',
+        'dangling-side-limb',
+        'terminal-width-recovers-after-tuck',
+      ],
+    },
     promotedBodyPolicy: {
       schema: 'LowerSocketFamilyRolePromotedBodyPolicy',
-      promotedBodyScale: hasEquatorialSocket ? 0.82 : 0.38,
+      promotedBodyScale: hasEquatorialSocket ? 0.52 : 0.3,
       sideSilhouetteMode: 'lower-socket-tuck-tongue-smooth-side-return-v0',
       materialAuthority: 'subordinate-to-equatorial-lip',
     },
@@ -878,6 +901,9 @@ function attachLowerSocketFamilyRoleLaw(composition) {
         lowerSocket.macroPromotedBody.sideSilhouettePolicy?.terminalWidthScale ?? law.geometryEffect.terminalWidthScale,
         law.geometryEffect.terminalWidthScale,
       ),
+      visibleArcLimitT: law.tuckTongueRefinement?.visibleArcLimitT,
+      maxLateralWander: law.tuckTongueRefinement?.maxLateralWander,
+      terminalBehavior: law.tuckTongueRefinement?.terminalBehavior,
       reason: 'lower socket has been classified as subordinate tuck tongue before visible macro meshing',
     };
   }
@@ -885,13 +911,16 @@ function attachLowerSocketFamilyRoleLaw(composition) {
 
 function lowerSocketFamilyRoleEffectAt(assemblage, t) {
   const activeEffects = (assemblage.lowerSocketFamilyRoleEffects || [])
-    .map(effect => ({ effect, influence: macroInterlockIntervalInfluence(effect, t) }))
+    .map(effect => ({ effect, influence: macroInterlockIntervalInfluence(effect, t), t }))
     .filter(item => item.influence > 0);
   if (!activeEffects.length) {
     return {
       widthScale: 1,
       radialDelta: 0,
       normalLiftDelta: 0,
+      socketAlignmentPull: 0,
+      maxLateralWander: Number.POSITIVE_INFINITY,
+      terminalAbsorption: 0,
       topologyRelief: 0,
       activeEffectIds: [],
       active: false,
@@ -899,10 +928,20 @@ function lowerSocketFamilyRoleEffectAt(assemblage, t) {
   }
   return activeEffects.reduce((total, item) => {
     const { effect, influence } = item;
+    const terminalAbsorption = smoothStep(effect.terminalAbsorbStartT ?? 1, 1, item.t ?? 0);
+    const widthTarget = (effect.widthScale ?? 1)
+      + ((effect.terminalWidthScale ?? effect.widthScale ?? 1) - (effect.widthScale ?? 1)) * terminalAbsorption;
+    const radialTarget = (effect.radialDelta || 0)
+      + ((effect.terminalRadialDelta ?? effect.radialDelta ?? 0) - (effect.radialDelta || 0)) * terminalAbsorption;
+    const liftTarget = (effect.normalLiftDelta || 0)
+      + ((effect.terminalNormalLiftDelta ?? effect.normalLiftDelta ?? 0) - (effect.normalLiftDelta || 0)) * terminalAbsorption;
     return {
-      widthScale: Math.min(total.widthScale, 1 - (1 - (effect.widthScale ?? 1)) * influence),
-      radialDelta: total.radialDelta + (effect.radialDelta || 0) * influence,
-      normalLiftDelta: total.normalLiftDelta + (effect.normalLiftDelta || 0) * influence,
+      widthScale: Math.min(total.widthScale, 1 - (1 - widthTarget) * influence),
+      radialDelta: total.radialDelta + radialTarget * influence,
+      normalLiftDelta: total.normalLiftDelta + liftTarget * influence,
+      socketAlignmentPull: Math.max(total.socketAlignmentPull, (effect.socketAlignmentPull || 0) * influence),
+      maxLateralWander: Math.min(total.maxLateralWander, effect.maxLateralWander ?? Number.POSITIVE_INFINITY),
+      terminalAbsorption: Math.max(total.terminalAbsorption, terminalAbsorption * influence),
       topologyRelief: Math.max(total.topologyRelief, (effect.topologyRelief || 0) * influence),
       activeEffectIds: [...total.activeEffectIds, effect.id],
       active: true,
@@ -911,6 +950,9 @@ function lowerSocketFamilyRoleEffectAt(assemblage, t) {
     widthScale: 1,
     radialDelta: 0,
     normalLiftDelta: 0,
+    socketAlignmentPull: 0,
+    maxLateralWander: Number.POSITIVE_INFINITY,
+    terminalAbsorption: 0,
     topologyRelief: 0,
     activeEffectIds: [],
     active: true,
@@ -1494,6 +1536,9 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
   const leftWall = sideWalls.find(wall => wall.targetEdge === 'left-promoted-body-edge');
   const rightWall = sideWalls.find(wall => wall.targetEdge === 'right-promoted-body-edge');
   if (!leftWall || !rightWall) return null;
+  const roleLaw = assemblage.lowerSocketFamilyRoleLaw || assemblage.macroPromotedBody?.lowerSocketFamilyRoleLaw;
+  const terminalCapAuthority = roleLaw?.tuckTongueRefinement?.terminalCapAuthority || 'visible-promoted-body-terminal-cap';
+  const normalRenderVisible = terminalCapAuthority === 'visible-promoted-body-terminal-cap';
   const sampleIndex = endRole === 'start-terminus' ? 0 : leftWall.sideWallSamples.length - 1;
   const left = leftWall.sideWallSamples[sampleIndex];
   const right = rightWall.sideWallSamples[sampleIndex];
@@ -1517,6 +1562,8 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
     targetPromotedBodyId: assemblage.macroPromotedBody?.id,
     endRole,
     t: endRole === 'start-terminus' ? 0 : 1,
+    normalRenderVisible,
+    capAuthority: terminalCapAuthority,
     sideWallIds: [leftWall.id, rightWall.id],
     capSamples: {
       outerLeft: left.outer,
@@ -1536,7 +1583,9 @@ function createLiveMacroTerminalCap(assemblage, sideWalls, endRole) {
       innerThicknessEdgeShared: true,
       couplingVerdict: 'terminal-cap-bridges-sidewalls-and-thickness-edges',
     },
-    visualContract: 'normal live render shows a closed solid end on the promoted shell strip',
+    visualContract: normalRenderVisible
+      ? 'normal live render shows a closed solid end on the promoted shell strip'
+      : 'topology cap exists but normal render hides it under the shared socket seam',
   };
 }
 
@@ -1556,6 +1605,9 @@ function createLiveMacroSideWallPlan(composition) {
       .map(endRole => createLiveMacroTerminalCap(assemblage, assemblageSideWalls, endRole))
       .filter(Boolean);
   });
+  const normalRenderHiddenTerminalCapIds = terminalCaps
+    .filter(cap => cap.normalRenderVisible === false)
+    .map(cap => cap.id);
   const suppressedLegacyRoundBandIds = composition.macroAssemblages
     .flatMap(assemblage => assemblage.childBandPlan.map(member => member.id));
   return {
@@ -1569,6 +1621,8 @@ function createLiveMacroSideWallPlan(composition) {
     sideWallCount: sideWalls.length,
     terminalCaps,
     terminalCapCount: terminalCaps.length,
+    normalRenderHiddenTerminalCapIds,
+    normalRenderVisibleTerminalCapCount: terminalCaps.length - normalRenderHiddenTerminalCapIds.length,
     terminalCapClosureVerdict: terminalCaps.length === expectedTerminalCapCount
       ? 'live-promoted-body-termini-capped'
       : 'live-promoted-body-termini-open',
@@ -3515,19 +3569,22 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const control = assemblage.spine.control;
   const torsion = assemblage.macroTorsionField;
   const anatomyT = lowerSocketAnatomyParametricT(assemblage, t);
+  const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+  const socketAlignmentDamping = 1 - clamp(roleEffect.socketAlignmentPull * roleEffect.terminalAbsorption, 0, 0.88);
   const lat = control.startLat + (control.endLat - control.startLat) * anatomyT;
   const widthPressure = assemblage.sphericalTerritory.lonWidth * 0.12;
-  const siblingOffset = bandMember.siblingOffset + Math.sin(Math.PI * anatomyT) * widthPressure * 0.18;
+  const rawSiblingOffset = bandMember.siblingOffset + Math.sin(Math.PI * anatomyT) * widthPressure * 0.18;
+  const siblingOffset = rawSiblingOffset * socketAlignmentDamping;
   const effectiveTwist = control.effectiveTwist ?? control.twist;
   const torsionWave = torsion
-    ? Math.sin(TAU * anatomyT + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * anatomyT)
+    ? Math.sin(TAU * anatomyT + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * anatomyT) * socketAlignmentDamping
     : 0;
   const surfaceRollBias = torsion
-    ? torsion.surfaceRoll * Math.sin(Math.PI * anatomyT) * (bandMember.siblingOffset || 0) * 0.9
+    ? torsion.surfaceRoll * Math.sin(Math.PI * anatomyT) * (bandMember.siblingOffset || 0) * 0.9 * socketAlignmentDamping
     : 0;
   const lon = assemblage.sphericalTerritory.centerPhase
     + assemblage.handedness * effectiveTwist * (anatomyT - 0.5)
-    + Math.sin(Math.PI * anatomyT) * control.bow
+    + Math.sin(Math.PI * anatomyT) * control.bow * socketAlignmentDamping
     + torsionWave
     + surfaceRollBias
     + siblingOffset;
@@ -3536,7 +3593,6 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-  const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
   return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
 }
 
@@ -4700,7 +4756,10 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
           sideWallMesh.userData.MacroPromotedBody = assemblage.macroPromotedBody;
           macroGroup.add(sideWallMesh);
         }
-        for (const terminalCap of composition.liveMacroSideWallPlan?.terminalCaps?.filter(cap => cap.parentAssemblage === assemblage.id) || []) {
+        for (const terminalCap of composition.liveMacroSideWallPlan?.terminalCaps?.filter(cap => (
+          cap.parentAssemblage === assemblage.id
+          && cap.normalRenderVisible !== false
+        )) || []) {
           const capMesh = new THREE.Mesh(makeMacroPromotedBodyTerminalCapGeometry(THREE, terminalCap), liveMacroSideWallMaterial);
           capMesh.name = terminalCap.id;
           capMesh.userData.LiveMacroSideWallPlan = composition.liveMacroSideWallPlan;

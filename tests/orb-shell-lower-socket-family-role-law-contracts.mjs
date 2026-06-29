@@ -65,6 +65,57 @@ assert.equal(
   'tuck-tongue-role-law-applied',
   'composition records the applied tuck-tongue role verdict',
 );
+assert.equal(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement?.schema,
+  'LowerSocketTuckTongueRefinementContract',
+  'role law carries the post-smoke tuck tongue refinement contract',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.visibleArcLimitT <= 0.52,
+  'tuck tongue refinement limits how long the lower socket family may read as independently visible',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.visibleArcLimitT <= 0.38,
+  'post-smoke tuck tongue refinement keeps the lower socket insert short enough to avoid appendage read',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.maxLateralWander <= 0.11,
+  'tuck tongue refinement forbids the lower socket insert from wandering into a dangling side limb',
+);
+assert.equal(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.terminalBehavior,
+  'persist-terminal-absorption-through-mesh-end',
+  'terminal role effect must persist through the mesh end instead of fading out before the tail',
+);
+assert.equal(
+  fiveMacro.lowerSocketFamilyRoleLaw.tuckTongueRefinement.terminalCapAuthority,
+  'hidden-under-shared-socket-seam',
+  'tuck tongue refinement demotes terminal caps so they do not grant independent macro objecthood',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.interval.t1 >= 0.98,
+  'tuck tongue role effect persists through the terminal mesh rows',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.terminalAbsorbStartT <= 0.48,
+  'tuck tongue absorption starts early enough to avoid a long visible bent appendage',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.terminalAbsorbStartT <= 0.34,
+  'post-smoke tuck tongue absorption starts before the body can become a visible side limb',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.terminalWidthScale <= 0.08,
+  'terminal rows collapse to a seam-bound tongue rather than recovering full width',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.socketAlignmentPull >= 0.62,
+  'tuck tongue geometry declares a strong pull toward the lower/equatorial socket seam',
+);
+assert.ok(
+  fiveMacro.lowerSocketFamilyRoleLaw.geometryEffect.socketAlignmentPull >= 0.82,
+  'post-smoke tuck tongue geometry aggressively damps lateral wander into the socket seam',
+);
 
 assert.equal(
   lowerSocket.lowerSocketFamilyRoleLaw?.schema,
@@ -97,10 +148,47 @@ assert.ok(
   lowerSocket.macroPromotedBody.promotedBodyScale <= 0.84,
   'tuck tongue role keeps the lower socket narrower than a full macro body',
 );
+assert.ok(
+  lowerSocket.macroPromotedBody.promotedBodyScale <= 0.56,
+  'post-smoke tuck tongue role demotes the lower socket below small-macro objecthood',
+);
 assert.equal(
   lowerSocket.macroPromotedBody.sideSilhouettePolicy.mode,
   'lower-socket-tuck-tongue-smooth-side-return-v0',
   'side silhouette policy names the tuck tongue role instead of only generic lower-socket smoothing',
+);
+assert.equal(
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.terminalBehavior,
+  'persist-terminal-absorption-through-mesh-end',
+  'promoted lower socket side silhouette keeps terminal absorption active through the tail rows',
+);
+assert.ok(
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.visibleArcLimitT <= 0.52,
+  'promoted lower socket side silhouette has a bounded visible arc for the subordinate tuck tongue',
+);
+assert.ok(
+  lowerSocket.macroPromotedBody.sideSilhouettePolicy.maxLateralWander <= 0.11,
+  'promoted lower socket side silhouette exposes the lateral wander clamp',
+);
+
+const lowerSocketTerminalCaps = fiveMacro.liveMacroSideWallPlan.terminalCaps.filter(cap => cap.parentAssemblage === 'lower-socket-keel');
+assert.equal(
+  lowerSocketTerminalCaps.length,
+  2,
+  'lower socket still keeps topology cap records even when normal render demotes their authority',
+);
+assert.ok(
+  lowerSocketTerminalCaps.every(cap => cap.normalRenderVisible === false),
+  'lower socket tuck terminal caps are hidden in normal render instead of reading as independent object ends',
+);
+assert.ok(
+  lowerSocketTerminalCaps.every(cap => cap.capAuthority === 'hidden-under-shared-socket-seam'),
+  'lower socket tuck terminal caps carry the hidden seam authority',
+);
+assert.deepEqual(
+  fiveMacro.liveMacroSideWallPlan.normalRenderHiddenTerminalCapIds.filter(id => id.startsWith('lower-socket-keel-')).sort(),
+  lowerSocketTerminalCaps.map(cap => cap.id).sort(),
+  'sidewall plan accounts for hidden lower socket terminal caps before rendering',
 );
 
 const lowerEquatorialContact = fiveMacro.macroContactMap.contacts.find(item => (
