@@ -209,6 +209,72 @@ function assertExpectedServerRoot(roots) {
   }
 }
 
+async function runForgeHostSmokeOffersScenario(ws) {
+  phase = 'scenario-forge-host-smoke-offers';
+  lastEvidence.forgeHostSmokeOffers = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host stations did not auto-spawn from smoke URL');
+      if (initial.manifestSchema !== 'kaminos.forge-host.station-manifest.v0') {
+        throw new Error('Forge Host manifest schema mismatch: ' + JSON.stringify(initial));
+      }
+      if (initial.validation?.falseAuthorityViolations?.length) {
+        throw new Error('fixture offer claimed live display authority: ' + JSON.stringify(initial.validation.falseAuthorityViolations));
+      }
+      if (initial.stationCount < 4) throw new Error('Forge Host station count too small: ' + initial.stationCount);
+      if (initial.smokeOfferCount < initial.stationCount) throw new Error('Forge Host smoke offers missing from stations');
+      const stationRows = [...document.querySelectorAll('[data-forge-station-actor-id]')].map(row => ({
+        actorId: row.dataset.forgeStationActorId,
+        active: row.classList.contains('active'),
+        pressed: row.getAttribute('aria-pressed'),
+        text: row.textContent.trim(),
+      }));
+      if (stationRows.length !== initial.stationCount) {
+        throw new Error('Forge Host station rows did not match debug state: ' + JSON.stringify({ stationRows, initial }));
+      }
+      const targetStation = initial.stations.find(station => station.diaulos === 'wake-and-bake-pit-boss') || initial.stations[1];
+      window.selectForgeHostStation(targetStation.actorId);
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState();
+      if (selected.selectedActorId !== targetStation.actorId) {
+        throw new Error('Forge Host station selection did not update debug state: ' + JSON.stringify({ targetStation, selected }));
+      }
+      if (selected.selectedStation.attention.schema !== 'kaminos.forge-host.station-attention.v0') {
+        throw new Error('Forge Host selected station lost attention schema: ' + JSON.stringify(selected.selectedStation.attention));
+      }
+      if (!['camera', 'offer', 'bench', 'wander'].includes(selected.selectedStation.attention.primaryLookTarget)) {
+        throw new Error('Forge Host selected station attention target invalid: ' + JSON.stringify(selected.selectedStation.attention));
+      }
+      const offers = [...document.querySelectorAll('[data-forge-smoke-offer-id]')].map(row => ({
+        id: row.dataset.forgeSmokeOfferId,
+        text: row.textContent.trim(),
+      }));
+      if (!offers.length) throw new Error('Forge Host selected station did not render smoke offer rows');
+      const opened = window.kaminosOpenForgeHostSmokeOffer(offers[0].id);
+      await wait(150);
+      const finalState = window.kaminosForgeHostDebugState();
+      if (finalState.lastOpenedOffer?.id !== offers[0].id) {
+        throw new Error('Forge Host smoke offer did not become last opened offer: ' + JSON.stringify({ offers, finalState }));
+      }
+      if (opened.schema !== 'kaminos.forge-host.smoke-offer.v0') {
+        throw new Error('Forge Host opened offer lost smoke offer schema: ' + JSON.stringify(opened));
+      }
+      if (opened.displayState === 'live' && ['fixture', 'fallback', 'seeded'].includes(opened.authority)) {
+        throw new Error('fixture offer claimed live display authority: ' + JSON.stringify(opened));
+      }
+      return {
+        initial,
+        stationRows,
+        selectedActorId: finalState.selectedActorId,
+        selectedAttention: finalState.selectedStation.attention,
+        offers,
+        openedOffer: finalState.lastOpenedOffer,
+      };
+    })()
+  `, { timeoutMs: 20000 });
+}
+
 function assertClickedSelection(evidence, phaseLabel, clickedId, otherId) {
   const rows = evidence || [];
   const activeRows = rows.filter(row => row.active && row.pressed === 'true');
@@ -4154,6 +4220,8 @@ try {
     await runSplatCropFrameScenario(ws);
   } else if (scenario === 'ao-route-delta') {
     await runAoRouteDeltaScenario(ws);
+  } else if (scenario === 'forge-host-smoke-offers') {
+    await runForgeHostSmokeOffersScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

@@ -28,6 +28,9 @@ assert.match(witness, /splat-correction-mode/, 'witness supports viewport-driven
 assert.match(witness, /viewport-click-select-deselect/, 'witness supports viewport click select/deselect scenario');
 assert.match(witness, /object-groups-roundtrip/, 'witness supports an object grouping and rename roundtrip scenario');
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
+assert.match(witness, /forge-host-smoke-offers/, 'witness supports Forge Host smoke offer station projection');
+assert.match(witness, /kaminosForgeHostDebugState/, 'Forge Host witness reads the explicit browser debug state');
+assert.match(witness, /fixture offer claimed live display authority/, 'Forge Host witness fails loud on fixture/live false authority');
 assert.match(witness, /requestedUrl:\s*url/, 'witness report records requested URL');
 assert.match(witness, /effectiveUrl:/, 'witness report records effective browser URL');
 assert.match(witness, /effectiveServerRoots:/, 'witness report records effective server root identity');

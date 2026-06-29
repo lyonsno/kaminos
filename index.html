@@ -217,6 +217,22 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .motion-clip-title { color: #ddd; font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .motion-clip-meta { color: #666; font: 9px 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .motion-clip-intent { color: #a9b8d8; font: 9px 'SF Mono', monospace; border: 1px solid #2d3852; border-radius: 4px; padding: 2px 5px; background: #141a28; white-space: nowrap; }
+
+/* Forge Host */
+.forge-station-list, .forge-offer-list { display: flex; flex-direction: column; gap: 6px; }
+.forge-station-row, .forge-offer-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #202020; border: 1px solid #303030; border-radius: 6px; color: #bbb; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
+.forge-station-row > span:first-child, .forge-offer-row > span:first-child { min-width: 0; overflow: hidden; }
+.forge-station-row:hover, .forge-offer-row:hover { background: #262626; border-color: #3a3a3a; }
+.forge-station-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
+.forge-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }
+.forge-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.forge-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.forge-offer-row .forge-chip { color: #f0d28a; border-color: #4c3c1b; background: #211b0e; }
+.forge-empty { font-size: 11px; color: #555; }
+.forge-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.forge-readout { display: grid; grid-template-columns: 1fr; gap: 3px; }
+.forge-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
+.forge-readout .field-val { max-width: 220px; text-align: right; }
 </style>
 </head>
 <body>
@@ -227,6 +243,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="forge">Forge</div>
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
@@ -469,6 +486,33 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <input type="range" id="dof-maxblur" min="0" max="0.05" step="0.001" value="0.01">
         <span class="slider-val" id="dof-maxblur-val">0.01</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Forge Tab -->
+  <div class="tab-content" id="tab-forge">
+    <h2>Forge Stations</h2>
+    <div class="panel">
+      <div class="forge-actions">
+        <button type="button" class="btn" id="forge-host-enable">Spawn Stations</button>
+        <button type="button" class="btn" id="forge-host-frame-camera">Frame</button>
+      </div>
+      <div id="forge-host-empty" class="forge-empty">No Forge Host stations spawned</div>
+      <div id="forge-host-station-list" class="forge-station-list" data-forge-host-attention-schema="kaminos.forge-host.station-attention.v0"></div>
+    </div>
+
+    <h2>Smoke Offers</h2>
+    <div class="panel">
+      <div id="forge-host-selected-summary" class="forge-empty">Select a station</div>
+      <div id="forge-host-offer-list" class="forge-offer-list" data-forge-host-smoke-offer-schema="kaminos.forge-host.smoke-offer.v0"></div>
+    </div>
+
+    <h2>Attention</h2>
+    <div class="panel forge-readout">
+      <div class="field"><span class="field-key">Schema</span><span id="forge-attention-schema" class="field-val">-</span></div>
+      <div class="field"><span class="field-key">Mode</span><span id="forge-attention-mode" class="field-val">-</span></div>
+      <div class="field"><span class="field-key">Look</span><span id="forge-attention-target" class="field-val">-</span></div>
+      <div class="field"><span class="field-key">Proximity</span><span id="forge-attention-proximity" class="field-val">-</span></div>
     </div>
   </div>
 
@@ -1098,6 +1142,12 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
+import {
+  FORGE_HOST_STATION_ATTENTION_SCHEMA,
+  buildForgeHostFixture,
+  deriveForgeStationAttention,
+  validateForgeHostStationManifest,
+} from './forge-host-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1140,6 +1190,7 @@ let motionPhraseControlState = null;
 let motionTrackState = null;
 let motionOutputMapState = null;
 let motionTemporalState = null;
+let forgeHostState = null;
 let generatedPoseTemporalRegistryPromise = null;
 const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
@@ -3783,6 +3834,356 @@ window.kaminosSetSplatCorrectionDebug = function(id, correction = {}) {
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
+function disposeForgeHostStationScene() {
+  if (!forgeHostState?.root) return;
+  scene.remove(forgeHostState.root);
+  forgeHostState.root.traverse(object => {
+    if (object.geometry) object.geometry.dispose?.();
+    if (object.material) {
+      if (Array.isArray(object.material)) object.material.forEach(material => {
+        material.map?.dispose?.();
+        material.dispose?.();
+      });
+      else {
+        object.material.map?.dispose?.();
+        object.material.dispose?.();
+      }
+    }
+  });
+  forgeHostState.active = false;
+}
+
+function setForgeHostText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value ?? '-');
+}
+
+function renderForgeLabelTexture(visual, text) {
+  if (!visual?.labelContext) return;
+  const { labelCanvas: canvas, labelContext: context, labelTexture: texture, baseColor } = visual;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = 'rgba(10, 12, 14, 0.72)';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = baseColor.getStyle();
+  context.lineWidth = 4;
+  context.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+  context.fillStyle = '#f2f2e8';
+  context.font = '700 34px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(String(text || '').slice(0, 18), canvas.width / 2, canvas.height / 2);
+  texture.needsUpdate = true;
+}
+
+function makeForgeHostStationVisual(station) {
+  const baseColor = new THREE.Color(station.visual?.color || station.statusColor || '#f0d28a');
+  const radius = Number(station.visual?.radius || 0.22);
+  const group = new THREE.Group();
+  group.name = station.actorId;
+  group.position.set(...station.anchor.position);
+  group.userData.kaminosForgeStationActorId = station.actorId;
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 1.9, 0.012, 8, 96),
+    new THREE.MeshBasicMaterial({ color: baseColor, transparent: true, opacity: 0.68, depthWrite: false })
+  );
+  ring.name = `${station.actorId}-selection-ring`;
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -0.015;
+
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: baseColor,
+    emissive: baseColor.clone().multiplyScalar(0.2),
+    roughness: 0.28,
+    metalness: 0.18,
+  });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(radius, 36, 18), bodyMaterial);
+  body.name = `${station.actorId}-orb`;
+  body.position.y = radius + 0.04;
+
+  const nose = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 0.26, 16, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  nose.name = `${station.actorId}-look-nub`;
+  nose.position.set(0, radius + 0.06, radius * 1.06);
+
+  const offerTarget = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(radius * 0.26, 1),
+    new THREE.MeshBasicMaterial({ color: 0xf0d28a, transparent: true, opacity: 0.72, depthWrite: false })
+  );
+  offerTarget.name = `${station.actorId}-offer-target`;
+  offerTarget.position.set(
+    station.anchor.offerLookTarget[0] - station.anchor.position[0],
+    station.anchor.offerLookTarget[1] - station.anchor.position[1],
+    station.anchor.offerLookTarget[2] - station.anchor.position[2]
+  );
+
+  const labelCanvas = document.createElement('canvas');
+  labelCanvas.width = 512;
+  labelCanvas.height = 128;
+  const labelContext = labelCanvas.getContext('2d');
+  const labelTexture = new THREE.CanvasTexture(labelCanvas);
+  labelTexture.colorSpace = THREE.SRGBColorSpace;
+  labelTexture.generateMipmaps = false;
+  labelTexture.minFilter = THREE.LinearFilter;
+  labelTexture.magFilter = THREE.LinearFilter;
+  const label = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.92, 0.23),
+    new THREE.MeshBasicMaterial({ map: labelTexture, transparent: true, opacity: 0.94, depthWrite: false, side: THREE.DoubleSide })
+  );
+  label.name = `${station.actorId}-label`;
+  label.position.set(0, 0.018, radius * 2.45);
+  label.rotation.x = -Math.PI / 2;
+  label.renderOrder = 9;
+
+  group.add(ring);
+  group.add(body);
+  group.add(nose);
+  group.add(offerTarget);
+  group.add(label);
+
+  const visual = {
+    station,
+    group,
+    body,
+    bodyMaterial,
+    ring,
+    nose,
+    offerTarget,
+    label,
+    labelCanvas,
+    labelContext,
+    labelTexture,
+    baseColor,
+    lastAttention: null,
+  };
+  renderForgeLabelTexture(visual, station.visual?.ringLabel || station.callSign);
+  return visual;
+}
+
+function setForgeHostSelectedActor(actorId) {
+  if (!forgeHostState?.active) return null;
+  const exists = forgeHostState.visuals.some(visual => visual.station.actorId === actorId);
+  forgeHostState.selectedActorId = exists ? actorId : forgeHostState.visuals[0]?.station.actorId || null;
+  renderForgeHostStationList();
+  updateForgeHostReadout();
+  updateForgeHostStationFrame(performance.now() / 1000);
+  window._kaminosDirty?.();
+  return window.kaminosForgeHostDebugState();
+}
+
+function renderForgeHostStationList() {
+  const list = document.getElementById('forge-host-station-list');
+  const empty = document.getElementById('forge-host-empty');
+  if (!list || !empty) return;
+  const stations = forgeHostState?.manifest?.stations || [];
+  empty.style.display = stations.length ? 'none' : '';
+  list.innerHTML = '';
+  for (const station of stations) {
+    const active = station.actorId === forgeHostState.selectedActorId;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = active ? 'forge-station-row active' : 'forge-station-row';
+    button.dataset.forgeStationActorId = station.actorId;
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.innerHTML = `
+      <span>
+        <span class="forge-title">${escapeHtml(station.callSign)}</span>
+        <span class="forge-meta">${escapeHtml(station.role)} / ${escapeHtml(station.status)}</span>
+      </span>
+      <span class="forge-chip">${escapeHtml(station.smokeOffers.length)} smoke</span>
+    `;
+    button.addEventListener('click', () => setForgeHostSelectedActor(station.actorId));
+    list.appendChild(button);
+  }
+}
+
+function openForgeHostSmokeOffer(offerId) {
+  const station = forgeHostState?.manifest?.stations?.find(item => item.actorId === forgeHostState.selectedActorId);
+  const offerRecord = station?.smokeOffers?.find(item => item.id === offerId) || null;
+  if (!offerRecord) throw new Error(`No Forge Host smoke offer: ${offerId}`);
+  forgeHostState.lastOpenedOffer = offerRecord;
+  setInfo(`Smoke offer: ${offerRecord.title}`);
+  renderForgeHostStationList();
+  updateForgeHostReadout();
+  window._kaminosDirty?.();
+  return offerRecord;
+}
+
+function renderForgeHostOfferList() {
+  const list = document.getElementById('forge-host-offer-list');
+  const summary = document.getElementById('forge-host-selected-summary');
+  if (!list || !summary) return;
+  const station = forgeHostState?.manifest?.stations?.find(item => item.actorId === forgeHostState.selectedActorId) || null;
+  if (!station) {
+    summary.textContent = 'Select a station';
+    list.innerHTML = '';
+    return;
+  }
+  summary.textContent = `${station.callSign} / ${station.role}`;
+  list.innerHTML = '';
+  for (const offerRecord of station.smokeOffers) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'forge-offer-row';
+    button.dataset.forgeSmokeOfferId = offerRecord.id;
+    button.innerHTML = `
+      <span>
+        <span class="forge-title">${escapeHtml(offerRecord.title)}</span>
+        <span class="forge-meta">${escapeHtml(offerRecord.targetSurface)} / ${escapeHtml(offerRecord.sourceRef)}</span>
+      </span>
+      <span class="forge-chip">${escapeHtml(offerRecord.displayState)}</span>
+    `;
+    button.addEventListener('click', () => openForgeHostSmokeOffer(offerRecord.id));
+    list.appendChild(button);
+  }
+}
+
+function updateForgeHostReadout() {
+  const debug = window.kaminosForgeHostDebugState?.();
+  const selected = debug?.selectedStation || null;
+  const attention = selected?.attention || null;
+  setForgeHostText('forge-attention-schema', attention?.schema || FORGE_HOST_STATION_ATTENTION_SCHEMA);
+  setForgeHostText('forge-attention-mode', attention?.mode || '-');
+  setForgeHostText('forge-attention-target', attention?.primaryLookTarget || '-');
+  setForgeHostText('forge-attention-proximity', attention ? Number(attention.operatorProximity).toFixed(2) : '-');
+  renderForgeHostOfferList();
+}
+
+function createForgeHostStationScene({ force = false } = {}) {
+  if (forgeHostState?.active && !force) return forgeHostState;
+  disposeForgeHostStationScene();
+  disposeMotionTemporalScene();
+  disposeMotionOutputMapScene();
+  disposeMotionAgencyScene();
+  disposeMotionDecisionScene();
+  disposeMotionPhraseControlScene();
+  disposeMotionTrackScene();
+  const manifest = buildForgeHostFixture();
+  const validation = validateForgeHostStationManifest(manifest);
+  if (!validation.ok) {
+    throw new Error(`Forge Host fixture false authority: ${validation.falseAuthorityViolations.join('; ')}`);
+  }
+  const root = new THREE.Group();
+  root.name = 'forge-host-station-root';
+  root.userData.kaminosForgeHost = {
+    schema: manifest.schema,
+    fixtureSource: manifest.fixtureSource,
+    validation,
+  };
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.6, 3.0, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x10151b, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
+  );
+  floor.name = 'forge-host-station-floor';
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.61, 0.22);
+  root.add(floor);
+
+  const visuals = manifest.stations.map(station => {
+    const visual = makeForgeHostStationVisual(station);
+    root.add(visual.group);
+    return visual;
+  });
+
+  scene.add(root);
+  forgeHostState = {
+    schema: manifest.schema,
+    active: true,
+    manifest,
+    validation,
+    root,
+    visuals,
+    selectedActorId: manifest.stations[0]?.actorId || null,
+    lastOpenedOffer: null,
+    startedAt: performance.now() / 1000,
+    frameCount: 0,
+  };
+  setActiveTab('forge');
+  renderForgeHostStationList();
+  updateForgeHostStationFrame(performance.now() / 1000);
+  updateForgeHostReadout();
+  frameForgeHostCamera();
+  setInfo('Forge Host stations spawned');
+  return forgeHostState;
+}
+
+function frameForgeHostCamera() {
+  if (!camera || !controls) return;
+  camera.position.set(0.05, 1.85, 4.35);
+  controls.target.set(0, -0.18, 0.16);
+  controls.update();
+  window._kaminosDirty?.();
+}
+
+function updateForgeHostStationFrame(timeSeconds = performance.now() / 1000) {
+  if (!forgeHostState?.active) return false;
+  const cameraPosition = camera ? camera.getWorldPosition(new THREE.Vector3()).toArray() : [0, 1.5, 4];
+  const selectedActorId = forgeHostState.selectedActorId;
+  for (const visual of forgeHostState.visuals) {
+    const station = visual.station;
+    const selected = station.actorId === selectedActorId;
+    const attention = deriveForgeStationAttention(station, { selectedActorId, cameraPosition, timeSeconds });
+    visual.lastAttention = attention;
+    const rootPosition = new THREE.Vector3(...station.anchor.position);
+    const lookTarget = new THREE.Vector3(...attention.lookTargetWorld);
+    const direction = lookTarget.sub(rootPosition).normalize();
+    const yaw = Math.atan2(direction.x, direction.z);
+    const bob = Math.sin(timeSeconds * 1.4 + station.anchor.position[0] * 2.1) * 0.018;
+    visual.group.rotation.y += (yaw - visual.group.rotation.y) * 0.08;
+    visual.body.position.y = (station.visual.radius || 0.22) + 0.04 + bob;
+    visual.nose.position.set(
+      Math.sin(yaw) * (station.visual.radius || 0.22) * 1.08,
+      (station.visual.radius || 0.22) + 0.08 + bob,
+      Math.cos(yaw) * (station.visual.radius || 0.22) * 1.08
+    );
+    visual.ring.material.opacity = selected ? 0.95 : 0.48 + attention.operatorProximity * 0.22;
+    visual.bodyMaterial.emissive.copy(visual.baseColor).multiplyScalar(selected ? 0.36 : 0.16 + attention.operatorProximity * 0.14);
+    visual.offerTarget.visible = station.smokeOffers.length > 0;
+    visual.offerTarget.rotation.y = timeSeconds * 1.2;
+    visual.offerTarget.scale.setScalar(selected ? 1.22 : 0.92 + attention.operatorProximity * 0.18);
+  }
+  forgeHostState.frameCount++;
+  if (forgeHostState.frameCount % 12 === 1) updateForgeHostReadout();
+  return true;
+}
+
+window.selectForgeHostStation = setForgeHostSelectedActor;
+window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
+window.kaminosForgeHostDebugState = function() {
+  const state = forgeHostState;
+  const stations = (state?.visuals || []).map(visual => ({
+    actorId: visual.station.actorId,
+    diaulos: visual.station.diaulos,
+    callSign: visual.station.callSign,
+    role: visual.station.role,
+    status: visual.station.status,
+    anchor: visual.station.anchor,
+    visual: visual.station.visual,
+    smokeOffers: visual.station.smokeOffers,
+    selected: visual.station.actorId === state?.selectedActorId,
+    attention: visual.lastAttention,
+    worldPosition: visual.group.getWorldPosition(new THREE.Vector3()).toArray(),
+  }));
+  const selectedStation = stations.find(station => station.selected) || null;
+  return {
+    schema: 'kaminos.forge-host.debug-state.v0',
+    active: !!state?.active,
+    manifestSchema: state?.manifest?.schema || null,
+    fixtureSource: state?.manifest?.fixtureSource || null,
+    validation: state?.validation || null,
+    stationCount: stations.length,
+    smokeOfferCount: stations.reduce((total, station) => total + station.smokeOffers.length, 0),
+    selectedActorId: state?.selectedActorId || null,
+    selectedStation,
+    stations,
+    lastOpenedOffer: state?.lastOpenedOffer || null,
+    frameCount: state?.frameCount || 0,
+  };
+};
+
 function renderMotionClipList() {
   const list = document.getElementById('motion-clip-list');
   if (!list) return;
@@ -5770,6 +6171,8 @@ function initKaminosMotionAgencyRoute() {
   wireMotionPanelSlider('motion-panel-steps');
   wireMotionPanelSlider('motion-panel-source-opacity', value => `${Math.max(0.02, Math.min(0.95, value || 0)).toFixed(2)}`);
   wireMotionPanelSlider('motion-panel-speed', value => `${Math.max(0.05, Math.min(5, value || 1)).toFixed(2)}x`);
+  document.getElementById('forge-host-enable')?.addEventListener('click', () => createForgeHostStationScene({ force: true }));
+  document.getElementById('forge-host-frame-camera')?.addEventListener('click', frameForgeHostCamera);
   document.getElementById('motion-enable')?.addEventListener('click', () => createMotionAgencyFixtureScene({ force: true }));
   document.getElementById('motion-phrase-enable')?.addEventListener('click', () => createMotionDecisionComparisonScene({ force: true }));
   document.getElementById('motion-controls-enable')?.addEventListener('click', () => createMotionPhraseControlHarnessScene({ force: true }));
@@ -5795,9 +6198,10 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
-  if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'motion'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-motion'));
+  if (params.has('kaminos_forge_host')) {
+    createForgeHostStationScene({ force: true });
+  } else if (params.has('kaminos_motion_agency') || params.has('kaminos_motion_phrase') || params.has('kaminos_motion_phrase_controls') || params.has('kaminos_motion_tracks') || params.has('kaminos_generated_motion_track') || params.has('kaminos_motion_output_map') || params.has('kaminos_generated_pose_temporal') || params.has('kaminos_motion_panel_temporal_fixture')) {
+    setActiveTab('motion');
     if (params.has('kaminos_motion_panel_temporal_fixture')) void previewMotionPanelTemporalFixture();
     else if (params.has('kaminos_generated_pose_temporal')) void createGeneratedPoseTemporalScene();
     else if (params.has('kaminos_motion_output_map')) createGeneratedPoseOutputMapScene();
@@ -6469,9 +6873,10 @@ async function initScene() {
     const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+    const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -6486,7 +6891,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }

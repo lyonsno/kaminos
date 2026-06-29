@@ -36,6 +36,13 @@ assert.match(index, /function removeActiveSceneObjectWithConfirmation\(/, 'selec
 assert.match(index, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/, 'selected-object deletion listens for Delete and Backspace');
 assert.match(index, /window\.confirm\(/, 'selected-object deletion asks before removing the active object');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
+assert.match(index, /data-tab="forge"/, 'Kaminos exposes a Forge Host tab for embodied station smoke offers');
+assert.match(index, /id="forge-host-station-list"/, 'Forge Host tab exposes station list rows');
+assert.match(index, /id="forge-host-offer-list"/, 'Forge Host tab exposes selected station smoke offers');
+assert.match(index, /function createForgeHostStationScene\(/, 'Forge Host stations render through an explicit scene creation path');
+assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
+assert.match(index, /kaminos\.forge-host\.station-attention\.v0/, 'Forge Host UI preserves station-attention schema identity');
+assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect Forge Host station state without DOM inference');
 assert.match(index, /data-scene-group-create/, 'Assets tab exposes a grouping command for authored objects');
 assert.match(index, /id="scene-object-empty"/, 'scene object list has an explicit empty state');
 assert.match(index, /id="transform-inspector"/, 'Assets tab exposes a selected-object transform inspector');
