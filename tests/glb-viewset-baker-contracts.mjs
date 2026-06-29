@@ -68,3 +68,11 @@ assert.match(index, /glb_job/, 'Kaminos supports durable Greenroom GLB job-outpu
 assert.match(index, /glb_file/, 'Kaminos GLB deep links accept an explicit output filename');
 assert.match(index, /greenroomImportMesh\(url,\s*fileName/, 'Kaminos GLB deep links load through the existing Greenroom mesh route');
 assert.match(index, /transformControls\.detach\(\)[\s\S]*Deep-link GLB loaded/, 'Kaminos GLB deep links hide transform controls for clean A/B comparison tabs');
+assert.match(index, /impostor_manifest_path/, 'Kaminos supports local impostor-manifest deep links for live StarCraft-style smoke tabs');
+assert.match(index, /window\.kaminosLoadImpostorDebugRoute/, 'Kaminos exposes a live impostor atlas debug loader');
+assert.match(index, /window\.kaminosImpostorDebugState/, 'Kaminos exposes the active impostor frame/angle debug state for witness smokes');
+assert.match(index, /selectImpostorFrameForCamera/, 'Kaminos selects impostor atlas cells from the camera/object azimuth');
+assert.match(index, /kaminos\.glb-impostor-live-debug\.v0/, 'live impostor debug route preserves route identity in scene metadata');
+assert.match(index, /atlasTexture\.repeat\.set/, 'live impostor debug route crops the atlas texture to the selected frame cell');
+assert.match(index, /atlasTexture\.offset\.set/, 'live impostor debug route shifts the atlas texture to the selected frame cell');
+assert.match(index, /impostorActive/, 'render loop keeps the camera-facing impostor frame updated during orbit controls');

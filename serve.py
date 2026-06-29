@@ -435,6 +435,27 @@ def greenroom_output_roots():
     return roots
 
 
+def local_artifact_roots():
+    """Roots for explicit local debug artifacts such as viewset atlases."""
+    roots = [Path("/tmp").resolve(), Path("/private/tmp").resolve(), ROOT.resolve()]
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if greenroom:
+        roots.append(greenroom.resolve())
+    return roots
+
+
+def resolve_local_artifact_path(path):
+    """Resolve a caller-provided artifact path only under declared local roots."""
+    if not path:
+        return None
+    target = Path(path).expanduser().resolve()
+    if not target.is_file():
+        return None
+    if any(target.is_relative_to(root) for root in local_artifact_roots()):
+        return target
+    return None
+
+
 def resolve_greenroom_output_dir(output_dir):
     """Resolve a receipt output_dir only if it is under a serving root."""
     if not output_dir:
@@ -516,6 +537,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_outputs(parse_qs(parsed.query))
         elif parsed.path.startswith("/api/job-output"):
             self.handle_job_output(parse_qs(parsed.query))
+        elif parsed.path == "/api/local-artifact":
+            self.handle_local_artifact(parse_qs(parsed.query))
         elif parsed.path == "/api/delete-scene":
             self.handle_delete_scene(parse_qs(parsed.query))
         else:
@@ -983,6 +1006,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             ".json": "application/json", ".txt": "text/plain", ".log": "text/plain",
         }
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def handle_local_artifact(self, params):
+        """Serve explicit local debug artifacts without copying them into scratch."""
+        path = params.get("path", [""])[0]
+        target = resolve_local_artifact_path(path)
+        if not target:
+            self.send_json({"error": "local artifact outside serving roots or not a file"}, 403)
+            return
+
+        ext = target.suffix.lower()
+        content_types = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
+            ".json": "application/json", ".txt": "text/plain", ".log": "text/plain",
+        }
+        body = target.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))

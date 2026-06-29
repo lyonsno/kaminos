@@ -10,6 +10,7 @@ from serve import BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
+from serve import resolve_local_artifact_path
 
 
 def test_http_status_404_log_does_not_crash():
@@ -115,6 +116,25 @@ def test_greenroom_configured_root_outputs_are_served_even_when_outside_home():
             assert display["load_label"] == "Load mesh"
         finally:
             BROWSE_ROOTS["greenroom"] = previous
+
+
+def test_local_artifact_route_serves_tmp_viewset_artifacts_without_copying():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        tmp_path = Path(tmp)
+        artifact = tmp_path / "impostor-manifest.json"
+        artifact.write_text('{"schema":"kaminos.glb-impostor-atlas.v0"}')
+
+        resolved = resolve_local_artifact_path(str(artifact))
+
+        assert resolved == artifact.resolve()
+        assert resolved.suffix == ".json"
+
+
+def test_local_artifact_route_rejects_paths_outside_declared_roots():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        escaped = Path(tmp).resolve().parent.parent / "etc" / "hosts"
+
+        assert resolve_local_artifact_path(str(escaped)) is None
 
 
 def test_greenroom_stray_output_dirs_do_not_get_load_affordance():
@@ -360,6 +380,8 @@ if __name__ == "__main__":
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
+    test_local_artifact_route_serves_tmp_viewset_artifacts_without_copying()
+    test_local_artifact_route_rejects_paths_outside_declared_roots()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()

@@ -974,6 +974,7 @@ let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
 let sceneMutationToken = 0;
+let impostorDebugState = null;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
 let transformGizmoDragging = false;
@@ -6291,8 +6292,9 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    const impostorActive = updateImpostorDebugFrame();
 
-    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD) {
+    if (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || volumeBridgeActive || impostorActive || idleFrames < IDLE_THRESHOLD) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -6307,7 +6309,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !volumeBridgeActive && !impostorActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -6410,6 +6412,7 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function clearScene() {
   sceneMutationToken++;
+  impostorDebugState = null;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
@@ -8123,6 +8126,180 @@ window.kaminosViewGLBDebugRoute = async function({ source, fileName, label, opaq
   };
 };
 
+function normalizeImpostorAngle(angle) {
+  return ((Number(angle) % 360) + 360) % 360;
+}
+
+function impostorAngularDistance(a, b) {
+  const delta = Math.abs(normalizeImpostorAngle(a) - normalizeImpostorAngle(b));
+  return Math.min(delta, 360 - delta);
+}
+
+function localArtifactUrl(path) {
+  return `/api/local-artifact?path=${encodeURIComponent(path)}`;
+}
+
+function resolveImpostorManifest(rawManifest) {
+  return rawManifest?.impostorManifest || rawManifest;
+}
+
+function resolveImpostorAtlasUrl(manifest, manifestUrl) {
+  const direct = manifest?.atlasUrl || manifest?.atlas?.atlasUrl;
+  if (direct) return direct;
+  const localPath = manifest?.atlasPath || manifest?.atlas?.atlasPath;
+  if (localPath) return localArtifactUrl(localPath);
+  if (manifest?.atlas?.path && manifestUrl) {
+    return new URL(manifest.atlas.path, manifestUrl).toString();
+  }
+  throw new Error('Impostor manifest is missing an atlas URL/path');
+}
+
+function selectImpostorFrameForCamera(frames, cameraAngle) {
+  const angle = normalizeImpostorAngle(cameraAngle);
+  return [...(frames || [])].sort((a, b) => {
+    const aDistance = impostorAngularDistance(a.angle, angle);
+    const bDistance = impostorAngularDistance(b.angle, angle);
+    if (aDistance !== bDistance) return aDistance - bDistance;
+    return Number(a.index || 0) - Number(b.index || 0);
+  })[0] || null;
+}
+
+function currentImpostorCameraAzimuth() {
+  camera?.updateMatrixWorld?.();
+  const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
+  const target = controls?.target || new THREE.Vector3();
+  return normalizeImpostorAngle(THREE.MathUtils.radToDeg(Math.atan2(cameraWorld.x - target.x, cameraWorld.z - target.z)));
+}
+
+function applyImpostorFrameCell(state, frame) {
+  const atlas = state.manifest.atlas || {};
+  const cell = frame.cellRect || {
+    x: (frame.index % Math.max(1, atlas.atlasColumns || 1)) * (atlas.atlasCellWidth || frame.pngWidth || 1),
+    y: Math.floor(frame.index / Math.max(1, atlas.atlasColumns || 1)) * (atlas.atlasCellHeight || frame.pngHeight || 1),
+    width: atlas.atlasCellWidth || frame.pngWidth || 1,
+    height: atlas.atlasCellHeight || frame.pngHeight || 1,
+  };
+  const atlasWidth = atlas.atlasWidth || (atlas.atlasColumns || 1) * (atlas.atlasCellWidth || cell.width);
+  const atlasHeight = atlas.atlasHeight || (atlas.atlasRows || 1) * (atlas.atlasCellHeight || cell.height);
+  const atlasTexture = state.atlasTexture;
+  atlasTexture.repeat.set(cell.width / atlasWidth, cell.height / atlasHeight);
+  atlasTexture.offset.set(cell.x / atlasWidth, 1 - ((cell.y + cell.height) / atlasHeight));
+  atlasTexture.needsUpdate = true;
+  state.currentFrame = {
+    index: Number(frame.index || 0),
+    angle: normalizeImpostorAngle(frame.angle),
+    cellRect: { ...cell },
+    cameraAngle: Number(currentImpostorCameraAzimuth().toFixed(3)),
+  };
+}
+
+function updateImpostorDebugFrame() {
+  if (!impostorDebugState?.active || !impostorDebugState.mesh) return false;
+  const cameraAngle = currentImpostorCameraAzimuth();
+  const frame = selectImpostorFrameForCamera(impostorDebugState.frames, cameraAngle);
+  if (!frame) return false;
+  if (!impostorDebugState.currentFrame || Number(impostorDebugState.currentFrame.index) !== Number(frame.index)) {
+    applyImpostorFrameCell(impostorDebugState, frame);
+  } else {
+    impostorDebugState.currentFrame.cameraAngle = Number(cameraAngle.toFixed(3));
+  }
+  impostorDebugState.mesh.lookAt(camera.position);
+  return true;
+}
+
+window.kaminosImpostorDebugState = function() {
+  const state = impostorDebugState;
+  return {
+    schema: 'kaminos.glb-impostor-live-debug-state.v0',
+    active: !!state?.active,
+    route: state?.route || null,
+    manifestUrl: state?.manifestUrl || null,
+    atlasUrl: state?.atlasUrl || null,
+    label: state?.label || null,
+    frameCount: state?.frames?.length || 0,
+    currentFrame: state?.currentFrame || null,
+  };
+};
+
+window.kaminosLoadImpostorDebugRoute = async function({ manifestUrl, manifestPath, label, planeSize = 3.2 } = {}) {
+  const sourceUrl = manifestUrl || (manifestPath ? localArtifactUrl(manifestPath) : null);
+  if (!sourceUrl) throw new Error('Missing impostor manifest URL/path');
+  document.body.classList.add('kaminos-viewset-bake-mode');
+  window.dispatchEvent(new Event('resize'));
+  if (typeof removeBackdrop === 'function') removeBackdrop();
+  if (groundPlane) groundPlane.visible = false;
+  showEnvBg = false;
+  scene.backgroundBlurriness = 0;
+  await window.kaminosSetViewsetCaptureBackground('transparent');
+
+  const resp = await fetch(sourceUrl);
+  if (!resp.ok) throw new Error(`Failed to load impostor manifest: ${resp.status}`);
+  const rawManifest = await resp.json();
+  const manifest = resolveImpostorManifest(rawManifest);
+  if (manifest?.schema !== 'kaminos.glb-impostor-atlas.v0') throw new Error(`Unexpected impostor manifest schema: ${manifest?.schema || 'missing'}`);
+  const frames = Array.isArray(manifest.frames) ? manifest.frames : [];
+  if (!frames.length) throw new Error('Impostor manifest has no frames');
+  const atlasUrl = resolveImpostorAtlasUrl(manifest, sourceUrl);
+  const atlasTexture = await new THREE.TextureLoader().loadAsync(atlasUrl);
+  atlasTexture.colorSpace = THREE.SRGBColorSpace;
+  atlasTexture.wrapS = THREE.ClampToEdgeWrapping;
+  atlasTexture.wrapT = THREE.ClampToEdgeWrapping;
+  atlasTexture.flipY = false;
+
+  clearScene();
+  const atlas = manifest.atlas || {};
+  const cellAspect = (atlas.atlasCellWidth && atlas.atlasCellHeight)
+    ? atlas.atlasCellWidth / atlas.atlasCellHeight
+    : 1;
+  const geometry = new THREE.PlaneGeometry(Number(planeSize) * cellAspect, Number(planeSize), 1, 1);
+  const material = new THREE.MeshBasicMaterial({
+    map: atlasTexture,
+    transparent: true,
+    alphaTest: 0.01,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = label || 'kaminos-impostor-live-debug';
+  mesh.userData.kaminosSceneObject = {
+    schema: 'kaminos.glb-impostor-live-debug.v0',
+    source: sourceUrl,
+    atlasUrl,
+    type: 'impostor-atlas',
+    fileName: sourceUrl.split('/').pop()?.split('?')[0] || 'impostor-manifest.json',
+    label: label || 'Live impostor atlas',
+  };
+  scene.add(mesh);
+  currentMesh = mesh;
+  impostorDebugState = {
+    schema: 'kaminos.glb-impostor-live-debug.v0',
+    route: 'kaminos.glb-impostor-live-debug.v0',
+    active: true,
+    mesh,
+    manifest,
+    manifestUrl: sourceUrl,
+    atlasUrl,
+    atlasTexture,
+    frames,
+    label: label || 'Live impostor atlas',
+    currentFrame: null,
+  };
+  controls.target.set(0, 0, 0);
+  camera.position.set(0, 0.95, 4.25);
+  camera.lookAt(controls.target);
+  controls.update();
+  updateImpostorDebugFrame();
+  if (transformControls) {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
+  document.getElementById('transform-bar')?.classList.remove('visible');
+  window.dispatchEvent(new Event('resize'));
+  window._kaminosDirty?.();
+  setInfo(`Live impostor atlas: ${impostorDebugState.label}`);
+  return window.kaminosImpostorDebugState();
+};
+
 async function greenroomImportMesh(url, fileName, display) {
   if (greenroomPreviewIsActive()) {
     await restoreAuthoredSceneFromPreview({ silent: true });
@@ -8153,6 +8330,17 @@ async function loadGreenroomGlbDeepLink(params) {
   }
   document.getElementById('transform-bar')?.classList.remove('visible');
   setInfo(`Deep-link GLB loaded: ${label}`);
+  return true;
+}
+
+async function loadImpostorDeepLink(params) {
+  const manifestPath = params.get('impostor_manifest_path');
+  const manifestUrl = params.get('impostor_manifest');
+  if (!manifestPath && !manifestUrl) return false;
+  const label = params.get('impostor_label') || 'Live impostor atlas';
+  const planeSize = Number(params.get('impostor_plane_size') || 3.2);
+  await window.kaminosLoadImpostorDebugRoute({ manifestPath, manifestUrl, label, planeSize });
+  setInfo(`Deep-link impostor loaded: ${label}`);
   return true;
 }
 
@@ -9920,6 +10108,7 @@ initScene().then(() => {
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
+    if (await loadImpostorDeepLink(params)) return;
     if (await loadGreenroomGlbDeepLink(params)) return;
     const loadSplat = params.get('load');
     if (loadSplat) {
