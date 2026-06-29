@@ -338,6 +338,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Albedo intensity</span><input type="range" min="-1" max="1" step="0.01" data-hybrid-renderer-control="material.albedo.brightness"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="material.albedo.brightness"></span></label>
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Emissive</span><input type="range" min="0" max="20" step="0.1" data-hybrid-renderer-control="emissive.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="emissive.intensity"></span></label>
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Emissive cut</span><input type="range" min="0" max="1" step="0.005" data-hybrid-renderer-control="emissive.threshold"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="emissive.threshold"></span></label>
+                <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Screen normals</span><input type="checkbox" data-hybrid-renderer-control="normal.forceScreenSpace"></label>
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">AO radius</span><input type="range" min="0" max="5" step="0.01" data-hybrid-renderer-control="ao.radius"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="ao.radius"></span></label>
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">AO intensity</span><input type="range" min="0" max="5" step="0.05" data-hybrid-renderer-control="ao.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="ao.intensity"></span></label>
                 <label class="splat-hybrid-renderer-control-row"><span class="splat-hybrid-renderer-control-label">Bloom</span><input type="range" min="0" max="10" step="0.05" data-hybrid-renderer-control="bloom.intensity"><span class="splat-hybrid-renderer-control-value" data-hybrid-renderer-control-value="bloom.intensity"></span></label>
@@ -807,6 +808,7 @@ const HYBRID_SPLAT_RENDERER_CONTROL_DEFAULTS = {
     albedo: { contrast: 1.0, brightness: 0.0, gamma: 1.0 },
   },
   emissive: { intensity: 3.0, threshold: 0.05 },
+  normal: { forceScreenSpace: false },
   ao: { enabled: true, radius: 0.15, intensity: 1.5, falloff: 1.0, thickness: 1.81, slices: 3, steps: 4 },
   bloom: { threshold: 0.8, softKnee: 0.5, intensity: 0.5 },
 };
@@ -1285,8 +1287,13 @@ function formatHybridSplatRendererControlValue(path, value) {
 function syncHybridSplatRendererControlInputs() {
   document.querySelectorAll('[data-hybrid-renderer-control]').forEach(input => {
     const path = input.dataset.hybridRendererControl;
-    const value = Number(nestedControlValue(path));
-    if (Number.isFinite(value) && document.activeElement !== input) input.value = String(value);
+    const value = nestedControlValue(path);
+    if (input.type === 'checkbox') {
+      if (document.activeElement !== input) input.checked = value === true;
+      return;
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && document.activeElement !== input) input.value = String(numeric);
   });
   document.querySelectorAll('[data-hybrid-renderer-control-value]').forEach(el => {
     const path = el.dataset.hybridRendererControlValue;
@@ -1300,6 +1307,7 @@ function buildHybridSplatRendererControlsV0() {
     schema: 'hybrid-render.splat-renderer-controls.v0',
     material: JSON.parse(JSON.stringify(hybridSplatRendererControls.material)),
     emissive: { ...hybridSplatRendererControls.emissive },
+    normal: { ...hybridSplatRendererControls.normal },
     ao: { ...hybridSplatRendererControls.ao },
     bloom: { ...hybridSplatRendererControls.bloom },
   };
@@ -1345,6 +1353,12 @@ function publishHybridSplatRendererControls(handle = hybridSplatOverlayState.han
 }
 
 function setHybridSplatRendererControl(path, value) {
+  if (typeof value === 'boolean') {
+    setNestedControlValue(path, value);
+    syncHybridSplatRendererControlInputs();
+    publishHybridSplatRendererControls();
+    return buildHybridSplatRendererControlsV0();
+  }
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return hybridSplatRendererControls;
   setNestedControlValue(path, numeric);
@@ -2934,8 +2948,12 @@ function initTransformInspector() {
   const hybridModuleInput = document.getElementById('splat-hybrid-renderer-module-url');
   hybridModuleInput?.addEventListener('change', () => setHybridSplatOverlayModuleUrl(hybridModuleInput.value));
   document.querySelectorAll('[data-hybrid-renderer-control]').forEach(input => {
-    input.addEventListener('input', () => setHybridSplatRendererControl(input.dataset.hybridRendererControl, input.value));
-    input.addEventListener('change', () => setHybridSplatRendererControl(input.dataset.hybridRendererControl, input.value));
+    const publish = () => setHybridSplatRendererControl(
+      input.dataset.hybridRendererControl,
+      input.type === 'checkbox' ? input.checked : input.value,
+    );
+    input.addEventListener('input', publish);
+    input.addEventListener('change', publish);
   });
   syncHybridSplatRendererControlInputs();
   updateTransformInspector();
