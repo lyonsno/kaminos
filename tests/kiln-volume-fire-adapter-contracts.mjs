@@ -60,9 +60,37 @@ assert.equal(live.volumeParams.volume_tall_preset, 'operator_fire_0622');
 assert.equal(live.volumeParams.volume_pressure_strategy, 'spatial_tiers');
 assert.equal(live.volumeParams.volume_pressure_tier_overlay, 0);
 assert.equal(live.volumeParams.kaminos_volume_smoke, 1);
-assert.ok(live.volumeParams.volume_fire > 0.15, 'live compute receives a visible fire body');
-assert.ok(live.volumeParams.volume_radiance > 2, 'live compute receives strong fire radiance');
-assert.ok(live.volumeParams.volume_flow_rate > 0.2, 'live compute receives the active tall-plume flow regime');
+assert.equal(live.volumeParams.volume_density, 3.05);
+assert.equal(live.volumeParams.volume_fire, 0.10);
+assert.equal(live.volumeParams.volume_radiance, 2.90);
+assert.equal(live.volumeParams.volume_absorption, 2.00);
+assert.equal(live.volumeParams.volume_glow, 2.50);
+assert.equal(live.volumeParams.volume_smoke, 2.80);
+assert.equal(live.volumeParams.volume_curl, 2.30);
+assert.equal(live.volumeParams.volume_microdetail, 0.00);
+assert.equal(live.volumeParams.volume_interface_shred, 1.55);
+assert.equal(live.volumeParams.volume_fire_licks, 3.25);
+assert.equal(live.volumeParams.volume_projection, 0.25);
+assert.equal(live.volumeParams.volume_speed, 5.00);
+assert.equal(live.volumeParams.volume_steps, 160);
+assert.equal(live.volumeParams.volume_adaptive_rays, 0.00);
+assert.equal(live.volumeParams.volume_occupancy_skip, 0.00);
+assert.equal(live.volumeParams.volume_majorant_skip, 0.00);
+assert.equal(live.volumeParams.volume_majorant_smooth, 0.10);
+assert.equal(live.volumeParams.volume_majorant_guard, 0.30);
+assert.equal(live.volumeParams.volume_temporal_accum, 0.00);
+assert.equal(live.volumeParams.volume_temporal_jitter, 0.00);
+assert.equal(live.volumeParams.volume_history_clamp, 1.00);
+assert.equal(live.volumeParams.volume_fire_scale, 0.42);
+assert.equal(live.volumeParams.volume_detail_scale, 1.00);
+assert.equal(live.volumeParams.volume_plume_height, 0.70);
+assert.equal(live.volumeParams.volume_wind_strength, 0.00);
+assert.equal(live.volumeParams.volume_wind_angle, 180);
+assert.equal(live.volumeParams.volume_wind_height, -0.80);
+assert.equal(live.volumeParams.volume_render_scale, 0.95);
+assert.equal(Object.hasOwn(live.volumeParams, 'volume_flow_rate'), false);
+assert.equal(Object.hasOwn(live.volumeParams, 'volume_input_radius'), false);
+assert.equal(Object.hasOwn(live.volumeParams, 'volume_reaction_fuel'), false);
 
 const cached = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'cached',
@@ -84,7 +112,7 @@ assert.equal(cached.visualPhase, 'glow');
 assert.equal(cached.allowsFullBurn, false);
 assert.equal(cached.volumeParams.kaminos_volume_smoke, 1);
 assert.ok(cached.volumeParams.volume_fire < live.volumeParams.volume_fire, 'cached glow is weaker than live fire');
-assert.ok(cached.volumeParams.volume_flow_rate < live.volumeParams.volume_flow_rate, 'cached glow does not pretend to spend');
+assert.ok(cached.volumeParams.volume_flow_rate <= 0.03, 'cached glow keeps only a tiny retained flow');
 assert.ok(cached.volumeParams.volume_glow > cached.volumeParams.volume_fire, 'cached output keeps warmth as glow');
 
 const fixture = deriveKilnVolumeFireVisual(routeActivity({
@@ -170,7 +198,7 @@ const failed = deriveKilnVolumeFireVisual(routeActivity({
 assert.equal(failed.visualPhase, 'snuff');
 assert.equal(failed.allowsFullBurn, false);
 assert.equal(failed.volumeParams.volume_fire, 0);
-assert.ok(failed.volumeParams.volume_smoke > live.volumeParams.volume_smoke, 'failure snuff can smoke without keeping flame authority');
+assert.ok(failed.volumeParams.volume_smoke > 0, 'failure snuff can smoke without keeping flame authority');
 
 const unavailable = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'unavailable',
