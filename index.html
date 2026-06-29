@@ -200,6 +200,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .compute-route-fire-artifact:first-child { border-top: 0; }
 .compute-route-fire-artifact-role { color: #8fc7d6; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
 .compute-route-fire-artifact-path { color: #777; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; text-align: right; }
+.compute-route-fire-actuator[hidden] { display: none; }
+.compute-route-fire-input { width: 100%; min-width: 0; height: 26px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #aaa; font: 9px 'SF Mono', monospace; padding: 2px 6px; outline: none; }
+.compute-route-fire-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
+.compute-route-fire-status-running { color: #f0b85a; }
+.compute-route-fire-status-completed { color: #66bb6a; }
+.compute-route-fire-status-failed { color: #ef8f8f; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -667,6 +673,24 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
       </div>
+    </div>
+    <div
+      class="panel compute-route-fire-actuator"
+      id="compute-route-fire-actuator"
+      data-compute-route-fire-actuator-schema="kaminos.compute-route-fire-actuator.v0"
+      data-compute-route-fire-run-status="idle"
+      hidden
+    >
+      <div class="field"><span class="field-key">Compute route</span><span class="route-chip" id="compute-route-fire-actuator-route">sharp-image-to-splat-live-v0</span></div>
+      <div class="field"><span class="field-key">Status</span><span class="field-val" id="compute-route-fire-run-status">idle</span></div>
+      <div class="field"><span class="field-key">Input</span></div>
+      <input class="compute-route-fire-input" id="compute-route-fire-input-path" value="">
+      <div class="volume-actions">
+        <button class="btn" id="compute-route-fire-start">Start SHARP</button>
+      </div>
+      <div class="field"><span class="field-key">Report</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-report">--</span></div>
+      <div class="field"><span class="field-key">Error</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-error">--</span></div>
+      <div class="compute-route-fire-artifacts" id="compute-route-fire-run-artifacts"></div>
     </div>
     <div
       class="panel"
@@ -7733,6 +7757,11 @@ function updateVolumeControlLabels() {
 
 let routeFireBenchModel = null;
 let computeRouteFireBenchModel = null;
+let computeRouteFireActuatorState = {
+  enabled: false,
+  run: null,
+  pollTimer: 0,
+};
 
 function volumeRouteFireBaseUrl() {
   return `${window.location.origin}${window.location.pathname}`;
@@ -7892,6 +7921,131 @@ function renderComputeRouteFireBench() {
 
 window.kaminosRouteFireBenchDebugState = () => routeFireBenchModel || renderRouteFireBench();
 window.kaminosComputeRouteFireBenchDebugState = () => computeRouteFireBenchModel || renderComputeRouteFireBench();
+
+function computeRouteFireActuatorIsEnabled() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('kaminos_compute_route_fire_actuator') === '1';
+}
+
+function setComputeRouteFireStatusClass(status) {
+  const statusEl = document.getElementById('compute-route-fire-run-status');
+  statusEl.classList.remove('compute-route-fire-status-running', 'compute-route-fire-status-completed', 'compute-route-fire-status-failed');
+  if (status === 'running') statusEl.classList.add('compute-route-fire-status-running');
+  if (status === 'completed') statusEl.classList.add('compute-route-fire-status-completed');
+  if (status === 'failed') statusEl.classList.add('compute-route-fire-status-failed');
+}
+
+function renderComputeRouteFireRun(run = null) {
+  const root = document.getElementById('compute-route-fire-actuator');
+  if (!root) return null;
+  const status = run?.status || 'idle';
+  root.dataset.computeRouteFireRunStatus = status;
+  document.getElementById('compute-route-fire-run-status').textContent = status;
+  setComputeRouteFireStatusClass(status);
+  const button = document.getElementById('compute-route-fire-start');
+  if (button) {
+    const active = status === 'starting' || status === 'running';
+    button.disabled = active;
+    button.textContent = status === 'starting'
+      ? 'Starting SHARP'
+      : status === 'running'
+        ? 'Running SHARP'
+        : 'Start SHARP';
+  }
+  document.getElementById('compute-route-fire-run-report').textContent = compactPathTail(run?.reportPath);
+  document.getElementById('compute-route-fire-run-report').title = run?.reportPath || '';
+  document.getElementById('compute-route-fire-run-error').textContent = run?.error || '--';
+  document.getElementById('compute-route-fire-run-error').title = run?.error || '';
+  const artifacts = document.getElementById('compute-route-fire-run-artifacts');
+  artifacts.replaceChildren();
+  for (const row of run?.artifacts || []) {
+    const item = document.createElement('div');
+    item.className = 'compute-route-fire-artifact';
+    item.dataset.computeRouteFireArtifactId = row.id;
+    item.dataset.computeRouteFireArtifactStatus = row.status;
+    const role = document.createElement('span');
+    role.className = 'compute-route-fire-artifact-role';
+    role.textContent = `${row.id} · ${row.status}`;
+    const path = document.createElement('span');
+    path.className = 'compute-route-fire-artifact-path';
+    path.textContent = compactPathTail(row.path);
+    path.title = row.path || '';
+    item.append(role, path);
+    artifacts.append(item);
+  }
+  computeRouteFireActuatorState.run = run;
+  return run;
+}
+
+async function applyComputeRouteFireVisualState(run) {
+  if (!volumePrototype) return;
+  if (run?.status === 'running') {
+    await volumePrototype.setActive(true);
+  } else {
+    await volumePrototype.setActive(false);
+  }
+  refreshVolumeReadout();
+}
+
+async function pollComputeRouteFireRun(runId) {
+  window.clearTimeout(computeRouteFireActuatorState.pollTimer);
+  const response = await fetch(`/api/compute-route-fire/status?${new URLSearchParams({ runId })}`, {
+    cache: 'no-store',
+  });
+  const run = await response.json();
+  renderComputeRouteFireRun(run);
+  await applyComputeRouteFireVisualState(run);
+  if (run.status === 'running') {
+    computeRouteFireActuatorState.pollTimer = window.setTimeout(() => pollComputeRouteFireRun(runId), 1000);
+  } else {
+    document.getElementById('compute-route-fire-start').disabled = false;
+  }
+  return run;
+}
+
+async function startComputeRouteFireRun() {
+  renderComputeRouteFireRun({ status: 'starting', artifacts: [] });
+  await applyComputeRouteFireVisualState({ status: 'idle' });
+  const inputPath = document.getElementById('compute-route-fire-input-path').value.trim();
+  const response = await fetch('/api/compute-route-fire/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputPath }),
+  });
+  const run = await response.json();
+  renderComputeRouteFireRun(run);
+  await applyComputeRouteFireVisualState(run);
+  if (run.status === 'running' && run.runId) {
+    computeRouteFireActuatorState.pollTimer = window.setTimeout(() => pollComputeRouteFireRun(run.runId), 1000);
+  }
+  return run;
+}
+
+async function initComputeRouteFireActuator() {
+  const root = document.getElementById('compute-route-fire-actuator');
+  if (!root) return;
+  const enabled = computeRouteFireActuatorIsEnabled();
+  computeRouteFireActuatorState.enabled = enabled;
+  root.hidden = !enabled;
+  if (!enabled) return;
+  const genericRoot = document.getElementById('route-fire-bench');
+  if (genericRoot) genericRoot.hidden = true;
+  const config = await fetch('/api/compute-route-fire/config', { cache: 'no-store' })
+    .then(response => response.json())
+    .catch(error => ({ error: String(error), defaultInputPath: '' }));
+  document.getElementById('compute-route-fire-actuator-route').textContent = config.pipelineId || 'sharp-image-to-splat-live-v0';
+  document.getElementById('compute-route-fire-input-path').value = config.defaultInputPath || '';
+  const startButton = document.getElementById('compute-route-fire-start');
+  startButton.addEventListener('click', () => startComputeRouteFireRun().catch(error => {
+    renderComputeRouteFireRun({ status: 'failed', error: String(error), artifacts: [] });
+    volumePrototype.setActive(false);
+    startButton.disabled = false;
+  }));
+  renderComputeRouteFireRun({ status: config.error ? 'failed' : 'idle', error: config.error || null, artifacts: [] });
+}
+
+window.kaminosComputeRouteFireActuatorDebugState = () => computeRouteFireActuatorState;
+window.kaminosStartComputeRouteFireRun = startComputeRouteFireRun;
 
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
@@ -8264,6 +8418,7 @@ async function initKaminosVolumeRoute() {
   }
 
   volumePrototype.setControls(readVolumeControls());
+  await initComputeRouteFireActuator();
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',
@@ -8357,12 +8512,14 @@ async function initKaminosVolumeRoute() {
   if (params.get('kaminos_volume_smoke') === '1') {
     setActiveTab('volume');
     frameVolumeCamera();
-    await volumePrototype.setActive(true);
+    if (!computeRouteFireActuatorIsEnabled()) {
+      await volumePrototype.setActive(true);
+    }
     refreshSyntheticExternalEmitters();
     if (routeExternalEmitters === 'synthetic_hand_trails') {
       syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
     }
-    setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+    setInfo(computeRouteFireActuatorIsEnabled() ? 'Compute route fire actuator armed' : 'Volume renderer — native WebGPU compute fluid raymarch');
   }
   syncControls();
   setInterval(refreshVolumeReadout, 500);

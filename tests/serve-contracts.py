@@ -2,6 +2,7 @@ from http import HTTPStatus
 import os
 from pathlib import Path
 import sys
+import time
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -189,6 +190,107 @@ def test_splat_asset_index_separates_experimental_and_production_roots():
         assert all(entry["display"]["raw_name"] in entry["path"] for entry in entries)
         assert entries[0]["display"]["title"] == "Hostile Greenroom Output 9f31c"
         assert "loose-machine-scan.ply" not in {entry["name"] for entry in entries}
+
+
+def test_compute_route_fire_run_actuates_fake_pipeline_and_cools_after_success():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        (pipeline / "pipeline-witness.mjs").write_text(
+            """
+import { mkdirSync, writeFileSync } from 'node:fs';
+const arg = name => process.argv[process.argv.indexOf(name) + 1];
+const outDir = arg('--out-dir');
+const report = arg('--report');
+mkdirSync(`${outDir}/artifacts`, { recursive: true });
+writeFileSync(`${outDir}/artifacts/sharp-output.ply`, 'ply\\n');
+writeFileSync(`${outDir}/artifacts/sharp-webgpu-depth.png`, 'png');
+writeFileSync(`${outDir}/artifacts/sharp-output.splat-autocrop-evidence.json`, '{}\\n');
+await new Promise(resolve => setTimeout(resolve, 180));
+writeFileSync(report, JSON.stringify({
+  schema: 'kaminos.pipeline-witness.v0',
+  ok: true,
+  requestedPipelineId: 'sharp-image-to-splat-live-v0',
+  effectivePipelineId: 'sharp-image-to-splat-live-v0',
+  phase: 'complete',
+  effectiveRouteConfig: { routeId: 'adapter.sharp-image-to-splat-live.v0', outputRoot: outDir },
+  artifacts: {
+    input: { role: 'source-image', status: 'requested', path: process.argv[process.argv.indexOf('--input') + 1] },
+    splat: { role: 'splat-candidate', status: 'real', path: `${outDir}/artifacts/sharp-output.ply`, bytes: 4 },
+    depthMap: { role: 'depth-map', status: 'real', path: `${outDir}/artifacts/sharp-webgpu-depth.png`, bytes: 3 },
+    autoCropEvidence: { role: 'splat-autocrop-evidence', schema: 'kaminos.splat-autocrop-evidence.v0', status: 'real', path: `${outDir}/artifacts/sharp-output.splat-autocrop-evidence.json`, bytes: 3 }
+  },
+  stages: [{ id: 'run-sharp-image-to-splat', status: 'real', effectiveRoute: { effectiveBackend: 'browser-webgpu' } }]
+}, null, 2));
+""".strip()
+        )
+
+        run = serve.start_compute_route_fire_run(
+            input_path=str(input_path),
+            config={
+                "pipeline_worktree": pipeline,
+                "output_root": root / "runs",
+            },
+        )
+        assert run["schema"] == "kaminos.compute-route-fire-run.v0"
+        assert run["status"] == "running"
+        assert run["visualPhase"] == "burn"
+        assert run["allowsFullBurn"] is True
+        assert Path(run["inputPath"]) == input_path.resolve()
+
+        current = serve.compute_route_fire_status(run["runId"])
+        assert current["status"] == "running"
+        assert current["visualPhase"] == "burn"
+        assert current["allowsFullBurn"] is True
+
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            current = serve.compute_route_fire_status(run["runId"])
+            if current["status"] == "completed":
+                break
+            time.sleep(0.05)
+
+        assert current["status"] == "completed"
+        assert current["visualPhase"] == "cooled"
+        assert current["allowsFullBurn"] is False
+        assert current["exitCode"] == 0
+        assert current["pipelineReport"]["ok"] is True
+        assert current["artifacts"][0]["id"] == "splat"
+        assert any(artifact["id"] == "autoCropEvidence" for artifact in current["artifacts"])
+
+
+def test_compute_route_fire_run_failure_never_keeps_fire_burning():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        (pipeline / "pipeline-witness.mjs").write_text("process.exit(7);\n")
+
+        run = serve.start_compute_route_fire_run(
+            input_path=str(input_path),
+            config={
+                "pipeline_worktree": pipeline,
+                "output_root": root / "runs",
+            },
+        )
+        deadline = time.time() + 5
+        current = run
+        while time.time() < deadline:
+            current = serve.compute_route_fire_status(run["runId"])
+            if current["status"] == "failed":
+                break
+            time.sleep(0.05)
+
+        assert current["status"] == "failed"
+        assert current["visualPhase"] == "failed"
+        assert current["allowsFullBurn"] is False
+        assert current["exitCode"] == 7
+        assert current["pipelineReport"] is None
 
 
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():

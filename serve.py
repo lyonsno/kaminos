@@ -5,9 +5,11 @@ import http.server
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
@@ -78,6 +80,22 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
+COMPUTE_ROUTE_FIRE_RUN_SCHEMA = "kaminos.compute-route-fire-run.v0"
+COMPUTE_ROUTE_FIRE_CONFIG_SCHEMA = "kaminos.compute-route-fire-config.v0"
+COMPUTE_ROUTE_FIRE_RUNS = {}
+COMPUTE_ROUTE_FIRE_RUNS_LOCK = threading.Lock()
+DEFAULT_COMPUTE_ROUTE_FIRE_INPUT = Path(os.environ.get(
+    "KAMINOS_COMPUTE_ROUTE_FIRE_DEFAULT_INPUT",
+    os.path.expanduser("~/.local/state/kaminos/assets/images/inbox/evil_orb_outer_shell_source_image.png"),
+)).expanduser()
+DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE = Path(os.environ.get(
+    "KAMINOS_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE",
+    "/private/tmp/kaminos-pipeline-gutfucker-0623",
+)).expanduser()
+DEFAULT_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT = Path(os.environ.get(
+    "KAMINOS_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT",
+    "/tmp/kaminos-compute-route-fire-actuated",
+)).expanduser()
 
 
 def runtime_config():
@@ -91,6 +109,197 @@ def runtime_config():
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
     }
+
+
+def compute_route_fire_config(overrides=None):
+    overrides = overrides or {}
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_CONFIG_SCHEMA,
+        "pipeline_id": overrides.get("pipeline_id", "sharp-image-to-splat-live-v0"),
+        "requested_route": overrides.get("requested_route", "adapter.sharp-image-to-splat-live.v0"),
+        "backend_class": overrides.get("backend_class", "browser-webgpu"),
+        "pipeline_worktree": Path(overrides.get("pipeline_worktree", DEFAULT_COMPUTE_ROUTE_FIRE_PIPELINE_WORKTREE)).expanduser(),
+        "output_root": Path(overrides.get("output_root", DEFAULT_COMPUTE_ROUTE_FIRE_OUTPUT_ROOT)).expanduser(),
+        "node_bin": overrides.get("node_bin", os.environ.get("KAMINOS_COMPUTE_ROUTE_FIRE_NODE_BIN", "node")),
+        "default_input": Path(overrides.get("default_input", DEFAULT_COMPUTE_ROUTE_FIRE_INPUT)).expanduser(),
+    }
+
+
+def compute_route_fire_config_public(config=None):
+    config = config or compute_route_fire_config()
+    default_input = Path(config["default_input"]).expanduser()
+    pipeline_worktree = Path(config["pipeline_worktree"]).expanduser()
+    output_root = Path(config["output_root"]).expanduser()
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_CONFIG_SCHEMA,
+        "pipelineId": config["pipeline_id"],
+        "requestedRoute": config["requested_route"],
+        "backendClass": config["backend_class"],
+        "pipelineWorktree": str(pipeline_worktree),
+        "pipelineWorktreeExists": pipeline_worktree.exists(),
+        "defaultInputPath": str(default_input),
+        "defaultInputExists": default_input.exists(),
+        "outputRoot": str(output_root),
+    }
+
+
+def _compute_route_fire_artifacts_from_report(report):
+    artifacts = []
+    if not isinstance(report, dict):
+        return artifacts
+    for artifact_id, artifact in (report.get("artifacts") or {}).items():
+        if artifact_id == "input" or not isinstance(artifact, dict):
+            continue
+        artifacts.append({
+            "id": artifact_id,
+            "role": artifact.get("role") or artifact_id,
+            "status": artifact.get("status") or "unknown",
+            "schema": artifact.get("schema"),
+            "path": artifact.get("path"),
+            "bytes": artifact.get("bytes"),
+        })
+    return artifacts
+
+
+def _compute_route_fire_snapshot(run):
+    report = run.get("pipeline_report")
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_RUN_SCHEMA,
+        "runId": run["run_id"],
+        "status": run["status"],
+        "visualPhase": run["visual_phase"],
+        "allowsFullBurn": run["allows_full_burn"],
+        "pipelineId": run["pipeline_id"],
+        "requestedRoute": run["requested_route"],
+        "backendClass": run["backend_class"],
+        "inputPath": str(run["input_path"]),
+        "outputDir": str(run["output_dir"]),
+        "reportPath": str(run["report_path"]),
+        "stdoutLogPath": str(run["stdout_log_path"]),
+        "stderrLogPath": str(run["stderr_log_path"]),
+        "startedAt": run.get("started_at"),
+        "finishedAt": run.get("finished_at"),
+        "exitCode": run.get("exit_code"),
+        "error": run.get("error"),
+        "pipelineReport": report,
+        "artifacts": _compute_route_fire_artifacts_from_report(report),
+    }
+
+
+def _close_compute_route_fire_logs(run):
+    for key in ("stdout_handle", "stderr_handle"):
+        handle = run.get(key)
+        if handle:
+            try:
+                handle.close()
+            except Exception:
+                pass
+            run[key] = None
+
+
+def _refresh_compute_route_fire_run(run):
+    if run["status"] != "running":
+        return run
+    process = run.get("process")
+    exit_code = process.poll() if process else run.get("exit_code")
+    if exit_code is None:
+        return run
+    run["exit_code"] = exit_code
+    run["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _close_compute_route_fire_logs(run)
+    report_path = Path(run["report_path"])
+    if report_path.is_file():
+        try:
+            run["pipeline_report"] = json.loads(report_path.read_text())
+        except Exception as error:
+            run["error"] = f"invalid pipeline report: {error}"
+    if exit_code == 0 and isinstance(run.get("pipeline_report"), dict) and run["pipeline_report"].get("ok") is True:
+        run["status"] = "completed"
+        run["visual_phase"] = "cooled"
+        run["allows_full_burn"] = False
+    else:
+        run["status"] = "failed"
+        run["visual_phase"] = "failed"
+        run["allows_full_burn"] = False
+        if not run.get("error"):
+            run["error"] = f"pipeline exited {exit_code}"
+    return run
+
+
+def start_compute_route_fire_run(input_path=None, config=None):
+    config = compute_route_fire_config(config)
+    input_path = Path(input_path or config["default_input"]).expanduser()
+    if not input_path.is_file():
+        raise FileNotFoundError(f"input image does not exist: {input_path}")
+    pipeline_worktree = Path(config["pipeline_worktree"]).expanduser()
+    if not (pipeline_worktree / "pipeline-witness.mjs").is_file():
+        raise FileNotFoundError(f"pipeline-witness.mjs does not exist in {pipeline_worktree}")
+    run_id = f"sharp-live-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
+    run_root = Path(config["output_root"]).expanduser() / run_id
+    output_dir = run_root / "pipeline-out"
+    report_path = output_dir / "pipeline-witness.json"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log_path = run_root / "pipeline.stdout.log"
+    stderr_log_path = run_root / "pipeline.stderr.log"
+    stdout_handle = stdout_log_path.open("wb")
+    stderr_handle = stderr_log_path.open("wb")
+    command = [
+        config["node_bin"],
+        "pipeline-witness.mjs",
+        "--pipeline-id", config["pipeline_id"],
+        "--input", str(input_path.resolve()),
+        "--out-dir", str(output_dir.resolve()),
+        "--report", str(report_path.resolve()),
+    ]
+    run = {
+        "run_id": run_id,
+        "status": "running",
+        "visual_phase": "burn",
+        "allows_full_burn": True,
+        "pipeline_id": config["pipeline_id"],
+        "requested_route": config["requested_route"],
+        "backend_class": config["backend_class"],
+        "input_path": input_path.resolve(),
+        "output_dir": output_dir.resolve(),
+        "report_path": report_path.resolve(),
+        "stdout_log_path": stdout_log_path.resolve(),
+        "stderr_log_path": stderr_log_path.resolve(),
+        "stdout_handle": stdout_handle,
+        "stderr_handle": stderr_handle,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "finished_at": None,
+        "exit_code": None,
+        "pipeline_report": None,
+        "error": None,
+    }
+    try:
+        run["process"] = subprocess.Popen(
+            command,
+            cwd=str(pipeline_worktree.resolve()),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+        )
+    except Exception as error:
+        _close_compute_route_fire_logs(run)
+        run["process"] = None
+        run["status"] = "failed"
+        run["visual_phase"] = "failed"
+        run["allows_full_burn"] = False
+        run["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        run["error"] = str(error)
+    with COMPUTE_ROUTE_FIRE_RUNS_LOCK:
+        COMPUTE_ROUTE_FIRE_RUNS[run_id] = run
+    return _compute_route_fire_snapshot(run)
+
+
+def compute_route_fire_status(run_id):
+    with COMPUTE_ROUTE_FIRE_RUNS_LOCK:
+        run = COMPUTE_ROUTE_FIRE_RUNS.get(run_id)
+        if not run:
+            raise KeyError(run_id)
+        _refresh_compute_route_fire_run(run)
+        return _compute_route_fire_snapshot(run)
 
 
 def splat_asset_root_allows_pointer(root_name):
@@ -500,6 +709,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/compute-route-fire/config":
+            self.handle_compute_route_fire_config()
+        elif parsed.path == "/api/compute-route-fire/status":
+            self.handle_compute_route_fire_status(parse_qs(parsed.query))
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
@@ -525,6 +738,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/save-scene":
             self.handle_save_scene()
+        elif parsed.path == "/api/compute-route-fire/start":
+            self.handle_compute_route_fire_start()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -534,6 +749,42 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_compute_route_fire_config(self):
+        self.send_json(compute_route_fire_config_public())
+
+    def handle_compute_route_fire_start(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        input_path = payload.get("inputPath") or payload.get("input")
+        try:
+            self.send_json(start_compute_route_fire_run(input_path=input_path))
+        except FileNotFoundError as error:
+            self.send_json({
+                "schema": COMPUTE_ROUTE_FIRE_RUN_SCHEMA,
+                "status": "failed",
+                "visualPhase": "failed",
+                "allowsFullBurn": False,
+                "error": str(error),
+            }, 400)
+
+    def handle_compute_route_fire_status(self, params):
+        run_id = params.get("runId", [""])[0]
+        if not run_id:
+            self.send_json({"error": "runId required"}, 400)
+            return
+        try:
+            self.send_json(compute_route_fire_status(run_id))
+        except KeyError:
+            self.send_json({"error": f"unknown runId: {run_id}"}, 404)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.
