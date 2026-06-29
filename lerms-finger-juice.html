@@ -74,6 +74,7 @@
       LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
       createFingerJuicePreviewBenchPayload,
       createWorldFingerJuiceTransportPrototype,
+      normalizeHillTerrainSamplePacket,
       normalizeWorldFingerJuiceEmitterPacket,
     } from './lerms-finger-juice-core.js';
     import {
@@ -94,14 +95,17 @@
     const supportDomainRenderer = 'support-domain-renderer-v0';
     const defaultHillSupportPayloadRoot = 'lerms-preview';
     const defaultHillSupportPayloadPath = 'lerms-hill-of-hills-preview-bench-payload.json';
+    const defaultTerrainSamplePacketRoot = 'lerms-preview';
+    const defaultTerrainSamplePacketPath = 'kaminos-gutterglass-smoke-offer-host-0629/scratch/lerms-hill-of-hills-terrain-sample-packet.json';
+    const sourceTerrainSampleCouplingMode = 'source_height_samples_v0';
     const particleSupportBudget = 36000;
     const lerms = [
-      { id: 'red-lerm-1', position: [0.03, -0.07, 1.08], radius: 0.2, mass: 1.1 },
-      { id: 'blue-lerm-1', position: [-0.02, -0.08, 1.26], radius: 0.22, mass: 1.7 },
-      { id: 'yellow-lerm-1', position: [0.02, -0.1, 1.9], radius: 0.2, mass: 1.0 },
+      { id: 'red-lerm-1', position: [-0.18, 0.75, -0.48], radius: 0.26, mass: 1.1 },
+      { id: 'blue-lerm-1', position: [0.03, 0.75, -0.42], radius: 0.28, mass: 1.7 },
+      { id: 'yellow-lerm-1', position: [0.24, 0.76, -0.36], radius: 0.26, mass: 1.0 },
     ];
     const goins = [
-      { id: 'goin-1', position: [0.0, -0.09, 1.66], radius: 0.24, mass: 2.2 },
+      { id: 'goin-1', position: [0.0, 0.75, -0.28], radius: 0.3, mass: 2.2 },
     ];
     const prototype = createWorldFingerJuiceTransportPrototype({
       seed: 11,
@@ -138,9 +142,9 @@
         world_from_hand_sample: 'kaminos.synthetic-caster-hand-to-hill-of-hills-v0',
       },
       emitters: [
-        { id: 'index', tip_index: 8, origin_world: [-0.18, 0.42, -0.86], aim_world: [0.18, 0.5, 1], motion_world: [0.05, 0, 0.06], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
-        { id: 'middle', tip_index: 12, origin_world: [0.02, 0.39, -0.84], aim_world: [0, 0.3, 1], motion_world: [0, 0, 0.04], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
-        { id: 'ring', tip_index: 16, origin_world: [0.18, 0.36, -0.82], aim_world: [-0.08, 0.24, 1], motion_world: [-0.02, 0, 0.03], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+        { id: 'index', tip_index: 8, origin_world: [-0.18, 1.16, -0.86], aim_world: [0.18, -0.16, 1], motion_world: [0.05, 0, 0.08], extension: 0.95, chemistry: 'knockback', radius: 0.04, strength: 1.25, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.02, 1.14, -0.84], aim_world: [0, -0.18, 1], motion_world: [0, 0, 0.07], extension: 0.82, chemistry: 'pooling', radius: 0.052, strength: 1.0, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.18, 1.12, -0.82], aim_world: [-0.08, -0.2, 1], motion_world: [-0.02, 0, 0.06], extension: 0.66, chemistry: 'weird', radius: 0.046, strength: 0.82, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
     const expandedWitnessEmitterPacket = normalizeWorldFingerJuiceEmitterPacket({
@@ -156,9 +160,9 @@
       hand_sample_space: emitterPacket.hand_sample_space,
       lerms_world_frame: emitterPacket.lerms_world_frame,
       emitters: [
-        { id: 'index', tip_index: 8, origin_world: [-0.44, 0.46, -1.02], aim_world: [0.28, 0.15, 1.0], motion_world: [0.035, -0.04, 0.075], extension: 1.0, chemistry: 'knockback', radius: 0.112, strength: 1.14, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
-        { id: 'middle', tip_index: 12, origin_world: [0.0, 0.44, -1.04], aim_world: [0.0, 0.16, 1.0], motion_world: [0.0, -0.03, 0.08], extension: 1.0, chemistry: 'pooling', radius: 0.112, strength: 1.32, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
-        { id: 'ring', tip_index: 16, origin_world: [0.28, 0.42, -1.02], aim_world: [-0.22, 0.13, 1.0], motion_world: [-0.035, -0.04, 0.065], extension: 1.0, chemistry: 'weird', radius: 0.122, strength: 0.9, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
+        { id: 'index', tip_index: 8, origin_world: [-0.44, 1.22, -1.02], aim_world: [0.28, -0.18, 1.0], motion_world: [0.035, -0.04, 0.09], extension: 1.0, chemistry: 'knockback', radius: 0.112, strength: 1.14, authority: { valid: true, stale: false, confidence: 0.94, force_safe: true }, active: true },
+        { id: 'middle', tip_index: 12, origin_world: [0.0, 1.2, -1.04], aim_world: [0.0, -0.2, 1.0], motion_world: [0.0, -0.03, 0.095], extension: 1.0, chemistry: 'pooling', radius: 0.112, strength: 1.32, authority: { valid: true, stale: false, confidence: 0.91, force_safe: true }, active: true },
+        { id: 'ring', tip_index: 16, origin_world: [0.28, 1.18, -1.02], aim_world: [-0.22, -0.22, 1.0], motion_world: [-0.035, -0.04, 0.08], extension: 1.0, chemistry: 'weird', radius: 0.122, strength: 0.9, authority: { valid: true, stale: false, confidence: 0.86, force_safe: true }, active: true },
       ],
     });
     prototype.setEmitters(emitterPacket);
@@ -176,6 +180,13 @@
     let hillSupportFramePayloadStatus = 'not_requested';
     let hillSupportFramePayloadRoute = null;
     let hillSupportFramePayloadError = null;
+    let terrainSamplePacket = null;
+    let terrainSampleData = null;
+    let terrainSampleSurface = null;
+    let terrainSampleStatus = 'not_requested';
+    let terrainSamplePacketRoute = null;
+    let terrainSampleDataRoute = null;
+    let terrainSampleError = null;
     let webgpuFramePending = false;
     let webgpuReadbackPending = false;
     let webgpuAccumulatedSeconds = 0;
@@ -262,6 +273,74 @@
       };
     }
 
+    function apiReadRoute(root, path) {
+      if (!root || !path) return null;
+      return {
+        kind: 'api_read',
+        root,
+        path,
+        url: `/api/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`,
+      };
+    }
+
+    function terrainSamplePacketRouteFromParams() {
+      const explicitUrl = params.get('terrain_sample_packet_url') || params.get('preview_bench_terrain_sample_url');
+      if (explicitUrl) {
+        return {
+          kind: 'url',
+          url: explicitUrl,
+          root: null,
+          path: null,
+        };
+      }
+      const root = params.get('terrain_sample_packet_root')
+        || params.get('preview_bench_terrain_sample_root')
+        || defaultTerrainSamplePacketRoot;
+      const path = params.get('terrain_sample_packet_path')
+        || params.get('preview_bench_terrain_sample_path')
+        || defaultTerrainSamplePacketPath;
+      return apiReadRoute(root, path);
+    }
+
+    function terrainSampleDataRouteFromPacket(packetReport) {
+      const explicitUrl = params.get('terrain_sample_data_url');
+      if (explicitUrl) {
+        return {
+          kind: 'url',
+          url: explicitUrl,
+          root: null,
+          path: null,
+        };
+      }
+      const explicitRoot = params.get('terrain_sample_data_root');
+      const explicitPath = params.get('terrain_sample_data_path');
+      if (explicitRoot || explicitPath) return apiReadRoute(explicitRoot, explicitPath);
+      const packet = packetReport?.payload || packetReport?.terrainSamplePacket || packetReport || {};
+      const transport = packet.terrainSample?.transport || packet.payload?.terrainSample?.transport || {};
+      if (typeof transport.dataPath === 'string' && transport.dataPath.startsWith('/private/tmp/')) {
+        return apiReadRoute('lerms-preview', transport.dataPath.slice('/private/tmp/'.length));
+      }
+      if (typeof transport.dataPath === 'string' && transport.dataPath.startsWith('/tmp/')) {
+        return apiReadRoute('lerms-preview', transport.dataPath.slice('/tmp/'.length));
+      }
+      if (typeof transport.fetchUrl === 'string' && transport.fetchUrl) {
+        return {
+          kind: 'url',
+          url: transport.fetchUrl,
+          root: null,
+          path: null,
+        };
+      }
+      return null;
+    }
+
+    async function fetchJsonRoute(route) {
+      if (!route?.url) throw new Error('missing route url');
+      const response = await fetch(route.url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
     async function applyHillSupportFramePayload(payloadReport) {
       hillSupportFramePayload = payloadReport;
       hillSupportFramePayloadStatus = 'loaded';
@@ -283,9 +362,7 @@
       if (!hillSupportFramePayloadRoute) return null;
       hillSupportFramePayloadStatus = 'loading';
       try {
-        const response = await fetch(hillSupportFramePayloadRoute.url, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payloadReport = await response.json();
+        const payloadReport = await fetchJsonRoute(hillSupportFramePayloadRoute);
         await applyHillSupportFramePayload(payloadReport);
         return payloadReport;
       } catch (error) {
@@ -311,7 +388,77 @@
       };
     }
 
+    function terrainSampleStateFields() {
+      const diagnostics = terrainSampleSurface?.diagnostics || webgpuState?.terrainSampleDiagnostics || {};
+      return {
+        terrainSampleStatus,
+        terrainSamplePacketRoute,
+        terrainSampleDataRoute,
+        terrainSampleError,
+        terrainSamplePacketSchema: terrainSamplePacket?.payload?.schema || terrainSamplePacket?.schema || null,
+        terrainSampleDataSchema: terrainSampleData?.payload?.schema || terrainSampleData?.schema || null,
+        terrainSampleCouplingMode: diagnostics.terrainSampleCouplingMode
+          || terrainSampleSurface?.supportFrame?.heightfieldCouplingMode
+          || (terrainSampleSurface ? sourceTerrainSampleCouplingMode : 'local_procedural_heightfield_v0'),
+        terrainSampleGpuCollisionMode: diagnostics.terrainSampleGpuCollisionMode
+          || webgpuState?.terrainSampleGpuCollisionMode
+          || (terrainSampleSurface ? 'source_height_samples_gpu_storage_v0' : 'local_procedural_heightfield_gpu_v0'),
+        terrainSampleChecksum: diagnostics.sampleChecksum || terrainSampleSurface?.checksums?.sample || null,
+        terrainChannelChecksum: diagnostics.channelChecksum || terrainSampleSurface?.checksums?.channels || null,
+      };
+    }
+
+    async function applyTerrainSampleSurface(packetReport, dataReport) {
+      terrainSamplePacket = packetReport;
+      terrainSampleData = dataReport;
+      terrainSampleSurface = normalizeHillTerrainSamplePacket(packetReport, dataReport);
+      if (!terrainSampleSurface) throw new Error('invalid Hill terrain sample packet');
+      terrainSampleStatus = 'loaded';
+      terrainSampleError = null;
+      prototype.setTerrainSampleSurface?.(terrainSampleSurface);
+      if (webgpuSolver?.setTerrainSampleSurface) {
+        const terrainState = webgpuSolver.setTerrainSampleSurface(terrainSampleSurface);
+        webgpuState = {
+          ...webgpuState,
+          ...terrainState,
+          ...terrainSampleStateFields(),
+        };
+        return terrainState;
+      }
+      return terrainSampleStateFields();
+    }
+
+    async function loadTerrainSampleSurface() {
+      terrainSamplePacketRoute = terrainSamplePacketRouteFromParams();
+      if (!terrainSamplePacketRoute) return null;
+      terrainSampleStatus = 'loading';
+      try {
+        const packetReport = await fetchJsonRoute(terrainSamplePacketRoute);
+        terrainSampleDataRoute = terrainSampleDataRouteFromPacket(packetReport);
+        if (!terrainSampleDataRoute) throw new Error('missing terrain sample data route');
+        const dataReport = await fetchJsonRoute(terrainSampleDataRoute);
+        await applyTerrainSampleSurface(packetReport, dataReport);
+        return terrainSampleSurface;
+      } catch (error) {
+        terrainSampleStatus = 'fallback_local_procedural';
+        terrainSampleError = error.message || String(error);
+        terrainSamplePacket = null;
+        terrainSampleData = null;
+        terrainSampleSurface = null;
+        prototype.setTerrainSampleSurface?.(null);
+        if (webgpuSolver?.setTerrainSampleSurface) webgpuSolver.setTerrainSampleSurface(null);
+        webgpuState = {
+          ...webgpuState,
+          ...terrainSampleStateFields(),
+          terrainSampleStatus,
+          terrainSampleError,
+        };
+        return null;
+      }
+    }
+
     const hillSupportFramePayloadPromise = loadHillSupportFramePayload();
+    const terrainSampleSurfacePromise = loadTerrainSampleSurface();
 
     createWebGPUFingerJuiceSolver({
       seed: 11,
@@ -320,14 +467,19 @@
       lerms,
       goins,
       hillSupportFramePayload,
+      terrainSampleSurface,
     }).then(solver => {
       webgpuSolver = solver;
       const initialSupportState = hillSupportFramePayload
         ? solver.setHillSupportFramePayload?.(hillSupportFramePayload)
         : null;
+      const initialTerrainState = terrainSampleSurface
+        ? solver.setTerrainSampleSurface?.(terrainSampleSurface)
+        : null;
       webgpuState = {
         ...webgpuState,
         ...(initialSupportState || {}),
+        ...(initialTerrainState || {}),
         solver_backend: solver.solver_backend,
         solverRoute: solver.solverRoute,
         shaderRoute: solver.shaderRoute,
@@ -342,6 +494,7 @@
         workgroupSize: solver.workgroupSize,
         maxParticles: solver.maxParticles,
         ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
       };
       return solver.createRenderer?.(gpuCanvas);
     }).then(renderer => {
@@ -364,6 +517,7 @@
           renderRoute: webgpuState.renderRoute,
           renderShaderRoute: webgpuState.renderShaderRoute,
           ...supportPayloadStateFields(),
+          ...terrainSampleStateFields(),
         };
       }
     }).catch(error => {
@@ -376,6 +530,7 @@
         renderRoute: LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE,
         error: error.message,
         ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
       };
     });
 
@@ -413,6 +568,7 @@
         emitterPacket,
         ...solverState,
         ...supportPayloadStateFields(),
+        ...terrainSampleStateFields(),
         activeWitnessEmitterConfig,
         evidence_kind: emitterPacket.evidence_kind,
         simulation_authority: emitterPacket.simulation_authority,
@@ -477,6 +633,7 @@
           renderShaderRoute: webgpuState.renderShaderRoute,
           cpuOracle: state.cpuOracle || previousCpuOracle,
           ...supportPayloadStateFields(),
+          ...terrainSampleStateFields(),
         };
       } else if (routeActive) {
         for (let i = 0; i < safeSteps; i += 1) prototype.step(safeDt);
@@ -1064,7 +1221,15 @@
       const camera = cameraSnapshot();
       const supportSource = supportFrame.supportFrameSource || state.supportFrameSource || 'local_procedural_support_frame_v0';
       const supportAuthority = supportFrame.sourceAuthority || state.sourceAuthority || 'none';
-      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer} | ${state.supportDomainRenderer || supportDomainRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>support ${supportSource} | ${state.hillSupportFramePayloadStatus || 'not_requested'} | ${supportAuthority}<br>supportFrameChecksum ${supportFrame.supportFrameChecksum || 'none'} domains ${substrateReservoirDiagnostics.activeReservoirDomains?.componentCount ?? 0} cells ${substrateReservoirDiagnostics.occupiedCellCount ?? 0}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom} pan ${camera.panX},${camera.panY}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>deep project ${deepDensityContinuityStats.deepContinuityProjectionCandidateCount ?? 0} peak ${deepDensityContinuityStats.deepContinuityPeakOccupancyRatio ?? 0} dense ${deepDensityContinuityStats.deepContinuityDenseCellCount ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>local pair ${localPairDensityStats.averageLocalPairNeighbors ?? 0} close ${localPairDensityStats.localPairClosePairCount ?? 0} cand ${localPairDensityStats.localPairProjectionCandidateCount ?? 0}<br>substrate ${neighborSupportSubstrateStats.averageSubstrateNeighborSupport ?? 0} p95 ${neighborSupportSubstrateStats.p95SubstrateNeighborSupport ?? 0} unsupported ${neighborSupportSubstrateStats.unsupportedSubstrateParticleCount ?? 0}<br>constraint ${substrateDensityConstraintStats.substrateConstraintCandidateCount ?? 0} low ${substrateDensityConstraintStats.lowSupportConstraintCount ?? 0} err ${substrateDensityConstraintStats.averageSubstrateConstraintError ?? 0}/${substrateDensityConstraintStats.maxSubstrateConstraintError ?? 0} unsupported ${substrateDensityConstraintStats.unsupportedSubstrateConstraintRatio ?? 0}<br>iterative ${iterativeDensityContinuityStats.iterativeDensityContinuityIterationCount ?? 0} cand ${iterativeDensityContinuityStats.iterativeDensityContinuityCandidateCount ?? 0} resid ${iterativeDensityContinuityStats.averageIterativeDensityResidual ?? 0}/${iterativeDensityContinuityStats.maxIterativeDensityResidual ?? 0} conv ${iterativeDensityContinuityStats.iterativeDensityConvergenceRatio ?? 0} clamps ${iterativeDensityContinuityStats.iterativeDensityClampCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
+      const terrainSampleDiagnostics = state.terrainSampleDiagnostics || {};
+      const terrainCoupling = terrainSampleDiagnostics.terrainSampleCouplingMode
+        || state.terrainSampleCouplingMode
+        || 'local_procedural_heightfield_v0';
+      const terrainGpuMode = terrainSampleDiagnostics.terrainSampleGpuCollisionMode
+        || state.terrainSampleGpuCollisionMode
+        || 'local_procedural_heightfield_gpu_v0';
+      const terrainChecksum = terrainSampleDiagnostics.sampleChecksum || state.terrainSampleChecksum || 'none';
+      hud.innerHTML = `<b>${LERMS_WORLD_FINGER_JUICE_ROUTE}</b><br>${state.solver_backend} | ${state.solverRoute}<br>${state.render_backend || 'cpu_canvas_render'} | ${state.renderRoute || visualRenderer} | ${state.supportDomainRenderer || supportDomainRenderer}<br>${state.pressureContract || 'pressure-unavailable'} + ${state.spatialPressureContract || 'spatial-pressure-unavailable'} + ${state.fluidDepthContract || 'fluid-depth-unavailable'}<br>source ${sourceDiagnostics.authority || state.simulation_authority} | ${sourceDiagnostics.frameId || 'no-frame'} | ${state.activeWitnessEmitterConfig || 'short-smoke-v0'}<br>support ${supportSource} | ${state.hillSupportFramePayloadStatus || 'not_requested'} | ${supportAuthority}<br>terrain ${state.terrainSampleStatus || terrainSampleDiagnostics.terrainSampleStatus || 'not_requested'} | ${terrainCoupling} | ${terrainGpuMode} | sample ${terrainChecksum}<br>supportFrameChecksum ${supportFrame.supportFrameChecksum || 'none'} domains ${substrateReservoirDiagnostics.activeReservoirDomains?.componentCount ?? 0} cells ${substrateReservoirDiagnostics.occupiedCellCount ?? 0}<br>camera ${camera.cameraControlContract} yaw ${camera.yaw} pitch ${camera.pitch} zoom ${camera.zoom} pan ${camera.panX},${camera.panY}<br>emitters ${emitterSummary || 'none'} | ring dx ${state.ringEmitterLateralDrift?.average_x_delta ?? 0}<br>pressure avg ${pressureDensityStats.averageNeighborDensity ?? 0} max ${pressureDensityStats.maxNeighborDensity ?? 0} window ${pressureDensityStats.pressureNeighborWindow ?? 0}<br>spatial cells ${spatialPressureStats.occupiedCellCount ?? 0}/${spatialPressureStats.spatialCellCount ?? 0} max ${spatialPressureStats.maxCellOccupancy ?? 0} | viscosity ${fluidDepthStats.viscosityAffectedCount ?? 0}<br>cohesion ${surfaceCohesionStats.cohesionAffectedCount ?? 0} neighbors ${surfaceCohesionStats.averageCohesionNeighbors ?? 0} align ${surfaceCohesionStats.ribbonAlignment ?? 0}<br>relax ${spatialSurfaceRelaxationStats.relaxedParticleCount ?? 0} dense ${spatialSurfaceRelaxationStats.denseCellCount ?? 0} continuity ${spatialSurfaceRelaxationStats.sheetContinuityRatio ?? 0}<br>density solve ${densityPositionSolveStats.correctionCandidateCount ?? 0} err ${densityPositionSolveStats.averageConstraintError ?? 0}/${densityPositionSolveStats.maxConstraintError ?? 0} cover ${densityPositionSolveStats.densitySolveCoverageRatio ?? 0}<br>project cand ${densityContinuityProjectionStats.continuityProjectionCandidateCount ?? 0} peak ${densityContinuityProjectionStats.continuityPeakOccupancyRatio ?? 0} dense ${densityContinuityProjectionStats.continuityDenseCellCount ?? 0} refresh ${densityContinuityProjectionStats.continuityBinRefreshChunk ?? 0}<br>deep project ${deepDensityContinuityStats.deepContinuityProjectionCandidateCount ?? 0} peak ${deepDensityContinuityStats.deepContinuityPeakOccupancyRatio ?? 0} dense ${deepDensityContinuityStats.deepContinuityDenseCellCount ?? 0}<br>sampled nbr ${sampledNeighborhoodDensityStats.averageSampledNeighborCount ?? 0} close ${sampledNeighborhoodDensityStats.closeSamplePairCount ?? 0} cand ${sampledNeighborhoodDensityStats.neighborhoodDensityCorrectionCandidateCount ?? 0}<br>local pair ${localPairDensityStats.averageLocalPairNeighbors ?? 0} close ${localPairDensityStats.localPairClosePairCount ?? 0} cand ${localPairDensityStats.localPairProjectionCandidateCount ?? 0}<br>substrate ${neighborSupportSubstrateStats.averageSubstrateNeighborSupport ?? 0} p95 ${neighborSupportSubstrateStats.p95SubstrateNeighborSupport ?? 0} unsupported ${neighborSupportSubstrateStats.unsupportedSubstrateParticleCount ?? 0}<br>constraint ${substrateDensityConstraintStats.substrateConstraintCandidateCount ?? 0} low ${substrateDensityConstraintStats.lowSupportConstraintCount ?? 0} err ${substrateDensityConstraintStats.averageSubstrateConstraintError ?? 0}/${substrateDensityConstraintStats.maxSubstrateConstraintError ?? 0} unsupported ${substrateDensityConstraintStats.unsupportedSubstrateConstraintRatio ?? 0}<br>iterative ${iterativeDensityContinuityStats.iterativeDensityContinuityIterationCount ?? 0} cand ${iterativeDensityContinuityStats.iterativeDensityContinuityCandidateCount ?? 0} resid ${iterativeDensityContinuityStats.averageIterativeDensityResidual ?? 0}/${iterativeDensityContinuityStats.maxIterativeDensityResidual ?? 0} conv ${iterativeDensityContinuityStats.iterativeDensityConvergenceRatio ?? 0} clamps ${iterativeDensityContinuityStats.iterativeDensityClampCount ?? 0}<br>support avg ${particleSupportBudgetStats.averageSupportNeighborCount ?? 0} unsupported ${particleSupportBudgetStats.unsupportedCorrectionRatio ?? 0} grid ${particleSupportBudgetStats.supportGridCellCount ?? 0}<br>rest p95 ${settleRestEnergyStats.p95SettledSurfaceSpeed ?? 0} energy ${settleRestEnergyStats.restEnergyScore ?? 0}<br>stable risk ${stabilityStats.stabilityRiskScore ?? 0} fast ${stabilityStats.highSpeedParticleCount ?? 0} sat ${stabilityStats.denseCellSaturation ?? 0}<br>visual beads ${visualStreakBeadStats.detachedBeadParticleCount ?? 0} streak ${visualStreakBeadStats.longStreakParticleCount ?? 0} air ${visualStreakBeadStats.olderAirborneStreakCount ?? 0}<br>extent x ${state.flowExtentX ?? 0} z ${state.flowExtentZ ?? 0} | particles ${state.particleCount || 0} | surface ${state.surfaceFlowCount || 0} | hits ${state.juiceHitEventCount || state.juiceHitEvents?.length || 0}`;
       window.__lermsFingerJuicePreviewBenchPayload = createFingerJuicePreviewBenchPayload(state, { reportPath: null });
       window.__lermsFingerJuiceDebug = readDebugState;
       window.__lermsFingerJuiceRenderForWitness = renderCurrentState;
@@ -1158,11 +1323,12 @@
                   ...webgpuState,
                   ...state,
                   render_backend: webgpuState.render_backend,
-                  renderRoute: webgpuState.renderRoute,
-                  renderShaderRoute: webgpuState.renderShaderRoute,
-                  cpuOracle: state.cpuOracle || previousCpuOracle,
-                  ...supportPayloadStateFields(),
-                };
+                renderRoute: webgpuState.renderRoute,
+                renderShaderRoute: webgpuState.renderShaderRoute,
+                cpuOracle: state.cpuOracle || previousCpuOracle,
+                ...supportPayloadStateFields(),
+                ...terrainSampleStateFields(),
+              };
               }).catch(error => {
                 webgpuState = {
                   ...webgpuState,

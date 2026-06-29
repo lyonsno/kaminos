@@ -7,6 +7,10 @@ export const FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA = 'big-papa-finger-juice.
 export const FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'big-papa-finger-juice.preview-bench-payload.v0';
 export const HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'lerms.hill-of-hills.preview-bench-payload.v0';
 export const FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT = 'hill-preview-bench-support-frame-ingestion-v0';
+export const HILL_OF_HILLS_TERRAIN_SAMPLE_PACKET_SCHEMA = 'kaminos.preview-bench.terrain-sample-packet.v0';
+export const HILL_OF_HILLS_TERRAIN_SAMPLE_DATA_SCHEMA = 'lerms.hill-of-hills.terrain-sample-data.v0';
+export const FINGER_JUICE_TERRAIN_SAMPLE_SURFACE_SCHEMA = 'big-papa-finger-juice.terrain-sample-surface.v0';
+export const FINGER_JUICE_HILL_TERRAIN_SAMPLE_INGESTION_CONTRACT = 'hill-terrain-sample-collision-ingestion-v0';
 export const LERMS_WORLD_FINGER_JUICE_AUTHORITY_VALUES = [
   'live_simulation',
   'synthetic_fixture',
@@ -210,6 +214,229 @@ function hillPayloadFromReport(report) {
   if (report.schema === HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA) return report;
   const payload = report.payload;
   return payload?.schema === HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA ? payload : null;
+}
+
+function terrainSamplePacketFromReport(report) {
+  if (!report || typeof report !== 'object') return null;
+  if (report.schema === HILL_OF_HILLS_TERRAIN_SAMPLE_PACKET_SCHEMA) return report;
+  const payload = report.payload || report.terrainSamplePacket;
+  return payload?.schema === HILL_OF_HILLS_TERRAIN_SAMPLE_PACKET_SCHEMA ? payload : null;
+}
+
+function terrainSampleDataFromReport(report) {
+  if (!report || typeof report !== 'object') return null;
+  if (report.schema === HILL_OF_HILLS_TERRAIN_SAMPLE_DATA_SCHEMA) return report;
+  const payload = report.payload || report.terrainSampleData;
+  return payload?.schema === HILL_OF_HILLS_TERRAIN_SAMPLE_DATA_SCHEMA ? payload : null;
+}
+
+function decodeBase64Bytes(data) {
+  if (typeof data !== 'string' || !data) return new Uint8Array();
+  if (globalThis.Buffer) return new Uint8Array(globalThis.Buffer.from(data, 'base64'));
+  const binary = globalThis.atob ? globalThis.atob(data) : '';
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function decodeF32Channel(channel, expectedValues = 0) {
+  if (!channel || channel.encoding !== 'base64-f32-le') return null;
+  const bytes = decodeBase64Bytes(channel.data);
+  const valueCount = Math.floor(bytes.byteLength / 4);
+  if (expectedValues > 0 && valueCount < expectedValues) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const out = new Float32Array(valueCount);
+  for (let i = 0; i < valueCount; i += 1) out[i] = view.getFloat32(i * 4, true);
+  return out;
+}
+
+function sampleGridIndex(grid, x, z) {
+  const columns = Math.max(1, Math.floor(finite(grid?.columns, grid?.x || 1)));
+  const rows = Math.max(1, Math.floor(finite(grid?.rows, grid?.z || 1)));
+  return {
+    columns,
+    rows,
+    index: Math.max(0, Math.min(rows - 1, z)) * columns + Math.max(0, Math.min(columns - 1, x)),
+  };
+}
+
+function bilinearScalar(channel, grid, worldBounds, x, z, fallback = 0) {
+  if (!channel) return fallback;
+  const columns = Math.max(1, Math.floor(finite(grid?.columns, 1)));
+  const rows = Math.max(1, Math.floor(finite(grid?.rows, 1)));
+  const xRange = Math.max(0.000001, finite(worldBounds?.x?.max, 1) - finite(worldBounds?.x?.min, -1));
+  const zRange = Math.max(0.000001, finite(worldBounds?.z?.max, 1) - finite(worldBounds?.z?.min, -1));
+  const gx = clamp((finite(x, 0) - finite(worldBounds?.x?.min, -1)) / xRange, 0, 1) * Math.max(0, columns - 1);
+  const gz = clamp((finite(z, 0) - finite(worldBounds?.z?.min, -1)) / zRange, 0, 1) * Math.max(0, rows - 1);
+  const x0 = Math.floor(gx);
+  const z0 = Math.floor(gz);
+  const x1 = Math.min(columns - 1, x0 + 1);
+  const z1 = Math.min(rows - 1, z0 + 1);
+  const tx = gx - x0;
+  const tz = gz - z0;
+  const i00 = sampleGridIndex(grid, x0, z0).index;
+  const i10 = sampleGridIndex(grid, x1, z0).index;
+  const i01 = sampleGridIndex(grid, x0, z1).index;
+  const i11 = sampleGridIndex(grid, x1, z1).index;
+  const a = finite(channel[i00], fallback) * (1 - tx) + finite(channel[i10], fallback) * tx;
+  const b = finite(channel[i01], fallback) * (1 - tx) + finite(channel[i11], fallback) * tx;
+  return a * (1 - tz) + b * tz;
+}
+
+function bilinearVector(channel, components, grid, worldBounds, x, z, fallback) {
+  if (!channel || components <= 0) return fallback.slice();
+  const out = [];
+  for (let component = 0; component < components; component += 1) {
+    const scalarView = {
+      get length() { return Math.floor(channel.length / components); },
+    };
+    const proxy = new Proxy(scalarView, {
+      get(target, prop) {
+        if (prop === 'length') return target.length;
+        const index = Number(prop);
+        if (!Number.isInteger(index)) return target[prop];
+        return channel[index * components + component];
+      },
+    });
+    out.push(bilinearScalar(proxy, grid, worldBounds, x, z, fallback[component] || 0));
+  }
+  return out;
+}
+
+function terrainSampleDiagnosticsFromSurface(surface) {
+  if (!surface) {
+    return {
+      schema: 'big-papa-finger-juice.terrain-sample-diagnostics.v0',
+      terrainSampleCouplingMode: 'local_procedural_heightfield_v0',
+      terrainSampleStatus: 'missing',
+    };
+  }
+  return {
+    schema: 'big-papa-finger-juice.terrain-sample-diagnostics.v0',
+    terrainSampleCouplingMode: 'source_height_samples_v0',
+    terrainSampleStatus: surface.status,
+    sourceAuthority: surface.sourceAuthority,
+    sourceRoute: surface.sourceRoute,
+    sourceFrameId: surface.sourceFrameId,
+    supportFrameChecksum: surface.checksums.supportFrame || null,
+    topologyChecksum: surface.checksums.topology || null,
+    sampleChecksum: surface.checksums.sample || null,
+    channelChecksum: surface.checksums.channels || null,
+    grid: surface.grid,
+    worldBounds: surface.worldBounds,
+    heightRange: surface.heightRange,
+    channelLayout: surface.channelLayout,
+  };
+}
+
+export function normalizeHillTerrainSamplePacket(packetReport, dataReport, options = {}) {
+  const packet = terrainSamplePacketFromReport(packetReport);
+  const data = terrainSampleDataFromReport(dataReport || packet?.terrainSampleData);
+  const sample = packet?.terrainSample || {};
+  if (!packet || !data || !data.channels) return null;
+  const grid = {
+    columns: Math.max(1, Math.floor(finite(data.grid?.columns, sample.grid?.columns || 1))),
+    rows: Math.max(1, Math.floor(finite(data.grid?.rows, sample.grid?.rows || 1))),
+    sampleCount: Math.max(1, Math.floor(finite(data.grid?.sampleCount, sample.grid?.sampleCount || 1))),
+    spacing: data.grid?.spacing || sample.grid?.spacing || null,
+  };
+  const sampleCount = grid.columns * grid.rows;
+  const channels = {
+    height: decodeF32Channel(data.channels.height, sampleCount),
+    normal: decodeF32Channel(data.channels.normal, sampleCount * 3),
+    gradient: decodeF32Channel(data.channels.gradient, sampleCount * 2),
+    heightDelta: decodeF32Channel(data.channels.heightDelta, sampleCount),
+    surfaceVelocity: decodeF32Channel(data.channels.surfaceVelocity, sampleCount * 3),
+  };
+  if (!channels.height) return null;
+  const worldBounds = data.worldBounds || sample.worldBounds || SUPPORT_WORLD_BOUNDS;
+  const checksums = data.checksums || sample.checksums || {};
+  const sourceTruth = data.sourceTruth || sample.sourceTruth || packet.source || {};
+  const source = packet.source || {};
+  const heightRange = sample.heightRange || {
+    min: finite(worldBounds?.y?.min, Math.min(...channels.height)),
+    max: finite(worldBounds?.y?.max, Math.max(...channels.height)),
+  };
+  const supportFrame = {
+    ...createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 }),
+    supportFrameIngestionContract: FINGER_JUICE_HILL_TERRAIN_SAMPLE_INGESTION_CONTRACT,
+    supportFrameSource: 'hill_terrain_sample_packet_v0',
+    sourceSupportFrameSchema: packet.schema,
+    sourceRoute: stringOrNull(sourceTruth.route || source.route || packet.route),
+    sourceAuthority: stringOrNull(sourceTruth.authority || source.authority) || 'unknown',
+    sourceDiaulos: stringOrNull(source.producerDiaulos || sourceTruth.diaulos),
+    sourceFrameId: stringOrNull(sourceTruth.frameId || packet.frameId),
+    sourceBackend: stringOrNull(sourceTruth.backend || source.backend),
+    sourceConfigId: stringOrNull(sourceTruth.configId || source.configId),
+    sourceRef: source.sourceRef || null,
+    supportFrameChecksum: stringOrNull(checksums.supportFrame) || checksumString(JSON.stringify(checksums)),
+    terrainSampleChecksum: stringOrNull(checksums.sample),
+    terrainTopologyChecksum: stringOrNull(checksums.topology),
+    terrainChannelChecksum: stringOrNull(checksums.channels),
+    terrainSampleSchema: stringOrNull(sample.schema || data.schema),
+    terrainBufferTransport: stringOrNull(sample.transport?.kind || sample.transport || 'source-owned-fetch-url'),
+    terrainSampleCount: sampleCount,
+    terrainHeightRange: heightRange,
+    substrateCellCount: sampleCount,
+    substrateGrid: {
+      x: grid.columns,
+      z: grid.rows,
+      cellSize: {
+        x: round((finite(worldBounds?.x?.max, 1) - finite(worldBounds?.x?.min, -1)) / Math.max(1, grid.columns), 5),
+        z: round((finite(worldBounds?.z?.max, 1) - finite(worldBounds?.z?.min, -1)) / Math.max(1, grid.rows), 5),
+      },
+    },
+    worldBounds,
+    maxHeightDelta: channels.heightDelta ? round(Math.max(...Array.from(channels.heightDelta).map(Math.abs)), 6) : 0,
+    maxSurfaceSpeed: channels.surfaceVelocity
+      ? round(Math.max(...Array.from({ length: sampleCount }, (_, index) => Math.hypot(
+        channels.surfaceVelocity[index * 3],
+        channels.surfaceVelocity[index * 3 + 1],
+        channels.surfaceVelocity[index * 3 + 2],
+      ))), 6)
+      : 0,
+    heightfieldCouplingMode: 'source_height_samples_v0',
+    supportFrameDowngrades: uniqueStrings([...(packet.downgrades || []), 'host_visualization_not_source_truth']),
+  };
+  const surface = {
+    schema: FINGER_JUICE_TERRAIN_SAMPLE_SURFACE_SCHEMA,
+    terrainSampleIngestionContract: FINGER_JUICE_HILL_TERRAIN_SAMPLE_INGESTION_CONTRACT,
+    sourceAuthority: supportFrame.sourceAuthority,
+    sourceRoute: supportFrame.sourceRoute,
+    sourceFrameId: supportFrame.sourceFrameId,
+    status: packet.status || 'fresh-live-terrain-sample',
+    grid,
+    worldBounds,
+    domainBounds: data.domainBounds || sample.domainBounds || { u: { min: 0, max: 1 }, v: { min: 0, max: 1 } },
+    heightRange,
+    channelLayout: sample.channelLayout || Object.keys(channels).filter(key => channels[key]),
+    checksums,
+    channels,
+    supportFrame,
+    sampleHeightAt(x, z) {
+      return round(bilinearScalar(channels.height, grid, worldBounds, x, z, terrainHeightAt(x, z)), 6);
+    },
+    sampleNormalAt(x, z) {
+      if (channels.normal) return normalize3(bilinearVector(channels.normal, 3, grid, worldBounds, x, z, [0, 1, 0]), [0, 1, 0]);
+      const gradient = channels.gradient
+        ? bilinearVector(channels.gradient, 2, grid, worldBounds, x, z, [0, 0])
+        : [0, 0];
+      return normalize3([-gradient[0], 1, -gradient[1]], [0, 1, 0]);
+    },
+    sampleGradientAt(x, z) {
+      return channels.gradient ? bilinearVector(channels.gradient, 2, grid, worldBounds, x, z, [0, 0]).map(value => round(value, 6)) : [0, 0];
+    },
+    sampleHeightDeltaAt(x, z) {
+      return channels.heightDelta ? round(bilinearScalar(channels.heightDelta, grid, worldBounds, x, z, 0), 6) : 0;
+    },
+    sampleSurfaceVelocityAt(x, z) {
+      return channels.surfaceVelocity
+        ? bilinearVector(channels.surfaceVelocity, 3, grid, worldBounds, x, z, [0, 0, 0]).map(value => round(value, 6))
+        : [0, 0, 0];
+    },
+  };
+  surface.diagnostics = terrainSampleDiagnosticsFromSurface(surface);
+  return surface;
 }
 
 export function normalizeHillSupportFramePayload(report, options = {}) {
@@ -651,6 +878,27 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
   let goinImpulseCount = 0;
   let maxRangeZ = 0;
   let eventLog = [];
+  let terrainSampleSurface = options.terrainSampleSurface || null;
+
+  function currentTerrainHeightAt(x, z) {
+    return terrainSampleSurface?.sampleHeightAt ? terrainSampleSurface.sampleHeightAt(x, z) : terrainHeightAt(x, z);
+  }
+
+  function currentTerrainNormalAt(x, z) {
+    return terrainSampleSurface?.sampleNormalAt ? terrainSampleSurface.sampleNormalAt(x, z) : terrainNormalAt(x, z);
+  }
+
+  function currentSurfaceVelocityAt(x, z) {
+    return terrainSampleSurface?.sampleSurfaceVelocityAt ? terrainSampleSurface.sampleSurfaceVelocityAt(x, z) : [0, 0, 0];
+  }
+
+  function currentSupportFrame() {
+    return terrainSampleSurface?.supportFrame || createFingerJuiceSupportFrame({ stepCount, particles });
+  }
+
+  function currentTerrainSampleDiagnostics() {
+    return terrainSampleSurface?.diagnostics || terrainSampleDiagnosticsFromSurface(null);
+  }
 
   function spawnParticles(dt) {
     if (!emitters.authority.simulation_safe) return;
@@ -732,25 +980,30 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     for (const particle of particles) {
       particle.age += safeDt;
       if (particle.age >= particle.life) continue;
-      const terrain = terrainHeightAt(particle.position[0], particle.position[2]);
       if (particle.phase === 'airborne') {
         particle.velocity[1] -= 5.2 * safeDt;
         particle.position = add(particle.position, mul(particle.velocity, safeDt));
-        const ground = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.35;
+        const ground = currentTerrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.35;
         if (particle.position[1] <= ground) {
           particle.position[1] = ground;
           particle.phase = 'surface_flow';
           particle.surface_flow = true;
-          particle.velocity = slideVelocityOnTerrain(particle.velocity, terrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry);
+          particle.velocity = add(
+            slideVelocityOnTerrain(particle.velocity, currentTerrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry),
+            mul(currentSurfaceVelocityAt(particle.position[0], particle.position[2]), 0.18),
+          );
           particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, 'impact', particle.velocity)];
           particle.phase_markers = [...(particle.phase_markers || []), trailSample(particle.position, 'impact', particle.velocity)].slice(-6);
         }
       } else {
         particle.surface_flow = true;
         particle.pooling = particle.chemistry === 'pooling' || length3(particle.velocity) < 0.18;
-        particle.velocity = slideVelocityOnTerrain(particle.velocity, terrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry);
+        particle.velocity = add(
+          slideVelocityOnTerrain(particle.velocity, currentTerrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry),
+          mul(currentSurfaceVelocityAt(particle.position[0], particle.position[2]), 0.12),
+        );
         particle.position = add(particle.position, mul(particle.velocity, safeDt));
-        particle.position[1] = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
+        particle.position[1] = currentTerrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
       }
       maxRangeZ = Math.max(maxRangeZ, particle.position[2] + 0.82);
       particle.visual_trail = [...(particle.visual_trail || []), trailSample(particle.position, particle.phase, particle.velocity)];
@@ -811,7 +1064,7 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
     const airborneBreadcrumbCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'airborne').length;
     const impactRingCount = [...trailSamples, ...phaseMarkers].filter(sample => sample.phase === 'impact').length;
     const surfaceSmearCount = trailSamples.filter(sample => sample.phase === 'surface_flow').length;
-    const supportFrame = createFingerJuiceSupportFrame({ stepCount, particles });
+    const supportFrame = currentSupportFrame();
     const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(particles, supportFrame);
     return {
       schema: 'lerms.world-finger-juice-debug.v0',
@@ -849,9 +1102,10 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       authority: emitters.authority,
       activeEmitterCount: emitters.active_emitter_count,
       supportFrame,
+      terrainSampleDiagnostics: currentTerrainSampleDiagnostics(),
       substrateReservoirDiagnostics,
       activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
-      heightfieldSamples: [-0.75, -0.35, 0, 0.35, 0.75].map(x => ({ x, z: 0, y: round(terrainHeightAt(x, 0), 4) })),
+      heightfieldSamples: [-0.75, -0.35, 0, 0.35, 0.75].map(x => ({ x, z: 0, y: round(currentTerrainHeightAt(x, 0), 4) })),
       particles: particles.slice(0, 96).map(particle => ({
         id: particle.id,
         emitter_id: particle.emitter_id,
@@ -903,8 +1157,12 @@ export function createWorldFingerJuiceTransportPrototype(options = {}) {
       emitters = normalizeWorldFingerJuiceEmitterPacket(packet);
       return emitters;
     },
+    setTerrainSampleSurface(surface = null) {
+      terrainSampleSurface = surface;
+      return currentTerrainSampleDiagnostics();
+    },
     step,
     debugState,
-    terrainHeightAt,
+    terrainHeightAt: currentTerrainHeightAt,
   };
 }
