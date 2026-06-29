@@ -5,6 +5,8 @@ export const LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT = 'finger-aim-ballistic-arc-r
 export const FINGER_JUICE_SUPPORT_FRAME_SCHEMA = 'big-papa-finger-juice.support-frame.v0';
 export const FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA = 'big-papa-finger-juice.substrate-reservoir-diagnostics.v0';
 export const FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'big-papa-finger-juice.preview-bench-payload.v0';
+export const HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'lerms.hill-of-hills.preview-bench-payload.v0';
+export const FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT = 'hill-preview-bench-support-frame-ingestion-v0';
 export const LERMS_WORLD_FINGER_JUICE_AUTHORITY_VALUES = [
   'live_simulation',
   'synthetic_fixture',
@@ -35,6 +37,7 @@ const SUPPORT_WORLD_BOUNDS = Object.freeze({
   z: Object.freeze({ min: -0.95, max: 2.25 }),
 });
 const SUPPORT_TILE_CELLS = Object.freeze({ x: 8, z: 8 });
+const LOCAL_COLLISION_DOWNGRADE = 'fluid_collision_heightfield_still_local_procedural';
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -116,6 +119,10 @@ function checksumString(input) {
   return `fnv1a32:${hash.toString(16).padStart(8, '0')}`;
 }
 
+function uniqueStrings(values) {
+  return [...new Set((values || []).filter(value => value !== undefined && value !== null && value !== '').map(String))];
+}
+
 function supportCellForWorld(position) {
   const p = vec3(position);
   const u = clamp((p[0] - SUPPORT_WORLD_BOUNDS.x.min) / (SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min), 0, 1);
@@ -195,6 +202,89 @@ export function createFingerJuiceSupportFrame(options = {}) {
     motionClassCounts: { stable: SUPPORT_GRID_X * SUPPORT_GRID_Z, phase_morph: 0, shock_reset: 0 },
     shockClassCounts: { none: SUPPORT_GRID_X * SUPPORT_GRID_Z, shock_reset: 0 },
     supportFrameChecksum: checksumString(supportFrameSeed),
+  };
+}
+
+function hillPayloadFromReport(report) {
+  if (!report || typeof report !== 'object') return null;
+  if (report.schema === HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA) return report;
+  const payload = report.payload;
+  return payload?.schema === HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA ? payload : null;
+}
+
+export function normalizeHillSupportFramePayload(report, options = {}) {
+  const payload = hillPayloadFromReport(report);
+  const sourceSupportFrame = payload?.supportFrame;
+  if (!sourceSupportFrame || typeof sourceSupportFrame !== 'object') return null;
+  const base = createFingerJuiceSupportFrame({ stepCount: options.stepCount || sourceSupportFrame.supportEpoch || 0 });
+  const sourceTruth = payload.sourceTruth || payload.source || {};
+  const source = payload.source || sourceTruth;
+  const terrainBuffer = payload.terrainBuffer || {};
+  const phase = payload.phase || {};
+  const gridResolution = terrainBuffer.gridResolution || {};
+  const gridX = Math.max(1, Math.floor(finite(gridResolution.x, base.substrateGrid.x)));
+  const gridZ = Math.max(1, Math.floor(finite(gridResolution.z, base.substrateGrid.z)));
+  const sampleCount = Math.max(0, Math.floor(finite(terrainBuffer.sampleCount, gridX * gridZ)));
+  const dirtyTileCount = Math.max(0, Math.floor(finite(sourceSupportFrame.dirtySubstrateTileCount, 0)));
+  const transport = stringOrNull(terrainBuffer.transport) || 'unknown';
+  const cellSize = {
+    x: round((SUPPORT_WORLD_BOUNDS.x.max - SUPPORT_WORLD_BOUNDS.x.min) / gridX, 5),
+    z: round((SUPPORT_WORLD_BOUNDS.z.max - SUPPORT_WORLD_BOUNDS.z.min) / gridZ, 5),
+  };
+  const checksumSeed = JSON.stringify({
+    schema: HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA,
+    sourceChecksum: sourceSupportFrame.supportFrameChecksum,
+    terrainSampleChecksum: terrainBuffer.sampleChecksum,
+    topologyChecksum: terrainBuffer.topologyChecksum,
+    grid: [gridX, gridZ],
+  });
+  return {
+    ...base,
+    supportFrameIngestionContract: FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT,
+    supportFrameSource: 'hill_preview_bench_payload_v0',
+    sourceSupportFrameSchema: payload.schema,
+    sourceRoute: stringOrNull(sourceTruth.route || source.route || payload.route),
+    sourceAuthority: stringOrNull(sourceTruth.authority || source.authority) || 'unknown',
+    sourceDiaulos: stringOrNull(sourceTruth.diaulos || source.diaulos),
+    sourceFrameId: stringOrNull(sourceTruth.frameId || source.frameId),
+    sourceBackend: stringOrNull(sourceTruth.backend || source.backend),
+    sourceConfigId: stringOrNull(sourceTruth.configId || source.configId),
+    sourceRef: payload.sourceRef || null,
+    supportClass: stringOrNull(sourceSupportFrame.supportClass) || base.supportClass,
+    mappingMode: stringOrNull(sourceSupportFrame.mappingMode) || base.mappingMode,
+    supportEpoch: Math.max(0, Math.floor(finite(sourceSupportFrame.supportEpoch, base.supportEpoch))),
+    topologyEpoch: Math.max(0, Math.floor(finite(sourceSupportFrame.topologyEpoch, base.topologyEpoch))),
+    substrateCellCount: sampleCount || gridX * gridZ,
+    substrateGrid: { x: gridX, z: gridZ, cellSize },
+    substrateTileCount: Math.max(0, Math.floor(finite(sourceSupportFrame.substrateTileCount, base.substrateTileCount))),
+    dirtySubstrateTileCount: dirtyTileCount,
+    dirtySubstrateSampleCount: Math.max(0, Math.floor(finite(sourceSupportFrame.dirtySubstrateSampleCount, dirtyTileCount > 0 ? sampleCount : 0))),
+    dirtySubstrateRegionChecksum: stringOrNull(sourceSupportFrame.dirtySubstrateRegionChecksum) || terrainBuffer.topologyChecksum || 'hill-summary',
+    minSupportWavelength: round(Math.max(cellSize.x, cellSize.z) * 3, 5),
+    maxHeightDelta: round(sourceSupportFrame.maxHeightDelta, 6),
+    maxSurfaceSpeed: round(sourceSupportFrame.maxSurfaceSpeed, 6),
+    supportFrameChecksum: stringOrNull(sourceSupportFrame.supportFrameChecksum) || checksumString(checksumSeed),
+    terrainBufferSchema: stringOrNull(terrainBuffer.schema),
+    terrainSampleSchema: stringOrNull(terrainBuffer.sampleSchema),
+    terrainBufferTransport: transport,
+    terrainSampleCount: sampleCount,
+    terrainSampleChecksum: stringOrNull(terrainBuffer.sampleChecksum),
+    terrainTopologyChecksum: stringOrNull(terrainBuffer.topologyChecksum),
+    terrainProxyMaterialChecksum: stringOrNull(terrainBuffer.proxyMaterialChecksum),
+    terrainHeightRange: terrainBuffer.heightRange || null,
+    motionClassCounts: { stable: 0, phase_morph: sampleCount || gridX * gridZ, shock_reset: 0 },
+    shockClassCounts: { none: sampleCount || gridX * gridZ, shock_reset: 0 },
+    phaseMode: stringOrNull(phase.mode),
+    terrainEpoch: Math.max(0, Math.floor(finite(phase.terrainEpoch, sourceSupportFrame.supportEpoch || 0))),
+    activePhaseCount: Math.max(0, Math.floor(finite(phase.activePhaseCount, 0))),
+    phaseChecksum: stringOrNull(phase.phaseChecksum),
+    heightfieldCouplingMode: transport === 'summary_only_typed_arrays_remain_source_owned'
+      ? 'support_frame_identity_only_v0'
+      : 'support_frame_with_source_height_samples_v0',
+    supportFrameDowngrades: uniqueStrings([
+      ...(payload.downgrades || []),
+      transport === 'summary_only_typed_arrays_remain_source_owned' ? LOCAL_COLLISION_DOWNGRADE : null,
+    ]),
   };
 }
 
@@ -297,6 +387,10 @@ export function createFingerJuicePreviewBenchPayload(debugState = {}, options = 
     configId: debugState.activeWitnessEmitterConfig || debugState.route_identity || null,
   };
   const largest = substrateReservoirDiagnostics.activeReservoirDomains?.largestComponent || null;
+  const hillSupportFrameLoaded = supportFrame.supportFrameSource === 'hill_preview_bench_payload_v0';
+  const supportFrameDowngrades = hillSupportFrameLoaded
+    ? uniqueStrings([...(supportFrame.supportFrameDowngrades || []), 'host_visualization_not_source_truth'])
+    : ['local_procedural_support_frame_not_live_hill', 'host_visualization_not_source_truth'];
   return {
     ok: true,
     schema: 'kaminos.preview-bench.payload-report.v0',
@@ -320,6 +414,10 @@ export function createFingerJuicePreviewBenchPayload(debugState = {}, options = 
         particleCount: debugState.particleCount || 0,
         surfaceFlowCount: substrateReservoirDiagnostics.surfaceParticleCount || debugState.surfaceFlowCount || 0,
         supportFrameChecksum: supportFrame.supportFrameChecksum,
+        supportFrameSource: supportFrame.supportFrameSource || 'local_procedural_support_frame_v0',
+        sourceAuthority: supportFrame.sourceAuthority || source.authority || null,
+        terrainSampleCount: supportFrame.terrainSampleCount || null,
+        maxSurfaceSpeed: supportFrame.maxSurfaceSpeed ?? null,
         activeDomains: substrateReservoirDiagnostics.activeReservoirDomains?.componentCount || 0,
         occupiedCellCount: substrateReservoirDiagnostics.occupiedCellCount || 0,
         largestDomainParticleCount: largest?.particleCount || 0,
@@ -330,6 +428,8 @@ export function createFingerJuicePreviewBenchPayload(debugState = {}, options = 
         { label: 'Occupied cells', value: String(substrateReservoirDiagnostics.occupiedCellCount || 0) },
         { label: 'Largest domain particles', value: String(largest?.particleCount || 0) },
         { label: 'Support checksum', value: supportFrame.supportFrameChecksum },
+        { label: 'Support source', value: supportFrame.supportFrameSource || 'local_procedural_support_frame_v0' },
+        { label: 'Hill authority', value: supportFrame.sourceAuthority || 'none' },
       ],
       supportFrame,
       reservoir: substrateReservoirDiagnostics,
@@ -337,10 +437,7 @@ export function createFingerJuicePreviewBenchPayload(debugState = {}, options = 
         sourceOwns: ['fluid reservoir/domain truth', 'support-frame checksum', 'source authority and freshness'],
         kaminosOwns: ['Preview Bench host display', 'route badges', 'fallback/rejection surfacing'],
       },
-      downgrades: [
-        'local_procedural_support_frame_not_live_hill',
-        'host_visualization_not_source_truth',
-      ],
+      downgrades: supportFrameDowngrades,
       rejectedSurfaces: [
         {
           surface: 'direct_lerms_finger_juice_debug_route',
