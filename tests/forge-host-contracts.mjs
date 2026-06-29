@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+  FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA,
   FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
+  buildForgeHostSmokeDispositionReceipt,
   deriveForgeStationAttention,
   routeForgeHostSmokeOfferToChamber,
   validateForgeHostStationManifest,
@@ -143,6 +145,34 @@ assert.throws(
   () => routeForgeHostSmokeOfferToChamber(lyingOffer, liveManifest.stations[0]),
   /fallback.*live/i,
   'smoke chamber routing must fail loud when fallback offer claims live routing',
+);
+
+const dispositionReceipt = buildForgeHostSmokeDispositionReceipt(liveChamber, {
+  disposition: 'needs-revision',
+  operatorNote: 'Orb nose overlaps the label at this angle.',
+  savedAt: '2026-06-29T19:30:00.000Z',
+  screenshot: {
+    path: '/tmp/kaminos-receipts/receipt-001/screenshot.png',
+    source: '/api/read?root=scratch&path=smoke-chamber-receipts/receipt-001/screenshot.png',
+    bytes: 2048,
+  },
+});
+assert.equal(FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA, 'kaminos.forge-host.smoke-disposition-receipt.v0');
+assert.equal(dispositionReceipt.schema, FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA);
+assert.equal(dispositionReceipt.chamberId, liveChamber.id);
+assert.equal(dispositionReceipt.sourceOfferId, liveChamber.sourceOffer.id);
+assert.equal(dispositionReceipt.stationActorId, liveChamber.stationActorId);
+assert.equal(dispositionReceipt.producerDiaulos, 'wake-and-bake-pit-boss');
+assert.equal(dispositionReceipt.disposition, 'needs-revision');
+assert.equal(dispositionReceipt.operatorNote, 'Orb nose overlaps the label at this angle.');
+assert.equal(dispositionReceipt.screenshot.path, '/tmp/kaminos-receipts/receipt-001/screenshot.png');
+assert.match(dispositionReceipt.returnLine, /Your Smoke Offer offer:wake-and-bake-pit-boss:live-endpoint was dispositioned in Kaminos as needs-revision/);
+assert.match(dispositionReceipt.returnLine, /evidence: \/tmp\/kaminos-receipts\/receipt-001\/screenshot\.png/);
+assert.match(dispositionReceipt.returnLine, /Let's discuss\./);
+assert.throws(
+  () => buildForgeHostSmokeDispositionReceipt(liveChamber, { disposition: 'victorious' }),
+  /Unsupported Smoke Chamber disposition/,
+  'disposition receipts must use a small explicit operator-state vocabulary',
 );
 
 const fallbackSnapshot = structuredClone(registrySnapshot);
