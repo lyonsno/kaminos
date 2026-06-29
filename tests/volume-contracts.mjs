@@ -169,6 +169,12 @@ assert.match(index, /applyTallPlumeOperatorPreset/, 'tall-plume operator preset 
 assert.match(index, /volume_reaction_fuel/, 'URL route can starve tall-plume reaction fuel without rewriting visual controls');
 assert.match(index, /routedVolumeReactionFuelScale/, 'route-only reaction fuel scale is preserved outside the visible cockpit sliders');
 assert.match(index, /reactionFuelScale/, 'Volume controls carry tall-plume reaction fuel scale into renderer debug state');
+assert.match(index, /volume_lifecycle_effect/, 'URL route can request a lifecycle visual effect without rewriting cockpit fire controls');
+assert.match(index, /volume_lifecycle_t/, 'URL route can pin lifecycle effect phase for deterministic visual witnesses');
+assert.match(index, /volume_quench_vapor/, 'URL route can set cheap quench-vapor strength for failure snuff visuals');
+assert.match(index, /routedVolumeLifecycleEffect/, 'route-only lifecycle effect is preserved outside visible cockpit sliders');
+assert.match(index, /routedVolumeLifecycleT/, 'route-only lifecycle phase is preserved outside visible cockpit sliders');
+assert.match(index, /routedVolumeQuenchVapor/, 'route-only quench-vapor strength is preserved outside visible cockpit sliders');
 assert.match(index, /canonicalPlumeReadoutActive/, 'volume readout distinguishes canonical labels from ordinary scene truth');
 assert.match(index, /sceneContentLabel/, 'non-canonical volume readout derives content from live scene controls instead of canonical defaults');
 assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
@@ -568,6 +574,9 @@ assert.match(core, /source_controls/, 'fluid uniforms carry source radius and fl
 assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/projection strength');
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
+assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
+assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
+assert.match(core, /quench-vapor-v0/, 'failure snuff visual has a stable cheap quench-vapor identity');
 assert.match(core, /tallPlumeFuelHeatReaction/, 'tall-plume fire is born from fuel/heat contact instead of source color alone');
 assert.match(core, /fuelConsumption/, 'tall-plume reaction consumes the fuel lane before writing material state');
 assert.match(core, /fireFuelOverlapRatio/, 'sim readback reports whether visible fire overlaps live fuel');
@@ -1065,6 +1074,12 @@ assert.match(witness, /detailScaleArtifactQuarantine/, 'witness records the effe
 assert.match(witness, /expectedReactionFuelScale/, 'witness verifies tall-plume reaction fuel route identity');
 assert.match(witness, /expectsFuelStarvedTallPlume/, 'witness has a fuel-starved tall-plume negative fire branch');
 assert.match(witness, /volume_reaction_fuel/, 'witness accepts a route-only tall-plume reaction fuel control');
+assert.match(witness, /expectedLifecycleEffect/, 'witness verifies lifecycle visual effect route identity');
+assert.match(witness, /expectedLifecycleT/, 'witness verifies lifecycle visual phase route identity');
+assert.match(witness, /expectedQuenchVapor/, 'witness verifies quench-vapor route identity');
+assert.match(witness, /snuffVisualModel/, 'witness records the active snuff visual model identity');
+assert.match(witness, /quenchVaporStrength/, 'witness records effective quench-vapor strength');
+assert.match(witness, /quench-vapor-v0/, 'witness recognizes the cheap failure-snuff vapor model');
 assert.match(witness, /fireFuelOverlapRatio/, 'witness records fire/fuel overlap evidence');
 assert.match(witness, /expectedTallPlumePreset/, 'witness reports effective tall-plume operator preset identity');
 assert.match(witness, /volume_expected_wind_drift/, 'witness can assert expected wind drift direction for tall-plume wind probes');
