@@ -266,8 +266,11 @@ assert.match(pageSource, /__lermsFingerJuiceVisualFrameForWitness/, 'prototype e
 assert.match(pageSource, /visualActivityFrame/, 'prototype computes projected activity framing for witness capture');
 assert.match(pageSource, /dense-fluid-activity-clip-v0/, 'prototype can focus witness capture on dense fluid activity instead of sparse outliers');
 assert.match(pageSource, /responsiveSmokeProjection/, 'prototype uses viewport-responsive smoke projection instead of fixed-pixel scale');
+assert.match(pageSource, /orbit-perspective-camera-projection-v1/, 'prototype names the corrected orbit projection contract');
 assert.match(pageSource, /orbit-camera-controls-v0/, 'prototype exposes operator orbit camera controls');
 assert.match(pageSource, /fingerJuiceCamera/, 'prototype keeps an explicit mutable orbit camera state');
+assert.match(pageSource, /source-terrain-sample-mesh-overlay-v0/, 'prototype visibly distinguishes source Hill terrain samples from the older local terrain backdrop');
+assert.match(pageSource, /operator-expanded-flow-v0/, 'prototype automatically expands operator flow after the initial small smoke');
 assert.match(pageSource, /pointerdown/, 'prototype lets the operator drag to orbit the camera');
 assert.match(pageSource, /cameraPan/, 'prototype keeps explicit camera pan state');
 assert.match(pageSource, /panCamera/, 'prototype lets the operator pan the camera target');
@@ -279,6 +282,7 @@ assert.match(webgpuCoreSource, /orbitCameraYaw/, 'WebGPU renderer accepts orbit 
 assert.match(webgpuCoreSource, /orbitCameraPitch/, 'WebGPU renderer accepts orbit camera pitch');
 assert.match(webgpuCoreSource, /orbitCameraZoom/, 'WebGPU renderer accepts orbit camera zoom');
 assert.match(webgpuCoreSource, /orbitCameraPan/, 'WebGPU renderer accepts orbit camera pan');
+assert.match(webgpuCoreSource, /orbit-perspective-camera-projection-v1/, 'WebGPU renderer uses the same corrected orbit projection contract as CPU overlays');
 assert.match(pageSource, /expanded-flow-stress-v0/, 'prototype names the expanded stress emitter config');
 assert.match(pageSource, /juiceHitEvents/, 'prototype exposes LERMS juice-hit events in debug state');
 assert.match(pageSource, /world-space-ballistic-surface-flow-particles-v0/, 'prototype page displays effective route identity');

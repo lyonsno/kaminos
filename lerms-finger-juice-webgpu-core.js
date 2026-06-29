@@ -10,6 +10,7 @@ export const LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE = 'wgsl-ballistic-heightfiel
 export const LERMS_FINGER_JUICE_WEBGPU_RENDERER_ROUTE = 'webgpu_particle_splat_renderer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RENDER_SHADER_ROUTE = 'wgsl-particle-splat-renderer-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_CANVAS_EXTENT_CONTRACT = 'nonzero_webgpu_canvas_extent_v0';
+export const LERMS_FINGER_JUICE_ORBIT_CAMERA_PROJECTION_CONTRACT = 'orbit-perspective-camera-projection-v1';
 export const LERMS_FINGER_JUICE_WEBGPU_EMITTER_BUFFER_ROUTE = 'webgpu_emitter_buffer_v0';
 export const LERMS_FINGER_JUICE_WEBGPU_RESPAWN_CONTRACT = 'wgsl-gpu-emitter-respawn-v0';
 export const LERMS_FINGER_JUICE_WEBGPU_PRESSURE_CONTRACT = 'wgsl-local-density-pressure-v0';
@@ -2999,6 +3000,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
 `;
 
 const RENDER_SHADER = `
+// ${LERMS_FINGER_JUICE_ORBIT_CAMERA_PROJECTION_CONTRACT}
 struct Particle {
   posPhase: vec4f,
   velChem: vec4f,
@@ -3062,20 +3064,22 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   let yawCos = cos(orbitCameraYaw);
   let pitchSin = sin(orbitCameraPitch);
   let pitchCos = cos(orbitCameraPitch);
-  let yawedX = world.x * yawCos - world.z * yawSin;
-  let yawedZ = world.x * yawSin + world.z * yawCos;
-  let pitchedY = world.y * pitchCos - yawedZ * pitchSin;
-  let pitchedZ = world.y * pitchSin + yawedZ * pitchCos;
+  let orbitTarget = vec3f(0.0, 0.64, -0.2);
+  let relativeWorld = world - orbitTarget;
+  let yawedX = relativeWorld.x * yawCos - relativeWorld.z * yawSin;
+  let yawedZ = relativeWorld.x * yawSin + relativeWorld.z * yawCos;
+  let pitchedY = relativeWorld.y * pitchCos - yawedZ * pitchSin;
+  let pitchedZ = relativeWorld.y * pitchSin + yawedZ * pitchCos;
   let cameraWorld = vec3f(yawedX, pitchedY, pitchedZ);
-  let depth = 1.45 + cameraWorld.z;
-  let responsiveProjectionScale = min(width * 0.64, height * 0.96);
-  let scale = responsiveProjectionScale * orbitCameraZoom / max(0.42, depth);
+  let depth = 2.4 + cameraWorld.z;
+  let responsiveProjectionScale = min(width * 0.82, height * 1.22);
+  let scale = responsiveProjectionScale * orbitCameraZoom / max(0.58, depth);
   let responsiveParticleScale = clamp(responsiveProjectionScale / 390.0, 1.0, 2.2);
   let screen = vec2f(
     width * (0.5 + orbitCameraPan.x) + cameraWorld.x * scale,
-    height * (0.74 + orbitCameraPan.y) - cameraWorld.z * height * 0.23 * orbitCameraZoom - cameraWorld.y * scale * 0.52
+    height * (0.64 + orbitCameraPan.y) - cameraWorld.y * scale
   );
-  let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.30, 1.0);
+  let particleBudgetScale = clamp(sqrt(2400.0 / max(1.0, params.viewport.w)), 0.84, 1.0);
   let radius = (select(4.8, 6.8, phase >= 0.5) + particle.misc.x * 42.0) * responsiveParticleScale * particleBudgetScale;
   let finalScreen = screen + corner * radius;
   var out: VertexOut;
