@@ -771,6 +771,152 @@ function sharedSocketSeamEffectAt(assemblage, t) {
   });
 }
 
+function createLowerSocketFamilyRoleLaw(composition) {
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+  if (!lowerSocket) return null;
+  const sharedSocketLaw = composition.lowerSocketEquatorialSocketJointLaw;
+  const hasEquatorialSocket = !!sharedSocketLaw
+    && sharedSocketLaw.sourceMacroId === 'lower-socket-keel'
+    && sharedSocketLaw.targetMacroId === 'equatorial-cupping-whorl';
+  return {
+    schema: 'LowerSocketFamilyRoleLaw',
+    id: 'lower-socket-family-role-law',
+    mode: 'lower-socket-family-role-classifier-v0',
+    targetMacroId: 'lower-socket-keel',
+    selectedRole: hasEquatorialSocket ? 'tuck-tongue' : 'absorbed',
+    visibleAuthority: hasEquatorialSocket ? 'subordinate-socket-insert' : 'absorbed-seam-influence',
+    generationLaw: 'lower-socket-derived optional families must classify before meshing; no short visible macro foot survives without a socket/tuck role',
+    roleEvidence: {
+      schema: 'LowerSocketFamilyRoleEvidence',
+      sourceAnatomyLawId: composition.lowerSocketKeelAnatomyLaw?.sourceMacroId || null,
+      sharedSocketJointLawId: sharedSocketLaw?.id || null,
+      macroCountContext: composition.macroAssemblageCountLaw?.selectedMacroAssemblageIds?.length || composition.macroAssemblages.length,
+      familySizeClass: 'short-subordinate-lower-socket-family',
+      observedFailurePressure: 'crimped-short-visible-foot-under-left-lower-socket',
+    },
+    familyRoleDecision: {
+      schema: 'LowerSocketFamilyRoleDecision',
+      role: hasEquatorialSocket ? 'tuck-tongue' : 'absorbed',
+      authority: hasEquatorialSocket ? 'subordinate-socket-insert' : 'hidden-seam-pressure',
+      targetMacroId: hasEquatorialSocket ? 'equatorial-cupping-whorl' : null,
+      terminalAbsorbStartT: 0.58,
+      terminalHoldT: 0.68,
+      allowedVisibleIf: [
+        'smooth-single-direction-socket-taper',
+        'terminates-into-shared-socket-seam',
+        'passes-under-equatorial-lip',
+      ],
+      demoteIf: [
+        'cannot-find-shared-socket-target',
+        'would-render-as-short-macro-pretender',
+      ],
+    },
+    geometryEffect: {
+      schema: 'LowerSocketFamilyRoleGeometryEffect',
+      id: 'lower-socket-family-role-tuck-tongue-effect',
+      role: hasEquatorialSocket ? 'tuck-tongue' : 'absorbed',
+      interval: { t0: 0.04, t1: 0.74, fade: 0.16 },
+      widthScale: hasEquatorialSocket ? 0.74 : 0.24,
+      terminalWidthScale: hasEquatorialSocket ? 0.16 : 0.05,
+      radialDelta: hasEquatorialSocket ? -0.032 : -0.08,
+      normalLiftDelta: hasEquatorialSocket ? -0.014 : -0.04,
+      topologyRelief: hasEquatorialSocket ? 0.72 : 1,
+      geometryContract: 'smooth-single-direction-socket-taper',
+    },
+    promotedBodyPolicy: {
+      schema: 'LowerSocketFamilyRolePromotedBodyPolicy',
+      promotedBodyScale: hasEquatorialSocket ? 0.82 : 0.38,
+      sideSilhouetteMode: 'lower-socket-tuck-tongue-smooth-side-return-v0',
+      materialAuthority: 'subordinate-to-equatorial-lip',
+    },
+    requiredRelations: hasEquatorialSocket
+      ? ['lower-socket-tucks-under-equatorial-lip', 'terminate-into-shared-seam']
+      : ['absorb-into-lower-socket-seam-pressure'],
+    forbiddenFailureClasses: [
+      'crimped-independent-foot',
+      'short-macro-pretender',
+      'multi-kink-terminal-stump',
+      'floating-support-appendage',
+    ],
+    verdict: hasEquatorialSocket
+      ? 'tuck-tongue-role-law-applied'
+      : 'lower-socket-family-absorbed-no-visible-macro-authority',
+    nonGoals: [
+      'not-editorial-one-off-shape-smoothing',
+      'not-full-collision-solving',
+      'not-final-orbit-tangent-continuation',
+    ],
+  };
+}
+
+function attachLowerSocketFamilyRoleLaw(composition) {
+  const law = composition.lowerSocketFamilyRoleLaw;
+  for (const assemblage of composition.macroAssemblages) assemblage.lowerSocketFamilyRoleEffects = [];
+  if (!law) return;
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === law.targetMacroId);
+  if (!lowerSocket) return;
+  lowerSocket.lowerSocketFamilyRoleLaw = law;
+  lowerSocket.lowerSocketFamilyRoleEffects.push({
+    ...law.geometryEffect,
+    familyRoleLawId: law.id,
+    sourceMacroId: law.targetMacroId,
+    targetMacroId: law.familyRoleDecision.targetMacroId,
+    visualContract: 'lower socket appears as subordinate smooth tuck tongue, not a crimped independent foot',
+  });
+  if (lowerSocket.macroPromotedBody) {
+    lowerSocket.macroPromotedBody.lowerSocketFamilyRoleLaw = law;
+    lowerSocket.macroPromotedBody.familyRoleDecision = law.familyRoleDecision;
+    lowerSocket.macroPromotedBody.visibleAuthority = law.visibleAuthority;
+    lowerSocket.macroPromotedBody.promotedBodyScale = Math.min(
+      lowerSocket.macroPromotedBody.promotedBodyScale || law.promotedBodyPolicy.promotedBodyScale,
+      law.promotedBodyPolicy.promotedBodyScale,
+    );
+    lowerSocket.macroPromotedBody.sideSilhouettePolicy = {
+      ...lowerSocket.macroPromotedBody.sideSilhouettePolicy,
+      mode: law.promotedBodyPolicy.sideSilhouetteMode,
+      terminalWidthScale: Math.min(
+        lowerSocket.macroPromotedBody.sideSilhouettePolicy?.terminalWidthScale ?? law.geometryEffect.terminalWidthScale,
+        law.geometryEffect.terminalWidthScale,
+      ),
+      reason: 'lower socket has been classified as subordinate tuck tongue before visible macro meshing',
+    };
+  }
+}
+
+function lowerSocketFamilyRoleEffectAt(assemblage, t) {
+  const activeEffects = (assemblage.lowerSocketFamilyRoleEffects || [])
+    .map(effect => ({ effect, influence: macroInterlockIntervalInfluence(effect, t) }))
+    .filter(item => item.influence > 0);
+  if (!activeEffects.length) {
+    return {
+      widthScale: 1,
+      radialDelta: 0,
+      normalLiftDelta: 0,
+      topologyRelief: 0,
+      activeEffectIds: [],
+      active: false,
+    };
+  }
+  return activeEffects.reduce((total, item) => {
+    const { effect, influence } = item;
+    return {
+      widthScale: Math.min(total.widthScale, 1 - (1 - (effect.widthScale ?? 1)) * influence),
+      radialDelta: total.radialDelta + (effect.radialDelta || 0) * influence,
+      normalLiftDelta: total.normalLiftDelta + (effect.normalLiftDelta || 0) * influence,
+      topologyRelief: Math.max(total.topologyRelief, (effect.topologyRelief || 0) * influence),
+      activeEffectIds: [...total.activeEffectIds, effect.id],
+      active: true,
+    };
+  }, {
+    widthScale: 1,
+    radialDelta: 0,
+    normalLiftDelta: 0,
+    topologyRelief: 0,
+    activeEffectIds: [],
+    active: true,
+  });
+}
+
 function createLowerSocketKeelAnatomyLaw(assemblage) {
   if (assemblage.id !== 'lower-socket-keel') return null;
   return {
@@ -849,8 +995,16 @@ function lowerSocketAnatomyEffectAt(assemblage, t) {
 function lowerSocketAnatomyParametricT(assemblage, t) {
   const law = assemblage.lowerSocketKeelAnatomyLaw || assemblage.macroPromotedBody?.lowerSocketKeelAnatomyLaw;
   if (!law) return t;
-  const cutStart = law.terminationDecision.terminalCutStartT ?? 0.72;
-  const terminalHold = law.terminationDecision.terminalHoldT ?? 0.84;
+  const roleDecision = assemblage.lowerSocketFamilyRoleLaw?.familyRoleDecision
+    || assemblage.macroPromotedBody?.familyRoleDecision;
+  const cutStart = Math.min(
+    law.terminationDecision.terminalCutStartT ?? 0.72,
+    roleDecision?.terminalAbsorbStartT ?? Number.POSITIVE_INFINITY,
+  );
+  const terminalHold = Math.min(
+    law.terminationDecision.terminalHoldT ?? 0.84,
+    roleDecision?.terminalHoldT ?? Number.POSITIVE_INFINITY,
+  );
   if (t <= cutStart) return t;
   const collapse = smoothStep(cutStart, 1, t);
   return cutStart + (terminalHold - cutStart) * (1 - Math.pow(1 - collapse, 1.45));
@@ -865,13 +1019,15 @@ function macroContactEnvelopeRadius(assemblage, t) {
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
+  const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
   const width = (body.widthProfile?.mid || 0.16)
     * (promoted.promotedBodyScale || 1.22)
     * (expanded.coverageScale || 1)
     * terminalScale
     * interlock.widthScale
     * lowerSocket.widthScale
-    * sharedSeam.widthScale;
+    * sharedSeam.widthScale
+    * roleEffect.widthScale;
   const thickness = body.thicknessProfile?.mid || 0.038;
   return width * 0.72 + thickness * 0.85;
 }
@@ -932,11 +1088,12 @@ function findLowerSocketEquatorialSocketJointLaw(composition, sourceMacroId, tar
     : null;
 }
 
-function macroContactDiagnosisTags(sourceMacroId, targetMacroId, relation, clearanceVerdict, sharedSocketJointLaw = null) {
+function macroContactDiagnosisTags(sourceMacroId, targetMacroId, relation, clearanceVerdict, sharedSocketJointLaw = null, lowerSocketFamilyRoleLaw = null) {
   const ids = [sourceMacroId, targetMacroId];
   const tags = [];
   if (relation) tags.push('known-interlock-relation');
   if (sharedSocketJointLaw) tags.push('shared-socket-seam-law');
+  if (lowerSocketFamilyRoleLaw && ids.includes(lowerSocketFamilyRoleLaw.targetMacroId)) tags.push('tuck-tongue-role-law');
   if (ids.includes('north-east-counter-thrust') && (
     ids.includes('north-west-dominant-thrust')
     || ids.includes('polar-crown-lock')
@@ -953,22 +1110,32 @@ function macroContactDiagnosisTags(sourceMacroId, targetMacroId, relation, clear
 function createMacroGeometryCoherenceWatch(composition, contacts) {
   const selectedIds = new Set(composition.macroAssemblages.map(assemblage => assemblage.id));
   const lowerSocketLaw = composition.lowerSocketKeelAnatomyLaw;
+  const lowerSocketRoleLaw = composition.lowerSocketFamilyRoleLaw;
   const optionalStressIds = ['lower-socket-keel', 'polar-crown-lock', 'equatorial-cupping-whorl']
     .filter(id => selectedIds.has(id));
   const watch = optionalStressIds.map(id => {
     const lowerSocketGoverned = id === 'lower-socket-keel' && lowerSocketLaw;
+    const lowerSocketRoleGoverned = id === 'lower-socket-keel' && lowerSocketRoleLaw;
     return {
       schema: 'MacroGeometryCoherenceWatch',
       macroId: id,
       watchType: lowerSocketGoverned
-        ? 'lower-socket-procedural-anatomy-contact-trust'
+        ? lowerSocketRoleGoverned
+          ? 'lower-socket-tuck-tongue-role-contact-trust'
+          : 'lower-socket-procedural-anatomy-contact-trust'
         : 'non-hero-optional-family-contact-trust',
       reason: lowerSocketGoverned
-        ? 'lower socket contact evidence is generated after applying a single-body termination/anatomy law'
+        ? lowerSocketRoleGoverned
+          ? 'lower socket contact evidence is generated after classifying the short family as subordinate tuck tongue anatomy'
+          : 'lower socket contact evidence is generated after applying a single-body termination/anatomy law'
         : 'optional stress macro has less mature surface/termination grammar than the hero aperture anchors',
       diagnosticPolicy: lowerSocketGoverned
-        ? lowerSocketLaw.contactMapTrustPolicy
+        ? lowerSocketRoleGoverned
+          ? 'trust-after-lower-socket-family-role-law'
+          : lowerSocketLaw.contactMapTrustPolicy
         : 'contact-map-can-indict-input-geometry-before-interlock-tuning',
+      roleLawId: lowerSocketRoleGoverned ? lowerSocketRoleLaw.id : null,
+      selectedRole: lowerSocketRoleGoverned ? lowerSocketRoleLaw.selectedRole : null,
     };
   });
   const badContacts = contacts
@@ -993,6 +1160,9 @@ function createMacroContactMap(composition) {
       const closestApproach = findMacroClosestApproach(source, target);
       const relation = findMacroContactRelation(composition, source.id, target.id);
       const sharedSocketJointLaw = findLowerSocketEquatorialSocketJointLaw(composition, source.id, target.id);
+      const lowerSocketFamilyRoleLaw = [source.id, target.id].includes(composition.lowerSocketFamilyRoleLaw?.targetMacroId)
+        ? composition.lowerSocketFamilyRoleLaw
+        : null;
       const clearanceRadius = closestApproach
         ? closestApproach.sourceEnvelopeRadius + closestApproach.targetEnvelopeRadius + (sharedSocketJointLaw ? sharedSocketJointLaw.gapPolicy.targetClearance : relation ? 0.055 : 0.035)
         : 0;
@@ -1017,7 +1187,9 @@ function createMacroContactMap(composition) {
         intendedPrecedence: relation?.precedence || null,
         sharedSocketJointLawId: sharedSocketJointLaw?.id || null,
         sharedSocketSeamId: sharedSocketJointLaw?.sharedSeam?.id || null,
-        diagnosisTags: macroContactDiagnosisTags(source.id, target.id, relation, clearanceVerdict, sharedSocketJointLaw),
+        lowerSocketFamilyRoleLawId: lowerSocketFamilyRoleLaw?.id || null,
+        lowerSocketFamilyRole: lowerSocketFamilyRoleLaw?.selectedRole || null,
+        diagnosisTags: macroContactDiagnosisTags(source.id, target.id, relation, clearanceVerdict, sharedSocketJointLaw, lowerSocketFamilyRoleLaw),
       };
       contacts.push(contact);
     }
@@ -1264,11 +1436,12 @@ function macroPromotedBodyEdgeSamples(assemblage, targetEdge, rowCount = 72) {
     const interlock = macroInterlockEffectAt(assemblage, t);
     const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale;
+    const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
     const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
     const sideWidth = sideSign < 0 ? leftWidth : rightWidth;
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta + roleEffect.normalLiftDelta;
     const crown = 0.82;
     const outer = addScaledPoint(
       addScaledPoint(center, sideAxis, sideSign * sideWidth),
@@ -1470,11 +1643,12 @@ function macroFamilySurfaceSample(assemblage, t, normalizedV, liftBias = 0.018) 
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-  const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale;
+  const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+  const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
   const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
   const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
   const sideWidth = normalizedV < 0 ? leftWidth : rightWidth;
-  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta;
+  const lift = body.thicknessProfile.mid * (0.92 + 0.72 * profile) + liftBias + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta + roleEffect.normalLiftDelta;
   const topologyDip = topologyReliefStrength(assemblage, t);
   const crown = Math.max(0.62, 1 - Math.pow(Math.abs(normalizedV), 2.2) * 0.14 - topologyDip * 0.12);
   const point = addScaledPoint(
@@ -3042,6 +3216,9 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   attachMacroInterlockEffects(next);
   next.lowerSocketEquatorialSocketJointLaw = createLowerSocketEquatorialSocketJointLaw(next);
   attachLowerSocketEquatorialSocketJointEffects(next);
+  next.lowerSocketFamilyRoleLaw = createLowerSocketFamilyRoleLaw(next);
+  attachLowerSocketFamilyRoleLaw(next);
+  next.lowerSocketFamilyRoleVerdict = next.lowerSocketFamilyRoleLaw?.verdict || 'lower-socket-family-role-law-not-active';
   if (next.macroBodyPromotion.lowerCupClosure) {
     next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
   }
@@ -3359,7 +3536,8 @@ function sampleSpinePoint(assemblage, bandMember, t, radius = 1.04) {
   const interlock = macroInterlockEffectAt(assemblage, t);
   const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
   const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta);
+  const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+  return spherePoint(lat, lon, radius + layerBias - interlock.depthInset - lowerSocket.radialInset + sharedSeam.radialDelta + roleEffect.radialDelta);
 }
 
 function sampleSpine(THREE, assemblage, bandMember, t, radius = 1.04) {
@@ -3386,6 +3564,7 @@ function topologyReliefStrength(assemblage, t) {
   const intervals = assemblage.layerItinerary?.intervals || [];
   let strength = macroInterlockEffectAt(assemblage, t).topologyRelief;
   strength = Math.max(strength, sharedSocketSeamEffectAt(assemblage, t).topologyRelief);
+  strength = Math.max(strength, lowerSocketFamilyRoleEffectAt(assemblage, t).topologyRelief);
   for (const interval of intervals) {
     const isTopologyCarrier = interval.layer === 'under-neighbor' || interval.layer === 'inner-support';
     if (!isTopologyCarrier || t < interval.t0 - 0.08 || t > interval.t1 + 0.08) continue;
@@ -3523,10 +3702,11 @@ function makeMacroPromotedBodyGeometry(THREE, assemblage) {
     const interlock = macroInterlockEffectAt(assemblage, t);
     const lowerSocket = lowerSocketAnatomyEffectAt(assemblage, t);
     const sharedSeam = sharedSocketSeamEffectAt(assemblage, t);
-    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale;
+    const roleEffect = lowerSocketFamilyRoleEffectAt(assemblage, t);
+    const widthScale = interlock.widthScale * lowerSocket.widthScale * sharedSeam.widthScale * roleEffect.widthScale;
     const leftWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'left', nearestCut) * widthScale;
     const rightWidth = body.widthProfile.mid * scale * terminalScale * promotedBodySideScale(promoted, 'right', nearestCut) * widthScale;
-    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta;
+    const lift = body.thicknessProfile.mid * (0.85 + 0.75 * profile) + interlock.normalLiftDelta + lowerSocket.normalLiftDelta + sharedSeam.normalLiftDelta + roleEffect.normalLiftDelta;
     const topologyDip = topologyReliefStrength(assemblage, t);
     for (let col = 0; col < columnCount; col++) {
       const u = col / (columnCount - 1);
@@ -4751,6 +4931,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       lowerSocketEquatorialSocketJointVerdict: composition.lowerSocketEquatorialSocketJointLaw
         ? 'shared-seam-law-applied'
         : 'shared-seam-law-not-active',
+      LowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
+      lowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
+      lowerSocketFamilyRoleVerdict: composition.lowerSocketFamilyRoleVerdict,
       MacroContactMap: composition.macroContactMap,
       macroContactMap: composition.macroContactMap,
       macroContactCount: composition.macroContactMap?.contactCount || 0,
@@ -5176,6 +5359,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         lowerSocketEquatorialSocketJointVerdict: composition.lowerSocketEquatorialSocketJointLaw
           ? 'shared-seam-law-applied'
           : 'shared-seam-law-not-active',
+        LowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
+        lowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
+        lowerSocketFamilyRoleVerdict: composition.lowerSocketFamilyRoleVerdict,
         MacroContactMap: composition.macroContactMap,
         macroContactMap: composition.macroContactMap,
         MacroContactSample: composition.macroContactMap?.contacts || [],
