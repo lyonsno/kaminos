@@ -354,19 +354,19 @@ function routeTruthPhaseFor(routeActivity) {
   if (routeActivity.activityState === 'timeout' || routeActivity.routePhase === 'timeout') {
     return 'snuff';
   }
-  if (routeActivity.activityState === 'cached' || routeActivity.truthMode === 'cached') {
+  if (routeActivity.activityState === 'cached' || routeActivity.routePhase === 'cached' || routeActivity.truthMode === 'cached') {
     return 'glow';
   }
-  if (routeActivity.activityState === 'fallback' || routeActivity.truthMode === 'fallback') {
+  if (routeActivity.activityState === 'fallback' || routeActivity.routePhase === 'fallback' || routeActivity.truthMode === 'fallback') {
     return 'weak_heat';
   }
-  if (routeActivity.activityState === 'fixture' || routeActivity.truthMode === 'fixture') {
+  if (routeActivity.activityState === 'fixture' || routeActivity.routePhase === 'fixture' || routeActivity.truthMode === 'fixture') {
     return 'pilot';
   }
-  if (routeActivity.activityState === 'unavailable' || routeActivity.truthMode === 'unavailable' || routeActivity.truthMode === 'missing') {
+  if (routeActivity.activityState === 'unavailable' || routeActivity.routePhase === 'unavailable' || routeActivity.truthMode === 'unavailable' || routeActivity.truthMode === 'missing') {
     return 'cold';
   }
-  if (routeActivity.activityState === 'partial' || routeActivity.truthMode === 'partial') {
+  if (routeActivity.activityState === 'partial' || routeActivity.routePhase === 'partial' || routeActivity.truthMode === 'partial') {
     return 'ember';
   }
   return null;

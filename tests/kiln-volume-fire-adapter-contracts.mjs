@@ -323,6 +323,36 @@ assert.ok(
   'failed route truth must not accept nested completion-blaze heat authority',
 );
 
+const routePhaseOnlyCompletionLies = [
+  ['cached', 'glow', 'cached_glow'],
+  ['fallback', 'weak_heat', 'weak_heat'],
+  ['fixture', 'pilot', 'pilot_heat'],
+  ['unavailable', 'cold', 'cold'],
+  ['partial', 'ember', 'banked_ember'],
+];
+
+for (const [routePhase, expectedPhase, expectedEffect] of routePhaseOnlyCompletionLies) {
+  const visual = deriveKilnVolumeFireVisual(routeActivity({
+    activityState: null,
+    routePhase,
+    truthMode: null,
+    visualAuthority: null,
+    fire: {
+      heatClass: 'completion-blaze',
+      fuelClass: 'route-phase-only',
+      truthClass: null,
+      visualAuthority: null,
+      allowsFullBurn: false,
+    },
+  }));
+  assert.equal(visual.visualPhase, expectedPhase, `routePhase ${routePhase} must outrank nested completion blaze`);
+  assert.equal(visual.lifecycleEffect.kind, expectedEffect, `routePhase ${routePhase} must preserve lifecycle effect`);
+  assert.ok(
+    visual.falseAuthorityViolations.includes('volume_completion_blaze_without_completed_live_route'),
+    `routePhase ${routePhase} must record incompatible completion-blaze authority`,
+  );
+}
+
 const unavailable = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'unavailable',
   routePhase: 'unavailable',
