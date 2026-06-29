@@ -4875,12 +4875,16 @@ function motionPanelClipletInterruptModeFromInputs() {
   return mode === 'path-trigger' ? 'path-trigger' : 'off';
 }
 
-function motionPanelSelectedClipletSegment(cliplets) {
+function motionPanelExplicitSelectedClipletSegment(cliplets) {
   if (!cliplets?.segments?.length) return null;
   const selectedId = String(document.getElementById('motion-panel-cliplet-playback')?.value || 'full');
-  const selected = selectedId !== 'full'
-    ? cliplets.segments.find(segment => segment.id === selectedId)
-    : null;
+  if (selectedId === 'full') return null;
+  return cliplets.segments.find(segment => segment.id === selectedId) || null;
+}
+
+function motionPanelFallbackClipletSegment(cliplets) {
+  if (!cliplets?.segments?.length) return null;
+  const selected = motionPanelExplicitSelectedClipletSegment(cliplets);
   if (selected) return selected;
   return cliplets.segments.find(segment => String(segment.labelGuess || '').toLowerCase().includes('brake'))
     || cliplets.segments.find(segment => Number(segment.index) > 0)
@@ -4889,7 +4893,7 @@ function motionPanelSelectedClipletSegment(cliplets) {
 
 function motionPanelClipletInterruptFromInputs(track, cliplets) {
   if (motionPanelClipletInterruptModeFromInputs() !== 'path-trigger') return null;
-  const selected = motionPanelSelectedClipletSegment(cliplets);
+  const selected = motionPanelFallbackClipletSegment(cliplets);
   if (!track || !selected) return null;
   return buildGeneratedPoseClipletPathInterrupt({
     generatedInput: track,
@@ -6711,8 +6715,8 @@ window.exportMotionPanelCurrentViewFilmstrip = exportMotionPanelCurrentViewFilms
 
 async function exportMotionPanelSelectedClipletFilmstrip() {
   if (!motionTemporalState?.active) throw new Error('No generated temporal motion is active');
-  const selectedCliplet = motionPanelSelectedClipletSegment(motionTemporalState?.generatedMotionCliplets);
-  if (!selectedCliplet) throw new Error('No generated motion cliplet is selected');
+  const selectedCliplet = motionPanelExplicitSelectedClipletSegment(motionTemporalState?.generatedMotionCliplets);
+  if (!selectedCliplet) throw new Error('Select a generated motion cliplet before exporting a cliplet sheet');
   const settings = motionPanelExportSettingsFromInputs();
   const button = document.getElementById('motion-panel-export-selected-cliplet');
   const prompt = motionPromptValueForPreview();

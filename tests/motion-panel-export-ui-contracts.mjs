@@ -50,7 +50,7 @@ assert.doesNotMatch(exportBlock, /readRenderTargetPixelsAsync|new THREE\.RenderT
 
 const clipletExportBlock = index.match(/async function exportMotionPanelSelectedClipletFilmstrip[\s\S]*?window\.exportMotionPanelSelectedClipletFilmstrip = exportMotionPanelSelectedClipletFilmstrip;/)?.[0] || '';
 assert.ok(clipletExportBlock, 'selected-cliplet export function block is discoverable');
-assert.match(clipletExportBlock, /motionPanelSelectedClipletSegment\(motionTemporalState\?\.generatedMotionCliplets\)/, 'selected-cliplet export uses the current selected cliplet from current motion state');
+assert.match(clipletExportBlock, /motionPanelExplicitSelectedClipletSegment\(motionTemporalState\?\.generatedMotionCliplets\)/, 'selected-cliplet export uses only an explicit selected cliplet from current motion state');
 assert.match(clipletExportBlock, /selectedCliplet/, 'selected-cliplet export records selected cliplet evidence');
 assert.match(clipletExportBlock, /sourceRange/, 'selected-cliplet export records selected source frame range');
 assert.match(clipletExportBlock, /sampleTime/, 'selected-cliplet export samples source times directly instead of waiting on realtime playback');
