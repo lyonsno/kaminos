@@ -171,6 +171,27 @@ assert.ok(completionBlaze.volumeParams.volume_fire < live.volumeParams.volume_fi
 assert.ok(completionBlaze.volumeParams.volume_radiance > cached.volumeParams.volume_radiance, 'completion blaze gets a visible success flash');
 assert.ok(completionBlaze.volumeParams.volume_smoke < live.volumeParams.volume_smoke, 'completion blaze avoids pretending the route is still burning');
 
+const cachedCompletionLie = deriveKilnVolumeFireVisual(routeActivity({
+  activityState: 'cached',
+  routePhase: 'complete',
+  truthMode: 'cached',
+  visualAuthority: 'cached',
+  fire: {
+    heatClass: 'completion-blaze',
+    fuelClass: 'cached-output',
+    truthClass: 'cached',
+    visualAuthority: 'cached',
+    allowsFullBurn: false,
+  },
+}));
+
+assert.equal(cachedCompletionLie.visualPhase, 'glow');
+assert.equal(cachedCompletionLie.lifecycleEffect.kind, 'cached_glow');
+assert.ok(
+  cachedCompletionLie.falseAuthorityViolations.includes('volume_completion_blaze_without_completed_live_route'),
+  'cached route truth must not accept nested completion-blaze heat authority',
+);
+
 const fixture = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'fixture',
   routePhase: 'demo',
@@ -213,6 +234,27 @@ assert.equal(fallback.visualPhase, 'weak_heat');
 assert.equal(fallback.allowsFullBurn, false);
 assert.ok(fallback.volumeParams.volume_smoke > cached.volumeParams.volume_smoke);
 assert.ok(fallback.volumeParams.volume_radiance < live.volumeParams.volume_radiance);
+
+const fallbackCompletionLie = deriveKilnVolumeFireVisual(routeActivity({
+  activityState: 'fallback',
+  routePhase: 'running',
+  truthMode: 'fallback',
+  visualAuthority: 'fallback',
+  fire: {
+    heatClass: 'completion-blaze',
+    fuelClass: 'fixture',
+    truthClass: 'fallback',
+    visualAuthority: 'fallback',
+    allowsFullBurn: false,
+  },
+}));
+
+assert.equal(fallbackCompletionLie.visualPhase, 'weak_heat');
+assert.equal(fallbackCompletionLie.lifecycleEffect.kind, 'weak_heat');
+assert.ok(
+  fallbackCompletionLie.falseAuthorityViolations.includes('volume_completion_blaze_without_completed_live_route'),
+  'fallback route truth must not accept nested completion-blaze heat authority',
+);
 
 const partial = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'banking',
@@ -258,6 +300,28 @@ assert.ok(failed.volumeParams.volume_smoke > 0, 'failure snuff can smoke without
 assert.equal(failed.lifecycleEffect.kind, 'failure_snuff');
 assert.equal(failed.lifecycleEffect.failureSharpness, 1);
 assert.equal(failed.lifecycleEffect.claimsLiveSpend, false);
+
+const failedCompletionLie = deriveKilnVolumeFireVisual(routeActivity({
+  activityState: 'failed',
+  routePhase: 'failed',
+  truthMode: 'failed',
+  visualAuthority: 'failure-snuff',
+  fire: {
+    heatClass: 'completion-blaze',
+    fuelClass: 'failed-route',
+    truthClass: 'failed',
+    visualAuthority: 'failure-snuff',
+    allowsFullBurn: false,
+    failureSharpness: 1,
+  },
+}));
+
+assert.equal(failedCompletionLie.visualPhase, 'snuff');
+assert.equal(failedCompletionLie.lifecycleEffect.kind, 'failure_snuff');
+assert.ok(
+  failedCompletionLie.falseAuthorityViolations.includes('volume_completion_blaze_without_completed_live_route'),
+  'failed route truth must not accept nested completion-blaze heat authority',
+);
 
 const unavailable = deriveKilnVolumeFireVisual(routeActivity({
   activityState: 'unavailable',

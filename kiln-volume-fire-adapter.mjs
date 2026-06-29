@@ -323,6 +323,9 @@ export function deriveKilnVolumeFireVisual(routeActivity = {}, options = {}) {
 
 function phaseFor(routeActivity) {
   const fire = routeActivity.fire || {};
+  const routeTruthPhase = routeTruthPhaseFor(routeActivity);
+  if (routeTruthPhase) return routeTruthPhase;
+
   const heatPhase = HEAT_CLASS_PHASES[fire.heatClass];
   if (heatPhase && heatPhase !== 'burn') return heatPhase;
 
@@ -342,6 +345,31 @@ function phaseFor(routeActivity) {
   if (routeActivity.truthMode === 'partial') return 'ember';
   if (routeActivity.truthMode === 'failed') return 'snuff';
   return 'cold';
+}
+
+function routeTruthPhaseFor(routeActivity) {
+  if (routeActivity.activityState === 'failed' || routeActivity.routePhase === 'failed' || routeActivity.truthMode === 'failed') {
+    return 'snuff';
+  }
+  if (routeActivity.activityState === 'timeout' || routeActivity.routePhase === 'timeout') {
+    return 'snuff';
+  }
+  if (routeActivity.activityState === 'cached' || routeActivity.truthMode === 'cached') {
+    return 'glow';
+  }
+  if (routeActivity.activityState === 'fallback' || routeActivity.truthMode === 'fallback') {
+    return 'weak_heat';
+  }
+  if (routeActivity.activityState === 'fixture' || routeActivity.truthMode === 'fixture') {
+    return 'pilot';
+  }
+  if (routeActivity.activityState === 'unavailable' || routeActivity.truthMode === 'unavailable' || routeActivity.truthMode === 'missing') {
+    return 'cold';
+  }
+  if (routeActivity.activityState === 'partial' || routeActivity.truthMode === 'partial') {
+    return 'ember';
+  }
+  return null;
 }
 
 function lifecycleEffectFor(routeActivity, visualPhase, allowsFullBurn) {
@@ -375,6 +403,26 @@ function isFullBurnEligible(routeActivity) {
   );
 }
 
+function isCompletionBlazeEligible(routeActivity) {
+  return (
+    routeActivity.truthMode === 'live' &&
+    (routeActivity.activityState === 'complete' || routeActivity.activityState === 'cooled') &&
+    (routeActivity.routePhase === 'complete' || routeActivity.routePhase === 'completed')
+  );
+}
+
+function requestsCompletionBlaze(routeActivity) {
+  const fire = routeActivity.fire || {};
+  return (
+    routeActivity.visualAuthority === 'completion-blaze' ||
+    routeActivity.visualAuthority === 'completion_blaze' ||
+    fire.visualAuthority === 'completion-blaze' ||
+    fire.visualAuthority === 'completion_blaze' ||
+    fire.heatClass === 'completion-blaze' ||
+    fire.heatClass === 'completion_blaze'
+  );
+}
+
 function falseAuthorityViolationsFor(routeActivity, requestedFullBurn, fullBurnEligible) {
   const violations = [];
   if (requestedFullBurn && !fullBurnEligible) {
@@ -382,6 +430,9 @@ function falseAuthorityViolationsFor(routeActivity, requestedFullBurn, fullBurnE
   }
   if (routeActivity.visualAuthority === 'live-compute' && routeActivity.truthMode !== 'live') {
     violations.push('volume_live_visual_without_live_truth');
+  }
+  if (requestsCompletionBlaze(routeActivity) && !isCompletionBlazeEligible(routeActivity)) {
+    violations.push('volume_completion_blaze_without_completed_live_route');
   }
   return violations;
 }
