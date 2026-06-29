@@ -959,6 +959,95 @@ function lowerSocketFamilyRoleEffectAt(assemblage, t) {
   });
 }
 
+function createLowerSocketStripHonestyLaw(composition) {
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === 'lower-socket-keel');
+  const roleLaw = composition.lowerSocketFamilyRoleLaw;
+  if (!lowerSocket || roleLaw?.selectedRole !== 'tuck-tongue') return null;
+  return {
+    schema: 'LowerSocketStripHonestyLaw',
+    id: 'lower-socket-strip-honesty-law',
+    mode: 'lower-socket-clean-strip-before-tuck-or-merge-v0',
+    targetMacroId: 'lower-socket-keel',
+    role: 'tuck-tongue',
+    coherentStripClass: 'subordinate-tuck-lamella',
+    generationLaw: 'lower socket must become one smooth lamellar strip before it may tuck under, merge with, or be covered by another form',
+    rewrittenExitZone: 'lower-equatorial-shared-socket-seam',
+    rewrittenTerminalTrigger: 'shared-socket-seam-absorption',
+    forbiddenHybridSignals: [
+      'right-rim-re-emergence',
+      'lower-front-rim',
+      'rim-absorption-end-for-tuck-role',
+      'visible-rim-exit-while-subordinate-tuck',
+    ],
+    requiredInvariants: [
+      'single-coherent-lower-socket-strip',
+      'continuous-centerline-before-tuck',
+      'smooth-side-curves-before-merge',
+      'bounded-terminal-width-recovery',
+      'no-visible-rim-exit-for-tuck-role',
+    ],
+    deferredSolves: [
+      'boolean-or-trim-merge',
+      'bottom-lip-ownership',
+      'final-under-neighbor-occlusion',
+    ],
+    visualContract: 'normal render may show one smooth lower-socket strip, not a crumpled foot or visible-rim/tuck hybrid',
+  };
+}
+
+function rewriteLowerSocketIntervalsForStripHonesty(intervals = [], law) {
+  if (!law) return intervals;
+  return intervals.map(interval => {
+    let trigger = interval.trigger;
+    if (trigger === 'right-rim-re-emergence') trigger = law.rewrittenTerminalTrigger;
+    if (trigger === 'primary-aperture-underfold' || trigger === 'aperture-underfold') {
+      trigger = 'lower-socket-clean-strip-continuity';
+    }
+    return {
+      ...interval,
+      layer: 'outer',
+      trigger,
+    };
+  });
+}
+
+function attachLowerSocketStripHonestyLaw(composition) {
+  const law = composition.lowerSocketStripHonestyLaw;
+  if (!law) return;
+  const lowerSocket = composition.macroAssemblages.find(assemblage => assemblage.id === law.targetMacroId);
+  if (!lowerSocket) return;
+  lowerSocket.lowerSocketStripHonestyLaw = law;
+  lowerSocket.exitZone = law.rewrittenExitZone;
+  if (lowerSocket.layerItinerary?.intervals) {
+    lowerSocket.layerItinerary.intervals = rewriteLowerSocketIntervalsForStripHonesty(
+      lowerSocket.layerItinerary.intervals,
+      law,
+    );
+  }
+  for (const member of lowerSocket.childBandPlan || []) {
+    member.layerIntervals = rewriteLowerSocketIntervalsForStripHonesty(member.layerIntervals || [], law);
+    if (member.role === 'body' && member.endTermination?.type === 'rim-absorption') {
+      member.endTermination.type = 'shared-socket-seam-absorption';
+      member.endTermination.proceduralFamily = 'shared-socket-seam-terminal-absorption';
+      member.endTermination.generatedBy = [
+        'LowerSocketStripHonestyLaw',
+        'lower-equatorial-shared-socket-seam',
+        'tuck-tongue-role-law',
+      ];
+    }
+  }
+  if (lowerSocket.macroPromotedBody) {
+    lowerSocket.macroPromotedBody.lowerSocketStripHonestyLaw = law;
+    lowerSocket.macroPromotedBody.exitZone = law.rewrittenExitZone;
+    lowerSocket.macroPromotedBody.sideSilhouettePolicy = {
+      ...lowerSocket.macroPromotedBody.sideSilhouettePolicy,
+      stripHonestyLawId: law.id,
+      stripHonestyMode: law.mode,
+      stripHonestyContract: law.visualContract,
+    };
+  }
+}
+
 function createLowerSocketKeelAnatomyLaw(assemblage) {
   if (assemblage.id !== 'lower-socket-keel') return null;
   return {
@@ -1037,6 +1126,10 @@ function lowerSocketAnatomyEffectAt(assemblage, t) {
 function lowerSocketAnatomyParametricT(assemblage, t) {
   const law = assemblage.lowerSocketKeelAnatomyLaw || assemblage.macroPromotedBody?.lowerSocketKeelAnatomyLaw;
   if (!law) return t;
+  const stripHonestyLaw = assemblage.lowerSocketStripHonestyLaw || assemblage.macroPromotedBody?.lowerSocketStripHonestyLaw;
+  if (stripHonestyLaw?.role === 'tuck-tongue') {
+    return t;
+  }
   const roleDecision = assemblage.lowerSocketFamilyRoleLaw?.familyRoleDecision
     || assemblage.macroPromotedBody?.familyRoleDecision;
   const cutStart = Math.min(
@@ -3273,6 +3366,11 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lowerSocketFamilyRoleLaw = createLowerSocketFamilyRoleLaw(next);
   attachLowerSocketFamilyRoleLaw(next);
   next.lowerSocketFamilyRoleVerdict = next.lowerSocketFamilyRoleLaw?.verdict || 'lower-socket-family-role-law-not-active';
+  next.lowerSocketStripHonestyLaw = createLowerSocketStripHonestyLaw(next);
+  attachLowerSocketStripHonestyLaw(next);
+  next.lowerSocketStripHonestyVerdict = next.lowerSocketStripHonestyLaw
+    ? 'lower-socket-strip-honesty-law-applied'
+    : 'lower-socket-strip-honesty-law-not-active';
   if (next.macroBodyPromotion.lowerCupClosure) {
     next.frontApertureOwnership.lowerCupClosure = next.macroBodyPromotion.lowerCupClosure;
   }
@@ -4993,6 +5091,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       LowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
       lowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
       lowerSocketFamilyRoleVerdict: composition.lowerSocketFamilyRoleVerdict,
+      LowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
+      lowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
+      lowerSocketStripHonestyVerdict: composition.lowerSocketStripHonestyVerdict,
       MacroContactMap: composition.macroContactMap,
       macroContactMap: composition.macroContactMap,
       macroContactCount: composition.macroContactMap?.contactCount || 0,
@@ -5421,6 +5522,9 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         LowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
         lowerSocketFamilyRoleLaw: composition.lowerSocketFamilyRoleLaw,
         lowerSocketFamilyRoleVerdict: composition.lowerSocketFamilyRoleVerdict,
+        LowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
+        lowerSocketStripHonestyLaw: composition.lowerSocketStripHonestyLaw,
+        lowerSocketStripHonestyVerdict: composition.lowerSocketStripHonestyVerdict,
         MacroContactMap: composition.macroContactMap,
         macroContactMap: composition.macroContactMap,
         MacroContactSample: composition.macroContactMap?.contacts || [],
