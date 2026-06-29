@@ -2,6 +2,7 @@ import {
   createFingerJuiceSupportFrame,
   createReservoirDomainDiagnostics,
   normalizeHillSupportFramePayload,
+  normalizeHillTerrainSamplePacket,
 } from './lerms-finger-juice-core.js';
 
 export const LERMS_FINGER_JUICE_WEBGPU_SOLVER_ROUTE = 'webgpu_particle_solver_v0';
@@ -59,6 +60,8 @@ const ITERATIVE_DENSITY_CONTINUITY_ITERATIONS = 3;
 const DENSITY_POSITION_SOLVE_REST_DISTANCE = PRESSURE_RADIUS * 0.62;
 const PARTICLE_BUDGET_RENDER_SCALE_CONTRACT = 'particle_budget_render_scale_v0';
 const SPAWN_JITTER_HASH_CONTRACT = 'spawn_jitter_hash_v0';
+const SOURCE_TERRAIN_GPU_COLLISION_MODE = 'source_height_samples_gpu_storage_v0';
+const LOCAL_PROCEDURAL_GPU_COLLISION_MODE = 'local_procedural_heightfield_gpu_v0';
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -168,6 +171,54 @@ function terrainNormalAt(x, z) {
   const dx = (terrainHeightAt(x + eps, z) - terrainHeightAt(x - eps, z)) / (eps * 2);
   const dz = (terrainHeightAt(x, z + eps) - terrainHeightAt(x, z - eps)) / (eps * 2);
   return normalize3([-dx, 1, -dz], [0, 1, 0]);
+}
+
+function createWebGPUTerrainSampleBufferData(surface = null) {
+  const grid = surface?.grid || {};
+  const channels = surface?.channels || {};
+  const columns = Math.max(1, Math.floor(finite(grid.columns, 1)));
+  const rows = Math.max(1, Math.floor(finite(grid.rows, 1)));
+  const sampleCount = Math.max(1, columns * rows);
+  if (!surface || !channels.height || channels.height.length < sampleCount) {
+    return {
+      mode: 0,
+      terrainSampleGpuCollisionMode: LOCAL_PROCEDURAL_GPU_COLLISION_MODE,
+      data: new Float32Array([0, 0, 1, 0]),
+      columns: 1,
+      rows: 1,
+      worldBounds: { x: { min: -1, max: 1 }, z: { min: -1, max: 1 } },
+      sampleChecksum: null,
+      channelChecksum: null,
+    };
+  }
+  const data = new Float32Array(sampleCount * 4);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const offset = index * 4;
+    data[offset] = finite(channels.height[index], 0);
+    if (channels.normal && channels.normal.length >= (index + 1) * 3) {
+      data[offset + 1] = finite(channels.normal[index * 3], 0);
+      data[offset + 2] = finite(channels.normal[index * 3 + 1], 1);
+      data[offset + 3] = finite(channels.normal[index * 3 + 2], 0);
+    } else {
+      const normal = surface.sampleNormalAt?.(
+        finite(surface.worldBounds?.x?.min, -1),
+        finite(surface.worldBounds?.z?.min, -1),
+      ) || [0, 1, 0];
+      data[offset + 1] = finite(normal[0], 0);
+      data[offset + 2] = finite(normal[1], 1);
+      data[offset + 3] = finite(normal[2], 0);
+    }
+  }
+  return {
+    mode: 1,
+    terrainSampleGpuCollisionMode: SOURCE_TERRAIN_GPU_COLLISION_MODE,
+    data,
+    columns,
+    rows,
+    worldBounds: surface.worldBounds || { x: { min: -1, max: 1 }, z: { min: -1, max: 1 } },
+    sampleChecksum: surface.checksums?.sample || null,
+    channelChecksum: surface.checksums?.channels || null,
+  };
 }
 
 function slideVelocityOnTerrain(velocity, normal, chemistry) {
@@ -437,6 +488,10 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
   const data = new Float32Array(initialParticles);
   const steps = Math.max(0, Math.floor(options.steps || 180));
   const dt = Math.max(1 / 240, Math.min(1 / 20, finite(options.dt, 1 / 60)));
+  const terrainSampleSurface = options.terrainSampleSurface || null;
+  const sampleHeightAt = terrainSampleSurface?.sampleHeightAt || terrainHeightAt;
+  const sampleNormalAt = terrainSampleSurface?.sampleNormalAt || terrainNormalAt;
+  const sampleSurfaceVelocityAt = terrainSampleSurface?.sampleSurfaceVelocityAt || (() => [0, 0, 0]);
   for (let step = 0; step < steps; step += 1) {
     for (let i = 0; i < data.length / PARTICLE_FLOATS; i += 1) {
       const particle = readParticle(data, i);
@@ -456,17 +511,23 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
       if (particle.phase < 0.5) {
         particle.velocity[1] -= 5.2 * dt;
         particle.position = add(particle.position, mul(particle.velocity, dt));
-        const ground = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.35;
+        const ground = sampleHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.35;
         if (particle.position[1] <= ground) {
           particle.position[1] = ground;
           particle.phase = 1;
           particle.impacted = true;
-          particle.velocity = slideVelocityOnTerrain(particle.velocity, terrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry);
+          particle.velocity = add(
+            slideVelocityOnTerrain(particle.velocity, sampleNormalAt(particle.position[0], particle.position[2]), particle.chemistry),
+            mul(sampleSurfaceVelocityAt(particle.position[0], particle.position[2]), 0.18),
+          );
         }
       } else {
-        particle.velocity = slideVelocityOnTerrain(particle.velocity, terrainNormalAt(particle.position[0], particle.position[2]), particle.chemistry);
+        particle.velocity = add(
+          slideVelocityOnTerrain(particle.velocity, sampleNormalAt(particle.position[0], particle.position[2]), particle.chemistry),
+          mul(sampleSurfaceVelocityAt(particle.position[0], particle.position[2]), 0.12),
+        );
         particle.position = add(particle.position, mul(particle.velocity, dt));
-        particle.position[1] = terrainHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
+        particle.position[1] = sampleHeightAt(particle.position[0], particle.position[2]) + particle.radius * 0.25;
       }
       writeParticle(data, i, particle);
     }
@@ -479,6 +540,7 @@ export function runCpuFingerJuiceOracle(initialParticles, options = {}) {
     goins: options.goins || [],
     solver_backend: 'cpu_oracle',
     hillSupportFramePayload: options.hillSupportFramePayload || options.supportFramePayload || null,
+    terrainSampleSurface,
   });
 }
 
@@ -1551,9 +1613,34 @@ function visualStreakBeadStats(particles) {
 }
 
 function supportFrameForSummary(options = {}) {
+  if (options.terrainSampleSurface?.supportFrame) return options.terrainSampleSurface.supportFrame;
   return normalizeHillSupportFramePayload(options.hillSupportFramePayload || options.supportFramePayload, {
     stepCount: options.stepCount || 0,
   }) || createFingerJuiceSupportFrame({ stepCount: options.stepCount || 0 });
+}
+
+function terrainSampleDiagnosticsForSummary(options = {}) {
+  const surface = options.terrainSampleSurface;
+  if (!surface) {
+    return {
+      schema: 'big-papa-finger-juice.terrain-sample-diagnostics.v0',
+      terrainSampleCouplingMode: 'local_procedural_heightfield_v0',
+      terrainSampleGpuCollisionMode: options.terrainSampleGpuCollisionMode || LOCAL_PROCEDURAL_GPU_COLLISION_MODE,
+      terrainSampleStatus: 'missing',
+    };
+  }
+  const diagnostics = surface.diagnostics || {
+    schema: 'big-papa-finger-juice.terrain-sample-diagnostics.v0',
+    terrainSampleCouplingMode: 'source_height_samples_v0',
+    terrainSampleStatus: surface.status || 'loaded',
+    sourceAuthority: surface.sourceAuthority || null,
+    sampleChecksum: surface.checksums?.sample || null,
+    channelChecksum: surface.checksums?.channels || null,
+  };
+  return {
+    ...diagnostics,
+    terrainSampleGpuCollisionMode: options.terrainSampleGpuCollisionMode || SOURCE_TERRAIN_GPU_COLLISION_MODE,
+  };
 }
 
 export function summarizeWebGPUParticles(buffer, options = {}) {
@@ -1601,6 +1688,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     const substrateSupportTotal = substrateSupportValues.reduce((sum, value) => sum + value, 0);
     const substrateSupportedCount = substrateSupportValues.filter(value => value >= 2).length;
     const supportFrame = supportFrameForSummary(options);
+    const terrainSampleDiagnostics = terrainSampleDiagnosticsForSummary(options);
     const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(liveParticles, supportFrame);
     return {
       solver_backend: options.solver_backend || 'webgpu_compute',
@@ -1629,6 +1717,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
       emitterDiagnostics: createEmitterDiagnostics(options.sources || [], particlesPerEmitter, null),
       supportFrame,
       supportFrameChecksum: supportFrame.supportFrameChecksum,
+      terrainSampleDiagnostics,
+      terrainSampleGpuCollisionMode: terrainSampleDiagnostics.terrainSampleGpuCollisionMode,
       substrateReservoirDiagnostics,
       activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
       neighborSupportSubstrateStats: {
@@ -1809,6 +1899,7 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
   const solverStabilityStats = stabilityStats(particles, spatialStats, depthStats);
   const visualStats = visualStreakBeadStats(particles);
   const supportFrame = supportFrameForSummary(options);
+  const terrainSampleDiagnostics = terrainSampleDiagnosticsForSummary(options);
   const substrateReservoirDiagnostics = createReservoirDomainDiagnostics(particles, supportFrame);
   const juiceHitEvents = [...lermHits.hitEvents, ...goinHits.hitEvents].slice(0, 256);
   const emitterDiagnostics = createEmitterDiagnostics(options.sources || [], particlesPerEmitter, ringEmitterLateralDrift);
@@ -1839,6 +1930,8 @@ export function summarizeWebGPUParticles(buffer, options = {}) {
     emitterDiagnostics,
     supportFrame,
     supportFrameChecksum: supportFrame.supportFrameChecksum,
+    terrainSampleDiagnostics,
+    terrainSampleGpuCollisionMode: terrainSampleDiagnostics.terrainSampleGpuCollisionMode,
     substrateReservoirDiagnostics,
     activeReservoirDomains: substrateReservoirDiagnostics.activeReservoirDomains,
     pressureDensityStats: pressureStats,
@@ -1924,9 +2017,14 @@ struct Params {
   steps: u32,
   emitterCount: u32,
   stepCount: u32,
-  pad0: u32,
-  pad1: u32,
-  pad2: u32,
+  terrainMode: u32,
+  terrainColumns: u32,
+  terrainRows: u32,
+  terrainMinX: f32,
+  terrainMaxX: f32,
+  terrainMinZ: f32,
+  terrainMaxZ: f32,
+  pad0: vec4f,
 };
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
@@ -1934,6 +2032,7 @@ struct Params {
 @group(0) @binding(2) var<storage, read> emitters: array<Emitter>;
 @group(0) @binding(3) var<storage, read_write> pressureBins: array<atomic<u32>>;
 @group(0) @binding(4) var<storage, read_write> neighborSupportBuffer: array<f32>;
+@group(0) @binding(5) var<storage, read> terrainSamples: array<vec4f>;
 
 const SPATIAL_PRESSURE_GRID_X: u32 = ${SPATIAL_PRESSURE_GRID_X}u;
 const SPATIAL_PRESSURE_GRID_Z: u32 = ${SPATIAL_PRESSURE_GRID_Z}u;
@@ -1959,7 +2058,7 @@ fn particleSupportScale() -> f32 {
   return clamp(sqrt(BASELINE_PARTICLE_SUPPORT_BUDGET / max(1.0, f32(params.particleCount))), MIN_PARTICLE_SUPPORT_SCALE, 1.0);
 }
 
-fn terrainHeightAt(x: f32, z: f32) -> f32 {
+fn proceduralTerrainHeightAt(x: f32, z: f32) -> f32 {
   let bowl = -0.08 + 0.11 * x * x + 0.035 * cos(z * 1.65);
   let hillA = 0.11 * exp(-((x - 0.46) * (x - 0.46) + (z - 0.28) * (z - 0.28)) / 0.18);
   let hillB = 0.09 * exp(-((x + 0.36) * (x + 0.36) + (z + 0.1) * (z + 0.1)) / 0.11);
@@ -1967,11 +2066,59 @@ fn terrainHeightAt(x: f32, z: f32) -> f32 {
   return bowl + hillA + hillB + valley;
 }
 
-fn terrainNormalAt(x: f32, z: f32) -> vec3f {
+fn terrainSampleIndex(column: u32, row: u32) -> u32 {
+  let safeColumn = min(column, max(1u, params.terrainColumns) - 1u);
+  let safeRow = min(row, max(1u, params.terrainRows) - 1u);
+  return safeRow * max(1u, params.terrainColumns) + safeColumn;
+}
+
+fn terrainSampleUv(x: f32, z: f32) -> vec2f {
+  let spanX = max(0.0001, params.terrainMaxX - params.terrainMinX);
+  let spanZ = max(0.0001, params.terrainMaxZ - params.terrainMinZ);
+  return vec2f(
+    clamp((x - params.terrainMinX) / spanX, 0.0, 1.0),
+    clamp((z - params.terrainMinZ) / spanZ, 0.0, 1.0)
+  );
+}
+
+fn terrainSampleLerp(x: f32, z: f32) -> vec4f {
+  if (params.terrainMode == 0u || params.terrainColumns <= 1u || params.terrainRows <= 1u) {
+    return vec4f(proceduralTerrainHeightAt(x, z), 0.0, 1.0, 0.0);
+  }
+  let uv = terrainSampleUv(x, z);
+  let gx = uv.x * f32(params.terrainColumns - 1u);
+  let gz = uv.y * f32(params.terrainRows - 1u);
+  let x0 = u32(floor(gx));
+  let z0 = u32(floor(gz));
+  let x1 = min(x0 + 1u, params.terrainColumns - 1u);
+  let z1 = min(z0 + 1u, params.terrainRows - 1u);
+  let tx = gx - f32(x0);
+  let tz = gz - f32(z0);
+  let a = terrainSamples[terrainSampleIndex(x0, z0)];
+  let b = terrainSamples[terrainSampleIndex(x1, z0)];
+  let c = terrainSamples[terrainSampleIndex(x0, z1)];
+  let d = terrainSamples[terrainSampleIndex(x1, z1)];
+  return mix(mix(a, b, tx), mix(c, d, tx), tz);
+}
+
+fn terrainHeightAt(x: f32, z: f32) -> f32 {
+  return terrainSampleLerp(x, z).x;
+}
+
+fn proceduralTerrainNormalAt(x: f32, z: f32) -> vec3f {
   let eps = 0.015;
   let dx = (terrainHeightAt(x + eps, z) - terrainHeightAt(x - eps, z)) / (eps * 2.0);
   let dz = (terrainHeightAt(x, z + eps) - terrainHeightAt(x, z - eps)) / (eps * 2.0);
   return normalize(vec3f(-dx, 1.0, -dz));
+}
+
+fn terrainNormalAt(x: f32, z: f32) -> vec3f {
+  if (params.terrainMode == 0u) {
+    return proceduralTerrainNormalAt(x, z);
+  }
+  let sample = terrainSampleLerp(x, z);
+  let normal = sample.yzw;
+  return select(vec3f(0.0, 1.0, 0.0), normalize(normal), length(normal) > 0.0001);
 }
 
 fn slideVelocityOnTerrain(velocity: vec3f, normal: vec3f, chemistry: f32) -> vec3f {
@@ -2984,6 +3131,12 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   let currentEmitterData = emitterData;
   let currentEmitterPacket = options.emitterPacket || {};
   let currentHillSupportFramePayload = options.hillSupportFramePayload || options.supportFramePayload || null;
+  let currentTerrainSampleSurface = options.terrainSampleSurface || normalizeHillTerrainSamplePacket(
+    options.terrainSamplePacket || null,
+    options.terrainSampleData || null,
+    { stepCount: 0 },
+  );
+  let currentTerrainSampleBufferData = createWebGPUTerrainSampleBufferData(currentTerrainSampleSurface);
   const cpuOracleBase = runCpuFingerJuiceOracle(data, {
     steps: options.oracleSteps || 180,
     dt: options.oracleDt || 1 / 60,
@@ -2992,6 +3145,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     lerms: options.lerms || [],
     goins: options.goins || [],
     hillSupportFramePayload: currentHillSupportFramePayload,
+    terrainSampleSurface: currentTerrainSampleSurface,
   });
   if (!globalThis.navigator?.gpu) {
     return unavailableSolver('navigator.gpu unavailable', { cpuOracle: cpuOracleBase });
@@ -3029,6 +3183,12 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: maxParticles * 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
+  let terrainSampleBuffer = device.createBuffer({
+    label: 'lerms-finger-juice-terrain-samples',
+    size: currentTerrainSampleBufferData.data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  let terrainSampleBufferByteLength = currentTerrainSampleBufferData.data.byteLength;
   const readbackBuffer = device.createBuffer({
     label: 'lerms-finger-juice-particle-readback',
     size: byteLength,
@@ -3041,11 +3201,12 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   });
   const paramsBuffer = device.createBuffer({
     label: 'lerms-finger-juice-params',
-    size: 32,
+    size: 64,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(particleBuffer, 0, data);
   device.queue.writeBuffer(emitterBuffer, 0, emitterData.data);
+  device.queue.writeBuffer(terrainSampleBuffer, 0, currentTerrainSampleBufferData.data);
   const shaderModule = device.createShaderModule({
     label: LERMS_FINGER_JUICE_WEBGPU_SHADER_ROUTE,
     code: COMPUTE_SHADER,
@@ -3058,6 +3219,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({
@@ -3092,30 +3254,54 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   } catch (error) {
     return unavailableSolver(`WebGPU pipeline validation failed: ${error.message || String(error)}`, { cpuOracle: cpuOracleBase });
   }
-  const bindGroup = device.createBindGroup({
-    label: 'lerms-finger-juice-bindgroup',
-    layout: computeBindGroupLayout,
-    entries: [
-      { binding: 0, resource: { buffer: particleBuffer } },
-      { binding: 1, resource: { buffer: paramsBuffer } },
-      { binding: 2, resource: { buffer: emitterBuffer } },
-      { binding: 3, resource: { buffer: pressureBinBuffer } },
-      { binding: 4, resource: { buffer: neighborSupportBuffer } },
-    ],
-  });
+  function createComputeBindGroup() {
+    return device.createBindGroup({
+      label: 'lerms-finger-juice-bindgroup',
+      layout: computeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: particleBuffer } },
+        { binding: 1, resource: { buffer: paramsBuffer } },
+        { binding: 2, resource: { buffer: emitterBuffer } },
+        { binding: 3, resource: { buffer: pressureBinBuffer } },
+        { binding: 4, resource: { buffer: neighborSupportBuffer } },
+        { binding: 5, resource: { buffer: terrainSampleBuffer } },
+      ],
+    });
+  }
+  let bindGroup = createComputeBindGroup();
   let stepCount = 0;
   let operationQueue = Promise.resolve();
+  function uploadTerrainSampleSurface(surface = null) {
+    currentTerrainSampleSurface = surface;
+    currentTerrainSampleBufferData = createWebGPUTerrainSampleBufferData(surface);
+    if (currentTerrainSampleBufferData.data.byteLength !== terrainSampleBufferByteLength) {
+      terrainSampleBuffer.destroy?.();
+      terrainSampleBuffer = device.createBuffer({
+        label: 'lerms-finger-juice-terrain-samples',
+        size: currentTerrainSampleBufferData.data.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      terrainSampleBufferByteLength = currentTerrainSampleBufferData.data.byteLength;
+      bindGroup = createComputeBindGroup();
+    }
+    device.queue.writeBuffer(terrainSampleBuffer, 0, currentTerrainSampleBufferData.data);
+    return currentTerrainSampleBufferData;
+  }
   function encodeCompute(encoder, safeSteps, safeDt, stepBase = stepCount, label = 'lerms-finger-juice-step') {
-    const params = new ArrayBuffer(32);
+    const params = new ArrayBuffer(64);
     const paramsView = new DataView(params);
     paramsView.setFloat32(0, safeDt, true);
     paramsView.setUint32(4, maxParticles, true);
     paramsView.setUint32(8, safeSteps, true);
     paramsView.setUint32(12, currentEmitterData.emitterCount, true);
     paramsView.setUint32(16, stepBase, true);
-    paramsView.setUint32(20, 0, true);
-    paramsView.setUint32(24, 0, true);
-    paramsView.setUint32(28, 0, true);
+    paramsView.setUint32(20, currentTerrainSampleBufferData.mode, true);
+    paramsView.setUint32(24, currentTerrainSampleBufferData.columns, true);
+    paramsView.setUint32(28, currentTerrainSampleBufferData.rows, true);
+    paramsView.setFloat32(32, finite(currentTerrainSampleBufferData.worldBounds?.x?.min, -1), true);
+    paramsView.setFloat32(36, finite(currentTerrainSampleBufferData.worldBounds?.x?.max, 1), true);
+    paramsView.setFloat32(40, finite(currentTerrainSampleBufferData.worldBounds?.z?.min, -1), true);
+    paramsView.setFloat32(44, finite(currentTerrainSampleBufferData.worldBounds?.z?.max, 1), true);
     device.queue.writeBuffer(paramsBuffer, 0, params);
     const pass = encoder.beginComputePass({ label });
     pass.setBindGroup(0, bindGroup);
@@ -3166,6 +3352,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
         substrateDensityConstraintContract: LERMS_FINGER_JUICE_WEBGPU_SUBSTRATE_DENSITY_CONSTRAINT_CONTRACT,
         iterativeDensityContinuityContract: LERMS_FINGER_JUICE_WEBGPU_ITERATIVE_DENSITY_CONTINUITY_CONTRACT,
         particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+        terrainSampleGpuCollisionMode: currentTerrainSampleBufferData.terrainSampleGpuCollisionMode,
         continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
         stepCount,
       };
@@ -3191,6 +3378,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       substrateDensityConstraintContract: LERMS_FINGER_JUICE_WEBGPU_SUBSTRATE_DENSITY_CONSTRAINT_CONTRACT,
       iterativeDensityContinuityContract: LERMS_FINGER_JUICE_WEBGPU_ITERATIVE_DENSITY_CONTINUITY_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+      terrainSampleGpuCollisionMode: currentTerrainSampleBufferData.terrainSampleGpuCollisionMode,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount,
       stepCount,
@@ -3227,6 +3415,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
           lerms: options.lerms || [],
           goins: options.goins || [],
           hillSupportFramePayload: currentHillSupportFramePayload,
+          terrainSampleSurface: currentTerrainSampleSurface,
         })
       : null;
     const summary = summarizeWebGPUParticles(result, {
@@ -3239,6 +3428,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       summaryMode: readOptions.summaryMode || null,
       neighborSupportData,
       hillSupportFramePayload: currentHillSupportFramePayload,
+      terrainSampleSurface: currentTerrainSampleSurface,
+      terrainSampleGpuCollisionMode: currentTerrainSampleBufferData.terrainSampleGpuCollisionMode,
     });
     return {
       ...summary,
@@ -3260,6 +3451,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       substrateDensityConstraintContract: LERMS_FINGER_JUICE_WEBGPU_SUBSTRATE_DENSITY_CONSTRAINT_CONTRACT,
       iterativeDensityContinuityContract: LERMS_FINGER_JUICE_WEBGPU_ITERATIVE_DENSITY_CONTINUITY_CONTRACT,
       particleSupportBudgetContract: LERMS_FINGER_JUICE_WEBGPU_SUPPORT_BUDGET_CONTRACT,
+      terrainSampleGpuCollisionMode: currentTerrainSampleBufferData.terrainSampleGpuCollisionMode,
       continuityBinRefreshChunk: CONTINUITY_BIN_REFRESH_CHUNK,
       continuityBinRefreshCount: safeSteps > 0 ? Math.ceil(safeSteps / CONTINUITY_BIN_REFRESH_CHUNK) : 0,
       adapterInfo,
@@ -3315,6 +3507,28 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
       supportFrameIngestionContract: normalized.supportFrameIngestionContract,
       heightfieldCouplingMode: normalized.heightfieldCouplingMode,
     };
+  }
+  function setTerrainSampleSurface(surface = null) {
+    const terrainBufferData = uploadTerrainSampleSurface(surface);
+    if (!surface) {
+      return {
+        terrainSampleStatus: 'missing',
+        terrainSampleGpuCollisionMode: terrainBufferData.terrainSampleGpuCollisionMode,
+        heightfieldCouplingMode: supportFrameForSummary({ hillSupportFramePayload: currentHillSupportFramePayload, stepCount }).heightfieldCouplingMode,
+      };
+    }
+    return {
+      terrainSampleStatus: surface.status || 'loaded',
+      terrainSampleCouplingMode: 'source_height_samples_v0',
+      terrainSampleGpuCollisionMode: terrainBufferData.terrainSampleGpuCollisionMode,
+      heightfieldCouplingMode: surface.supportFrame?.heightfieldCouplingMode || 'source_height_samples_v0',
+      terrainSampleChecksum: surface.checksums?.sample || null,
+      terrainChannelChecksum: surface.checksums?.channels || null,
+      supportFrameChecksum: surface.supportFrame?.supportFrameChecksum || null,
+    };
+  }
+  function setHillTerrainSamplePacket(packetReport = null, dataReport = null) {
+    return setTerrainSampleSurface(normalizeHillTerrainSamplePacket(packetReport, dataReport, { stepCount }));
   }
   function step(steps = 1, dt = 1 / 60) {
     const run = () => runStep(steps, dt);
@@ -3525,6 +3739,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     stepAndRead,
     setEmitterPacket,
     setHillSupportFramePayload,
+    setTerrainSampleSurface,
+    setHillTerrainSamplePacket,
     createRenderer,
   };
 }

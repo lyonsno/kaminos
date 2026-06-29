@@ -173,6 +173,10 @@ assert.match(webgpuCoreSource, /substrateReservoirDiagnostics/, 'WebGPU summarie
 assert.match(webgpuCoreSource, /activeReservoirDomains/, 'WebGPU summaries expose active reservoir domains');
 assert.match(webgpuCoreSource, /supportFrameChecksum/, 'WebGPU support diagnostics preserve checksum identity');
 assert.match(webgpuCoreSource, /settleRestEnergyStats/, 'WebGPU solver reports settle/rest energy diagnostics');
+assert.match(webgpuCoreSource, /@binding\(5\)\s+var<storage,\s*read>\s+terrainSamples/, 'WebGPU compute shader reads source terrain samples from a GPU storage buffer');
+assert.match(webgpuCoreSource, /source_height_samples_gpu_storage_v0/, 'WebGPU solver names source terrain sample GPU collision mode');
+assert.match(webgpuCoreSource, /terrainSampleGpuCollisionMode/, 'WebGPU summaries report whether live collision is source-sample-backed on GPU');
+assert.match(webgpuCoreSource, /uploadTerrainSampleSurface/, 'WebGPU solver can upload live Hill terrain samples after startup');
 assert.match(webgpuCoreSource, /averageSupportNeighborCount/, 'support diagnostics report average neighbor support');
 assert.match(webgpuCoreSource, /unsupportedCorrectionRatio/, 'support diagnostics report unsupported correction ratio');
 assert.match(webgpuCoreSource, /p95SettledSurfaceSpeed/, 'rest diagnostics report p95 settled surface speed');
@@ -249,6 +253,12 @@ assert.match(pageSource, /__lermsFingerJuicePreviewBenchPayload/, 'prototype exp
 assert.match(pageSource, /supportFrameChecksum/, 'prototype HUD/witness state exposes support-frame checksum');
 assert.match(pageSource, /hill_support_payload_root/, 'prototype accepts a Hill support payload file root for live support-frame ingestion');
 assert.match(pageSource, /hillSupportFramePayloadStatus/, 'prototype exposes Hill support payload load status to witnesses and HUD');
+assert.match(pageSource, /normalizeHillTerrainSamplePacket/, 'prototype normalizes source-owned Hill terrain sample packets for collision ingestion');
+assert.match(pageSource, /terrain_sample_packet_root/, 'prototype accepts a Hill terrain sample packet file root for live height-sample ingestion');
+assert.match(pageSource, /terrain_sample_data_root/, 'prototype accepts a Hill terrain sample data file root when the packet transport must be overridden');
+assert.match(pageSource, /setTerrainSampleSurface/, 'prototype pushes decoded Hill terrain samples into the solver/prototype surface path');
+assert.match(pageSource, /source_height_samples_v0/, 'prototype exposes source height-sample coupling instead of hiding behind local procedural terrain');
+assert.match(pageSource, /terrainSampleStatus/, 'prototype exposes terrain sample load status to witnesses and HUD');
 assert.match(pageSource, /__lermsFingerJuiceStressForWitness/, 'prototype exposes an expanded witness stress phase hook');
 assert.match(pageSource, /__lermsFingerJuiceFreezeForWitness/, 'prototype exposes a frozen capture hook so screenshot and state cannot drift');
 assert.match(pageSource, /witness-frozen-state-capture-v0/, 'prototype names the frozen witness capture contract');
@@ -378,6 +388,8 @@ assert.match(witnessSource, /stabilityGrowthStats/, 'witness records long-run gr
 assert.match(witnessSource, /visualFailureMetrics/, 'witness records visual streak and bead-chain failure metrics');
 assert.match(witnessSource, /longThinComponentCount/, 'witness detects long thin colored streak components');
 assert.match(witnessSource, /elongatedBandCount/, 'witness detects thick elongated colored rail components');
+assert.match(witnessSource, /sourceTerrainBroadSheetVisualMode/, 'witness allows source-terrain broad fluid sheets only under source-backed GPU terrain collision');
+assert.match(witnessSource, /sourceTerrainFullViewportLegible/, 'witness allows source-terrain full viewport sparsity only with dense-crop proof');
 assert.match(witnessSource, /detachedBeadChainCount/, 'witness detects detached bead-chain components');
 assert.match(witnessSource, /visual-attractor-failure-v0/, 'witness labels visual-attractor failure diagnostics');
 assert.match(witnessSource, /captureStateConsistency/, 'witness records screenshot/state consistency diagnostics');
@@ -421,6 +433,10 @@ assert.match(tabWitnessSource, /failure_phase:\s*null/, 'Kaminos tab witness cle
 
 const mod = await import(corePath);
 const webgpuMod = await import(webgpuCorePath);
+
+function encodeF32(values) {
+  return Buffer.from(new Float32Array(values).buffer).toString('base64');
+}
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_EMITTERS_SCHEMA, 'lerms.world-finger-juice-emitters.v0');
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_ROUTE, 'world-space-ballistic-surface-flow-particles-v0');
 assert.equal(mod.LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT, 'hill-of-hills-heightfield-collision-v0');
@@ -577,6 +593,88 @@ assert.equal(hillPreviewPayload.payload.summary.sourceAuthority, 'live_simulatio
 assert.ok(hillPreviewPayload.payload.downgrades.includes('fluid_collision_heightfield_still_local_procedural'), 'Preview Bench payload carries honest local-collision downgrade');
 assert.ok(!hillPreviewPayload.payload.downgrades.includes('local_procedural_support_frame_not_live_hill'), 'Preview Bench payload does not claim local support frame after Hill support ingestion');
 
+const hillTerrainSamplePacket = {
+  ok: true,
+  schema: 'kaminos.preview-bench.terrain-sample-packet.v0',
+  route: 'kaminos/preview-bench/terrain-sample-file',
+  frameId: 'hill-terrain-sample-frame-1',
+  source: {
+    authority: 'live_simulation',
+    producerDiaulos: 'hill-of-hills-fucker',
+    route: 'lerms/hill-of-hills/terrain-sample-packet-file',
+    configId: 'hill-of-hills-terrain-sample-packet-v0',
+    backend: 'deterministic-cpu-heightfield',
+  },
+  freshness: {
+    status: 'fresh-live-terrain-sample',
+    sampleAgeMs: 0,
+    budgetMs: 900000,
+  },
+  terrainSample: {
+    schema: 'lerms.terrain-sample.v0',
+    route: 'lerms/hill-of-hills/terrain-sample-fetch',
+    grid: { columns: 2, rows: 2, sampleCount: 4, spacing: { x: 2, z: 2 } },
+    worldBounds: {
+      x: { min: -1, max: 1 },
+      y: { min: 0, max: 0.6 },
+      z: { min: -1, max: 1 },
+    },
+    domainBounds: { u: { min: 0, max: 1 }, v: { min: 0, max: 1 } },
+    channelLayout: ['height', 'normal', 'gradient', 'heightDelta', 'surfaceVelocity'],
+    transport: {
+      kind: 'source-owned-fetch-url',
+      encoding: 'json-base64-f32-le',
+      fetchUrl: '/api/read?root=scratch&path=hill-terrain-data.json',
+    },
+    checksums: {
+      supportFrame: 'hill-live-support',
+      topology: 'hill-live-topology',
+      sample: 'hill-live-sample',
+      channels: 'hill-live-channels',
+    },
+  },
+};
+const hillTerrainSampleData = {
+  schema: 'lerms.hill-of-hills.terrain-sample-data.v0',
+  sourceTruth: {
+    schema: 'lerms.source-truth.v0',
+    authority: 'live_simulation',
+    route: 'hill-of-hills/terrain-sample-packet',
+    frameId: 'hill-terrain-sample-frame-1',
+    backend: 'deterministic-cpu-heightfield',
+    configId: 'hill-of-hills-terrain-sample-packet-v0',
+  },
+  grid: { columns: 2, rows: 2, sampleCount: 4, spacing: { x: 2, z: 2 } },
+  worldBounds: {
+    x: { min: -1, max: 1 },
+    y: { min: 0, max: 0.6 },
+    z: { min: -1, max: 1 },
+  },
+  domainBounds: { u: { min: 0, max: 1 }, v: { min: 0, max: 1 } },
+  checksums: {
+    supportFrame: 'hill-live-support',
+    topology: 'hill-live-topology',
+    sample: 'hill-live-sample',
+    channels: 'hill-live-channels',
+  },
+  channels: {
+    height: { encoding: 'base64-f32-le', components: ['height'], shape: [4], byteLength: 16, data: encodeF32([0, 0.2, 0.4, 0.6]) },
+    normal: { encoding: 'base64-f32-le', components: ['x', 'y', 'z'], shape: [4, 3], byteLength: 48, data: encodeF32([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]) },
+    gradient: { encoding: 'base64-f32-le', components: ['dx', 'dz'], shape: [4, 2], byteLength: 32, data: encodeF32([1, 10, 1, 10, 1, 10, 1, 10]) },
+    heightDelta: { encoding: 'base64-f32-le', components: ['heightDelta'], shape: [4], byteLength: 16, data: encodeF32([0.1, 0.2, 0.3, 0.4]) },
+    surfaceVelocity: { encoding: 'base64-f32-le', components: ['x', 'y', 'z'], shape: [4, 3], byteLength: 48, data: encodeF32([0.01, 0, 0.02, 0.01, 0, 0.02, 0.01, 0, 0.02, 0.01, 0, 0.02]) },
+  },
+};
+const hillTerrainSurface = mod.normalizeHillTerrainSamplePacket(hillTerrainSamplePacket, hillTerrainSampleData, { stepCount: 9 });
+assert.equal(hillTerrainSurface.schema, 'big-papa-finger-juice.terrain-sample-surface.v0', 'Hill terrain sample normalization produces a Big Papa sample surface');
+assert.equal(hillTerrainSurface.supportFrame.heightfieldCouplingMode, 'source_height_samples_v0', 'Hill terrain samples switch coupling to source samples');
+assert.equal(hillTerrainSurface.supportFrame.terrainBufferTransport, 'source-owned-fetch-url', 'Hill terrain sample normalization preserves source-owned fetch transport');
+assert.equal(hillTerrainSurface.supportFrame.terrainChannelChecksum, 'hill-live-channels', 'Hill terrain sample normalization preserves channel checksum');
+assert.equal(hillTerrainSurface.sampleHeightAt(0, 0), 0.3, 'Hill terrain sample bilinearly samples source height data');
+assert.deepEqual(hillTerrainSurface.sampleNormalAt(0, 0).map(value => Number(value.toFixed(3))), [0, 1, 0], 'Hill terrain sample exposes source normals');
+assert.equal(hillTerrainSurface.sampleSurfaceVelocityAt(0, 0)[0], 0.01, 'Hill terrain sample exposes source surface velocity');
+assert.ok(!hillTerrainSurface.supportFrame.supportFrameDowngrades.includes('fluid_collision_heightfield_still_local_procedural'), 'live sample surface removes local-collision downgrade');
+
 const packet = mod.normalizeWorldFingerJuiceEmitterPacket({
   packet_id: 'test-live-packet-1',
   source_route: 'perceptasia-finger-fluid-swarm',
@@ -646,11 +744,13 @@ assert.equal(packet.terrain_frame.id, 'palm-daddy-rounded-channel');
 
 const prototype = mod.createWorldFingerJuiceTransportPrototype({ maxParticles: 64, seed: 7 });
 prototype.setEmitters(packet);
+prototype.setTerrainSampleSurface(hillTerrainSurface);
 const afterSpawn = prototype.step(1 / 30);
 assert.equal(afterSpawn.effectiveRoute, 'world-space-ballistic-surface-flow-particles-v0');
 assert.equal(afterSpawn.emitterSchema, 'lerms.world-finger-juice-emitters.v0');
 assert.equal(afterSpawn.arcContract, 'finger-aim-ballistic-arc-range-v0');
 assert.equal(afterSpawn.terrainContract, 'hill-of-hills-heightfield-collision-v0');
+assert.equal(afterSpawn.supportFrame.heightfieldCouplingMode, 'source_height_samples_v0', 'prototype reports live terrain sample coupling after sample ingestion');
 assert.ok(afterSpawn.particleCount > 0, 'active world emitters spawn particles');
 assert.ok(afterSpawn.airborneCount > 0, 'first step preserves ballistic airborne particles');
 
@@ -672,6 +772,8 @@ assert.ok(settled.impactRingCount > 0, 'late state preserves contact/impact ring
 assert.ok(settled.surfaceSmearCount > 0, 'late state preserves phase-aware surface smear evidence');
 assert.ok(settled.trails.some(trail => trail.samples.some(sample => Array.isArray(sample.velocity_hint))), 'trail samples carry velocity hints');
 assert.ok(settled.heightfieldSamples.length >= 5, 'debug state records heightfield samples');
+assert.ok(settled.heightfieldSamples.every(sample => sample.y > 0.2), 'debug heightfield samples come from Hill source terrain data');
+assert.equal(settled.terrainSampleDiagnostics.sampleChecksum, 'hill-live-sample', 'debug state preserves Hill terrain sample checksum');
 assert.equal(settled.supportFrame.schema, 'big-papa-finger-juice.support-frame.v0', 'debug state carries Big Papa support frame schema');
 assert.equal(settled.supportFrame.supportClass, 'single_valued_heightfield', 'support frame declares Hill-compatible single-valued support');
 assert.equal(settled.supportFrame.mappingMode, 'static_domain_to_world', 'support frame declares current static domain mapping');
@@ -720,12 +822,15 @@ const oracleHitState = webgpuMod.runCpuFingerJuiceOracle(initialWebgpuData, {
   emitterPacket: packet,
   lerms: [{ id: 'red-lerm-1', position: [0.11, 0.1, -0.13], radius: 0.18, mass: 1.4 }],
   goins: [{ id: 'goin-1', position: [0.22, 0.1, -0.08], radius: 0.14, mass: 2 }],
+  terrainSampleSurface: hillTerrainSurface,
 });
 assert.equal(oracleHitState.sourceTruth.schema, 'lerms.source-truth.v0', 'WebGPU summary carries LERMS source truth');
 assert.equal(oracleHitState.sourceTruth.authority, 'synthetic_fixture', 'WebGPU summary preserves packet authority');
 assert.ok(oracleHitState.sourceDiagnostics.sourcePacketId, 'WebGPU summary reports source packet identity');
 assert.ok(Array.isArray(oracleHitState.emitterDiagnostics) && oracleHitState.emitterDiagnostics.length >= 2, 'WebGPU summary reports emitter diagnostics');
 assert.equal(oracleHitState.supportFrame.supportClass, 'single_valued_heightfield', 'WebGPU summary carries Hill-compatible support frame');
+assert.equal(oracleHitState.supportFrame.heightfieldCouplingMode, 'source_height_samples_v0', 'WebGPU oracle summary reports live source-height terrain coupling');
+assert.equal(oracleHitState.terrainSampleDiagnostics.sampleChecksum, 'hill-live-sample', 'WebGPU oracle summary preserves Hill terrain sample checksum');
 assert.equal(oracleHitState.substrateReservoirDiagnostics.supportFrameChecksum, oracleHitState.supportFrame.supportFrameChecksum, 'WebGPU reservoir diagnostics bind to support-frame checksum');
 assert.ok(oracleHitState.substrateReservoirDiagnostics.activeReservoirDomains.componentCount > 0, 'WebGPU summary reports active reservoir domains');
 assert.ok(oracleHitState.pressureDensityStats.pressureNeighborWindow > 0, 'WebGPU summary reports bounded pressure neighbor scope');
