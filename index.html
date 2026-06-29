@@ -4435,6 +4435,7 @@ function applyOrbShellCompositionRenderEffectPolicy(params) {
 
 function initOrbShellCompositionRoute() {
   const params = new URLSearchParams(window.location.search);
+  const orbShellFocus = params.get('orb_shell_focus');
   const requestedVariationSeed = Number(params.get('orb_shell_variation_seed') || 0);
   if (params.has('orb_shell_variation_seed') && Number.isFinite(requestedVariationSeed)) {
     document.getElementById('orb-shell-seed').value = String(Math.max(0, Math.min(99999, Math.round(requestedVariationSeed))));
@@ -4472,8 +4473,13 @@ function initOrbShellCompositionRoute() {
     setActiveTab('orb-shell');
     orbShellWitness?.setActive(false);
     orbShellCompositionWitness.setActive(true);
-    frameOrbShellCompositionCamera();
-    setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
+    if (orbShellFocus === 'lower-socket-semantic-render-inventory') {
+      const witnessState = orbShellCompositionWitness.enableLowerSocketSemanticRenderInventoryWitness();
+      setInfo(`Orb Shell Macro Grounding lower-socket semantic inventory: ${witnessState.visibleCount} visible meshes`);
+    } else {
+      frameOrbShellCompositionCamera();
+      setInfo(orbShellCompositionStatusText(orbShellCompositionWitness.debugState()));
+    }
   }
   updateOrbShellCompositionReadout();
 }

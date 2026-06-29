@@ -34,6 +34,7 @@ let cleanSidewallTopologyWitness = null;
 let liveTerminalCapWitness = null;
 let apertureTangencyWitness = null;
 let macroContactMapWitness = null;
+let lowerSocketSemanticRenderInventoryWitness = null;
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -277,6 +278,11 @@ async function main() {
       macroContactMapWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroContactMapWitness?.()');
       await delay(500);
     }
+    if (focus === 'lower-socket-semantic-render-inventory') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLowerSocketAnatomy?.()');
+      lowerSocketSemanticRenderInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableLowerSocketSemanticRenderInventoryWitness?.()');
+      await delay(500);
+    }
 
     phase = 'state';
     const renderEffectPolicy = await readRenderEffectPolicy(ws, forcedAoState);
@@ -305,6 +311,9 @@ async function main() {
       assert.equal(state?.lowerSocketKeelAnatomyVerdict, 'procedural-lower-socket-anatomy-law-applied', 'selected lower socket must record applied anatomy-law verdict');
       assert.equal(state?.LowerSocketFamilyRoleLaw?.schema, 'LowerSocketFamilyRoleLaw', 'selected lower socket must preserve family role law in witness state');
       assert.equal(state?.lowerSocketFamilyRoleVerdict, 'tuck-tongue-role-law-applied', 'selected lower socket must record tuck tongue role-law verdict');
+      assert.equal(state?.LowerSocketRenderInventoryPlan?.schema, 'LowerSocketRenderInventoryPlan', 'selected lower socket must preserve semantic render inventory plan in witness state');
+      assert.equal(state?.lowerSocketRenderInventory?.schema, 'LowerSocketSemanticRenderInventory', 'selected lower socket must expose runtime semantic render inventory');
+      assert.ok(state?.lowerSocketRenderInventoryExpectedClasses?.includes('BandMember'), 'lower socket inventory must account for legacy child bands');
       if (state?.selectedMacroAssemblageIds?.includes('equatorial-cupping-whorl')) {
         assert.equal(state?.LowerSocketEquatorialSocketJointLaw?.schema, 'LowerSocketEquatorialSocketJointLaw', 'selected lower/equatorial pair must preserve shared socket joint law in witness state');
         assert.equal(state?.lowerSocketEquatorialSocketJointVerdict, 'shared-seam-law-applied', 'selected lower/equatorial pair must record shared seam-law verdict');
@@ -313,6 +322,12 @@ async function main() {
       assert.equal(state?.LowerSocketKeelAnatomyLaw, null, 'retired lower socket must not expose stale anatomy law');
       assert.equal(state?.LowerSocketFamilyRoleLaw, null, 'retired lower socket must not expose stale family role law');
       assert.equal(state?.LowerSocketEquatorialSocketJointLaw, null, 'retired lower socket must not expose stale lower/equatorial seam law');
+    }
+    if (focus === 'lower-socket-semantic-render-inventory') {
+      assert.equal(lowerSocketSemanticRenderInventoryWitness?.schema, 'LowerSocketSemanticRenderInventoryWitnessState', 'lower socket semantic render inventory witness did not activate');
+      assert.equal(lowerSocketSemanticRenderInventoryWitness?.mode, 'lower-socket-semantic-render-inventory-isolated-v0', 'lower socket semantic render inventory witness used wrong mode');
+      assert.ok(lowerSocketSemanticRenderInventoryWitness?.visibleCount >= 1, 'lower socket semantic render inventory witness exposed no meshes');
+      assert.ok(lowerSocketSemanticRenderInventoryWitness?.runtimeRecords?.some(record => record.renderClass === 'LiveMacroSideWall'), 'lower socket semantic render inventory did not expose live sidewalls');
     }
     if (focus === 'macro-contact-map') {
       assert.equal(macroContactMapWitness?.schema, 'MacroContactMapWitnessState', 'macro contact map witness did not activate');
@@ -468,7 +483,13 @@ async function main() {
 
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
-    if (clipCanvas || focus === 'side-rim-clean-topology' || focus === 'live-terminal-caps' || focus === 'aperture-tangency') {
+    if (
+      clipCanvas
+      || focus === 'side-rim-clean-topology'
+      || focus === 'live-terminal-caps'
+      || focus === 'aperture-tangency'
+      || focus === 'lower-socket-semantic-render-inventory'
+    ) {
       const canvasRect = await evaluate(ws, `
         (() => {
           const canvas = document.querySelector('canvas');
@@ -523,6 +544,10 @@ async function main() {
       LowerSocketKeelAnatomyLaw: state.LowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyLaw: state.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyVerdict: state.lowerSocketKeelAnatomyVerdict,
+      LowerSocketRenderInventoryPlan: state.LowerSocketRenderInventoryPlan,
+      lowerSocketRenderInventoryPlan: state.lowerSocketRenderInventoryPlan,
+      lowerSocketRenderInventory: state.lowerSocketRenderInventory,
+      lowerSocketSemanticRenderInventoryWitness,
       macroContactMapWitness,
       MacroFamilySubstripPlan: state.MacroFamilySubstripPlan,
       macroFamilySubstripPlan: state.macroFamilySubstripPlan,
