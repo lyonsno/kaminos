@@ -53,6 +53,11 @@ const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-tran
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
 
+function normalizeLifecycleEffect(value) {
+  const normalized = String(value || 'none').toLowerCase();
+  return normalized === 'snuff' ? 'snuff' : 'none';
+}
+
 function fireLickOperatorGainFromAmount(value) {
   const numeric = Number(value);
   const amount = Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
@@ -547,6 +552,19 @@ const requestedReactionFuelScale = Number(routeParams.get('volume_reaction_fuel'
 const expectedReactionFuelScale = routeParams.has('volume_reaction_fuel') && Number.isFinite(requestedReactionFuelScale)
   ? Math.max(0, Math.min(1.5, requestedReactionFuelScale))
   : 1;
+const expectedLifecycleEffect = normalizeLifecycleEffect(routeParams.get('volume_lifecycle_effect'));
+const requestedLifecycleT = Number(routeParams.get('volume_lifecycle_t'));
+const expectedLifecycleT = routeParams.has('volume_lifecycle_t') && Number.isFinite(requestedLifecycleT)
+  ? Math.max(0, Math.min(1, requestedLifecycleT))
+  : 0;
+const requestedQuenchVapor = Number(routeParams.get('volume_quench_vapor'));
+const expectedQuenchVapor = routeParams.has('volume_quench_vapor') && Number.isFinite(requestedQuenchVapor)
+  ? Math.max(0, Math.min(2, requestedQuenchVapor))
+  : 0;
+const expectedQuenchEnvelope = expectedLifecycleT * expectedLifecycleT * (3 - 2 * expectedLifecycleT);
+const expectedQuenchVaporStrength = expectedLifecycleEffect === 'snuff'
+  ? expectedQuenchVapor * expectedQuenchEnvelope
+  : 0;
 const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
@@ -886,6 +904,14 @@ async function main() {
     assert.ok(Math.abs((state.controls?.fireLicks ?? 0) - expectedFireLicks) < 0.001, 'fire licks route/control did not apply');
     assert.ok(Math.abs((state.controls?.reactionFuelScale ?? 0) - expectedReactionFuelScale) < 0.001, 'reaction fuel route/control did not apply');
     assert.ok(Math.abs((state.reactionFuelScale ?? 0) - expectedReactionFuelScale) < 0.001, 'effective reaction fuel scale did not reach debug state');
+    assert.equal(state.controls?.lifecycleEffect ?? 'none', expectedLifecycleEffect, 'lifecycle effect route/control did not apply');
+    assert.equal(state.lifecycleEffect ?? 'none', expectedLifecycleEffect, 'effective lifecycle effect did not reach debug state');
+    assert.ok(Math.abs((state.controls?.lifecycleT ?? 0) - expectedLifecycleT) < 0.001, 'lifecycle phase route/control did not apply');
+    assert.ok(Math.abs((state.lifecycleT ?? 0) - expectedLifecycleT) < 0.001, 'effective lifecycle phase did not reach debug state');
+    assert.ok(Math.abs((state.controls?.quenchVapor ?? 0) - expectedQuenchVapor) < 0.001, 'quench vapor route/control did not apply');
+    assert.ok(Math.abs((state.quenchVapor ?? 0) - expectedQuenchVapor) < 0.001, 'effective quench vapor did not reach debug state');
+    assert.ok(Math.abs((state.quenchVaporStrength ?? 0) - expectedQuenchVaporStrength) < 0.001, 'effective quench-vapor strength did not match route phase');
+    assert.equal(state.snuffVisualModel ?? 'inactive', expectedQuenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive', 'snuff visual model identity did not match effective quench-vapor state');
     assert.ok(Math.abs((state.controls?.windStrength ?? 0) - expectedWindStrength) < 0.001, 'wind strength route/control did not apply');
     assert.ok(Math.abs((state.windStrength ?? 0) - expectedWindStrength) < 0.001, 'effective wind strength state did not match route/control');
     assert.ok(Math.abs((state.controls?.windAngle ?? 0) - expectedWindAngle) < 0.001, 'wind direction route/control did not apply');
@@ -1729,6 +1755,11 @@ async function main() {
       tallPlumeDetailFrequencySource: sample.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: sample.visibleDetailOverlayGain,
       reactionFuelScale: sample.reactionFuelScale,
+      lifecycleEffect: sample.lifecycleEffect,
+      lifecycleT: sample.lifecycleT,
+      quenchVapor: sample.quenchVapor,
+      quenchVaporStrength: sample.quenchVaporStrength,
+      snuffVisualModel: sample.snuffVisualModel,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
@@ -1745,6 +1776,10 @@ async function main() {
       expectedDetailScaleArtifactQuarantine,
       expectedVisibleDetailOverlayGain,
       expectedReactionFuelScale,
+      expectedLifecycleEffect,
+      expectedLifecycleT,
+      expectedQuenchVapor,
+      expectedQuenchVaporStrength,
       expectedPlumeHeight,
       expectedCurl,
       expectedSpeed,

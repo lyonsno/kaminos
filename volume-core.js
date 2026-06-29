@@ -101,6 +101,26 @@ function normalizeReactionFuelScale(value) {
   return clampFinite(value, 0, 1.5, 1);
 }
 
+function normalizeLifecycleEffect(value) {
+  const normalized = String(value || 'none').toLowerCase();
+  return normalized === 'snuff' ? 'snuff' : 'none';
+}
+
+function normalizeLifecycleT(value) {
+  return clampFinite(value, 0, 1, 0);
+}
+
+function normalizeQuenchVapor(value) {
+  return clampFinite(value, 0, 2, 0);
+}
+
+function snuffQuenchVaporStrength(controls = {}) {
+  if (normalizeLifecycleEffect(controls.lifecycleEffect) !== 'snuff') return 0;
+  const t = normalizeLifecycleT(controls.lifecycleT);
+  const envelope = t * t * (3 - 2 * t);
+  return normalizeQuenchVapor(controls.quenchVapor) * envelope;
+}
+
 function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
   return clampFinite(value, 0, max, fallback);
 }
@@ -2929,6 +2949,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let scaleDomain = vec3<f32>(tallPlumeRenderDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), tallPlumeRenderDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
+  let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3083,7 +3104,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       clamp(0.52 + bonfireFireRenderBreakup * 0.26 + flameDetail * 0.11 + fireLick * 0.09 + emberFleck * 0.06, 0.44, 1.04),
       bonfireRenderScene * smoothstep(0.030, 0.84, flame + flameDetail + fireLick)
     );
-    let smokeAlpha = mix(
+    var smokeAlpha = mix(
       clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16),
       clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
       canonicalSmokeOnlyRender
@@ -3105,8 +3126,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       clamp(0.70 + tallPlumeRenderTransitionStagger * 0.36, 0.58, 1.18),
       tallPlumeRenderTransitionBand
     );
+    let vaporCarrier = clamp(
+      quenchVaporStrength
+        * smoothstep(0.003, 0.24, flame + flameDetail * 0.74 + fireLick * 0.45 + heat * 0.55 + smokeDensity * 0.24 + microSmoke * 0.18)
+        * smoothstep(0.02, 0.70, y)
+        * (0.84 + curtainNoise * 0.22 + verticalPuffBreak * 0.16),
+      0.0,
+      1.85
+    );
+    let vaporAlpha = clamp(vaporCarrier * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
+    smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
+    let fireSnuffDamping = 1.0 - clamp(vaporCarrier * 1.55, 0.0, 0.985);
     let fireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, 0.0, fireAlphaMax),
+      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping, 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -3136,6 +3168,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     let smokeBacklight = fireColor(temp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, temp) * (0.13 + fireFilament * 0.10);
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
     var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
+    let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
+    local = mix(local, vaporCol, clamp(vaporCarrier * 0.92, 0.0, 0.96));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
@@ -3211,6 +3245,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
     visibleDetailOverlayGain: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene) ? 0.35 : 1,
     reactionFuelScale: normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale),
+    lifecycleEffect: normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect),
+    lifecycleT: normalizeLifecycleT(controlsSnapshot.lifecycleT),
+    quenchVapor: normalizeQuenchVapor(controlsSnapshot.quenchVapor),
+    quenchVaporStrength: snuffQuenchVaporStrength(controlsSnapshot),
+    snuffVisualModel: snuffQuenchVaporStrength(controlsSnapshot) > 0 ? 'quench-vapor-v0' : 'inactive',
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
@@ -3764,6 +3803,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       snapshot.bonfireProjection,
       snapshot.bonfireTemporal,
       snapshot.bonfireInstabilityProbe,
+      normalizeLifecycleEffect(snapshot.lifecycleEffect),
+      snapshot.lifecycleT,
+      snapshot.quenchVapor,
       snapshot.inputRadius,
       snapshot.flowRate,
       snapshot.resolution,
@@ -4350,7 +4392,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
     uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
     uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
-    uniforms[75] = 0;
+    const quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
+    uniforms[75] = quenchVaporStrength;
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
     uniforms[76] = pressureTierControls.lowerMax;
     uniforms[77] = pressureTierControls.heroMin;
@@ -4380,6 +4423,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.tallPlumeDetailFrequencySource = state.volumeScene === 'tall_plume' ? 'fire-scale-decoupled-v0' : 'scale-controls';
     state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
     state.reactionFuelScale = uniforms[71];
+    state.lifecycleEffect = normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect);
+    state.lifecycleT = normalizeLifecycleT(controlsSnapshot.lifecycleT);
+    state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
+    state.quenchVaporStrength = quenchVaporStrength;
+    state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
     state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
@@ -5811,6 +5859,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
+        lifecycleEffect: state.lifecycleEffect,
+        lifecycleT: state.lifecycleT,
+        quenchVapor: state.quenchVapor,
+        quenchVaporStrength: state.quenchVaporStrength,
+        snuffVisualModel: state.snuffVisualModel,
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
         tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -6110,6 +6163,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
+      lifecycleEffect: state.lifecycleEffect,
+      lifecycleT: state.lifecycleT,
+      quenchVapor: state.quenchVapor,
+      quenchVaporStrength: state.quenchVaporStrength,
+      snuffVisualModel: state.snuffVisualModel,
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -6266,6 +6324,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
       state.visibleDetailOverlayGain = state.detailScaleArtifactQuarantine ? 0.35 : 1;
       state.reactionFuelScale = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
+      state.lifecycleEffect = normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect);
+      state.lifecycleT = normalizeLifecycleT(controlsSnapshot.lifecycleT);
+      state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
+      state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
+      state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
       state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
