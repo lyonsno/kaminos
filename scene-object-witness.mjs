@@ -21,6 +21,7 @@ const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
 const smokeOfferPath = args.get('--smoke-offer-path') || null;
+const previewBenchPayloadPath = args.get('--preview-bench-payload-path') || null;
 
 function buildPreviewBenchSmokeOfferFixture() {
   return {
@@ -86,6 +87,58 @@ function buildPreviewBenchSmokeOfferFixture() {
   };
 }
 
+function buildPreviewBenchPayloadReportFixture() {
+  return {
+    ok: true,
+    schema: 'lerms.glove-well-live-throw-composition-witness.v0',
+    route: 'lerms/glove-well/live-throw-composition-witness-file',
+    frameId: 'lerms-glove-well-live-throw-fixture',
+    previewBenchPayload: {
+      ok: true,
+      schema: 'kaminos.preview-bench.payload-report.v0',
+      route: 'kaminos/preview-bench/payload-file',
+      outputPath: '/tmp/lerms-glove-well-live-throw-composition-witness-0628.json#preview-bench',
+      frameId: 'lerms-glove-well-live-throw-fixture-preview-bench',
+      timestampMs: 42000,
+      payload: {
+        schema: 'lerms.glove-well-preview-bench-payload.v0',
+        route: 'lerms/glove-well/preview-bench-payload-file',
+        label: 'Greedy live throw Preview Bench payload',
+        acceptanceSurface: {
+          id: 'preview-bench-payload-report-contract',
+          route: 'kaminos/preview-bench/payload-file',
+          worldChamberId: 'lerms-underhill',
+          bench: 'terrain-preview',
+        },
+        source: {
+          authority: 'synthetic_fixture',
+          producerDiaulos: 'greedy-glove-fucker',
+          sourceRef: '/tmp/lerms-glove-well-live-throw-composition-witness-0628.json',
+          route: 'lerms/glove-well/live-throw-composition-witness-file',
+        },
+        sourceTruth: {
+          effectiveAuthority: 'synthetic_fixture',
+          fallbackReasons: [],
+        },
+        fields: [
+          { label: 'throw phases', value: 'launch>flight>bounce>rolling>settled' },
+          { label: 'bounces', value: 2 },
+          { label: 'fixture downgrade', value: true },
+        ],
+        downgrades: ['preview_bench_transport_not_source_authority'],
+        rejectedSurfaces: [
+          'browser/?greedy_glove=1',
+          'fixture filmstrip is not live WiLoR camera evidence',
+        ],
+        custody: {
+          sourceDiaulos: 'greedy-glove-fucker',
+          hostDiaulos: 'gutterglass-pornographer',
+        },
+      },
+    },
+  };
+}
+
 function ensurePreviewBenchSmokeOfferRoute() {
   if (scenario !== 'preview-bench-smoke-offer-contract') return;
   const current = new URL(url);
@@ -98,7 +151,20 @@ function ensurePreviewBenchSmokeOfferRoute() {
   url = current.href;
 }
 
+function ensurePreviewBenchPayloadReportRoute() {
+  if (scenario !== 'preview-bench-payload-report-contract') return;
+  const current = new URL(url);
+  if (current.searchParams.has('preview_bench_payload_url') || current.searchParams.has('preview_bench_payload_root')) return;
+  const fixturePath = resolve(previewBenchPayloadPath || 'scratch/preview-bench-payload-report-witness.json');
+  mkdirSync(dirname(fixturePath), { recursive: true });
+  writeFileSync(fixturePath, JSON.stringify(buildPreviewBenchPayloadReportFixture(), null, 2));
+  current.searchParams.set('preview_bench_payload_root', 'scratch');
+  current.searchParams.set('preview_bench_payload_path', fixturePath.split('/scratch/').pop() || 'preview-bench-payload-report-witness.json');
+  url = current.href;
+}
+
 ensurePreviewBenchSmokeOfferRoute();
+ensurePreviewBenchPayloadReportRoute();
 
 let phase = 'initializing';
 let stderr = '';
@@ -4210,6 +4276,152 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
   };
 }
 
+async function runPreviewBenchPayloadReportContractScenario(ws) {
+  phase = 'scenario-preview-bench-payload-report-contract';
+  lastEvidence.previewBenchPayloadReport = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 120; i++) {
+        const state = window.kaminosPreviewBenchSmokeOfferDebugState?.();
+        if (state?.mounted || state?.status === 'error') break;
+        await wait(125);
+      }
+      const payloadReportState = window.kaminosPreviewBenchSmokeOfferDebugState?.() || null;
+      const rows = [...document.querySelectorAll('[data-smoke-offer-id]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-id'),
+        schema: row.getAttribute('data-smoke-offer-schema'),
+        authority: row.getAttribute('data-smoke-offer-authority'),
+        freshness: row.getAttribute('data-smoke-offer-freshness'),
+        downgrade: row.getAttribute('data-smoke-offer-downgrade'),
+        targetSurface: row.getAttribute('data-smoke-offer-target-surface'),
+        acceptanceSurface: row.getAttribute('data-smoke-offer-acceptance-surface'),
+        text: row.textContent,
+      }));
+      const rejectedDebugSurfaces = [...document.querySelectorAll('[data-smoke-offer-rejected-surface]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-rejected-surface'),
+        text: row.textContent,
+      }));
+      return {
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        statusText: document.getElementById('preview-bench-smoke-offer-status')?.textContent || null,
+        countText: document.getElementById('preview-bench-smoke-offer-count')?.textContent || null,
+        sourceText: document.getElementById('preview-bench-smoke-offer-source')?.textContent || null,
+        targetText: document.getElementById('preview-bench-smoke-offer-target')?.textContent || null,
+        payloadReportState,
+        rows,
+        rejectedDebugSurfaces,
+        sourceAuthority: payloadReportState?.offers?.[0]?.sourceAuthority || null,
+        embeddedPreviewBenchPayload: payloadReportState?.embeddedPreviewBenchPayload || false,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.previewBenchPayloadReport;
+  if (evidence.activeTab !== 'preview') {
+    throw new Error(`Preview Bench payload-report route did not activate Preview tab: ${JSON.stringify(evidence)}`);
+  }
+  const state = evidence.payloadReportState;
+  if (state?.schema !== 'kaminos.preview-bench.smoke-offer-state.v0'
+      || state?.route !== 'kaminos/preview-bench/payload-file'
+      || state?.mounted !== true
+      || state?.sourceKind !== 'payload-report') {
+    throw new Error(`Preview Bench payload-report state mismatch: ${JSON.stringify(evidence)}`);
+  }
+  if (state.embeddedPreviewBenchPayload !== true || evidence.embeddedPreviewBenchPayload !== true) {
+    throw new Error(`Preview Bench payload-report witness did not prove embedded previewBenchPayload extraction: ${JSON.stringify(evidence)}`);
+  }
+  const offer = state.offers?.[0];
+  if (!offer || offer.schema !== 'kaminos.preview-bench.payload-report.v0'
+      || offer.payloadSchema !== 'lerms.glove-well-preview-bench-payload.v0') {
+    throw new Error(`Preview Bench payload-report did not preserve payload schema: ${JSON.stringify(evidence)}`);
+  }
+  if (evidence.sourceAuthority !== 'synthetic_fixture') {
+    throw new Error(`Preview Bench payload-report witness lost source authority: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rows?.[0]
+      || evidence.rows[0].authority !== 'synthetic_fixture'
+      || evidence.rows[0].downgrade !== 'preview_bench_transport_not_source_authority'
+      || evidence.rows[0].acceptanceSurface !== 'preview-bench-payload-report-contract') {
+    throw new Error(`Preview Bench payload-report UI did not expose authority/downgrade/acceptance surface: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rejectedDebugSurfaces?.length
+      || evidence.rejectedDebugSurfaces[0].id !== 'browser/?greedy_glove=1') {
+    throw new Error(`Preview Bench payload-report witness lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
+  }
+  lastEvidence.previewBenchPayloadReport = {
+    schema: 'kaminos.preview-bench.payload-report-witness.v0',
+    ...lastEvidence.previewBenchPayloadReport,
+    previewBenchPayloadReportShot: await capturePngScreenshot(ws, siblingPngPath('-previewBenchPayloadReport')),
+  };
+}
+
+async function runPreviewBenchPayloadLiveSmokeScenario(ws) {
+  phase = 'scenario-preview-bench-payload-live-smoke';
+  lastEvidence.previewBenchPayloadLiveSmoke = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 120; i++) {
+        const state = window.kaminosPreviewBenchSmokeOfferDebugState?.();
+        if (state?.mounted || state?.status === 'error') break;
+        await wait(125);
+      }
+      const payloadReportState = window.kaminosPreviewBenchSmokeOfferDebugState?.() || null;
+      const rows = [...document.querySelectorAll('[data-smoke-offer-id]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-id'),
+        schema: row.getAttribute('data-smoke-offer-schema'),
+        authority: row.getAttribute('data-smoke-offer-authority'),
+        freshness: row.getAttribute('data-smoke-offer-freshness'),
+        downgrade: row.getAttribute('data-smoke-offer-downgrade'),
+        targetSurface: row.getAttribute('data-smoke-offer-target-surface'),
+        acceptanceSurface: row.getAttribute('data-smoke-offer-acceptance-surface'),
+        text: row.textContent,
+      }));
+      const rejectedDebugSurfaces = [...document.querySelectorAll('[data-smoke-offer-rejected-surface]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-rejected-surface'),
+        text: row.textContent,
+      }));
+      return {
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        statusText: document.getElementById('preview-bench-smoke-offer-status')?.textContent || null,
+        sourceText: document.getElementById('preview-bench-smoke-offer-source')?.textContent || null,
+        targetText: document.getElementById('preview-bench-smoke-offer-target')?.textContent || null,
+        payloadReportState,
+        rows,
+        rejectedDebugSurfaces,
+        sourceAuthority: payloadReportState?.offers?.[0]?.sourceAuthority || null,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.previewBenchPayloadLiveSmoke;
+  const state = evidence.payloadReportState;
+  const row = evidence.rows?.[0];
+  if (evidence.activeTab !== 'preview'
+      || state?.route !== 'kaminos/preview-bench/payload-file'
+      || state?.sourceKind !== 'payload-report'
+      || state?.mounted !== true
+      || !row) {
+    throw new Error(`Preview Bench payload live smoke did not mount a payload report: ${JSON.stringify(evidence)}`);
+  }
+  if (!row.schema || row.schema === 'payload-schema-unset') {
+    throw new Error(`Preview Bench payload live smoke lost payload schema: ${JSON.stringify(evidence)}`);
+  }
+  if (!row.authority || row.authority === 'authority-unset') {
+    throw new Error(`Preview Bench payload live smoke lost source authority: ${JSON.stringify(evidence)}`);
+  }
+  if (!row.downgrade || row.downgrade === 'no downgrade') {
+    throw new Error(`Preview Bench payload live smoke lost downgrade/fallback evidence: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rejectedDebugSurfaces?.length) {
+    throw new Error(`Preview Bench payload live smoke lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
+  }
+  lastEvidence.previewBenchPayloadLiveSmoke = {
+    schema: 'kaminos.preview-bench.payload-report-live-smoke.v0',
+    ...lastEvidence.previewBenchPayloadLiveSmoke,
+    previewBenchPayloadLiveSmokeShot: await capturePngScreenshot(ws, siblingPngPath('-previewBenchPayloadLiveSmoke')),
+  };
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -4313,6 +4525,10 @@ try {
     await runAoRouteDeltaScenario(ws);
   } else if (scenario === 'preview-bench-smoke-offer-contract') {
     await runPreviewBenchSmokeOfferContractScenario(ws);
+  } else if (scenario === 'preview-bench-payload-report-contract') {
+    await runPreviewBenchPayloadReportContractScenario(ws);
+  } else if (scenario === 'preview-bench-payload-live-smoke') {
+    await runPreviewBenchPayloadLiveSmokeScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

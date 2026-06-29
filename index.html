@@ -497,17 +497,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 
   <!-- Preview Bench Tab -->
   <div class="tab-content" id="tab-preview">
-    <h2>Smoke Offers</h2>
+    <h2>Preview Bench Host</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Host Route</span><span class="route-chip">kaminos/preview-bench/smoke-offer-file</span></div>
+      <div class="field"><span class="field-key">Payload Route</span><span class="route-chip">kaminos/preview-bench/payload-file</span></div>
       <div class="field"><span class="field-key">State</span><span class="field-val" id="preview-bench-smoke-offer-schema">kaminos.preview-bench.smoke-offer-state.v0</span></div>
       <div class="preview-bench-status" id="preview-bench-smoke-offer-status">No smoke offer mounted</div>
       <div class="volume-actions">
-        <button class="btn" id="preview-bench-smoke-offer-reload">Reload Offer</button>
+        <button class="btn" id="preview-bench-smoke-offer-reload">Reload Source</button>
       </div>
     </div>
     <div class="panel">
-      <div class="field"><span class="field-key">Offer Count</span><span class="field-val" id="preview-bench-smoke-offer-count">0</span></div>
+      <div class="field"><span class="field-key">Item Count</span><span class="field-val" id="preview-bench-smoke-offer-count">0</span></div>
       <div class="field"><span class="field-key">Source</span><span class="field-val" id="preview-bench-smoke-offer-source">none</span></div>
       <div class="field"><span class="field-key">Target</span><span class="field-val" id="preview-bench-smoke-offer-target">none</span></div>
     </div>
@@ -1189,6 +1190,8 @@ const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive-not-final-lamellar-topology';
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 const SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
+const PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA = 'kaminos.preview-bench.payload-report.v0';
+const PREVIEW_BENCH_PAYLOAD_ROUTE = 'kaminos/preview-bench/payload-file';
 const PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA = 'kaminos.preview-bench.smoke-offer-state.v0';
 const PREVIEW_BENCH_SMOKE_OFFER_ROUTE = 'kaminos/preview-bench/smoke-offer-file';
 let volumePrimitives = [];
@@ -7030,9 +7033,23 @@ function previewBenchText(value, fallback = '') {
   return text || fallback;
 }
 
+function previewBenchSurfaceLabel(surface, fallback = 'surface unset') {
+  const value = previewBenchObject(surface);
+  return previewBenchText(
+    value.id
+      || value.kind
+      || value.route
+      || value.surface
+      || value.bench
+      || value.worldChamberId
+      || value.label,
+    fallback,
+  );
+}
+
 function previewBenchSmokeOfferUrlFromRoute(params) {
   const directUrl = params.get('smoke_offer_url') || params.get('preview_bench_smoke_offer_url');
-  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  if (directUrl) return { url: directUrl, mode: 'external_url', kind: 'smoke-offer' };
   const root = params.get('smoke_offer_root') || params.get('preview_bench_smoke_offer_root');
   const path = params.get('smoke_offer_path') || params.get('preview_bench_smoke_offer_path');
   if (root && path) {
@@ -7040,8 +7057,23 @@ function previewBenchSmokeOfferUrlFromRoute(params) {
     return {
       url: `/api/read?${query}`,
       mode: 'server_file',
+      kind: 'smoke-offer',
       root,
       path,
+    };
+  }
+  const payloadUrl = params.get('preview_bench_payload_url') || params.get('payload_report_url');
+  if (payloadUrl) return { url: payloadUrl, mode: 'external_url', kind: 'payload-report' };
+  const payloadRoot = params.get('preview_bench_payload_root') || params.get('payload_report_root');
+  const payloadPath = params.get('preview_bench_payload_path') || params.get('payload_report_path');
+  if (payloadRoot && payloadPath) {
+    const query = new URLSearchParams({ root: payloadRoot, path: payloadPath }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      kind: 'payload-report',
+      root: payloadRoot,
+      path: payloadPath,
     };
   }
   return null;
@@ -7051,6 +7083,7 @@ function previewBenchSmokeOfferSourceFromRoute(route) {
   if (!route) return null;
   return {
     mode: route.mode,
+    kind: route.kind || 'smoke-offer',
     requestedUrl: route.url,
     effectiveUrl: new URL(route.url, window.location.href).href,
     root: route.root || null,
@@ -7169,6 +7202,127 @@ function normalizePreviewBenchSmokeOffer(rawDocument, source = null) {
   };
 }
 
+function previewBenchExtractPayloadReport(rawDocument) {
+  const document = previewBenchObject(rawDocument);
+  if (document.previewBenchPayload && typeof document.previewBenchPayload === 'object') {
+    return {
+      payloadReport: previewBenchObject(document.previewBenchPayload),
+      embeddedPreviewBenchPayload: true,
+      containerSchema: document.schema || null,
+      containerRoute: document.route || null,
+    };
+  }
+  if (document.payloadReport && typeof document.payloadReport === 'object') {
+    return {
+      payloadReport: previewBenchObject(document.payloadReport),
+      embeddedPreviewBenchPayload: true,
+      containerSchema: document.schema || null,
+      containerRoute: document.route || null,
+    };
+  }
+  return {
+    payloadReport: document,
+    embeddedPreviewBenchPayload: false,
+    containerSchema: null,
+    containerRoute: null,
+  };
+}
+
+function normalizePreviewBenchPayloadReport(rawDocument, source = null) {
+  const extraction = previewBenchExtractPayloadReport(rawDocument);
+  const report = previewBenchObject(extraction.payloadReport);
+  const payload = previewBenchObject(report.payload || report);
+  const sourcePacket = previewBenchObject(payload.source || report.source);
+  const sourceTruth = previewBenchObject(payload.sourceTruth || report.sourceTruth);
+  const custody = previewBenchObject(payload.custody || report.custody);
+  const acceptanceSurface = previewBenchObject(payload.acceptanceSurface || report.acceptanceSurface);
+  const targetSurface = previewBenchObject(payload.targetSurface || report.targetSurface || acceptanceSurface);
+  const authority = previewBenchText(
+    sourcePacket.authority
+      || payload.authority
+      || sourceTruth.effectiveAuthority
+      || report.sourceAuthority,
+    'authority-unset',
+  );
+  const downgrades = [
+    ...previewBenchArray(report.downgrades),
+    ...previewBenchArray(payload.downgrades),
+    ...previewBenchArray(sourceTruth.fallbackReasons),
+  ].map(item => typeof item === 'string' ? item : item?.reason || item?.label || item?.id || 'downgrade').filter(Boolean);
+  const rejectedDebugSurfaces = previewBenchArray(payload.rejectedSurfaces || payload.rejectedDebugSurfaces || report.rejectedSurfaces || report.rejectedDebugSurfaces)
+    .map(surface => typeof surface === 'string'
+      ? { id: surface, reason: 'source marked debug/non-acceptance surface' }
+      : previewBenchObject(surface));
+  const freshness = previewBenchFreshnessState({
+    ...previewBenchObject(report.freshness),
+    ...previewBenchObject(payload.freshness),
+    observedAt: sourcePacket.observedAt || report.observedAt || payload.observedAt,
+    generatedAt: sourcePacket.generatedAt || report.generatedAt || payload.generatedAt,
+    budgetMs: sourcePacket.freshnessBudgetMs ?? report.freshnessBudgetMs ?? payload.freshnessBudgetMs,
+    status: sourcePacket.status || report.status || payload.status || (sourcePacket.fallbackReason ? 'fallback' : 'payload-mounted'),
+  });
+  const fields = previewBenchArray(payload.fields || report.fields)
+    .map(field => ({
+      label: previewBenchText(field?.label || field?.name || field?.key, 'field'),
+      value: previewBenchText(field?.value ?? field?.text ?? field?.route ?? field?.path, ''),
+    }))
+    .filter(field => field.value);
+  const summary = previewBenchObject(payload.summary || report.summary);
+  if (!fields.length) {
+    for (const [key, value] of Object.entries(summary).slice(0, 8)) {
+      if (value === null || value === undefined || typeof value === 'object') continue;
+      fields.push({ label: key, value: String(value) });
+    }
+  }
+  const offer = {
+    schema: PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA,
+    id: previewBenchText(payload.id || payload.frameId || report.frameId || payload.schema || report.schema, 'payload-report'),
+    label: previewBenchText(payload.label || payload.benchHints?.title || report.label || report.frameId, 'Preview Bench payload'),
+    payloadSchema: previewBenchText(payload.schema || report.payloadSchema || report.schema, 'payload-schema-unset'),
+    sourceRoute: previewBenchText(payload.route || report.route, 'source-route-unset'),
+    targetSurface,
+    acceptanceSurface,
+    source: {
+      ...previewBenchCloneJson(sourcePacket, {}),
+      authority,
+      producerDiaulos: previewBenchText(
+        sourcePacket.producerDiaulos
+          || sourcePacket.producer_diaulos
+          || custody.sourceDiaulos
+          || custody.source_diaulos,
+        '',
+      ),
+      sourceRef: previewBenchText(sourcePacket.sourceRef || sourcePacket.source_ref || report.outputPath || report.reportPath, ''),
+    },
+    freshness,
+    sourceAuthority: authority,
+    freshnessBudget: freshness.budgetMs,
+    downgrades,
+    rejectedDebugSurfaces,
+    summary: Object.keys(summary).length ? previewBenchCloneJson(summary, {}) : null,
+    fields,
+    rawOffer: previewBenchCloneJson(payload, {}),
+  };
+  return {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
+    route: PREVIEW_BENCH_PAYLOAD_ROUTE,
+    sourceKind: 'payload-report',
+    embeddedPreviewBenchPayload: extraction.embeddedPreviewBenchPayload,
+    containerSchema: extraction.containerSchema,
+    containerRoute: extraction.containerRoute,
+    mounted: true,
+    status: extraction.embeddedPreviewBenchPayload ? 'mounted-embedded-payload-report' : 'mounted-payload-report',
+    source: source ? previewBenchCloneJson(source, {}) : null,
+    targetSurface: previewBenchCloneJson(targetSurface, null),
+    acceptanceSurface: previewBenchCloneJson(acceptanceSurface, null),
+    loadedAt: new Date().toISOString(),
+    rawSchema: report.schema || null,
+    offers: [offer],
+    rejectedDebugSurfaces,
+    error: null,
+  };
+}
+
 function previewBenchSetSmokeOfferStatus(message, error = false) {
   const el = document.getElementById('preview-bench-smoke-offer-status');
   if (!el) return;
@@ -7180,7 +7334,7 @@ function renderPreviewBenchSmokeOfferState() {
   const state = previewBenchSmokeOfferState;
   document.getElementById('preview-bench-smoke-offer-count').textContent = String(state.offers?.length || 0);
   document.getElementById('preview-bench-smoke-offer-source').textContent = state.source?.label || state.source?.requestedUrl || 'none';
-  document.getElementById('preview-bench-smoke-offer-target').textContent = previewBenchText(state.targetSurface?.id || state.acceptanceSurface?.id, 'none');
+  document.getElementById('preview-bench-smoke-offer-target').textContent = previewBenchSurfaceLabel(state.targetSurface || state.acceptanceSurface, 'none');
   if (state.error) {
     previewBenchSetSmokeOfferStatus(`${state.status}: ${state.error}`, true);
   } else if (state.mounted) {
@@ -7206,8 +7360,8 @@ function renderPreviewBenchSmokeOfferState() {
     row.setAttribute('data-smoke-offer-authority', offer.sourceAuthority);
     row.setAttribute('data-smoke-offer-freshness', offer.freshness?.status || '');
     row.setAttribute('data-smoke-offer-downgrade', offer.downgrades?.[0] || '');
-    row.setAttribute('data-smoke-offer-target-surface', offer.targetSurface?.id || '');
-    row.setAttribute('data-smoke-offer-acceptance-surface', offer.acceptanceSurface?.id || '');
+    row.setAttribute('data-smoke-offer-target-surface', previewBenchSurfaceLabel(offer.targetSurface, ''));
+    row.setAttribute('data-smoke-offer-acceptance-surface', previewBenchSurfaceLabel(offer.acceptanceSurface, ''));
 
     const head = document.createElement('div');
     head.className = 'preview-bench-offer-head';
@@ -7239,8 +7393,8 @@ function renderPreviewBenchSmokeOfferState() {
     fields.className = 'preview-bench-field-grid';
     const fieldPairs = [
       ['schema', offer.payloadSchema],
-      ['target', offer.targetSurface?.id || 'target unset'],
-      ['accept', offer.acceptanceSurface?.id || 'acceptance unset'],
+      ['target', previewBenchSurfaceLabel(offer.targetSurface, 'target unset')],
+      ['accept', previewBenchSurfaceLabel(offer.acceptanceSurface, 'acceptance unset')],
       ['producer', offer.source?.producerDiaulos || offer.source?.diaulos || 'producer unset'],
       ['source ref', offer.source?.sourceRef || offer.source?.branch || offer.source?.commit || 'source ref unset'],
       ['observed', offer.freshness?.observedAt || 'observed unset'],
@@ -7273,9 +7427,9 @@ function renderPreviewBenchSmokeOfferState() {
       for (const surface of offer.rejectedDebugSurfaces) {
         const rejectedRow = document.createElement('div');
         rejectedRow.className = 'preview-bench-rejected-row';
-        rejectedRow.setAttribute('data-smoke-offer-rejected-surface', surface.id || surface.route || surface.label || 'debug-surface');
+        rejectedRow.setAttribute('data-smoke-offer-rejected-surface', surface.id || surface.route || surface.surface || surface.label || 'debug-surface');
         const name = document.createElement('span');
-        name.textContent = surface.id || surface.route || surface.label || 'debug-surface';
+        name.textContent = surface.id || surface.route || surface.surface || surface.label || 'debug-surface';
         const reason = document.createElement('span');
         reason.textContent = surface.reason || 'rejected debug surface';
         rejectedRow.append(name, reason);
@@ -7295,6 +7449,24 @@ function mountPreviewBenchSmokeOffer(rawDocument, source = null) {
   return previewBenchSmokeOfferState;
 }
 
+function mountPreviewBenchPayloadReport(rawDocument, source = null) {
+  previewBenchSmokeOfferState = normalizePreviewBenchPayloadReport(rawDocument, source);
+  renderPreviewBenchSmokeOfferState();
+  setInfo(`Preview Bench payload report mounted: ${previewBenchSmokeOfferState.offers.length} item(s)`);
+  return previewBenchSmokeOfferState;
+}
+
+function mountPreviewBenchSourceDocument(rawDocument, source = null) {
+  const document = previewBenchObject(rawDocument);
+  if (document.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
+      || document.previewBenchPayload?.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
+      || document.payloadReport?.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
+      || source?.kind === 'payload-report') {
+    return mountPreviewBenchPayloadReport(document, source);
+  }
+  return mountPreviewBenchSmokeOffer(document, source);
+}
+
 async function loadPreviewBenchSmokeOfferRoute(route) {
   previewBenchSmokeOfferState = {
     ...previewBenchSmokeOfferState,
@@ -7307,7 +7479,7 @@ async function loadPreviewBenchSmokeOfferRoute(route) {
     const resp = await fetch(route.url);
     const payload = await resp.json();
     if (!resp.ok || payload?.error) throw new Error(payload?.error || `HTTP ${resp.status}`);
-    return mountPreviewBenchSmokeOffer(payload, previewBenchSmokeOfferSourceFromRoute(route));
+    return mountPreviewBenchSourceDocument(payload, previewBenchSmokeOfferSourceFromRoute(route));
   } catch (error) {
     previewBenchSmokeOfferState = {
       schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
@@ -7344,6 +7516,7 @@ function initPreviewBenchSmokeOfferRoute() {
 }
 
 window.kaminosMountPreviewBenchSmokeOffer = mountPreviewBenchSmokeOffer;
+window.kaminosMountPreviewBenchPayloadReport = mountPreviewBenchPayloadReport;
 window.kaminosPreviewBenchSmokeOfferDebugState = function() {
   return previewBenchCloneJson(previewBenchSmokeOfferState, {});
 };

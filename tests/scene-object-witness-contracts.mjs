@@ -30,9 +30,16 @@ assert.match(witness, /object-groups-roundtrip/, 'witness supports an object gro
 assert.match(witness, /ao-route-delta/, 'witness supports an AO route on/off delta scenario');
 assert.match(witness, /preview-bench-smoke-offer-contract/, 'witness supports a Preview Bench smoke-offer contract scenario');
 assert.match(witness, /kaminos\.preview-bench\.smoke-offer-witness\.v0/, 'Preview Bench smoke-offer witness declares its report schema');
+assert.match(witness, /preview-bench-payload-report-contract/, 'witness supports a Preview Bench generic payload-report contract scenario');
+assert.match(witness, /kaminos\.preview-bench\.payload-report-witness\.v0/, 'Preview Bench payload-report witness declares its report schema');
+assert.match(witness, /preview-bench-payload-live-smoke/, 'witness supports a flexible Preview Bench live payload smoke scenario');
+assert.match(witness, /kaminos\.preview-bench\.payload-report-live-smoke\.v0/, 'Preview Bench live payload smoke declares its report schema');
 assert.match(witness, /kaminosPreviewBenchSmokeOfferDebugState/, 'Preview Bench smoke-offer witness reads the browser state surface');
 assert.match(witness, /smokeOfferState/, 'Preview Bench smoke-offer witness records machine-readable state rather than sidebar text alone');
+assert.match(witness, /payloadReportState/, 'Preview Bench payload-report witness records machine-readable state rather than sidebar text alone');
+assert.match(witness, /embeddedPreviewBenchPayload/, 'Preview Bench payload-report witness proves embedded previewBenchPayload extraction');
 assert.match(witness, /Page\.captureScreenshot[\s\S]*previewBenchSmokeOffer/, 'Preview Bench smoke-offer witness captures a browser screenshot artifact');
+assert.match(witness, /Page\.captureScreenshot[\s\S]*previewBenchPayloadReport/, 'Preview Bench payload-report witness captures a browser screenshot artifact');
 assert.match(witness, /sourceAuthority/, 'Preview Bench smoke-offer witness records source authority visible at capture time');
 assert.match(witness, /freshnessBudget/, 'Preview Bench smoke-offer witness records freshness budget visible at capture time');
 assert.match(witness, /rejectedDebugSurfaces/, 'Preview Bench smoke-offer witness preserves rejected debug surfaces');
