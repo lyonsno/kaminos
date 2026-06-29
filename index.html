@@ -1219,6 +1219,7 @@ let activeSceneGroupId = null;
 let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
+let directGlbLoadState = null;
 let sceneMutationToken = 0;
 let viewportPointerDown = null;
 let viewportSuppressedClick = null;
@@ -9179,6 +9180,71 @@ document.getElementById('search-input').addEventListener('keydown', async e => {
   }
 });
 
+function directGlbDeepLinkFromParams(params) {
+  const localPath = params.get('glb_path');
+  const servedUrl = params.get('glb_url');
+  if (!localPath && !servedUrl) return null;
+  const requested = localPath || servedUrl;
+  const url = localPath
+    ? `/api/local-artifact?path=${encodeURIComponent(localPath)}`
+    : servedUrl;
+  const fallbackName = (requested || 'model.glb').split(/[\\/]/).pop() || 'model.glb';
+  const fileName = params.get('glb_file') || fallbackName;
+  const label = params.get('glb_label') || fileName;
+  return {
+    schema: 'kaminos.direct-glb-deep-link.v0',
+    route: localPath ? 'glb_path' : 'glb_url',
+    requested,
+    url,
+    fileName,
+    label,
+  };
+}
+
+async function loadDirectGlbDeepLink(params = new URLSearchParams(window.location.search)) {
+  const route = directGlbDeepLinkFromParams(params);
+  if (!route) return null;
+  directGlbLoadState = {
+    ...route,
+    status: 'loading',
+    loadedAt: null,
+    error: null,
+  };
+  try {
+    const url = route.url;
+    await showGLB(url, {
+      clear: true,
+      metadata: {
+        source: url,
+        type: 'glb',
+        fileName: route.fileName,
+        label: route.label,
+        directGlbRoute: route,
+      },
+    });
+    directGlbLoadState = {
+      ...directGlbLoadState,
+      status: 'loaded',
+      loadedAt: new Date().toISOString(),
+    };
+    setInfo(`Direct GLB loaded: ${route.label}`);
+    return directGlbLoadState;
+  } catch (error) {
+    directGlbLoadState = {
+      ...directGlbLoadState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Direct GLB deep-link load failed:', error);
+    setInfo(`Direct GLB load failed: ${directGlbLoadState.error}`);
+    return directGlbLoadState;
+  }
+}
+
+window.kaminosDirectGlbLoadState = function() {
+  return directGlbLoadState;
+};
+
 // --- Image Generation ---
 window.generateImage = async function() {
   const prompt = document.getElementById('gen-prompt').value.trim();
@@ -11465,9 +11531,11 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  const routeParams = new URLSearchParams(window.location.search);
+  void loadDirectGlbDeepLink(routeParams);
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
-    const params = new URLSearchParams(window.location.search);
+    const params = routeParams;
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply

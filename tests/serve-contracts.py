@@ -11,6 +11,7 @@ from serve import BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
+from serve import resolve_local_artifact_path
 
 
 def test_http_status_404_log_does_not_crash():
@@ -213,6 +214,26 @@ def test_greenroom_stray_output_dirs_do_not_get_load_affordance():
             assert display["output_count"] == 0
             assert display["mesh_output_count"] == 0
             assert display["load_label"] == "Open"
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+
+def test_local_artifact_resolver_serves_declared_roots_and_rejects_strays():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        greenroom = root / "greenroom"
+        greenroom.mkdir()
+        asset = greenroom / "outputs" / "asset.glb"
+        asset.parent.mkdir()
+        asset.write_bytes(b"glb")
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            with TemporaryDirectory(prefix="kaminos-local-artifact-stray-", dir=Path.home()) as home_tmp:
+                stray = Path(home_tmp) / "asset.glb"
+                stray.write_bytes(b"glb")
+                assert resolve_local_artifact_path(str(asset)) == asset.resolve()
+                assert resolve_local_artifact_path(str(stray)) is None
         finally:
             BROWSE_ROOTS["greenroom"] = previous
 
@@ -435,6 +456,7 @@ if __name__ == "__main__":
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()
     test_greenroom_configured_root_outputs_are_served_even_when_outside_home()
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
+    test_local_artifact_resolver_serves_declared_roots_and_rejects_strays()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
     test_splat_asset_ingest_writes_only_to_experimental_inbox()

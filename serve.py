@@ -533,6 +533,39 @@ def greenroom_output_roots():
     return roots
 
 
+def local_artifact_roots():
+    """Roots that can lawfully serve absolute local artifact deep links."""
+    roots = [ROOT.resolve()]
+    for root in BROWSE_ROOTS.values():
+        try:
+            roots.append(Path(root).expanduser().resolve())
+        except Exception:
+            continue
+    for temp_root in (Path("/tmp"), Path("/private/tmp")):
+        if temp_root.exists():
+            roots.append(temp_root.resolve())
+    deduped = []
+    seen = set()
+    for root in roots:
+        key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(root)
+    return deduped
+
+
+def resolve_local_artifact_path(raw_path):
+    if not raw_path:
+        return None
+    target = Path(raw_path).expanduser().resolve()
+    if not target.is_file():
+        return None
+    if any(target.is_relative_to(root) for root in local_artifact_roots()):
+        return target
+    return None
+
+
 def resolve_greenroom_output_dir(output_dir):
     """Resolve a receipt output_dir only if it is under a serving root."""
     if not output_dir:
@@ -608,6 +641,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_forge_host_registry()
         elif parsed.path == "/api/roots":
             self.handle_roots()
+        elif parsed.path == "/api/local-artifact":
+            self.handle_local_artifact(parse_qs(parsed.query))
         elif parsed.path.startswith("/api/read"):
             self.handle_read(parse_qs(parsed.query))
         elif parsed.path == "/api/job-output-events":
@@ -961,6 +996,28 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"content": text})
         except Exception:
             self.send_json({"error": "Failed to read file"}, 500)
+
+    def handle_local_artifact(self, params):
+        """Serve a guarded absolute local artifact. ?path=/abs/output.glb"""
+        raw_path = params.get("path", [""])[0]
+        target = resolve_local_artifact_path(raw_path)
+        if not target:
+            self.send_json({"error": "Path is not an allowed local artifact"}, 403)
+            return
+
+        ext = target.suffix.lower()
+        content_types = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
+            ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
+            ".json": "application/json", ".txt": "text/plain", ".log": "text/plain",
+        }
+        body = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def handle_job_outputs(self, params):
         """List files in a job's output_dir. ?job_id=xxx"""

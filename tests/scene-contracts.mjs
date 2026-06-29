@@ -198,6 +198,11 @@ assert.match(index, /id="greenroom-preview-controls"/, 'viewport exposes a promi
 assert.match(index, /data-greenroom-preview-action="import"/, 'Greenroom Preview exposes an explicit Import to Scene action');
 assert.match(index, /data-greenroom-preview-action="back"/, 'Greenroom Preview exposes an explicit Back to Scene action');
 assert.match(index, /showGLB\(url,[\s\S]*register:\s*false/, 'Greenroom View loads preview geometry without registering an authored scene object');
+assert.match(index, /glb_path/, 'URL route can deep-link a local GLB path for direct operator inspection');
+assert.match(index, /glb_url/, 'URL route can deep-link an already served GLB URL for direct operator inspection');
+assert.match(index, /\/api\/local-artifact\?path=/, 'local GLB path deep links route through the guarded local artifact endpoint');
+assert.match(index, /kaminosDirectGlbLoadState/, 'direct GLB deep-link route exposes load state for visual-smoke witnesses');
+assert.match(index, /showGLB\(url,[\s\S]*source:\s*url,[\s\S]*type:\s*'glb'/, 'direct GLB deep-link route loads through the same source-preserving GLB inspector path');
 assert.match(index, /greenroomImportMesh\([\s\S]*clear:\s*false/, 'Greenroom Import appends explicitly without relying on the Assets tab Append checkbox');
 assert.match(index, /greenroomImportSplat\([\s\S]*clear:\s*false/, 'Greenroom Import Splat appends explicitly without relying on the Assets tab Append checkbox');
 assert.match(index, /if \(greenroomPreviewIsActive\(\)\)[\s\S]*Greenroom preview is temporary/, 'scene save refuses to write while a Greenroom Preview is active');

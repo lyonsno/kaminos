@@ -32,6 +32,14 @@ Output:
 
 `/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-asset-reduction-gltf-v1-20260629T1730Z`
 
+Kaminos direct inspection route:
+
+`/?glb_path=<absolute-glb-path>&glb_label=<label>`
+
+This route loads the GLB through the guarded `/api/local-artifact` endpoint and
+the normal GLB inspector path, so generated-asset closeouts can give the
+operator a click-through Kaminos URL instead of a raw file path.
+
 Observed result:
 
 - Source: `328,987` triangles, `45.7 MB`, 4K source textures.
