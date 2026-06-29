@@ -501,6 +501,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div class="field"><span class="field-key">Host Route</span><span class="route-chip">kaminos/preview-bench/smoke-offer-file</span></div>
       <div class="field"><span class="field-key">Payload Route</span><span class="route-chip">kaminos/preview-bench/payload-file</span></div>
+      <div class="field"><span class="field-key">Terrain Route</span><span class="route-chip">kaminos/preview-bench/terrain-sample-file</span></div>
       <div class="field"><span class="field-key">State</span><span class="field-val" id="preview-bench-smoke-offer-schema">kaminos.preview-bench.smoke-offer-state.v0</span></div>
       <div class="preview-bench-status" id="preview-bench-smoke-offer-status">No smoke offer mounted</div>
       <div class="volume-actions">
@@ -1192,6 +1193,8 @@ const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 const SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
 const PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA = 'kaminos.preview-bench.payload-report.v0';
 const PREVIEW_BENCH_PAYLOAD_ROUTE = 'kaminos/preview-bench/payload-file';
+const PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA = 'kaminos.preview-bench.terrain-sample-packet.v0';
+const PREVIEW_BENCH_TERRAIN_SAMPLE_ROUTE = 'kaminos/preview-bench/terrain-sample-file';
 const PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA = 'kaminos.preview-bench.smoke-offer-state.v0';
 const PREVIEW_BENCH_SMOKE_OFFER_ROUTE = 'kaminos/preview-bench/smoke-offer-file';
 let volumePrimitives = [];
@@ -7076,6 +7079,20 @@ function previewBenchSmokeOfferUrlFromRoute(params) {
       path: payloadPath,
     };
   }
+  const terrainUrl = params.get('preview_bench_terrain_sample_url') || params.get('terrain_sample_url');
+  if (terrainUrl) return { url: terrainUrl, mode: 'external_url', kind: 'terrain-sample-packet' };
+  const terrainRoot = params.get('preview_bench_terrain_sample_root') || params.get('terrain_sample_root');
+  const terrainPath = params.get('preview_bench_terrain_sample_path') || params.get('terrain_sample_path');
+  if (terrainRoot && terrainPath) {
+    const query = new URLSearchParams({ root: terrainRoot, path: terrainPath }).toString();
+    return {
+      url: `/api/read?${query}`,
+      mode: 'server_file',
+      kind: 'terrain-sample-packet',
+      root: terrainRoot,
+      path: terrainPath,
+    };
+  }
   return null;
 }
 
@@ -7228,6 +7245,32 @@ function previewBenchExtractPayloadReport(rawDocument) {
   };
 }
 
+function previewBenchExtractTerrainSamplePacket(rawDocument) {
+  const document = previewBenchObject(rawDocument);
+  if (document.terrainSamplePacket && typeof document.terrainSamplePacket === 'object') {
+    return {
+      terrainSamplePacket: previewBenchObject(document.terrainSamplePacket),
+      embeddedTerrainSamplePacket: true,
+      containerSchema: document.schema || null,
+      containerRoute: document.route || null,
+    };
+  }
+  if (document.previewBenchTerrainSample && typeof document.previewBenchTerrainSample === 'object') {
+    return {
+      terrainSamplePacket: previewBenchObject(document.previewBenchTerrainSample),
+      embeddedTerrainSamplePacket: true,
+      containerSchema: document.schema || null,
+      containerRoute: document.route || null,
+    };
+  }
+  return {
+    terrainSamplePacket: document,
+    embeddedTerrainSamplePacket: false,
+    containerSchema: null,
+    containerRoute: null,
+  };
+}
+
 function normalizePreviewBenchPayloadReport(rawDocument, source = null) {
   const extraction = previewBenchExtractPayloadReport(rawDocument);
   const report = previewBenchObject(extraction.payloadReport);
@@ -7323,6 +7366,131 @@ function normalizePreviewBenchPayloadReport(rawDocument, source = null) {
   };
 }
 
+function normalizePreviewBenchTerrainSamplePacket(rawDocument, source = null) {
+  const extraction = previewBenchExtractTerrainSamplePacket(rawDocument);
+  const packet = previewBenchObject(extraction.terrainSamplePacket);
+  const terrainSample = previewBenchObject(packet.terrainSample || packet.sample || packet.payload || packet);
+  const sourcePacket = previewBenchObject(packet.source || terrainSample.source);
+  const sourceTruth = previewBenchObject(packet.sourceTruth || terrainSample.sourceTruth);
+  const acceptanceSurface = previewBenchObject(packet.acceptanceSurface || terrainSample.acceptanceSurface);
+  const targetSurface = previewBenchObject(packet.targetSurface || terrainSample.targetSurface || acceptanceSurface);
+  const transport = previewBenchObject(packet.transport || terrainSample.transport);
+  const checksums = previewBenchObject(packet.checksums || terrainSample.checksums);
+  const grid = previewBenchObject(packet.grid || terrainSample.grid || terrainSample.resolution);
+  const worldBounds = previewBenchObject(packet.worldBounds || packet.bounds || terrainSample.worldBounds || terrainSample.bounds);
+  const heightRange = previewBenchObject(packet.heightRange || terrainSample.heightRange);
+  const channelLayout = previewBenchArray(packet.channelLayout || packet.channels || terrainSample.channelLayout || terrainSample.channels)
+    .map(channel => previewBenchText(channel?.id || channel?.name || channel, ''))
+    .filter(Boolean);
+  const authority = previewBenchText(
+    sourcePacket.authority
+      || terrainSample.authority
+      || sourceTruth.effectiveAuthority
+      || packet.sourceAuthority,
+    'authority-unset',
+  );
+  const downgrades = [
+    ...previewBenchArray(packet.downgrades),
+    ...previewBenchArray(terrainSample.downgrades),
+    ...previewBenchArray(sourceTruth.fallbackReasons),
+  ].map(item => typeof item === 'string' ? item : item?.reason || item?.label || item?.id || 'downgrade').filter(Boolean);
+  const rejectedDebugSurfaces = previewBenchArray(packet.rejectedSurfaces || packet.rejectedDebugSurfaces || terrainSample.rejectedSurfaces || terrainSample.rejectedDebugSurfaces)
+    .map(surface => typeof surface === 'string'
+      ? { id: surface, reason: 'source marked debug/non-acceptance surface' }
+      : previewBenchObject(surface));
+  const freshness = previewBenchFreshnessState({
+    ...previewBenchObject(packet.freshness),
+    ...previewBenchObject(terrainSample.freshness),
+    observedAt: sourcePacket.observedAt || packet.observedAt || terrainSample.observedAt,
+    generatedAt: sourcePacket.generatedAt || packet.generatedAt || terrainSample.generatedAt,
+    budgetMs: sourcePacket.freshnessBudgetMs ?? packet.freshnessBudgetMs ?? terrainSample.freshnessBudgetMs,
+    status: sourcePacket.status || packet.status || terrainSample.status || 'terrain-sample-mounted',
+  });
+  const sampleChecksum = previewBenchText(
+    checksums.sample
+      || checksums.samples
+      || checksums.sampleChecksum
+      || terrainSample.sampleChecksum
+      || packet.sampleChecksum,
+    '',
+  );
+  const topologyChecksum = previewBenchText(checksums.topology || terrainSample.topologyChecksum || packet.topologyChecksum, '');
+  const supportFrameChecksum = previewBenchText(checksums.supportFrame || checksums.support_frame || terrainSample.supportFrameChecksum || packet.supportFrameChecksum, '');
+  const fields = [
+    { label: 'grid', value: previewBenchText(grid.columns && grid.rows ? `${grid.columns}x${grid.rows}` : grid.width && grid.height ? `${grid.width}x${grid.height}` : grid.resolution, '') },
+    { label: 'bounds', value: previewBenchText(worldBounds.label || worldBounds.id || (worldBounds.min && worldBounds.max ? `${JSON.stringify(worldBounds.min)}..${JSON.stringify(worldBounds.max)}` : ''), '') },
+    { label: 'height range', value: previewBenchText(heightRange.min !== undefined && heightRange.max !== undefined ? `${heightRange.min}..${heightRange.max}` : heightRange.label, '') },
+    { label: 'channels', value: channelLayout.join(', ') },
+    { label: 'transport', value: previewBenchText(transport.kind || transport.encoding || transport.mode, '') },
+    { label: 'fetch url', value: previewBenchText(transport.fetchUrl || transport.fetch_url || transport.url, '') },
+    { label: 'sample checksum', value: sampleChecksum },
+    { label: 'topology checksum', value: topologyChecksum },
+    { label: 'support frame checksum', value: supportFrameChecksum },
+    ...previewBenchArray(packet.fields || terrainSample.fields).map(field => ({
+      label: previewBenchText(field?.label || field?.name || field?.key, 'field'),
+      value: previewBenchText(field?.value ?? field?.text ?? field?.route ?? field?.path, ''),
+    })),
+  ].filter(field => field.value);
+  const terrainSampleSummary = {
+    transport,
+    grid,
+    worldBounds,
+    heightRange,
+    channelLayout,
+    checksums: {
+      ...checksums,
+      sample: sampleChecksum,
+      topology: topologyChecksum,
+      supportFrame: supportFrameChecksum,
+    },
+    fetchUrl: previewBenchText(transport.fetchUrl || transport.fetch_url || transport.url, ''),
+    sampleChecksum,
+  };
+  const offer = {
+    schema: PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA,
+    id: previewBenchText(packet.id || terrainSample.id || packet.frameId || terrainSample.schema, 'terrain-sample-packet'),
+    label: previewBenchText(packet.label || terrainSample.label || 'Hill terrain sample packet'),
+    payloadSchema: previewBenchText(terrainSample.schema || packet.payloadSchema || packet.schema, 'terrain-sample-schema-unset'),
+    sourceRoute: previewBenchText(packet.route || terrainSample.route, 'source-route-unset'),
+    targetSurface,
+    acceptanceSurface,
+    source: {
+      ...previewBenchCloneJson(sourcePacket, {}),
+      authority,
+      producerDiaulos: previewBenchText(sourcePacket.producerDiaulos || sourcePacket.producer_diaulos || packet.producerDiaulos, ''),
+      sourceRef: previewBenchText(sourcePacket.sourceRef || sourcePacket.source_ref || packet.outputPath || packet.reportPath, ''),
+    },
+    freshness,
+    sourceAuthority: authority,
+    freshnessBudget: freshness.budgetMs,
+    downgrades,
+    rejectedDebugSurfaces,
+    summary: terrainSampleSummary,
+    fields,
+    terrainSample: terrainSampleSummary,
+    rawOffer: previewBenchCloneJson(terrainSample, {}),
+  };
+  return {
+    schema: PREVIEW_BENCH_SMOKE_OFFER_STATE_SCHEMA,
+    route: PREVIEW_BENCH_TERRAIN_SAMPLE_ROUTE,
+    sourceKind: 'terrain-sample-packet',
+    embeddedTerrainSamplePacket: extraction.embeddedTerrainSamplePacket,
+    containerSchema: extraction.containerSchema,
+    containerRoute: extraction.containerRoute,
+    mounted: true,
+    status: extraction.embeddedTerrainSamplePacket ? 'mounted-embedded-terrain-sample' : 'mounted-terrain-sample',
+    source: source ? previewBenchCloneJson(source, {}) : null,
+    targetSurface: previewBenchCloneJson(targetSurface, null),
+    acceptanceSurface: previewBenchCloneJson(acceptanceSurface, null),
+    loadedAt: new Date().toISOString(),
+    rawSchema: packet.schema || null,
+    offers: [offer],
+    rejectedDebugSurfaces,
+    terrainSample: terrainSampleSummary,
+    error: null,
+  };
+}
+
 function previewBenchSetSmokeOfferStatus(message, error = false) {
   const el = document.getElementById('preview-bench-smoke-offer-status');
   if (!el) return;
@@ -7362,6 +7530,11 @@ function renderPreviewBenchSmokeOfferState() {
     row.setAttribute('data-smoke-offer-downgrade', offer.downgrades?.[0] || '');
     row.setAttribute('data-smoke-offer-target-surface', previewBenchSurfaceLabel(offer.targetSurface, ''));
     row.setAttribute('data-smoke-offer-acceptance-surface', previewBenchSurfaceLabel(offer.acceptanceSurface, ''));
+    if (offer.terrainSample) {
+      row.setAttribute('data-terrain-sample-transport', offer.terrainSample.transport?.kind || offer.terrainSample.transport?.encoding || offer.terrainSample.transport?.mode || '');
+      row.setAttribute('data-terrain-sample-fetch-url', offer.terrainSample.fetchUrl || '');
+      row.setAttribute('data-terrain-sample-sample-checksum', offer.terrainSample.sampleChecksum || offer.terrainSample.checksums?.sample || '');
+    }
 
     const head = document.createElement('div');
     head.className = 'preview-bench-offer-head';
@@ -7456,8 +7629,21 @@ function mountPreviewBenchPayloadReport(rawDocument, source = null) {
   return previewBenchSmokeOfferState;
 }
 
+function mountPreviewBenchTerrainSamplePacket(rawDocument, source = null) {
+  previewBenchSmokeOfferState = normalizePreviewBenchTerrainSamplePacket(rawDocument, source);
+  renderPreviewBenchSmokeOfferState();
+  setInfo(`Preview Bench terrain sample mounted: ${previewBenchSmokeOfferState.offers.length} packet(s)`);
+  return previewBenchSmokeOfferState;
+}
+
 function mountPreviewBenchSourceDocument(rawDocument, source = null) {
   const document = previewBenchObject(rawDocument);
+  if (document.schema === PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA
+      || document.terrainSamplePacket?.schema === PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA
+      || document.previewBenchTerrainSample?.schema === PREVIEW_BENCH_TERRAIN_SAMPLE_PACKET_SCHEMA
+      || source?.kind === 'terrain-sample-packet') {
+    return mountPreviewBenchTerrainSamplePacket(document, source);
+  }
   if (document.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
       || document.previewBenchPayload?.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
       || document.payloadReport?.schema === PREVIEW_BENCH_PAYLOAD_REPORT_SCHEMA
@@ -7517,6 +7703,7 @@ function initPreviewBenchSmokeOfferRoute() {
 
 window.kaminosMountPreviewBenchSmokeOffer = mountPreviewBenchSmokeOffer;
 window.kaminosMountPreviewBenchPayloadReport = mountPreviewBenchPayloadReport;
+window.kaminosMountPreviewBenchTerrainSamplePacket = mountPreviewBenchTerrainSamplePacket;
 window.kaminosPreviewBenchSmokeOfferDebugState = function() {
   return previewBenchCloneJson(previewBenchSmokeOfferState, {});
 };

@@ -22,6 +22,7 @@ const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
 const smokeOfferPath = args.get('--smoke-offer-path') || null;
 const previewBenchPayloadPath = args.get('--preview-bench-payload-path') || null;
+const terrainSamplePath = args.get('--terrain-sample-path') || null;
 
 function buildPreviewBenchSmokeOfferFixture() {
   return {
@@ -139,6 +140,70 @@ function buildPreviewBenchPayloadReportFixture() {
   };
 }
 
+function buildPreviewBenchTerrainSampleFixture() {
+  return {
+    ok: true,
+    schema: 'lerms.hill-of-hills-terrain-witness.v0',
+    route: 'lerms/hill-of-hills/terrain-witness-file',
+    frameId: 'hill-terrain-sample-fixture',
+    terrainSamplePacket: {
+      ok: true,
+      schema: 'kaminos.preview-bench.terrain-sample-packet.v0',
+      route: 'kaminos/preview-bench/terrain-sample-file',
+      frameId: 'hill-terrain-sample-fixture-packet',
+      label: 'Hill raw terrain sample for Big Papa',
+      source: {
+        authority: 'live_simulation',
+        producerDiaulos: 'hill-of-hills-fucker',
+        sourceRef: '/tmp/hill-of-hills-terrain-sample-packet-0629.json',
+        route: 'lerms/hill-of-hills/terrain-sample-packet-file',
+      },
+      freshness: {
+        observedAt: new Date().toISOString(),
+        budgetMs: 900000,
+        status: 'fresh-live-terrain-sample',
+      },
+      acceptanceSurface: {
+        id: 'preview-bench-terrain-sample-contract',
+        route: 'kaminos/preview-bench/terrain-sample-file',
+        worldChamberId: 'lerms-underhill',
+        bench: 'terrain-preview',
+      },
+      terrainSample: {
+        schema: 'lerms.terrain-sample.v0',
+        route: 'lerms/hill-of-hills/terrain-sample-fetch',
+        label: 'Hill terrain sample grid',
+        grid: { columns: 116, rows: 148, spacing: 0.125 },
+        worldBounds: { label: 'x:-7.25..7.25 z:-9.25..9.25 y:-0.9..2.4' },
+        heightRange: { min: -0.9, max: 2.4 },
+        channelLayout: ['height', 'normal', 'gradient', 'heightDelta', 'surfaceVelocity'],
+        transport: {
+          kind: 'source-owned-fetch-url',
+          encoding: 'json-f32-array-packet',
+          fetchUrl: '/api/read?root=terrain-samples&path=hill-raw-sample-0629.json',
+        },
+        checksums: {
+          supportFrame: 'support-frame-8e64a2',
+          topology: 'topology-5cb088a1',
+          sample: 'sample-6ad24032',
+          channels: 'channels-c67de90b',
+        },
+        fields: [
+          { label: 'sample count', value: 17168 },
+          { label: 'consumer', value: 'big-papa-finger-juice collision coupling' },
+        ],
+      },
+      downgrades: ['arrays_source_owned_fetch_required'],
+      rejectedSurfaces: [
+        {
+          surface: 'hill-local-canvas-debug',
+          reason: 'debug canvas lacks fetchable raw terrain arrays',
+        },
+      ],
+    },
+  };
+}
+
 function ensurePreviewBenchSmokeOfferRoute() {
   if (scenario !== 'preview-bench-smoke-offer-contract') return;
   const current = new URL(url);
@@ -163,8 +228,21 @@ function ensurePreviewBenchPayloadReportRoute() {
   url = current.href;
 }
 
+function ensurePreviewBenchTerrainSampleRoute() {
+  if (scenario !== 'preview-bench-terrain-sample-contract') return;
+  const current = new URL(url);
+  if (current.searchParams.has('preview_bench_terrain_sample_url') || current.searchParams.has('preview_bench_terrain_sample_root')) return;
+  const fixturePath = resolve(terrainSamplePath || 'scratch/preview-bench-terrain-sample-witness.json');
+  mkdirSync(dirname(fixturePath), { recursive: true });
+  writeFileSync(fixturePath, JSON.stringify(buildPreviewBenchTerrainSampleFixture(), null, 2));
+  current.searchParams.set('preview_bench_terrain_sample_root', 'scratch');
+  current.searchParams.set('preview_bench_terrain_sample_path', fixturePath.split('/scratch/').pop() || 'preview-bench-terrain-sample-witness.json');
+  url = current.href;
+}
+
 ensurePreviewBenchSmokeOfferRoute();
 ensurePreviewBenchPayloadReportRoute();
+ensurePreviewBenchTerrainSampleRoute();
 
 let phase = 'initializing';
 let stderr = '';
@@ -4422,6 +4500,95 @@ async function runPreviewBenchPayloadLiveSmokeScenario(ws) {
   };
 }
 
+async function runPreviewBenchTerrainSampleContractScenario(ws) {
+  phase = 'scenario-preview-bench-terrain-sample-contract';
+  lastEvidence.previewBenchTerrainSample = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 120; i++) {
+        const state = window.kaminosPreviewBenchSmokeOfferDebugState?.();
+        if (state?.mounted || state?.status === 'error') break;
+        await wait(125);
+      }
+      const terrainSampleState = window.kaminosPreviewBenchSmokeOfferDebugState?.() || null;
+      const rows = [...document.querySelectorAll('[data-smoke-offer-id]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-id'),
+        schema: row.getAttribute('data-smoke-offer-schema'),
+        authority: row.getAttribute('data-smoke-offer-authority'),
+        freshness: row.getAttribute('data-smoke-offer-freshness'),
+        downgrade: row.getAttribute('data-smoke-offer-downgrade'),
+        targetSurface: row.getAttribute('data-smoke-offer-target-surface'),
+        acceptanceSurface: row.getAttribute('data-smoke-offer-acceptance-surface'),
+        terrainSampleTransport: row.getAttribute('data-terrain-sample-transport'),
+        terrainSampleFetchUrl: row.getAttribute('data-terrain-sample-fetch-url'),
+        terrainSampleChecksum: row.getAttribute('data-terrain-sample-sample-checksum'),
+        text: row.textContent,
+      }));
+      const rejectedDebugSurfaces = [...document.querySelectorAll('[data-smoke-offer-rejected-surface]')].map(row => ({
+        id: row.getAttribute('data-smoke-offer-rejected-surface'),
+        text: row.textContent,
+      }));
+      return {
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        statusText: document.getElementById('preview-bench-smoke-offer-status')?.textContent || null,
+        sourceText: document.getElementById('preview-bench-smoke-offer-source')?.textContent || null,
+        targetText: document.getElementById('preview-bench-smoke-offer-target')?.textContent || null,
+        terrainSampleState,
+        rows,
+        rejectedDebugSurfaces,
+        sourceAuthority: terrainSampleState?.offers?.[0]?.sourceAuthority || null,
+        embeddedTerrainSamplePacket: terrainSampleState?.embeddedTerrainSamplePacket || false,
+        terrainSampleTransport: terrainSampleState?.offers?.[0]?.terrainSample?.transport?.kind || null,
+        terrainSampleFetchUrl: terrainSampleState?.offers?.[0]?.terrainSample?.fetchUrl || null,
+        terrainSampleChecksum: terrainSampleState?.offers?.[0]?.terrainSample?.sampleChecksum || null,
+      };
+    })()
+  `, { timeoutMs: 30000 });
+
+  const evidence = lastEvidence.previewBenchTerrainSample;
+  const state = evidence.terrainSampleState;
+  const row = evidence.rows?.[0];
+  if (evidence.activeTab !== 'preview'
+      || state?.schema !== 'kaminos.preview-bench.smoke-offer-state.v0'
+      || state?.route !== 'kaminos/preview-bench/terrain-sample-file'
+      || state?.sourceKind !== 'terrain-sample-packet'
+      || state?.mounted !== true
+      || !row) {
+    throw new Error(`Preview Bench terrain sample route did not mount a terrain packet: ${JSON.stringify(evidence)}`);
+  }
+  if (state.embeddedTerrainSamplePacket !== true || evidence.embeddedTerrainSamplePacket !== true) {
+    throw new Error(`Preview Bench terrain sample witness did not prove embeddedTerrainSamplePacket extraction: ${JSON.stringify(evidence)}`);
+  }
+  const offer = state.offers?.[0];
+  if (!offer || offer.schema !== 'kaminos.preview-bench.terrain-sample-packet.v0'
+      || offer.payloadSchema !== 'lerms.terrain-sample.v0') {
+    throw new Error(`Preview Bench terrain sample witness lost payload schema: ${JSON.stringify(evidence)}`);
+  }
+  const channels = offer.terrainSample?.channelLayout || [];
+  for (const required of ['height', 'normal', 'gradient', 'heightDelta', 'surfaceVelocity']) {
+    if (!channels.includes(required)) {
+      throw new Error(`Preview Bench terrain sample lost required channel ${required}: ${JSON.stringify(evidence)}`);
+    }
+  }
+  if (evidence.sourceAuthority !== 'live_simulation') {
+    throw new Error(`Preview Bench terrain sample witness lost source authority: ${JSON.stringify(evidence)}`);
+  }
+  if (row.terrainSampleTransport !== 'source-owned-fetch-url'
+      || row.terrainSampleFetchUrl !== '/api/read?root=terrain-samples&path=hill-raw-sample-0629.json'
+      || row.terrainSampleChecksum !== 'sample-6ad24032') {
+    throw new Error(`Preview Bench terrain sample UI lost transport/fetch/checksum evidence: ${JSON.stringify(evidence)}`);
+  }
+  if (!evidence.rejectedDebugSurfaces?.length
+      || evidence.rejectedDebugSurfaces[0].id !== 'hill-local-canvas-debug') {
+    throw new Error(`Preview Bench terrain sample witness lost rejected debug surfaces: ${JSON.stringify(evidence)}`);
+  }
+  lastEvidence.previewBenchTerrainSample = {
+    schema: 'kaminos.preview-bench.terrain-sample-witness.v0',
+    ...lastEvidence.previewBenchTerrainSample,
+    previewBenchTerrainSampleShot: await capturePngScreenshot(ws, siblingPngPath('-previewBenchTerrainSample')),
+  };
+}
+
 let chromeProcess = null;
 let ws = null;
 
@@ -4529,6 +4696,8 @@ try {
     await runPreviewBenchPayloadReportContractScenario(ws);
   } else if (scenario === 'preview-bench-payload-live-smoke') {
     await runPreviewBenchPayloadLiveSmokeScenario(ws);
+  } else if (scenario === 'preview-bench-terrain-sample-contract') {
+    await runPreviewBenchTerrainSampleContractScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {
