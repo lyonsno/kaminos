@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
+  FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
   deriveForgeStationAttention,
+  routeForgeHostSmokeOfferToChamber,
   validateForgeHostStationManifest,
 } from '../forge-host-core.js';
 
@@ -116,6 +118,32 @@ assert.equal(liveManifest.stations[0].smokeOffers[0].displayState, 'live');
 assert.match(liveManifest.stations[0].smokeOffers[0].sourceRef, /directive-alert-endpoints\.json/);
 assert.deepEqual(validateForgeHostStationManifest(liveManifest).falseAuthorityViolations, []);
 assert.equal(deriveForgeStationAttention(liveManifest.stations[0]).source, 'live_registry');
+
+const liveChamber = routeForgeHostSmokeOfferToChamber(liveManifest.stations[0].smokeOffers[0], liveManifest.stations[0], {
+  openedAt: '2026-06-29T08:08:00.000Z',
+});
+assert.equal(FORGE_HOST_SMOKE_CHAMBER_SCHEMA, 'kaminos.forge-host.smoke-chamber.v0');
+assert.equal(liveChamber.schema, FORGE_HOST_SMOKE_CHAMBER_SCHEMA);
+assert.equal(liveChamber.routeIdentity, 'forge-host-smoke-offer-route');
+assert.equal(liveChamber.stationActorId, liveManifest.stations[0].actorId);
+assert.equal(liveChamber.producerDiaulos, liveManifest.stations[0].diaulos);
+assert.equal(liveChamber.sourceAuthority, 'live');
+assert.equal(liveChamber.displayState, 'live');
+assert.equal(liveChamber.sourceOffer.schema, 'kaminos.forge-host.smoke-offer.v0');
+assert.equal(liveChamber.targetSurface, liveManifest.stations[0].smokeOffers[0].targetSurface);
+assert.equal(liveChamber.targetUrl, liveManifest.stations[0].smokeOffers[0].targetUrl);
+assert.match(liveChamber.sourceRef, /directive-alert-endpoints\.json/);
+assert.deepEqual(liveChamber.captureAffordances.map(affordance => affordance.id), ['screenshot', 'filmstrip', 'reply']);
+assert.deepEqual(liveChamber.routeWarnings, ['not_chat_bridge', 'not_command_execution']);
+
+const lyingOffer = structuredClone(liveManifest.stations[0].smokeOffers[0]);
+lyingOffer.authority = 'fallback';
+lyingOffer.displayState = 'live';
+assert.throws(
+  () => routeForgeHostSmokeOfferToChamber(lyingOffer, liveManifest.stations[0]),
+  /fallback.*live/i,
+  'smoke chamber routing must fail loud when fallback offer claims live routing',
+);
 
 const fallbackSnapshot = structuredClone(registrySnapshot);
 fallbackSnapshot.sourceAuthority = 'fallback';

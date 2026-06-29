@@ -39,10 +39,14 @@ assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object
 assert.match(index, /data-tab="forge"/, 'Kaminos exposes a Forge Host tab for embodied station smoke offers');
 assert.match(index, /id="forge-host-station-list"/, 'Forge Host tab exposes station list rows');
 assert.match(index, /id="forge-host-offer-list"/, 'Forge Host tab exposes selected station smoke offers');
+assert.match(index, /id="forge-host-smoke-chamber"/, 'Forge Host tab exposes a smoke chamber for opened offers');
+assert.match(index, /data-forge-host-smoke-chamber-schema="kaminos\.forge-host\.smoke-chamber\.v0"/, 'Forge Host smoke chamber preserves route schema identity in the DOM');
 assert.match(index, /function createForgeHostStationScene\(/, 'Forge Host stations render through an explicit scene creation path');
 assert.match(index, /\/api\/forge-host\/registry/, 'Forge Host can request the live Epistaxis registry snapshot through the Kaminos server');
 assert.match(index, /buildForgeHostManifestFromRegistrySnapshot/, 'Forge Host browser route can build station manifests from live registry snapshots');
+assert.match(index, /routeForgeHostSmokeOfferToChamber/, 'Forge Host browser route materializes smoke offers into chamber state');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
+assert.match(index, /kaminos\.forge-host\.smoke-chamber\.v0/, 'Forge Host UI preserves smoke-chamber schema identity');
 assert.match(index, /kaminos\.forge-host\.station-attention\.v0/, 'Forge Host UI preserves station-attention schema identity');
 assert.match(index, /kaminos\.forge-host\.registry-snapshot\.v0/, 'Forge Host UI preserves registry snapshot schema identity');
 assert.match(index, /window\.kaminosForgeHostDebugState/, 'browser witnesses can inspect Forge Host station state without DOM inference');

@@ -2,6 +2,7 @@ export const FORGE_HOST_STATION_MANIFEST_SCHEMA = 'kaminos.forge-host.station-ma
 export const FORGE_HOST_STATION_ANCHOR_SCHEMA = 'kaminos.forge-host.station-anchor.v0';
 export const FORGE_HOST_STATION_VISUAL_SCHEMA = 'kaminos.forge-host.station-visual.v0';
 export const FORGE_HOST_SMOKE_OFFER_SCHEMA = 'kaminos.forge-host.smoke-offer.v0';
+export const FORGE_HOST_SMOKE_CHAMBER_SCHEMA = 'kaminos.forge-host.smoke-chamber.v0';
 export const FORGE_HOST_STATION_ATTENTION_SCHEMA = 'kaminos.forge-host.station-attention.v0';
 export const FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA = 'kaminos.forge-host.registry-snapshot.v0';
 
@@ -43,6 +44,43 @@ function offer({
     freshness,
     displayState,
     downgrades,
+  };
+}
+
+export function routeForgeHostSmokeOfferToChamber(offerRecord, station = {}, {
+  openedAt = new Date().toISOString(),
+} = {}) {
+  if (!offerRecord || offerRecord.schema !== FORGE_HOST_SMOKE_OFFER_SCHEMA) {
+    throw new Error(`Forge Host smoke chamber route expected ${FORGE_HOST_SMOKE_OFFER_SCHEMA}`);
+  }
+  if (!offerRecord.sourceRef || !offerRecord.targetSurface) {
+    throw new Error(`${offerRecord.id || station.actorId || 'unknown'}: smoke chamber route missing source or target surface`);
+  }
+  if (['fixture', 'fallback', 'seeded', 'stale'].includes(offerRecord.authority) && offerRecord.displayState === 'live') {
+    throw new Error(`${offerRecord.authority} smoke offer claimed live chamber routing for ${offerRecord.id || station.actorId || 'unknown offer'}`);
+  }
+  return {
+    schema: FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
+    id: `smoke-chamber:${offerRecord.id}`,
+    routeIdentity: 'forge-host-smoke-offer-route',
+    openedAt,
+    stationActorId: station.actorId || null,
+    producerDiaulos: offerRecord.producerDiaulos || station.diaulos || null,
+    callSign: station.callSign || titleFromDiaulos(offerRecord.producerDiaulos || station.diaulos),
+    sourceAuthority: offerRecord.authority || 'unknown',
+    displayState: offerRecord.displayState || 'unknown',
+    freshness: offerRecord.freshness || 'unknown',
+    targetSurface: offerRecord.targetSurface,
+    sourceRef: offerRecord.sourceRef,
+    targetUrl: offerRecord.targetUrl || null,
+    sourceOffer: cloneJson(offerRecord),
+    downgrades: cloneJson(offerRecord.downgrades || []),
+    captureAffordances: [
+      { id: 'screenshot', label: 'Screenshot', status: 'placeholder' },
+      { id: 'filmstrip', label: 'Filmstrip', status: 'placeholder' },
+      { id: 'reply', label: 'Reply', status: 'placeholder' },
+    ],
+    routeWarnings: ['not_chat_bridge', 'not_command_execution'],
   };
 }
 

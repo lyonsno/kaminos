@@ -233,6 +233,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .forge-readout { display: grid; grid-template-columns: 1fr; gap: 3px; }
 .forge-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
 .forge-readout .field-val { max-width: 220px; text-align: right; }
+.forge-chamber { border-color: #3b4935; background: #1b221d; }
+.forge-chamber[data-forge-host-smoke-chamber-active="false"] { border-color: #2a2a2a; background: #1f1f1f; }
+.forge-chamber-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.forge-chamber-title { min-width: 0; color: #f0d28a; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.forge-chamber-kicker { color: #7f9a86; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; }
+.forge-chamber-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
+.forge-chamber-actions .btn { padding: 4px 8px; margin: 0; font-size: 10px; color: #888; }
 </style>
 </head>
 <body>
@@ -506,6 +513,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="panel">
       <div id="forge-host-selected-summary" class="forge-empty">Select a station</div>
       <div id="forge-host-offer-list" class="forge-offer-list" data-forge-host-smoke-offer-schema="kaminos.forge-host.smoke-offer.v0"></div>
+    </div>
+
+    <h2>Smoke Chamber</h2>
+    <div class="panel forge-chamber" id="forge-host-smoke-chamber" data-forge-host-smoke-chamber-schema="kaminos.forge-host.smoke-chamber.v0" data-forge-host-smoke-chamber-active="false">
+      <div class="forge-empty">Open a Smoke Offer</div>
     </div>
 
     <h2>Attention</h2>
@@ -1149,6 +1161,7 @@ import {
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
   deriveForgeStationAttention,
+  routeForgeHostSmokeOfferToChamber,
   validateForgeHostStationManifest,
 } from './forge-host-core.js';
 
@@ -3854,6 +3867,8 @@ function disposeForgeHostStationScene() {
     }
   });
   forgeHostState.active = false;
+  forgeHostState.smokeChamber = null;
+  renderForgeHostSmokeChamber();
 }
 
 function setForgeHostText(id, value) {
@@ -4007,11 +4022,13 @@ function openForgeHostSmokeOffer(offerId) {
   const offerRecord = station?.smokeOffers?.find(item => item.id === offerId) || null;
   if (!offerRecord) throw new Error(`No Forge Host smoke offer: ${offerId}`);
   forgeHostState.lastOpenedOffer = offerRecord;
-  setInfo(`Smoke offer: ${offerRecord.title}`);
+  forgeHostState.smokeChamber = routeForgeHostSmokeOfferToChamber(offerRecord, station);
+  setInfo(`Smoke chamber: ${offerRecord.title}`);
   renderForgeHostStationList();
+  renderForgeHostSmokeChamber();
   updateForgeHostReadout();
   window._kaminosDirty?.();
-  return offerRecord;
+  return forgeHostState.smokeChamber;
 }
 
 function renderForgeHostOfferList() {
@@ -4043,6 +4060,38 @@ function renderForgeHostOfferList() {
   }
 }
 
+function renderForgeHostSmokeChamber() {
+  const chamberEl = document.getElementById('forge-host-smoke-chamber');
+  if (!chamberEl) return;
+  const chamber = forgeHostState?.smokeChamber || null;
+  chamberEl.dataset.forgeHostSmokeChamberActive = chamber ? 'true' : 'false';
+  if (!chamber) {
+    chamberEl.innerHTML = '<div class="forge-empty">Open a Smoke Offer</div>';
+    return;
+  }
+  const affordances = (chamber.captureAffordances || []).map(affordance => (
+    `<button type="button" class="btn" disabled data-forge-chamber-affordance="${escapeHtml(affordance.id)}">${escapeHtml(affordance.label)}</button>`
+  )).join('');
+  chamberEl.innerHTML = `
+    <div class="forge-chamber-head">
+      <div>
+        <div class="forge-chamber-kicker">${escapeHtml(chamber.routeIdentity)}</div>
+        <div class="forge-chamber-title">${escapeHtml(chamber.sourceOffer?.title || chamber.targetSurface)}</div>
+      </div>
+      <span class="forge-chip">${escapeHtml(chamber.displayState)}</span>
+    </div>
+    <div class="forge-readout">
+      <div class="field"><span class="field-key">Producer</span><span class="field-val">${escapeHtml(chamber.producerDiaulos)}</span></div>
+      <div class="field"><span class="field-key">Authority</span><span class="field-val">${escapeHtml(chamber.sourceAuthority)}</span></div>
+      <div class="field"><span class="field-key">Surface</span><span class="field-val">${escapeHtml(chamber.targetSurface)}</span></div>
+      <div class="field"><span class="field-key">Target</span><span class="field-val">${escapeHtml(chamber.targetUrl || '-')}</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val">${escapeHtml(chamber.sourceRef)}</span></div>
+      <div class="field"><span class="field-key">Warnings</span><span class="field-val">${escapeHtml((chamber.routeWarnings || []).join(', '))}</span></div>
+    </div>
+    <div class="forge-chamber-actions">${affordances}</div>
+  `;
+}
+
 function updateForgeHostReadout() {
   const debug = window.kaminosForgeHostDebugState?.();
   const selected = debug?.selectedStation || null;
@@ -4052,6 +4101,7 @@ function updateForgeHostReadout() {
   setForgeHostText('forge-attention-target', attention?.primaryLookTarget || '-');
   setForgeHostText('forge-attention-proximity', attention ? Number(attention.operatorProximity).toFixed(2) : '-');
   renderForgeHostOfferList();
+  renderForgeHostSmokeChamber();
 }
 
 async function loadForgeHostRegistrySnapshot() {
@@ -4126,6 +4176,7 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
     visuals,
     selectedActorId: manifest.stations[0]?.actorId || null,
     lastOpenedOffer: null,
+    smokeChamber: null,
     startedAt: performance.now() / 1000,
     frameCount: 0,
   };
@@ -4180,6 +4231,7 @@ function updateForgeHostStationFrame(timeSeconds = performance.now() / 1000) {
 
 window.selectForgeHostStation = setForgeHostSelectedActor;
 window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
+window.kaminosRouteForgeHostSmokeOfferToChamber = routeForgeHostSmokeOfferToChamber;
 window.kaminosForgeHostDebugState = function() {
   const state = forgeHostState;
   const stations = (state?.visuals || []).map(visual => ({
@@ -4217,6 +4269,7 @@ window.kaminosForgeHostDebugState = function() {
     selectedStation,
     stations,
     lastOpenedOffer: state?.lastOpenedOffer || null,
+    smokeChamber: state?.smokeChamber || null,
     frameCount: state?.frameCount || 0,
   };
 };

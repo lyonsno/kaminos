@@ -257,10 +257,13 @@ async function runForgeHostSmokeOffersScenario(ws) {
       if (finalState.lastOpenedOffer?.id !== offers[0].id) {
         throw new Error('Forge Host smoke offer did not become last opened offer: ' + JSON.stringify({ offers, finalState }));
       }
-      if (opened.schema !== 'kaminos.forge-host.smoke-offer.v0') {
-        throw new Error('Forge Host opened offer lost smoke offer schema: ' + JSON.stringify(opened));
+      if (opened.schema !== 'kaminos.forge-host.smoke-chamber.v0') {
+        throw new Error('Forge Host opened offer did not materialize chamber schema: ' + JSON.stringify(opened));
       }
-      if (opened.displayState === 'live' && ['fixture', 'fallback', 'seeded'].includes(opened.authority)) {
+      if (finalState.smokeChamber?.sourceOffer?.id !== offers[0].id) {
+        throw new Error('Forge Host smoke chamber did not preserve opened offer id: ' + JSON.stringify({ offers, finalState }));
+      }
+      if (opened.displayState === 'live' && ['fixture', 'fallback', 'seeded'].includes(opened.sourceAuthority)) {
         throw new Error('fixture offer claimed live display authority: ' + JSON.stringify(opened));
       }
       return {
@@ -315,7 +318,7 @@ async function runForgeHostLiveRegistryScenario(ws) {
       await wait(250);
       const selected = window.kaminosForgeHostDebugState();
       const opened = window.kaminosOpenForgeHostSmokeOffer(selected.selectedStation.smokeOffers[0].id);
-      if (opened.authority !== 'live' || opened.displayState !== 'live') {
+      if (opened.sourceAuthority !== 'live' || opened.displayState !== 'live') {
         throw new Error('Forge Host live smoke offer lost live authority: ' + JSON.stringify(opened));
       }
       return {
@@ -324,6 +327,77 @@ async function runForgeHostLiveRegistryScenario(ws) {
         selectedActorId: selected.selectedActorId,
         openedOffer: opened,
       };
+    })()
+  `, { timeoutMs: 25000 });
+}
+
+async function runForgeHostSmokeChamberRoutingScenario(ws) {
+  phase = 'scenario-forge-host-smoke-chamber-routing';
+  lastEvidence.forgeHostSmokeChamberRouting = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host smoke chamber route did not activate');
+      const minion = initial.stations.find(station => station.diaulos === 'minion-spawnfucker');
+      if (!minion) throw new Error('Forge Host smoke chamber route missing minion live endpoint: ' + JSON.stringify(initial.stations.map(station => station.diaulos)));
+      window.selectForgeHostStation(minion.actorId);
+      await wait(250);
+      const selected = window.kaminosForgeHostDebugState();
+      const offer = selected.selectedStation.smokeOffers[0];
+      const chamber = window.kaminosOpenForgeHostSmokeOffer(offer.id);
+      await wait(150);
+      const finalState = window.kaminosForgeHostDebugState();
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      if (!panel) throw new Error('Forge Host smoke chamber panel missing from DOM');
+      if (panel.dataset.forgeHostSmokeChamberSchema !== 'kaminos.forge-host.smoke-chamber.v0') {
+        throw new Error('Forge Host smoke chamber DOM lost schema identity: ' + panel.outerHTML);
+      }
+      if (panel.dataset.forgeHostSmokeChamberActive !== 'true') {
+        throw new Error('Forge Host smoke chamber panel did not become active: ' + panel.outerHTML);
+      }
+      if (chamber.schema !== 'kaminos.forge-host.smoke-chamber.v0') {
+        throw new Error('Forge Host smoke chamber schema mismatch: ' + JSON.stringify(chamber));
+      }
+      if (chamber.routeIdentity !== 'forge-host-smoke-offer-route') {
+        throw new Error('Forge Host smoke chamber lost route identity: ' + JSON.stringify(chamber));
+      }
+      if (chamber.sourceOffer?.id !== offer.id || finalState.smokeChamber?.sourceOffer?.id !== offer.id) {
+        throw new Error('Forge Host smoke chamber did not preserve source offer identity: ' + JSON.stringify({ offer, chamber, finalState }));
+      }
+      if (chamber.sourceAuthority !== 'live' || chamber.displayState !== 'live') {
+        throw new Error('Forge Host smoke chamber lost live authority: ' + JSON.stringify(chamber));
+      }
+      if (!/directive-alert-endpoints\\.json#minion-spawnfucker/.test(chamber.sourceRef)) {
+        throw new Error('Forge Host smoke chamber lost endpoint source ref: ' + JSON.stringify(chamber));
+      }
+      if (!chamber.targetUrl) throw new Error('Forge Host smoke chamber lost target URL: ' + JSON.stringify(chamber));
+      if (!chamber.routeWarnings?.includes('not_chat_bridge') || !chamber.routeWarnings?.includes('not_command_execution')) {
+        throw new Error('Forge Host smoke chamber overclaimed chat or command execution: ' + JSON.stringify(chamber));
+      }
+      panel.scrollIntoView({ block: 'center' });
+      await wait(150);
+      const lyingOffer = { ...offer, authority: 'fallback', displayState: 'live' };
+      try {
+        window.kaminosRouteForgeHostSmokeOfferToChamber(lyingOffer, selected.selectedStation);
+      } catch (error) {
+        if (!/fallback.*live/i.test(String(error?.message || error))) {
+          throw new Error('Forge Host smoke chamber false-authority failure was unclear: ' + String(error?.message || error));
+        }
+        return {
+          initial,
+          selectedActorId: selected.selectedActorId,
+          offer,
+          chamber,
+          panelText: panel.textContent.trim(),
+          falseAuthorityFailure: String(error?.message || error),
+        };
+      }
+      throw new Error('smoke chamber routed fallback as live');
     })()
   `, { timeoutMs: 25000 });
 }
@@ -4277,6 +4351,8 @@ try {
     await runForgeHostSmokeOffersScenario(ws);
   } else if (scenario === 'forge-host-live-registry') {
     await runForgeHostLiveRegistryScenario(ws);
+  } else if (scenario === 'forge-host-smoke-chamber-routing') {
+    await runForgeHostSmokeChamberRoutingScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {
