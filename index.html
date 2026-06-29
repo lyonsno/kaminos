@@ -9112,6 +9112,16 @@ async function grFetchApi(endpoint, params = {}) {
   }
 }
 
+async function grPostApi(endpoint, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  try {
+    const resp = await fetch(`/api/${endpoint}?${qs}`, { method: 'POST' });
+    return await resp.json();
+  } catch {
+    return { error: 'Server not reachable. Use serve.py instead of python3 -m http.server' };
+  }
+}
+
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
 let greenroomRouteJobState = {
   schema: 'kaminos.route-provider-index.v0',
@@ -9887,6 +9897,7 @@ function routeJobDisplay(row = {}) {
   const routeJob = row.route_job || {};
   const display = row.display || {};
   const resumability = routeJob.resumability || {};
+  const pauseRequested = routeJobPauseRequested(row);
   const routeId = routeJob.routeId || row.job_id || 'unknown';
   const status = routeJob.status || 'degraded';
   const priority = routeJob.priorityClass || 'normal';
@@ -9894,6 +9905,7 @@ function routeJobDisplay(row = {}) {
   const checkpointBits = resumability.kind === 'cooperative-checkpoint'
     ? [
         resumability.completedStage ? `stage ${resumability.completedStage}` : null,
+        pauseRequested ? 'pause requested' : null,
         resumability.resumeSupported ? 'resume supported' : (resumability.resumeBlocker ? 'resume blocked' : null),
       ].filter(Boolean)
     : [];
@@ -9919,9 +9931,54 @@ function renderRouteJobLinkButton(container, label, url, title) {
   container.appendChild(button);
 }
 
+function routeJobPauseRequested(row = {}) {
+  const routeJob = row.route_job || {};
+  return !!(
+    row.checkpoint_pause_request
+    || routeJob.resumability?.pauseRequested
+    || routeJob.native?.checkpoint_pause_requested
+  );
+}
+
+function renderRouteJobActionButton(container, row, control) {
+  if (!control || control.kind !== 'request-checkpoint-pause') return;
+  const routeJob = row.route_job || {};
+  const button = document.createElement('button');
+  button.className = 'btn';
+  button.textContent = control.label || 'Stop after checkpoint';
+  button.title = 'Request cooperative stop after the next checkpoint boundary';
+  button.setAttribute('data-greenroom-route-action', 'request-checkpoint-pause');
+  button.onclick = async (event) => {
+    event.stopPropagation();
+    button.disabled = true;
+    button.textContent = 'Requesting...';
+    const result = await grPostApi('route-jobs/checkpoint-pause', {
+      provider: 'native-greenroom',
+      job_id: routeJob.id || row.job_id || '',
+    });
+    if (result?.error) {
+      button.disabled = false;
+      button.textContent = control.label || 'Stop after checkpoint';
+      setInfo(`Checkpoint stop request failed: ${result.error}`);
+      return;
+    }
+    if (result?.route_provider_index) {
+      greenroomRouteJobState = {
+        ...result.route_provider_index,
+        loadedAt: new Date().toISOString(),
+        error: null,
+      };
+    }
+    setInfo('Stop after checkpoint requested');
+    await grBrowseRouteJobs();
+  };
+  container.appendChild(button);
+}
+
 function renderGreenroomRouteJobRow(row) {
   const routeJob = row.route_job || {};
   const resumability = routeJob.resumability || {};
+  const pauseRequested = routeJobPauseRequested(row);
   const div = document.createElement('div');
   div.className = 'gr-entry native-greenroom-route-row';
   div.setAttribute('data-greenroom-route-job-id', routeJob.id || row.job_id || '');
@@ -9931,6 +9988,7 @@ function renderGreenroomRouteJobRow(row) {
   div.setAttribute('data-greenroom-route-resumability', resumability.kind || 'unknown');
   div.setAttribute('data-greenroom-route-completed-stage', resumability.completedStage || '');
   div.setAttribute('data-greenroom-route-resume-supported', String(!!resumability.resumeSupported));
+  div.setAttribute('data-greenroom-route-pause-requested', String(pauseRequested));
 
   const icon = document.createElement('span');
   icon.className = 'gr-icon';
@@ -9955,6 +10013,7 @@ function renderGreenroomRouteJobRow(row) {
     checkpoint.className = 'gr-meta checkpoint-meta';
     checkpoint.textContent = [
       resumability.completedStage || 'checkpoint',
+      pauseRequested ? 'pause requested' : null,
       resumability.resumeSupported ? 'resume supported' : 'resume blocked',
     ].filter(Boolean).join(' / ');
     checkpoint.title = resumability.resumeBlocker || resumability.checkpointReceipt || '';
@@ -9971,6 +10030,9 @@ function renderGreenroomRouteJobRow(row) {
 
   renderRouteJobLinkButton(div, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
   renderRouteJobLinkButton(div, 'Checkpoint', row.checkpoint_receipt_link, 'Open checkpoint-yield receipt');
+  for (const control of (row.controls || [])) {
+    renderRouteJobActionButton(div, row, control);
+  }
   for (const link of (row.output_links || []).slice(0, 2)) {
     renderRouteJobLinkButton(div, link.kind === 'mesh' ? 'Output' : 'File', link.path, link.name);
   }

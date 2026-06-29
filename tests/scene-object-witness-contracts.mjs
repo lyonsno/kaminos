@@ -131,8 +131,13 @@ assert.match(indexHtml, /data-greenroom-route-status/, 'Native Greenroom route t
 assert.match(indexHtml, /data-greenroom-route-resumability/, 'Native Greenroom route tray preserves route resumability kind on rows');
 assert.match(indexHtml, /data-greenroom-route-completed-stage/, 'Native Greenroom route tray preserves checkpoint completed stage on rows');
 assert.match(indexHtml, /data-greenroom-route-resume-supported/, 'Native Greenroom route tray preserves checkpoint resume support on rows');
+assert.match(indexHtml, /data-greenroom-route-pause-requested/, 'Native Greenroom route tray preserves checkpoint pause request state on rows');
 assert.match(indexHtml, /checkpoint_paused/, 'Native Greenroom route tray recognizes checkpoint_paused status');
 assert.match(indexHtml, /cooperative-checkpoint/, 'Native Greenroom route tray recognizes cooperative checkpoint resumability');
+assert.match(indexHtml, /Stop after checkpoint/, 'Native Greenroom route tray exposes the checkpoint stop request action');
+assert.match(indexHtml, /setAttribute\('data-greenroom-route-action', 'request-checkpoint-pause'\)/, 'Native Greenroom route tray marks checkpoint stop request action buttons');
+assert.match(indexHtml, /route-jobs\/checkpoint-pause/, 'Native Greenroom route tray calls the checkpoint pause request endpoint');
+assert.match(indexHtml, /pause requested/, 'Native Greenroom route tray distinguishes requested pause from achieved checkpoint pause');
 assert.match(indexHtml, /window\.kaminosRouteJobDebugState/, 'Native Greenroom route tray exposes explicit debug state');
 assert.match(indexHtml, /Checkpoint pause metadata only/, 'Native Greenroom route tray warns instead of claiming pause/resume controls');
 assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');

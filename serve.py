@@ -49,6 +49,7 @@ SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 ROUTE_PROVIDER_INDEX_SCHEMA = "kaminos.route-provider-index.v0"
 ROUTE_JOB_SCHEMA = "kaminos.route-job.v0"
+CHECKPOINT_PAUSE_REQUEST_SCHEMA = "gpu-greenroom.checkpoint-pause-request.v1"
 ROUTE_JOB_STATUSES = {
     "pending",
     "reserved",
@@ -543,7 +544,50 @@ def _greenroom_read_link_for_path(path):
     })
 
 
-def _greenroom_resumability(state):
+def _greenroom_checkpoint_pause_capable(job_type):
+    return job_type == "trellis2mlx" or str(job_type or "").startswith("trellis2mlx.")
+
+
+def _greenroom_read_checkpoint_pause_request(job_dir):
+    request_path = job_dir / "_control" / "checkpoint_pause_request.json"
+    request, _ = _read_json_file(request_path)
+    if not isinstance(request, dict):
+        return None
+    if request.get("schema") != CHECKPOINT_PAUSE_REQUEST_SCHEMA:
+        return None
+    if request.get("status") != "requested":
+        return None
+    request.setdefault("receipt_path", str(request_path))
+    return request
+
+
+def _greenroom_control_paths(state):
+    output_dir = (state or {}).get("output_dir") or (state or {}).get("outputDir")
+    checkpoint_dir = (state or {}).get("checkpoint_dir") or (state or {}).get("checkpointDir")
+    checkpoint_stop_file = (
+        (state or {}).get("checkpoint_stop_file")
+        or (state or {}).get("checkpointStopFile")
+    )
+    if not checkpoint_dir and output_dir:
+        checkpoint_dir = str(Path(output_dir) / "checkpoints")
+    if not checkpoint_stop_file and output_dir:
+        checkpoint_stop_file = str(Path(output_dir) / "_control" / "checkpoint-stop")
+    return checkpoint_dir, checkpoint_stop_file
+
+
+def _greenroom_path_is_writable_control(path):
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if not greenroom or not path:
+        return False
+    try:
+        root = Path(greenroom).expanduser().resolve()
+        resolved = Path(path).expanduser().resolve()
+    except OSError:
+        return False
+    return resolved == root or resolved.is_relative_to(root)
+
+
+def _greenroom_resumability(state, checkpoint_pause_request=None):
     checkpoint_yield = (state or {}).get("checkpoint_yield")
     if isinstance(checkpoint_yield, dict) and checkpoint_yield.get("schema") == "trellis2mlx.checkpoint_yield.v1":
         resumability = {
@@ -553,16 +597,26 @@ def _greenroom_resumability(state):
             "nextStage": checkpoint_yield.get("next_stage"),
             "resumeSupported": bool(checkpoint_yield.get("resume_supported")),
             "checkpointReceipt": checkpoint_yield.get("receipt_path"),
+            "pauseRequested": bool(checkpoint_pause_request),
         }
         if checkpoint_yield.get("resume_blocker"):
             resumability["resumeBlocker"] = checkpoint_yield.get("resume_blocker")
         if checkpoint_yield.get("resume_command_hint"):
             resumability["resumeCommandHint"] = checkpoint_yield.get("resume_command_hint")
         return resumability
+    if checkpoint_pause_request:
+        return {
+            "kind": "cooperative-checkpoint",
+            "state": "pause_requested",
+            "pauseRequested": True,
+            "resumeSupported": False,
+            "checkpointStopFile": checkpoint_pause_request.get("checkpoint_stop_file"),
+            "pauseRequestReceipt": checkpoint_pause_request.get("receipt_path"),
+        }
     return {"kind": "unknown"}
 
 
-def _greenroom_native_checkpoint_fields(state):
+def _greenroom_native_checkpoint_fields(state, checkpoint_pause_request=None):
     fields = {}
     if (state or {}).get("checkpoint_dir"):
         fields["checkpoint_dir"] = state.get("checkpoint_dir")
@@ -571,10 +625,34 @@ def _greenroom_native_checkpoint_fields(state):
     checkpoint_yield = (state or {}).get("checkpoint_yield")
     if isinstance(checkpoint_yield, dict) and checkpoint_yield.get("receipt_path"):
         fields["checkpoint_yield_receipt"] = checkpoint_yield.get("receipt_path")
+    if checkpoint_pause_request:
+        fields["checkpoint_pause_requested"] = True
+        if checkpoint_pause_request.get("receipt_path"):
+            fields["checkpoint_pause_request_receipt"] = checkpoint_pause_request.get("receipt_path")
+        if checkpoint_pause_request.get("checkpoint_stop_file"):
+            fields["checkpoint_stop_file"] = checkpoint_pause_request.get("checkpoint_stop_file")
     return fields
 
 
-def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir):
+def _greenroom_route_controls(job_type, status, state, checkpoint_pause_request):
+    if status not in {"pending", "running"}:
+        return []
+    if checkpoint_pause_request:
+        return []
+    if isinstance((state or {}).get("checkpoint_yield"), dict):
+        return []
+    if not _greenroom_checkpoint_pause_capable(job_type):
+        return []
+    _, checkpoint_stop_file = _greenroom_control_paths(state)
+    if not _greenroom_path_is_writable_control(checkpoint_stop_file):
+        return []
+    return [{
+        "kind": "request-checkpoint-pause",
+        "label": "Stop after checkpoint",
+    }]
+
+
+def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir, checkpoint_pause_request=None):
     input_path = (state or {}).get("input_path") or (state or {}).get("inputPath")
     output_dir = (state or {}).get("output_dir") or (state or {}).get("outputDir")
     input_artifacts = []
@@ -593,13 +671,13 @@ def _native_greenroom_route_job(job_id, job_type, status, schedule, state, statu
         "status": normalize_route_job_status(status),
         "inputArtifacts": input_artifacts,
         "outputPolicy": {"root": output_dir, "mode": "caller-owned"} if output_dir else None,
-        "resumability": _greenroom_resumability(state),
+        "resumability": _greenroom_resumability(state, checkpoint_pause_request),
         "native": {
             "greenroom_job_id": job_id,
             "status_dir": status_dir,
             "job_dir": str(job_dir),
             "output_dir": output_dir,
-            **_greenroom_native_checkpoint_fields(state),
+            **_greenroom_native_checkpoint_fields(state, checkpoint_pause_request),
         },
     }
 
@@ -644,7 +722,17 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
         })
     if receipt:
         raw = {**raw, **{k: v for k, v in receipt.items() if v is not None}}
-    route_job = _native_greenroom_route_job(job_id, job_type, status, schedule, raw, status_dir, job_dir)
+    checkpoint_pause_request = _greenroom_read_checkpoint_pause_request(job_dir)
+    route_job = _native_greenroom_route_job(
+        job_id,
+        job_type,
+        status,
+        schedule,
+        raw,
+        status_dir,
+        job_dir,
+        checkpoint_pause_request,
+    )
     display = build_display_metadata(
         job_id,
         entry_type="dir",
@@ -672,13 +760,75 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
             else None
         ),
         "output_links": _greenroom_output_links(job_id, receipt or raw),
-        "controls": [],
+        "controls": _greenroom_route_controls(job_type, status, raw, checkpoint_pause_request),
+        "checkpoint_pause_request": checkpoint_pause_request,
         "warnings": warnings,
         "parse_error": parse_error,
     }
     if legacy_status is not None:
         row["legacy_status"] = legacy_status
     return row
+
+
+def _find_greenroom_job_dir(job_id, status_dirs=("running", "pending")):
+    greenroom = BROWSE_ROOTS.get("greenroom")
+    if not greenroom or not greenroom.exists():
+        return None
+    root = greenroom.resolve()
+    for status_dir in status_dirs:
+        job_dir = (greenroom / status_dir / job_id).resolve()
+        status_root = (greenroom / status_dir).resolve()
+        if not job_dir.is_relative_to(status_root):
+            continue
+        if not job_dir.is_relative_to(root):
+            continue
+        if (job_dir / "status.json").exists():
+            return job_dir, status_dir
+    return None
+
+
+def request_greenroom_checkpoint_pause(job_id):
+    located = _find_greenroom_job_dir(job_id)
+    if not located:
+        return None
+    job_dir, status_dir = located
+    state, exc = _read_json_file(job_dir / "status.json")
+    state = state if isinstance(state, dict) else {}
+    if exc is not None:
+        raise ValueError(f"Could not read Greenroom status for {job_id}: {exc}")
+    job_type = state.get("job_type") or state.get("jobType")
+    if not _greenroom_checkpoint_pause_capable(job_type):
+        raise ValueError(f"Job type {job_type!r} does not advertise cooperative checkpoint pause")
+    checkpoint_dir, checkpoint_stop_file = _greenroom_control_paths(state)
+    if not checkpoint_stop_file:
+        raise ValueError(f"Job {job_id} has no checkpoint stop file")
+    if not _greenroom_path_is_writable_control(checkpoint_stop_file):
+        raise PermissionError("checkpoint stop file is outside the configured Greenroom root")
+
+    stop_path = Path(checkpoint_stop_file).expanduser().resolve()
+    request_path = job_dir / "_control" / "checkpoint_pause_request.json"
+    receipt = {
+        "schema": CHECKPOINT_PAUSE_REQUEST_SCHEMA,
+        "status": "requested",
+        "job_id": job_id,
+        "job_type": job_type,
+        "job_status_at_request": state.get("status") or status_dir,
+        "requested_at": time.time(),
+        "checkpoint_dir": checkpoint_dir,
+        "checkpoint_stop_file": str(stop_path),
+        "receipt_path": str(request_path),
+        "request_semantics": "cooperative_stop_after_next_checkpoint",
+    }
+    request_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_request = request_path.with_suffix(request_path.suffix + ".tmp")
+    tmp_request.write_text(json.dumps(receipt, indent=2) + "\n")
+    os.replace(tmp_request, request_path)
+
+    stop_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_stop = stop_path.with_suffix(stop_path.suffix + ".tmp")
+    tmp_stop.write_text(json.dumps(receipt, indent=2) + "\n")
+    os.replace(tmp_stop, stop_path)
+    return receipt
 
 
 def build_greenroom_route_provider_index():
@@ -786,6 +936,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
+        elif parsed.path == "/api/route-jobs/checkpoint-pause":
+            self.handle_route_job_checkpoint_pause(parse_qs(parsed.query))
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -1075,6 +1227,36 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": f"Unsupported route job provider: {provider}"}, 400)
             return
         self.send_json(build_greenroom_route_provider_index())
+
+    def handle_route_job_checkpoint_pause(self, params):
+        """Request cooperative stop after the next checkpoint boundary."""
+        provider = params.get("provider", ["native-greenroom"])[0]
+        if provider != "native-greenroom":
+            self.send_json({"error": f"Unsupported route job provider: {provider}"}, 400)
+            return
+        job_id = params.get("job_id", [""])[0]
+        if not job_id:
+            self.send_json({"error": "job_id required"}, 400)
+            return
+        try:
+            receipt = request_greenroom_checkpoint_pause(job_id)
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        if receipt is None:
+            self.send_json({"error": f"Job {job_id} not found or not pending/running"}, 404)
+            return
+        self.send_json({
+            "schema": "kaminos.route-job-action-result.v0",
+            "provider": "native-greenroom",
+            "job_id": job_id,
+            "action": "request-checkpoint-pause",
+            "receipt": receipt,
+            "route_provider_index": build_greenroom_route_provider_index(),
+        })
 
     def handle_read(self, params):
         """Read a file's content. ?root=scratch&path=file.json"""

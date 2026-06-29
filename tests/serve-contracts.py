@@ -12,6 +12,7 @@ from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import build_greenroom_route_provider_index
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
+from serve import request_greenroom_checkpoint_pause
 
 
 def test_http_status_404_log_does_not_crash():
@@ -276,6 +277,103 @@ def test_native_greenroom_route_provider_projects_checkpoint_paused_rows():
     assert row["controls"] == []
 
 
+def test_native_greenroom_route_provider_projects_pause_request_controls():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        job_dir = greenroom / "pending" / "run123"
+        output_dir = greenroom / "outputs" / "run123"
+        job_dir.mkdir(parents=True)
+        output_dir.mkdir(parents=True)
+        state = {
+            "job_id": "run123",
+            "status": "pending",
+            "job_type": "trellis2mlx",
+            "input_path": "/tmp/source.png",
+            "output_dir": str(output_dir),
+            "params": {},
+            "submitted_at": 10,
+            "checkpoint_dir": str(output_dir / "checkpoints"),
+            "checkpoint_stop_file": str(output_dir / "_control" / "checkpoint-stop"),
+        }
+        (job_dir / "request.json").write_text(json.dumps({
+            "job_id": "run123",
+            "job_type": "trellis2mlx",
+            "input_path": "/tmp/source.png",
+            "output_dir": str(output_dir),
+            "params": {},
+            "submitted_at": 10,
+        }))
+        (job_dir / "status.json").write_text(json.dumps(state))
+
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            before = build_greenroom_route_provider_index()
+            receipt = request_greenroom_checkpoint_pause("run123")
+            after = build_greenroom_route_provider_index()
+            stop_file = output_dir / "_control" / "checkpoint-stop"
+            request_receipt = job_dir / "_control" / "checkpoint_pause_request.json"
+            stop_file_exists = stop_file.exists()
+            request_receipt_exists = request_receipt.exists()
+            expected_stop_file = str(stop_file.resolve())
+            expected_request_receipt = str(request_receipt.resolve())
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    [before_row] = before["rows"]
+    assert before_row["controls"] == [{
+        "kind": "request-checkpoint-pause",
+        "label": "Stop after checkpoint",
+    }]
+
+    assert stop_file_exists
+    assert request_receipt_exists
+    assert receipt["schema"] == "gpu-greenroom.checkpoint-pause-request.v1"
+    assert receipt["status"] == "requested"
+    assert receipt["checkpoint_stop_file"] == expected_stop_file
+
+    [after_row] = after["rows"]
+    assert after_row["controls"] == []
+    assert after_row["checkpoint_pause_request"]["status"] == "requested"
+    assert after_row["route_job"]["resumability"]["kind"] == "cooperative-checkpoint"
+    assert after_row["route_job"]["resumability"]["pauseRequested"] is True
+    assert after_row["route_job"]["native"]["checkpoint_pause_request_receipt"] == expected_request_receipt
+
+
+def test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        job_dir = greenroom / "pending" / "echo123"
+        output_dir = greenroom / "outputs" / "echo123"
+        job_dir.mkdir(parents=True)
+        output_dir.mkdir(parents=True)
+        (job_dir / "status.json").write_text(json.dumps({
+            "job_id": "echo123",
+            "status": "pending",
+            "job_type": "echo",
+            "input_path": "/tmp/source.png",
+            "output_dir": str(output_dir),
+        }))
+
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            index = build_greenroom_route_provider_index()
+            try:
+                request_greenroom_checkpoint_pause("echo123")
+            except ValueError as exc:
+                error = str(exc)
+            else:
+                error = ""
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    [row] = index["rows"]
+    assert row["controls"] == []
+    assert "does not advertise cooperative checkpoint pause" in error
+    assert not (output_dir / "_control" / "checkpoint-stop").exists()
+
+
 def test_native_greenroom_route_provider_preserves_degraded_legacy_rows():
     with TemporaryDirectory(dir="/tmp") as tmp:
         greenroom = Path(tmp) / "greenroom"
@@ -521,6 +619,8 @@ if __name__ == "__main__":
     test_greenroom_stray_output_dirs_do_not_get_load_affordance()
     test_native_greenroom_route_provider_projects_route_job_rows()
     test_native_greenroom_route_provider_projects_checkpoint_paused_rows()
+    test_native_greenroom_route_provider_projects_pause_request_controls()
+    test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()
