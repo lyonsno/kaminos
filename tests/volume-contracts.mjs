@@ -1366,3 +1366,22 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+
+const interframeBaselinePath = join(root, 'volume-interframe-baseline.mjs');
+assert.ok(existsSync(interframeBaselinePath), 'volume interframe baseline harness exists');
+const interframeBaseline = existsSync(interframeBaselinePath) ? readFileSync(interframeBaselinePath, 'utf8') : '';
+assert.match(interframeBaseline, /kaminos\.volume\.interframe-baseline\.v0/, 'interframe baseline writes a stable evidence schema identity');
+assert.match(interframeBaseline, /kaminos\.volume\.interframe-triplet\.v0/, 'interframe baseline records real simulator triplet identity');
+assert.match(interframeBaseline, /same-route-live-sequence/, 'interframe triplet labels that frames came from one live simulator route');
+assert.match(interframeBaseline, /synthetic-comparison-not-live-simulator-output/, 'interframe baseline labels synthesized frames as comparison evidence only');
+assert.match(interframeBaseline, /pixel-midpoint-rgba-v0/, 'interframe baseline includes the cheapest deterministic pixel midpoint baseline');
+assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves the actual middle frame as the comparison target');
+assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
+assert.match(interframeBaseline, /meanAbsoluteError/, 'interframe baseline reports a concrete pixel error metric');
+assert.match(interframeBaseline, /rootMeanSquaredError/, 'interframe baseline reports a concrete squared pixel error metric');
+assert.match(interframeBaseline, /ghosting|smearing|topology-lie|snuff-quench-miss|low-fire-shimmer|broad-smoke-mush/, 'interframe baseline names visual failure-mode buckets');
+assert.match(interframeBaseline, /frameCount/, 'interframe triplet preserves frame count timing identity');
+assert.match(interframeBaseline, /simStepCount/, 'interframe triplet preserves sim step timing identity');
+assert.match(interframeBaseline, /effectiveRoute/, 'interframe triplet preserves effective route identity');
+assert.match(interframeBaseline, /prototypeIdentity/, 'interframe triplet preserves prototype identity');
+assert.match(interframeBaseline, /failurePhase/, 'interframe baseline writes phase-tagged failure reports');
