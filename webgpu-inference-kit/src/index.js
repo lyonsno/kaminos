@@ -33,6 +33,19 @@ export {
 } from './kernel-profile.js';
 
 export {
+  createWebGpuRuntimeProfile,
+  createWebGpuRuntimeProfileInput,
+  validateWebGpuRuntimeProfile,
+  WEBGPU_RUNTIME_PROFILE_SCHEMA,
+} from './runtime-profile.js';
+
+export {
+  classifyWebGpuRouteReceiptEvidence,
+  classifyWebGpuRouteWorkerResultEvidence,
+  WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
+} from './route-receipt-consumer.js';
+
+export {
   MOGE_DEPTH_NORMAL_ROUTE_ID,
   createMogeDepthNormalRouteDefinition,
   createMogeDepthNormalRouteReceipt,

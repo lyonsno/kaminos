@@ -11,9 +11,9 @@ Current surface:
 - `createWebGpuLocalRouteReceipt(input)`: creates a
   `kaminos.webgpu-route-receipt.v0` receipt for a `webgpu-local` route.
 - `createWebGpuRouteSchemaContract(input)`: exposes the kit-owned route
-  definition/request/result/receipt schema strings as a compact contract object
-  so route repos can run conformance checks instead of manually mirroring hidden
-  constants.
+  definition/request/result/receipt/runtime-profile/evidence-classification
+  schema strings as a compact contract object so route repos can run conformance
+  checks instead of manually mirroring hidden constants.
 - `createWebGpuRouteReceiptFromArtifacts(input)` plus
   `createRouteReceiptArtifacts`, `createRouteReceiptInputArtifact`,
   `finishAndValidateRouteProfile`, and validation helpers: shared route receipt
@@ -45,6 +45,16 @@ Current surface:
   `createRouteKernelProfileMetadata(input)`: normalize shared kit version,
   kernel profile, commit, required stage, and timing-source metadata for route
   definitions and receipts while keeping route-specific semantics local.
+- `createWebGpuRuntimeProfileInput(input)`,
+  `createWebGpuRuntimeProfile(input)`, and
+  `validateWebGpuRuntimeProfile(profile)`: combine effective WebGPU backend
+  identity, kernel metadata, staged profile evidence, and evidence mode into a
+  single producer-side runtime profile object.
+- `classifyWebGpuRouteReceiptEvidence(receipt)` and
+  `classifyWebGpuRouteWorkerResultEvidence(result)`: commoner-side receipt
+  classification helpers that distinguish authoritative live WebGPU evidence
+  from fallback, partial, cache/demo, stale, route-mismatch, and invalid
+  receipts.
 - `createMogeDepthNormalRouteReceipt(input)`: first concrete `webgpu-local`
   route receipt factory for `moge.depth-normal.webgpu-local.v0`.
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`,
@@ -98,8 +108,11 @@ Near-term extraction order:
 9. Shared kernel/profile metadata helper. Kit version, kernel profile, commit,
    required stage, and timing-source normalization now live in one helper
    consumed by all four concrete route factories.
-10. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-11. Shared kernels only when at least two real routes need them or a measured
+10. Runtime profile and commoner receipt classification helpers. Producers can
+   normalize effective WebGPU runtime evidence, and downstream commoners can
+   classify receipts before treating outputs as live route evidence.
+11. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+12. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:

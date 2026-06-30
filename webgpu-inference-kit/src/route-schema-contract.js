@@ -1,4 +1,6 @@
 import { WEBGPU_ROUTE_RECEIPT_SCHEMA } from './route-receipt.js';
+import { WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA } from './route-receipt-consumer.js';
+import { WEBGPU_RUNTIME_PROFILE_SCHEMA } from './runtime-profile.js';
 import {
   WEBGPU_ROUTE_DEFINITION_SCHEMA,
   WEBGPU_ROUTE_REQUEST_SCHEMA,
@@ -13,6 +15,8 @@ export function createWebGpuRouteSchemaContract(input = {}) {
     requestSchema: WEBGPU_ROUTE_REQUEST_SCHEMA,
     resultSchema: WEBGPU_ROUTE_RESULT_SCHEMA,
     receiptSchema: WEBGPU_ROUTE_RECEIPT_SCHEMA,
+    runtimeProfileSchema: WEBGPU_RUNTIME_PROFILE_SCHEMA,
+    evidenceClassificationSchema: WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
     authoritativeReceiptStatuses: ['real'],
     nonAuthoritativeReceiptStatuses: ['fallback', 'partial', 'cached'],
   };
