@@ -220,6 +220,10 @@ assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 her
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
+assert.match(index, /volume_sim_cadence/, 'URL route can request low-cadence simulation without hiding render continuation');
+assert.match(index, /routedVolumeSimCadence/, 'route-only sim cadence is preserved outside visible cockpit sliders');
+assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
+assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
 assert.match(index, /<option value="32">32\^3 majorant<\/option>/, 'Majorant grid selector can test a 32^3 coarse field');
@@ -268,6 +272,9 @@ assert.match(index, /routedVolumeLifecycleT/, 'route-only lifecycle phase is pre
 assert.match(index, /routedVolumeQuenchVapor/, 'route-only quench-vapor strength is preserved outside visible cockpit sliders');
 assert.match(index, /routedVolumeRuntimeQuality/, 'route-only runtime quality is preserved outside visible cockpit sliders');
 assert.match(index, /applyVolumeRuntimeQualityLadder/, 'runtime quality ladder applies explicit effective control downgrades');
+assert.match(index, /floor\('simCadence',\s*2\)/, 'live-low runtime quality floors sim cadence to create headroom');
+assert.match(index, /floor\('simCadence',\s*4\)/, 'holdover runtime quality floors sim cadence to continuation mode');
+assert.match(index, /floor\('simCadence',\s*8\)/, 'impostor runtime quality floors sim cadence to maximum continuation mode');
 assert.match(index, /canonicalPlumeReadoutActive/, 'volume readout distinguishes canonical labels from ordinary scene truth');
 assert.match(index, /sceneContentLabel/, 'non-canonical volume readout derives content from live scene controls instead of canonical defaults');
 assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
@@ -359,6 +366,7 @@ assert.match(index, /canonicalMotionMode/, 'volume controls carry effective cano
 assert.match(index, /canonicalContentMode/, 'volume controls carry effective canonical content mode into renderer debug state');
 assert.match(index, /volume-canonical-render-mode-state'\)\.textContent/, 'volume readout prints effective canonical render diagnostic mode');
 assert.match(index, /volume-canonical-motion-mode-state'\)\.textContent/, 'volume readout prints effective canonical motion diagnostic mode');
+assert.match(index, /effectiveVisualAuthority === 'continuation' \? 'continuation' : 'live'/, 'volume readout labels cadence-held render continuation instead of silent live compute');
 assert.match(index, /volume-canonical-content-mode-state'\)\.textContent/, 'volume readout prints effective canonical content mode');
 assert.match(index, /density:\s*0\.45/, 'canonical macro foothold preserves the operator-tuned low density control');
 assert.match(index, /smoke:\s*2\.80/, 'canonical macro foothold preserves the operator-tuned smoke visibility control');
@@ -763,6 +771,13 @@ assert.match(core, /runtimeQualityRequested/, 'debug state records requested run
 assert.match(core, /runtimeQualityEffective/, 'debug state records the effective runtime quality mode');
 assert.match(core, /runtimeQualityReceipt/, 'debug state exposes the pressure-aware ladder receipt');
 assert.match(core, /volume-runtime-quality-ladder-v0/, 'runtime quality ladder has a stable receipt identity');
+assert.match(core, /normalizeSimCadence/, 'volume core normalizes requested sim cadence explicitly');
+assert.match(core, /shouldRunSimForFrame/, 'volume core has a named per-frame sim cadence gate');
+assert.match(core, /state\.continuationFrameCount/, 'debug state records render frames that reused the most recent live field');
+assert.match(core, /state\.liveSimFrameCount/, 'debug state records frames that actually advanced live simulation');
+assert.match(core, /state\.lastLiveSimFrameId/, 'debug state records the latest render frame that advanced simulation');
+assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
+assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');
 assert.match(core, /tallPlumeFuelHeatReaction/, 'tall-plume fire is born from fuel/heat contact instead of source color alone');
 assert.match(core, /fuelConsumption/, 'tall-plume reaction consumes the fuel lane before writing material state');
 assert.match(core, /fireFuelOverlapRatio/, 'sim readback reports whether visible fire overlaps live fuel');
@@ -1269,6 +1284,10 @@ assert.match(witness, /expectedRuntimeQualityRequested/, 'witness verifies reque
 assert.match(witness, /expectedRuntimeQualityEffective/, 'witness verifies effective runtime quality identity');
 assert.match(witness, /runtimeQualityReceipt/, 'witness records the runtime quality ladder receipt');
 assert.match(witness, /volume-runtime-quality-ladder-v0/, 'witness recognizes the stable runtime quality ladder identity');
+assert.match(witness, /expectedSimCadence/, 'witness verifies effective sim cadence route identity');
+assert.match(witness, /expectedVisualAuthority/, 'witness verifies live-sim versus continuation authority identity');
+assert.match(witness, /continuationAuthority/, 'witness records the continuation source authority');
+assert.match(witness, /frameCount > state\.simStepCount/, 'witness proves continuation with a frame-count/sim-step gap');
 assert.match(witness, /snuffVisualModel/, 'witness records the active snuff visual model identity');
 assert.match(witness, /quenchVaporStrength/, 'witness records effective quench-vapor strength');
 assert.match(witness, /quench-vapor-v0/, 'witness recognizes the cheap failure-snuff vapor model');
