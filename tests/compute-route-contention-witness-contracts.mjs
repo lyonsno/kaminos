@@ -379,6 +379,25 @@ assert.equal(optimisticSchedulerWithoutEffective.falseClosureChecks.schedulerUnv
 assert.ok(optimisticSchedulerWithoutEffective.witnessWarnings.includes('scheduler_unverified'));
 assert.ok(optimisticSchedulerWithoutEffective.witnessWarnings.includes('requested_scheduler_without_effective_scheduler'));
 
+const partialVerifiedSchedulerWithoutEffective = buildComputeRouteContentionWitness({
+  routeIdentity: witness.routeIdentity,
+  routePhase: witness.routePhase,
+  visualBudget: witness.visualBudget,
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    frameP95Ms: 72,
+    queueDoneP95Ms: 140,
+  },
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    verificationState: 'verified',
+  },
+});
+assert.equal(partialVerifiedSchedulerWithoutEffective.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(partialVerifiedSchedulerWithoutEffective.falseClosureChecks.schedulerUnverified, true);
+assert.ok(partialVerifiedSchedulerWithoutEffective.witnessWarnings.includes('scheduler_unverified'));
+
 const p99OnlyWitness = buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
   routePhase: witness.routePhase,

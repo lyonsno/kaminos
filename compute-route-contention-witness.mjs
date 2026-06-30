@@ -183,10 +183,7 @@ function effectiveRouteEvidence(report = {}) {
 }
 
 function schedulerVerificationState(scheduler, adapterEvidence) {
-  if (scheduler?.requestedScheduler && !scheduler?.effectiveScheduler && !adapterEvidence?.effectiveScheduler) {
-    return 'scheduler-unverified';
-  }
-  if (adapterEvidence?.requestedScheduler && !adapterEvidence?.effectiveScheduler && !scheduler?.effectiveScheduler) {
+  if (!scheduler?.effectiveScheduler && !adapterEvidence?.effectiveScheduler) {
     return 'scheduler-unverified';
   }
   if (scheduler?.verificationState) return scheduler.verificationState;
