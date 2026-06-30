@@ -5930,9 +5930,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
-  async function sampleFrame() {
+  async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
-    updateUniforms(performance.now());
+    const advanceSim = options.advanceSim !== false;
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const includeRgba = options.includeRgba === true;
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
+    updateUniforms(sampleNow);
     ensureFrameTexture();
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
@@ -5944,7 +5950,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    encodeSim(encoder);
+    if (advanceSim) {
+      encodeSim(encoder);
+    }
     encodeMajorant(encoder, { force: true });
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
@@ -6167,6 +6175,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const previewWidth = 256;
     const previewHeight = Math.max(1, Math.round(previewWidth * state.height / state.width));
     const preview = new Uint8Array(previewWidth * previewHeight * 4);
+    const rgba = includeRgba ? new Uint8Array(state.width * state.height * 4) : null;
+    if (rgba) {
+      for (let y = 0; y < state.height; y += 1) {
+        const src = y * bytesPerRow;
+        const dst = y * state.width * bytesPerPixel;
+        rgba.set(data.slice(src, src + state.width * bytesPerPixel), dst);
+      }
+    }
     for (let y = Math.floor(state.height * 0.08); y < Math.floor(state.height * 0.92); y += 2) {
       const row = y * bytesPerRow;
       for (let x = Math.floor(state.width * 0.08); x < Math.floor(state.width * 0.92); x += 2) {
@@ -6404,12 +6420,152 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      sampleAuthority: advanceSim ? 'sim-advanced-frame-readback' : 'render-only-frozen-sim-state',
+      simAdvanced: advanceSim,
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      sampleNowMs: sampleNow,
       preview: {
         width: previewWidth,
         height: previewHeight,
         rgba: Array.from(preview),
       },
+      image: rgba ? {
+        width: state.width,
+        height: state.height,
+        rgba: Array.from(rgba),
+      } : null,
     };
+  }
+
+  async function sampleRenderScaleSet(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlsBefore = { ...controlsSnapshot };
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `same-state-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const samples = [];
+    try {
+      for (let index = 0; index < renderScales.length; index += 1) {
+        const renderScale = renderScales[index];
+        controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
+        resetTemporalHistory('same-state-render-scale-capture');
+        const sample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: options.includeRgba === true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+          renderScaleSetIndex: index,
+        });
+        samples.push({
+          role: index === renderScales.length - 1 ? 'high' : `low-${index + 1}`,
+          requestedRenderScale: renderScale,
+          ...sample,
+        });
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('same-state-render-scale-restore');
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    return {
+      ok: samples.every(sample => sample.ok === true),
+      sampleSetAuthority: 'frame-locked-render-scale-set-v0',
+      sampleAuthority: 'render-only-frozen-sim-state',
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      fixedNowMs: fixedNow,
+      renderScales,
+      samples,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+    };
+  }
+
+  async function renderFrozenScaleToCanvas(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlsBefore = { ...controlsSnapshot };
+    const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
+      resetTemporalHistory('same-state-render-scale-canvas-capture');
+      updateUniforms(fixedNow);
+      const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
+      encodeMajorant(encoder, { force: true });
+      const currentTexture = context.getCurrentTexture();
+      encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+      device.queue.submit([encoder.finish()]);
+      if (device.queue?.onSubmittedWorkDone) {
+        await device.queue.onSubmittedWorkDone();
+      }
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        ok: true,
+        sampleAuthority: 'render-only-frozen-sim-state',
+        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        sampleNowMs: fixedNow,
+        requestedRenderScale: renderScale,
+        renderScale: state.renderScale,
+        renderPixelRatio: state.renderPixelRatio,
+        displayWidth: state.displayWidth,
+        displayHeight: state.displayHeight,
+        renderWidth: state.renderWidth,
+        renderHeight: state.renderHeight,
+        volumeReconstructionStyle: state.volumeReconstructionStyle,
+        canvasCssRect: {
+          x: canvasRect.left,
+          y: canvasRect.top,
+          width: canvasRect.width,
+          height: canvasRect.height,
+        },
+        devicePixelRatio: window.devicePixelRatio || 1,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+      };
+    } finally {
+      if (options.restoreControls !== false) {
+        controlsSnapshot = controlsBefore;
+        resetTemporalHistory('same-state-render-scale-canvas-restore');
+      }
+      if (options.resumeRenderLoop === true && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
   }
 
   return {
@@ -6548,6 +6704,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleRenderScaleSet,
+    renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();

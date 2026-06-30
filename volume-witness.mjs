@@ -10,6 +10,23 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args.set(process.argv[i], process.argv[i + 1]);
 }
 
+function parseNumberList(value) {
+  return String(value || '')
+    .split(',')
+    .map(entry => Number(entry.trim()))
+    .filter(entry => Number.isFinite(entry));
+}
+
+function clampRenderScale(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 0.25;
+  return Math.max(0.1, Math.min(1, requested));
+}
+
+function scaleSlug(value) {
+  return `rs${String(Math.round(clampRenderScale(value) * 100)).padStart(3, '0')}`;
+}
+
 const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
@@ -21,6 +38,9 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
+const renderScaleSet = parseNumberList(args.get('--render-scale-set')).map(clampRenderScale);
+const renderScaleSetDir = resolve(args.get('--render-scale-set-dir') || dirname(out));
+const renderScaleSetPrefix = String(args.get('--render-scale-set-prefix') || 'same-state-render-scale-set');
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -1779,6 +1799,197 @@ async function main() {
     } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
     }
+    let renderScaleSetReport = null;
+    if (renderScaleSet.length) {
+      mkdirSync(renderScaleSetDir, { recursive: true });
+      const hudSuppressionEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.getElementById('fps-counter');
+          if (!el) return { ok: true, found: false, selector: '#fps-counter' };
+          const previous = {
+            visibility: el.style.visibility || '',
+            display: el.style.display || '',
+            textContent: el.textContent || '',
+          };
+          el.style.visibility = 'hidden';
+          return {
+            ok: true,
+            found: true,
+            selector: '#fps-counter',
+            previous,
+            applied: { visibility: el.style.visibility },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const hudSuppression = hudSuppressionEval.result.value || {
+        ok: false,
+        found: false,
+        selector: '#fps-counter',
+      };
+      const renderScaleSetEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosVolumePrototype.sampleRenderScaleSet(${JSON.stringify({
+          renderScales: renderScaleSet,
+          includeRgba: false,
+          resumeRenderLoop: false,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const scaleSet = renderScaleSetEval.result.value;
+      if (scaleSet?.ok !== true || scaleSet?.sampleSetAuthority !== 'frame-locked-render-scale-set-v0') {
+        throw new Error(`Frame-locked render-scale set capture failed: ${JSON.stringify({
+          ok: scaleSet?.ok,
+          reason: scaleSet?.reason,
+          sampleSetAuthority: scaleSet?.sampleSetAuthority,
+          sameStateCaptureId: scaleSet?.sameStateCaptureId,
+        })}`);
+      }
+      const captures = [];
+      for (let index = 0; index < scaleSet.samples.length; index += 1) {
+        const scaleSample = scaleSet.samples[index];
+        const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+        const slug = `${renderScaleSetPrefix}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
+        const imagePath = resolve(renderScaleSetDir, `${slug}.png`);
+        const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
+        const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
+        if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
+          writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
+        }
+        const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+            renderScale,
+            now: scaleSet.fixedNowMs,
+            sameStateCaptureId: scaleSet.sameStateCaptureId,
+            baseFrameCount: scaleSet.baseFrameCount,
+            baseSimStepCount: scaleSet.baseSimStepCount,
+            restoreControls: false,
+            resumeRenderLoop: false,
+          })})`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const canvasCapture = canvasEval.result.value;
+        if (canvasCapture?.ok !== true || canvasCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+          throw new Error(`Frame-locked render-scale canvas capture failed: ${JSON.stringify({
+            renderScale,
+            ok: canvasCapture?.ok,
+            reason: canvasCapture?.reason,
+            sampleAuthority: canvasCapture?.sampleAuthority,
+            sameStateCaptureId: canvasCapture?.sameStateCaptureId,
+          })}`);
+        }
+        const canvasCssRect = canvasCapture.canvasCssRect || {};
+        const screenshotClip = {
+          x: Math.max(0, Number(canvasCssRect.x) || 0),
+          y: Math.max(0, Number(canvasCssRect.y) || 0),
+          width: Math.max(1, Number(canvasCssRect.width) || 0),
+          height: Math.max(1, Number(canvasCssRect.height) || 0),
+          scale: 1,
+        };
+        if (!Number.isFinite(screenshotClip.width) || !Number.isFinite(screenshotClip.height) || screenshotClip.width <= 1 || screenshotClip.height <= 1) {
+          throw new Error(`missing-canvas-clip-bounds: ${JSON.stringify({
+            renderScale,
+            canvasCssRect,
+            imageAuthority: canvasCapture.imageAuthority,
+          })}`);
+        }
+        const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          clip: screenshotClip,
+        });
+        const imageBuffer = Buffer.from(scaleShot.data, 'base64');
+        writeFileSync(imagePath, imageBuffer);
+        const imageMetrics = measureScreenshot(imageBuffer);
+        const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+        const captureReport = {
+          ...sampleReport,
+          image: {
+            path: imagePath,
+            width: imageMetrics.width,
+            height: imageMetrics.height,
+            authority: canvasCapture.imageAuthority,
+            canvasCssRect,
+            screenshotClip,
+            devicePixelRatio: canvasCapture.devicePixelRatio,
+            hudSuppression,
+            metrics: imageMetrics,
+          },
+          preview: preview ? {
+            path: previewPath,
+            width: preview.width,
+            height: preview.height,
+          } : null,
+          canvasCapture,
+          simReadback: simReadback ? {
+            grid: simReadback.grid,
+            densityMean: simReadback.densityMean,
+            densityMax: simReadback.densityMax,
+            velocityMean: simReadback.velocityMean,
+            fireLayerMean: simReadback.fireLayerMean,
+            radianceMean: simReadback.radianceMean,
+            extinctionMean: simReadback.extinctionMean,
+            liveVoxels: simReadback.liveVoxels,
+            frontFieldIdentity: simReadback.frontFieldIdentity,
+          } : null,
+          majorantReadback: majorantReadback ? {
+            grid: majorantReadback.grid,
+            occupiedBricks: majorantReadback.occupiedBricks,
+            importanceMax: majorantReadback.importanceMax,
+          } : null,
+        };
+        writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
+        captures.push({
+          role: scaleSample.role,
+          requestedRenderScale: renderScale,
+          renderScale: scaleSample.renderScale,
+          renderPixelRatio: scaleSample.renderPixelRatio,
+          renderWidth: scaleSample.renderWidth,
+          renderHeight: scaleSample.renderHeight,
+          displayWidth: scaleSample.displayWidth,
+          displayHeight: scaleSample.displayHeight,
+          volumeReconstructionStyle: scaleSample.volumeReconstructionStyle,
+          sampleAuthority: scaleSample.sampleAuthority,
+          imageAuthority: canvasCapture.imageAuthority,
+          canvasCssRect,
+          screenshotClip,
+          devicePixelRatio: canvasCapture.devicePixelRatio,
+          hudSuppression,
+          sameStateCaptureId: scaleSample.sameStateCaptureId,
+          baseFrameCount: scaleSample.baseFrameCount,
+          baseSimStepCount: scaleSample.baseSimStepCount,
+          frameCount: canvasCapture.frameCount,
+          simStepCount: canvasCapture.simStepCount,
+          imageWidth: imageMetrics.width,
+          imageHeight: imageMetrics.height,
+          image: imagePath,
+          preview: previewPath,
+          report: captureReportPath,
+        });
+      }
+      const uniqueFrameCounts = new Set(captures.map(capture => capture.frameCount));
+      const uniqueSimStepCounts = new Set(captures.map(capture => capture.simStepCount));
+      renderScaleSetReport = {
+        sampleSetAuthority: scaleSet.sampleSetAuthority,
+        sampleAuthority: scaleSet.sampleAuthority,
+        sameStateCaptureId: scaleSet.sameStateCaptureId,
+        baseFrameCount: scaleSet.baseFrameCount,
+        baseSimStepCount: scaleSet.baseSimStepCount,
+        fixedNowMs: scaleSet.fixedNowMs,
+        renderScales: scaleSet.renderScales,
+        hudSuppression,
+        supervisedResidualTrainingSuitable: uniqueFrameCounts.size === 1 && uniqueSimStepCounts.size === 1,
+        captures,
+      };
+      if (!renderScaleSetReport.supervisedResidualTrainingSuitable) {
+        throw new Error(`Frame-locked render-scale set did not preserve one frame/sim state: ${JSON.stringify({
+          sameStateCaptureId: renderScaleSetReport.sameStateCaptureId,
+          frameCounts: Array.from(uniqueFrameCounts),
+          simStepCounts: Array.from(uniqueSimStepCounts),
+        })}`);
+      }
+    }
     const reportControls = {
       ...(state.controls || {}),
       rayBudgetPreset: state.controls?.rayBudgetPreset || rayBudgetPreset,
@@ -1983,6 +2194,7 @@ async function main() {
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
       fieldSliceScreenshot: fieldSliceOut || null,
+      renderScaleSet: renderScaleSetReport,
       metrics,
       mainRendererMetrics,
     };
