@@ -57,6 +57,39 @@ const receipt = createMogeDepthNormalRouteReceipt({
   kernel: route.kernel,
   profile,
 });
+receipt.runtime = {
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      yieldMs: 5,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: { decoderLevel: 1 },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      yieldMs: 5,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {},
+      unsupportedFields: ['phaseChunkSize.decoderLevel'],
+    },
+    verificationState: 'scheduler-unverified',
+  },
+  backpressure: {
+    schema: 'kaminos.webgpu-route-backpressure.v0',
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+    memoryExclusivity: 'shared',
+    warmCacheState: 'warm',
+    frameTail: {
+      sampleWindowMs: 5000,
+      longFrameCount: 1,
+      maxFrameGapMs: 47.2,
+      p95FrameGapMs: 22.1,
+      p99FrameGapMs: 47.2,
+    },
+  },
+};
 
 const authoritative = classifyWebGpuRouteReceiptEvidence(receipt, {
   expectedRouteId: route.routeId,
@@ -65,6 +98,11 @@ const authoritative = classifyWebGpuRouteReceiptEvidence(receipt, {
 assert.equal(authoritative.schema, 'kaminos.webgpu-route-evidence-classification.v0');
 assert.equal(authoritative.classification, 'authoritative-live-webgpu');
 assert.equal(authoritative.authoritative, true);
+assert.equal(authoritative.schedulerVerificationState, 'scheduler-unverified');
+assert.equal(authoritative.schedulerMode, 'cooperative');
+assert.equal(authoritative.requestedBudget, 'visible-wait');
+assert.equal(authoritative.effectiveBudget, 'visible-wait');
+assert.equal(authoritative.longFrameCount, 1);
 assert.equal(authoritative.routeId, route.routeId);
 assert.deepEqual(authoritative.outputRoles, ['depth', 'normal']);
 assert.equal(authoritative.timingSource, 'queue-submit-wait');

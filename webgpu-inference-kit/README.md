@@ -50,11 +50,23 @@ Current surface:
   `validateWebGpuRuntimeProfile(profile)`: combine effective WebGPU backend
   identity, kernel metadata, staged profile evidence, and evidence mode into a
   single producer-side runtime profile object.
+- `createWebGpuRouteSchedulerProfile(input)` and
+  `validateWebGpuRouteSchedulerProfile(profile)`: preserve requested versus
+  effective WebGPU route scheduling, including throughput/cooperative mode,
+  route-specific phase chunk sizes, submitted-work waits, yield cadence, and
+  unsupported scheduler fields so a route cannot claim cooperative behavior
+  without effective telemetry.
+- `createWebGpuRouteBackpressureProfile(input)` and
+  `validateWebGpuRouteBackpressureProfile(profile)`: record route pressure
+  classification, warm/cache and memory-sharing posture, and frame-tail
+  evidence for visible-wait/furnace classification without turning internal
+  scheduler knobs into operator-facing controls.
 - `classifyWebGpuRouteReceiptEvidence(receipt)` and
   `classifyWebGpuRouteWorkerResultEvidence(result)`: commoner-side receipt
   classification helpers that distinguish authoritative live WebGPU evidence
   from fallback, partial, cache/demo, stale, route-mismatch, and invalid
-  receipts.
+  receipts, while surfacing scheduler verification and frame-tail fields when a
+  route provides them.
 - `createMogeDepthNormalRouteReceipt(input)`: first concrete `webgpu-local`
   route receipt factory for `moge.depth-normal.webgpu-local.v0`.
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`,
@@ -111,8 +123,12 @@ Near-term extraction order:
 10. Runtime profile and commoner receipt classification helpers. Producers can
    normalize effective WebGPU runtime evidence, and downstream commoners can
    classify receipts before treating outputs as live route evidence.
-11. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
-12. Shared kernels only when at least two real routes need them or a measured
+11. Scheduler/backpressure contracts. Routes can now report throughput versus
+   cooperative scheduling, requested/effective phase chunking, unsupported
+   fields, visible-wait/furnace pressure, and frame-tail evidence without
+   implying browser GPU preemption that WebGPU does not provide.
+12. Pipeline, bind-group, uniform, and buffer caches from MoGE/SHARP.
+13. Shared kernels only when at least two real routes need them or a measured
    kernel slice proves the extraction useful.
 
 Non-goals:

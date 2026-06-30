@@ -4,6 +4,10 @@ import {
 import {
   validateRouteReceipt,
 } from './route-receipt.js';
+import {
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+} from './scheduler-backpressure.js';
 
 export const WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = 'kaminos.webgpu-route-evidence-classification.v0';
 
@@ -51,6 +55,16 @@ function baseClassification(receipt, options = {}) {
 
   const backendResult = validateWebGpuBackendIdentity(receipt?.backend);
   if (!backendResult.ok) reasons.push(...backendResult.errors.map(error => `backend.${error}`));
+
+  if (receipt?.runtime?.scheduler) {
+    const schedulerResult = validateWebGpuRouteSchedulerProfile(receipt.runtime.scheduler);
+    if (!schedulerResult.ok) reasons.push(...schedulerResult.errors.map(error => `scheduler.${error}`));
+  }
+
+  if (receipt?.runtime?.backpressure) {
+    const backpressureResult = validateWebGpuRouteBackpressureProfile(receipt.runtime.backpressure);
+    if (!backpressureResult.ok) reasons.push(...backpressureResult.errors.map(error => `backpressure.${error}`));
+  }
 
   if (reasons.length > 0) {
     return { classification: 'invalid', authoritative: false, reasons };
@@ -103,6 +117,8 @@ function baseClassification(receipt, options = {}) {
 
 export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
   const base = baseClassification(receipt, options);
+  const scheduler = receipt?.runtime?.scheduler || null;
+  const backpressure = receipt?.runtime?.backpressure || null;
   return {
     schema: WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
     classification: base.classification,
@@ -115,6 +131,19 @@ export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
     adapterName: receipt?.backend?.adapterName || null,
     timingSource: receipt?.timings?.source || receipt?.timings?.profile?.timingSource || null,
     totalMs: Number.isFinite(receipt?.timings?.totalMs) ? receipt.timings.totalMs : null,
+    schedulerVerificationState: scheduler?.verificationState || null,
+    schedulerMode: scheduler?.effectiveScheduler?.mode || scheduler?.requestedScheduler?.mode || null,
+    schedulerUnsupportedFields: Array.isArray(scheduler?.effectiveScheduler?.unsupportedFields)
+      ? [...scheduler.effectiveScheduler.unsupportedFields]
+      : [],
+    requestedBudget: backpressure?.requestedBudget || null,
+    effectiveBudget: backpressure?.effectiveBudget || null,
+    longFrameCount: Number.isInteger(backpressure?.frameTail?.longFrameCount)
+      ? backpressure.frameTail.longFrameCount
+      : null,
+    maxFrameGapMs: Number.isFinite(backpressure?.frameTail?.maxFrameGapMs)
+      ? backpressure.frameTail.maxFrameGapMs
+      : null,
     outputRoles: Array.isArray(receipt?.outputs) ? receipt.outputs.map(output => output.role) : [],
     createdAt: receipt?.createdAt || null,
   };

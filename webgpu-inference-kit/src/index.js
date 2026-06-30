@@ -40,6 +40,15 @@ export {
 } from './runtime-profile.js';
 
 export {
+  createWebGpuRouteBackpressureProfile,
+  createWebGpuRouteSchedulerProfile,
+  validateWebGpuRouteBackpressureProfile,
+  validateWebGpuRouteSchedulerProfile,
+  WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+  WEBGPU_ROUTE_SCHEDULER_SCHEMA,
+} from './scheduler-backpressure.js';
+
+export {
   classifyWebGpuRouteReceiptEvidence,
   classifyWebGpuRouteWorkerResultEvidence,
   WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
