@@ -320,6 +320,9 @@ const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
+const PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY = 'pyro-dynamic-detail-atlas-v0';
+const PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE = 'pyro-dynamic-detail-authority-live-fields-v0';
+const PYRO_DYNAMIC_DETAIL_RESET_POLICY = 'pyro-dynamic-detail-reset-policy-v0';
 
 function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
@@ -329,6 +332,10 @@ function clampFinite(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function normalizePyroDynamicDetailEnabled(value) {
+  return clampFinite(value, 0, 1, 0) >= 0.5;
 }
 
 function fireLickOperatorGainFromAmount(value) {
@@ -3448,6 +3455,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frontFieldReadIndex: 0,
     frontFieldWriteIndex: 1,
     frontFieldProjectionPassthrough: false,
+    pyroDynamicDetail: {
+      identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
+      authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
+      resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
+      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
+      visualRole: 'debug-atlas-only-not-main-fire',
+      enabled: normalizePyroDynamicDetailEnabled(controlsSnapshot.pyroDynamicDetail),
+      confidence: 0,
+      liveFireAuthority: 0,
+      smokeAuthority: 0,
+      stateEnergy: 0,
+      statePhase: 0,
+      resetGate: true,
+      resetReasons: ['disabled'],
+      lastUpdateFrame: 0,
+      lastInputKind: 'initial',
+      atlasCells: new Array(24).fill(0),
+    },
     lastFrameEnergy: 0,
     timing: {
       timingEvidenceSource: 'raf-and-queue-proxy',
@@ -3465,6 +3490,106 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     error: null,
   };
+
+  let pyroDynamicDetailEnergy = 0;
+  let pyroDynamicDetailConfidence = 0;
+  let pyroDynamicDetailPhase = 0;
+  let pyroDynamicDetailLastReadbackFrame = -1;
+  let pyroDynamicDetailLastReadbackMs = -Infinity;
+
+  function clonePyroDynamicDetail() {
+    const detail = state.pyroDynamicDetail || {};
+    return {
+      ...detail,
+      resetReasons: Array.isArray(detail.resetReasons) ? [...detail.resetReasons] : [],
+      atlasCells: Array.isArray(detail.atlasCells) ? [...detail.atlasCells] : [],
+    };
+  }
+
+  function updatePyroDynamicDetailState({ simReadback = null, inputKind = 'control-proxy' } = {}) {
+    if (simReadback) {
+      pyroDynamicDetailLastReadbackFrame = state.frameCount;
+      pyroDynamicDetailLastReadbackMs = performance.now();
+    }
+    const enabled = normalizePyroDynamicDetailEnabled(controlsSnapshot.pyroDynamicDetail);
+    const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const reactionFuel = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
+    const quench = snuffQuenchVaporStrength(controlsSnapshot);
+    const contentMode = normalizeCanonicalContentMode(controlsSnapshot.canonicalContentMode);
+    const fireControl = Math.max(
+      0,
+      Number(controlsSnapshot.fire || 0),
+      Number(controlsSnapshot.radiance || 0) * 0.55,
+      Number(controlsSnapshot.glow || 0) * 0.35,
+      contentMode === 'fire' || contentMode === 'fire_smoke' ? 0.7 : 0,
+    );
+    const smokeControl = Math.max(
+      0,
+      Number(controlsSnapshot.smoke || 0) * 0.28,
+      Number(controlsSnapshot.density || 0) * 0.08,
+    );
+    const fieldFire = Math.max(
+      0,
+      Number(simReadback?.fireLayerMean || 0) * 8,
+      Number(simReadback?.radianceMean || 0) * 5,
+      Number(simReadback?.combustionFrontMean || 0) * 4,
+      Number(simReadback?.frontTopologyMean || 0) * 2,
+    );
+    const fieldSmoke = Math.max(
+      0,
+      Number(simReadback?.smokeMean || 0) * 2,
+      Number(simReadback?.densityMean || 0) * 2,
+      Number(simReadback?.extinctionMean || 0) * 3,
+      smokeControl,
+    );
+    const rawLiveFireAuthority = clampFinite(simReadback ? fieldFire : fireControl, 0, 1, 0);
+    const smokeAuthority = clampFinite(fieldSmoke, 0, 1, 0);
+    const resetReasons = [];
+    if (!enabled) resetReasons.push('disabled');
+    if (reactionFuel <= 0.0005 && scene === 'tall_plume') resetReasons.push('fuel-off');
+    if (quench > 0.01 || normalizeLifecycleEffect(controlsSnapshot.lifecycleEffect) === 'snuff') resetReasons.push('snuff-quench');
+    if (rawLiveFireAuthority <= 0.015) resetReasons.push('no-live-fire-authority');
+    if (!simReadback && state.frameCount > 20 && performance.now() - pyroDynamicDetailLastReadbackMs > 3000) resetReasons.push('stale-input');
+    const resetGate = resetReasons.includes('disabled') || resetReasons.includes('fuel-off') || resetReasons.includes('snuff-quench');
+    const liveFireAuthority = resetGate ? 0 : rawLiveFireAuthority;
+    if (resetGate) {
+      pyroDynamicDetailEnergy = 0;
+      pyroDynamicDetailConfidence = 0;
+    } else if (liveFireAuthority > 0.015) {
+      pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.84 + liveFireAuthority * 0.22 + smokeAuthority * 0.04, 0, 1, 0);
+      pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.78 + liveFireAuthority * 0.24, 0, 1, 0);
+    } else {
+      pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.68, 0, 1, 0);
+      pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.62, 0, 1, 0);
+    }
+    pyroDynamicDetailPhase = (pyroDynamicDetailPhase + 0.031 + liveFireAuthority * 0.113 + smokeAuthority * 0.017) % 1024;
+    const atlasCells = new Array(24).fill(0).map((_, index) => {
+      const x = index % 8;
+      const y = Math.floor(index / 8);
+      const wave = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 6.283 + x * 1.73 + y * 2.11);
+      const neighbor = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 3.71 + x * 0.79 - y * 1.39);
+      return clampFinite(pyroDynamicDetailEnergy * (0.28 + wave * 0.54 + neighbor * 0.18), 0, 1, 0);
+    });
+    state.pyroDynamicDetail = {
+      identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
+      authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
+      resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
+      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
+      visualRole: 'debug-atlas-only-not-main-fire',
+      enabled,
+      confidence: pyroDynamicDetailConfidence,
+      liveFireAuthority,
+      smokeAuthority,
+      stateEnergy: pyroDynamicDetailEnergy,
+      statePhase: pyroDynamicDetailPhase,
+      resetGate,
+      resetReasons,
+      lastUpdateFrame: state.frameCount,
+      lastInputKind: inputKind,
+      atlasCells,
+    };
+    return state.pyroDynamicDetail;
+  }
 
   let adapter = null;
   let device = null;
@@ -4551,6 +4676,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
+    updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -5993,6 +6119,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         quenchVaporStrength: state.quenchVaporStrength,
         snuffVisualModel: state.snuffVisualModel,
         flameQuenchModel: state.flameQuenchModel,
+        pyroDynamicDetail: clonePyroDynamicDetail(),
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6241,6 +6368,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     buffer.unmap();
     buffer.destroy();
     const simReadback = await sampleSimReadback();
+    updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
     const majorantReadback = await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
@@ -6303,6 +6431,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       quenchVaporStrength: state.quenchVaporStrength,
       snuffVisualModel: state.snuffVisualModel,
       flameQuenchModel: state.flameQuenchModel,
+      pyroDynamicDetail: clonePyroDynamicDetail(),
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -6470,6 +6599,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
+      updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -6542,7 +6672,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     },
     debugState() {
-      return { ...state, controls: { ...controlsSnapshot } };
+      return { ...state, controls: { ...controlsSnapshot }, pyroDynamicDetail: clonePyroDynamicDetail() };
     },
     canvasElement() {
       return canvas;

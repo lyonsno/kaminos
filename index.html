@@ -208,6 +208,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 .volume-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
+.volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
+#volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
@@ -971,6 +973,11 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Pyro Detail</span>
+      <input type="range" id="volume-pyro-detail" min="0" max="1" step="1" value="0">
+      <span class="slider-val" id="volume-pyro-detail-val">off</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Pressure</span>
       <select id="volume-pressure-mode" class="select-input">
         <option value="auto" selected>Default</option>
@@ -1029,6 +1036,12 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <div class="field"><span class="field-key">Frame p95</span><span class="field-val" id="volume-frame-p95">-- ms</span></div>
       <div class="field"><span class="field-key">Queue done</span><span class="field-val" id="volume-queue-ms">-- ms</span></div>
       <div class="field"><span class="field-key">Queue p95</span><span class="field-val" id="volume-queue-p95">-- ms</span></div>
+      <div class="field"><span class="field-key">Pyro detail</span><span class="field-val" id="volume-pyro-detail-state">inactive</span></div>
+      <div class="field"><span class="field-key">Pyro confidence</span><span class="field-val" id="volume-pyro-detail-confidence">0.00</span></div>
+      <div class="field"><span class="field-key">Pyro reset</span><span class="field-val" id="volume-pyro-detail-reset">disabled</span></div>
+      <div class="volume-pyro-atlas-wrap">
+        <canvas id="volume-pyro-dynamic-atlas" width="192" height="54"></canvas>
+      </div>
     </div>
   </div>
 
@@ -9514,6 +9527,7 @@ function readVolumeControls() {
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
     gridOverlay: parseFloat(document.getElementById('volume-grid-overlay').value),
     flowDebug: parseFloat(document.getElementById('volume-flow-debug').value),
+    pyroDynamicDetail: parseFloat(document.getElementById('volume-pyro-detail').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
@@ -9588,6 +9602,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-majorant-grid-val').textContent = `${c.majorantGrid}^3`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
+  document.getElementById('volume-pyro-detail-val').textContent = c.pyroDynamicDetail >= 0.5 ? 'on' : 'off';
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -9605,6 +9620,38 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
   syncCanonicalVolumeControlVisibility(c.volumeScene);
   syncRayBudgetGamutFromControls();
+}
+
+function paintVolumePyroDynamicAtlas(detail) {
+  const canvas = document.getElementById('volume-pyro-dynamic-atlas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#070707';
+  ctx.fillRect(0, 0, width, height);
+  const cells = Array.isArray(detail?.atlasCells) ? detail.atlasCells : [];
+  const cols = 8;
+  const rows = 3;
+  const gap = 2;
+  const cellW = (width - gap * (cols + 1)) / cols;
+  const cellH = (height - gap * (rows + 1)) / rows;
+  for (let i = 0; i < cols * rows; i += 1) {
+    const energy = Math.max(0, Math.min(1, Number(cells[i]) || 0));
+    const x = gap + (i % cols) * (cellW + gap);
+    const y = gap + Math.floor(i / cols) * (cellH + gap);
+    const reset = detail?.resetGate || !detail?.enabled;
+    const r = reset ? Math.round(18 + energy * 45) : Math.round(42 + energy * 205);
+    const g = reset ? Math.round(30 + energy * 65) : Math.round(20 + energy * 118);
+    const b = reset ? Math.round(42 + energy * 72) : Math.round(12 + energy * 35);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x, y, cellW, cellH);
+  }
+  ctx.strokeStyle = detail?.resetGate ? '#355066' : '#905321';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
 }
 
 function refreshVolumeReadout() {
@@ -9643,9 +9690,18 @@ function refreshVolumeReadout() {
   document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
   document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
+  const pyroDetail = s.pyroDynamicDetail || {};
+  const pyroState = pyroDetail.enabled
+    ? (pyroDetail.resetGate ? 'reset' : (pyroDetail.liveFireAuthority > 0.015 ? 'live-coupled' : 'decay'))
+    : 'inactive';
+  document.getElementById('volume-pyro-detail-state').textContent = `${pyroState} / ${pyroDetail.visualRole || 'debug-atlas'}`;
+  document.getElementById('volume-pyro-detail-confidence').textContent = Number.isFinite(pyroDetail.confidence) ? pyroDetail.confidence.toFixed(2) : '0.00';
+  document.getElementById('volume-pyro-detail-reset').textContent = Array.isArray(pyroDetail.resetReasons) && pyroDetail.resetReasons.length ? pyroDetail.resetReasons.join('+') : 'none';
+  paintVolumePyroDynamicAtlas(pyroDetail);
   document.getElementById('volume-toggle').textContent = s.active ? 'Disable' : 'Enable';
   document.getElementById('volume-toggle').classList.toggle('active', !!s.active);
 }
+window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
@@ -9875,6 +9931,10 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
     document.getElementById('volume-flow-debug').value = String(Math.max(0, Math.min(1, routeFlowDebug)));
   }
+  const routePyroDynamicDetail = Number(params.get('volume_pyro_detail'));
+  if (params.has('volume_pyro_detail') && Number.isFinite(routePyroDynamicDetail)) {
+    document.getElementById('volume-pyro-detail').value = String(Math.max(0, Math.min(1, Math.round(routePyroDynamicDetail))));
+  }
   const routedPressureTierControls = normalizeVolumePressureTierControls({
     overlay: params.has('volume_pressure_tier_overlay') ? Number(params.get('volume_pressure_tier_overlay')) : document.getElementById('volume-pressure-tier-overlay').value,
     lowerMax: params.has('volume_pressure_tier_lower_max') ? Number(params.get('volume_pressure_tier_lower_max')) : document.getElementById('volume-pressure-tier-lower-max').value,
@@ -10015,7 +10075,7 @@ async function initKaminosVolumeRoute() {
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

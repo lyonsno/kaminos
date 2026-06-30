@@ -21,13 +21,16 @@ const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
 }
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
-const visualEvidenceMode = expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume';
+const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const visualEvidenceMode = expectsNoFireVolumeEvidence
+  ? 'no-fire-volume-signal'
+  : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume');
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -274,9 +277,15 @@ const TALL_PLUME_OPERATOR_PRESETS = {
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    glow: 0.00,
     smoke: 2.80,
     absorption: 2.00,
     curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
     projection: 1.05,
     speed: 0.30,
     raySteps: 148,
@@ -288,6 +297,8 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
     plumeHeight: 1.45,
     renderScale: 0.65,
     inputRadius: 0.08,
@@ -300,9 +311,15 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
   },
   honest_smoke_0622: {
     density: 0.45,
+    fire: 0.00,
+    radiance: 0.00,
+    glow: 0.00,
     smoke: 2.80,
     absorption: 2.00,
     curl: 1.00,
+    microdetail: 0.00,
+    interfaceShred: 0.00,
+    fireLicks: 0.00,
     projection: 1.05,
     speed: 0.30,
     raySteps: 148,
@@ -314,6 +331,8 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     temporalAccum: 0.00,
     temporalJitter: 0.00,
     historyClamp: 1.00,
+    fireScale: 0.86,
+    detailScale: 0.75,
     plumeHeight: 1.45,
     renderScale: 0.65,
     inputRadius: 0.08,
@@ -1715,9 +1734,16 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
+      expectsFuelStarvedTallPlume ||
+      (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
     if (expectsSnuffVisualEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsNoFireMainRendererVolume) {
+      if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
+        throw new Error(`main renderer screenshot missing bridged no-fire volume signal: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -1734,6 +1760,24 @@ async function main() {
           smokeWeight: sample.simReadback?.smokeWeight,
           xyActivePixelRatio: canonicalFieldSlice?.xyActivePixelRatio,
           xyMax: canonicalFieldSlice?.xyMax,
+        })}`);
+      }
+    } else if (expectsNoFireVolumeEvidence) {
+      const noFireVolumeSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.volumeBounds?.pixelCount || 0);
+      if (metrics.litPixels < 220 || noFireVolumeSignalPixels < 350 || metrics.meanLuma < 1.2) {
+        throw new Error(`blank frame or missing no-fire volume signal: ${JSON.stringify({
+          ...metrics,
+          noFireVolumeSignalPixels,
+        })}`);
+      }
+      if (visibleFirePixels > 260) {
+        throw new Error(`no-fire volume evidence unexpectedly retained visible fire: ${JSON.stringify({
+          visibleFirePixels,
+          fireLikePixels: metrics.fireLikePixels,
+          emissiveLikePixels: metrics.emissiveLikePixels,
         })}`);
       }
     } else if (expectsCanonicalPlumeProof) {
@@ -1797,6 +1841,7 @@ async function main() {
       windowSize,
       evidenceMode,
       visualEvidenceMode,
+      noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -1842,6 +1887,7 @@ async function main() {
       quenchVaporStrength: sample.quenchVaporStrength,
       snuffVisualModel: sample.snuffVisualModel,
       flameQuenchModel: sample.flameQuenchModel,
+      pyroDynamicDetail: sample.pyroDynamicDetail || state.pyroDynamicDetail || null,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
       gpuPressure: sample.gpuPressure,
@@ -1966,6 +2012,7 @@ async function main() {
       canonicalPassiveBottomFieldProof,
       expectsCanonicalSmokeRise,
       expectsCanonicalFireEvidence,
+      expectsNoFireVolumeEvidence,
       timing: sample.timing || stateTiming,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,

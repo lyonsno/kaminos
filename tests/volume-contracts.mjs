@@ -195,6 +195,11 @@ assert.match(index, /id="volume-input-radius"[^>]+value="0\.12"/, 'smoke route d
 assert.match(index, /id="volume-flow-rate"[^>]+value="0\.15"/, 'smoke route defaults to the accepted input flow rate');
 assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
 assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
+assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
+assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
+assert.match(index, /id="volume-pyro-detail-state"/, 'Volume readout exposes Pyro dynamic detail reset/live state');
+assert.match(index, /id="volume-pyro-detail-confidence"/, 'Volume readout exposes Pyro dynamic detail confidence');
+assert.match(index, /id="volume-pyro-detail-reset"/, 'Volume readout exposes Pyro dynamic detail reset reason');
 assert.match(index, /id="volume-canonical-spread"/, 'Volume tab exposes a canonical plume scalar-spread cockpit control');
 assert.match(index, /id="volume-canonical-centerline"/, 'Volume tab exposes a canonical plume centerline-relief cockpit control');
 assert.match(index, /id="volume-canonical-body-balance"/, 'Volume tab exposes a canonical plume body/chimney balance cockpit control');
@@ -243,6 +248,7 @@ assert.match(index, /volume_fire'\)/, 'URL route can override fire visibility in
 assert.match(index, /volume_smoke/, 'URL route can override smoke visibility for fire/smoke separation witnesses');
 assert.match(index, /volume_projection/, 'URL route can override pressure/projection strength');
 assert.match(index, /volume_flow_debug/, 'URL route can override flow diagnostic overlay');
+assert.match(index, /volume_pyro_detail/, 'URL route can enable the Pyro dynamic detail debug atlas');
 assert.match(index, /volume_canonical_spread/, 'URL route can override canonical plume scalar-spread cockpit gain');
 assert.match(index, /volume_canonical_centerline/, 'URL route can override canonical plume centerline-relief cockpit gain');
 assert.match(index, /volume_canonical_body_balance/, 'URL route can override canonical plume body/chimney cockpit gain');
@@ -584,6 +590,11 @@ assert.match(core, /fireLickMean/, 'sim readback reports fire-lick breakup evide
 assert.match(core, /source_controls/, 'fluid uniforms carry source radius and flow controls');
 assert.match(core, /u\.source_controls\.z/, 'fluid uniforms carry pressure/projection strength');
 assert.match(core, /u\.source_controls\.w/, 'fluid uniforms carry flow diagnostic overlay strength');
+assert.match(core, /pyro-dynamic-detail-atlas-v0/, 'renderer names the Pyro dynamic detail atlas identity');
+assert.match(core, /pyro-dynamic-detail-authority-live-fields-v0/, 'renderer names live-field authority for Pyro dynamic detail state');
+assert.match(core, /pyro-dynamic-detail-reset-policy-v0/, 'renderer names reset policy for subordinate Pyro detail state');
+assert.match(core, /pyroDynamicDetail/, 'debug state exposes Pyro dynamic detail state for witness and UI');
+assert.match(core, /visualRole:\s*'debug-atlas-only-not-main-fire'/, 'Pyro dynamic detail state is explicitly not main fire authority');
 assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible tall-plume fuel/reaction scale');
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
@@ -1179,6 +1190,10 @@ assert.match(witness, /pressureJacobiInlineDivergencePasses/, 'witness reports J
 assert.match(witness, /fullGridPassBreakdown/, 'witness reports pass-level full-grid breakdown');
 assert.match(witness, /performance-volume-signal/, 'witness has a performance visual-evidence mode that does not confuse low-fire measurement frames with missing output');
 assert.match(witness, /low-fire-performance-evidence/, 'performance witness preserves low-fire visual frames as warnings instead of failing before primary cost reports');
+assert.match(witness, /no-fire-volume/, 'witness accepts a deliberate no-fire volume evidence mode');
+assert.match(witness, /no-fire-volume-signal/, 'witness reports no-fire volume visual evidence identity');
+assert.match(witness, /expectsNoFireVolumeEvidence/, 'witness separates deliberate no-fire evidence from missing fire failures');
+assert.match(witness, /pyroDynamicDetail/, 'witness report carries Pyro dynamic detail state and reset semantics');
 assert.match(witness, /rayBudgetPreset/, 'witness records named ray-budget preset/config identity when present');
 assert.match(witness, /timing/, 'witness records route-local timing evidence');
 assert.match(witness, /queueDoneMs/, 'witness records GPU queue completion timing when available');
