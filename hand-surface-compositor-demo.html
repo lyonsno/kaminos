@@ -125,6 +125,9 @@
     const pollMs = Math.max(30, Number(params.get('poll_ms') || 80));
     const framePostMs = Math.max(45, Number(params.get('frame_post_ms') || 90));
     const launchSidecar = params.get('launch_sidecar') !== '0';
+    const sidecarPollMs = Math.max(10, Number(params.get('sidecar_poll_ms') || 30));
+    const sidecarHandConf = Number(params.get('hand_conf') || 0.18);
+    const sidecarIncludeVertices = params.get('include_vertices') === '1';
 
     let latestPacket = buildFixturePerceptasiaHandPacket({
       sourceBackend: useFixture ? 'kaminos_hand_surface_fixture' : requestedBackend,
@@ -209,7 +212,12 @@
         liveVideoStarted = true;
         stopLiveButton.disabled = false;
         if (launchSidecar) {
-          const response = await fetch('/hand-control-sidecar-launch', { method: 'POST' });
+          const launchParams = new URLSearchParams({
+            poll_ms: String(sidecarPollMs),
+            hand_conf: String(sidecarHandConf),
+            include_vertices: sidecarIncludeVertices ? '1' : '0',
+          });
+          const response = await fetch(`/hand-control-sidecar-launch?${launchParams.toString()}`, { method: 'POST' });
           sidecarStatus = await response.json().catch(() => null);
           if (!response.ok) {
             throw new Error(sidecarStatus?.launch_error || sidecarStatus?.error || `sidecar launch failed ${response.status}`);

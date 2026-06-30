@@ -126,6 +126,8 @@ HAND_CONTROL_SIDECAR_PROCESS = {
     "started_at_ms": None,
     "launch_error": None,
     "log_path": None,
+    "command": None,
+    "effective_config": None,
 }
 
 
@@ -845,6 +847,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             started_at_ms = HAND_CONTROL_SIDECAR_PROCESS["started_at_ms"]
             launch_error = HAND_CONTROL_SIDECAR_PROCESS["launch_error"]
             log_path = HAND_CONTROL_SIDECAR_PROCESS["log_path"]
+            command = HAND_CONTROL_SIDECAR_PROCESS["command"]
+            effective_config = HAND_CONTROL_SIDECAR_PROCESS["effective_config"]
             running = process is not None and process.poll() is None
             returncode = None if process is None else process.poll()
             pid = None if process is None else process.pid
@@ -869,6 +873,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "python": KAMINOS_SIDECAR_PYTHON,
             "mlx_root": str(KAMINOS_WILOR_MLX_ROOT),
             "script": str(KAMINOS_HAND_CONTROL_SIDECAR_SCRIPT),
+            "command": command,
+            "effective_config": effective_config,
         }
 
     def handle_hand_control_sidecar_status(self):
@@ -878,7 +884,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         params = parse_qs(urlparse(self.path).query)
         poll_ms = params.get("poll_ms", ["45"])[0]
         hand_conf = params.get("hand_conf", ["0.18"])[0]
-        include_vertices = params.get("include_vertices", ["1"])[0] != "0"
+        include_vertices = params.get("include_vertices", ["0"])[0] == "1"
         log_path = KAMINOS_NATIVE_FRAME_DIR / "wilor-mlx-sidecar.log"
         KAMINOS_NATIVE_FRAME_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -930,6 +936,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         "started_at_ms": int(time.time() * 1000),
                         "launch_error": None,
                         "log_path": str(log_path),
+                        "command": command,
+                        "effective_config": {
+                            "poll_ms": float(poll_ms),
+                            "hand_conf": float(hand_conf),
+                            "include_vertices": include_vertices,
+                            "dense_mano": "requested" if include_vertices else "disabled",
+                        },
                     })
                 except Exception as error:
                     HAND_CONTROL_SIDECAR_PROCESS.update({
@@ -937,6 +950,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         "started_at_ms": None,
                         "launch_error": str(error),
                         "log_path": str(log_path),
+                        "command": command,
+                        "effective_config": {
+                            "poll_ms": poll_ms,
+                            "hand_conf": hand_conf,
+                            "include_vertices": include_vertices,
+                            "dense_mano": "requested" if include_vertices else "disabled",
+                        },
                     })
                     failed = True
                 else:

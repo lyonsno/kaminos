@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { buildFixturePerceptasiaHandPacket } from '../hand-surface-compositor-core.mjs';
@@ -7,10 +10,16 @@ import { buildFixturePerceptasiaHandPacket } from '../hand-surface-compositor-co
 const root = new URL('..', import.meta.url).pathname;
 const port = 19731 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://127.0.0.1:${port}`;
+const nativeFrameDir = mkdtempSync(join(tmpdir(), 'kaminos-hand-sidecar-contract-'));
 
 function startServer() {
   const child = spawn('python3', ['serve.py', String(port)], {
     cwd: root,
+    env: {
+      ...process.env,
+      KAMINOS_HAND_CONTROL_NATIVE_FRAME_DIR: nativeFrameDir,
+      KAMINOS_HAND_CONTROL_SIDECAR_PYTHON: '/bin/echo',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const chunks = [];
@@ -77,6 +86,27 @@ try {
   assert.equal(sidecarStatus.body.frame_dir, nativeFrame.body.frame_dir);
   assert.equal(sidecarStatus.body.event_endpoint, '/hand-control-sidecar-event');
   assert.equal(sidecarStatus.body.native_frame_endpoint, '/hand-control-native-frame');
+  assert.equal(sidecarStatus.body.python, '/bin/echo');
+
+  const launchedDefault = await requestJson('/hand-control-sidecar-launch', { method: 'POST' });
+  assert.equal(launchedDefault.response.status, 200);
+  assert.equal(launchedDefault.body.log_path, `${nativeFrameDir}/wilor-mlx-sidecar.log`);
+  assert.equal(launchedDefault.body.effective_config.include_vertices, false);
+  assert.equal(launchedDefault.body.effective_config.dense_mano, 'disabled');
+  await delay(80);
+  const defaultLaunchLog = readFileSync(launchedDefault.body.log_path, 'utf8');
+  assert.match(defaultLaunchLog, /kaminos_wilor_mlx_handframe_sidecar\.py/, 'sidecar launch test captures the sidecar command');
+  assert.doesNotMatch(defaultLaunchLog, /--include-vertices/, 'dense MANO vertices are opt-in so the live sidecar default stays in the landmark-only latency lane');
+
+  const stoppedDefault = await requestJson('/hand-control-sidecar-stop', { method: 'POST' });
+  assert.equal(stoppedDefault.response.status, 200);
+  const launchedDense = await requestJson('/hand-control-sidecar-launch?include_vertices=1', { method: 'POST' });
+  assert.equal(launchedDense.response.status, 200);
+  assert.equal(launchedDense.body.effective_config.include_vertices, true);
+  assert.equal(launchedDense.body.effective_config.dense_mano, 'requested');
+  await delay(80);
+  const denseLaunchLog = readFileSync(launchedDense.body.log_path, 'utf8');
+  assert.match(denseLaunchLog, /--include-vertices/, 'dense MANO vertices remain explicitly requestable when a caller accepts the cost');
 
   const empty = await requestJson('/hand-control-sidecar-event');
   assert.equal(empty.response.status, 200);
