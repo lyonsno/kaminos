@@ -144,7 +144,11 @@ assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 her
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
 assert.match(index, /volume_sim_cadence/, 'URL route can request low-cadence simulation without hiding render continuation');
-assert.match(index, /routedVolumeSimCadence/, 'route-only sim cadence is preserved outside visible cockpit sliders');
+assert.match(index, /id="volume-sim-cadence" min="1" max="8" step="1"/, 'Volume cockpit exposes a visible sim-hold cadence slider');
+assert.match(index, /id="volume-sim-cadence-val"/, 'Volume cockpit exposes the effective sim-hold cadence value');
+assert.match(index, /volume-sim-cadence-state/, 'Volume readout exposes the effective sim cadence');
+assert.match(index, /volume-cadence-gap/, 'Volume readout exposes the frame/sim-step cadence gap');
+assert.match(index, /volume-continuation-frames/, 'Volume readout exposes live versus continued frame counts');
 assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
 assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
