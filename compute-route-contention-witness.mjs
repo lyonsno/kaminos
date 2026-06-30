@@ -175,6 +175,98 @@ function cloneObject(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function pruneUndefined(value) {
+  if (Array.isArray(value)) return value.map(pruneUndefined);
+  if (!isPlainObject(value)) return value;
+  const output = {};
+  for (const [key, child] of Object.entries(value)) {
+    const pruned = pruneUndefined(child);
+    if (pruned !== undefined) output[key] = pruned;
+  }
+  return output;
+}
+
+function canonicalSchedulerConfig(config) {
+  if (!isPlainObject(config)) return null;
+  const canonical = cloneObject(config);
+  if (!isPlainObject(canonical.phaseChunkSize)) canonical.phaseChunkSize = {};
+  if (canonical.spnPatchChunkSize !== undefined) canonical.phaseChunkSize.spnPatch = canonical.spnPatchChunkSize;
+  if (canonical.vitBlockChunkSize !== undefined) canonical.phaseChunkSize.vitBlock = canonical.vitBlockChunkSize;
+  delete canonical.spnPatchChunkSize;
+  delete canonical.vitBlockChunkSize;
+  delete canonical.unsupportedFields;
+  if (Object.keys(canonical.phaseChunkSize).length === 0) delete canonical.phaseChunkSize;
+  return pruneUndefined(canonical);
+}
+
+function leafPaths(value, prefix = '') {
+  if (!isPlainObject(value)) return prefix ? [prefix] : [];
+  const entries = Object.entries(value);
+  if (entries.length === 0) return prefix ? [prefix] : [];
+  return entries.flatMap(([key, child]) => leafPaths(child, prefix ? `${prefix}.${key}` : key));
+}
+
+function valueAtPath(value, path) {
+  return path.split('.').reduce((cursor, key) => (cursor && cursor[key] !== undefined ? cursor[key] : undefined), value);
+}
+
+function valuesMatch(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function isUnsupported(path, unsupportedFields) {
+  return unsupportedFields.some(field => path === field || path.startsWith(`${field}.`));
+}
+
+function unsupportedFieldsFrom(...configs) {
+  return unique(configs.flatMap(config => asArray(config?.unsupportedFields)));
+}
+
+function schedulerDriftViolations(requested, effective, unsupportedFields, prefix) {
+  const requestedCanonical = canonicalSchedulerConfig(requested);
+  const effectiveCanonical = canonicalSchedulerConfig(effective);
+  if (!requestedCanonical || !effectiveCanonical) return [];
+  return leafPaths(requestedCanonical)
+    .filter(path => !isUnsupported(path, unsupportedFields))
+    .filter(path => !valuesMatch(valueAtPath(requestedCanonical, path), valueAtPath(effectiveCanonical, path)))
+    .map(path => `${prefix}:${path}`);
+}
+
+function adapterKitDisagreements(kitScheduler, adapterEvidence) {
+  if (!kitScheduler || !adapterEvidence) return [];
+  const violations = [];
+  for (const field of ['requestedScheduler', 'effectiveScheduler']) {
+    const kitConfig = canonicalSchedulerConfig(kitScheduler[field]);
+    const adapterConfig = canonicalSchedulerConfig(adapterEvidence[field]);
+    if (!kitConfig || !adapterConfig) continue;
+    const unsupported = unsupportedFieldsFrom(kitScheduler.effectiveScheduler, adapterEvidence.effectiveScheduler);
+    const kitPaths = leafPaths(kitConfig);
+    const adapterPaths = new Set(leafPaths(adapterConfig));
+    const paths = kitPaths.filter(path => adapterPaths.has(path));
+    for (const path of paths) {
+      if (isUnsupported(path, unsupported)) continue;
+      if (!valuesMatch(valueAtPath(kitConfig, path), valueAtPath(adapterConfig, path))) {
+        violations.push(`adapter_scheduler_disagrees_with_kit_scheduler:${field}.${path}`);
+      }
+    }
+  }
+  return unique(violations);
+}
+
+function schedulerTelemetryWarnings(scheduler, adapterEvidence) {
+  const warnings = [];
+  for (const source of [scheduler, adapterEvidence]) {
+    const age = finiteOrNull(source?.telemetryAgeMs);
+    const maxAge = finiteOrNull(source?.maxTelemetryAgeMs);
+    if (age !== null && maxAge !== null && age > maxAge) warnings.push('scheduler_telemetry_stale');
+  }
+  return unique(warnings);
+}
+
 function effectiveRouteEvidence(report = {}) {
   return {
     ...(report.pipelineReport?.effectiveRouteConfig || {}),
@@ -196,29 +288,70 @@ function schedulerFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
   const scheduler = cloneObject(routeEvidence.scheduler);
   const adapterEvidence = cloneObject(routeEvidence.breathingRoom || routeEvidence.schedulerEvidence);
-  return normalizeScheduler(scheduler, adapterEvidence);
+  if (scheduler) {
+    return {
+      ...scheduler,
+      adapterEvidence: scheduler.adapterEvidence || adapterEvidence,
+    };
+  }
+  return adapterEvidence ? { adapterEvidence } : null;
 }
 
 function normalizeScheduler(scheduler = null, adapterEvidence = null) {
   const normalizedScheduler = cloneObject(scheduler);
   const normalizedAdapterEvidence = cloneObject(adapterEvidence || scheduler?.adapterEvidence);
-  if (normalizedScheduler) {
+  const hasKitScheduler = Boolean(
+    normalizedScheduler?.requestedScheduler
+      || normalizedScheduler?.effectiveScheduler
+      || normalizedScheduler?.schema === 'kaminos.webgpu-route-scheduler.v0',
+  );
+  if (normalizedScheduler && hasKitScheduler) {
     const effectiveScheduler = normalizedScheduler.effectiveScheduler || normalizedAdapterEvidence?.effectiveScheduler || null;
-    return {
+    const base = {
       schema: normalizedScheduler.schema || 'kaminos.webgpu-route-scheduler.v0',
       requestedScheduler: normalizedScheduler.requestedScheduler || normalizedAdapterEvidence?.requestedScheduler || null,
       effectiveScheduler,
       verificationState: schedulerVerificationState(normalizedScheduler, normalizedAdapterEvidence),
       adapterEvidence: normalizedAdapterEvidence,
     };
+    const driftViolations = schedulerDriftViolations(
+      base.requestedScheduler,
+      base.effectiveScheduler,
+      unsupportedFieldsFrom(base.effectiveScheduler),
+      'requested_effective_scheduler_drift_without_unsupported_fields',
+    );
+    const verifiedWithoutEffective = normalizedScheduler.verificationState === 'verified' && !effectiveScheduler
+      ? ['scheduler_verified_without_effective_scheduler']
+      : [];
+    const adapterDisagreements = adapterKitDisagreements(base, normalizedAdapterEvidence);
+    const validationWarnings = unique([
+      ...verifiedWithoutEffective,
+      ...driftViolations,
+      ...adapterDisagreements,
+      ...schedulerTelemetryWarnings(normalizedScheduler, normalizedAdapterEvidence),
+    ]);
+    return {
+      ...base,
+      validationWarnings,
+      falseAuthorityViolations: unique([
+        ...verifiedWithoutEffective,
+        ...driftViolations,
+        ...adapterDisagreements,
+      ]),
+    };
   }
   if (normalizedAdapterEvidence) {
     return {
       schema: 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: normalizedAdapterEvidence.requestedScheduler || null,
-      effectiveScheduler: normalizedAdapterEvidence.effectiveScheduler || null,
-      verificationState: schedulerVerificationState(null, normalizedAdapterEvidence),
+      requestedScheduler: null,
+      effectiveScheduler: null,
+      verificationState: 'scheduler-unverified',
       adapterEvidence: normalizedAdapterEvidence,
+      validationWarnings: unique([
+        'route_specific_scheduler_without_kit_mapping',
+        ...schedulerTelemetryWarnings(null, normalizedAdapterEvidence),
+      ]),
+      falseAuthorityViolations: [],
     };
   }
   return {
@@ -227,6 +360,8 @@ function normalizeScheduler(scheduler = null, adapterEvidence = null) {
     effectiveScheduler: null,
     verificationState: 'scheduler-unverified',
     adapterEvidence: null,
+    validationWarnings: [],
+    falseAuthorityViolations: [],
   };
 }
 
@@ -261,6 +396,8 @@ function optimizationFromReport(report = {}) {
 
 function witnessWarningsFor({ scheduler }) {
   const warnings = [];
+  warnings.push(...asArray(scheduler?.validationWarnings));
+  warnings.push(...asArray(scheduler?.falseAuthorityViolations));
   if (scheduler?.verificationState === 'scheduler-unverified') warnings.push('scheduler_unverified');
   const requested = scheduler?.requestedScheduler;
   const effective = scheduler?.effectiveScheduler;
