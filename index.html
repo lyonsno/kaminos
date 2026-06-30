@@ -1133,6 +1133,14 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       <input type="range" id="volume-render-scale" min="0.1" max="1" step="0.05" value="0.85">
       <span class="slider-val" id="volume-render-scale-val">0.85</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Upscale</span>
+      <select id="volume-reconstruction-style" class="select-input">
+        <option value="smooth" selected>Smooth</option>
+        <option value="crisp">Crisp</option>
+      </select>
+      <span class="slider-val" id="volume-reconstruction-style-val">Smooth</span>
+    </div>
     <div class="ray-budget-wrap" id="volume-ray-budget-section">
       <div class="ray-budget-grid">
         <div class="ray-budget-axis-y">Adaptive</div>
@@ -9825,6 +9833,10 @@ function normalizeVolumeLifecycleEffect(value) {
   return ['none', 'snuff'].includes(normalized) ? normalized : 'none';
 }
 
+function normalizeVolumeReconstructionStyle(value) {
+  return String(value || '').toLowerCase() === 'crisp' ? 'crisp' : 'smooth';
+}
+
 function normalizeVolumeRuntimeQuality(value) {
   const normalized = String(value || 'live_high').toLowerCase().replace(/-/g, '_');
   if (['live_high', 'live', 'high', 'hero', 'default'].includes(normalized)) return 'live_high';
@@ -14145,6 +14157,7 @@ function readVolumeControls() {
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
     windHeight: parseFloat(document.getElementById('volume-wind-height').value),
     renderScale: parseFloat(document.getElementById('volume-render-scale').value),
+    reconstructionStyle: normalizeVolumeReconstructionStyle(document.getElementById('volume-reconstruction-style').value),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
@@ -14240,6 +14253,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
   document.getElementById('volume-render-scale-val').textContent = c.renderScale.toFixed(2);
+  if (document.getElementById('volume-reconstruction-style').value !== c.reconstructionStyle) setVolumeControlValue('volume-reconstruction-style', c.reconstructionStyle);
+  document.getElementById('volume-reconstruction-style-val').textContent = c.reconstructionStyle === 'crisp' ? 'Crisp' : 'Smooth';
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
@@ -14424,6 +14439,12 @@ function createVolumeMainRendererBridge() {
       const active = !!state.active;
       mesh.visible = active;
       if (!active) return false;
+      const requestedFilter = state.volumeReconstructionStyle === 'nearest-css-upscale' ? THREE.NearestFilter : THREE.LinearFilter;
+      if (sourceTexture.magFilter !== requestedFilter || sourceTexture.minFilter !== requestedFilter) {
+        sourceTexture.magFilter = requestedFilter;
+        sourceTexture.minFilter = requestedFilter;
+        sourceTexture.userData.volumeReconstructionStyle = state.volumeReconstructionStyle;
+      }
       sourceTexture.needsUpdate = true;
       const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
       camera.getWorldDirection(direction);
@@ -14441,6 +14462,8 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        volumeReconstructionStyle: volumePrototype?.debugState?.()?.volumeReconstructionStyle || null,
+        textureFilter: sourceTexture.magFilter === THREE.NearestFilter ? 'nearest' : 'linear',
       };
     },
     dispose() {
@@ -14796,6 +14819,10 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_render_scale') && Number.isFinite(routeRenderScale)) {
     document.getElementById('volume-render-scale').value = String(Math.max(0.1, Math.min(1, routeRenderScale)));
   }
+  const routeReconstructionStyle = params.get('volume_reconstruction');
+  if (routeReconstructionStyle) {
+    setVolumeControlValue('volume-reconstruction-style', normalizeVolumeReconstructionStyle(routeReconstructionStyle));
+  }
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
@@ -14843,7 +14870,7 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
-  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-majorant-skip', 'volume-majorant-smooth', 'volume-majorant-guard', 'volume-temporal-accum', 'volume-temporal-jitter', 'volume-history-clamp', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-reconstruction-style', 'volume-input-radius', 'volume-flow-rate', 'volume-resolution', 'volume-majorant-grid', 'volume-grid-overlay', 'volume-flow-debug', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
