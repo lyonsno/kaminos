@@ -9926,6 +9926,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
     next.pressureIterations = 0;
     changed.push('pressureStrategy', 'pressureIterations');
   }
+  next.effectiveVisualAuthority = normalizeVolumeSimCadence(next.simCadence) > 1 ? 'continuation' : 'live-sim';
   next.runtimeQualityReceipt = {
     identity: 'volume-runtime-quality-ladder-v0',
     requested,
