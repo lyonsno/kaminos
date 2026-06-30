@@ -5050,6 +5050,7 @@ function openForgeHostSmokeOffer(offerId) {
   setInfo(`Smoke chamber: ${offerRecord.title}`);
   renderForgeHostStationList();
   renderForgeHostSmokeChamber();
+  scrollForgeHostSmokeChamberIntoView();
   updateForgeHostReadout();
   window._kaminosDirty?.();
   return forgeHostState.smokeChamber;
@@ -5095,6 +5096,14 @@ function setForgeHostSmokeDisposition(value) {
 function setForgeHostSmokeOperatorNote(value) {
   if (!forgeHostState?.smokeChamber) return;
   forgeHostState.smokeOperatorNote = String(value || '');
+}
+
+function scrollForgeHostSmokeChamberIntoView() {
+  const chamberEl = document.getElementById('forge-host-smoke-chamber');
+  if (!chamberEl) return;
+  requestAnimationFrame(() => {
+    chamberEl.scrollIntoView({ block: 'start', inline: 'nearest' });
+  });
 }
 
 function expectedForgeHostReceiptScreenshotSource(receiptId) {
