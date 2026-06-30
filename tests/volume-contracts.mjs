@@ -364,6 +364,12 @@ assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal ren
 assert.match(index, /id="volume-render-scale" min="0\.1" max="1"/, 'Volume tab lets operator range-find aggressive low render-scale raymarch regimes');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
+assert.match(index, /id="volume-reconstruction-style"/, 'Volume tab exposes a reconstruction/upscale style selector for low render-scale regimes');
+assert.match(index, /<option value="smooth" selected>Smooth<\/option>/, 'Volume reconstruction defaults to smooth browser-native upscale');
+assert.match(index, /<option value="crisp">Crisp<\/option>/, 'Volume reconstruction can force crisp nearest-neighbor range finding');
+assert.match(index, /volume_reconstruction/, 'URL route can override volume reconstruction/upscale style');
+assert.match(index, /reconstructionStyle/, 'Volume controls carry reconstruction/upscale style into the renderer');
+assert.match(index, /THREE\.NearestFilter/, 'main renderer bridge can preserve crisp low-scale volume pixels when requested');
 assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
 assert.match(index, /data-volume-visual-cost-knob="branch-threshold"[\s\S]*id="volume-fire-licks"/, 'Fire Licks is marked as a visual knob that can enable extra sim shader work');
 assert.match(index, /data-volume-visual-cost-knob="projection-pass-gate"[\s\S]*id="volume-projection"/, 'Projection is marked as a visual knob that can gate pressure projection work');
@@ -796,6 +802,10 @@ assert.match(core, /displayWidth/, 'debug state preserves displayed canvas width
 assert.match(core, /renderWidth/, 'debug state exposes internal render width');
 assert.match(core, /renderPixelRatio/, 'debug state exposes render-to-display pixel ratio');
 assert.match(core, /volumeReconstructionStyle/, 'canvas uses an explicit reconstruction/upscale style for lower internal render scale');
+assert.match(core, /normalizeVolumeReconstructionStyle/, 'renderer normalizes reconstruction/upscale style explicitly');
+assert.match(core, /nearest-css-upscale/, 'renderer exposes nearest-neighbor CSS upscale identity for crisp range finding');
+assert.match(core, /linear-css-upscale/, 'renderer exposes smooth CSS upscale identity for default low-scale reconstruction');
+assert.match(core, /canvas\.style\.imageRendering = reconstructionStyle === 'crisp' \? 'pixelated' : 'auto'/, 'renderer applies CSS image-rendering from the requested reconstruction style');
 assert.match(core, /resetTemporalHistory\('render-scale-change'\)/, 'temporal history resets when internal render scale changes');
 assert.match(core, /scaledSourceRadius/, 'fluid source scales fire size without relying only on screen zoom');
 assert.match(core, /scaledDetailFrequency/, 'raymarch detail frequency can increase so fire details read smaller');
@@ -1538,6 +1548,8 @@ assert.match(witness, /renderScale/, 'witness records effective internal render 
 assert.match(witness, /displayWidth/, 'witness records displayed canvas width');
 assert.match(witness, /renderWidth/, 'witness records internal render width');
 assert.match(witness, /renderPixelRatio/, 'witness records render-to-display pixel ratio');
+assert.match(witness, /expectedVolumeReconstructionStyle/, 'witness verifies requested reconstruction/upscale route identity');
+assert.match(witness, /volumeReconstructionStyle/, 'witness records effective reconstruction/upscale style');
 assert.match(witness, /expectedExternalEmitterMode/, 'witness verifies external emitter route identity when requested');
 assert.match(witness, /externalEmitterMode/, 'witness records external emitter mode');
 assert.match(witness, /externalEmitterCount/, 'witness records effective external emitter count');

@@ -49,6 +49,15 @@ function normalizeRenderScale(value) {
   return Math.max(0.1, Math.min(1, requested));
 }
 
+function normalizeVolumeReconstructionStyle(value) {
+  return String(value || '').toLowerCase() === 'crisp' ? 'crisp' : 'smooth';
+}
+
+function volumeReconstructionIdentity(renderScale, reconstructionStyle) {
+  if (renderScale >= 0.999) return 'native-resolution';
+  return normalizeVolumeReconstructionStyle(reconstructionStyle) === 'crisp' ? 'nearest-css-upscale' : 'linear-css-upscale';
+}
+
 function normalizeVolumeScene(value) {
   return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
@@ -3881,7 +3890,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderHeight: 0,
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
     renderPixelRatio: 1,
-    volumeReconstructionStyle: 'linear-css-upscale',
+    reconstructionStyle: normalizeVolumeReconstructionStyle(controlsSnapshot.reconstructionStyle),
+    volumeReconstructionStyle: volumeReconstructionIdentity(normalizeRenderScale(controlsSnapshot.renderScale), controlsSnapshot.reconstructionStyle),
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
@@ -5165,12 +5175,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const displayWidth = Math.max(1, Math.floor(rect.width * dpr));
     const displayHeight = Math.max(1, Math.floor(rect.height * dpr));
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
+    const reconstructionStyle = normalizeVolumeReconstructionStyle(controlsSnapshot.reconstructionStyle);
+    const volumeReconstructionStyle = volumeReconstructionIdentity(renderScale, reconstructionStyle);
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
     if (state.renderScale !== renderScale) {
       resetTemporalHistory('render-scale-change');
     }
-    if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight) {
+    if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight || state.volumeReconstructionStyle !== volumeReconstructionStyle) {
       canvas.width = renderWidth;
       canvas.height = renderHeight;
       canvas.style.width = '100%';
@@ -5183,8 +5195,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.renderHeight = renderHeight;
       state.renderScale = renderScale;
       state.renderPixelRatio = renderWidth / Math.max(1, displayWidth);
-      state.volumeReconstructionStyle = renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
-      canvas.style.imageRendering = 'auto';
+      state.reconstructionStyle = reconstructionStyle;
+      state.volumeReconstructionStyle = volumeReconstructionStyle;
+      canvas.style.imageRendering = reconstructionStyle === 'crisp' ? 'pixelated' : 'auto';
       frameTextureSize = '';
     }
   }
@@ -7265,6 +7278,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderHeight: state.renderHeight,
       renderScale: state.renderScale,
       renderPixelRatio: state.renderPixelRatio,
+      reconstructionStyle: state.reconstructionStyle,
       volumeReconstructionStyle: state.volumeReconstructionStyle,
       volumeScene: state.volumeScene,
       meanLuma: totalLuma / Math.max(1, samples),
@@ -7334,6 +7348,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       displayHeight: state.displayHeight,
       renderWidth: state.renderWidth,
       renderHeight: state.renderHeight,
+      reconstructionStyle: state.reconstructionStyle,
       volumeReconstructionStyle: state.volumeReconstructionStyle,
       volumeScene: state.volumeScene,
       externalEmitterMode: state.externalEmitterMode,
@@ -7499,6 +7514,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
+      state.reconstructionStyle = normalizeVolumeReconstructionStyle(controlsSnapshot.reconstructionStyle);
+      state.volumeReconstructionStyle = volumeReconstructionIdentity(state.renderScale, state.reconstructionStyle);
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);

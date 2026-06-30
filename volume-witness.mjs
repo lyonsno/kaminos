@@ -986,6 +986,10 @@ const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
 let expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.1, Math.min(1, requestedRenderScale))
   : canonicalMacroPreset.renderScale ?? scenePreset.renderScale ?? 0.85;
+const expectedVolumeReconstructionControl = String(routeParams.get('volume_reconstruction') || '').toLowerCase() === 'crisp' ? 'crisp' : 'smooth';
+const expectedVolumeReconstructionStyle = expectedRenderScale >= 0.999
+  ? 'native-resolution'
+  : expectedVolumeReconstructionControl === 'crisp' ? 'nearest-css-upscale' : 'linear-css-upscale';
 const requestedInputRadius = Number(routeParams.get('volume_input_radius'));
 const expectedInputRadius = routeParams.has('volume_input_radius') && Number.isFinite(requestedInputRadius)
   ? Math.max(0.08, Math.min(0.7, requestedInputRadius))
@@ -1480,6 +1484,8 @@ async function main() {
     assert.ok((state.displayWidth ?? 0) >= (state.renderWidth ?? 0), 'internal render width exceeded display width');
     assert.ok((state.displayHeight ?? 0) >= (state.renderHeight ?? 0), 'internal render height exceeded display height');
     assert.ok(Math.abs((state.renderPixelRatio ?? 0) - expectedRenderScale) < 0.015, 'render-to-display pixel ratio did not match render scale');
+    assert.equal(state.controls?.reconstructionStyle, expectedVolumeReconstructionControl, 'reconstruction style route/control did not apply');
+    assert.equal(state.volumeReconstructionStyle, expectedVolumeReconstructionStyle, 'effective reconstruction style did not match route/control');
     if (expectedExternalEmitterMode) {
       assert.equal(state.externalEmitterMode, expectedExternalEmitterMode, 'external emitter route identity did not apply');
       assert.equal(state.externalEmitterCoordinateSpace, 'volume-local', 'external emitter coordinate space did not reach debug state');
@@ -2385,6 +2391,7 @@ async function main() {
       bonfireAblation: sample.bonfireAblation,
       bonfireReferenceConfinement: sample.bonfireReferenceConfinement,
       expectedRenderScale,
+      expectedVolumeReconstructionStyle,
       renderScale: sample.renderScale,
       renderPixelRatio: sample.renderPixelRatio,
       displayWidth: sample.displayWidth,
