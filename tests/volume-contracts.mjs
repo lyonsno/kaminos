@@ -1382,6 +1382,10 @@ assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves 
 assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
 assert.match(interframeBaseline, /contactSheet/, 'interframe baseline writes an inspectable contact sheet for operator smoke');
 assert.match(interframeBaseline, /tileOrder/, 'interframe contact sheet records the order of visual tiles');
+assert.match(interframeBaseline, /operatorEvidenceHtml/, 'interframe baseline writes a labeled operator evidence viewer instead of relying on unlabeled tile position');
+assert.match(interframeBaseline, /timelineOrder/, 'interframe operator evidence names the left-to-right live sequence order');
+assert.match(interframeBaseline, /actual-vs-synthetic/, 'interframe operator evidence explicitly names the actual-vs-synthetic comparison rows');
+assert.match(interframeBaseline, /Ground truth live simulator middle/, 'interframe operator evidence labels the actual middle frame in human-readable terms');
 assert.match(interframeBaseline, /bestByMeanAbsoluteError/, 'interframe baseline reports the best deterministic baseline by actual-middle MAE');
 assert.match(interframeBaseline, /meanAbsoluteError/, 'interframe baseline reports a concrete pixel error metric');
 assert.match(interframeBaseline, /rootMeanSquaredError/, 'interframe baseline reports a concrete squared pixel error metric');

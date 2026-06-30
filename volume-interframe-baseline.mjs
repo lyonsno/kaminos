@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
@@ -541,6 +541,322 @@ function writeContactSheet(path, width, height, tiles) {
   };
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function artifactHref(path) {
+  return escapeHtml(basename(path));
+}
+
+function formatMetric(value, digits = 2) {
+  return Number.isFinite(value) ? Number(value).toFixed(digits) : 'n/a';
+}
+
+function frameStamp(frame) {
+  return `frame ${frame.frameCount}, sim step ${frame.simStepCount}`;
+}
+
+function writeOperatorEvidenceHtml(path, report) {
+  const triplet = report.triplet;
+  const timelineOrder = [
+    {
+      id: 't0',
+      heading: 'T0 live start anchor',
+      role: 'live simulator input',
+      path: triplet.t0.path,
+      stamp: frameStamp(triplet.t0),
+      note: 'First real captured frame. Baselines may use this as input.',
+    },
+    {
+      id: 'actualMiddle',
+      heading: 'T1 actual middle',
+      role: 'Ground truth live simulator middle',
+      path: triplet.actualMiddle.path,
+      stamp: frameStamp(triplet.actualMiddle),
+      note: 'This is the real simulator frame every synthetic frame is judged against.',
+    },
+    {
+      id: 't2',
+      heading: 'T2 live end anchor',
+      role: 'live simulator input',
+      path: triplet.t2.path,
+      stamp: frameStamp(triplet.t2),
+      note: 'Third real captured frame. Baselines may use this as input.',
+    },
+  ];
+  const rows = report.baselines.map(baseline => {
+    const metrics = baseline.metrics;
+    const failureModes = baseline.failureModes.join(', ');
+    return `
+      <section class="comparison-row" data-comparison-mode="actual-vs-synthetic" data-baseline-id="${escapeHtml(baseline.id)}">
+        <header>
+          <div>
+            <p class="kicker">actual-vs-synthetic row</p>
+            <h2>${escapeHtml(baseline.id)}</h2>
+          </div>
+          <dl class="metrics">
+            <div><dt>MAE</dt><dd>${formatMetric(metrics.meanAbsoluteError)}</dd></div>
+            <div><dt>RMSE</dt><dd>${formatMetric(metrics.rootMeanSquaredError)}</dd></div>
+            <div><dt>fire MAE</dt><dd>${formatMetric(metrics.fireRegionMeanAbsoluteError)}</dd></div>
+            <div><dt>smoke MAE</dt><dd>${formatMetric(metrics.smokeRegionMeanAbsoluteError)}</dd></div>
+          </dl>
+        </header>
+        <p class="failure">Failure buckets: ${escapeHtml(failureModes)}</p>
+        <div class="comparison-grid">
+          <figure>
+            <figcaption><strong>Ground truth live simulator middle</strong><span>T1 actual, ${escapeHtml(frameStamp(triplet.actualMiddle))}</span></figcaption>
+            <img src="${artifactHref(triplet.actualMiddle.path)}" alt="Actual middle frame from the live simulator">
+          </figure>
+          <figure>
+            <figcaption><strong>Synthetic comparison T1</strong><span>${escapeHtml(baseline.syntheticAuthority)} from T0 and T2</span></figcaption>
+            <img src="${artifactHref(baseline.syntheticMiddle.path)}" alt="Synthetic middle frame for ${escapeHtml(baseline.id)}">
+          </figure>
+          <figure>
+            <figcaption><strong>Error map</strong><span>Absolute RGB difference: actual T1 minus synthetic T1</span></figcaption>
+            <img src="${artifactHref(baseline.difference.path)}" alt="Error map for ${escapeHtml(baseline.id)}">
+          </figure>
+        </div>
+      </section>
+    `;
+  }).join('\n');
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Interframe Perjury Evidence</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b0d10;
+      color: #f3f1e8;
+    }
+    body {
+      margin: 0;
+      background: #0b0d10;
+    }
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1, h2, p, dl, figure {
+      margin: 0;
+    }
+    h1 {
+      font-size: 28px;
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .subhead {
+      max-width: 980px;
+      color: #c9c4b6;
+      line-height: 1.45;
+      margin-bottom: 18px;
+    }
+    .authority {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 18px 0 22px;
+    }
+    .authority div,
+    .timeline figure,
+    .comparison-row {
+      border: 1px solid #303842;
+      background: #11161d;
+      border-radius: 6px;
+    }
+    .authority div {
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .authority dt,
+    .metrics dt,
+    .kicker {
+      color: #92a0ad;
+      font-size: 11px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .authority dd {
+      margin: 3px 0 0;
+      overflow-wrap: anywhere;
+      color: #f3f1e8;
+      font-size: 13px;
+    }
+    .legend {
+      padding: 12px 14px;
+      border-left: 4px solid #58c48a;
+      background: #121912;
+      margin-bottom: 18px;
+      color: #dce7d5;
+      line-height: 1.45;
+    }
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    figure {
+      min-width: 0;
+    }
+    figcaption {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: #161d26;
+      border-bottom: 1px solid #303842;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    figcaption span {
+      color: #aeb7c0;
+      text-align: right;
+    }
+    img {
+      display: block;
+      width: 100%;
+      image-rendering: auto;
+      background: #050607;
+    }
+    .timeline img {
+      aspect-ratio: ${triplet.width} / ${triplet.height};
+      object-fit: contain;
+    }
+    .timeline-note {
+      padding: 10px 12px;
+      color: #c6ccd2;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .comparison-row {
+      margin: 14px 0;
+      overflow: hidden;
+    }
+    .comparison-row header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #303842;
+      background: #151b23;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(76px, 1fr));
+      gap: 8px;
+      min-width: min(560px, 100%);
+    }
+    .metrics div {
+      background: #0d1117;
+      border: 1px solid #2b333c;
+      border-radius: 4px;
+      padding: 7px 8px;
+    }
+    .metrics dd {
+      margin: 2px 0 0;
+      font-variant-numeric: tabular-nums;
+      font-size: 15px;
+    }
+    .failure {
+      padding: 10px 14px;
+      color: #ffd7a1;
+      background: #1d160f;
+      border-bottom: 1px solid #303842;
+      font-size: 13px;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0;
+    }
+    .comparison-grid figure + figure {
+      border-left: 1px solid #303842;
+    }
+    footer {
+      color: #8e98a3;
+      font-size: 12px;
+      line-height: 1.45;
+      padding: 18px 0 4px;
+    }
+    @media (max-width: 980px) {
+      main {
+        padding: 14px;
+      }
+      .authority,
+      .timeline,
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+      .comparison-grid figure + figure {
+        border-left: 0;
+        border-top: 1px solid #303842;
+      }
+      .comparison-row header {
+        display: block;
+      }
+      .metrics {
+        margin-top: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Kaminos Interframe Perjury Evidence</h1>
+    <p class="subhead">This page compares synthetic middle frames against the real simulator middle frame from the same live route. Synthetic frames are comparison evidence only, not live simulator output.</p>
+    <dl class="authority">
+      <div><dt>route authority</dt><dd>${escapeHtml(triplet.authority)}</dd></div>
+      <div><dt>effective route</dt><dd>${escapeHtml(triplet.effectiveRoute)}</dd></div>
+      <div><dt>prototype</dt><dd>${escapeHtml(triplet.prototypeIdentity)}</dd></div>
+      <div><dt>best cheap baseline by MAE</dt><dd>${escapeHtml(report.summary.bestByMeanAbsoluteError?.id || 'none')}</dd></div>
+    </dl>
+    <p class="legend"><strong>How to read this:</strong> top section reads left to right as live time: T0 start anchor -> T1 actual middle -> T2 end anchor. Every baseline row below reads left to right as actual-vs-synthetic: actual T1 ground truth -> synthetic T1 made from T0/T2 -> error map.</p>
+    <section class="timeline" data-timeline-order="t0 actualMiddle t2">
+      ${timelineOrder.map(frame => `
+      <figure data-frame-role="${escapeHtml(frame.id)}">
+        <figcaption><strong>${escapeHtml(frame.heading)}</strong><span>${escapeHtml(frame.stamp)}</span></figcaption>
+        <img src="${artifactHref(frame.path)}" alt="${escapeHtml(frame.heading)}">
+        <p class="timeline-note">${escapeHtml(frame.role)}. ${escapeHtml(frame.note)}</p>
+      </figure>
+      `).join('\n')}
+    </section>
+    ${rows}
+    <footer>
+      Report: ${escapeHtml(report.reportPath)}. Contact-sheet PNG remains a secondary debug collage at ${escapeHtml(report.contactSheet.path)}; this HTML page is the operator-facing comparison artifact.
+    </footer>
+  </main>
+</body>
+</html>
+`;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, html);
+  return {
+    path,
+    format: 'html',
+    timelineOrder: timelineOrder.map(frame => frame.id),
+    comparisonMode: 'actual-vs-synthetic',
+    rowOrder: report.baselines.map(baseline => baseline.id),
+    readingOrder: 'Top section left-to-right: T0 live start anchor, T1 actual middle ground truth, T2 live end anchor. Baseline rows left-to-right: Ground truth live simulator middle, synthetic comparison T1, absolute RGB error map.',
+  };
+}
+
 function baselineRgba(id, first, third, width, height) {
   if (id === HOLD_LAST_BASELINE_ID) return cloneRgba(first);
   if (id === HOLD_NEXT_BASELINE_ID) return cloneRgba(third);
@@ -648,6 +964,7 @@ const artifactPaths = {
   actualMiddle: resolve(outDir, 'triplet-t1-actual-middle.png'),
   t2: resolve(outDir, 'triplet-t2.png'),
   contactSheet: resolve(outDir, 'interframe-baseline-contact-sheet.png'),
+  operatorEvidenceHtml: resolve(outDir, 'interframe-baseline-evidence.html'),
   baselines: Object.fromEntries(BASELINE_IDS.map(id => [id, {
     syntheticMiddle: resolve(outDir, `${id}-synthetic-middle.png`),
     difference: resolve(outDir, `${id}-error.png`),
@@ -688,6 +1005,7 @@ const baseReport = {
   },
   baselines: [],
   contactSheet: null,
+  operatorEvidenceHtml: null,
   summary: {
     bestByMeanAbsoluteError: null,
   },
@@ -860,7 +1178,7 @@ try {
       ];
     }),
   ]);
-  const report = {
+  let report = {
     ...baseReport,
     status: 'captured',
     updatedAt: new Date().toISOString(),
@@ -880,6 +1198,11 @@ try {
         failureModes: bestByMeanAbsoluteError.failureModes,
       } : null,
     },
+  };
+  const operatorEvidenceHtml = writeOperatorEvidenceHtml(artifactPaths.operatorEvidenceHtml, report);
+  report = {
+    ...report,
+    operatorEvidenceHtml,
   };
   writeJson(reportPath, report);
   console.log(JSON.stringify(report, null, 2));
