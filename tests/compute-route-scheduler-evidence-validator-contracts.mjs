@@ -280,6 +280,82 @@ assert.ok(
   ),
 );
 
+const partialKitSchedulerDoesNotAdoptAdapterEffective = witnessForScheduler({
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  verificationState: 'verified',
+  adapterEvidence: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+});
+assert.equal(partialKitSchedulerDoesNotAdoptAdapterEffective.scheduler.verificationState, 'scheduler-unverified');
+assert.deepEqual(partialKitSchedulerDoesNotAdoptAdapterEffective.scheduler.requestedScheduler, {
+  mode: 'cooperative',
+  phaseChunkSize: {
+    vitBlock: 6,
+  },
+});
+assert.equal(partialKitSchedulerDoesNotAdoptAdapterEffective.scheduler.effectiveScheduler, null);
+assert.ok(partialKitSchedulerDoesNotAdoptAdapterEffective.witnessWarnings.includes('requested_scheduler_without_effective_scheduler'));
+assert.ok(partialKitSchedulerDoesNotAdoptAdapterEffective.falseClosureChecks.schedulerUnverified);
+
+const requestedAdapterDisagreementNotWaivedByRequestedUnsupported = witnessForScheduler({
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  effectiveScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+    unsupportedFields: [],
+  },
+  verificationState: 'verified',
+  adapterEvidence: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 4,
+      unsupportedFields: ['phaseChunkSize.vitBlock'],
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+});
+assert.ok(
+  requestedAdapterDisagreementNotWaivedByRequestedUnsupported.scheduler.falseAuthorityViolations.includes(
+    'adapter_scheduler_disagrees_with_kit_scheduler:requestedScheduler.phaseChunkSize.vitBlock',
+  ),
+);
+assert.ok(
+  requestedAdapterDisagreementNotWaivedByRequestedUnsupported.witnessWarnings.includes(
+    'adapter_scheduler_disagrees_with_kit_scheduler:requestedScheduler.phaseChunkSize.vitBlock',
+  ),
+);
+
 const staleTelemetry = witnessForScheduler({
   schema: 'kaminos.webgpu-route-scheduler.v0',
   requestedScheduler: {
@@ -383,3 +459,26 @@ const adapterOnly = buildComputeRouteContentionWitnessFromReport(adapterOnlyRepo
 assert.equal(adapterOnly.scheduler.verificationState, 'scheduler-unverified');
 assert.ok(adapterOnly.scheduler.validationWarnings.includes('route_specific_scheduler_without_kit_mapping'));
 assert.ok(adapterOnly.scheduler.adapterEvidence);
+
+const partialKitReport = structuredClone(adapterOnlyReport);
+partialKitReport.pipelineReport.stages[0].effectiveRoute.scheduler = {
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  verificationState: 'verified',
+};
+const partialKitFromReport = buildComputeRouteContentionWitnessFromReport(partialKitReport, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.equal(partialKitFromReport.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(partialKitFromReport.scheduler.effectiveScheduler, null);
+assert.ok(partialKitFromReport.scheduler.adapterEvidence);
+assert.ok(partialKitFromReport.witnessWarnings.includes('requested_scheduler_without_effective_scheduler'));

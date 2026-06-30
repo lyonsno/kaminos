@@ -245,7 +245,7 @@ function adapterKitDisagreements(kitScheduler, adapterEvidence) {
     if (!kitConfig || !adapterConfig) continue;
     const unsupported = field === 'effectiveScheduler'
       ? unsupportedFieldsFrom(kitScheduler.effectiveScheduler, adapterEvidence.effectiveScheduler)
-      : unsupportedFieldsFrom(kitScheduler.requestedScheduler, adapterEvidence.requestedScheduler);
+      : [];
     const kitPaths = leafPaths(kitConfig);
     const adapterPaths = new Set(leafPaths(adapterConfig));
     const paths = kitPaths.filter(path => adapterPaths.has(path));
@@ -277,6 +277,9 @@ function effectiveRouteEvidence(report = {}) {
 }
 
 function schedulerVerificationState(scheduler, adapterEvidence) {
+  if (scheduler && !scheduler.effectiveScheduler) {
+    return 'scheduler-unverified';
+  }
   if (!scheduler?.effectiveScheduler && !adapterEvidence?.effectiveScheduler) {
     return 'scheduler-unverified';
   }
@@ -307,10 +310,10 @@ function normalizeScheduler(scheduler = null, adapterEvidence = null) {
       || normalizedScheduler?.effectiveScheduler,
   );
   if (normalizedScheduler && hasKitScheduler) {
-    const effectiveScheduler = normalizedScheduler.effectiveScheduler || normalizedAdapterEvidence?.effectiveScheduler || null;
+    const effectiveScheduler = normalizedScheduler.effectiveScheduler || null;
     const base = {
       schema: normalizedScheduler.schema || 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: normalizedScheduler.requestedScheduler || normalizedAdapterEvidence?.requestedScheduler || null,
+      requestedScheduler: normalizedScheduler.requestedScheduler || null,
       effectiveScheduler,
       verificationState: schedulerVerificationState(normalizedScheduler, normalizedAdapterEvidence),
       adapterEvidence: normalizedAdapterEvidence,
