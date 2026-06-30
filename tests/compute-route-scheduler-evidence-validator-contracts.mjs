@@ -356,6 +356,47 @@ assert.ok(
   ),
 );
 
+const adapterVerificationDoesNotBecomeKitVerification = witnessForScheduler({
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  effectiveScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+    unsupportedFields: [],
+  },
+  adapterEvidence: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+});
+assert.equal(adapterVerificationDoesNotBecomeKitVerification.scheduler.verificationState, 'adapter-evidence');
+assert.ok(
+  adapterVerificationDoesNotBecomeKitVerification.scheduler.validationWarnings.includes(
+    'kit_scheduler_verification_state_missing',
+  ),
+);
+assert.ok(
+  adapterVerificationDoesNotBecomeKitVerification.witnessWarnings.includes(
+    'kit_scheduler_verification_state_missing',
+  ),
+);
+
 const staleTelemetry = witnessForScheduler({
   schema: 'kaminos.webgpu-route-scheduler.v0',
   requestedScheduler: {
@@ -482,3 +523,31 @@ assert.equal(partialKitFromReport.scheduler.verificationState, 'scheduler-unveri
 assert.equal(partialKitFromReport.scheduler.effectiveScheduler, null);
 assert.ok(partialKitFromReport.scheduler.adapterEvidence);
 assert.ok(partialKitFromReport.witnessWarnings.includes('requested_scheduler_without_effective_scheduler'));
+
+const noKitVerificationReport = structuredClone(adapterOnlyReport);
+noKitVerificationReport.pipelineReport.stages[0].effectiveRoute.scheduler = {
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  effectiveScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+    unsupportedFields: [],
+  },
+};
+const noKitVerificationFromReport = buildComputeRouteContentionWitnessFromReport(noKitVerificationReport, {
+  requestedVisualBudget: {
+    budgetId: 'live',
+    liveSimulation: true,
+    prerecorded: false,
+  },
+});
+assert.equal(noKitVerificationFromReport.scheduler.verificationState, 'adapter-evidence');
+assert.ok(noKitVerificationFromReport.scheduler.adapterEvidence);
+assert.ok(noKitVerificationFromReport.witnessWarnings.includes('kit_scheduler_verification_state_missing'));

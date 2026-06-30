@@ -280,10 +280,12 @@ function schedulerVerificationState(scheduler, adapterEvidence) {
   if (scheduler && !scheduler.effectiveScheduler) {
     return 'scheduler-unverified';
   }
+  if (scheduler?.verificationState) return scheduler.verificationState;
+  if (scheduler?.effectiveScheduler && adapterEvidence?.verificationState) return 'adapter-evidence';
+  if (scheduler?.effectiveScheduler) return 'effective-evidence';
   if (!scheduler?.effectiveScheduler && !adapterEvidence?.effectiveScheduler) {
     return 'scheduler-unverified';
   }
-  if (scheduler?.verificationState) return scheduler.verificationState;
   if (adapterEvidence?.verificationState) return adapterEvidence.verificationState;
   if (scheduler?.effectiveScheduler || adapterEvidence?.effectiveScheduler) return 'adapter-evidence';
   return 'scheduler-unverified';
@@ -327,9 +329,13 @@ function normalizeScheduler(scheduler = null, adapterEvidence = null) {
     const verifiedWithoutEffective = normalizedScheduler.verificationState === 'verified' && !effectiveScheduler
       ? ['scheduler_verified_without_effective_scheduler']
       : [];
+    const kitVerificationMissing = effectiveScheduler && !normalizedScheduler.verificationState
+      ? ['kit_scheduler_verification_state_missing']
+      : [];
     const adapterDisagreements = adapterKitDisagreements(base, normalizedAdapterEvidence);
     const validationWarnings = unique([
       ...verifiedWithoutEffective,
+      ...kitVerificationMissing,
       ...driftViolations,
       ...adapterDisagreements,
       ...schedulerTelemetryWarnings(normalizedScheduler, normalizedAdapterEvidence),
