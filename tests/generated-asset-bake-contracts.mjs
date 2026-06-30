@@ -92,8 +92,12 @@ const manifest = JSON.parse(readFileSync(join(outDir, 'generated-asset-bake-mani
 assert.equal(manifest.schema, 'kaminos.generated-asset-bake.v0', 'manifest names the bake contract');
 assert.equal(manifest.assetName, 'fixture-bake', 'manifest preserves caller asset name');
 assert.equal(manifest.uvPolicy, 'required-existing-uv0', 'V0 requires existing UV0 instead of inventing unwrap work');
-assert.equal(manifest.projection.route, 'nearest-source-vertex', 'manifest records the effective projection route');
+assert.equal(manifest.projection.route, 'nearest-source-surface', 'manifest records the effective projection route');
+assert.equal(manifest.projection.sourceTriangleCandidates, 12, 'manifest records nearest-surface candidate count');
 assert.equal(manifest.projection.status, 'pending', 'assay-only does not pretend projection ran');
+assert.equal(manifest.padding.status, 'pending', 'assay-only does not pretend padding ran');
+assert.equal(manifest.padding.pixels, 12, 'manifest records effective UV island padding');
+assert.equal(manifest.padding.mode, 'nearest-covered-atlas-pixel', 'manifest records the padding mode');
 assert.equal(manifest.products.baseColor.status, 'pending', 'assay-only does not pretend baseColor was emitted');
 assert.equal(manifest.products.metallicRoughness.status, 'pending', 'assay-only does not pretend MR was emitted');
 assert.equal(manifest.products.normal.status, 'not-implemented', 'normal bake is not claimed');

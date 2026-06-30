@@ -24,7 +24,7 @@ Those products stay marked `pending` or `deferred` in the manifest until an actu
 
 ## Generated asset bake v0
 
-`tools/generated-asset-bake.py` is the first high-to-low material transfer harness. It takes a detailed source GLB and a target GLB, requires both to already have `TEXCOORD_0`, rasterizes the target's existing UV0 atlas, reconstructs target surface positions per covered atlas pixel, projects those positions to the nearest source vertex, and samples the source material UV into new target-space textures.
+`tools/generated-asset-bake.py` is the first high-to-low material transfer harness. It takes a detailed source GLB and a target GLB, requires both to already have `TEXCOORD_0`, rasterizes the target's existing UV0 atlas, reconstructs target surface positions per covered atlas pixel, projects those positions to the source material using the recorded route, and samples source UVs into new target-space textures.
 
 V0 emits:
 
@@ -33,22 +33,27 @@ V0 emits:
 - `debug/projectionDistance.png`
 - `debug/projectionRoute.png`
 - `debug/unresolvedMask.png`
+- `debug/paddingMask.png`
 - `asset-baked.glb`
 - `generated-asset-bake-manifest.json`
 
 The UV policy is deliberately narrow: `required-existing-uv0`. Trellis 2, Pixel 3D, and Stable Fast 3D generated meshes already emit UVs in the current pipeline, and SHARP splats are not an unwrap target. A mesh with no UV0 fails during preflight with a written manifest receipt. V0 does not spend engineering time on xatlas or other unwrap fallback paths.
 
-The manifest records the effective projection route (`nearest-source-vertex`), atlas coverage, projection distance statistics, emitted texture paths, and the failure phase/code when it cannot proceed. Atlas uncovered pixels are empty UV atlas space, not automatically object projection failures.
+The manifest records the effective projection route, nearest-surface candidate count when used, UV island padding radius, atlas coverage, projection distance statistics, emitted texture paths, and the failure phase/code when it cannot proceed. Atlas uncovered pixels are empty UV atlas space, not automatically object projection failures.
+
+The default V0.1 route is `nearest-source-surface`: a KDTree over source triangle centroids proposes nearby source triangles, the baker finds the closest point on those candidates, and source UVs are sampled barycentrically. The older `nearest-source-vertex` route remains available as a faster/cruder diagnostic path.
+
+V0.1 also dilates covered UV island pixels into nearby uncovered atlas pixels with `nearest-covered-atlas-pixel` padding. This targets the classic bake seam footgun where bilinear filtering or mipmapping pulls black/transparent atlas background into visible UV boundaries.
 
 V0 still does not claim:
 
 - tangent-space normal maps
-- ambient occlusion
+- baked ambient occlusion
 - curvature/cavity masks
 - emissive masks
 - height/parallax maps
 
-Those remain `not-implemented` or `deferred` until a route exists and has visual proof.
+Baked ambient occlusion is intentionally demoted rather than merely missing. Kaminos already pays for screen-space GTAO; baked AO risks double-occlusion and does not respond to nearby scene geometry. Normal baking is still a likely later target, but it should follow texture padding and projection-route cleanup.
 
 ## 2026-06-29 molten cube smoke
 

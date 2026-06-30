@@ -5,7 +5,7 @@ V0 is intentionally narrow and honest:
 
 - source and target must already have UV0
 - no unwrap/xatlas path exists here
-- projection is nearest-source-vertex
+- default projection is nearest-source-surface
 - only baseColor and metallicRoughness are emitted
 - normals, AO, emissive extraction, height, and parallax remain unimplemented
 """
@@ -190,6 +190,9 @@ def manifest_base(
     asset_name: str,
     source_assay: dict[str, Any] | None,
     target_assay: dict[str, Any] | None,
+    projection_route: str,
+    source_triangle_candidates: int,
+    padding_pixels: int,
 ) -> dict[str, Any]:
     return {
         "schema": BAKE_SCHEMA,
@@ -200,9 +203,16 @@ def manifest_base(
         "target": target_assay or {"path": str(target_path)},
         "uvPolicy": "required-existing-uv0",
         "projection": {
-            "route": "nearest-source-vertex",
+            "route": projection_route,
+            "sourceTriangleCandidates": source_triangle_candidates if projection_route == "nearest-source-surface" else None,
             "status": "pending",
-            "description": "Target UV pixels reconstruct target surface positions, then sample nearest source vertex material UV.",
+            "description": "Target UV pixels reconstruct target surface positions, then sample source material UV through the recorded projection route.",
+        },
+        "padding": {
+            "status": "pending",
+            "pixels": padding_pixels,
+            "mode": "nearest-covered-atlas-pixel",
+            "description": "Dilate covered target UV island pixels into nearby uncovered atlas pixels to reduce bilinear/mip seam pull.",
         },
         "products": pending_products(),
         "diagnostics": pending_diagnostics(),
@@ -226,6 +236,12 @@ def preflight(manifest: dict[str, Any]) -> None:
         raise BakeFailure("preflight", "source-missing-basecolor", "source GLB has no baseColor texture to transfer")
     if not manifest["source"]["materials"]["hasMetallicRoughnessTexture"]:
         raise BakeFailure("preflight", "source-missing-metallicroughness", "source GLB has no metallicRoughness texture to transfer")
+    if manifest["projection"]["route"] not in {"nearest-source-vertex", "nearest-source-surface"}:
+        raise BakeFailure("preflight", "unsupported-projection-route", f"unsupported projection route {manifest['projection']['route']}")
+    if manifest["projection"]["route"] == "nearest-source-surface" and int(manifest["projection"]["sourceTriangleCandidates"]) <= 0:
+        raise BakeFailure("preflight", "invalid-source-triangle-candidates", "nearest-source-surface requires at least one triangle candidate")
+    if int(manifest["padding"]["pixels"]) < 0:
+        raise BakeFailure("preflight", "invalid-padding-pixels", "padding pixels must be non-negative")
 
 
 def load_single_mesh(path: Path, role: str):
@@ -289,7 +305,136 @@ def barycentric_grid(points, a, b, c):
     return u, v, w
 
 
-def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int) -> dict[str, Any]:
+def closest_points_on_segments(points, a, b):
+    import numpy as np
+
+    ab = b - a
+    denom = np.sum(ab * ab, axis=1)
+    safe = denom > 1e-12
+    t = np.zeros(len(points), dtype=np.float32)
+    t[safe] = np.sum((points[safe] - a[safe]) * ab[safe], axis=1) / denom[safe]
+    t = np.clip(t, 0.0, 1.0)
+    closest = a + t[:, None] * ab
+    dist2 = np.sum((points - closest) ** 2, axis=1)
+    return closest, dist2, t
+
+
+def closest_points_on_triangles(points, a, b, c):
+    import numpy as np
+
+    n = len(points)
+    v0 = b - a
+    v1 = c - a
+    v2 = points - a
+    d00 = np.sum(v0 * v0, axis=1)
+    d01 = np.sum(v0 * v1, axis=1)
+    d11 = np.sum(v1 * v1, axis=1)
+    d20 = np.sum(v2 * v0, axis=1)
+    d21 = np.sum(v2 * v1, axis=1)
+    denom = d00 * d11 - d01 * d01
+    safe = np.abs(denom) > 1e-12
+
+    plane_bary = np.zeros((n, 3), dtype=np.float32)
+    plane_bary[safe, 1] = (d11[safe] * d20[safe] - d01[safe] * d21[safe]) / denom[safe]
+    plane_bary[safe, 2] = (d00[safe] * d21[safe] - d01[safe] * d20[safe]) / denom[safe]
+    plane_bary[safe, 0] = 1.0 - plane_bary[safe, 1] - plane_bary[safe, 2]
+    plane_point = (
+        plane_bary[:, 0:1] * a
+        + plane_bary[:, 1:2] * b
+        + plane_bary[:, 2:3] * c
+    )
+    plane_dist2 = np.sum((points - plane_point) ** 2, axis=1)
+    inside = safe & np.all(plane_bary >= -1e-5, axis=1)
+
+    best_point = plane_point.copy()
+    best_bary = plane_bary.copy()
+    best_dist2 = plane_dist2.copy()
+    best_dist2[~inside] = np.inf
+
+    edge_ab, dist_ab, t_ab = closest_points_on_segments(points, a, b)
+    edge_bc, dist_bc, t_bc = closest_points_on_segments(points, b, c)
+    edge_ca, dist_ca, t_ca = closest_points_on_segments(points, c, a)
+
+    improve = dist_ab < best_dist2
+    best_point[improve] = edge_ab[improve]
+    best_dist2[improve] = dist_ab[improve]
+    best_bary[improve] = np.stack([1.0 - t_ab[improve], t_ab[improve], np.zeros(np.count_nonzero(improve))], axis=1)
+
+    improve = dist_bc < best_dist2
+    best_point[improve] = edge_bc[improve]
+    best_dist2[improve] = dist_bc[improve]
+    best_bary[improve] = np.stack([np.zeros(np.count_nonzero(improve)), 1.0 - t_bc[improve], t_bc[improve]], axis=1)
+
+    improve = dist_ca < best_dist2
+    best_point[improve] = edge_ca[improve]
+    best_dist2[improve] = dist_ca[improve]
+    best_bary[improve] = np.stack([t_ca[improve], np.zeros(np.count_nonzero(improve)), 1.0 - t_ca[improve]], axis=1)
+
+    return best_point, best_bary, best_dist2
+
+
+def nearest_source_surface_uvs(positions, source_vertices, source_faces, source_uv, centroid_tree, candidate_count):
+    import numpy as np
+
+    k = min(max(1, int(candidate_count)), len(source_faces))
+    _, candidate_triangles = centroid_tree.query(positions, k=k)
+    if k == 1:
+        candidate_triangles = candidate_triangles[:, None]
+
+    best_dist2 = np.full(len(positions), np.inf, dtype=np.float32)
+    best_uv = np.zeros((len(positions), 2), dtype=np.float32)
+    for candidate_slot in range(candidate_triangles.shape[1]):
+        tri_indices = candidate_triangles[:, candidate_slot]
+        faces = source_faces[tri_indices]
+        a = source_vertices[faces[:, 0]]
+        b = source_vertices[faces[:, 1]]
+        c = source_vertices[faces[:, 2]]
+        _, bary, dist2 = closest_points_on_triangles(positions, a, b, c)
+        improve = dist2 < best_dist2
+        if not np.any(improve):
+            continue
+        uv_tri = source_uv[faces[improve]]
+        best_uv[improve] = (
+            bary[improve, 0:1] * uv_tri[:, 0]
+            + bary[improve, 1:2] * uv_tri[:, 1]
+            + bary[improve, 2:3] * uv_tri[:, 2]
+        )
+        best_dist2[improve] = dist2[improve]
+
+    return np.sqrt(best_dist2), best_uv
+
+
+def dilate_atlas_pixels(out_base, out_mr, covered, padding_pixels):
+    import numpy as np
+    from scipy import ndimage
+
+    padding_pixels = int(padding_pixels)
+    padding_mask = np.zeros_like(covered, dtype=bool)
+    if padding_pixels <= 0 or not np.any(covered):
+        return padding_mask
+
+    uncovered = ~covered
+    distances, indices = ndimage.distance_transform_edt(uncovered, return_indices=True)
+    padding_mask = uncovered & (distances <= padding_pixels)
+    if not np.any(padding_mask):
+        return padding_mask
+
+    source_y = indices[0][padding_mask]
+    source_x = indices[1][padding_mask]
+    out_base[padding_mask] = out_base[source_y, source_x]
+    out_mr[padding_mask] = out_mr[source_y, source_x]
+    return padding_mask
+
+
+def bake(
+    source_path: Path,
+    target_path: Path,
+    out_dir: Path,
+    texture_size: int,
+    projection_route: str,
+    source_triangle_candidates: int,
+    padding_pixels: int,
+) -> dict[str, Any]:
     import numpy as np
     from PIL import Image
     from scipy.spatial import cKDTree
@@ -318,13 +463,19 @@ def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int)
 
     source_vertices = np.asarray(source_mesh.vertices, dtype=np.float32)
     source_uv = np.asarray(source_mesh.visual.uv, dtype=np.float32)
+    source_faces = np.asarray(source_mesh.faces, dtype=np.int64)
     target_vertices = np.asarray(target_mesh.vertices, dtype=np.float32)
     target_uv = np.asarray(target_mesh.visual.uv, dtype=np.float32)
     target_faces = np.asarray(target_mesh.faces, dtype=np.int64)
 
     base_img = image_array(source_base, "RGBA")
     mr_img = image_array(source_mr, "RGB")
-    tree = cKDTree(source_vertices)
+    vertex_tree = cKDTree(source_vertices) if projection_route == "nearest-source-vertex" else None
+    if projection_route == "nearest-source-surface":
+        source_triangles = source_vertices[source_faces]
+        centroid_tree = cKDTree(np.mean(source_triangles, axis=1))
+    else:
+        centroid_tree = None
 
     out_base = np.zeros((size, size, 4), dtype=np.float32)
     out_mr = np.zeros((size, size, 3), dtype=np.float32)
@@ -362,8 +513,18 @@ def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int)
         weights = np.stack([b0[mask], b1[mask], b2[mask]], axis=1).astype(np.float32)
         tri_pos = target_vertices[face]
         positions = weights @ tri_pos
-        dists, source_indices = tree.query(positions, k=1)
-        sample_uv = source_uv[source_indices]
+        if projection_route == "nearest-source-surface":
+            dists, sample_uv = nearest_source_surface_uvs(
+                positions,
+                source_vertices,
+                source_faces,
+                source_uv,
+                centroid_tree,
+                source_triangle_candidates,
+            )
+        else:
+            dists, source_indices = vertex_tree.query(positions, k=1)
+            sample_uv = source_uv[source_indices]
 
         out_base[py, px] = bilinear_sample(base_img, sample_uv)
         out_mr[py, px] = bilinear_sample(mr_img, sample_uv)
@@ -384,20 +545,24 @@ def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int)
         p95 = max_dist = mean_dist = min_dist = None
         distance_vis = np.zeros((size, size), dtype=np.uint8)
 
-    out_base[unresolved] = np.array([0, 0, 0, 0], dtype=np.float32)
-    out_mr[unresolved] = np.array([0, 255, 255], dtype=np.float32)
+    padding_mask = dilate_atlas_pixels(out_base, out_mr, covered, padding_pixels)
+    remaining_unresolved = ~(covered | padding_mask)
+    out_base[remaining_unresolved] = np.array([0, 0, 0, 0], dtype=np.float32)
+    out_mr[remaining_unresolved] = np.array([0, 255, 255], dtype=np.float32)
 
     base_path = textures_dir / "baseColor.png"
     mr_path = textures_dir / "metallicRoughness.png"
     distance_path = debug_dir / "projectionDistance.png"
     route_path = debug_dir / "projectionRoute.png"
     unresolved_path = debug_dir / "unresolvedMask.png"
+    padding_path = debug_dir / "paddingMask.png"
 
     Image.fromarray(np.clip(out_base, 0, 255).astype(np.uint8), mode="RGBA").save(base_path)
     Image.fromarray(np.clip(out_mr, 0, 255).astype(np.uint8), mode="RGB").save(mr_path)
     Image.fromarray(distance_vis, mode="L").save(distance_path)
     Image.fromarray((covered.astype(np.uint8) * 255), mode="L").save(route_path)
     Image.fromarray((unresolved.astype(np.uint8) * 255), mode="L").save(unresolved_path)
+    Image.fromarray((padding_mask.astype(np.uint8) * 255), mode="L").save(padding_path)
 
     baked_glb = out_dir / "asset-baked.glb"
     baked_mesh = target_mesh.copy()
@@ -423,6 +588,10 @@ def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int)
         "totalPixels": total_pixels,
         "atlasCoverageRatio": float(covered_pixels / total_pixels),
         "atlasUncoveredRatio": float((total_pixels - covered_pixels) / total_pixels),
+        "paddingPixels": int(padding_pixels),
+        "paddedPixels": int(np.count_nonzero(padding_mask)),
+        "atlasPaddedRatio": float(np.count_nonzero(padding_mask) / total_pixels),
+        "remainingUncoveredRatio": float(np.count_nonzero(remaining_unresolved) / total_pixels),
         "distance": {
             "min": min_dist,
             "mean": mean_dist,
@@ -436,6 +605,7 @@ def bake(source_path: Path, target_path: Path, out_dir: Path, texture_size: int)
             "projectionDistance": str(distance_path),
             "projectionRoute": str(route_path),
             "unresolvedMask": str(unresolved_path),
+            "paddingMask": str(padding_path),
         },
     }
 
@@ -447,6 +617,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", required=True, help="Output directory")
     parser.add_argument("--name", default=None, help="Stable asset name")
     parser.add_argument("--texture-size", type=int, default=1024, help="Square bake texture size")
+    parser.add_argument(
+        "--projection-route",
+        choices=["nearest-source-surface", "nearest-source-vertex"],
+        default="nearest-source-surface",
+        help="Source material lookup route",
+    )
+    parser.add_argument("--source-triangle-candidates", type=int, default=12, help="Triangle candidates for nearest-source-surface")
+    parser.add_argument("--padding-pixels", type=int, default=12, help="UV island dilation radius in atlas pixels")
     parser.add_argument("--assay-only", action="store_true", help="Only write assay/manifest; do not project")
     args = parser.parse_args(argv)
 
@@ -461,13 +639,31 @@ def main(argv: list[str] | None = None) -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
         source_assay = assay_glb(source_path)
         target_assay = assay_glb(target_path)
-        manifest = manifest_base(source_path, target_path, out_dir, asset_name, source_assay, target_assay)
+        manifest = manifest_base(
+            source_path,
+            target_path,
+            out_dir,
+            asset_name,
+            source_assay,
+            target_assay,
+            args.projection_route,
+            args.source_triangle_candidates,
+            args.padding_pixels,
+        )
         preflight(manifest)
         if args.assay_only:
             manifest["status"] = "assay-only"
         else:
             started = time.time()
-            stats = bake(source_path, target_path, out_dir, args.texture_size)
+            stats = bake(
+                source_path,
+                target_path,
+                out_dir,
+                args.texture_size,
+                args.projection_route,
+                args.source_triangle_candidates,
+                args.padding_pixels,
+            )
             manifest["status"] = "emitted"
             manifest["projection"]["status"] = "emitted"
             manifest["projection"]["durationMs"] = int((time.time() - started) * 1000)
@@ -477,24 +673,51 @@ def main(argv: list[str] | None = None) -> int:
             manifest["projection"]["atlasCoverageRatio"] = stats["atlasCoverageRatio"]
             manifest["projection"]["atlasUncoveredRatio"] = stats["atlasUncoveredRatio"]
             manifest["projection"]["distance"] = stats["distance"]
+            manifest["padding"].update({
+                "status": "emitted",
+                "paddedPixels": stats["paddedPixels"],
+                "atlasPaddedRatio": stats["atlasPaddedRatio"],
+                "remainingUncoveredRatio": stats["remainingUncoveredRatio"],
+            })
             manifest["products"]["baseColor"].update({"status": "emitted", "path": stats["paths"]["baseColor"]})
             manifest["products"]["metallicRoughness"].update({"status": "emitted", "path": stats["paths"]["metallicRoughness"]})
             manifest["products"]["glb"] = {"status": "emitted", "path": stats["paths"]["bakedGlb"]}
             manifest["diagnostics"]["distance"].update({"status": "emitted", "path": stats["paths"]["projectionDistance"]})
             manifest["diagnostics"]["route"].update({"status": "emitted", "path": stats["paths"]["projectionRoute"]})
             manifest["diagnostics"]["unresolvedMask"].update({"status": "emitted", "path": stats["paths"]["unresolvedMask"]})
+            manifest["diagnostics"]["paddingMask"] = {"status": "emitted", "path": stats["paths"]["paddingMask"]}
         manifest_path = write_manifest(out_dir, manifest)
         print(json.dumps({"manifest": str(manifest_path), "status": manifest["status"]}, indent=2))
         return 0
     except BakeFailure as exc:
-        manifest = manifest_base(source_path, target_path, out_dir, asset_name, source_assay, target_assay)
+        manifest = manifest_base(
+            source_path,
+            target_path,
+            out_dir,
+            asset_name,
+            source_assay,
+            target_assay,
+            args.projection_route,
+            args.source_triangle_candidates,
+            args.padding_pixels,
+        )
         manifest["status"] = "failed"
         manifest["failure"] = {"phase": exc.phase, "code": exc.code, "message": exc.message}
         manifest_path = write_manifest(out_dir, manifest)
         print(json.dumps({"manifest": str(manifest_path), "status": "failed", "failure": manifest["failure"]}, indent=2), file=sys.stderr)
         return 1
     except Exception as exc:
-        manifest = manifest_base(source_path, target_path, out_dir, asset_name, source_assay, target_assay)
+        manifest = manifest_base(
+            source_path,
+            target_path,
+            out_dir,
+            asset_name,
+            source_assay,
+            target_assay,
+            args.projection_route,
+            args.source_triangle_candidates,
+            args.padding_pixels,
+        )
         manifest["status"] = "failed"
         manifest["failure"] = {"phase": "unexpected", "code": exc.__class__.__name__, "message": str(exc)}
         manifest_path = write_manifest(out_dir, manifest)
