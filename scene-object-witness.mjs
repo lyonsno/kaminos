@@ -463,7 +463,7 @@ async function runForgeHostViewportSmokeOfferClickScenario(ws) {
     (async () => {
       const state = window.kaminosForgeHostDebugState?.();
       const panel = document.querySelector('#forge-host-smoke-chamber');
-      if (state?.lastOpenedOffer?.id !== 'offer:minion-spawnfucker:live-endpoint') {
+      if (state?.lastOpenedOffer?.schema !== 'kaminos.forge-host.smoke-result-offer.v0') {
         throw new Error('viewport smoke-offer click did not open chamber: ' + JSON.stringify({
           lastOpenedOffer: state?.lastOpenedOffer,
           smokeChamber: state?.smokeChamber,
@@ -475,6 +475,9 @@ async function runForgeHostViewportSmokeOfferClickScenario(ws) {
       }
       if (state.smokeChamber?.schema !== 'kaminos.forge-host.smoke-chamber.v0') {
         throw new Error('viewport smoke-offer click opened invalid chamber: ' + JSON.stringify(state.smokeChamber));
+      }
+      if (state.smokeChamber?.routeIdentity !== 'forge-host-smoke-result-route') {
+        throw new Error('viewport smoke-offer click did not prefer result chamber: ' + JSON.stringify(state.smokeChamber));
       }
       return {
         point: ${JSON.stringify(point)},
@@ -553,6 +556,65 @@ async function runForgeHostSidePanelSmokeOfferClickScenario(ws) {
       };
     })()
   `, { timeoutMs: 10000 });
+}
+
+async function runForgeHostSmokeResultOfferScenario(ws) {
+  phase = 'scenario-forge-host-smoke-result-offer';
+  lastEvidence.forgeHostSmokeResultOffer = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      const initial = window.kaminosForgeHostDebugState?.();
+      if (!initial?.active) throw new Error('Forge Host Smoke Result route did not activate');
+      const minion = initial.stations.find(station => station.diaulos === 'minion-spawnfucker');
+      if (!minion) throw new Error('Forge Host Smoke Result route missing minion station: ' + JSON.stringify(initial.stations.map(station => station.diaulos)));
+      window.selectForgeHostStation?.(minion.actorId, { scrollToOffers: true });
+      await wait(250);
+      const row = document.querySelector('[data-forge-smoke-offer-schema="kaminos.forge-host.smoke-result-offer.v0"]');
+      if (!row) throw new Error('Forge Host Smoke Result offer row missing from selected station');
+      row.scrollIntoView({ block: 'center', inline: 'nearest' });
+      await wait(120);
+      row.click();
+      await wait(250);
+      const state = window.kaminosForgeHostDebugState?.();
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      const preview = document.querySelector('.forge-chamber-result-preview');
+      if (state?.lastOpenedOffer?.schema !== 'kaminos.forge-host.smoke-result-offer.v0') {
+        throw new Error('Smoke Result offer did not become last opened offer: ' + JSON.stringify({
+          lastOpenedOffer: state?.lastOpenedOffer,
+          selectedStation: state?.selectedStation,
+        }));
+      }
+      if (state?.smokeChamber?.routeIdentity !== 'forge-host-smoke-result-route') {
+        throw new Error('Smoke Result offer did not open result chamber: ' + JSON.stringify({
+          lastOpenedOffer: state?.lastOpenedOffer,
+          smokeChamber: state?.smokeChamber,
+        }));
+      }
+      if (state.smokeChamber.sourceOffer?.schema !== 'kaminos.forge-host.smoke-result-offer.v0') {
+        throw new Error('Smoke Result chamber lost source offer schema: ' + JSON.stringify(state.smokeChamber));
+      }
+      if (state.smokeChamber.displayState === 'live' && ['fixture', 'fallback', 'seeded', 'stale'].includes(state.smokeChamber.sourceAuthority)) {
+        throw new Error('Smoke Result chamber overclaimed live authority: ' + JSON.stringify(state.smokeChamber));
+      }
+      if (!preview) throw new Error('Smoke Result chamber did not render result preview: ' + (panel?.outerHTML || 'missing panel'));
+      if (!/Smoke Result|Receipt|Fixture|chamber/i.test(panel.textContent || '')) {
+        throw new Error('Smoke Result chamber preview text was not useful: ' + (panel?.textContent || ''));
+      }
+      return {
+        initial,
+        selectedActorId: state.selectedActorId,
+        openedOffer: state.lastOpenedOffer,
+        chamber: state.smokeChamber,
+        panelText: panel.textContent.trim(),
+        resultPreview: preview.textContent.trim(),
+      };
+    })()
+  `, { timeoutMs: 25000 });
 }
 
 async function runForgeHostSmokeChamberReceiptScenario(ws) {
@@ -5010,6 +5072,8 @@ try {
     await runForgeHostViewportSmokeOfferClickScenario(ws);
   } else if (scenario === 'forge-host-side-panel-smoke-offer-click') {
     await runForgeHostSidePanelSmokeOfferClickScenario(ws);
+  } else if (scenario === 'forge-host-smoke-result-offer') {
+    await runForgeHostSmokeResultOfferScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-receipt') {
     await runForgeHostSmokeChamberReceiptScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {

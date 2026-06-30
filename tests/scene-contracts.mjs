@@ -54,7 +54,12 @@ assert.match(index, /buildForgeHostManifestFromRegistrySnapshot/, 'Forge Host br
 assert.match(index, /routeForgeHostSmokeOfferToChamber/, 'Forge Host browser route materializes smoke offers into chamber state');
 assert.match(index, /buildForgeHostSmokeDispositionReceipt/, 'Forge Host browser route builds structured disposition receipts');
 assert.match(index, /captureForgeHostSmokeChamberScreenshot/, 'Forge Host browser route captures chamber screenshots through an explicit function');
-assert.match(index, /openForgeHostSmokeOffer\(forgeHit\.station\.smokeOffers\[0\]\.id\)/, 'clicking a 3D Forge Host smoke-offer marker opens the same Smoke Chamber route as the panel row');
+assert.match(index, /FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA/, 'Forge Host UI preserves smoke-result offer schema identity through the shared core constant');
+assert.match(index, /forge-host-smoke-result-route/, 'Forge Host UI can render a Smoke Result chamber route distinct from endpoint bridge routes');
+assert.match(index, /forgeSmokeOfferSchema/, 'Forge Host offer rows expose whether they are endpoint offers or smoke-result offers');
+assert.match(index, /forgeSmokeResultEmpty/, 'Forge Host selected station surface distinguishes missing current smoke results from inert clicks');
+assert.match(index, /forge-chamber-result-preview/, 'Forge Host Smoke Result chamber can render a result preview or payload text');
+assert.match(index, /const primaryOffer = forgeHit\.station\.smokeOffers\.find/, 'clicking a 3D Forge Host smoke-offer marker prefers an available Smoke Result before falling back to an endpoint offer');
 assert.match(index, /scrollForgeHostSmokeChamberIntoView\(\)/, 'opened Smoke Chambers scroll into view instead of looking like a no-op below the fold');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
 assert.match(index, /kaminos\.forge-host\.smoke-chamber\.v0/, 'Forge Host UI preserves smoke-chamber schema identity');

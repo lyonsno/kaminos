@@ -82,6 +82,99 @@ def test_forge_host_registry_snapshot_preserves_endpoint_identity():
     assert snapshot["endpoints"][0]["diaulosId"] == "dia-wake-fixture"
     assert snapshot["endpoints"][0]["endpoint"]["thread_id"] == "wake-thread"
     assert snapshot["endpoints"][0]["sourceTopoi"] == ["projects/lerms/topoi/codex-wake-and-bake-pit-boss-0627.md"]
+    assert snapshot["smokeResultRegistry"]["schema"] == "kaminos.forge-host.smoke-result-snapshot.v0"
+
+
+def test_forge_host_smoke_result_snapshot_ingests_fixture_and_local_receipt():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        fixture_dir = root / "fixtures"
+        receipt_root = root / "receipts"
+        fixture_dir.mkdir()
+        receipt_dir = receipt_root / "receipt-minion-001"
+        receipt_dir.mkdir(parents=True)
+        fixture_offer = {
+            "schema": "kaminos.forge-host.smoke-result-offer.v0",
+            "id": "result:minion-spawnfucker:fixture-branch-smoke",
+            "producerDiaulos": "minion-spawnfucker",
+            "title": "Fixture Branch Smoke",
+            "targetSurface": "smoke-result",
+            "sourceRef": "fixtures/forge-host-smoke-results/minion.json",
+            "targetUrl": "fixtures/forge-host-smoke-results/minion.json",
+            "reportSource": "fixtures/forge-host-smoke-results/minion.json",
+            "screenshotSource": None,
+            "summary": "Fixture smoke result for the chamber viewer.",
+            "authority": "fixture",
+            "freshness": "2026-06-30T12:00:00Z",
+            "displayState": "fixture",
+            "resultStatus": "available",
+            "downgrades": ["fixture_result_payload"],
+        }
+        (fixture_dir / "minion.json").write_text(json.dumps(fixture_offer))
+        (receipt_dir / "receipt.json").write_text(json.dumps({
+            "schema": "kaminos.forge-host.smoke-disposition-receipt.v0",
+            "receiptId": "receipt-minion-001",
+            "sourceOfferId": "offer:minion-spawnfucker:live-endpoint",
+            "stationActorId": "forge-station:minion-spawnfucker",
+            "producerDiaulos": "minion-spawnfucker",
+            "sourceAuthority": "live",
+            "displayState": "live",
+            "sourceRef": "directive-alert-endpoints.json#minion-spawnfucker",
+            "targetUrl": "codex resume minion-thread",
+            "targetSurface": "diaulos-endpoint",
+            "disposition": "accepted",
+            "operatorNote": "Saw the chamber result.",
+            "savedAt": "2026-06-30T13:00:00Z",
+            "screenshot": {
+                "path": str(receipt_dir / "screenshot.png"),
+                "source": "/api/read?root=scratch&path=smoke-chamber-receipts%2Freceipt-minion-001%2Fscreenshot.png",
+                "bytes": 4096,
+            },
+            "returnLine": "Your Smoke Offer offer:minion-spawnfucker:live-endpoint was dispositioned in Kaminos as accepted; evidence: screenshot. Let's discuss.",
+        }))
+
+        snapshot = serve.build_forge_host_smoke_result_snapshot(
+            fixture_dir=fixture_dir,
+            receipt_dir=receipt_root,
+        )
+
+    assert snapshot["schema"] == "kaminos.forge-host.smoke-result-snapshot.v0"
+    assert snapshot["sourceAuthority"] == "local_artifact"
+    assert len(snapshot["results"]) == 2
+    fixture = next(row for row in snapshot["results"] if row["authority"] == "fixture")
+    local = next(row for row in snapshot["results"] if row["authority"] == "local_artifact")
+    assert fixture["schema"] == "kaminos.forge-host.smoke-result-offer.v0"
+    assert fixture["displayState"] == "fixture"
+    assert fixture["producerDiaulos"] == "minion-spawnfucker"
+    assert local["id"] == "result:minion-spawnfucker:receipt-minion-001"
+    assert local["displayState"] == "artifact"
+    assert local["screenshotSource"].endswith("screenshot.png")
+    assert local["reportSource"].endswith("receipt.json")
+
+
+def test_forge_host_smoke_result_snapshot_rejects_fixture_claiming_live():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        fixture_dir = Path(tmp) / "fixtures"
+        fixture_dir.mkdir()
+        (fixture_dir / "lying.json").write_text(json.dumps({
+            "schema": "kaminos.forge-host.smoke-result-offer.v0",
+            "id": "result:lying:fixture-live",
+            "producerDiaulos": "lying-diaulos",
+            "title": "Lying Fixture",
+            "targetSurface": "smoke-result",
+            "sourceRef": "fixtures/lying.json",
+            "targetUrl": "fixtures/lying.json",
+            "authority": "fixture",
+            "freshness": "2026-06-30T12:00:00Z",
+            "displayState": "live",
+            "resultStatus": "available",
+        }))
+        try:
+            serve.build_forge_host_smoke_result_snapshot(fixture_dir=fixture_dir, receipt_dir=Path(tmp) / "missing")
+        except ValueError as error:
+            assert "fixture" in str(error) and "live" in str(error)
+        else:
+            raise AssertionError("fixture smoke result claiming live display must fail loud")
 
 
 def test_forge_host_registry_snapshot_fallback_is_not_live():
@@ -682,6 +775,8 @@ def test_pipeline_run_rejects_excluded_api_read_roots():
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
+    test_forge_host_smoke_result_snapshot_ingests_fixture_and_local_receipt()
+    test_forge_host_smoke_result_snapshot_rejects_fixture_claiming_live()
     test_forge_host_registry_snapshot_fallback_is_not_live()
     test_forge_host_smoke_chamber_receipt_persists_png_and_json()
     test_forge_host_smoke_chamber_receipt_rejects_false_live_and_bad_png()
