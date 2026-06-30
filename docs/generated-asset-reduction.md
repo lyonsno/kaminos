@@ -22,6 +22,34 @@ It does not bake or synthesize:
 
 Those products stay marked `pending` or `deferred` in the manifest until an actual high-to-low projection path exists.
 
+## Generated asset bake v0
+
+`tools/generated-asset-bake.py` is the first high-to-low material transfer harness. It takes a detailed source GLB and a target GLB, requires both to already have `TEXCOORD_0`, rasterizes the target's existing UV0 atlas, reconstructs target surface positions per covered atlas pixel, projects those positions to the nearest source vertex, and samples the source material UV into new target-space textures.
+
+V0 emits:
+
+- `textures/baseColor.png`
+- `textures/metallicRoughness.png`
+- `debug/projectionDistance.png`
+- `debug/projectionRoute.png`
+- `debug/unresolvedMask.png`
+- `asset-baked.glb`
+- `generated-asset-bake-manifest.json`
+
+The UV policy is deliberately narrow: `required-existing-uv0`. Trellis 2, Pixel 3D, and Stable Fast 3D generated meshes already emit UVs in the current pipeline, and SHARP splats are not an unwrap target. A mesh with no UV0 fails during preflight with a written manifest receipt. V0 does not spend engineering time on xatlas or other unwrap fallback paths.
+
+The manifest records the effective projection route (`nearest-source-vertex`), atlas coverage, projection distance statistics, emitted texture paths, and the failure phase/code when it cannot proceed. Atlas uncovered pixels are empty UV atlas space, not automatically object projection failures.
+
+V0 still does not claim:
+
+- tangent-space normal maps
+- ambient occlusion
+- curvature/cavity masks
+- emissive masks
+- height/parallax maps
+
+Those remain `not-implemented` or `deferred` until a route exists and has visual proof.
+
 ## 2026-06-29 molten cube smoke
 
 Source:
