@@ -1366,3 +1366,16 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+
+const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
+assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
+const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
+assert.match(dynamicTextureProof, /kaminos\.volume\.dynamic-texture-proof\.v0/, 'dynamic texture proof writes a stable manifest schema identity');
+assert.match(dynamicTextureProof, /pyro-cellular-detail-memory-deterministic-ca-v0/, 'dynamic texture proof names the deterministic CA scaffold identity');
+assert.match(dynamicTextureProof, /live-witness-sim-readback-v0/, 'dynamic texture proof couples to live witness sim readback instead of ornament-only pixels');
+assert.match(dynamicTextureProof, /live-authority-gated-reset-v0/, 'dynamic texture proof names the reset policy that keeps state subordinate to live authority');
+for (const control of ['fuel-off-decay', 'snuff-quench-reset', 'broad-smoke-no-fire', 'camera-phase-mismatch', 'stale-input']) {
+  assert.match(dynamicTextureProof, new RegExp(control), `dynamic texture proof includes ${control} negative control`);
+}
+assert.match(dynamicTextureProof, /confidenceFloor/, 'dynamic texture proof records confidence gating for the hidden detail state');
+assert.match(dynamicTextureProof, /failurePhase/, 'dynamic texture proof records the failure phase before pretending to produce evidence');
