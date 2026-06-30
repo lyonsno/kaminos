@@ -1366,3 +1366,19 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+
+const fieldPairDatasetPath = join(root, 'volume-field-pair-dataset.mjs');
+assert.ok(existsSync(fieldPairDatasetPath), 'volume field-space pair dataset extractor exists');
+const fieldPairDataset = existsSync(fieldPairDatasetPath) ? readFileSync(fieldPairDatasetPath, 'utf8') : '';
+assert.match(fieldPairDataset, /kaminos\.volume\.field-pair-dataset\.v0/, 'field-pair dataset writes a stable dataset schema identity');
+assert.match(fieldPairDataset, /volume-witness\.mjs/, 'field-pair dataset captures field state through the witness instead of bypassing route validation');
+assert.match(fieldPairDataset, /volume_resolution/, 'field-pair dataset varies simulation grid resolution through the public route parameter');
+assert.match(fieldPairDataset, /lowGrid/, 'field-pair dataset records requested low simulation grid');
+assert.match(fieldPairDataset, /highGrid/, 'field-pair dataset records requested high simulation grid');
+assert.match(fieldPairDataset, /gridScaleRatio/, 'field-pair dataset records the low/high grid relationship explicitly');
+assert.match(fieldPairDataset, /simReadback/, 'field-pair dataset preserves live simulator field readback evidence');
+assert.match(fieldPairDataset, /majorantReadback/, 'field-pair dataset preserves majorant/occupancy readback evidence');
+assert.match(fieldPairDataset, /fluidBufferBytes/, 'field-pair dataset records fluid storage shape/byte identity');
+assert.match(fieldPairDataset, /fieldAuthority/, 'field-pair dataset labels field authority separately from visual screenshots');
+assert.match(fieldPairDataset, /route-paired-sequential-field-readbacks-not-frame-locked/, 'field-pair dataset refuses to claim frame-locked supervised authority');
+assert.match(fieldPairDataset, /failurePhase/, 'field-pair dataset records the phase when capture or validation fails');
