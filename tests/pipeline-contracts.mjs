@@ -353,6 +353,31 @@ writeFileSync(report, JSON.stringify({
   output,
   inputSha256: hash,
   outputBytes: stat.size,
+  breathingRoom: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    status: 'verified',
+    requestedScheduler: {
+      mode: 'cooperative',
+      spnPatchChunkSize: 1,
+      yieldMs: 2,
+      waitForSubmittedWorkDone: true,
+      gaussianPhaseYieldMs: 3
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      spnPatchChunkSize: 1,
+      yieldMs: 2,
+      waitForSubmittedWorkDone: true,
+      gaussianPhaseYieldMs: 3,
+      vitBlockChunkSize: null
+    },
+    unsupportedFields: ['vitBlockChunkSize'],
+    telemetry: {
+      schema: 'sharp-webgpu.scheduler-telemetry.v0',
+      status: 'verified',
+      events: [{ phase: 'spn-patch-chunk', yieldMs: 2 }]
+    }
+  },
   sideArtifacts: [
     { id: 'depthMap', role: 'depth-map', path: depthPath },
     { id: 'metadata', role: 'sharp-webgpu-metadata', path: metadataPath },
@@ -392,6 +417,10 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.realModel, false);
   assert.equal(liveReport.stages[0].effectiveRoute.requestedRealModel, true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schema, 'mock.sharp-adapter-report.v0');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.status, 'verified');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.effectiveScheduler.spnPatchChunkSize, 1);
+  assert.deepEqual(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.unsupportedFields, ['vitBlockChunkSize']);
   assert.equal(liveReport.stages[0].effectiveRoute.fixtureMode, 'mock-adapter');
   assert.match(liveReport.stages[0].effectiveRoute.truthBoundary, /mock SHARP(?:-WebGPU)? adapter fixture output/);
   assert.equal(liveReport.stages[0].effectiveRoute.availability.status, 'available');

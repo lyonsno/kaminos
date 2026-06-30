@@ -417,6 +417,7 @@ function adapterReportSummary(report) {
     ok: report.ok ?? null,
     phase: report.phase || null,
     backend: report.backend || null,
+    breathingRoom: report.breathingRoom || null,
     inputSha256: report.inputSha256 || report.input?.sha256 || null,
     outputBytes: report.outputBytes || report.output?.bytes || null,
   };
