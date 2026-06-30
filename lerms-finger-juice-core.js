@@ -5,6 +5,9 @@ export const LERMS_WORLD_FINGER_JUICE_ARC_CONTRACT = 'finger-aim-ballistic-arc-r
 export const FINGER_JUICE_SUPPORT_FRAME_SCHEMA = 'big-papa-finger-juice.support-frame.v0';
 export const FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA = 'big-papa-finger-juice.substrate-reservoir-diagnostics.v0';
 export const FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'big-papa-finger-juice.preview-bench-payload.v0';
+export const FINGER_JUICE_HOST_PACKET_SCHEMA = 'big-papa-finger-juice.host-packet.v0';
+export const FINGER_JUICE_HOST_PACKET_ROUTE = 'big-papa/finger-juice/host-packet';
+export const FINGER_JUICE_HOST_RENDER_PAYLOAD_PREVIEW_SCHEMA = 'big-papa-finger-juice.render-payload.preview.v0';
 export const HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA = 'lerms.hill-of-hills.preview-bench-payload.v0';
 export const FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT = 'hill-preview-bench-support-frame-ingestion-v0';
 export const HILL_OF_HILLS_TERRAIN_SAMPLE_PACKET_SCHEMA = 'kaminos.preview-bench.terrain-sample-packet.v0';
@@ -672,6 +675,258 @@ export function createFingerJuicePreviewBenchPayload(debugState = {}, options = 
           reason: 'debug route is useful evidence but not a Kaminos Preview Bench acceptance surface',
         },
       ],
+    },
+  };
+}
+
+function particlePosition(particle) {
+  return vec3(particle?.position || particle?.world || particle?.position_world || particle?.positionWorld, [0, 0, 0]);
+}
+
+function particleBounds(particles = [], fallback = null) {
+  const positions = (Array.isArray(particles) ? particles : [])
+    .map(particlePosition)
+    .filter(position => position.every(Number.isFinite));
+  if (!positions.length) {
+    return fallback || {
+      x: { min: -0.75, max: 0.75 },
+      y: { min: 0, max: 1 },
+      z: { min: -0.95, max: 2.25 },
+    };
+  }
+  const xs = positions.map(position => position[0]);
+  const ys = positions.map(position => position[1]);
+  const zs = positions.map(position => position[2]);
+  return {
+    x: { min: round(Math.min(...xs), 4), max: round(Math.max(...xs), 4) },
+    y: { min: round(Math.min(...ys), 4), max: round(Math.max(...ys), 4) },
+    z: { min: round(Math.min(...zs), 4), max: round(Math.max(...zs), 4) },
+  };
+}
+
+function chemistryCounts(particles = []) {
+  return (Array.isArray(particles) ? particles : []).reduce((counts, particle) => {
+    const chemistry = stringOrNull(particle?.chemistry) || 'unknown';
+    counts[chemistry] = (counts[chemistry] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function sourceTruthForHostPacket(debugState = {}) {
+  return debugState.sourceTruth || {
+    schema: 'lerms.source-truth.v0',
+    authority: debugState.sourceDiagnostics?.authority || debugState.simulation_authority || debugState.evidence_kind || 'synthetic_fixture',
+    route: debugState.sourceDiagnostics?.route || debugState.source_route || 'kaminos.lerms-finger-juice.synthetic-caster',
+    frameId: debugState.sourceDiagnostics?.frameId || debugState.source_frame_id || debugState.packet_id || null,
+    backend: debugState.sourceDiagnostics?.backend || debugState.source_backend || debugState.solver_backend || null,
+    configId: debugState.sourceDiagnostics?.configId || debugState.activeWitnessEmitterConfig || debugState.route_identity || null,
+    sampleAgeMs: debugState.sourceDiagnostics?.sampleAgeMs ?? null,
+  };
+}
+
+function createHostRenderPayload(debugState = {}) {
+  const particles = Array.isArray(debugState.particles) ? debugState.particles : [];
+  const trails = Array.isArray(debugState.trails) ? debugState.trails : [];
+  return {
+    schema: FINGER_JUICE_HOST_RENDER_PAYLOAD_PREVIEW_SCHEMA,
+    representation: 'debug-particle-samples-v0',
+    downgraded: true,
+    downgradeReason: 'full_gpu_particle_buffer_not_exposed_to_host_packet_yet',
+    sourceSampleCount: particles.length,
+    sourceTrailCount: trails.length,
+    particleSamples: particles.map(particle => ({
+      id: stringOrNull(particle.id),
+      emitterId: stringOrNull(particle.emitter_id || particle.emitterId),
+      chemistry: stringOrNull(particle.chemistry) || 'unknown',
+      phase: stringOrNull(particle.phase) || (particle.surface_flow ? 'surface_flow' : 'unknown'),
+      surfaceFlow: Boolean(particle.surface_flow || particle.surfaceFlow),
+      pooling: Boolean(particle.pooling),
+      position: particlePosition(particle).map(value => round(value, 4)),
+      velocity: vec3(particle.velocity, [0, 0, 0]).map(value => round(value, 4)),
+      radius: round(particle.radius ?? 0.04, 4),
+    })),
+    trailSamples: trails.map(trail => ({
+      id: stringOrNull(trail.id),
+      emitterId: stringOrNull(trail.emitter_id || trail.emitterId),
+      chemistry: stringOrNull(trail.chemistry) || 'unknown',
+      phase: stringOrNull(trail.phase) || 'unknown',
+      surfaceFlow: Boolean(trail.surface_flow || trail.surfaceFlow),
+      samples: (trail.samples || []).map(sample => ({
+        position: particlePosition(sample).map(value => round(value, 4)),
+        phase: stringOrNull(sample.phase) || null,
+        velocityHint: vec3(sample.velocity_hint || sample.velocityHint, [0, 0, 0]).map(value => round(value, 4)),
+      })),
+    })),
+    downgrades: ['preview_particle_samples_not_full_render_buffer'],
+  };
+}
+
+export function createFingerJuiceHostPacket(debugState = {}, options = {}) {
+  const supportFrame = debugState.supportFrame || createFingerJuiceSupportFrame({ stepCount: debugState.stepCount || 0 });
+  const terrainSampleDiagnostics = debugState.terrainSampleDiagnostics || {};
+  const sourceTruth = sourceTruthForHostPacket(debugState);
+  const generatedAt = options.generatedAt || new Date().toISOString();
+  const observedAt = options.observedAt || sourceTruth.observedAt || sourceTruth.generatedAt || generatedAt;
+  const renderPayload = createHostRenderPayload(debugState);
+  const fallbackBounds = terrainSampleDiagnostics.worldBounds || supportFrame.worldBounds || {
+    x: SUPPORT_WORLD_BOUNDS.x,
+    y: supportFrame.terrainHeightRange || { min: 0, max: 1 },
+    z: SUPPORT_WORLD_BOUNDS.z,
+  };
+  const bounds = particleBounds(debugState.particles, fallbackBounds);
+  const sourcePacketId = debugState.sourceDiagnostics?.sourcePacketId
+    || debugState.emitterPacket?.packet_id
+    || debugState.packet_id
+    || sourceTruth.frameId
+    || null;
+  const sourceAuthority = sourceTruth.authority || debugState.sourceDiagnostics?.authority || debugState.simulation_authority || 'synthetic_fixture';
+  const terrainCouplingMode = terrainSampleDiagnostics.terrainSampleCouplingMode
+    || supportFrame.heightfieldCouplingMode
+    || 'local_procedural_heightfield_v0';
+  const terrainGpuMode = terrainSampleDiagnostics.terrainSampleGpuCollisionMode
+    || debugState.terrainSampleGpuCollisionMode
+    || (terrainCouplingMode === 'source_height_samples_v0'
+      ? 'source_height_samples_gpu_storage_v0'
+      : 'local_procedural_heightfield_gpu_v0');
+  const hitEvents = Array.isArray(debugState.juiceHitEvents) ? debugState.juiceHitEvents : [];
+  const supportFrameDowngrades = Array.isArray(supportFrame.supportFrameDowngrades) ? supportFrame.supportFrameDowngrades : [];
+  const downgrades = uniqueStrings([
+    ...supportFrameDowngrades,
+    ...renderPayload.downgrades,
+    'host_packet_preview_payload_not_native_render_buffer',
+  ]);
+  return {
+    ok: true,
+    schema: FINGER_JUICE_HOST_PACKET_SCHEMA,
+    route: FINGER_JUICE_HOST_PACKET_ROUTE,
+    packetUrl: options.packetUrl || null,
+    source: {
+      schema: 'big-papa-finger-juice.host-packet-source.v0',
+      producerDiaulos: 'big-papa-finger-juice-fucker',
+      route: FINGER_JUICE_HOST_PACKET_ROUTE,
+      sourceRef: options.sourceRef || debugState.sourceRef || supportFrame.sourceRef || null,
+      sourcePacketId,
+      authority: sourceAuthority,
+      sourceTruthAuthority: sourceTruth.authority || sourceAuthority,
+      sourceTruth,
+      generatedAt,
+      observedAt,
+    },
+    freshness: {
+      status: options.freshnessStatus || debugState.freshness?.status || 'host-packet-generated-from-current-debug-state',
+      budgetMs: Math.max(0, finite(options.freshnessBudgetMs ?? debugState.freshness?.budgetMs, 2000)),
+      observedAt,
+      generatedAt,
+      sampleAgeMs: sourceTruth.sampleAgeMs ?? debugState.sourceDiagnostics?.sampleAgeMs ?? null,
+    },
+    terrain: {
+      terrainContract: debugState.terrainContract || LERMS_WORLD_FINGER_JUICE_TERRAIN_CONTRACT,
+      supportFrameSchema: supportFrame.schema || FINGER_JUICE_SUPPORT_FRAME_SCHEMA,
+      supportFrameSource: supportFrame.supportFrameSource || 'local_procedural_support_frame_v0',
+      supportFrameChecksum: supportFrame.supportFrameChecksum || terrainSampleDiagnostics.supportFrameChecksum || null,
+      topologyChecksum: terrainSampleDiagnostics.topologyChecksum || supportFrame.terrainTopologyChecksum || null,
+      sampleChecksum: terrainSampleDiagnostics.sampleChecksum || supportFrame.terrainSampleChecksum || null,
+      channelChecksum: terrainSampleDiagnostics.channelChecksum || supportFrame.terrainChannelChecksum || null,
+      terrainSampleSchema: supportFrame.terrainSampleSchema || null,
+      terrainBufferTransport: supportFrame.terrainBufferTransport || null,
+      terrainSourceRoute: terrainSampleDiagnostics.sourceRoute || supportFrame.sourceRoute || null,
+      terrainSourceAuthority: terrainSampleDiagnostics.sourceAuthority || supportFrame.sourceAuthority || null,
+      terrainSourceFrameId: terrainSampleDiagnostics.sourceFrameId || supportFrame.sourceFrameId || null,
+      couplingMode: terrainCouplingMode,
+      gpuCollisionMode: terrainGpuMode,
+      grid: terrainSampleDiagnostics.grid || supportFrame.substrateGrid || null,
+      worldBounds: terrainSampleDiagnostics.worldBounds || supportFrame.worldBounds || null,
+      heightRange: terrainSampleDiagnostics.heightRange || supportFrame.terrainHeightRange || null,
+      channelLayout: terrainSampleDiagnostics.channelLayout || null,
+    },
+    solver: {
+      solverRoute: debugState.solverRoute || debugState.effectiveRoute || LERMS_WORLD_FINGER_JUICE_ROUTE,
+      effectiveRoute: debugState.effectiveRoute || LERMS_WORLD_FINGER_JUICE_ROUTE,
+      shaderRoute: debugState.shaderRoute || null,
+      backend: debugState.solver_backend || 'cpu_fallback',
+      emitterBufferRoute: debugState.emitterBufferRoute || null,
+      respawnContract: debugState.respawnContract || null,
+      pressureContract: debugState.pressureContract || null,
+      spatialPressureContract: debugState.spatialPressureContract || null,
+      fluidDepthContract: debugState.fluidDepthContract || null,
+      densityContinuityProjectionContract: debugState.densityContinuityProjectionContract || null,
+      particleSupportBudgetContract: debugState.particleSupportBudgetContract || null,
+      particleCount: Math.max(0, Math.floor(finite(debugState.particleCount, (debugState.particles || []).length))),
+      surfaceFlowCount: Math.max(0, Math.floor(finite(debugState.surfaceFlowCount, 0))),
+      airborneCount: Math.max(0, Math.floor(finite(debugState.airborneCount, 0))),
+      chemistryCounts: chemistryCounts(debugState.particles),
+      materialChannels: Object.keys(chemistryCounts(debugState.particles)),
+      frameId: sourceTruth.frameId || debugState.source_frame_id || debugState.packet_id || null,
+      timestamp: observedAt,
+      bounds,
+      supportFrame,
+      reservoir: debugState.substrateReservoirDiagnostics || createReservoirDomainDiagnostics(debugState.particles || [], supportFrame),
+    },
+    render: {
+      renderRoute: debugState.renderRoute || null,
+      renderShaderRoute: debugState.renderShaderRoute || null,
+      backend: debugState.render_backend || 'cpu_canvas_render',
+      payload: renderPayload,
+      downgraded: true,
+      downgrades: renderPayload.downgrades,
+    },
+    hitRefs: {
+      schema: 'big-papa-finger-juice.host-packet.hit-refs.v0',
+      sourcePacketId,
+      eventSchema: 'lerms.juice-hit-event.v0',
+      events: hitEvents.map(event => ({
+        schema: event.schema || 'lerms.juice-hit-event.v0',
+        targetKind: event.targetKind || event.target_kind || null,
+        targetId: event.targetId || event.target_id || null,
+        contactWorld: Array.isArray(event.contactWorld) ? event.contactWorld.map(value => round(value, 4)) : null,
+        impulse: Array.isArray(event.impulse) ? event.impulse.map(value => round(value, 4)) : null,
+        chemistry: event.chemistry || null,
+        sourcePacketId: event.sourcePacketId || sourcePacketId,
+      })),
+    },
+    visual: {
+      cameraHints: {
+        bounds,
+        lookAt: [
+          round((bounds.x.min + bounds.x.max) / 2, 4),
+          round((bounds.y.min + bounds.y.max) / 2, 4),
+          round((bounds.z.min + bounds.z.max) / 2, 4),
+        ],
+        up: [0, 1, 0],
+        near: 0.01,
+        far: 24,
+        presets: [
+          { id: 'operator-oblique', yaw: -0.52, pitch: -0.42, zoom: 1.4 },
+          { id: 'terrain-overview', yaw: 0, pitch: -0.75, zoom: 0.9 },
+          { id: 'fluid-close', yaw: -0.34, pitch: -0.28, zoom: 2.1 },
+        ],
+      },
+      materialHints: {
+        renderStyle: 'source-legible-phase-breadcrumbs-v2',
+        chemistryColors: {
+          knockback: '#ff5f55',
+          pooling: '#4bd5c6',
+          weird: '#d89cff',
+          splash: '#ffd05b',
+        },
+      },
+    },
+    custody: {
+      sourceOwns: ['fluid law', 'solver/source truth', 'terrain coupling checksums', 'hit event semantics'],
+      kaminosOwns: ['native host camera', 'viewport composition', 'operator display', 'interaction controls'],
+      downgrades,
+      rejectedDebugSurfaces: [
+        {
+          surface: 'direct_lerms_finger_juice_debug_route',
+          acceptanceSurface: false,
+          reason: 'debug route is useful evidence but not the first-class Kaminos host acceptance surface',
+        },
+      ],
+      syntheticOrLocal: uniqueStrings([
+        terrainCouplingMode === 'source_height_samples_v0' ? null : 'terrain_collision',
+        debugState.solver_backend === 'webgpu_compute' ? null : 'solver_backend',
+        renderPayload.downgraded ? 'native_render_buffer_transport' : null,
+      ]),
     },
   };
 }
