@@ -1382,3 +1382,10 @@ assert.match(fieldPairDataset, /fluidBufferBytes/, 'field-pair dataset records f
 assert.match(fieldPairDataset, /fieldAuthority/, 'field-pair dataset labels field authority separately from visual screenshots');
 assert.match(fieldPairDataset, /route-paired-sequential-field-readbacks-not-frame-locked/, 'field-pair dataset refuses to claim frame-locked supervised authority');
 assert.match(fieldPairDataset, /failurePhase/, 'field-pair dataset records the phase when capture or validation fails');
+assert.match(fieldPairDataset, /kaminos\.volume\.field-projection-tensor\.v0/, 'field-pair dataset writes compact field-projection tensor artifacts');
+assert.match(fieldPairDataset, /fieldProjectionTensor/, 'field-pair dataset records per-capture field projection tensor artifact paths');
+assert.match(fieldPairDataset, /plumeHeightBins/, 'field-pair projection tensor preserves plume-height field bins as trainable compact features');
+assert.match(fieldPairDataset, /sourceRelativeVisualHeightBins/, 'field-pair projection tensor preserves source-relative field bins as trainable compact features');
+assert.match(fieldPairDataset, /sameStateFreezeAttempt/, 'field-pair dataset records the same-state/freeze pairing preflight result');
+assert.match(fieldPairDataset, /same-state-grid-snapshot-unsupported/, 'field-pair dataset names the missing same-state grid snapshot hook instead of claiming frame lock');
+assert.match(fieldPairDataset, /pairing-preflight/, 'field-pair dataset reports same-state pairing failure phase separately from capture/validation');

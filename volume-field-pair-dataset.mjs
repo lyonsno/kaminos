@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const DATASET_SCHEMA = 'kaminos.volume.field-pair-dataset.v0';
+const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v0';
+const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
 const PAIR_AUTHORITY = 'route-paired-sequential-field-readbacks-not-frame-locked';
@@ -99,6 +101,165 @@ function fieldShapeFromReadback(simReadback, majorantReadback, simCostLedger) {
   };
 }
 
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function makeBinTensor(name, bins, channels) {
+  const rows = Array.isArray(bins) ? bins : [];
+  return {
+    name,
+    dtype: 'float32-json-number-array',
+    shape: [rows.length, channels.length],
+    channels,
+    data: rows.flatMap((row) => channels.map((channel) => finiteNumber(row?.[channel]))),
+  };
+}
+
+function buildFieldProjectionTensor({ witness, plan, fieldShape, simReadback, majorantReadback, simCostLedger }) {
+  const plumeHeightChannels = [
+    'yMin',
+    'yMax',
+    'smokeWeight',
+    'smokeRadialBreadth',
+    'smokeVelocityY',
+    'smokeLateralVelocityMean',
+    'smokeWeightedCurlMean',
+    'fireWeight',
+    'fireInteriorWeight',
+    'fireRingWeight',
+    'emissionDetailWeight',
+    'smokeDetailWeight',
+    'combustionFrontWeight',
+    'frontTopologyWeight',
+  ];
+  const sourceRelativeChannels = [
+    'visualCenter',
+    'smokeWeight',
+    'fireWeight',
+    'fireInteriorWeight',
+    'fireRingWeight',
+    'fireFlameWeight',
+    'fireEmberWeight',
+    'fireFlameDetailWeight',
+    'fireLickWeight',
+    'fireHeatWeight',
+    'emissionDetailWeight',
+    'smokeDetailWeight',
+    'combustionFrontWeight',
+    'frontTopologyWeight',
+    'smokeVisualRiseVelocity',
+    'fireVisualRiseVelocity',
+  ];
+  const fieldProjectionTensor = {
+    schema: FIELD_PROJECTION_TENSOR_SCHEMA,
+    identity: 'kaminos-field-summary-projection-v0',
+    fieldAuthority: FIELD_AUTHORITY,
+    sourceReport: plan.report,
+    requestedRoute: plan.route,
+    effectiveRoute: witness.effectiveRoute,
+    prototypeIdentity: witness.prototypeIdentity,
+    backend: witness.backend,
+    captureBackend: witness.captureBackend,
+    role: plan.role,
+    requestedGrid: plan.requestedGrid,
+    simGrid: simReadback.grid,
+    requestedMajorantGrid: plan.requestedMajorantGrid,
+    frameCount: witness.frameCount,
+    simStepCount: witness.simStepCount,
+    fieldShape,
+    tensors: {
+      plumeHeightBins: makeBinTensor('plumeHeightBins', simReadback.plumeHeightBins, plumeHeightChannels),
+      sourceRelativeVisualHeightBins: makeBinTensor('sourceRelativeVisualHeightBins', simReadback.sourceRelativeVisualHeightBins, sourceRelativeChannels),
+      scalarSummary: {
+        name: 'scalarSummary',
+        dtype: 'float32-json-number-array',
+        shape: [1, 18],
+        channels: [
+          'densityMean',
+          'densityMax',
+          'heatMean',
+          'fuelMean',
+          'reactionMean',
+          'fireLayerMean',
+          'radianceMean',
+          'extinctionMean',
+          'detailMean',
+          'microdetailMean',
+          'combustionFrontMean',
+          'frontTopologyMean',
+          'velocityMean',
+          'curlMean',
+          'divergenceMean',
+          'liveVoxels',
+          'majorantOccupiedBricks',
+          'majorantImportanceMax',
+        ],
+        data: [
+          finiteNumber(simReadback.densityMean),
+          finiteNumber(simReadback.densityMax),
+          finiteNumber(simReadback.heatMean),
+          finiteNumber(simReadback.fuelMean),
+          finiteNumber(simReadback.reactionMean),
+          finiteNumber(simReadback.fireLayerMean),
+          finiteNumber(simReadback.radianceMean),
+          finiteNumber(simReadback.extinctionMean),
+          finiteNumber(simReadback.detailMean),
+          finiteNumber(simReadback.microdetailMean),
+          finiteNumber(simReadback.combustionFrontMean),
+          finiteNumber(simReadback.frontTopologyMean),
+          finiteNumber(simReadback.velocityMean),
+          finiteNumber(simReadback.curlMean),
+          finiteNumber(simReadback.divergenceMean),
+          finiteNumber(simReadback.liveVoxels),
+          finiteNumber(majorantReadback.occupiedBricks),
+          finiteNumber(majorantReadback.importanceMax),
+        ],
+      },
+    },
+    pressureCues: {
+      pressureSourceStrategy: simCostLedger.pressureSourceStrategy,
+      pressureStrategy: simCostLedger.pressureStrategy,
+      pressureJacobiPasses: simCostLedger.pressureJacobiPasses,
+      pressureJacobiInlineDivergencePasses: simCostLedger.pressureJacobiInlineDivergencePasses,
+      fullGridPassBreakdown: simCostLedger.fullGridPassBreakdown,
+    },
+    limitation: 'Compact projection tensor is derived from live readback summaries/bins; it is trainable feature material, not dense 3D field export.',
+  };
+  writeJson(plan.fieldProjectionTensor, { fieldProjectionTensor });
+  return {
+    schema: FIELD_PROJECTION_TENSOR_SCHEMA,
+    identity: fieldProjectionTensor.identity,
+    path: plan.fieldProjectionTensor,
+    dtype: 'float32-json-number-array',
+    tensors: Object.fromEntries(Object.entries(fieldProjectionTensor.tensors).map(([key, tensor]) => [
+      key,
+      {
+        shape: tensor.shape,
+        channels: tensor.channels,
+      },
+    ])),
+  };
+}
+
+function buildSameStateFreezeAttempt() {
+  return {
+    schema: SAME_STATE_FREEZE_PREFLIGHT_SCHEMA,
+    status: 'blocked-by-missing-simulator-hook',
+    code: 'same-state-grid-snapshot-unsupported',
+    failurePhase: 'pairing-preflight',
+    requestedPairing: 'same-state low/high simulation-grid field readbacks',
+    effectivePairing: PAIR_AUTHORITY,
+    currentEvidence: [
+      'volume_resolution changes rebuildFluidState() and resets GPU fluid buffers',
+      'sampleFrame() can copy current fluid/front/majorant buffers but cannot export/import them into a different grid instance',
+      'no deterministic cross-grid seed/replay or frozen snapshot restore hook is exposed to volume-witness.mjs',
+    ],
+    requiredHook: 'Expose a simulator snapshot/reseed path that can clone or deterministically replay fluid/front/majorant state across requested low/high grids before readback.',
+  };
+}
+
 function summarizeFieldEvidence(witness, plan) {
   const simReadback = witness.simReadback || null;
   const majorantReadback = witness.majorantReadback || null;
@@ -147,6 +308,14 @@ function summarizeFieldEvidence(witness, plan) {
     throw error;
   }
   const fieldShape = fieldShapeFromReadback(simReadback, majorantReadback, simCostLedger);
+  const fieldProjectionTensor = buildFieldProjectionTensor({
+    witness,
+    plan,
+    fieldShape,
+    simReadback,
+    majorantReadback,
+    simCostLedger,
+  });
   return {
     path: plan.out,
     fullScreenshot: plan.fullScreenshot,
@@ -163,6 +332,7 @@ function summarizeFieldEvidence(witness, plan) {
     simStepCount: witness.simStepCount,
     volumeScene: witness.volumeScene,
     fieldShape,
+    fieldProjectionTensor,
     simReadback: {
       grid: simReadback.grid,
       samples: simReadback.samples,
@@ -232,6 +402,7 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
   const fullScreenshot = resolve(pairDir, `${slug}.full.png`);
   const stdout = resolve(pairDir, `${slug}.stdout.log`);
   const stderr = resolve(pairDir, `${slug}.stderr.log`);
+  const fieldProjectionTensor = resolve(pairDir, `${slug}.field-projection-tensor.json`);
   const command = [
     process.execPath,
     'volume-witness.mjs',
@@ -252,6 +423,7 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     out,
     report,
     fullScreenshot,
+    fieldProjectionTensor,
     stdout,
     stderr,
     command,
@@ -363,6 +535,7 @@ const manifest = {
   dryRun,
   pairAuthority: PAIR_AUTHORITY,
   fieldAuthority: FIELD_AUTHORITY,
+  sameStateFreezeAttempt: buildSameStateFreezeAttempt(),
   limitation: 'Pairs are live sequential readbacks from the same route family; they preserve field authority but are not frame-locked supervised tensors.',
   lowGrids,
   lowGrid: lowGrids[0],
