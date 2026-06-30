@@ -62,6 +62,7 @@ ROUTE_JOB_STATUSES = {
     "cancelled",
     "degraded",
 }
+ROUTE_JOB_INTENTS = {"preview", "hero", "checkpoint", "unknown"}
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -476,6 +477,10 @@ def normalize_route_job_status(status):
     return status if status in ROUTE_JOB_STATUSES else "degraded"
 
 
+def normalize_route_job_intent(intent):
+    return intent if intent in ROUTE_JOB_INTENTS else "unknown"
+
+
 def _read_json_file(path):
     try:
         return json.loads(path.read_text()), None
@@ -507,6 +512,28 @@ def _greenroom_schedule(job_dir, state=None):
         "priority_class": str(priority_class),
         "submitted_at": submitted_at,
     }
+
+
+def _greenroom_route_intent(job_type, status, schedule, state):
+    params = (state or {}).get("params") if isinstance(state, dict) else {}
+    params = params if isinstance(params, dict) else {}
+    explicit = (
+        (state or {}).get("route_intent")
+        or (state or {}).get("routeIntent")
+        or params.get("route_intent")
+        or params.get("routeIntent")
+        or params.get("intent")
+    )
+    if explicit:
+        return normalize_route_job_intent(str(explicit))
+    priority = str((schedule or {}).get("priority_class") or "")
+    if priority in {"preview", "hero", "checkpoint"}:
+        return priority
+    if status == "checkpoint_paused" or isinstance((state or {}).get("checkpoint_yield"), dict):
+        return "checkpoint"
+    if "checkpoint" in str(job_type or ""):
+        return "checkpoint"
+    return "unknown"
 
 
 def _greenroom_receipt_link(status_dir, job_id):
@@ -652,12 +679,52 @@ def _greenroom_route_controls(job_type, status, state, checkpoint_pause_request)
     }]
 
 
-def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir, checkpoint_pause_request=None):
+def _greenroom_route_capabilities(job_type, status, state, checkpoint_pause_request, controls):
+    resumability = _greenroom_resumability(state, checkpoint_pause_request)
+    checkpoint_capable = _greenroom_checkpoint_pause_capable(job_type)
+    return {
+        "deferable": status == "pending",
+        "abortable": status in {"pending", "running"},
+        "chunkYieldable": False,
+        "checkpointable": checkpoint_capable,
+        "checkpointPauseRequestable": any(control.get("kind") == "request-checkpoint-pause" for control in controls),
+        "resumable": False,
+        "resumeAdvertised": bool(resumability.get("resumeSupported")),
+        "warmCacheSensitive": False,
+        "memoryExclusive": True,
+    }
+
+
+def _greenroom_route_warnings(status, resumability, warnings):
+    route_warnings = list(warnings or [])
+    if resumability.get("pauseRequested"):
+        route_warnings.append({
+            "kind": "pause_requested",
+            "message": "Cooperative stop has been requested; the job has not checkpoint-paused yet.",
+        })
+    if status == "checkpoint_paused" and resumability.get("resumeSupported"):
+        route_warnings.append({
+            "kind": "resume_unverified",
+            "message": "Resume is advertised by the checkpoint receipt but has not been exercised through Kaminos.",
+        })
+    if resumability.get("kind") == "unknown" and status in {"pending", "running"}:
+        route_warnings.append({
+            "kind": "non_resumable_unverified",
+            "message": "This route has no verified checkpoint/resume contract.",
+        })
+    return route_warnings
+
+
+def _native_greenroom_route_job(job_id, job_type, status, schedule, state, status_dir, job_dir, checkpoint_pause_request=None, controls=None, warnings=None):
     input_path = (state or {}).get("input_path") or (state or {}).get("inputPath")
     output_dir = (state or {}).get("output_dir") or (state or {}).get("outputDir")
     input_artifacts = []
     if input_path:
         input_artifacts.append({"role": "input", "path": input_path})
+    controls = list(controls or [])
+    normalized_status = normalize_route_job_status(status)
+    resumability = _greenroom_resumability(state, checkpoint_pause_request)
+    route_warnings = _greenroom_route_warnings(normalized_status, resumability, warnings)
     return {
         "schema": ROUTE_JOB_SCHEMA,
         "id": job_id,
@@ -667,11 +734,15 @@ def _native_greenroom_route_job(job_id, job_type, status, schedule, state, statu
             "id": "local-greenroom",
             "nativeQueueDir": str(BROWSE_ROOTS.get("greenroom", "")),
         },
+        "intent": _greenroom_route_intent(job_type, normalized_status, schedule, state),
         "priorityClass": schedule["priority_class"],
-        "status": normalize_route_job_status(status),
+        "status": normalized_status,
         "inputArtifacts": input_artifacts,
         "outputPolicy": {"root": output_dir, "mode": "caller-owned"} if output_dir else None,
-        "resumability": _greenroom_resumability(state, checkpoint_pause_request),
+        "capabilities": _greenroom_route_capabilities(job_type, normalized_status, state, checkpoint_pause_request, controls),
+        "controls": controls,
+        "resumability": resumability,
+        "warnings": route_warnings,
         "native": {
             "greenroom_job_id": job_id,
             "status_dir": status_dir,
@@ -723,6 +794,7 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
     if receipt:
         raw = {**raw, **{k: v for k, v in receipt.items() if v is not None}}
     checkpoint_pause_request = _greenroom_read_checkpoint_pause_request(job_dir)
+    controls = _greenroom_route_controls(job_type, status, raw, checkpoint_pause_request)
     route_job = _native_greenroom_route_job(
         job_id,
         job_type,
@@ -732,7 +804,10 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
         status_dir,
         job_dir,
         checkpoint_pause_request,
+        controls,
+        warnings,
     )
+    warnings = route_job.get("warnings", warnings)
     display = build_display_metadata(
         job_id,
         entry_type="dir",
@@ -760,7 +835,7 @@ def _greenroom_route_row(greenroom, status_dir, job_dir):
             else None
         ),
         "output_links": _greenroom_output_links(job_id, receipt or raw),
-        "controls": _greenroom_route_controls(job_type, status, raw, checkpoint_pause_request),
+        "controls": controls,
         "checkpoint_pause_request": checkpoint_pause_request,
         "warnings": warnings,
         "parse_error": parse_error,

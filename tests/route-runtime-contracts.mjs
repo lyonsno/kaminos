@@ -9,6 +9,7 @@ import {
 
 function testExecutorKindsIncludeNativeAndBrowserRoutes() {
   assert.ok(BACKEND_EXECUTOR_KINDS.includes('webgpu-local'));
+  assert.ok(BACKEND_EXECUTOR_KINDS.includes('browser-webgpu'));
   assert.ok(BACKEND_EXECUTOR_KINDS.includes('native-greenroom'));
   assert.ok(BACKEND_EXECUTOR_KINDS.includes('local-command'));
   assert.ok(BACKEND_EXECUTOR_KINDS.includes('http-job'));
@@ -55,11 +56,27 @@ function testWebGpuRouteJobCanDeclareCooperativeYieldPolicy() {
     id: 'job-webgpu-moge',
     routeId: 'moge.depth-normal.webgpu-local.v0',
     executor: {
-      kind: 'webgpu-local',
+      kind: 'browser-webgpu',
       id: 'browser-worker',
+      backendKind: 'webgpu-local',
       workerModule: './routes/moge-worker.js',
     },
+    intent: 'preview',
     priorityClass: 'preview',
+    capabilities: {
+      deferable: true,
+      abortable: true,
+      chunkYieldable: true,
+      checkpointable: false,
+      resumable: false,
+      warmCacheSensitive: true,
+      memoryExclusive: true,
+    },
+    controls: [{
+      kind: 'defer-before-start',
+      label: 'Defer',
+      enabled: true,
+    }],
     resumability: {
       kind: 'cooperative-yield',
       boundaries: ['stage', 'dispatch-batch'],
@@ -67,10 +84,27 @@ function testWebGpuRouteJobCanDeclareCooperativeYieldPolicy() {
     },
   });
 
-  assert.equal(job.executor.kind, 'webgpu-local');
+  assert.equal(job.executor.kind, 'browser-webgpu');
+  assert.equal(job.executor.backendKind, 'webgpu-local');
+  assert.equal(job.intent, 'preview');
+  assert.equal(job.capabilities.chunkYieldable, true);
+  assert.equal(job.capabilities.warmCacheSensitive, true);
+  assert.equal(job.controls[0].kind, 'defer-before-start');
   assert.equal(job.resumability.kind, 'cooperative-yield');
   assert.deepEqual(job.resumability.boundaries, ['stage', 'dispatch-batch']);
   assert.equal(job.resumability.memoryPolicy, 'yield-keep-warm');
+}
+
+function testRouteJobRejectsUnknownIntent() {
+  assert.throws(
+    () => createRouteJob({
+      id: 'bad-intent',
+      routeId: 'bad.route',
+      executor: { kind: 'fixture' },
+      intent: 'mystery-meat',
+    }),
+    /unknown route intent/,
+  );
 }
 
 function testReceiptRecordsRequestedAndEffectiveExecutorIdentity() {
@@ -94,6 +128,7 @@ function testReceiptRecordsRequestedAndEffectiveExecutorIdentity() {
 
   assert.equal(receipt.schema, 'kaminos.route-run.v0');
   assert.equal(receipt.requestedExecutor.kind, 'native-greenroom');
+  assert.equal(receipt.intent, 'unknown');
   assert.equal(receipt.effectiveExecutor.greenroomJobId, 'abc123');
   assert.equal(receipt.artifacts[0].role, 'mesh');
   assert.equal(receipt.timings.durationSeconds, 2);
@@ -110,6 +145,7 @@ testExecutorKindsIncludeNativeAndBrowserRoutes();
 testRouteJobRequiresPortableExecutorIdentity();
 testRouteJobRejectsUnknownExecutorKind();
 testWebGpuRouteJobCanDeclareCooperativeYieldPolicy();
+testRouteJobRejectsUnknownIntent();
 testReceiptRecordsRequestedAndEffectiveExecutorIdentity();
 testStatusNormalizerPreservesDegradedEvidence();
 

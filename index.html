@@ -9900,6 +9900,7 @@ function routeJobDisplay(row = {}) {
   const pauseRequested = routeJobPauseRequested(row);
   const routeId = routeJob.routeId || row.job_id || 'unknown';
   const status = routeJob.status || 'degraded';
+  const intent = routeJob.intent || 'unknown';
   const priority = routeJob.priorityClass || 'normal';
   const executor = routeJob.executor?.kind || 'unknown';
   const checkpointBits = resumability.kind === 'cooperative-checkpoint'
@@ -9911,11 +9912,25 @@ function routeJobDisplay(row = {}) {
     : [];
   return {
     title: display.title || greenroomHumanizeName(routeId, routeId),
-    subtitle: [routeId, executor, priority, status, ...checkpointBits].filter(Boolean).join(' / '),
+    subtitle: [routeId, executor, intent, priority, status, ...checkpointBits].filter(Boolean).join(' / '),
     meta: display.meta || `raw ${routeJob.id || row.job_id || ''}`,
     raw_name: routeJob.id || row.job_id || '',
     load_label: 'Open',
   };
+}
+
+function routeJobControls(row = {}) {
+  const routeJob = row.route_job || {};
+  return Array.isArray(routeJob.controls) ? routeJob.controls : (row.controls || []);
+}
+
+function routeWarningLabel(kind = 'warning') {
+  const labels = {
+    resume_unverified: 'resume unverified',
+    pause_requested: 'pause requested',
+    non_resumable_unverified: 'non-resumable',
+  };
+  return labels[kind] || String(kind || 'warning').replaceAll('_', ' ');
 }
 
 function renderRouteJobLinkButton(container, label, url, title) {
@@ -9979,12 +9994,15 @@ function renderGreenroomRouteJobRow(row) {
   const routeJob = row.route_job || {};
   const resumability = routeJob.resumability || {};
   const pauseRequested = routeJobPauseRequested(row);
+  const capabilities = routeJob.capabilities || {};
   const div = document.createElement('div');
   div.className = 'gr-entry native-greenroom-route-row';
   div.setAttribute('data-greenroom-route-job-id', routeJob.id || row.job_id || '');
   div.setAttribute('data-greenroom-route-status', routeJob.status || 'degraded');
   div.setAttribute('data-greenroom-route-id', routeJob.routeId || '');
   div.setAttribute('data-greenroom-route-executor', routeJob.executor?.kind || '');
+  div.setAttribute('data-greenroom-route-intent', routeJob.intent || 'unknown');
+  div.setAttribute('data-greenroom-route-capabilities', JSON.stringify(capabilities));
   div.setAttribute('data-greenroom-route-resumability', resumability.kind || 'unknown');
   div.setAttribute('data-greenroom-route-completed-stage', resumability.completedStage || '');
   div.setAttribute('data-greenroom-route-resume-supported', String(!!resumability.resumeSupported));
@@ -10008,6 +10026,12 @@ function renderGreenroomRouteJobRow(row) {
   priority.title = 'priority class';
   div.appendChild(priority);
 
+  const intent = document.createElement('span');
+  intent.className = 'gr-meta route-intent';
+  intent.textContent = routeJob.intent || 'unknown';
+  intent.title = 'route intent';
+  div.appendChild(intent);
+
   if (resumability.kind === 'cooperative-checkpoint') {
     const checkpoint = document.createElement('span');
     checkpoint.className = 'gr-meta checkpoint-meta';
@@ -10020,17 +10044,18 @@ function renderGreenroomRouteJobRow(row) {
     div.appendChild(checkpoint);
   }
 
-  if (row.parse_error || row.warnings?.length) {
+  const warnings = routeJob.warnings?.length ? routeJob.warnings : (row.warnings || []);
+  if (row.parse_error || warnings.length) {
     const warning = document.createElement('span');
     warning.className = 'route-warning';
-    warning.textContent = row.parse_error ? 'degraded' : row.warnings[0]?.kind || 'warning';
-    warning.title = row.parse_error || row.warnings?.[0]?.message || '';
+    warning.textContent = row.parse_error ? 'degraded' : routeWarningLabel(warnings[0]?.kind);
+    warning.title = row.parse_error || warnings[0]?.message || '';
     div.appendChild(warning);
   }
 
   renderRouteJobLinkButton(div, 'Receipt', row.receipt_link, 'Open Greenroom receipt');
   renderRouteJobLinkButton(div, 'Checkpoint', row.checkpoint_receipt_link, 'Open checkpoint-yield receipt');
-  for (const control of (row.controls || [])) {
+  for (const control of routeJobControls(row)) {
     renderRouteJobActionButton(div, row, control);
   }
   for (const link of (row.output_links || []).slice(0, 2)) {

@@ -3,12 +3,20 @@ export const ROUTE_RUN_SCHEMA = 'kaminos.route-run.v0';
 
 export const BACKEND_EXECUTOR_KINDS = Object.freeze([
   'webgpu-local',
+  'browser-webgpu',
   'native-greenroom',
   'local-command',
   'http-job',
   'websocket-job',
   'comfyui-workflow',
   'fixture',
+]);
+
+export const ROUTE_JOB_INTENTS = Object.freeze([
+  'preview',
+  'hero',
+  'checkpoint',
+  'unknown',
 ]);
 
 const ROUTE_JOB_STATUSES = new Set([
@@ -39,6 +47,14 @@ export function normalizeRouteJobStatus(status) {
   return ROUTE_JOB_STATUSES.has(status) ? status : 'degraded';
 }
 
+export function normalizeRouteJobIntent(intent) {
+  if (intent === undefined || intent === null || intent === '') return 'unknown';
+  if (!ROUTE_JOB_INTENTS.includes(intent)) {
+    throw new TypeError(`unknown route intent: ${intent}`);
+  }
+  return intent;
+}
+
 export function normalizeBackendExecutor(executor, label = 'executor') {
   if (!executor || typeof executor !== 'object') {
     throw new TypeError(`${label} must be an object`);
@@ -53,11 +69,15 @@ export function createRouteJob({
   id,
   routeId,
   executor,
+  intent = 'unknown',
   priorityClass = 'normal',
   status = 'pending',
   inputArtifacts = [],
   outputPolicy = null,
+  capabilities = {},
+  controls = [],
   resumability = { kind: 'unknown' },
+  warnings = [],
   labels = {},
   metadata = {},
 } = {}) {
@@ -70,11 +90,15 @@ export function createRouteJob({
     id,
     routeId,
     executor: normalizeBackendExecutor(executor),
+    intent: normalizeRouteJobIntent(intent),
     priorityClass,
     status: normalizeRouteJobStatus(status),
     inputArtifacts: cloneJsonish(inputArtifacts, []),
     outputPolicy: cloneJsonish(outputPolicy, null),
+    capabilities: cloneJsonish(capabilities, {}),
+    controls: cloneJsonish(controls, []),
     resumability: cloneJsonish(resumability, { kind: 'unknown' }),
+    warnings: cloneJsonish(warnings, []),
     labels: cloneJsonish(labels, {}),
     metadata: cloneJsonish(metadata, {}),
   };
@@ -110,6 +134,7 @@ export function createRouteRunReceipt({
     jobId: job.id,
     routeId: job.routeId,
     status: normalizeRouteJobStatus(status),
+    intent: normalizeRouteJobIntent(job.intent),
     priorityClass: job.priorityClass,
     requestedExecutor: normalizeBackendExecutor(job.executor, 'job.executor'),
     effectiveExecutor: normalizeBackendExecutor(effectiveExecutor, 'effectiveExecutor'),

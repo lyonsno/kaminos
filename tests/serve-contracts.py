@@ -203,9 +203,14 @@ def test_native_greenroom_route_provider_projects_route_job_rows():
     assert row["route_job"]["id"] == "hero123"
     assert row["route_job"]["routeId"] == "trellis2mlx.hero-checkpoint"
     assert row["route_job"]["executor"]["kind"] == "native-greenroom"
+    assert row["route_job"]["intent"] == "preview"
     assert row["route_job"]["priorityClass"] == "preview"
     assert row["route_job"]["status"] == "done"
     assert row["route_job"]["resumability"]["kind"] == "unknown"
+    assert row["route_job"]["capabilities"]["memoryExclusive"] is True
+    assert row["route_job"]["capabilities"]["checkpointable"] is True
+    assert row["route_job"]["capabilities"]["resumable"] is False
+    assert row["route_job"]["controls"] == []
     assert row["controls"] == []
     assert row["receipt_link"] == "/api/read?root=greenroom&path=done%2Fhero123%2Freceipt.json"
     assert row["output_links"][0]["path"] == "/api/job-output?job_id=hero123&file=seed-42.glb"
@@ -267,10 +272,13 @@ def test_native_greenroom_route_provider_projects_checkpoint_paused_rows():
     [row] = index["rows"]
     assert row["status_dir"] == "checkpoint_paused"
     assert row["route_job"]["status"] == "checkpoint_paused"
+    assert row["route_job"]["intent"] == "checkpoint"
     assert row["route_job"]["resumability"]["kind"] == "cooperative-checkpoint"
     assert row["route_job"]["resumability"]["completedStage"] == "texture"
     assert row["route_job"]["resumability"]["resumeSupported"] is True
     assert row["route_job"]["native"]["checkpoint_yield_receipt"] == str(checkpoint_receipt)
+    assert row["route_job"]["capabilities"]["resumable"] is False
+    assert any(warning["kind"] == "resume_unverified" for warning in row["warnings"])
     assert row["checkpoint_receipt_link"].endswith(
         "outputs%2Fyield123%2Fcheckpoints%2F_control%2Fcheckpoint_yield.json"
     )
@@ -325,6 +333,8 @@ def test_native_greenroom_route_provider_projects_pause_request_controls():
         "kind": "request-checkpoint-pause",
         "label": "Stop after checkpoint",
     }]
+    assert before_row["route_job"]["controls"] == before_row["controls"]
+    assert before_row["route_job"]["capabilities"]["checkpointPauseRequestable"] is True
 
     assert stop_file_exists
     assert request_receipt_exists
@@ -334,6 +344,8 @@ def test_native_greenroom_route_provider_projects_pause_request_controls():
 
     [after_row] = after["rows"]
     assert after_row["controls"] == []
+    assert after_row["route_job"]["controls"] == []
+    assert after_row["route_job"]["capabilities"]["checkpointPauseRequestable"] is False
     assert after_row["checkpoint_pause_request"]["status"] == "requested"
     assert after_row["route_job"]["resumability"]["kind"] == "cooperative-checkpoint"
     assert after_row["route_job"]["resumability"]["pauseRequested"] is True
