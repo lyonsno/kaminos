@@ -264,6 +264,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
 #finger-juice-operator-panel { position: absolute; inset: 0; z-index: 4; background: #10120f; }
 #finger-juice-operator-panel[hidden] { display: none; }
 #finger-juice-viewport-frame { width: 100%; height: 100%; border: 0; display: block; background: #10120f; }
+
+/* Native Finger Juice host */
+.finger-juice-host-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.finger-juice-host-readout .field { margin: 0; padding: 0; }
+.finger-juice-host-downgrades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.finger-juice-host-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #47351f; color: #f0b85a; background: #21180e; border-radius: 5px; padding: 3px 6px; font: 9px 'SF Mono', monospace; }
+#finger-juice-host-operator-panel { position: absolute; inset: 0; z-index: 4; background: #080b10; }
+#finger-juice-host-operator-panel[hidden] { display: none; }
+#finger-juice-host-canvas { width: 100%; height: 100%; display: block; background: radial-gradient(circle at 50% 52%, #17202b 0%, #0b0e13 56%, #050607 100%); }
+#finger-juice-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(560px, calc(100% - 32px)); background: rgba(4,7,10,0.78); border: 1px solid #31485a; border-radius: 8px; padding: 10px 12px; color: #b7d4dc; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+#finger-juice-host-overlay-title { font: 11px 'SF Mono', monospace; color: #8fc7d6; text-transform: uppercase; letter-spacing: 0.8px; }
+#finger-juice-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #d4ecf3; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -278,6 +290,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="worlds">Worlds</div>
+    <div class="tab" data-tab="finger-juice-host">Host</div>
     <div class="tab" data-tab="finger-juice">Juice</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
@@ -1094,6 +1107,35 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     </div>
   </div>
 
+  <!-- Finger Juice Host Tab -->
+  <div class="tab-content" id="tab-finger-juice-host">
+    <h2>Finger Juice Host</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_juice_host=1</span></div>
+      <div class="field"><span class="field-key">Host</span><span class="field-val">kaminos/finger-juice-host</span></div>
+      <div class="field"><span class="field-key">Packet</span><span class="field-val" id="finger-juice-host-packet-schema">big-papa-finger-juice.host-packet.v0</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="finger-juice-host-packet-url">pending</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="finger-juice-host-load">Load Packet</button>
+        <a class="btn" id="finger-juice-host-open-direct" href="lerms-finger-juice.html?lerms_world_finger_juice=1" target="_blank" rel="noopener">Open Direct</a>
+      </div>
+    </div>
+    <div class="panel finger-juice-host-readout">
+      <div class="field"><span class="field-key">Authority</span><span class="field-val" id="finger-juice-host-source-authority">pending</span></div>
+      <div class="field"><span class="field-key">Truth</span><span class="field-val" id="finger-juice-host-source-truth">pending</span></div>
+      <div class="field"><span class="field-key">Freshness</span><span class="field-val" id="finger-juice-host-freshness">pending</span></div>
+      <div class="field"><span class="field-key">Terrain</span><span class="field-val" id="finger-juice-host-terrain">pending</span></div>
+      <div class="field"><span class="field-key">Particles</span><span class="field-val" id="finger-juice-host-particles">0</span></div>
+      <div class="field"><span class="field-key">Hits</span><span class="field-val" id="finger-juice-host-hits">0</span></div>
+      <div class="field"><span class="field-key">Render</span><span class="field-val" id="finger-juice-host-render">pending</span></div>
+      <div class="field"><span class="field-key">Custody</span><span class="field-val" id="finger-juice-host-custody">pending</span></div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Downgrades</span></div>
+      <div class="finger-juice-host-downgrades" id="finger-juice-host-downgrades"></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -1222,6 +1264,13 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
           <span class="hybrid-control-value" data-hybrid-control-value-for="hybrid-control-ao-intensity">1.50</span>
         </div>
       </div>
+    </div>
+  </div>
+  <div id="finger-juice-host-operator-panel" hidden>
+    <canvas id="finger-juice-host-canvas"></canvas>
+    <div id="finger-juice-host-overlay">
+      <div id="finger-juice-host-overlay-title">Finger Juice Host</div>
+      <div id="finger-juice-host-overlay-body">kaminos/finger-juice-host · packet pending</div>
     </div>
   </div>
   <div id="finger-juice-operator-panel" hidden>
@@ -1356,6 +1405,13 @@ import {
   selectLermsPreviewTimelineFrame,
   worldChamberDebugState,
 } from './world-chambers-core.js';
+import {
+  BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
+  BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE,
+  KAMINOS_FINGER_JUICE_HOST_ROUTE,
+  KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
+  createFingerJuiceHostState,
+} from './finger-juice-host-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1423,6 +1479,31 @@ const LAMELLAR_PLACEHOLDER_CONTRACT = 'temporary-aesthetic-composition-primitive
 const RENDER_HANDOFF_SCHEMA = 'kaminos.render-handoff.v0';
 const FINGER_JUICE_TAB_EMBED_ROUTE = 'kaminos-finger-juice-tab-embed-v0';
 const FINGER_JUICE_STANDALONE_ROUTE = 'lerms-finger-juice.html?lerms_world_finger_juice=1';
+const FINGER_JUICE_HOST_DEFAULT_ROOT = 'lerms-preview';
+const FINGER_JUICE_HOST_DEFAULT_PATH = 'big-papa-finger-juice-host-packet.json';
+const FINGER_JUICE_HOST_DEFAULT_URL = `/api/read?${new URLSearchParams({
+  root: FINGER_JUICE_HOST_DEFAULT_ROOT,
+  path: FINGER_JUICE_HOST_DEFAULT_PATH,
+})}`;
+let fingerJuiceHostPacket = null;
+let fingerJuiceHostState = {
+  schema: KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
+  route: KAMINOS_FINGER_JUICE_HOST_ROUTE,
+  status: 'idle',
+  effectiveUrl: FINGER_JUICE_HOST_DEFAULT_URL,
+  packetSchema: BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
+  packetRoute: BIG_PAPA_FINGER_JUICE_HOST_PACKET_ROUTE,
+  sourceAuthority: 'pending',
+  sourceTruthAuthority: 'pending',
+  freshness: { status: 'pending' },
+  terrain: {},
+  previewParticles: [],
+  previewTrails: [],
+  downgrades: ['host_packet_preview_payload_not_native_render_buffer'],
+  rejectedDebugSurfaces: [],
+  error: null,
+};
+let fingerJuiceHostRouteInitialized = false;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneGroups = [];
@@ -7833,6 +7914,11 @@ function setInfo(msg) {
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+  const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
+  if (fingerJuiceHostPanel) {
+    fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
+    if (tabName === 'finger-juice-host') requestAnimationFrame(drawFingerJuiceHostPreview);
+  }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
@@ -7981,6 +8067,187 @@ function updateLermsPreviewTimelinePlaybackFrame(nowMs = performance.now()) {
   return true;
 }
 
+function fingerJuiceHostRouteFromParams(params = new URLSearchParams(window.location.search)) {
+  const directUrl = params.get('finger_juice_host_url');
+  if (directUrl) return { url: directUrl, mode: 'external_url' };
+  const root = params.get('finger_juice_host_root');
+  const path = params.get('finger_juice_host_path');
+  if (root && path) {
+    return {
+      url: `/api/read?${new URLSearchParams({ root, path })}`,
+      mode: 'root_path',
+      root,
+      path,
+    };
+  }
+  return {
+    url: FINGER_JUICE_HOST_DEFAULT_URL,
+    mode: 'default_root_path',
+    root: FINGER_JUICE_HOST_DEFAULT_ROOT,
+    path: FINGER_JUICE_HOST_DEFAULT_PATH,
+  };
+}
+
+async function loadFingerJuiceHostPacketFromUrl(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Finger Juice host packet fetch failed ${response.status}: ${url}`);
+  return response.json();
+}
+
+function updateFingerJuiceHostReadout() {
+  const state = fingerJuiceHostState;
+  const sourceAuthorityEl = document.getElementById('finger-juice-host-source-authority');
+  document.getElementById('finger-juice-host-packet-schema').textContent = state.packetSchema || BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA;
+  document.getElementById('finger-juice-host-packet-url').textContent = state.effectiveUrl || 'pending';
+  sourceAuthorityEl.textContent = state.sourceAuthority || 'pending';
+  document.getElementById('finger-juice-host-source-truth').textContent = state.sourceTruthAuthority || 'pending';
+  document.getElementById('finger-juice-host-freshness').textContent = state.freshness?.status || 'pending';
+  document.getElementById('finger-juice-host-terrain').textContent = state.terrain?.sampleChecksum || state.terrain?.couplingMode || 'pending';
+  document.getElementById('finger-juice-host-particles').textContent = String(state.previewParticleCount ?? state.previewParticles?.length ?? 0);
+  document.getElementById('finger-juice-host-hits').textContent = String(state.hitEventCount || 0);
+  document.getElementById('finger-juice-host-render').textContent = state.renderDowngraded
+    ? `${state.renderPayloadSchema || 'preview'} downgraded`
+    : (state.renderPayloadSchema || 'pending');
+  document.getElementById('finger-juice-host-custody').textContent = state.custody?.bigPapaOwns?.length
+    ? 'split'
+    : 'pending';
+  sourceAuthorityEl.classList.toggle('present', state.sourceAuthority === 'synthetic_fixture' || state.sourceAuthority === 'live_simulation');
+  sourceAuthorityEl.classList.toggle('missing', state.status === 'error' || state.sourceAuthority === 'pending');
+  const downgradeList = document.getElementById('finger-juice-host-downgrades');
+  downgradeList.innerHTML = '';
+  const downgrades = state.downgrades?.length ? state.downgrades : ['host_packet_preview_payload_not_native_render_buffer'];
+  for (const downgrade of downgrades) {
+    const chip = document.createElement('span');
+    chip.className = 'finger-juice-host-chip';
+    chip.textContent = downgrade;
+    downgradeList.appendChild(chip);
+  }
+  document.getElementById('finger-juice-host-overlay-body').textContent = [
+    KAMINOS_FINGER_JUICE_HOST_ROUTE,
+    state.packetSchema || BIG_PAPA_FINGER_JUICE_HOST_PACKET_SCHEMA,
+    state.sourceAuthority || 'pending',
+    state.freshness?.status || 'pending',
+    ...(downgrades.slice(0, 2)),
+  ].join(' · ');
+}
+
+function projectFingerJuiceHostPoint(position, bounds, width, height) {
+  const min = Array.isArray(bounds?.min) ? bounds.min : [-1, 0, -1];
+  const max = Array.isArray(bounds?.max) ? bounds.max : [1, 1, 1];
+  const spanX = Math.max(0.001, max[0] - min[0]);
+  const spanY = Math.max(0.001, max[1] - min[1]);
+  const spanZ = Math.max(0.001, max[2] - min[2]);
+  const x = (position[0] - min[0]) / spanX;
+  const y = (position[1] - min[1]) / spanY;
+  const z = (position[2] - min[2]) / spanZ;
+  const screenX = width * (0.5 + (x - 0.5) * 0.74 + (z - 0.5) * 0.22);
+  const screenY = height * (0.62 - (y - 0.35) * 0.58 - (z - 0.5) * 0.18);
+  return [screenX, screenY, z];
+}
+
+function drawFingerJuiceHostPreview() {
+  const canvas = document.getElementById('finger-juice-host-canvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.floor(rect.width * window.devicePixelRatio));
+  const height = Math.max(1, Math.floor(rect.height * window.devicePixelRatio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createRadialGradient(width * 0.52, height * 0.52, width * 0.04, width * 0.5, height * 0.55, width * 0.7);
+  gradient.addColorStop(0, '#182434');
+  gradient.addColorStop(0.55, '#0b0f15');
+  gradient.addColorStop(1, '#030405');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const state = fingerJuiceHostState;
+  const bounds = state.visual?.bounds || state.solver?.bounds || { min: [-1, 0, -1], max: [1, 1, 1] };
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = '#3d708a';
+  ctx.lineWidth = Math.max(1, window.devicePixelRatio);
+  const floorY = height * 0.72;
+  ctx.beginPath();
+  ctx.ellipse(width * 0.52, floorY, width * 0.28, height * 0.12, -0.08, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  for (const trail of state.previewTrails || []) {
+    if (!trail.samples?.length) continue;
+    ctx.save();
+    ctx.strokeStyle = `rgba(${Math.round((trail.color?.[0] || 1) * 255)}, ${Math.round((trail.color?.[1] || 0.4) * 255)}, ${Math.round((trail.color?.[2] || 0.1) * 255)}, ${trail.color?.[3] || 0.55})`;
+    ctx.lineWidth = Math.max(1.5, 2.5 * window.devicePixelRatio);
+    ctx.beginPath();
+    trail.samples.forEach((sample, index) => {
+      const [x, y] = projectFingerJuiceHostPoint(sample, bounds, width, height);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const particle of state.previewParticles || []) {
+    const [x, y, z] = projectFingerJuiceHostPoint(particle.position, bounds, width, height);
+    const radius = Math.max(3, particle.radius * Math.min(width, height) * (0.42 + z * 0.28));
+    const [r, g, b, a] = particle.color || [1, 0.35, 0.08, 0.85];
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 2.7);
+    glow.addColorStop(0, `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`);
+    glow.addColorStop(0.38, `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a * 0.38})`);
+    glow.addColorStop(1, `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 2.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${Math.min(1, a + 0.15)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function kaminosFingerJuiceHostDebugState() {
+  return fingerJuiceHostState;
+}
+
+async function loadFingerJuiceHostPacket(route = fingerJuiceHostRouteFromParams()) {
+  fingerJuiceHostState = {
+    ...fingerJuiceHostState,
+    status: 'loading',
+    effectiveUrl: route.url,
+    error: null,
+  };
+  updateFingerJuiceHostReadout();
+  try {
+    const packet = await loadFingerJuiceHostPacketFromUrl(route.url);
+    fingerJuiceHostPacket = packet;
+    fingerJuiceHostState = {
+      ...createFingerJuiceHostState(packet, { effectiveUrl: route.url }),
+      status: 'loaded',
+      routeMode: route.mode,
+      error: null,
+    };
+    updateFingerJuiceHostReadout();
+    drawFingerJuiceHostPreview();
+    setInfo(`Finger Juice host packet loaded: ${fingerJuiceHostState.sourceAuthority} · ${fingerJuiceHostState.previewParticleCount} preview particles`);
+    return fingerJuiceHostState;
+  } catch (error) {
+    fingerJuiceHostState = {
+      ...fingerJuiceHostState,
+      status: 'error',
+      error: String(error?.message || error),
+    };
+    updateFingerJuiceHostReadout();
+    drawFingerJuiceHostPreview();
+    setInfo(`Finger Juice host packet failed: ${error.message || error}`);
+    throw error;
+  }
+}
+
 function fingerJuiceChildDebugState() {
   const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
   try {
@@ -8056,6 +8323,26 @@ function reloadFingerJuiceTabFrame() {
   const fingerJuiceFrame = document.getElementById('finger-juice-viewport-frame');
   fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
   setInfo('Finger Juice primitive reloaded');
+}
+
+function initKaminosFingerJuiceHostRoute() {
+  if (fingerJuiceHostRouteInitialized) return;
+  fingerJuiceHostRouteInitialized = true;
+  const params = new URLSearchParams(window.location.search);
+  document.getElementById('finger-juice-host-open-direct').href = FINGER_JUICE_STANDALONE_ROUTE;
+  document.getElementById('finger-juice-host-load').addEventListener('click', () => {
+    loadFingerJuiceHostPacket(fingerJuiceHostRouteFromParams()).catch(error => console.error('Finger Juice host load failed:', error));
+  });
+  window.kaminosFingerJuiceHostDebugState = kaminosFingerJuiceHostDebugState;
+  window.__kaminosFingerJuiceHostDebugState = kaminosFingerJuiceHostDebugState;
+  window.kaminosLoadFingerJuiceHostPacket = loadFingerJuiceHostPacket;
+  window.addEventListener('resize', drawFingerJuiceHostPreview);
+  updateFingerJuiceHostReadout();
+  drawFingerJuiceHostPreview();
+  if (params.get('kaminos_finger_juice_host') === '1') {
+    setActiveTab('finger-juice-host');
+    loadFingerJuiceHostPacket(fingerJuiceHostRouteFromParams(params)).catch(error => console.error('Finger Juice host route load failed:', error));
+  }
 }
 
 function worldChamberReceiptSourceLabel(receiptSource) {
@@ -12428,6 +12715,7 @@ window.addEventListener('keydown', e => {
 
 // --- Init ---
 grInit();
+initKaminosFingerJuiceHostRoute();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
@@ -12471,6 +12759,7 @@ initScene().then(() => {
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
+  initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
@@ -12479,6 +12768,7 @@ initScene().then(() => {
   loadDemoButtons();
   restoreSettings();
   initWorldChambersRoute();
+  initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
 </script>
