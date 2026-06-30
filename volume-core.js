@@ -191,6 +191,7 @@ function applyRuntimeQualityControls(controls = {}) {
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
   }
+  next.effectiveVisualAuthority = normalizeSimCadence(next.simCadence) > 1 ? 'continuation' : 'live-sim';
   return next;
 }
 
@@ -5876,7 +5877,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!shouldRunSimForFrame(options)) {
       state.lastSimFrameSkipped = true;
       state.continuationFrameCount += 1;
-      updateSimCostLedger();
+      state.majorantBuiltThisFrame = false;
+      updateSimCostLedger({ majorantBuiltThisFrame: false });
       return false;
     }
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });

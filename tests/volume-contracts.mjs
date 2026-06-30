@@ -414,6 +414,7 @@ assert.match(index, /volume_sim_cadence/, 'URL route can request low-cadence sim
 assert.match(index, /routedVolumeSimCadence/, 'route-only sim cadence is preserved outside visible cockpit sliders');
 assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
 assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
+assert.match(index, /next\.effectiveVisualAuthority\s*=\s*normalizeVolumeSimCadence\(next\.simCadence\) > 1 \? 'continuation' : 'live-sim'/, 'runtime quality ladder labels cadence-held volume frames as continuation after applying cadence floors');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
 assert.match(index, /<option value="32">32\^3 majorant<\/option>/, 'Majorant grid selector can test a 32^3 coarse field');
@@ -1411,6 +1412,8 @@ assert.doesNotMatch(core, /beginComputePass\(\{\s*label:\s*'kaminos divergence p
 assert.match(core, /kaminos pressure jacobi inline-divergence pass/, 'active pressure Jacobi pass label names inline divergence source');
 assert.match(core, /majorantBuildCadence/, 'sim-cost ledger records coarse majorant build cadence');
 assert.match(core, /majorantBuiltThisFrame/, 'sim-cost ledger records whether the current frame rebuilt the majorant');
+assert.match(core, /next\.effectiveVisualAuthority\s*=\s*normalizeSimCadence\(next\.simCadence\) > 1 \? 'continuation' : 'live-sim'/, 'core runtime quality ladder labels cadence-held frames after effective cadence floors');
+assert.match(core, /state\.lastSimFrameSkipped = true;[\s\S]{0,180}state\.majorantBuiltThisFrame = false;[\s\S]{0,120}updateSimCostLedger\(\{ majorantBuiltThisFrame: false \}\)/, 'cadence-held sim frames must clear stale majorant-build accounting before writing the cost ledger');
 assert.match(core, /fullGridCellVisitsPerFrame/, 'sim-cost ledger records full-grid cell visits per frame');
 assert.match(core, /fluidBufferBytes/, 'sim-cost ledger records fluid buffer footprint');
 assert.match(core, /frontFieldBufferBytes/, 'sim-cost ledger records front sidecar footprint');
