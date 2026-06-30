@@ -69,11 +69,24 @@ The probe records:
 - actual triangle/vertex count
 - UV0 and normal availability
 - material texture availability and material flags
+- source-relative geometry validity: bounds ratios plus voxel source-coverage
 - bake route, texture size, padding, candidate count, and normal threshold
 - bake command/result and emitted bake manifest
 - direct Kaminos inspection URL for emitted baked GLBs
 
 Use this route to answer whether baking buys a lower runtime topology path. If no lower target preserves UV0/normals, the next problem is target generation or UV-preserving decimation, not texture transfer. Arbitrary cube/sphere projection is a later hostility test, not the first runtime-LOD question.
+
+The target validity assay is intentionally upstream of baking. It catches two
+failure modes that looked like bake candidates in metrics but failed visually:
+
+- `partial-bounds`: target bounds collapse relative to the source, as with a
+  slab/side fragment that still has many triangles.
+- `partial-coverage`: target bounds look plausible, but a voxelized source
+  occupancy comparison shows that major source regions were deleted.
+
+Non-assay runs skip those target-geometry failures before invoking the bake
+route. A skipped lower target is not evidence against material transfer; it is
+evidence that the candidate mesh is not a usable LOD substrate.
 
 ## 2026-06-29 molten cube smoke
 
