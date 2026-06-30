@@ -8,6 +8,7 @@ const webgpuCorePath = join(root, 'lerms-finger-juice-webgpu-core.js');
 const pagePath = join(root, 'lerms-finger-juice.html');
 const witnessPath = join(root, 'lerms-finger-juice-witness.mjs');
 const tabWitnessPath = join(root, 'kaminos-finger-juice-tab-witness.mjs');
+const hostPacketCliPath = join(root, 'lerms-finger-juice-host-packet.mjs');
 const indexPath = join(root, 'index.html');
 const previewBenchDocsPath = join(root, 'docs', 'preview-bench-adapters.md');
 
@@ -16,6 +17,7 @@ assert.ok(existsSync(webgpuCorePath), 'WebGPU finger-juice core module exists');
 assert.ok(existsSync(pagePath), 'world finger-juice prototype page exists');
 assert.ok(existsSync(witnessPath), 'world finger-juice route witness exists');
 assert.ok(existsSync(tabWitnessPath), 'Kaminos Finger Juice tab witness exists');
+assert.ok(existsSync(hostPacketCliPath), 'Big Papa host-packet file emitter exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
 assert.ok(existsSync(previewBenchDocsPath), 'Kaminos Preview Bench adapter docs exist for generic payload smokes');
 
@@ -24,6 +26,7 @@ const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
 const pageSource = readFileSync(pagePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
 const tabWitnessSource = existsSync(tabWitnessPath) ? readFileSync(tabWitnessPath, 'utf8') : '';
+const hostPacketCliSource = existsSync(hostPacketCliPath) ? readFileSync(hostPacketCliPath, 'utf8') : '';
 const indexSource = readFileSync(indexPath, 'utf8');
 const previewBenchDocsSource = readFileSync(previewBenchDocsPath, 'utf8');
 
@@ -57,18 +60,24 @@ assert.match(coreSource, /terrain_frame/, 'debug state records terrain frame ide
 assert.match(coreSource, /FINGER_JUICE_SUPPORT_FRAME_SCHEMA\s*=\s*'big-papa-finger-juice\.support-frame\.v0'/, 'finger juice names its Hill-compatible support-frame schema');
 assert.match(coreSource, /FINGER_JUICE_RESERVOIR_DIAGNOSTICS_SCHEMA\s*=\s*'big-papa-finger-juice\.substrate-reservoir-diagnostics\.v0'/, 'finger juice names substrate reservoir diagnostics');
 assert.match(coreSource, /FINGER_JUICE_PREVIEW_BENCH_PAYLOAD_SCHEMA\s*=\s*'big-papa-finger-juice\.preview-bench-payload\.v0'/, 'finger juice names its source-owned Preview Bench payload schema');
+assert.match(coreSource, /FINGER_JUICE_HOST_PACKET_SCHEMA\s*=\s*'big-papa-finger-juice\.host-packet\.v0'/, 'finger juice names its first-class host packet schema');
+assert.match(coreSource, /FINGER_JUICE_HOST_PACKET_ROUTE\s*=\s*'big-papa\/finger-juice\/host-packet'/, 'finger juice names its first-class host packet route');
+assert.match(coreSource, /FINGER_JUICE_HOST_RENDER_PAYLOAD_PREVIEW_SCHEMA\s*=\s*'big-papa-finger-juice\.render-payload\.preview\.v0'/, 'finger juice names its downgraded host render payload schema');
 assert.match(coreSource, /HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA\s*=\s*'lerms\.hill-of-hills\.preview-bench-payload\.v0'/, 'finger juice names the Hill of Hills Preview Bench payload schema it ingests');
 assert.match(coreSource, /FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT\s*=\s*'hill-preview-bench-support-frame-ingestion-v0'/, 'finger juice names its Hill support-frame ingestion contract');
 assert.match(coreSource, /createFingerJuiceSupportFrame/, 'core creates a Hill-compatible support frame for reservoir state');
 assert.match(coreSource, /normalizeHillSupportFramePayload/, 'core exports Hill support-frame payload normalization');
 assert.match(coreSource, /createReservoirDomainDiagnostics/, 'core creates active-domain reservoir diagnostics in support coordinates');
 assert.match(coreSource, /createFingerJuicePreviewBenchPayload/, 'core exports a source-owned Preview Bench payload wrapper');
+assert.match(coreSource, /createFingerJuiceHostPacket/, 'core exports a first-class Kaminos host packet wrapper');
 assert.match(coreSource, /supportFrameChecksum/, 'support-frame diagnostics expose checksum identity');
 assert.match(coreSource, /fluid_collision_heightfield_still_local_procedural/, 'Hill support ingestion keeps collision downgrade explicit until raw samples are wired');
 assert.match(coreSource, /activeReservoirDomains/, 'reservoir diagnostics expose active domains instead of only scalar metrics');
 assert.match(coreSource, /host_visualization_not_source_truth/, 'Preview Bench payload downgrades host visuals explicitly');
 assert.match(coreSource, /export function normalizeWorldFingerJuiceEmitterPacket/, 'core exports packet normalizer');
 assert.match(coreSource, /export function createWorldFingerJuiceTransportPrototype/, 'core exports deterministic transport prototype');
+assert.match(pageSource, /__lermsFingerJuiceHostPacket/, 'prototype page exposes the current host packet to Kaminos composition');
+assert.match(hostPacketCliSource, /createFingerJuiceHostPacket/, 'host-packet CLI writes the source-owned host packet');
 
 assert.match(webgpuCoreSource, /webgpu_particle_solver_v0/, 'WebGPU solver route identity is explicit');
 assert.match(webgpuCoreSource, /wgsl-ballistic-heightfield-surface-v0/, 'WebGPU shader route identity is explicit');
@@ -500,6 +509,9 @@ assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_VISUAL_DAMPING_CONTRACT, 'wgsl-
 assert.equal(webgpuMod.LERMS_FINGER_JUICE_WEBGPU_LOCAL_PAIR_DENSITY_CONTRACT, 'wgsl-local-pair-density-projection-v0');
 assert.equal(webgpuMod.LERMS_SOURCE_TRUTH_SCHEMA, 'lerms.source-truth.v0');
 assert.equal(webgpuMod.LERMS_JUICE_HIT_EVENT_SCHEMA, 'lerms.juice-hit-event.v0');
+assert.equal(mod.FINGER_JUICE_HOST_PACKET_SCHEMA, 'big-papa-finger-juice.host-packet.v0');
+assert.equal(mod.FINGER_JUICE_HOST_PACKET_ROUTE, 'big-papa/finger-juice/host-packet');
+assert.equal(mod.FINGER_JUICE_HOST_RENDER_PAYLOAD_PREVIEW_SCHEMA, 'big-papa-finger-juice.render-payload.preview.v0');
 assert.equal(mod.HILL_OF_HILLS_PREVIEW_BENCH_PAYLOAD_SCHEMA, 'lerms.hill-of-hills.preview-bench-payload.v0');
 assert.equal(mod.FINGER_JUICE_HILL_SUPPORT_FRAME_INGESTION_CONTRACT, 'hill-preview-bench-support-frame-ingestion-v0');
 
@@ -800,6 +812,32 @@ assert.equal(previewPayload.payload.summary.supportFrameChecksum, settled.suppor
 assert.ok(previewPayload.payload.fields.some(field => field.label === 'Active domains'), 'Preview Bench payload exposes active domain field for operator inspection');
 assert.ok(previewPayload.payload.downgrades.includes('local_procedural_support_frame_not_live_hill'), 'Preview Bench payload declares local support frame downgrade');
 assert.ok(previewPayload.payload.rejectedSurfaces.some(surface => surface.acceptanceSurface === false), 'Preview Bench payload rejects debug/visual surfaces explicitly');
+const hostPacket = mod.createFingerJuiceHostPacket(settled, {
+  packetUrl: '/api/read?root=lerms-preview&path=big-papa-finger-juice-host-packet.json',
+  sourceRef: 'cc/big-papa-finger-juice-0626@host-packet-test',
+  generatedAt: '2026-06-30T00:00:00.000Z',
+  observedAt: '2026-06-30T00:00:00.000Z',
+  freshnessBudgetMs: 1500,
+});
+assert.equal(hostPacket.schema, 'big-papa-finger-juice.host-packet.v0', 'host packet uses Big Papa source schema');
+assert.equal(hostPacket.route, 'big-papa/finger-juice/host-packet', 'host packet uses Big Papa source route');
+assert.equal(hostPacket.packetUrl, '/api/read?root=lerms-preview&path=big-papa-finger-juice-host-packet.json', 'host packet carries file/root-path compatible URL');
+assert.equal(hostPacket.source.producerDiaulos, 'big-papa-finger-juice-fucker', 'host packet names Big Papa as producer diaulos');
+assert.equal(hostPacket.source.authority, 'synthetic_fixture', 'host packet preserves source authority');
+assert.equal(hostPacket.source.sourceTruthAuthority, 'synthetic_fixture', 'host packet exposes source-truth authority separately');
+assert.equal(hostPacket.freshness.budgetMs, 1500, 'host packet carries explicit freshness budget');
+assert.equal(hostPacket.terrain.couplingMode, 'source_height_samples_v0', 'host packet preserves Hill terrain sample coupling');
+assert.equal(hostPacket.terrain.sampleChecksum, 'hill-live-sample', 'host packet preserves Hill sample checksum');
+assert.equal(hostPacket.terrain.channelChecksum, 'hill-live-channels', 'host packet preserves Hill channel checksum');
+assert.ok(hostPacket.solver.solverRoute, 'host packet carries solver route identity');
+assert.ok(hostPacket.solver.particleCount > 0, 'host packet carries particle count');
+assert.equal(hostPacket.render.payload.schema, 'big-papa-finger-juice.render-payload.preview.v0', 'host packet carries downgraded render payload schema');
+assert.equal(hostPacket.render.payload.downgraded, true, 'host packet marks preview payload as downgraded');
+assert.ok(hostPacket.render.payload.downgrades.includes('preview_particle_samples_not_full_render_buffer'), 'host packet names preview particle sample downgrade');
+assert.ok(hostPacket.visual.cameraHints.presets.some(preset => preset.id === 'operator-oblique'), 'host packet carries operator camera hint preset');
+assert.ok(hostPacket.custody.rejectedDebugSurfaces.some(surface => surface.surface === 'direct_lerms_finger_juice_debug_route'), 'host packet rejects direct debug route as acceptance surface');
+assert.ok(hostPacket.custody.downgrades.includes('host_packet_preview_payload_not_native_render_buffer'), 'host packet names native-render-buffer downgrade');
+assert.ok(Array.isArray(hostPacket.hitRefs.events), 'host packet exposes hit event refs array');
 
 const hitPrototype = mod.createWorldFingerJuiceTransportPrototype({
   maxParticles: 64,
