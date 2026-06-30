@@ -214,6 +214,9 @@ assert.equal(classifyFrameTailDamage({ frameP95Ms: 160, queueDoneP95Ms: 310 }).b
 assert.equal(classifyFrameTailDamage({}).bucket, 'unknown');
 assert.ok(classifyFrameTailDamage({}).reasons.includes('frame_p95_missing'));
 assert.ok(classifyFrameTailDamage({}).reasons.includes('queue_p95_missing'));
+assert.equal(classifyFrameTailDamage({ frameP99Ms: 22, queueDoneP99Ms: 40 }).bucket, 'clean');
+assert.ok(classifyFrameTailDamage({ frameP99Ms: 22, queueDoneP99Ms: 40 }).reasons.includes('frame_p99_clean'));
+assert.ok(classifyFrameTailDamage({ frameP99Ms: 22, queueDoneP99Ms: 40 }).reasons.includes('queue_p99_clean'));
 
 const witness = buildComputeRouteContentionWitnessFromReport(baseVisualReport, {
   witnessId: 'contention-contract-001',
@@ -353,6 +356,44 @@ const schedulerUnverifiedWitness = buildComputeRouteContentionWitnessFromReport(
 assert.equal(schedulerUnverifiedWitness.scheduler.verificationState, 'scheduler-unverified');
 assert.equal(schedulerUnverifiedWitness.falseClosureChecks.schedulerUnverified, true);
 assert.ok(schedulerUnverifiedWitness.witnessWarnings.includes('scheduler_unverified'));
+
+const optimisticSchedulerWithoutEffective = buildComputeRouteContentionWitness({
+  routeIdentity: witness.routeIdentity,
+  routePhase: witness.routePhase,
+  visualBudget: witness.visualBudget,
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    frameP95Ms: 72,
+    queueDoneP95Ms: 140,
+  },
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: { mode: 'cooperative' },
+    effectiveScheduler: null,
+    verificationState: 'verified',
+  },
+});
+assert.equal(optimisticSchedulerWithoutEffective.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(optimisticSchedulerWithoutEffective.falseClosureChecks.schedulerUnverified, true);
+assert.ok(optimisticSchedulerWithoutEffective.witnessWarnings.includes('scheduler_unverified'));
+assert.ok(optimisticSchedulerWithoutEffective.witnessWarnings.includes('requested_scheduler_without_effective_scheduler'));
+
+const p99OnlyWitness = buildComputeRouteContentionWitness({
+  routeIdentity: witness.routeIdentity,
+  routePhase: witness.routePhase,
+  visualBudget: witness.visualBudget,
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    frameP99Ms: 22,
+    queueDoneP99Ms: 40,
+  },
+});
+assert.equal(p99OnlyWitness.falseClosureChecks.missingTiming, false);
+assert.equal(p99OnlyWitness.frameTailDamage.bucket, 'clean');
+assert.ok(p99OnlyWitness.frameTailDamage.reasons.includes('frame_p99_clean'));
+assert.ok(p99OnlyWitness.frameTailDamage.reasons.includes('queue_p99_clean'));
 
 const tmp = mkdtempSync(join(tmpdir(), 'kaminos-contention-witness-contract-'));
 const inputReport = join(tmp, 'compute-route-fire-report.json');

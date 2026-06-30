@@ -31,22 +31,22 @@ function worstBucket(...buckets) {
   ), 'unknown');
 }
 
-function bucketForFrameP95(value) {
+function bucketForFrameTail(value, reasonPrefix = 'frame_p95') {
   const numeric = finiteOrNull(value);
-  if (numeric === null) return { bucket: 'unknown', reason: 'frame_p95_missing' };
-  if (numeric >= 120) return { bucket: 'deranged', reason: 'frame_p95_deranged' };
-  if (numeric >= 50) return { bucket: 'hot', reason: 'frame_p95_hot' };
-  if (numeric >= 24) return { bucket: 'warm', reason: 'frame_p95_warm' };
-  return { bucket: 'clean', reason: 'frame_p95_clean' };
+  if (numeric === null) return { bucket: 'unknown', reason: `${reasonPrefix}_missing` };
+  if (numeric >= 120) return { bucket: 'deranged', reason: `${reasonPrefix}_deranged` };
+  if (numeric >= 50) return { bucket: 'hot', reason: `${reasonPrefix}_hot` };
+  if (numeric >= 24) return { bucket: 'warm', reason: `${reasonPrefix}_warm` };
+  return { bucket: 'clean', reason: `${reasonPrefix}_clean` };
 }
 
-function bucketForQueueP95(value) {
+function bucketForQueueTail(value, reasonPrefix = 'queue_p95') {
   const numeric = finiteOrNull(value);
-  if (numeric === null) return { bucket: 'unknown', reason: 'queue_p95_missing' };
-  if (numeric >= 240) return { bucket: 'deranged', reason: 'queue_p95_deranged' };
-  if (numeric >= 96) return { bucket: 'hot', reason: 'queue_p95_hot' };
-  if (numeric >= 45) return { bucket: 'warm', reason: 'queue_p95_warm' };
-  return { bucket: 'clean', reason: 'queue_p95_clean' };
+  if (numeric === null) return { bucket: 'unknown', reason: `${reasonPrefix}_missing` };
+  if (numeric >= 240) return { bucket: 'deranged', reason: `${reasonPrefix}_deranged` };
+  if (numeric >= 96) return { bucket: 'hot', reason: `${reasonPrefix}_hot` };
+  if (numeric >= 45) return { bucket: 'warm', reason: `${reasonPrefix}_warm` };
+  return { bucket: 'clean', reason: `${reasonPrefix}_clean` };
 }
 
 export function classifyFrameTailDamage({
@@ -55,8 +55,10 @@ export function classifyFrameTailDamage({
   queueDoneP95Ms = null,
   queueDoneP99Ms = null,
 } = {}) {
-  const frame = bucketForFrameP95(frameP99Ms ?? frameP95Ms);
-  const queue = bucketForQueueP95(queueDoneP99Ms ?? queueDoneP95Ms);
+  const frameUsesP99 = finiteOrNull(frameP99Ms) !== null;
+  const queueUsesP99 = finiteOrNull(queueDoneP99Ms) !== null;
+  const frame = bucketForFrameTail(frameUsesP99 ? frameP99Ms : frameP95Ms, frameUsesP99 ? 'frame_p99' : 'frame_p95');
+  const queue = bucketForQueueTail(queueUsesP99 ? queueDoneP99Ms : queueDoneP95Ms, queueUsesP99 ? 'queue_p99' : 'queue_p95');
   return {
     bucket: worstBucket(frame.bucket, queue.bucket),
     reasons: unique([frame.reason, queue.reason]),
@@ -181,6 +183,12 @@ function effectiveRouteEvidence(report = {}) {
 }
 
 function schedulerVerificationState(scheduler, adapterEvidence) {
+  if (scheduler?.requestedScheduler && !scheduler?.effectiveScheduler && !adapterEvidence?.effectiveScheduler) {
+    return 'scheduler-unverified';
+  }
+  if (adapterEvidence?.requestedScheduler && !adapterEvidence?.effectiveScheduler && !scheduler?.effectiveScheduler) {
+    return 'scheduler-unverified';
+  }
   if (scheduler?.verificationState) return scheduler.verificationState;
   if (adapterEvidence?.verificationState) return adapterEvidence.verificationState;
   if (scheduler?.effectiveScheduler || adapterEvidence?.effectiveScheduler) return 'adapter-evidence';
@@ -191,22 +199,29 @@ function schedulerFromReport(report = {}) {
   const routeEvidence = effectiveRouteEvidence(report);
   const scheduler = cloneObject(routeEvidence.scheduler);
   const adapterEvidence = cloneObject(routeEvidence.breathingRoom || routeEvidence.schedulerEvidence);
-  if (scheduler) {
+  return normalizeScheduler(scheduler, adapterEvidence);
+}
+
+function normalizeScheduler(scheduler = null, adapterEvidence = null) {
+  const normalizedScheduler = cloneObject(scheduler);
+  const normalizedAdapterEvidence = cloneObject(adapterEvidence || scheduler?.adapterEvidence);
+  if (normalizedScheduler) {
+    const effectiveScheduler = normalizedScheduler.effectiveScheduler || normalizedAdapterEvidence?.effectiveScheduler || null;
     return {
-      schema: scheduler.schema || 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: scheduler.requestedScheduler || null,
-      effectiveScheduler: scheduler.effectiveScheduler || null,
-      verificationState: schedulerVerificationState(scheduler, adapterEvidence),
-      adapterEvidence,
+      schema: normalizedScheduler.schema || 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: normalizedScheduler.requestedScheduler || normalizedAdapterEvidence?.requestedScheduler || null,
+      effectiveScheduler,
+      verificationState: schedulerVerificationState(normalizedScheduler, normalizedAdapterEvidence),
+      adapterEvidence: normalizedAdapterEvidence,
     };
   }
-  if (adapterEvidence) {
+  if (normalizedAdapterEvidence) {
     return {
       schema: 'kaminos.webgpu-route-scheduler.v0',
-      requestedScheduler: adapterEvidence.requestedScheduler || null,
-      effectiveScheduler: adapterEvidence.effectiveScheduler || null,
-      verificationState: schedulerVerificationState(null, adapterEvidence),
-      adapterEvidence,
+      requestedScheduler: normalizedAdapterEvidence.requestedScheduler || null,
+      effectiveScheduler: normalizedAdapterEvidence.effectiveScheduler || null,
+      verificationState: schedulerVerificationState(null, normalizedAdapterEvidence),
+      adapterEvidence: normalizedAdapterEvidence,
     };
   }
   return {
@@ -325,15 +340,10 @@ export function buildComputeRouteContentionWitness({
     sourceTruthWarnings: normalizedWarnings,
     fixtureOrCachedRoute,
   });
-  const missingTiming = !Number.isFinite(timing.frameP95Ms) || !Number.isFinite(timing.queueDoneP95Ms);
+  const missingTiming = !(Number.isFinite(timing.frameP99Ms) || Number.isFinite(timing.frameP95Ms))
+    || !(Number.isFinite(timing.queueDoneP99Ms) || Number.isFinite(timing.queueDoneP95Ms));
   const frameTailDamage = classifyFrameTailDamage(timing);
-  const normalizedScheduler = scheduler || {
-    schema: 'kaminos.webgpu-route-scheduler.v0',
-    requestedScheduler: null,
-    effectiveScheduler: null,
-    verificationState: 'scheduler-unverified',
-    adapterEvidence: null,
-  };
+  const normalizedScheduler = normalizeScheduler(scheduler);
   const witnessWarnings = witnessWarningsFor({ scheduler: normalizedScheduler });
   return {
     schema: COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA,
