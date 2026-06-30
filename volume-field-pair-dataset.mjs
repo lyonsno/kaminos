@@ -8,7 +8,9 @@ const FIELD_PROJECTION_TENSOR_SCHEMA = 'kaminos.volume.field-projection-tensor.v
 const SAME_STATE_FREEZE_PREFLIGHT_SCHEMA = 'kaminos.volume.same-state-freeze-preflight.v0';
 const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
-const PAIR_AUTHORITY = 'route-paired-sequential-field-readbacks-not-frame-locked';
+const SEQUENTIAL_PAIR_AUTHORITY = 'route-paired-sequential-field-readbacks-not-frame-locked';
+const DETERMINISTIC_REPLAY_PAIR_AUTHORITY = 'deterministic-replay-same-route-controls-fixed-step-not-state-transfer';
+const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const FIELD_AUTHORITY = 'webgpu-copy-src-readback-simReadback-summary-and-majorant';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_resolution=128&volume_majorant_grid=48&volume_steps=148&volume_adaptive_rays=0.75&volume_density=3.05&volume_fire=0.50&volume_radiance=3&volume_absorption=0&volume_glow=2.5&volume_smoke=2.8&volume_curl=3.5&volume_microdetail=2.5&volume_interface_shred=0&volume_fire_licks=0&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.59&volume_detail_scale=0.45&volume_plume_height=2.2&volume_wind_strength=0&volume_wind_angle=180&volume_wind_height=-0.8&volume_input_radius=0.11&volume_flow_rate=0.35&volume_reaction_fuel=1&volume_majorant_cadence=1&volume_pressure_iterations=2&volume_pressure_strategy=global&volume_sim_profile=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_occupancy_skip=0.1&volume_majorant_skip=0&volume_majorant_smooth=0.1&volume_majorant_guard=0.3';
 const SUPPORTED_GRIDS = [96, 128, 160];
@@ -243,14 +245,31 @@ function buildFieldProjectionTensor({ witness, plan, fieldShape, simReadback, ma
   };
 }
 
-function buildSameStateFreezeAttempt() {
+function buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }) {
+  if (deterministicReplay?.enabled) {
+    return {
+      schema: SAME_STATE_FREEZE_PREFLIGHT_SCHEMA,
+      status: 'satisfied-by-deterministic-replay',
+      code: 'same-state-buffer-transfer-unsupported-deterministic-replay-used',
+      failurePhase: 'pairing-preflight',
+      requestedPairing: 'same-state low/high simulation-grid field readbacks',
+      effectivePairing: pairAuthority,
+      deterministicReplay,
+      currentEvidence: [
+        'volume_resolution changes still rebuildFluidState() and cannot transfer GPU buffers across grid dimensions',
+        'volume-witness.mjs can request sampleDeterministicReplayFrame() with fixed route controls, reset reason, step count, and timestamp clock',
+        'low/high captures are comparable as deterministic same-logical-state replays, not literal cloned GPU field snapshots',
+      ],
+      remainingHook: 'A true cross-grid snapshot/reseed import path would still be needed to claim literal state transfer instead of deterministic replay.',
+    };
+  }
   return {
     schema: SAME_STATE_FREEZE_PREFLIGHT_SCHEMA,
     status: 'blocked-by-missing-simulator-hook',
     code: 'same-state-grid-snapshot-unsupported',
     failurePhase: 'pairing-preflight',
     requestedPairing: 'same-state low/high simulation-grid field readbacks',
-    effectivePairing: PAIR_AUTHORITY,
+    effectivePairing: pairAuthority,
     currentEvidence: [
       'volume_resolution changes rebuildFluidState() and resets GPU fluid buffers',
       'sampleFrame() can copy current fluid/front/majorant buffers but cannot export/import them into a different grid instance',
@@ -307,6 +326,22 @@ function summarizeFieldEvidence(witness, plan) {
     error.details = { requestedGrid: plan.requestedGrid, simCostLedger, report: plan.report };
     throw error;
   }
+  if (plan.deterministicReplay?.enabled) {
+    const replay = witness.deterministicReplay || null;
+    if (
+      replay?.identity !== DETERMINISTIC_REPLAY_IDENTITY ||
+      Number(replay.steps) !== plan.deterministicReplay.steps ||
+      Number(replay.completedSteps) !== plan.deterministicReplay.steps ||
+      Number(witness.simStepCount) !== plan.deterministicReplay.steps ||
+      replay.stateTransfer !== false
+    ) {
+      const error = new Error('wrong-fallback-route: deterministic replay metadata is absent or does not match requested fixed-step capture');
+      error.code = 'wrong-fallback-route';
+      error.failurePhase = 'validation';
+      error.details = { requestedReplay: plan.deterministicReplay, effectiveReplay: replay, report: plan.report };
+      throw error;
+    }
+  }
   const fieldShape = fieldShapeFromReadback(simReadback, majorantReadback, simCostLedger);
   const fieldProjectionTensor = buildFieldProjectionTensor({
     witness,
@@ -330,6 +365,7 @@ function summarizeFieldEvidence(witness, plan) {
     captureBackend: witness.captureBackend,
     frameCount: witness.frameCount,
     simStepCount: witness.simStepCount,
+    deterministicReplay: witness.deterministicReplay || null,
     volumeScene: witness.volumeScene,
     fieldShape,
     fieldProjectionTensor,
@@ -395,7 +431,7 @@ function summarizeFieldEvidence(witness, plan) {
   };
 }
 
-function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode }) {
+function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, debugPort, settleMs, windowSize, evidenceMode, deterministicReplay }) {
   const slug = `${pairId}-${role}-${gridSlug(grid)}`;
   const out = resolve(pairDir, `${slug}.png`);
   const report = resolve(pairDir, `${slug}.json`);
@@ -415,6 +451,13 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     '--window-size', windowSize,
     '--evidence-mode', evidenceMode,
   ];
+  if (deterministicReplay?.enabled) {
+    command.push(
+      '--deterministic-replay-steps', String(deterministicReplay.steps),
+      '--deterministic-replay-time-step-ms', String(deterministicReplay.timeStepMs),
+      '--deterministic-replay-start-ms', String(deterministicReplay.startTimeMs)
+    );
+  }
   return {
     role,
     requestedGrid: nearestSupported(grid, SUPPORTED_GRIDS, 96),
@@ -424,6 +467,7 @@ function makeCapturePlan({ pairId, role, grid, majorantGrid, route, pairDir, deb
     report,
     fullScreenshot,
     fieldProjectionTensor,
+    deterministicReplay: deterministicReplay?.enabled ? { ...deterministicReplay } : null,
     stdout,
     stderr,
     command,
@@ -474,6 +518,16 @@ const settleMs = Number(args.get('--settle-ms') || 8000);
 const windowSize = String(args.get('--window-size') || '1280,960');
 const debugPort = Number(args.get('--debug-port') || 9700);
 const evidenceMode = String(args.get('--evidence-mode') || 'performance');
+const deterministicReplaySteps = Math.max(0, Math.floor(Number(args.get('--deterministic-replay-steps') || 0)));
+const deterministicReplay = deterministicReplaySteps > 0 ? {
+  enabled: true,
+  identity: DETERMINISTIC_REPLAY_IDENTITY,
+  steps: deterministicReplaySteps,
+  timeStepMs: Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60)),
+  startTimeMs: Number(args.get('--deterministic-replay-start-ms') || 1000),
+  stateTransfer: false,
+} : { enabled: false };
+const pairAuthority = deterministicReplay.enabled ? DETERMINISTIC_REPLAY_PAIR_AUTHORITY : SEQUENTIAL_PAIR_AUTHORITY;
 const dryRun = args.has('--dry-run');
 const createdAt = new Date().toISOString();
 const gitCommit = gitValue(['rev-parse', 'HEAD']);
@@ -486,7 +540,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
   const highRoute = routeWithGrid(baseUrl, highGrid, majorantGrid);
   return {
     pairId,
-    pairAuthority: PAIR_AUTHORITY,
+    pairAuthority,
     fieldAuthority: FIELD_AUTHORITY,
     lowGrid,
     highGrid,
@@ -504,6 +558,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       settleMs,
       windowSize,
       evidenceMode,
+      deterministicReplay,
     }),
     high: makeCapturePlan({
       pairId,
@@ -516,6 +571,7 @@ const pairs = lowGrids.map((lowGrid, index) => {
       settleMs,
       windowSize,
       evidenceMode,
+      deterministicReplay,
     }),
   };
 });
@@ -533,10 +589,13 @@ const manifest = {
   outDir,
   manifestPath,
   dryRun,
-  pairAuthority: PAIR_AUTHORITY,
+  pairAuthority,
   fieldAuthority: FIELD_AUTHORITY,
-  sameStateFreezeAttempt: buildSameStateFreezeAttempt(),
-  limitation: 'Pairs are live sequential readbacks from the same route family; they preserve field authority but are not frame-locked supervised tensors.',
+  deterministicReplay,
+  sameStateFreezeAttempt: buildSameStateFreezeAttempt({ pairAuthority, deterministicReplay }),
+  limitation: deterministicReplay.enabled
+    ? 'Pairs are fixed-step deterministic replays from the same route/control family; they preserve field authority and logical pairing but are not literal cross-grid GPU snapshot transfers.'
+    : 'Pairs are live sequential readbacks from the same route family; they preserve field authority but are not frame-locked supervised tensors.',
   lowGrids,
   lowGrid: lowGrids[0],
   highGrid,

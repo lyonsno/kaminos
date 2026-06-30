@@ -1,6 +1,7 @@
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const DETERMINISTIC_REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -3345,6 +3346,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
+    deterministicReplay: null,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -5930,9 +5932,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
-  async function sampleFrame() {
-    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
-    updateUniforms(performance.now());
+  function normalizeDeterministicReplayOptions(options = {}) {
+    const steps = Math.max(1, Math.min(600, Math.floor(Number(options.steps ?? options.replaySteps ?? 96))));
+    const timeStepMs = Math.max(1, Math.min(100, Number(options.timeStepMs ?? options.replayTimeStepMs ?? 1000 / 60)));
+    const startTimeMs = Math.max(0, Math.min(3600000, Number(options.startTimeMs ?? options.replayStartTimeMs ?? 1000)));
+    return {
+      identity: DETERMINISTIC_REPLAY_IDENTITY,
+      authority: 'same-route-controls-fixed-step-replay',
+      stateTransfer: false,
+      resetReason: 'deterministic-replay-reset',
+      steps,
+      timeStepMs,
+      startTimeMs,
+      finalTimeMs: startTimeMs + Math.max(0, steps - 1) * timeStepMs,
+      routeIdentity: ROUTE_IDENTITY,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      grid: gridSize,
+      majorantGrid: majorantGridSize,
+      controlsSignature: temporalControlSignature(controlsSnapshot),
+    };
+  }
+
+  async function sampleFrame(options = {}) {
+    const sampleOptions = options || {};
+    const deterministicReplay = sampleOptions.deterministicReplay || state.deterministicReplay || null;
+    if ((!state.active && !sampleOptions.allowInactive) || !device) {
+      return { ok: false, reason: 'inactive', ...state, deterministicReplay };
+    }
+    updateUniforms(Number.isFinite(Number(sampleOptions.nowMs)) ? Number(sampleOptions.nowMs) : performance.now());
     ensureFrameTexture();
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
@@ -5944,7 +5971,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    encodeSim(encoder);
+    if (sampleOptions.advanceSim !== false) encodeSim(encoder);
     encodeMajorant(encoder, { force: true });
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
@@ -5964,6 +5991,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         height: state.height,
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
+        deterministicReplay,
         simGrid: state.simGrid,
         simGridLabel: state.simGridLabel,
         frontFieldIdentity: state.frontFieldIdentity,
@@ -6275,6 +6303,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeBounds,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
+      deterministicReplay,
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
@@ -6410,6 +6439,75 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         rgba: Array.from(preview),
       },
     };
+  }
+
+  async function sampleDeterministicReplayFrame(options = {}) {
+    if (!device) {
+      return { ok: false, reason: 'inactive', ...state, deterministicReplay: null };
+    }
+    const replay = normalizeDeterministicReplayOptions(options);
+    const wasActive = state.active;
+    if (wasActive) {
+      state.active = false;
+      canvas.classList.remove('active');
+      cancelAnimationFrame(raf);
+    }
+    state.frameCount = 0;
+    state.deterministicReplay = {
+      ...replay,
+      status: 'resetting',
+      backend: state.backend,
+      captureRoute: state.effectiveRoute,
+      startedAtFrameCount: 0,
+      startedAtSimStepCount: 0,
+    };
+    rebuildFluidState(gridSize, majorantGridSize, replay.resetReason);
+    state.frameCount = 0;
+    state.deterministicReplay = {
+      ...state.deterministicReplay,
+      status: 'advancing',
+      grid: gridSize,
+      majorantGrid: majorantGridSize,
+    };
+    for (let step = 0; step < replay.steps; step += 1) {
+      const nowMs = replay.startTimeMs + step * replay.timeStepMs;
+      updateUniforms(nowMs);
+      const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${replay.steps}` });
+      encodeSim(encoder);
+      if (step === replay.steps - 1) encodeMajorant(encoder, { force: true });
+      device.queue.submit([encoder.finish()]);
+      state.frameCount += 1;
+    }
+    await device.queue.onSubmittedWorkDone?.();
+    state.deterministicReplay = {
+      ...state.deterministicReplay,
+      status: 'advanced',
+      completedSteps: replay.steps,
+      finalFrameCount: state.frameCount,
+      finalSimStepCount: state.simStepCount,
+      finalTimeMs: replay.finalTimeMs,
+      fieldAuthority: 'webgpu-compute-replay-then-copy-src-readback',
+    };
+    const sample = await sampleFrame({
+      allowInactive: true,
+      advanceSim: false,
+      nowMs: replay.finalTimeMs,
+      deterministicReplay: state.deterministicReplay,
+    });
+    state.deterministicReplay = {
+      ...state.deterministicReplay,
+      status: sample.ok ? 'captured' : 'failed',
+      sampledAtFrameCount: state.frameCount,
+      sampledAtSimStepCount: state.simStepCount,
+    };
+    sample.deterministicReplay = { ...state.deterministicReplay };
+    if (wasActive) {
+      state.active = true;
+      canvas.classList.add('active');
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(render);
+    }
+    return sample;
   }
 
   return {
@@ -6548,6 +6646,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleDeterministicReplayFrame,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();

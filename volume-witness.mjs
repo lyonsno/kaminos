@@ -18,6 +18,10 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-volume-witness-profile-${port}`;
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
+const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps') || 0);
+const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
+const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
+const deterministicReplayStartTimeMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
@@ -1155,14 +1159,31 @@ async function main() {
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
+    const sampleExpression = deterministicReplayRequested
+      ? `window.__kaminosVolumePrototype.sampleDeterministicReplayFrame(${JSON.stringify({
+        steps: deterministicReplaySteps,
+        timeStepMs: deterministicReplayTimeStepMs,
+        startTimeMs: deterministicReplayStartTimeMs,
+      })})`
+      : 'window.__kaminosVolumePrototype.sampleFrame()';
     const sampleEval = await wsRequest(ws, 'Runtime.evaluate', {
-      expression: 'window.__kaminosVolumePrototype.sampleFrame()',
+      expression: sampleExpression,
       awaitPromise: true,
       returnByValue: true,
     });
     const sample = sampleEval.result.value;
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
+    }
+    if (deterministicReplayRequested) {
+      if (
+        sample.deterministicReplay?.identity !== 'deterministic-replay-same-route-controls-fixed-step-v0' ||
+        Number(sample.deterministicReplay?.steps) !== deterministicReplaySteps ||
+        Number(sample.deterministicReplay?.completedSteps) !== deterministicReplaySteps ||
+        Number(sample.simStepCount) !== deterministicReplaySteps
+      ) {
+        throw new Error(`deterministic replay did not report exact fixed-step authority: ${JSON.stringify(sample.deterministicReplay)}`);
+      }
     }
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
@@ -1805,6 +1826,7 @@ async function main() {
       captureBackend,
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
+      deterministicReplay: sample.deterministicReplay || null,
       simGrid: sample.simGrid,
       simGridLabel: sample.simGridLabel,
       frontFieldIdentity: sample.frontFieldIdentity,

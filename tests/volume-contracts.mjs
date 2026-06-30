@@ -1389,3 +1389,11 @@ assert.match(fieldPairDataset, /sourceRelativeVisualHeightBins/, 'field-pair pro
 assert.match(fieldPairDataset, /sameStateFreezeAttempt/, 'field-pair dataset records the same-state/freeze pairing preflight result');
 assert.match(fieldPairDataset, /same-state-grid-snapshot-unsupported/, 'field-pair dataset names the missing same-state grid snapshot hook instead of claiming frame lock');
 assert.match(fieldPairDataset, /pairing-preflight/, 'field-pair dataset reports same-state pairing failure phase separately from capture/validation');
+assert.match(core, /DETERMINISTIC_REPLAY_IDENTITY\s*=\s*'deterministic-replay-same-route-controls-fixed-step-v0'/, 'volume core names deterministic replay as a same-route fixed-step field pairing authority');
+assert.match(core, /sampleDeterministicReplayFrame/, 'volume core exposes a deterministic replay field sampler instead of relying only on RAF timing');
+assert.match(core, /deterministicReplay/, 'volume core reports deterministic replay metadata through readback/debug state');
+assert.match(witness, /--deterministic-replay-steps/, 'volume witness can request deterministic replay steps for exact field-pair captures');
+assert.match(witness, /sampleDeterministicReplayFrame/, 'volume witness routes deterministic replay captures through the simulator replay sampler');
+assert.match(fieldPairDataset, /deterministic-replay-same-route-controls-fixed-step-not-state-transfer/, 'field-pair dataset can mark low/high pairs as deterministic replay instead of sequential frame readbacks');
+assert.match(fieldPairDataset, /deterministicReplay/, 'field-pair dataset records deterministic replay controls/effective identity per capture');
+assert.match(fieldPairDataset, /same-state-buffer-transfer-unsupported-deterministic-replay-used/, 'field-pair dataset distinguishes deterministic replay from literal cross-grid state transfer');
