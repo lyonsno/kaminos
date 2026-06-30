@@ -10225,6 +10225,7 @@ let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
 let routedVolumeSimProfile = false;
+let routedVolumeSimCadence = 1;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
 let routedVolumeQuenchVapor = 0;
@@ -10268,6 +10269,12 @@ function normalizeVolumeRuntimeQuality(value) {
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
+}
+
+function normalizeVolumeSimCadence(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(8, requested));
 }
 
 function normalizeVolumeQualityReason(value) {
@@ -10316,6 +10323,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
     cap('raySteps', 96);
     floor('adaptiveRays', 0.45);
     floor('majorantCadence', 2);
+    floor('simCadence', 2);
   } else if (effective === 'holdover') {
     cap('renderScale', 0.70);
     cap('raySteps', 72);
@@ -10323,6 +10331,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
     floor('occupancySkip', 0.25);
     floor('majorantSkip', 0.35);
     floor('majorantCadence', 4);
+    floor('simCadence', 4);
     floor('temporalAccum', 0.42);
     next.pressureStrategy = 'global';
     next.pressureIterations = Math.min(1, Number.isFinite(Number(next.pressureIterations)) ? Number(next.pressureIterations) : 1);
@@ -10334,6 +10343,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
     floor('occupancySkip', 0.45);
     floor('majorantSkip', 0.55);
     floor('majorantCadence', 8);
+    floor('simCadence', 8);
     floor('temporalAccum', 0.65);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
@@ -10353,6 +10363,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
       occupancySkip: next.occupancySkip,
       majorantSkip: next.majorantSkip,
       majorantCadence: next.majorantCadence,
+      simCadence: next.simCadence,
       temporalAccum: next.temporalAccum,
       pressureStrategy: next.pressureStrategy,
       pressureIterations: next.pressureIterations,
@@ -14945,9 +14956,11 @@ function readVolumeControls() {
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
     majorantCadence: routedVolumeMajorantCadence,
+    simCadence: routedVolumeSimCadence,
     pressureIterations: pressureConfig.pressureIterations,
     pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
+    effectiveVisualAuthority: routedVolumeSimCadence > 1 ? 'continuation' : 'live-sim',
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   });
@@ -15114,7 +15127,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-scene-state').textContent = s.volumeScene || 'compact_plume';
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
-  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : 'live';
+  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : (s.effectiveVisualAuthority === 'continuation' ? 'continuation' : 'live');
   document.getElementById('volume-canonical-content-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.contentMode || 'smoke') : sceneContentLabel;
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
@@ -15326,6 +15339,10 @@ async function initKaminosVolumeRoute() {
   const routeMajorantCadence = Number(params.get('volume_majorant_cadence'));
   if (params.has('volume_majorant_cadence') && Number.isFinite(routeMajorantCadence)) {
     routedVolumeMajorantCadence = Math.max(1, Math.min(8, Math.round(routeMajorantCadence)));
+  }
+  const routeSimCadence = Number(params.get('volume_sim_cadence'));
+  if (params.has('volume_sim_cadence') && Number.isFinite(routeSimCadence)) {
+    routedVolumeSimCadence = normalizeVolumeSimCadence(routeSimCadence);
   }
   const routePressureIterations = Number(params.get('volume_pressure_iterations'));
   const routePressureMode = normalizeVolumePressureMode(params.get('volume_pressure_mode'));

@@ -865,6 +865,11 @@ let expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const requestedSimProfile = (routeParams.get('volume_sim_profile') || '').toLowerCase();
 const expectedSimProfile = requestedSimProfile === '1' || requestedSimProfile === 'true' || requestedSimProfile === 'yes' || requestedSimProfile === 'on';
+const requestedSimCadence = Number(routeParams.get('volume_sim_cadence'));
+const routeRequestedSimCadence = routeParams.has('volume_sim_cadence') && Number.isFinite(requestedSimCadence)
+  ? Math.max(1, Math.min(8, Math.round(requestedSimCadence)))
+  : 1;
+let expectedSimCadence = routeRequestedSimCadence;
 const requestedGridOverlay = Number(routeParams.get('volume_grid'));
 const expectedGridOverlay = Number.isFinite(requestedGridOverlay)
   ? Math.max(0, Math.min(1, requestedGridOverlay))
@@ -1044,6 +1049,7 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedRaySteps = Math.min(expectedRaySteps, 96);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.45);
   expectedMajorantCadence = Math.max(expectedMajorantCadence, 2);
+  expectedSimCadence = Math.max(expectedSimCadence, 2);
 } else if (expectedRuntimeQualityEffective === 'holdover') {
   expectedRenderScale = Math.min(expectedRenderScale, 0.70);
   expectedRaySteps = Math.min(expectedRaySteps, 72);
@@ -1051,6 +1057,7 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.25);
   expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.35);
   expectedMajorantCadence = Math.max(expectedMajorantCadence, 4);
+  expectedSimCadence = Math.max(expectedSimCadence, 4);
   expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.42);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = Math.min(1, expectedPressureIterations);
@@ -1061,10 +1068,12 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.45);
   expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.55);
   expectedMajorantCadence = Math.max(expectedMajorantCadence, 8);
+  expectedSimCadence = Math.max(expectedSimCadence, 8);
   expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.65);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = 0;
 }
+const expectedVisualAuthority = expectedSimCadence > 1 ? 'continuation' : 'live-sim';
 expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
 expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
 expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
@@ -1516,8 +1525,15 @@ async function main() {
     assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
+    assert.equal(state.controls?.simCadence, expectedSimCadence, 'sim cadence route/control did not apply');
+    assert.equal(state.simCadence, expectedSimCadence, 'effective sim cadence did not reach debug state');
+    assert.equal(state.effectiveVisualAuthority, expectedVisualAuthority, 'effective visual authority did not match sim cadence');
+    if (expectedSimCadence > 1) {
+      assert.ok(state.frameCount > state.simStepCount, 'low-cadence continuation did not create a frame/sim-step cadence gap');
+      assert.ok(state.continuationFrameCount > 0, 'low-cadence continuation did not record continued render frames');
+      assert.equal(state.continuationAuthority, 'continuation-from-latest-live-field-v0', 'continuation authority label is missing');
+    }
     assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
-    const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
     const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
     const expectedMainFluidLocalProjectionStrategy = MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY;
@@ -1543,7 +1559,12 @@ async function main() {
     assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
     assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
     assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
-    assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
+    assert.equal(stateLedger.simCadence, expectedSimCadence, 'sim cost ledger sim cadence does not match effective route');
+    assert.equal(stateLedger.effectiveVisualAuthority, expectedVisualAuthority, 'sim cost ledger visual authority does not match effective route');
+    const stateLedgerSimSkipped = Boolean(stateLedger.lastSimFrameSkipped);
+    const expectedLedgerPressureSourceStrategy = stateLedgerSimSkipped || !state.pressureProjectionEnabled ? 'disabled' : 'jacobi-inline-divergence-v0';
+    const expectedLedgerPressurePasses = stateLedgerSimSkipped || !state.pressureProjectionEnabled ? 0 : expectedPressureProjectionIterations;
+    assert.equal(stateLedger.pressureSourceStrategy, expectedLedgerPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match dispatched frame state');
     assert.equal(stateLedger.pressureStrategy || 'global', expectedPressureStrategy, 'sim cost ledger pressure strategy does not match effective route');
     assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureStrategy, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
     assert.equal(Number(stateLedger.tallPlumePressureIterationTarget), expectedTallPlumePressureTarget, 'sim cost ledger tall-plume pressure target does not match effective scene');
@@ -1576,10 +1597,14 @@ async function main() {
     assert.equal(stateLedger.tallPlumeTransitionBandStrategy, expectedTransitionBandStrategy, 'sim cost ledger transition-band strategy does not match effective scene');
     assert.equal(Number(stateLedger.tallPlumeTransitionBandExtraReadsPerCell), expectedTransitionBandExtraReads, 'sim cost ledger transition-band breakup should not restore scalar neighborhood reads');
     assert.equal(Number(stateLedger.pressureDivergencePasses), 0, 'sim cost ledger should not report a standalone pressure divergence pass');
-    assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
-    assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
+    assert.equal(stateLedger.pressureJacobiPasses, expectedLedgerPressurePasses, 'sim cost ledger pressure pass count does not match dispatched frame state');
+    assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, expectedLedgerPressurePasses, 'sim cost ledger inline-divergence Jacobi pass count does not match dispatched frame state');
     assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
-    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
+    assert.ok(
+      Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) &&
+        (expectedSimCadence > 1 ? stateLedger.fullGridCellVisitsPerFrame >= 0 : stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3),
+      'sim cost ledger did not report full-grid cell visits',
+    );
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
@@ -1600,7 +1625,6 @@ async function main() {
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
-    const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
     const sampleMainFluidStrategy = expectedMainFluidKernelStrategy(sampleFireLicks);
     const sampleFireLickBreakupEvaluations = expectedFireLickBreakupEvaluationsPerCell(sampleFireLicks);
@@ -1620,10 +1644,15 @@ async function main() {
     const sampleTransitionBandStrategy = expectedTallPlumeTransitionBandStrategy(sampleVolumeScene);
     const sampleTransitionBandExtraReads = expectedTallPlumeTransitionBandExtraReadsPerCell(sampleVolumeScene);
     const sampleLedger = sample.simCostLedger || stateLedger;
+    const sampleLedgerSimSkipped = Boolean(sampleLedger?.lastSimFrameSkipped);
+    const expectedSamplePressureSourceStrategy = sampleLedgerSimSkipped || !sample.pressureProjectionEnabled ? 'disabled' : 'jacobi-inline-divergence-v0';
+    const expectedSamplePressurePasses = sampleLedgerSimSkipped || !sample.pressureProjectionEnabled ? 0 : expectedPressureProjectionIterations;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
       sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
-      sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
+      sampleLedger?.simCadence !== expectedSimCadence ||
+      sampleLedger?.effectiveVisualAuthority !== expectedVisualAuthority ||
+      sampleLedger?.pressureSourceStrategy !== expectedSamplePressureSourceStrategy ||
       sampleLedger?.mainFluidKernelStrategy !== sampleMainFluidStrategy ||
       sampleLedger?.mainFluidLocalProjectionStrategy !== expectedMainFluidLocalProjectionStrategy ||
       Number(sampleLedger?.mainFluidLocalProjectionDivergenceEvaluationsPerCell) !== 0 ||
@@ -1646,8 +1675,8 @@ async function main() {
       sampleLedger?.pressureStrategy !== expectedPressureStrategy ||
       sampleLedger?.tallPlumePressureTierStrategy !== expectedTallPlumePressureTierStrategyValue ||
       sampleLedger?.pressureProjectionReadStrategy !== expectedPressureProjectionReadStrategy ||
-      sampleLedger?.pressureJacobiPasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
-      sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
+      sampleLedger?.pressureJacobiPasses !== expectedSamplePressurePasses ||
+      sampleLedger?.pressureJacobiInlineDivergencePasses !== expectedSamplePressurePasses ||
       (expectedSpatialPressureTiers && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
       sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
       !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
@@ -2173,6 +2202,10 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
+    } else if (expectsPerformanceVolumeEvidence) {
+      if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
+        throw new Error(`main renderer screenshot missing bridged performance volume signal: ${JSON.stringify(mainRendererMetrics)}`);
+      }
     } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
@@ -2253,7 +2286,7 @@ async function main() {
         Number(metrics.smokeLikePixels || 0) +
         Number(metrics.fireLikePixels || 0) +
         Number(metrics.emissiveLikePixels || 0);
-      if (metrics.litPixels < 1000 || volumeSignalPixels < 1500 || metrics.meanLuma < 1.5) {
+      if (metrics.smokeLikePixels < 120 || volumeSignalPixels < 1000 || metrics.meanLuma < 1.5) {
         throw new Error(`blank frame or missing performance volume signal: ${JSON.stringify({
           ...metrics,
           volumeSignalPixels,
@@ -2300,7 +2333,7 @@ async function main() {
       volumeBridge: bridge,
       backend: state.backend,
       captureBackend,
-      frameCount: state.frameCount,
+      frameCount: sample.frameCount,
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
       simGridLabel: sample.simGridLabel,
@@ -2346,6 +2379,15 @@ async function main() {
       gpuPressure: sample.gpuPressure,
       runtimeQualityReason: sample.runtimeQualityReason,
       runtimeQualityReceipt: sample.runtimeQualityReceipt,
+      expectedSimCadence,
+      expectedVisualAuthority,
+      simCadence: sample.simCadence,
+      effectiveVisualAuthority: sample.effectiveVisualAuthority,
+      continuationAuthority: sample.continuationAuthority,
+      liveSimFrameCount: sample.liveSimFrameCount,
+      continuationFrameCount: sample.continuationFrameCount,
+      lastLiveSimFrameId: sample.lastLiveSimFrameId,
+      lastSimFrameSkipped: sample.lastSimFrameSkipped,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,

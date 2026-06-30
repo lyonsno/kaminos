@@ -167,6 +167,7 @@ function applyRuntimeQualityControls(controls = {}) {
     cap('raySteps', 96);
     floor('adaptiveRays', 0.45);
     floor('majorantCadence', 2);
+    floor('simCadence', 2);
   } else if (effective === 'holdover') {
     cap('renderScale', 0.70);
     cap('raySteps', 72);
@@ -174,6 +175,7 @@ function applyRuntimeQualityControls(controls = {}) {
     floor('occupancySkip', 0.25);
     floor('majorantSkip', 0.35);
     floor('majorantCadence', 4);
+    floor('simCadence', 4);
     floor('temporalAccum', 0.42);
     next.pressureStrategy = 'global';
     next.pressureIterations = Math.min(1, Number.isFinite(Number(next.pressureIterations)) ? Number(next.pressureIterations) : 1);
@@ -184,6 +186,7 @@ function applyRuntimeQualityControls(controls = {}) {
     floor('occupancySkip', 0.45);
     floor('majorantSkip', 0.55);
     floor('majorantCadence', 8);
+    floor('simCadence', 8);
     floor('temporalAccum', 0.65);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
@@ -209,6 +212,7 @@ function runtimeQualityReceipt(controls = {}) {
       occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
       majorantSkip: clampFinite(controls.majorantSkip, 0, 1, 0.70),
       majorantCadence: normalizeMajorantBuildCadence(controls.majorantCadence),
+      simCadence: normalizeSimCadence(controls.simCadence),
       temporalAccum: clampFinite(controls.temporalAccum, 0, 0.85, 0.25),
       pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
       pressureIterations: normalizePressureIterationCount(controls.pressureIterations, controls.volumeScene),
@@ -431,6 +435,12 @@ function fireLickOperatorGainFromAmount(value) {
 }
 
 function normalizeMajorantBuildCadence(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(8, requested));
+}
+
+function normalizeSimCadence(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(8, requested));
@@ -3900,6 +3910,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     lookFreezeSkippedFrames: 0,
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
+    simCadence: normalizeSimCadence(controlsSnapshot.simCadence),
+    effectiveVisualAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation' : 'live-sim',
+    continuationAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0',
+    liveSimFrameCount: 0,
+    continuationFrameCount: 0,
+    lastLiveSimFrameId: -1,
+    lastSimFrameSkipped: false,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4945,6 +4962,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     currentFluid = 0;
     currentFront = 0;
     state.simStepCount = 0;
+    state.liveSimFrameCount = 0;
+    state.continuationFrameCount = 0;
+    state.lastLiveSimFrameId = -1;
+    state.lastSimFrameSkipped = false;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
     state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
@@ -5550,6 +5571,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         uploadedCells: uploadedPyroMaterialCells,
       },
     };
+    state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -5633,7 +5657,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
-    const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
+    const pressureEnabled = !state.lastSimFrameSkipped && state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
     const tallPlumePressureStrategy = spatialPressureEnabled
@@ -5642,7 +5666,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureEnabled ? 2 : 0;
     const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-    const simPassesPerFrame = 1;
+    const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.simCadence = simCadence;
+    state.effectiveVisualAuthority = simCadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+    const simPassesPerFrame = state.lastSimFrameSkipped ? 0 : 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
     const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
     const mainFluidKernelStrategy = fireLickBreakupEnabled
@@ -5766,6 +5794,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fullGridWorkgroupsPerPass,
       majorantWorkgroupsPerPass,
       simPassesPerFrame,
+      simCadence,
+      effectiveVisualAuthority: state.effectiveVisualAuthority,
+      continuationAuthority: state.continuationAuthority,
+      liveSimFrameCount: state.liveSimFrameCount,
+      continuationFrameCount: state.continuationFrameCount,
+      lastLiveSimFrameId: state.lastLiveSimFrameId,
+      lastSimFrameSkipped: state.lastSimFrameSkipped,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
@@ -5829,7 +5864,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.simCostLedger;
   }
 
-  function encodeSim(encoder) {
+  function shouldRunSimForFrame(options = {}) {
+    const cadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.simCadence = cadence;
+    state.effectiveVisualAuthority = cadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = cadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+    return options.force === true || cadence <= 1 || state.frameCount % cadence === 0;
+  }
+
+  function encodeSim(encoder, options = {}) {
+    if (!shouldRunSimForFrame(options)) {
+      state.lastSimFrameSkipped = true;
+      state.continuationFrameCount += 1;
+      updateSimCostLedger();
+      return false;
+    }
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
@@ -5841,9 +5890,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
+    state.lastSimFrameSkipped = false;
     encodePressureProjection(encoder);
     state.simStepCount += 1;
+    state.liveSimFrameCount += 1;
+    state.lastLiveSimFrameId = state.frameCount;
     updateSimCostLedger();
+    return true;
   }
 
   function encodePressureProjection(encoder) {
@@ -6019,8 +6072,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else {
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
-        encodeSim(encoder);
-        encodeMajorant(encoder);
+        const ranSim = encodeSim(encoder);
+        if (ranSim) encodeMajorant(encoder);
       }
       const currentTexture = context.getCurrentTexture();
       encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
@@ -6961,7 +7014,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
-    encodeSim(encoder);
+    encodeSim(encoder, { force: true });
     encodeMajorant(encoder, { force: true });
     encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     encoder.copyTextureToBuffer(
@@ -7012,6 +7065,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         flameQuenchModel: state.flameQuenchModel,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
+        simCadence: state.simCadence,
+        effectiveVisualAuthority: state.effectiveVisualAuthority,
+        continuationAuthority: state.continuationAuthority,
+        liveSimFrameCount: state.liveSimFrameCount,
+        continuationFrameCount: state.continuationFrameCount,
+        lastLiveSimFrameId: state.lastLiveSimFrameId,
+        lastSimFrameSkipped: state.lastSimFrameSkipped,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -7326,6 +7386,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       flameQuenchModel: state.flameQuenchModel,
       pyroDynamicDetail: clonePyroDynamicDetail(),
       pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
+      simCadence: state.simCadence,
+      effectiveVisualAuthority: state.effectiveVisualAuthority,
+      continuationAuthority: state.continuationAuthority,
+      liveSimFrameCount: state.liveSimFrameCount,
+      continuationFrameCount: state.continuationFrameCount,
+      lastLiveSimFrameId: state.lastLiveSimFrameId,
+      lastSimFrameSkipped: state.lastSimFrameSkipped,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -7497,6 +7564,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
       updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+      state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
+      state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
