@@ -1375,8 +1375,14 @@ assert.match(interframeBaseline, /kaminos\.volume\.interframe-triplet\.v0/, 'int
 assert.match(interframeBaseline, /same-route-live-sequence/, 'interframe triplet labels that frames came from one live simulator route');
 assert.match(interframeBaseline, /synthetic-comparison-not-live-simulator-output/, 'interframe baseline labels synthesized frames as comparison evidence only');
 assert.match(interframeBaseline, /pixel-midpoint-rgba-v0/, 'interframe baseline includes the cheapest deterministic pixel midpoint baseline');
+assert.match(interframeBaseline, /hold-last-rgba-v0/, 'interframe baseline includes a hold-last baseline for freeze/holdover comparison');
+assert.match(interframeBaseline, /hold-next-rgba-v0/, 'interframe baseline includes a hold-next baseline for reverse holdover comparison');
+assert.match(interframeBaseline, /block-match-bidirectional-warp-rgba-v0/, 'interframe baseline includes a deterministic local block-match warp baseline before external interpolators');
 assert.match(interframeBaseline, /actualMiddle/, 'interframe baseline preserves the actual middle frame as the comparison target');
 assert.match(interframeBaseline, /syntheticMiddle/, 'interframe baseline writes a synthesized middle-frame artifact');
+assert.match(interframeBaseline, /contactSheet/, 'interframe baseline writes an inspectable contact sheet for operator smoke');
+assert.match(interframeBaseline, /tileOrder/, 'interframe contact sheet records the order of visual tiles');
+assert.match(interframeBaseline, /bestByMeanAbsoluteError/, 'interframe baseline reports the best deterministic baseline by actual-middle MAE');
 assert.match(interframeBaseline, /meanAbsoluteError/, 'interframe baseline reports a concrete pixel error metric');
 assert.match(interframeBaseline, /rootMeanSquaredError/, 'interframe baseline reports a concrete squared pixel error metric');
 assert.match(interframeBaseline, /ghosting|smearing|topology-lie|snuff-quench-miss|low-fire-shimmer|broad-smoke-mush/, 'interframe baseline names visual failure-mode buckets');

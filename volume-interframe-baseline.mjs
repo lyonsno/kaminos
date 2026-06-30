@@ -12,7 +12,16 @@ const EXPECTED_VOLUME_ROUTE_ID = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE_ID = 'kaminos-volume-prototype-v0';
 const TRIPLET_AUTHORITY = 'same-route-live-sequence';
 const SYNTHETIC_AUTHORITY = 'synthetic-comparison-not-live-simulator-output';
+const HOLD_LAST_BASELINE_ID = 'hold-last-rgba-v0';
+const HOLD_NEXT_BASELINE_ID = 'hold-next-rgba-v0';
 const MIDPOINT_BASELINE_ID = 'pixel-midpoint-rgba-v0';
+const BLOCK_MATCH_BASELINE_ID = 'block-match-bidirectional-warp-rgba-v0';
+const BASELINE_IDS = [
+  HOLD_LAST_BASELINE_ID,
+  HOLD_NEXT_BASELINE_ID,
+  MIDPOINT_BASELINE_ID,
+  BLOCK_MATCH_BASELINE_ID,
+];
 const FAILURE_MODE_BUCKETS = [
   'ghosting',
   'smearing',
@@ -293,6 +302,100 @@ function midpointRgba(first, third) {
   return out;
 }
 
+function cloneRgba(source) {
+  return Uint8Array.from(source);
+}
+
+function lumaAt(rgba, width, x, y) {
+  const i = (y * width + x) * 4;
+  return 0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2];
+}
+
+function blockMatchCost(first, third, width, height, x, y, dx, dy, blockSize) {
+  let cost = 0;
+  let samples = 0;
+  for (let by = 0; by < blockSize; by += 2) {
+    const y0 = y + by;
+    const y2 = y + dy + by;
+    if (y0 < 0 || y0 >= height || y2 < 0 || y2 >= height) continue;
+    for (let bx = 0; bx < blockSize; bx += 2) {
+      const x0 = x + bx;
+      const x2 = x + dx + bx;
+      if (x0 < 0 || x0 >= width || x2 < 0 || x2 >= width) continue;
+      const d = lumaAt(first, width, x0, y0) - lumaAt(third, width, x2, y2);
+      cost += d * d;
+      samples += 1;
+    }
+  }
+  return samples ? cost / samples : Number.POSITIVE_INFINITY;
+}
+
+function blockMatchBidirectionalWarpRgba(first, third, width, height, options = {}) {
+  const blockSize = Number(options.blockSize || 8);
+  const searchRadius = Number(options.searchRadius || 14);
+  const searchStep = Number(options.searchStep || 2);
+  const fallback = midpointRgba(first, third);
+  const accum = new Float64Array(first.length);
+  const weights = new Uint16Array(width * height);
+  for (let y = 0; y < height; y += blockSize) {
+    for (let x = 0; x < width; x += blockSize) {
+      let bestDx = 0;
+      let bestDy = 0;
+      let bestCost = Number.POSITIVE_INFINITY;
+      for (let dy = -searchRadius; dy <= searchRadius; dy += searchStep) {
+        for (let dx = -searchRadius; dx <= searchRadius; dx += searchStep) {
+          const cost = blockMatchCost(first, third, width, height, x, y, dx, dy, blockSize);
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestDx = dx;
+            bestDy = dy;
+          }
+        }
+      }
+      const halfDx = Math.round(bestDx / 2);
+      const halfDy = Math.round(bestDy / 2);
+      for (let by = 0; by < blockSize; by += 1) {
+        for (let bx = 0; bx < blockSize; bx += 1) {
+          const x0 = x + bx;
+          const y0 = y + by;
+          const x2 = x0 + bestDx;
+          const y2 = y0 + bestDy;
+          const xm = x0 + halfDx;
+          const ym = y0 + halfDy;
+          if (x0 < 0 || x0 >= width || y0 < 0 || y0 >= height) continue;
+          if (x2 < 0 || x2 >= width || y2 < 0 || y2 >= height) continue;
+          if (xm < 0 || xm >= width || ym < 0 || ym >= height) continue;
+          const src0 = (y0 * width + x0) * 4;
+          const src2 = (y2 * width + x2) * 4;
+          const dst = (ym * width + xm) * 4;
+          const weightIndex = ym * width + xm;
+          for (let c = 0; c < 4; c += 1) {
+            accum[dst + c] += (first[src0 + c] + third[src2 + c]) / 2;
+          }
+          weights[weightIndex] += 1;
+        }
+      }
+    }
+  }
+  const out = new Uint8Array(first.length);
+  for (let i = 0; i < weights.length; i += 1) {
+    const dst = i * 4;
+    const weight = weights[i];
+    if (weight > 0) {
+      out[dst] = Math.round(accum[dst] / weight);
+      out[dst + 1] = Math.round(accum[dst + 1] / weight);
+      out[dst + 2] = Math.round(accum[dst + 2] / weight);
+      out[dst + 3] = 255;
+    } else {
+      out[dst] = fallback[dst];
+      out[dst + 1] = fallback[dst + 1];
+      out[dst + 2] = fallback[dst + 2];
+      out[dst + 3] = 255;
+    }
+  }
+  return out;
+}
+
 function differenceRgba(actual, synthetic) {
   const out = new Uint8Array(actual.length);
   for (let i = 0; i < actual.length; i += 4) {
@@ -372,6 +475,78 @@ function classifyFailureModes(metrics, triplet) {
   if ((middle.fireLayerMean || 0) < 0.01 && metrics.fireRegionMeanAbsoluteError > 10) modes.push('low-fire-shimmer');
   if (metrics.smokeRegionMeanAbsoluteError > Math.max(12, metrics.meanAbsoluteError * 1.10)) modes.push('broad-smoke-mush');
   return modes.length ? modes : ['no-obvious-bucket-from-cheap-metrics'];
+}
+
+function blitTile(sheet, sheetWidth, tile, tileWidth, tileHeight, dstX, dstY, barColor) {
+  for (let y = 0; y < tileHeight; y += 1) {
+    for (let x = 0; x < tileWidth; x += 1) {
+      const src = (y * tileWidth + x) * 4;
+      const dst = ((dstY + y) * sheetWidth + dstX + x) * 4;
+      sheet[dst] = tile[src];
+      sheet[dst + 1] = tile[src + 1];
+      sheet[dst + 2] = tile[src + 2];
+      sheet[dst + 3] = 255;
+    }
+  }
+  for (let y = 0; y < 5; y += 1) {
+    for (let x = 0; x < tileWidth; x += 1) {
+      const dst = ((dstY + y) * sheetWidth + dstX + x) * 4;
+      sheet[dst] = barColor[0];
+      sheet[dst + 1] = barColor[1];
+      sheet[dst + 2] = barColor[2];
+      sheet[dst + 3] = 255;
+    }
+  }
+}
+
+function writeContactSheet(path, width, height, tiles) {
+  const columns = 3;
+  const rows = Math.ceil(tiles.length / columns);
+  const gap = 6;
+  const sheetWidth = columns * width + (columns + 1) * gap;
+  const sheetHeight = rows * height + (rows + 1) * gap;
+  const sheet = new Uint8Array(sheetWidth * sheetHeight * 4);
+  for (let i = 0; i < sheet.length; i += 4) {
+    sheet[i] = 8;
+    sheet[i + 1] = 8;
+    sheet[i + 2] = 8;
+    sheet[i + 3] = 255;
+  }
+  const tileOrder = [];
+  tiles.forEach((tile, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    const dstX = gap + col * (width + gap);
+    const dstY = gap + row * (height + gap);
+    blitTile(sheet, sheetWidth, tile.rgba, width, height, dstX, dstY, tile.barColor || [120, 120, 120]);
+    tileOrder.push({
+      index,
+      row,
+      col,
+      label: tile.label,
+      path: tile.path || null,
+      baselineId: tile.baselineId || null,
+      role: tile.role || null,
+      barColor: tile.barColor || [120, 120, 120],
+    });
+  });
+  writeRgbaPng(path, sheetWidth, sheetHeight, sheet);
+  return {
+    path,
+    width: sheetWidth,
+    height: sheetHeight,
+    tileColumns: columns,
+    tileRows: rows,
+    tileOrder,
+  };
+}
+
+function baselineRgba(id, first, third, width, height) {
+  if (id === HOLD_LAST_BASELINE_ID) return cloneRgba(first);
+  if (id === HOLD_NEXT_BASELINE_ID) return cloneRgba(third);
+  if (id === MIDPOINT_BASELINE_ID) return midpointRgba(first, third);
+  if (id === BLOCK_MATCH_BASELINE_ID) return blockMatchBidirectionalWarpRgba(first, third, width, height);
+  throw new Error(`Unknown baseline id ${id}`);
 }
 
 async function currentDebugState(ws) {
@@ -472,8 +647,11 @@ const artifactPaths = {
   t0: resolve(outDir, 'triplet-t0.png'),
   actualMiddle: resolve(outDir, 'triplet-t1-actual-middle.png'),
   t2: resolve(outDir, 'triplet-t2.png'),
-  syntheticMiddle: resolve(outDir, 'triplet-t1-synthetic-midpoint.png'),
-  difference: resolve(outDir, 'triplet-t1-midpoint-error.png'),
+  contactSheet: resolve(outDir, 'interframe-baseline-contact-sheet.png'),
+  baselines: Object.fromEntries(BASELINE_IDS.map(id => [id, {
+    syntheticMiddle: resolve(outDir, `${id}-synthetic-middle.png`),
+    difference: resolve(outDir, `${id}-error.png`),
+  }])),
 };
 
 const baseReport = {
@@ -505,7 +683,13 @@ const baseReport = {
     inputFrames: ['t0', 't2'],
     targetFrame: 'actualMiddle',
     syntheticMiddle: null,
+    baselineIds: BASELINE_IDS,
     failureModeBuckets: FAILURE_MODE_BUCKETS,
+  },
+  baselines: [],
+  contactSheet: null,
+  summary: {
+    bestByMeanAbsoluteError: null,
   },
   artifacts: artifactPaths,
   failures: [],
@@ -580,21 +764,10 @@ try {
   const t0Rgba = Uint8Array.from(t0.preview.rgba);
   const actualMiddleRgba = Uint8Array.from(actualMiddle.preview.rgba);
   const t2Rgba = Uint8Array.from(t2.preview.rgba);
-  const syntheticMiddleRgba = midpointRgba(t0Rgba, t2Rgba);
-  const differenceRgbaImage = differenceRgba(actualMiddleRgba, syntheticMiddleRgba);
-
   writeRgbaPng(artifactPaths.t0, width, height, t0Rgba);
   writeRgbaPng(artifactPaths.actualMiddle, width, height, actualMiddleRgba);
   writeRgbaPng(artifactPaths.t2, width, height, t2Rgba);
-  writeRgbaPng(artifactPaths.syntheticMiddle, width, height, syntheticMiddleRgba);
-  writeRgbaPng(artifactPaths.difference, width, height, differenceRgbaImage);
-
-  const syntheticBuffer = readFileSync(artifactPaths.syntheticMiddle);
   const actualBuffer = readFileSync(artifactPaths.actualMiddle);
-  const syntheticPng = parsePngRgba(syntheticBuffer);
-  assert.equal(syntheticPng.width, width, 'synthetic PNG width drifted after write');
-  assert.equal(syntheticPng.height, height, 'synthetic PNG height drifted after write');
-  const metrics = compareRgba(actualMiddleRgba, syntheticMiddleRgba, width, height);
   const tripletSummary = {
     schema: TRIPLET_SCHEMA,
     authority: TRIPLET_AUTHORITY,
@@ -619,15 +792,24 @@ try {
       t0ToT2: t2.simStepCount - t0.simStepCount,
     },
   };
-  const report = {
-    ...baseReport,
-    status: 'captured',
-    updatedAt: new Date().toISOString(),
-    triplet: tripletSummary,
-    baseline: {
-      ...baseReport.baseline,
+  const baselineReports = BASELINE_IDS.map(id => {
+    const paths = artifactPaths.baselines[id];
+    const syntheticMiddleRgba = baselineRgba(id, t0Rgba, t2Rgba, width, height);
+    const differenceRgbaImage = differenceRgba(actualMiddleRgba, syntheticMiddleRgba);
+    writeRgbaPng(paths.syntheticMiddle, width, height, syntheticMiddleRgba);
+    writeRgbaPng(paths.difference, width, height, differenceRgbaImage);
+    const syntheticBuffer = readFileSync(paths.syntheticMiddle);
+    const syntheticPng = parsePngRgba(syntheticBuffer);
+    assert.equal(syntheticPng.width, width, `${id} synthetic PNG width drifted after write`);
+    assert.equal(syntheticPng.height, height, `${id} synthetic PNG height drifted after write`);
+    const metrics = compareRgba(actualMiddleRgba, syntheticMiddleRgba, width, height);
+    return {
+      id,
+      syntheticAuthority: SYNTHETIC_AUTHORITY,
+      inputFrames: ['t0', 't2'],
+      targetFrame: 'actualMiddle',
       syntheticMiddle: {
-        path: artifactPaths.syntheticMiddle,
+        path: paths.syntheticMiddle,
         authority: SYNTHETIC_AUTHORITY,
         imageSha256: sha256Buffer(syntheticBuffer),
       },
@@ -636,11 +818,67 @@ try {
         imageSha256: sha256Buffer(actualBuffer),
       },
       difference: {
-        path: artifactPaths.difference,
+        path: paths.difference,
       },
       metrics,
       failureModes: classifyFailureModes(metrics, tripletSummary),
+    };
+  });
+  const bestByMeanAbsoluteError = baselineReports
+    .slice()
+    .sort((a, b) => a.metrics.meanAbsoluteError - b.metrics.meanAbsoluteError)[0];
+  const contactSheet = writeContactSheet(artifactPaths.contactSheet, width, height, [
+    { label: 't0', role: 't0', path: artifactPaths.t0, rgba: t0Rgba, barColor: [80, 120, 220] },
+    { label: 'actualMiddle', role: 'actualMiddle', path: artifactPaths.actualMiddle, rgba: actualMiddleRgba, barColor: [80, 220, 120] },
+    { label: 't2', role: 't2', path: artifactPaths.t2, rgba: t2Rgba, barColor: [80, 120, 220] },
+    ...baselineReports.flatMap((baseline, index) => {
+      const synthetic = parsePngRgba(readFileSync(baseline.syntheticMiddle.path)).rgba;
+      const error = parsePngRgba(readFileSync(baseline.difference.path)).rgba;
+      const hue = [
+        [230, 180, 70],
+        [190, 150, 230],
+        [230, 100, 80],
+        [80, 210, 220],
+      ][index] || [160, 160, 160];
+      return [
+        {
+          label: `${baseline.id}:syntheticMiddle`,
+          role: 'syntheticMiddle',
+          baselineId: baseline.id,
+          path: baseline.syntheticMiddle.path,
+          rgba: synthetic,
+          barColor: hue,
+        },
+        {
+          label: `${baseline.id}:error`,
+          role: 'difference',
+          baselineId: baseline.id,
+          path: baseline.difference.path,
+          rgba: error,
+          barColor: [Math.max(0, hue[0] - 40), Math.max(0, hue[1] - 40), Math.max(0, hue[2] - 40)],
+        },
+      ];
+    }),
+  ]);
+  const report = {
+    ...baseReport,
+    status: 'captured',
+    updatedAt: new Date().toISOString(),
+    triplet: tripletSummary,
+    baseline: {
+      ...baseReport.baseline,
+      ...baselineReports.find(entry => entry.id === MIDPOINT_BASELINE_ID),
       interpretation: 'Cheap midpoint interpolation is on trial against the actual simulator middle frame; smoothness is not evidence unless the actual-middle comparison survives.',
+    },
+    baselines: baselineReports,
+    contactSheet,
+    summary: {
+      bestByMeanAbsoluteError: bestByMeanAbsoluteError ? {
+        id: bestByMeanAbsoluteError.id,
+        meanAbsoluteError: bestByMeanAbsoluteError.metrics.meanAbsoluteError,
+        rootMeanSquaredError: bestByMeanAbsoluteError.metrics.rootMeanSquaredError,
+        failureModes: bestByMeanAbsoluteError.failureModes,
+      } : null,
     },
   };
   writeJson(reportPath, report);
