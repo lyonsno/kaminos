@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_SMOKE_DISPOSITION_RECEIPT_SCHEMA,
+  FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA,
   FORGE_HOST_SMOKE_CHAMBER_SCHEMA,
   buildForgeHostManifestFromRegistrySnapshot,
   buildForgeHostFixture,
@@ -31,11 +32,14 @@ for (const station of manifest.stations) {
   assert.ok(station.smokeOffers.length >= 1, 'each fixture station advertises at least one smoke offer');
 
   for (const offer of station.smokeOffers) {
-    assert.equal(offer.schema, 'kaminos.forge-host.smoke-offer.v0');
+    assert.ok([
+      'kaminos.forge-host.smoke-offer.v0',
+      'kaminos.forge-host.smoke-result-offer.v0',
+    ].includes(offer.schema), 'station offers are typed as endpoint or result offers');
     assert.equal(offer.producerDiaulos, station.diaulos);
     assert.ok(offer.targetSurface, 'smoke offer declares a target surface');
     assert.ok(offer.sourceRef, 'smoke offer declares a source ref');
-    assert.ok(['live', 'fixture', 'fallback', 'seeded', 'stale'].includes(offer.authority), 'smoke offer authority is explicit');
+    assert.ok(['live', 'fixture', 'fallback', 'seeded', 'stale', 'local_artifact'].includes(offer.authority), 'smoke offer authority is explicit');
     assert.notEqual(offer.displayState, 'live', 'fixture manifest must not claim a live display state');
     assert.ok(Array.isArray(offer.downgrades), 'smoke offer downgrade list is machine-readable');
   }
@@ -103,6 +107,25 @@ const registrySnapshot = {
     },
   ],
   warnings: [],
+  smokeResults: [
+    {
+      schema: FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA,
+      id: 'result:wake-and-bake-pit-boss:lerms-preview',
+      producerDiaulos: 'wake-and-bake-pit-boss',
+      title: 'LERMS Preview Smoke',
+      targetSurface: 'smoke-result',
+      sourceRef: 'metadosis/lerms-first-vertical-run-ledger_2026-06-27.md',
+      targetUrl: '/api/read?root=scratch&path=forge-host-smoke-results%2Fwake-lerms-preview.json',
+      reportSource: 'metadosis/lerms-first-vertical-run-ledger_2026-06-27.md',
+      screenshotSource: '/api/read?root=scratch&path=smoke-results%2Fwake-preview.png',
+      summary: 'Preview chamber result fixture.',
+      authority: 'fixture',
+      freshness: '2026-06-29T04:18:00Z',
+      displayState: 'fixture',
+      resultStatus: 'available',
+      downgrades: ['fixture_result_payload'],
+    },
+  ],
 };
 
 const liveManifest = buildForgeHostManifestFromRegistrySnapshot(registrySnapshot, { fixtureManifest: manifest });
@@ -118,6 +141,10 @@ assert.equal(liveManifest.stations[0].anchor.authority, 'host_static_fixture_ove
 assert.equal(liveManifest.stations[0].smokeOffers[0].authority, 'live');
 assert.equal(liveManifest.stations[0].smokeOffers[0].displayState, 'live');
 assert.match(liveManifest.stations[0].smokeOffers[0].sourceRef, /directive-alert-endpoints\.json/);
+assert.equal(liveManifest.stations[0].smokeOffers[1].schema, FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA);
+assert.equal(liveManifest.stations[0].smokeOffers[1].displayState, 'fixture');
+assert.equal(liveManifest.stations[0].smokeOffers[1].resultStatus, 'available');
+assert.equal(liveManifest.stations[0].smokeOffers[1].screenshotSource, '/api/read?root=scratch&path=smoke-results%2Fwake-preview.png');
 assert.deepEqual(validateForgeHostStationManifest(liveManifest).falseAuthorityViolations, []);
 assert.equal(deriveForgeStationAttention(liveManifest.stations[0]).source, 'live_registry');
 
@@ -138,6 +165,19 @@ assert.match(liveChamber.sourceRef, /directive-alert-endpoints\.json/);
 assert.deepEqual(liveChamber.captureAffordances.map(affordance => affordance.id), ['screenshot', 'filmstrip', 'reply']);
 assert.deepEqual(liveChamber.routeWarnings, ['not_chat_bridge', 'not_command_execution']);
 
+const resultChamber = routeForgeHostSmokeOfferToChamber(liveManifest.stations[0].smokeOffers[1], liveManifest.stations[0], {
+  openedAt: '2026-06-29T08:09:00.000Z',
+});
+assert.equal(resultChamber.schema, FORGE_HOST_SMOKE_CHAMBER_SCHEMA);
+assert.equal(resultChamber.routeIdentity, 'forge-host-smoke-result-route');
+assert.equal(resultChamber.sourceOffer.schema, FORGE_HOST_SMOKE_RESULT_OFFER_SCHEMA);
+assert.equal(resultChamber.targetSurface, 'smoke-result');
+assert.equal(resultChamber.resultStatus, 'available');
+assert.equal(resultChamber.reportSource, 'metadosis/lerms-first-vertical-run-ledger_2026-06-27.md');
+assert.equal(resultChamber.screenshotSource, '/api/read?root=scratch&path=smoke-results%2Fwake-preview.png');
+assert.match(resultChamber.summary, /Preview chamber result fixture/);
+assert.ok(resultChamber.routeWarnings.includes('not_chat_bridge'));
+
 const lyingOffer = structuredClone(liveManifest.stations[0].smokeOffers[0]);
 lyingOffer.authority = 'fallback';
 lyingOffer.displayState = 'live';
@@ -145,6 +185,15 @@ assert.throws(
   () => routeForgeHostSmokeOfferToChamber(lyingOffer, liveManifest.stations[0]),
   /fallback.*live/i,
   'smoke chamber routing must fail loud when fallback offer claims live routing',
+);
+
+const lyingResultOffer = structuredClone(liveManifest.stations[0].smokeOffers[1]);
+lyingResultOffer.authority = 'fixture';
+lyingResultOffer.displayState = 'live';
+assert.throws(
+  () => routeForgeHostSmokeOfferToChamber(lyingResultOffer, liveManifest.stations[0]),
+  /fixture.*live/i,
+  'smoke result routing must fail loud when fixture result claims live display authority',
 );
 
 const dispositionReceipt = buildForgeHostSmokeDispositionReceipt(liveChamber, {

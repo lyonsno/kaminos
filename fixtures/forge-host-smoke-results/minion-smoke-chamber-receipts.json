@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.forge-host.smoke-result-offer.v0",
+  "id": "result:minion-spawnfucker:smoke-chamber-receipts",
+  "producerDiaulos": "minion-spawnfucker",
+  "title": "Smoke Chamber Receipt Slice",
+  "targetSurface": "smoke-result",
+  "sourceRef": "fixtures/forge-host-smoke-results/minion-smoke-chamber-receipts.json",
+  "targetUrl": "fixtures/forge-host-smoke-results/minion-smoke-chamber-receipts.json",
+  "reportSource": "projects/kaminos/topoi/codex-minion-spawnfucker-0623.md#2026-06-30--Smoke-Result-Offer-Viewer-Slice-Opened",
+  "screenshotSource": null,
+  "summary": "Source-honest fixture result for the first Smoke Result chamber. It describes the branch slice that made Smoke Offers clickable, added disposition receipts, and opened this result-viewer substrate. This is not live source-thread delivery yet.",
+  "authority": "fixture",
+  "freshness": "2026-06-30T20:30:00Z",
+  "displayState": "fixture",
+  "resultStatus": "available",
+  "downgrades": [
+    "fixture_result_payload",
+    "not_live_smoke_artifact",
+    "not_source_thread_delivery"
+  ]
+}
