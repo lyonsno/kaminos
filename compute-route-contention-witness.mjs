@@ -243,7 +243,9 @@ function adapterKitDisagreements(kitScheduler, adapterEvidence) {
     const kitConfig = canonicalSchedulerConfig(kitScheduler[field]);
     const adapterConfig = canonicalSchedulerConfig(adapterEvidence[field]);
     if (!kitConfig || !adapterConfig) continue;
-    const unsupported = unsupportedFieldsFrom(kitScheduler.effectiveScheduler, adapterEvidence.effectiveScheduler);
+    const unsupported = field === 'effectiveScheduler'
+      ? unsupportedFieldsFrom(kitScheduler.effectiveScheduler, adapterEvidence.effectiveScheduler)
+      : unsupportedFieldsFrom(kitScheduler.requestedScheduler, adapterEvidence.requestedScheduler);
     const kitPaths = leafPaths(kitConfig);
     const adapterPaths = new Set(leafPaths(adapterConfig));
     const paths = kitPaths.filter(path => adapterPaths.has(path));
@@ -302,8 +304,7 @@ function normalizeScheduler(scheduler = null, adapterEvidence = null) {
   const normalizedAdapterEvidence = cloneObject(adapterEvidence || scheduler?.adapterEvidence);
   const hasKitScheduler = Boolean(
     normalizedScheduler?.requestedScheduler
-      || normalizedScheduler?.effectiveScheduler
-      || normalizedScheduler?.schema === 'kaminos.webgpu-route-scheduler.v0',
+      || normalizedScheduler?.effectiveScheduler,
   );
   if (normalizedScheduler && hasKitScheduler) {
     const effectiveScheduler = normalizedScheduler.effectiveScheduler || normalizedAdapterEvidence?.effectiveScheduler || null;

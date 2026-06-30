@@ -217,6 +217,69 @@ assert.ok(
   ),
 );
 
+const adapterOnlyInsideKitWrapper = witnessForScheduler({
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  adapterEvidence: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+});
+assert.equal(adapterOnlyInsideKitWrapper.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(adapterOnlyInsideKitWrapper.scheduler.requestedScheduler, null);
+assert.equal(adapterOnlyInsideKitWrapper.scheduler.effectiveScheduler, null);
+assert.ok(adapterOnlyInsideKitWrapper.scheduler.validationWarnings.includes('route_specific_scheduler_without_kit_mapping'));
+assert.ok(adapterOnlyInsideKitWrapper.witnessWarnings.includes('route_specific_scheduler_without_kit_mapping'));
+
+const requestedAdapterDisagreementNotWaivedByEffectiveUnsupported = witnessForScheduler({
+  schema: 'kaminos.webgpu-route-scheduler.v0',
+  requestedScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+  },
+  effectiveScheduler: {
+    mode: 'cooperative',
+    phaseChunkSize: {
+      vitBlock: 6,
+    },
+    unsupportedFields: ['phaseChunkSize.vitBlock'],
+  },
+  verificationState: 'verified',
+  adapterEvidence: {
+    schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 4,
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      vitBlockChunkSize: 6,
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+});
+assert.ok(
+  requestedAdapterDisagreementNotWaivedByEffectiveUnsupported.scheduler.falseAuthorityViolations.includes(
+    'adapter_scheduler_disagrees_with_kit_scheduler:requestedScheduler.phaseChunkSize.vitBlock',
+  ),
+);
+assert.ok(
+  requestedAdapterDisagreementNotWaivedByEffectiveUnsupported.witnessWarnings.includes(
+    'adapter_scheduler_disagrees_with_kit_scheduler:requestedScheduler.phaseChunkSize.vitBlock',
+  ),
+);
+
 const staleTelemetry = witnessForScheduler({
   schema: 'kaminos.webgpu-route-scheduler.v0',
   requestedScheduler: {
