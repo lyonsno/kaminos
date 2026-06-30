@@ -4341,15 +4341,22 @@ async function runPreviewBenchSmokeOfferContractScenario(ws) {
       || !offer.payloadSchema.length) {
     throw new Error(`Preview Bench smoke-offer did not preserve source payload schema: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.sourceAuthority !== 'fixture' || !Number.isFinite(Number(evidence.freshnessBudget))) {
+  const expectedSourceAuthority = offer.sourceAuthority;
+  const expectedFreshnessStatus = offer.freshness?.status;
+  if (typeof expectedSourceAuthority !== 'string'
+      || !expectedSourceAuthority.length
+      || evidence.sourceAuthority !== expectedSourceAuthority
+      || !Number.isFinite(Number(evidence.freshnessBudget))
+      || typeof expectedFreshnessStatus !== 'string'
+      || !expectedFreshnessStatus.length) {
     throw new Error(`Preview Bench smoke-offer witness lost source authority or freshness budget: ${JSON.stringify(evidence)}`);
   }
   if (!offer.acceptanceSurface?.id || offer.acceptanceSurface.id !== 'preview-bench-smoke-offer-contract') {
     throw new Error(`Preview Bench smoke-offer witness lost acceptance surface: ${JSON.stringify(evidence)}`);
   }
   if (!evidence.rows?.[0]
-      || evidence.rows[0].authority !== 'fixture'
-      || evidence.rows[0].freshness !== 'fresh-fixture'
+      || evidence.rows[0].authority !== expectedSourceAuthority
+      || evidence.rows[0].freshness !== expectedFreshnessStatus
       || !evidence.rows[0].schema
       || evidence.rows[0].schema !== offer.payloadSchema
       || typeof evidence.rows[0].downgrade !== 'string'

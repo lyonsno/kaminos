@@ -47,6 +47,8 @@ assert.match(witness, /Page\.captureScreenshot[\s\S]*previewBenchPayloadReport/,
 assert.match(witness, /Page\.captureScreenshot[\s\S]*previewBenchTerrainSample/, 'Preview Bench terrain sample witness captures a browser screenshot artifact');
 assert.match(witness, /sourceAuthority/, 'Preview Bench smoke-offer witness records source authority visible at capture time');
 assert.match(witness, /freshnessBudget/, 'Preview Bench smoke-offer witness records freshness budget visible at capture time');
+assert.match(witness, /expectedSourceAuthority/, 'Preview Bench smoke-offer witness compares UI authority against the mounted producer offer instead of one fixture');
+assert.match(witness, /expectedFreshnessStatus/, 'Preview Bench smoke-offer witness accepts the mounted producer freshness status, including stale evidence when visibly surfaced');
 assert.match(witness, /rejectedDebugSurfaces/, 'Preview Bench smoke-offer witness preserves rejected debug surfaces');
 assert.match(witness, /coincidentMarkerGroups/, 'Preview Bench smoke-offer witness proves coincident marker layout instead of accepting visual collapse');
 assert.doesNotMatch(witness, /lerms\.throw-physics-artifact\.v1/, 'Preview Bench smoke-offer witness must not hardcode one producer payload schema');
