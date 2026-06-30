@@ -10,7 +10,9 @@ import serve
 from serve import BROWSE_ROOTS
 from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
+from serve import build_browser_webgpu_route_provider_index
 from serve import build_greenroom_route_provider_index
+from serve import build_route_provider_index
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import request_greenroom_checkpoint_pause
 
@@ -386,6 +388,62 @@ def test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows():
     assert not (output_dir / "_control" / "checkpoint-stop").exists()
 
 
+def test_browser_webgpu_route_provider_projects_fixture_route_identity():
+    index = build_browser_webgpu_route_provider_index()
+
+    assert index["schema"] == "kaminos.route-provider-index.v0"
+    assert index["provider"]["kind"] == "browser-webgpu"
+    assert index["provider"]["source"] == "fixture"
+    assert index["summary"]["reserved"] == 1
+    [row] = index["rows"]
+    assert row["provider"] == "browser-webgpu"
+    assert row["controls"] == []
+    assert row["route_job"]["schema"] == "kaminos.route-job.v0"
+    assert row["route_job"]["id"] == "browser-webgpu-moge-fixture"
+    assert row["route_job"]["routeId"] == "moge.depth-normal.webgpu-local.v0"
+    assert row["route_job"]["executor"]["kind"] == "browser-webgpu"
+    assert row["route_job"]["executor"]["backendKind"] == "webgpu-local"
+    assert row["route_job"]["intent"] == "preview"
+    assert row["route_job"]["capabilities"]["warmCacheSensitive"] is True
+    assert row["route_job"]["capabilities"]["memoryExclusive"] is True
+    assert row["route_job"]["capabilities"]["chunkYieldable"] is False
+    assert row["route_job"]["capabilities"]["resumable"] is False
+    assert row["route_job"]["controls"] == []
+    assert row["route_job"]["metadata"]["effectiveBackend"]["kind"] == "webgpu-local"
+    assert row["route_job"]["metadata"]["model"]["id"] == "Ruicheng/moge-2-vitl-normal"
+    assert row["route_job"]["metadata"]["cache"]["state"] == "not-loaded"
+    assert any(warning["kind"] == "fixture_route_identity_only" for warning in row["warnings"])
+
+
+def test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        greenroom = Path(tmp) / "greenroom"
+        job_dir = greenroom / "pending" / "run123"
+        output_dir = greenroom / "outputs" / "run123"
+        job_dir.mkdir(parents=True)
+        output_dir.mkdir(parents=True)
+        (job_dir / "status.json").write_text(json.dumps({
+            "job_id": "run123",
+            "status": "pending",
+            "job_type": "trellis2mlx",
+            "input_path": "/tmp/source.png",
+            "output_dir": str(output_dir),
+            "checkpoint_stop_file": str(output_dir / "_control" / "checkpoint-stop"),
+        }))
+        previous = BROWSE_ROOTS["greenroom"]
+        BROWSE_ROOTS["greenroom"] = greenroom
+        try:
+            index = build_route_provider_index("all")
+        finally:
+            BROWSE_ROOTS["greenroom"] = previous
+
+    providers = {row["provider"] for row in index["rows"]}
+    assert index["provider"]["kind"] == "kaminos-route-providers"
+    assert providers == {"native-greenroom", "browser-webgpu"}
+    assert index["summary"]["pending"] == 1
+    assert index["summary"]["reserved"] == 1
+
+
 def test_native_greenroom_route_provider_preserves_degraded_legacy_rows():
     with TemporaryDirectory(dir="/tmp") as tmp:
         greenroom = Path(tmp) / "greenroom"
@@ -633,6 +691,8 @@ if __name__ == "__main__":
     test_native_greenroom_route_provider_projects_checkpoint_paused_rows()
     test_native_greenroom_route_provider_projects_pause_request_controls()
     test_native_greenroom_checkpoint_pause_request_refuses_non_trellis_rows()
+    test_browser_webgpu_route_provider_projects_fixture_route_identity()
+    test_route_provider_all_combines_native_greenroom_and_browser_webgpu_rows()
     test_native_greenroom_route_provider_preserves_degraded_legacy_rows()
     test_splat_asset_index_separates_experimental_and_production_roots()
     test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots()

@@ -937,6 +937,138 @@ def build_greenroom_route_provider_index():
     }
 
 
+def build_browser_webgpu_route_provider_index():
+    route_job = {
+        "schema": ROUTE_JOB_SCHEMA,
+        "id": "browser-webgpu-moge-fixture",
+        "routeId": "moge.depth-normal.webgpu-local.v0",
+        "executor": {
+            "kind": "browser-webgpu",
+            "id": "webgpu-inference-kit-fixture",
+            "backendKind": "webgpu-local",
+            "workerModule": "webgpu-inference-kit/routes/moge-worker.js",
+        },
+        "intent": "preview",
+        "priorityClass": "preview",
+        "status": "reserved",
+        "inputArtifacts": [],
+        "outputPolicy": {"mode": "kaminos-artifact-sidecar"},
+        "capabilities": {
+            "deferable": False,
+            "abortable": False,
+            "chunkYieldable": False,
+            "checkpointable": False,
+            "checkpointPauseRequestable": False,
+            "resumable": False,
+            "resumeAdvertised": False,
+            "warmCacheSensitive": True,
+            "memoryExclusive": True,
+        },
+        "controls": [],
+        "resumability": {
+            "kind": "unproven",
+            "resumeSupported": False,
+            "yieldSupported": False,
+        },
+        "warnings": [{
+            "kind": "fixture_route_identity_only",
+            "message": "Browser WebGPU route identity fixture only; no live model execution or cooperative yield has been exercised.",
+        }],
+        "metadata": {
+            "effectiveBackend": {
+                "kind": "webgpu-local",
+                "execution": "browser-worker",
+            },
+            "model": {
+                "id": "Ruicheng/moge-2-vitl-normal",
+                "role": "depth-normal-pointmap",
+            },
+            "cache": {
+                "state": "not-loaded",
+                "warmCacheSensitive": True,
+            },
+            "device": {
+                "adapter": None,
+                "features": [],
+                "identitySource": "not-probed",
+            },
+        },
+    }
+    row = {
+        "schema": "kaminos.route-provider-row.v0",
+        "provider": "browser-webgpu",
+        "job_id": route_job["id"],
+        "status_dir": "fixture",
+        "route_job": route_job,
+        "display": {
+            "title": "MoGE WebGPU",
+            "subtitle": "browser-webgpu / webgpu-local / preview",
+            "meta": "fixture route identity only",
+            "raw_name": route_job["id"],
+            "job_type_label": "Browser WebGPU",
+            "load_label": "Open",
+        },
+        "schedule": {
+            "schema": "kaminos.browser-webgpu.schedule.v0",
+            "priority_class": "preview",
+            "submitted_at": 0,
+        },
+        "process": {
+            "pid": None,
+            "worker_pid": None,
+            "child_pid": None,
+            "process_group_id": None,
+        },
+        "receipt_link": None,
+        "checkpoint_receipt_link": None,
+        "output_links": [],
+        "controls": [],
+        "warnings": route_job["warnings"],
+        "parse_error": None,
+    }
+    return {
+        "schema": ROUTE_PROVIDER_INDEX_SCHEMA,
+        "provider": {
+            "kind": "browser-webgpu",
+            "id": "local-browser-webgpu",
+            "source": "fixture",
+        },
+        "summary": {"reserved": 1},
+        "rows": [row],
+    }
+
+
+def build_route_provider_index(provider="native-greenroom"):
+    if provider == "native-greenroom":
+        return build_greenroom_route_provider_index()
+    if provider == "browser-webgpu":
+        return build_browser_webgpu_route_provider_index()
+    if provider != "all":
+        raise ValueError(f"Unsupported route job provider: {provider}")
+
+    indexes = [
+        build_greenroom_route_provider_index(),
+        build_browser_webgpu_route_provider_index(),
+    ]
+    rows = []
+    summary = {}
+    for index in indexes:
+        rows.extend(index.get("rows") or [])
+        for status, count in (index.get("summary") or {}).items():
+            summary[status] = summary.get(status, 0) + count
+    return {
+        "schema": ROUTE_PROVIDER_INDEX_SCHEMA,
+        "provider": {
+            "kind": "kaminos-route-providers",
+            "id": "all",
+            "source": "combined",
+            "providers": [index.get("provider", {}) for index in indexes],
+        },
+        "summary": summary,
+        "rows": rows,
+    }
+
+
 def find_greenroom_receipt(job_id):
     greenroom = BROWSE_ROOTS.get("greenroom")
     if not greenroom or not greenroom.exists():
@@ -1298,10 +1430,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_route_jobs(self, params):
         """Expose read-only route job rows for route trays."""
         provider = params.get("provider", ["native-greenroom"])[0]
-        if provider not in {"native-greenroom", "all"}:
+        if provider not in {"native-greenroom", "browser-webgpu", "all"}:
             self.send_json({"error": f"Unsupported route job provider: {provider}"}, 400)
             return
-        self.send_json(build_greenroom_route_provider_index())
+        self.send_json(build_route_provider_index(provider))
 
     def handle_route_job_checkpoint_pause(self, params):
         """Request cooperative stop after the next checkpoint boundary."""

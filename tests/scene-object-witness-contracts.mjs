@@ -126,7 +126,9 @@ assert.match(witness, /titleIdentityKey !== row\.rawIdentityKey/, 'Green Room pi
 assert.match(witness, /greenroom picker did not expose subtitle and raw metadata/, 'Green Room picker witness requires display subtitle and raw metadata');
 assert.match(indexHtml, /native-greenroom-route-tray/, 'Green Room tab exposes a Native Greenroom route tray');
 assert.match(indexHtml, /grBrowseRouteJobs/, 'Green Room tab has a route-job refresh path');
+assert.match(indexHtml, /provider: 'all'/, 'Route tray requests the combined route-provider index');
 assert.match(indexHtml, /data-greenroom-route-job-id/, 'Native Greenroom route tray preserves route job identity on rows');
+assert.match(indexHtml, /data-greenroom-route-provider/, 'Route tray preserves route provider identity on rows');
 assert.match(indexHtml, /data-greenroom-route-status/, 'Native Greenroom route tray preserves route status on rows');
 assert.match(indexHtml, /data-greenroom-route-intent/, 'Native Greenroom route tray preserves route intent on rows');
 assert.match(indexHtml, /data-greenroom-route-resumability/, 'Native Greenroom route tray preserves route resumability kind on rows');
@@ -142,6 +144,9 @@ assert.match(indexHtml, /routeJobControls/, 'Native Greenroom route tray renders
 assert.match(indexHtml, /route-jobs\/checkpoint-pause/, 'Native Greenroom route tray calls the checkpoint pause request endpoint');
 assert.match(indexHtml, /pause requested/, 'Native Greenroom route tray distinguishes requested pause from achieved checkpoint pause');
 assert.match(indexHtml, /resume unverified/, 'Native Greenroom route tray can warn when resume is advertised but not proven in Kaminos');
+assert.match(indexHtml, /browser-webgpu/, 'Route tray recognizes browser WebGPU route rows');
+assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');
+assert.match(indexHtml, /webgpu-local/, 'Route tray preserves WebGPU effective backend identity');
 assert.match(indexHtml, /window\.kaminosRouteJobDebugState/, 'Native Greenroom route tray exposes explicit debug state');
 assert.match(indexHtml, /Checkpoint pause metadata only/, 'Native Greenroom route tray warns instead of claiming pause/resume controls');
 assert.match(witness, /greenroom picker did not expose View and Import mesh actions/, 'Green Room picker witness requires explicit View and Import mesh actions');

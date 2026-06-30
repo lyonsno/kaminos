@@ -9123,6 +9123,8 @@ async function grPostApi(endpoint, params = {}) {
 }
 
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
+const ROUTE_EXECUTOR_BROWSER_WEBGPU = 'browser-webgpu';
+const ROUTE_BACKEND_WEBGPU_LOCAL = 'webgpu-local';
 let greenroomRouteJobState = {
   schema: 'kaminos.route-provider-index.v0',
   provider: { kind: 'native-greenroom' },
@@ -9903,6 +9905,7 @@ function routeJobDisplay(row = {}) {
   const intent = routeJob.intent || 'unknown';
   const priority = routeJob.priorityClass || 'normal';
   const executor = routeJob.executor?.kind || 'unknown';
+  const backend = routeJob.executor?.backendKind || routeJob.metadata?.effectiveBackend?.kind || null;
   const checkpointBits = resumability.kind === 'cooperative-checkpoint'
     ? [
         resumability.completedStage ? `stage ${resumability.completedStage}` : null,
@@ -9912,7 +9915,7 @@ function routeJobDisplay(row = {}) {
     : [];
   return {
     title: display.title || greenroomHumanizeName(routeId, routeId),
-    subtitle: [routeId, executor, intent, priority, status, ...checkpointBits].filter(Boolean).join(' / '),
+    subtitle: [routeId, executor, backend, intent, priority, status, ...checkpointBits].filter(Boolean).join(' / '),
     meta: display.meta || `raw ${routeJob.id || row.job_id || ''}`,
     raw_name: routeJob.id || row.job_id || '',
     load_label: 'Open',
@@ -9929,8 +9932,16 @@ function routeWarningLabel(kind = 'warning') {
     resume_unverified: 'resume unverified',
     pause_requested: 'pause requested',
     non_resumable_unverified: 'non-resumable',
+    fixture_route_identity_only: 'fixture route identity only',
   };
   return labels[kind] || String(kind || 'warning').replaceAll('_', ' ');
+}
+
+function routeJobIcon(routeJob = {}) {
+  if (routeJob.executor?.kind === ROUTE_EXECUTOR_BROWSER_WEBGPU) return '\u25CE';
+  if (routeJob.status === 'running') return '\u25B6';
+  if (routeJob.status === 'checkpoint_paused') return '\u25EB';
+  return '\u25A3';
 }
 
 function renderRouteJobLinkButton(container, label, url, title) {
@@ -9997,6 +10008,7 @@ function renderGreenroomRouteJobRow(row) {
   const capabilities = routeJob.capabilities || {};
   const div = document.createElement('div');
   div.className = 'gr-entry native-greenroom-route-row';
+  div.setAttribute('data-greenroom-route-provider', row.provider || '');
   div.setAttribute('data-greenroom-route-job-id', routeJob.id || row.job_id || '');
   div.setAttribute('data-greenroom-route-status', routeJob.status || 'degraded');
   div.setAttribute('data-greenroom-route-id', routeJob.routeId || '');
@@ -10010,7 +10022,7 @@ function renderGreenroomRouteJobRow(row) {
 
   const icon = document.createElement('span');
   icon.className = 'gr-icon';
-  icon.textContent = routeJob.status === 'running' ? '\u25B6' : (routeJob.status === 'checkpoint_paused' ? '\u25EB' : '\u25A3');
+  icon.textContent = routeJobIcon(routeJob);
   div.appendChild(icon);
 
   renderGreenroomEntryIdentity(div, { ...row, display: routeJobDisplay(row), name: routeJob.id || row.job_id }, { forceSubtitle: true });
@@ -10068,7 +10080,7 @@ async function grBrowseRouteJobs() {
   const listEl = document.getElementById('native-greenroom-route-list');
   const summaryEl = document.getElementById('native-greenroom-route-summary');
   if (!listEl || !summaryEl) return;
-  const data = await grFetchApi('route-jobs', { provider: 'native-greenroom' });
+  const data = await grFetchApi('route-jobs', { provider: 'all' });
   greenroomRouteJobState = {
     ...(data || {}),
     loadedAt: new Date().toISOString(),
