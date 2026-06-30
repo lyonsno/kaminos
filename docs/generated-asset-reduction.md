@@ -41,7 +41,11 @@ The UV policy is deliberately narrow: `required-existing-uv0`. Trellis 2, Pixel 
 
 The manifest records the effective projection route, nearest-surface candidate count when used, UV island padding radius, atlas coverage, projection distance statistics, emitted texture paths, and the failure phase/code when it cannot proceed. Atlas uncovered pixels are empty UV atlas space, not automatically object projection failures.
 
+The baked GLB writer preserves the target GLB and injects replacement PNG payloads for the PBR textures. It must not re-export the mesh through raw Trimesh, because that route dropped `NORMAL` attributes and changed material `doubleSided` state on the generated asset smoke. The manifest includes a post-export assay so closeouts can verify that UV0, normals, triangle count, and material records survived the bake.
+
 The default V0.1 route is `nearest-source-surface`: a KDTree over source triangle centroids proposes nearby source triangles, the baker finds the closest point on those candidates, and source UVs are sampled barycentrically. The older `nearest-source-vertex` route remains available as a faster/cruder diagnostic path.
+
+The normal-aware nearest-surface route (`nearest-source-surface-normal-aware`) additionally filters candidate source triangles by source/target normal agreement before falling back to the closest spatial candidate when no candidate passes. This targets thin-layer and opposite-side source-sheet pickup without treating the generated target as a globally clean watertight mesh.
 
 V0.1 also dilates covered UV island pixels into nearby uncovered atlas pixels with `nearest-covered-atlas-pixel` padding. This targets the classic bake seam footgun where bilinear filtering or mipmapping pulls black/transparent atlas background into visible UV boundaries.
 

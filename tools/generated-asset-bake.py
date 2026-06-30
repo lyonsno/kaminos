@@ -5,7 +5,7 @@ V0 is intentionally narrow and honest:
 
 - source and target must already have UV0
 - no unwrap/xatlas path exists here
-- default projection is nearest-source-surface
+- default projection is nearest-source-surface-normal-aware
 - only baseColor and metallicRoughness are emitted
 - normals, AO, emissive extraction, height, and parallax remain unimplemented
 """
@@ -24,6 +24,7 @@ from typing import Any
 
 
 JSON_CHUNK = 0x4E4F534A
+BIN_CHUNK = 0x004E4942
 TRIANGLES = 4
 BAKE_SCHEMA = "kaminos.generated-asset-bake.v0"
 
@@ -69,6 +70,123 @@ def read_glb_json(path: Path) -> dict[str, Any]:
         if chunk_type == JSON_CHUNK:
             return json.loads(chunk.rstrip(b" \t\r\n\0").decode("utf-8"))
     raise ValueError(f"{path} has no JSON chunk")
+
+
+def read_glb(path: Path) -> tuple[dict[str, Any], bytes]:
+    data = path.read_bytes()
+    if len(data) < 20:
+        raise ValueError(f"{path} is too small to be a GLB")
+    magic, version, total_length = struct.unpack_from("<III", data, 0)
+    if magic != 0x46546C67:
+        raise ValueError(f"{path} does not start with GLB magic")
+    if version != 2:
+        raise ValueError(f"{path} is GLB version {version}, expected 2")
+    if total_length != len(data):
+        raise ValueError(f"{path} length header {total_length} does not match file size {len(data)}")
+
+    doc = None
+    bin_chunk = b""
+    offset = 12
+    while offset + 8 <= len(data):
+        chunk_length, chunk_type = struct.unpack_from("<II", data, offset)
+        offset += 8
+        chunk = data[offset: offset + chunk_length]
+        offset += chunk_length
+        if chunk_type == JSON_CHUNK:
+            doc = json.loads(chunk.rstrip(b" \t\r\n\0").decode("utf-8"))
+        elif chunk_type == BIN_CHUNK:
+            bin_chunk = chunk
+    if doc is None:
+        raise ValueError(f"{path} has no JSON chunk")
+    return doc, bin_chunk
+
+
+def pad4(data: bytes, pad_byte: bytes) -> bytes:
+    pad = (4 - (len(data) % 4)) % 4
+    return data + pad_byte * pad
+
+
+def write_glb(path: Path, doc: dict[str, Any], bin_chunk: bytes) -> None:
+    json_chunk = pad4(json.dumps(doc, separators=(",", ":")).encode("utf-8"), b" ")
+    bin_chunk = pad4(bin_chunk, b"\0")
+    total_length = 12 + 8 + len(json_chunk)
+    if bin_chunk:
+        total_length += 8 + len(bin_chunk)
+    header = struct.pack("<III", 0x46546C67, 2, total_length)
+    chunks = [header, struct.pack("<II", len(json_chunk), JSON_CHUNK), json_chunk]
+    if bin_chunk:
+        chunks.extend([struct.pack("<II", len(bin_chunk), BIN_CHUNK), bin_chunk])
+    path.write_bytes(b"".join(chunks))
+
+
+def append_bin_payload(doc: dict[str, Any], bin_chunk: bytes, payload: bytes) -> tuple[bytes, int]:
+    aligned_bin = pad4(bin_chunk, b"\0")
+    byte_offset = len(aligned_bin)
+    payload = pad4(payload, b"\0")
+    buffer_views = doc.setdefault("bufferViews", [])
+    buffer_view_index = len(buffer_views)
+    buffer_views.append({
+        "buffer": 0,
+        "byteOffset": byte_offset,
+        "byteLength": len(payload),
+    })
+    buffers = doc.setdefault("buffers", [{"byteLength": 0}])
+    buffers[0]["byteLength"] = byte_offset + len(payload)
+    return aligned_bin + payload, buffer_view_index
+
+
+def texture_image_index(doc: dict[str, Any], texture_info: dict[str, Any] | None) -> int | None:
+    if not texture_info:
+        return None
+    texture_index = texture_info.get("index")
+    textures = doc.get("textures") or []
+    if texture_index is None or texture_index < 0 or texture_index >= len(textures):
+        return None
+    return textures[texture_index].get("source")
+
+
+def replace_or_create_pbr_image(
+    doc: dict[str, Any],
+    bin_chunk: bytes,
+    texture_slot: str,
+    image_path: Path,
+    image_name: str,
+) -> bytes:
+    materials = doc.setdefault("materials", [{}])
+    material = materials[0]
+    pbr = material.setdefault("pbrMetallicRoughness", {})
+    texture_info = pbr.get(texture_slot)
+    image_index = texture_image_index(doc, texture_info)
+    if image_index is None:
+        images = doc.setdefault("images", [])
+        textures = doc.setdefault("textures", [])
+        image_index = len(images)
+        texture_index = len(textures)
+        images.append({})
+        textures.append({"source": image_index})
+        pbr[texture_slot] = {"index": texture_index}
+
+    payload = image_path.read_bytes()
+    bin_chunk, buffer_view_index = append_bin_payload(doc, bin_chunk, payload)
+    images = doc.setdefault("images", [])
+    images[image_index] = {
+        "bufferView": buffer_view_index,
+        "mimeType": "image/png",
+        "name": image_name,
+    }
+    return bin_chunk
+
+
+def write_baked_glb_from_target(target_path: Path, output_path: Path, base_path: Path, mr_path: Path) -> None:
+    doc, bin_chunk = read_glb(target_path)
+    asset = doc.setdefault("asset", {"version": "2.0"})
+    previous_generator = asset.get("generator")
+    asset["generator"] = "kaminos generated-asset-bake.py texture-injection"
+    if previous_generator:
+        asset["extras"] = {**(asset.get("extras") or {}), "sourceGenerator": previous_generator}
+    bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "baseColorTexture", base_path, "kaminos-baked-baseColor")
+    bin_chunk = replace_or_create_pbr_image(doc, bin_chunk, "metallicRoughnessTexture", mr_path, "kaminos-baked-metallicRoughness")
+    write_glb(output_path, doc, bin_chunk)
 
 
 def accessor_count(doc: dict[str, Any], accessor_index: int | None) -> int:
@@ -132,6 +250,7 @@ def assay_glb(path: Path) -> dict[str, Any]:
         material_records.append({
             "index": material_index,
             "name": material.get("name"),
+            "doubleSided": material.get("doubleSided"),
             "baseColorTexture": base_name,
             "metallicRoughnessTexture": mr_name,
             "metallicFactor": pbr.get("metallicFactor"),
@@ -193,6 +312,7 @@ def manifest_base(
     projection_route: str,
     source_triangle_candidates: int,
     padding_pixels: int,
+    normal_min_dot: float,
 ) -> dict[str, Any]:
     return {
         "schema": BAKE_SCHEMA,
@@ -204,7 +324,8 @@ def manifest_base(
         "uvPolicy": "required-existing-uv0",
         "projection": {
             "route": projection_route,
-            "sourceTriangleCandidates": source_triangle_candidates if projection_route == "nearest-source-surface" else None,
+            "sourceTriangleCandidates": source_triangle_candidates if projection_route.startswith("nearest-source-surface") else None,
+            "normalMinDot": normal_min_dot if projection_route == "nearest-source-surface-normal-aware" else None,
             "status": "pending",
             "description": "Target UV pixels reconstruct target surface positions, then sample source material UV through the recorded projection route.",
         },
@@ -236,10 +357,13 @@ def preflight(manifest: dict[str, Any]) -> None:
         raise BakeFailure("preflight", "source-missing-basecolor", "source GLB has no baseColor texture to transfer")
     if not manifest["source"]["materials"]["hasMetallicRoughnessTexture"]:
         raise BakeFailure("preflight", "source-missing-metallicroughness", "source GLB has no metallicRoughness texture to transfer")
-    if manifest["projection"]["route"] not in {"nearest-source-vertex", "nearest-source-surface"}:
+    if manifest["projection"]["route"] not in {"nearest-source-vertex", "nearest-source-surface", "nearest-source-surface-normal-aware"}:
         raise BakeFailure("preflight", "unsupported-projection-route", f"unsupported projection route {manifest['projection']['route']}")
-    if manifest["projection"]["route"] == "nearest-source-surface" and int(manifest["projection"]["sourceTriangleCandidates"]) <= 0:
+    if manifest["projection"]["route"].startswith("nearest-source-surface") and int(manifest["projection"]["sourceTriangleCandidates"]) <= 0:
         raise BakeFailure("preflight", "invalid-source-triangle-candidates", "nearest-source-surface requires at least one triangle candidate")
+    normal_min_dot = manifest["projection"]["normalMinDot"]
+    if normal_min_dot is not None and not (-1.0 <= float(normal_min_dot) <= 1.0):
+        raise BakeFailure("preflight", "invalid-normal-min-dot", "normalMinDot must be between -1 and 1")
     if int(manifest["padding"]["pixels"]) < 0:
         raise BakeFailure("preflight", "invalid-padding-pixels", "padding pixels must be non-negative")
 
@@ -373,7 +497,17 @@ def closest_points_on_triangles(points, a, b, c):
     return best_point, best_bary, best_dist2
 
 
-def nearest_source_surface_uvs(positions, source_vertices, source_faces, source_uv, centroid_tree, candidate_count):
+def nearest_source_surface_uvs(
+    positions,
+    source_vertices,
+    source_faces,
+    source_uv,
+    centroid_tree,
+    candidate_count,
+    source_face_normals=None,
+    target_normals=None,
+    normal_min_dot=None,
+):
     import numpy as np
 
     k = min(max(1, int(candidate_count)), len(source_faces))
@@ -383,6 +517,10 @@ def nearest_source_surface_uvs(positions, source_vertices, source_faces, source_
 
     best_dist2 = np.full(len(positions), np.inf, dtype=np.float32)
     best_uv = np.zeros((len(positions), 2), dtype=np.float32)
+    fallback_dist2 = np.full(len(positions), np.inf, dtype=np.float32)
+    fallback_uv = np.zeros((len(positions), 2), dtype=np.float32)
+    normal_rejected = 0
+    normal_aware = source_face_normals is not None and target_normals is not None and normal_min_dot is not None
     for candidate_slot in range(candidate_triangles.shape[1]):
         tri_indices = candidate_triangles[:, candidate_slot]
         faces = source_faces[tri_indices]
@@ -390,7 +528,23 @@ def nearest_source_surface_uvs(positions, source_vertices, source_faces, source_
         b = source_vertices[faces[:, 1]]
         c = source_vertices[faces[:, 2]]
         _, bary, dist2 = closest_points_on_triangles(positions, a, b, c)
-        improve = dist2 < best_dist2
+        fallback_improve = dist2 < fallback_dist2
+        if np.any(fallback_improve):
+            fallback_uv_tri = source_uv[faces[fallback_improve]]
+            fallback_uv[fallback_improve] = (
+                bary[fallback_improve, 0:1] * fallback_uv_tri[:, 0]
+                + bary[fallback_improve, 1:2] * fallback_uv_tri[:, 1]
+                + bary[fallback_improve, 2:3] * fallback_uv_tri[:, 2]
+            )
+            fallback_dist2[fallback_improve] = dist2[fallback_improve]
+
+        valid = np.ones(len(positions), dtype=bool)
+        if normal_aware:
+            dots = np.sum(source_face_normals[tri_indices] * target_normals, axis=1)
+            valid = dots >= float(normal_min_dot)
+            normal_rejected += int(np.count_nonzero(~valid))
+
+        improve = valid & (dist2 < best_dist2)
         if not np.any(improve):
             continue
         uv_tri = source_uv[faces[improve]]
@@ -401,7 +555,12 @@ def nearest_source_surface_uvs(positions, source_vertices, source_faces, source_
         )
         best_dist2[improve] = dist2[improve]
 
-    return np.sqrt(best_dist2), best_uv
+    missing = ~np.isfinite(best_dist2)
+    if np.any(missing):
+        best_dist2[missing] = fallback_dist2[missing]
+        best_uv[missing] = fallback_uv[missing]
+
+    return np.sqrt(best_dist2), best_uv, normal_rejected
 
 
 def dilate_atlas_pixels(out_base, out_mr, covered, padding_pixels):
@@ -434,12 +593,11 @@ def bake(
     projection_route: str,
     source_triangle_candidates: int,
     padding_pixels: int,
+    normal_min_dot: float,
 ) -> dict[str, Any]:
     import numpy as np
     from PIL import Image
     from scipy.spatial import cKDTree
-    from trimesh.visual.material import PBRMaterial
-    from trimesh.visual.texture import TextureVisuals
 
     source_mesh = load_single_mesh(source_path, "source")
     target_mesh = load_single_mesh(target_path, "target")
@@ -471,16 +629,23 @@ def bake(
     base_img = image_array(source_base, "RGBA")
     mr_img = image_array(source_mr, "RGB")
     vertex_tree = cKDTree(source_vertices) if projection_route == "nearest-source-vertex" else None
-    if projection_route == "nearest-source-surface":
+    if projection_route.startswith("nearest-source-surface"):
         source_triangles = source_vertices[source_faces]
         centroid_tree = cKDTree(np.mean(source_triangles, axis=1))
+        source_face_normals = np.asarray(source_mesh.face_normals, dtype=np.float32)
     else:
         centroid_tree = None
+        source_face_normals = None
+    if projection_route == "nearest-source-surface-normal-aware":
+        target_vertex_normals = np.asarray(target_mesh.vertex_normals, dtype=np.float32)
+    else:
+        target_vertex_normals = None
 
     out_base = np.zeros((size, size, 4), dtype=np.float32)
     out_mr = np.zeros((size, size, 3), dtype=np.float32)
     distance = np.full((size, size), np.nan, dtype=np.float32)
     covered = np.zeros((size, size), dtype=bool)
+    normal_rejected_total = 0
 
     uv_px = np.empty_like(target_uv)
     uv_px[:, 0] = target_uv[:, 0] * (size - 1)
@@ -513,15 +678,27 @@ def bake(
         weights = np.stack([b0[mask], b1[mask], b2[mask]], axis=1).astype(np.float32)
         tri_pos = target_vertices[face]
         positions = weights @ tri_pos
-        if projection_route == "nearest-source-surface":
-            dists, sample_uv = nearest_source_surface_uvs(
+        if projection_route.startswith("nearest-source-surface"):
+            if projection_route == "nearest-source-surface-normal-aware":
+                target_tri_normals = target_vertex_normals[face]
+                target_normals = weights @ target_tri_normals
+                normal_lengths = np.linalg.norm(target_normals, axis=1)
+                valid_normals = normal_lengths > 1e-9
+                target_normals[valid_normals] /= normal_lengths[valid_normals, None]
+            else:
+                target_normals = None
+            dists, sample_uv, normal_rejected = nearest_source_surface_uvs(
                 positions,
                 source_vertices,
                 source_faces,
                 source_uv,
                 centroid_tree,
                 source_triangle_candidates,
+                source_face_normals=source_face_normals,
+                target_normals=target_normals,
+                normal_min_dot=normal_min_dot if projection_route == "nearest-source-surface-normal-aware" else None,
             )
+            normal_rejected_total += normal_rejected
         else:
             dists, source_indices = vertex_tree.query(positions, k=1)
             sample_uv = source_uv[source_indices]
@@ -565,20 +742,8 @@ def bake(
     Image.fromarray((padding_mask.astype(np.uint8) * 255), mode="L").save(padding_path)
 
     baked_glb = out_dir / "asset-baked.glb"
-    baked_mesh = target_mesh.copy()
-    baked_base_img = Image.open(base_path)
-    baked_mr_img = Image.open(mr_path)
-    baked_mesh.visual = TextureVisuals(
-        uv=target_uv,
-        material=PBRMaterial(
-            name="kaminos-baked-pbr-v0",
-            baseColorTexture=baked_base_img,
-            metallicRoughnessTexture=baked_mr_img,
-            metallicFactor=1.0,
-            roughnessFactor=1.0,
-        ),
-    )
-    baked_mesh.export(baked_glb)
+    write_baked_glb_from_target(target_path, baked_glb, base_path, mr_path)
+    post_export_assay = assay_glb(baked_glb)
 
     total_pixels = size * size
     covered_pixels = int(np.count_nonzero(covered))
@@ -592,6 +757,8 @@ def bake(
         "paddedPixels": int(np.count_nonzero(padding_mask)),
         "atlasPaddedRatio": float(np.count_nonzero(padding_mask) / total_pixels),
         "remainingUncoveredRatio": float(np.count_nonzero(remaining_unresolved) / total_pixels),
+        "normalMinDot": float(normal_min_dot) if projection_route == "nearest-source-surface-normal-aware" else None,
+        "normalRejectedCandidates": int(normal_rejected_total),
         "distance": {
             "min": min_dist,
             "mean": mean_dist,
@@ -607,6 +774,13 @@ def bake(
             "unresolvedMask": str(unresolved_path),
             "paddingMask": str(padding_path),
         },
+        "postExportAssay": {
+            "hasVertexNormals": post_export_assay["geometry"]["hasVertexNormals"],
+            "hasUv0": post_export_assay["geometry"]["hasUv0"],
+            "triangleCount": post_export_assay["mesh"]["triangleCount"],
+            "vertexCount": post_export_assay["mesh"]["vertexCount"],
+            "materialRecords": post_export_assay["materials"]["records"],
+        },
     }
 
 
@@ -619,11 +793,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--texture-size", type=int, default=1024, help="Square bake texture size")
     parser.add_argument(
         "--projection-route",
-        choices=["nearest-source-surface", "nearest-source-vertex"],
-        default="nearest-source-surface",
+        choices=["nearest-source-surface-normal-aware", "nearest-source-surface", "nearest-source-vertex"],
+        default="nearest-source-surface-normal-aware",
         help="Source material lookup route",
     )
     parser.add_argument("--source-triangle-candidates", type=int, default=12, help="Triangle candidates for nearest-source-surface")
+    parser.add_argument("--normal-min-dot", type=float, default=0.25, help="Minimum source/target normal dot for normal-aware surface projection")
     parser.add_argument("--padding-pixels", type=int, default=12, help="UV island dilation radius in atlas pixels")
     parser.add_argument("--assay-only", action="store_true", help="Only write assay/manifest; do not project")
     args = parser.parse_args(argv)
@@ -649,6 +824,7 @@ def main(argv: list[str] | None = None) -> int:
             args.projection_route,
             args.source_triangle_candidates,
             args.padding_pixels,
+            args.normal_min_dot,
         )
         preflight(manifest)
         if args.assay_only:
@@ -663,6 +839,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.projection_route,
                 args.source_triangle_candidates,
                 args.padding_pixels,
+                args.normal_min_dot,
             )
             manifest["status"] = "emitted"
             manifest["projection"]["status"] = "emitted"
@@ -673,6 +850,9 @@ def main(argv: list[str] | None = None) -> int:
             manifest["projection"]["atlasCoverageRatio"] = stats["atlasCoverageRatio"]
             manifest["projection"]["atlasUncoveredRatio"] = stats["atlasUncoveredRatio"]
             manifest["projection"]["distance"] = stats["distance"]
+            if stats["normalMinDot"] is not None:
+                manifest["projection"]["normalMinDot"] = stats["normalMinDot"]
+                manifest["projection"]["normalRejectedCandidates"] = stats["normalRejectedCandidates"]
             manifest["padding"].update({
                 "status": "emitted",
                 "paddedPixels": stats["paddedPixels"],
@@ -682,6 +862,7 @@ def main(argv: list[str] | None = None) -> int:
             manifest["products"]["baseColor"].update({"status": "emitted", "path": stats["paths"]["baseColor"]})
             manifest["products"]["metallicRoughness"].update({"status": "emitted", "path": stats["paths"]["metallicRoughness"]})
             manifest["products"]["glb"] = {"status": "emitted", "path": stats["paths"]["bakedGlb"]}
+            manifest["postExportAssay"] = stats["postExportAssay"]
             manifest["diagnostics"]["distance"].update({"status": "emitted", "path": stats["paths"]["projectionDistance"]})
             manifest["diagnostics"]["route"].update({"status": "emitted", "path": stats["paths"]["projectionRoute"]})
             manifest["diagnostics"]["unresolvedMask"].update({"status": "emitted", "path": stats["paths"]["unresolvedMask"]})
@@ -700,6 +881,7 @@ def main(argv: list[str] | None = None) -> int:
             args.projection_route,
             args.source_triangle_candidates,
             args.padding_pixels,
+            args.normal_min_dot,
         )
         manifest["status"] = "failed"
         manifest["failure"] = {"phase": exc.phase, "code": exc.code, "message": exc.message}
@@ -717,6 +899,7 @@ def main(argv: list[str] | None = None) -> int:
             args.projection_route,
             args.source_triangle_candidates,
             args.padding_pixels,
+            args.normal_min_dot,
         )
         manifest["status"] = "failed"
         manifest["failure"] = {"phase": "unexpected", "code": exc.__class__.__name__, "message": str(exc)}
