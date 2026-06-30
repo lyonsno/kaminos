@@ -24,6 +24,7 @@ assert.match(index, /function setActiveSceneObject\(/, 'selection/gizmo can targ
 assert.match(index, /function setActiveSceneGroup\(/, 'group selection is explicit and does not masquerade as object selection');
 assert.match(index, /new THREE\.Raycaster\(\)/, 'viewport click selection uses a real scene raycaster');
 assert.match(index, /function pickSceneObjectFromViewportPointer\(/, 'viewport click selection resolves pointer hits to authored scene objects');
+assert.match(index, /function pickForgeHostFromViewportPointer\(/, 'viewport click selection resolves pointer hits to Forge Host station and smoke-offer meshes');
 assert.match(index, /function handleViewportSelectionClick\(/, 'viewport click selection has an explicit click handler distinct from orbit dirtying');
 assert.match(index, /viewportSuppressedClick/, 'viewport drag rejection suppresses the follow-up click fallback');
 assert.match(index, /if \(drift > 5\)[\s\S]*viewportSuppressedClick/, 'viewport drag rejection is recorded before returning');
@@ -52,6 +53,7 @@ assert.match(index, /buildForgeHostManifestFromRegistrySnapshot/, 'Forge Host br
 assert.match(index, /routeForgeHostSmokeOfferToChamber/, 'Forge Host browser route materializes smoke offers into chamber state');
 assert.match(index, /buildForgeHostSmokeDispositionReceipt/, 'Forge Host browser route builds structured disposition receipts');
 assert.match(index, /captureForgeHostSmokeChamberScreenshot/, 'Forge Host browser route captures chamber screenshots through an explicit function');
+assert.match(index, /openForgeHostSmokeOffer\(forgeHit\.station\.smokeOffers\[0\]\.id\)/, 'clicking a 3D Forge Host smoke-offer marker opens the same Smoke Chamber route as the panel row');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
 assert.match(index, /kaminos\.forge-host\.smoke-chamber\.v0/, 'Forge Host UI preserves smoke-chamber schema identity');
 assert.match(index, /kaminos\.forge-host\.smoke-disposition-receipt\.v0/, 'Forge Host UI preserves smoke disposition receipt schema identity');

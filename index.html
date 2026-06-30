@@ -4443,6 +4443,52 @@ function pickSceneObjectFromViewportPointer(event) {
   return null;
 }
 
+function forgeHostHitForDescendant(object) {
+  if (!forgeHostState?.active) return null;
+  for (const visual of forgeHostState.visuals || []) {
+    let cursor = object;
+    let stationHit = null;
+    while (cursor) {
+      if (cursor === visual.offerTarget) {
+        return { type: 'smoke-offer', station: visual.station, visual };
+      }
+      if (
+        cursor === visual.group
+        || cursor === visual.body
+        || cursor === visual.nose
+        || cursor === visual.ring
+        || cursor === visual.label
+      ) {
+        stationHit = { type: 'station', station: visual.station, visual };
+      }
+      cursor = cursor.parent;
+    }
+    if (stationHit) return stationHit;
+  }
+  return null;
+}
+
+function pickForgeHostFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !forgeHostState?.active) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    return null;
+  }
+  scenePointerNdc.set(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+  );
+  sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
+  const targets = (forgeHostState.visuals || []).map(visual => visual.group);
+  const hits = sceneRaycaster.intersectObjects(targets, true);
+  for (const hit of hits) {
+    const forgeHit = forgeHostHitForDescendant(hit.object);
+    if (forgeHit) return forgeHit;
+  }
+  return null;
+}
+
 function viewportEventHitsInteractiveOverlay(event) {
   return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls');
 }
@@ -4495,6 +4541,20 @@ function handleViewportSelectionClick(event) {
       y: event.clientY,
       at: performance.now(),
     };
+    return;
+  }
+
+  const forgeHit = pickForgeHostFromViewportPointer(event);
+  if (forgeHit) {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    setForgeHostSelectedActor(forgeHit.station.actorId);
+    if (forgeHit.type === 'smoke-offer' && forgeHit.station.smokeOffers[0]) {
+      openForgeHostSmokeOffer(forgeHit.station.smokeOffers[0].id);
+    } else {
+      setInfo(`Forge station: ${forgeHit.station.callSign}`);
+    }
+    window._kaminosDirty?.();
     return;
   }
 
@@ -5297,6 +5357,20 @@ window.kaminosOpenForgeHostSmokeOffer = openForgeHostSmokeOffer;
 window.kaminosRouteForgeHostSmokeOfferToChamber = routeForgeHostSmokeOfferToChamber;
 window.captureForgeHostSmokeChamberScreenshot = captureForgeHostSmokeChamberScreenshot;
 window.copyForgeHostSmokeChamberReturnLine = copyForgeHostSmokeChamberReturnLine;
+window.kaminosForgeHostViewportPointForOffer = function(diaulos = 'minion-spawnfucker') {
+  if (!camera || !renderer || !forgeHostState?.active) return null;
+  const visual = forgeHostState.visuals.find(item => item.station.diaulos === diaulos) || null;
+  const station = visual?.station || null;
+  if (!station || !visual?.offerTarget) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const projected = visual.offerTarget.getWorldPosition(new THREE.Vector3()).project(camera);
+  return {
+    x: rect.left + ((projected.x + 1) / 2) * rect.width,
+    y: rect.top + ((1 - projected.y) / 2) * rect.height,
+    diaulos: station.diaulos,
+    actorId: station.actorId,
+  };
+};
 window.kaminosForgeHostDebugState = function() {
   const state = forgeHostState;
   const stations = (state?.visuals || []).map(visual => ({
