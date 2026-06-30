@@ -155,6 +155,38 @@ async function dispatchMouseClick(ws, point) {
   });
 }
 
+async function dispatchMouseMove(ws, point) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: point.x,
+    y: point.y,
+    button: 'none',
+    buttons: 0,
+  });
+}
+
+async function dispatchMousePress(ws, point) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+}
+
+async function dispatchMouseRelease(ws, point) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: point.x,
+    y: point.y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+}
+
 async function dispatchMouseDrag(ws, from, to) {
   await wsRequest(ws, 'Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -442,6 +474,74 @@ async function runForgeHostViewportSmokeOfferClickScenario(ws) {
       }
       if (state.smokeChamber?.schema !== 'kaminos.forge-host.smoke-chamber.v0') {
         throw new Error('viewport smoke-offer click opened invalid chamber: ' + JSON.stringify(state.smokeChamber));
+      }
+      return {
+        point: ${JSON.stringify(point)},
+        selectedActorId: state.selectedActorId,
+        openedOffer: state.lastOpenedOffer,
+        chamber: state.smokeChamber,
+        panelText: panel.textContent.trim(),
+      };
+    })()
+  `, { timeoutMs: 10000 });
+}
+
+async function runForgeHostSidePanelSmokeOfferClickScenario(ws) {
+  phase = 'scenario-forge-host-side-panel-smoke-offer-click';
+  const point = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 80; i++) {
+        const state = window.kaminosForgeHostDebugState?.();
+        if (state?.active && state?.registrySource?.schema === 'kaminos.forge-host.registry-snapshot.v0') break;
+        await wait(125);
+      }
+      const minion = window.kaminosForgeHostDebugState?.()?.stations?.find(station => station.diaulos === 'minion-spawnfucker');
+      if (!minion) throw new Error('Forge Host side-panel smoke route missing minion station');
+      window.selectForgeHostStation?.(minion.actorId, { scrollToOffers: true });
+      await wait(250);
+      const row = document.querySelector('[data-forge-smoke-offer-id="offer:minion-spawnfucker:live-endpoint"]');
+      if (!row) throw new Error('Forge Host side-panel smoke-offer row missing');
+      row.scrollIntoView({ block: 'center', inline: 'nearest' });
+      await wait(120);
+      row.dataset.hoverStabilityProbe = 'still-here';
+      const rect = row.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        offerId: row.dataset.forgeSmokeOfferId,
+      };
+    })()
+  `, { timeoutMs: 25000 });
+  await dispatchMouseMove(ws, point);
+  await delay(650);
+  await evaluate(ws, `
+    (() => {
+      const row = document.querySelector('[data-forge-smoke-offer-id="offer:minion-spawnfucker:live-endpoint"]');
+      if (!row) throw new Error('Forge Host side-panel smoke-offer row disappeared under hover');
+      if (row.dataset.hoverStabilityProbe !== 'still-here') {
+        throw new Error('side-panel smoke-offer row was re-rendered under hover');
+      }
+      return true;
+    })()
+  `, { timeoutMs: 10000 });
+  await dispatchMousePress(ws, point);
+  await delay(180);
+  await dispatchMouseRelease(ws, point);
+  await delay(300);
+  lastEvidence.forgeHostSidePanelSmokeOfferClick = await evaluate(ws, `
+    (() => {
+      const state = window.kaminosForgeHostDebugState?.();
+      const panel = document.querySelector('#forge-host-smoke-chamber');
+      if (state?.lastOpenedOffer?.id !== 'offer:minion-spawnfucker:live-endpoint') {
+        throw new Error('side-panel smoke-offer click did not open chamber: ' + JSON.stringify({
+          lastOpenedOffer: state?.lastOpenedOffer,
+          smokeChamber: state?.smokeChamber,
+          selectedActorId: state?.selectedActorId,
+        }));
+      }
+      if (panel?.dataset.forgeHostSmokeChamberActive !== 'true') {
+        throw new Error('side-panel smoke-offer click did not activate chamber panel: ' + (panel?.outerHTML || 'missing panel'));
       }
       return {
         point: ${JSON.stringify(point)},
@@ -4488,6 +4588,8 @@ try {
     await runForgeHostSmokeChamberRoutingScenario(ws);
   } else if (scenario === 'forge-host-viewport-smoke-offer-click') {
     await runForgeHostViewportSmokeOfferClickScenario(ws);
+  } else if (scenario === 'forge-host-side-panel-smoke-offer-click') {
+    await runForgeHostSidePanelSmokeOfferClickScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-receipt') {
     await runForgeHostSmokeChamberReceiptScenario(ws);
   } else if (scenario === 'viewport-click-select-deselect') {
