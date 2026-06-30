@@ -121,6 +121,78 @@ function schedulerEvidence(telemetry = null, statusOverride = null) {
   };
 }
 
+function uniqueTelemetryPhases(telemetry) {
+  const phases = [];
+  for (const event of telemetry?.events || []) {
+    if (!event?.phase || phases.includes(event.phase)) continue;
+    phases.push(event.phase);
+  }
+  return phases;
+}
+
+function pipelineSchedulerEvidence(breathingRoom) {
+  const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
+  const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
+    ? breathingRoom.unsupportedFields
+    : [];
+  const schedulerEffective = effectiveScheduler
+    ? { ...effectiveScheduler, ...(unsupportedFields.length ? { unsupportedFields } : {}) }
+    : null;
+  const failureDowngrades = [];
+  if (!effectiveScheduler) failureDowngrades.push('effective-scheduler-missing');
+  if (unsupportedFields.length) failureDowngrades.push('unsupported-fields-present');
+  return {
+    schema: 'kaminos.pipeline-scheduler-composition.v0',
+    source: 'pipeline-adapter-report',
+    verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    requestedScheduler: breathingRoom?.requestedScheduler || requestedScheduler,
+    effectiveScheduler,
+    unsupportedFields,
+    scheduler: {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: breathingRoom?.requestedScheduler || requestedScheduler,
+      effectiveScheduler: schedulerEffective,
+      unsupportedFields,
+      verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    },
+    backpressure: {
+      schema: 'kaminos.webgpu-route-backpressure.v0',
+      requestedBudget: 'unknown',
+      effectiveBudget: 'unknown',
+      memoryExclusivity: 'unknown',
+      warmCacheState: 'unknown',
+      frameTail: {
+        sampleWindowMs: 0,
+        longFrameCount: 0,
+        maxFrameGapMs: 0,
+        p95FrameGapMs: null,
+        p99FrameGapMs: null,
+      },
+    },
+    phaseBoundaries: uniqueTelemetryPhases(breathingRoom?.telemetry),
+    backendIdentity: {
+      modelFamily: 'SHARP-WebGPU',
+      runtime: 'browser-webgpu',
+      repo: sharpRepo,
+      appUrl: url,
+    },
+    optimizationIdentity: {
+      vitEncoderMode: effectiveScheduler
+        ? (effectiveScheduler.vitBlockChunkSize ? 'split' : 'fused')
+        : null,
+      vitBlockChunkSize: effectiveScheduler?.vitBlockChunkSize ?? null,
+      spnPatchChunkSize: effectiveScheduler?.spnPatchChunkSize ?? null,
+      waitForSubmittedWorkDone: effectiveScheduler?.waitForSubmittedWorkDone ?? null,
+      yieldMs: effectiveScheduler?.yieldMs ?? null,
+      gaussianPhaseYieldMs: effectiveScheduler?.gaussianPhaseYieldMs ?? null,
+    },
+    raw: {
+      breathingRoom,
+    },
+    failureDowngrades,
+  };
+}
+
 function resolveArtifactPath(value) {
   return value ? resolve(value) : null;
 }
@@ -140,6 +212,7 @@ function writeJson(path, value) {
 }
 
 function reportBase(extra = {}) {
+  const breathingRoom = schedulerEvidence(extra.schedulerTelemetry || null, extra.schedulerStatus);
   return {
     schema: 'kaminos.sharp-webgpu-adapter-report.v0',
     ok: extra.ok ?? false,
@@ -163,7 +236,8 @@ function reportBase(extra = {}) {
       weightsPath: join(sharpRepo, 'public', 'weights.bin'),
       requestedScheduler,
     },
-    breathingRoom: schedulerEvidence(extra.schedulerTelemetry || null, extra.schedulerStatus),
+    breathingRoom,
+    pipelineScheduler: pipelineSchedulerEvidence(breathingRoom),
     lastTrustworthyEvidence,
     serverLogs: {
       stdoutTail: serverLogs.stdout.slice(-4000),

@@ -410,7 +410,130 @@ function readJsonIfExists(path) {
   }
 }
 
-function adapterReportSummary(report) {
+function uniqueAdapterPhases(telemetry) {
+  const phases = [];
+  for (const event of telemetry?.events || []) {
+    if (!event?.phase || phases.includes(event.phase)) continue;
+    phases.push(event.phase);
+  }
+  return phases;
+}
+
+function adapterBackendIdentity(report, effectiveRoute = null) {
+  const schema = String(report?.schema || '').toLowerCase();
+  const backend = report?.backend || {};
+  return {
+    modelFamily: backend.modelFamily || effectiveRoute?.tool || (schema.includes('sharp') ? 'SHARP-WebGPU' : null),
+    runtime: backend.runtime || (schema.includes('mock') ? 'mock-adapter' : effectiveRoute?.effectiveBackend || null),
+    repo: backend.repo || null,
+    appUrl: backend.appUrl || null,
+    effectiveBackend: effectiveRoute?.effectiveBackend || null,
+  };
+}
+
+function emptyOptimizationIdentity() {
+  return {
+    vitEncoderMode: null,
+    vitBlockChunkSize: null,
+    spnPatchChunkSize: null,
+    waitForSubmittedWorkDone: null,
+    yieldMs: null,
+    gaussianPhaseYieldMs: null,
+  };
+}
+
+function backpressurePlaceholder() {
+  return {
+    schema: 'kaminos.webgpu-route-backpressure.v0',
+    requestedBudget: 'unknown',
+    effectiveBudget: 'unknown',
+    memoryExclusivity: 'unknown',
+    warmCacheState: 'unknown',
+    frameTail: {
+      sampleWindowMs: 0,
+      longFrameCount: 0,
+      maxFrameGapMs: 0,
+      p95FrameGapMs: null,
+      p99FrameGapMs: null,
+    },
+  };
+}
+
+function pipelineSchedulerEvidence(report, effectiveRoute = null) {
+  if (!report) {
+    return {
+      schema: 'kaminos.pipeline-scheduler-composition.v0',
+      source: 'missing',
+      verificationState: 'scheduler-evidence-missing',
+      requestedScheduler: null,
+      effectiveScheduler: null,
+      unsupportedFields: [],
+      scheduler: {
+        schema: 'kaminos.webgpu-route-scheduler.v0',
+        requestedScheduler: null,
+        effectiveScheduler: null,
+        unsupportedFields: [],
+        verificationState: 'scheduler-evidence-missing',
+      },
+      backpressure: backpressurePlaceholder(),
+      phaseBoundaries: [],
+      backendIdentity: adapterBackendIdentity(null, effectiveRoute),
+      optimizationIdentity: emptyOptimizationIdentity(),
+      raw: {
+        breathingRoom: null,
+      },
+      failureDowngrades: ['scheduler-evidence-missing'],
+    };
+  }
+  if (report.pipelineScheduler?.schema === 'kaminos.pipeline-scheduler-composition.v0') {
+    return report.pipelineScheduler;
+  }
+  const breathingRoom = report.breathingRoom || null;
+  const effectiveScheduler = breathingRoom?.effectiveScheduler || null;
+  const unsupportedFields = Array.isArray(breathingRoom?.unsupportedFields)
+    ? breathingRoom.unsupportedFields
+    : [];
+  const schedulerEffective = effectiveScheduler
+    ? { ...effectiveScheduler, ...(unsupportedFields.length ? { unsupportedFields } : {}) }
+    : null;
+  const failureDowngrades = [];
+  if (report.schema === 'unparseable-json') failureDowngrades.push('unparseable-adapter-report');
+  if (!breathingRoom) failureDowngrades.push('breathing-room-missing');
+  if (!effectiveScheduler) failureDowngrades.push('effective-scheduler-missing');
+  if (unsupportedFields.length) failureDowngrades.push('unsupported-fields-present');
+  return {
+    schema: 'kaminos.pipeline-scheduler-composition.v0',
+    source: 'pipeline-adapter-report',
+    verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || null,
+    effectiveScheduler,
+    unsupportedFields,
+    scheduler: {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: breathingRoom?.requestedScheduler || report.backend?.requestedScheduler || null,
+      effectiveScheduler: schedulerEffective,
+      unsupportedFields,
+      verificationState: breathingRoom?.status || (effectiveScheduler ? 'verified' : 'scheduler-unverified'),
+    },
+    backpressure: backpressurePlaceholder(),
+    phaseBoundaries: uniqueAdapterPhases(breathingRoom?.telemetry),
+    backendIdentity: adapterBackendIdentity(report, effectiveRoute),
+    optimizationIdentity: effectiveScheduler ? {
+      vitEncoderMode: effectiveScheduler.vitBlockChunkSize ? 'split' : 'fused',
+      vitBlockChunkSize: effectiveScheduler.vitBlockChunkSize ?? null,
+      spnPatchChunkSize: effectiveScheduler.spnPatchChunkSize ?? null,
+      waitForSubmittedWorkDone: effectiveScheduler.waitForSubmittedWorkDone ?? null,
+      yieldMs: effectiveScheduler.yieldMs ?? null,
+      gaussianPhaseYieldMs: effectiveScheduler.gaussianPhaseYieldMs ?? null,
+    } : emptyOptimizationIdentity(),
+    raw: {
+      breathingRoom,
+    },
+    failureDowngrades,
+  };
+}
+
+function adapterReportSummary(report, effectiveRoute = null) {
   if (!report) return null;
   return {
     schema: report.schema || null,
@@ -418,6 +541,7 @@ function adapterReportSummary(report) {
     phase: report.phase || null,
     backend: report.backend || null,
     breathingRoom: report.breathingRoom || null,
+    pipelineScheduler: pipelineSchedulerEvidence(report, effectiveRoute),
     inputSha256: report.inputSha256 || report.input?.sha256 || null,
     outputBytes: report.outputBytes || report.output?.bytes || null,
   };
@@ -492,7 +616,8 @@ function validateRequiredAdapterSideArtifacts(effectiveRoute, stage, outputPath)
 
 function classifyLiveAdapterOutput(effectiveRoute, stage, artifactId) {
   const adapterReport = readJsonIfExists(effectiveRoute.adapterReportPath);
-  effectiveRoute.adapterReport = adapterReportSummary(adapterReport);
+  effectiveRoute.adapterReport = adapterReportSummary(adapterReport, effectiveRoute);
+  effectiveRoute.pipelineScheduler = pipelineSchedulerEvidence(adapterReport, effectiveRoute);
   const schema = String(adapterReport?.schema || '').toLowerCase();
   const modelFamily = stage.route?.modelFamily || effectiveRoute.tool || 'model';
   const artifactRole = pipeline.artifacts?.[artifactId]?.role || artifactId || 'artifact';
@@ -590,6 +715,9 @@ function runLiveModelAdapter(outputPath, stage) {
   effectiveRoute.signal = proc.signal || null;
   effectiveRoute.stdoutTail = (proc.stdout || '').slice(-4000);
   effectiveRoute.stderrTail = (proc.stderr || '').slice(-4000);
+  const adapterReport = readJsonIfExists(adapterReportPath);
+  effectiveRoute.adapterReport = adapterReportSummary(adapterReport, effectiveRoute);
+  effectiveRoute.pipelineScheduler = pipelineSchedulerEvidence(adapterReport, effectiveRoute);
   if (proc.error || proc.status !== 0) {
     const message = proc.error?.message || `live model adapter exited ${proc.status}`;
     const error = new Error(message);
