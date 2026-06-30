@@ -1384,3 +1384,18 @@ assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only
 assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
 assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
 assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
+
+const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
+assert.ok(existsSync(residualMlxPath), 'tiny MLX residual-upscale smoke harness exists');
+const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
+assert.match(residualMlx, /kaminos\.volume\.residual-upscale-mlx\.v0/, 'MLX residual harness writes a stable report schema identity');
+assert.match(residualMlx, /--corpus-manifest/, 'MLX residual harness reads a frame-locked corpus manifest path from the caller');
+assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual harness validates frame-locked pair authority before training');
+assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual harness validates clean canvas image authority before training');
+assert.match(residualMlx, /baselinePsnr/, 'MLX residual harness reports linear-css-upscale baseline PSNR');
+assert.match(residualMlx, /modelPsnr/, 'MLX residual harness reports residual model PSNR');
+assert.match(residualMlx, /maxSteps/, 'MLX residual harness exposes bounded max steps for contention control');
+assert.match(residualMlx, /sleepMs/, 'MLX residual harness exposes per-step sleep throttling for contention control');
+assert.match(residualMlx, /zeros_like/, 'MLX residual harness zero-initializes the residual head so step zero preserves the renderer baseline');
+assert.match(residualMlx, /foregroundThreshold/, 'MLX residual harness supports foreground-biased patches so training does not mostly see black canvas');
+assert.match(residualMlx, /foregroundPixels/, 'MLX residual harness reports selected foreground pixels for corpus sanity');
