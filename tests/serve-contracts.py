@@ -406,12 +406,43 @@ def test_browser_webgpu_route_provider_projects_fixture_route_identity():
     assert row["route_job"]["intent"] == "preview"
     assert row["route_job"]["capabilities"]["warmCacheSensitive"] is True
     assert row["route_job"]["capabilities"]["memoryExclusive"] is True
+    assert row["route_job"]["capabilities"]["deferBeforeStart"] is False
+    assert row["route_job"]["capabilities"]["abortBeforeCommit"] is False
+    assert row["route_job"]["capabilities"]["cooperativeYieldable"] is False
+    assert row["route_job"]["capabilities"]["schedulerConfigurable"] is False
+    assert row["route_job"]["capabilities"]["memoryPressureSensitive"] is True
+    assert row["route_job"]["capabilities"]["frameBudgetSensitive"] is True
     assert row["route_job"]["capabilities"]["chunkYieldable"] is False
     assert row["route_job"]["capabilities"]["resumable"] is False
     assert row["route_job"]["controls"] == []
     assert row["route_job"]["metadata"]["effectiveBackend"]["kind"] == "webgpu-local"
     assert row["route_job"]["metadata"]["model"]["id"] == "Ruicheng/moge-2-vitl-normal"
     assert row["route_job"]["metadata"]["cache"]["state"] == "not-loaded"
+    assert row["route_job"]["metadata"]["runtimeProfile"]["schema"] == "kaminos.webgpu-runtime-profile.v0"
+    assert row["route_job"]["metadata"]["runtimeProfile"]["routeId"] == "moge.depth-normal.webgpu-local.v0"
+    assert row["route_job"]["metadata"]["runtimeProfile"]["backend"]["kind"] == "webgpu-local"
+    assert row["route_job"]["metadata"]["runtimeProfile"]["backend"]["runtime"] == "browser"
+    assert row["route_job"]["metadata"]["runtimeProfile"]["backend"]["adapterName"] == "not-probed"
+    assert row["route_job"]["metadata"]["scheduler"]["schema"] == "kaminos.webgpu-route-scheduler.v0"
+    assert row["route_job"]["metadata"]["scheduler"]["requestedScheduler"]["mode"] == "throughput"
+    assert row["route_job"]["metadata"]["scheduler"]["effectiveScheduler"]["mode"] == "throughput"
+    assert row["route_job"]["metadata"]["scheduler"]["verificationState"] == "scheduler-unverified"
+    assert row["route_job"]["metadata"]["scheduler"]["effectiveScheduler"]["unsupportedFields"] == []
+    assert row["route_job"]["metadata"]["backpressure"]["schema"] == "kaminos.webgpu-route-backpressure.v0"
+    assert row["route_job"]["metadata"]["backpressure"]["requestedBudget"] == "visible-wait"
+    assert row["route_job"]["metadata"]["backpressure"]["effectiveBudget"] == "visible-wait"
+    assert row["route_job"]["metadata"]["backpressure"]["memoryExclusivity"] == "unknown"
+    assert row["route_job"]["metadata"]["backpressure"]["warmCacheState"] == "not-loaded"
+    assert row["route_job"]["metadata"]["backpressure"]["frameTail"]["longFrameCount"] == 0
+    assert row["route_job"]["metadata"]["evidenceClassification"]["schema"] == "kaminos.webgpu-route-evidence-classification.v0"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["classification"] == "demo"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["authoritative"] is False
+    assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerVerificationState"] == "scheduler-unverified"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["schedulerMode"] == "throughput"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["requestedBudget"] == "visible-wait"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["effectiveBudget"] == "visible-wait"
+    assert row["route_job"]["metadata"]["evidenceClassification"]["longFrameCount"] == 0
+    assert any(warning["kind"] == "scheduler_unverified" for warning in row["warnings"])
     assert any(warning["kind"] == "fixture_route_identity_only" for warning in row["warnings"])
 
 

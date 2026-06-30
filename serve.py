@@ -50,6 +50,10 @@ SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
 ROUTE_PROVIDER_INDEX_SCHEMA = "kaminos.route-provider-index.v0"
 ROUTE_JOB_SCHEMA = "kaminos.route-job.v0"
 CHECKPOINT_PAUSE_REQUEST_SCHEMA = "gpu-greenroom.checkpoint-pause-request.v1"
+WEBGPU_RUNTIME_PROFILE_SCHEMA = "kaminos.webgpu-runtime-profile.v0"
+WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = "kaminos.webgpu-route-evidence-classification.v0"
+WEBGPU_ROUTE_SCHEDULER_SCHEMA = "kaminos.webgpu-route-scheduler.v0"
+WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = "kaminos.webgpu-route-backpressure.v0"
 ROUTE_JOB_STATUSES = {
     "pending",
     "reserved",
@@ -938,10 +942,103 @@ def build_greenroom_route_provider_index():
 
 
 def build_browser_webgpu_route_provider_index():
+    route_id = "moge.depth-normal.webgpu-local.v0"
+    backend_identity = {
+        "kind": "webgpu-local",
+        "runtime": "browser",
+        "adapterName": "not-probed",
+        "browser": None,
+        "features": [],
+        "requestedFeatures": [],
+        "limits": {},
+        "timestampQuery": "not-requested",
+    }
+    scheduler_profile = {
+        "schema": WEBGPU_ROUTE_SCHEDULER_SCHEMA,
+        "requestedScheduler": {
+            "mode": "throughput",
+            "yieldMs": 0,
+            "waitForSubmittedWorkDone": False,
+            "phaseChunkSize": {},
+        },
+        "effectiveScheduler": {
+            "mode": "throughput",
+            "yieldMs": 0,
+            "waitForSubmittedWorkDone": False,
+            "phaseChunkSize": {},
+            "unsupportedFields": [],
+        },
+        "verificationState": "scheduler-unverified",
+    }
+    backpressure_profile = {
+        "schema": WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
+        "requestedBudget": "visible-wait",
+        "effectiveBudget": "visible-wait",
+        "memoryExclusivity": "unknown",
+        "warmCacheState": "not-loaded",
+        "frameTail": {
+            "sampleWindowMs": 0,
+            "longFrameCount": 0,
+            "maxFrameGapMs": 0,
+            "p95FrameGapMs": None,
+            "p99FrameGapMs": None,
+        },
+    }
+    runtime_profile = {
+        "schema": WEBGPU_RUNTIME_PROFILE_SCHEMA,
+        "routeId": route_id,
+        "runtimeLabel": "fixture-browser-webgpu-not-probed",
+        "backend": backend_identity,
+        "kernel": {
+            "kitVersion": "fixture",
+            "profile": "moge-depth-normal-fixture",
+            "commit": None,
+        },
+        "profile": {
+            "schema": "kaminos.webgpu-staged-profile.v0",
+            "route": "fixture-not-run",
+            "timingSource": "fixture-not-run",
+            "timestampQueryValidatedAgainstStaged": False,
+            "requiredStages": ["fixture-not-run"],
+            "stages": [{"name": "fixture-not-run", "ms": 0}],
+            "stageNames": ["fixture-not-run"],
+            "totalMs": 0,
+        },
+        "evidence": {
+            "mode": "demo",
+            "source": "kaminos-browser-webgpu-route-fixture",
+            "fallbackReason": None,
+        },
+        "requiredStages": ["fixture-not-run"],
+        "timingSource": "fixture-not-run",
+        "createdAt": None,
+    }
+    evidence_classification = {
+        "schema": WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA,
+        "classification": "demo",
+        "authoritative": False,
+        "reasons": ["fixture route identity only; no live WebGPU receipt has been produced"],
+        "routeId": route_id,
+        "requestedRouteId": route_id,
+        "effectiveRouteId": route_id,
+        "backendKind": "webgpu-local",
+        "adapterName": "not-probed",
+        "timingSource": "fixture-not-run",
+        "totalMs": 0,
+        "schedulerVerificationState": scheduler_profile["verificationState"],
+        "schedulerMode": scheduler_profile["effectiveScheduler"]["mode"],
+        "schedulerUnsupportedFields": [],
+        "requestedBudget": backpressure_profile["requestedBudget"],
+        "effectiveBudget": backpressure_profile["effectiveBudget"],
+        "longFrameCount": backpressure_profile["frameTail"]["longFrameCount"],
+        "maxFrameGapMs": backpressure_profile["frameTail"]["maxFrameGapMs"],
+        "outputRoles": ["depth", "normal", "pointmap"],
+        "createdAt": None,
+    }
     route_job = {
         "schema": ROUTE_JOB_SCHEMA,
         "id": "browser-webgpu-moge-fixture",
-        "routeId": "moge.depth-normal.webgpu-local.v0",
+        "routeId": route_id,
         "executor": {
             "kind": "browser-webgpu",
             "id": "webgpu-inference-kit-fixture",
@@ -957,12 +1054,18 @@ def build_browser_webgpu_route_provider_index():
             "deferable": False,
             "abortable": False,
             "chunkYieldable": False,
+            "deferBeforeStart": False,
+            "abortBeforeCommit": False,
+            "cooperativeYieldable": False,
+            "schedulerConfigurable": False,
             "checkpointable": False,
             "checkpointPauseRequestable": False,
             "resumable": False,
             "resumeAdvertised": False,
             "warmCacheSensitive": True,
             "memoryExclusive": True,
+            "memoryPressureSensitive": True,
+            "frameBudgetSensitive": True,
         },
         "controls": [],
         "resumability": {
@@ -970,10 +1073,16 @@ def build_browser_webgpu_route_provider_index():
             "resumeSupported": False,
             "yieldSupported": False,
         },
-        "warnings": [{
-            "kind": "fixture_route_identity_only",
-            "message": "Browser WebGPU route identity fixture only; no live model execution or cooperative yield has been exercised.",
-        }],
+        "warnings": [
+            {
+                "kind": "scheduler_unverified",
+                "message": "Browser WebGPU scheduler/backpressure fields are fixture evidence; no cooperative scheduler telemetry has been exercised.",
+            },
+            {
+                "kind": "fixture_route_identity_only",
+                "message": "Browser WebGPU route identity fixture only; no live model execution or cooperative yield has been exercised.",
+            },
+        ],
         "metadata": {
             "effectiveBackend": {
                 "kind": "webgpu-local",
@@ -992,6 +1101,10 @@ def build_browser_webgpu_route_provider_index():
                 "features": [],
                 "identitySource": "not-probed",
             },
+            "runtimeProfile": runtime_profile,
+            "scheduler": scheduler_profile,
+            "backpressure": backpressure_profile,
+            "evidenceClassification": evidence_classification,
         },
     }
     row = {

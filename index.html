@@ -9125,6 +9125,10 @@ async function grPostApi(endpoint, params = {}) {
 const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
 const ROUTE_EXECUTOR_BROWSER_WEBGPU = 'browser-webgpu';
 const ROUTE_BACKEND_WEBGPU_LOCAL = 'webgpu-local';
+const WEBGPU_RUNTIME_PROFILE_SCHEMA = 'kaminos.webgpu-runtime-profile.v0';
+const WEBGPU_ROUTE_EVIDENCE_CLASSIFICATION_SCHEMA = 'kaminos.webgpu-route-evidence-classification.v0';
+const WEBGPU_ROUTE_SCHEDULER_SCHEMA = 'kaminos.webgpu-route-scheduler.v0';
+const WEBGPU_ROUTE_BACKPRESSURE_SCHEMA = 'kaminos.webgpu-route-backpressure.v0';
 let greenroomRouteJobState = {
   schema: 'kaminos.route-provider-index.v0',
   provider: { kind: 'native-greenroom' },
@@ -9929,6 +9933,7 @@ function routeJobControls(row = {}) {
 
 function routeWarningLabel(kind = 'warning') {
   const labels = {
+    scheduler_unverified: 'scheduler unverified',
     resume_unverified: 'resume unverified',
     pause_requested: 'pause requested',
     non_resumable_unverified: 'non-resumable',

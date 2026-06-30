@@ -146,6 +146,11 @@ assert.match(indexHtml, /pause requested/, 'Native Greenroom route tray distingu
 assert.match(indexHtml, /resume unverified/, 'Native Greenroom route tray can warn when resume is advertised but not proven in Kaminos');
 assert.match(indexHtml, /browser-webgpu/, 'Route tray recognizes browser WebGPU route rows');
 assert.match(indexHtml, /fixture route identity only/, 'Route tray can warn when a browser WebGPU row is identity-only fixture evidence');
+assert.match(indexHtml, /scheduler unverified/, 'Route tray can warn when browser WebGPU scheduler evidence is unverified');
+assert.match(indexHtml, /kaminos\.webgpu-route-scheduler\.v0/, 'Route tray source preserves WebGPU scheduler schema identity');
+assert.match(indexHtml, /kaminos\.webgpu-route-backpressure\.v0/, 'Route tray source preserves WebGPU backpressure schema identity');
+assert.match(indexHtml, /kaminos\.webgpu-runtime-profile\.v0/, 'Route tray source preserves WebGPU runtime profile schema identity');
+assert.match(indexHtml, /kaminos\.webgpu-route-evidence-classification\.v0/, 'Route tray source preserves WebGPU evidence classification schema identity');
 assert.match(indexHtml, /webgpu-local/, 'Route tray preserves WebGPU effective backend identity');
 assert.match(indexHtml, /window\.kaminosRouteJobDebugState/, 'Native Greenroom route tray exposes explicit debug state');
 assert.match(indexHtml, /Checkpoint pause metadata only/, 'Native Greenroom route tray warns instead of claiming pause/resume controls');
