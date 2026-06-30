@@ -1334,3 +1334,20 @@ assert.match(sweep, /--window-size/, 'sweep harness forwards explicit browser wi
 assert.match(sweep, /frameP95Ms/, 'sweep aggregate preserves route-local frame p95 timing');
 assert.match(sweep, /queueDoneP95Ms/, 'sweep aggregate preserves GPU queue-completion p95 timing');
 assert.match(sweep, /screenshot/, 'sweep aggregate preserves per-run screenshot paths for visual inspection');
+
+const greenroomBenchmarkPath = join(root, 'volume-greenroom-benchmark.mjs');
+assert.ok(existsSync(greenroomBenchmarkPath), 'volume greenroom benchmark launcher exists');
+const greenroomBenchmark = existsSync(greenroomBenchmarkPath) ? readFileSync(greenroomBenchmarkPath, 'utf8') : '';
+assert.match(greenroomBenchmark, /kaminos\.volume\.greenroom-benchmark\.v0/, 'greenroom benchmark writes a stable job schema identity');
+assert.match(greenroomBenchmark, /volume-sweep\.mjs/, 'greenroom benchmark wraps the existing sweep harness instead of forking benchmark logic');
+assert.match(greenroomBenchmark, /--matrix['"],\s*['"]performance/, 'greenroom benchmark forces the tall-plume performance matrix');
+assert.match(greenroomBenchmark, /--evidence-mode|performance matrix evidence mode/i, 'greenroom benchmark preserves the sweep evidence-mode contract');
+assert.match(greenroomBenchmark, /greenroom-job\.json/, 'greenroom benchmark writes a durable job packet before running');
+assert.match(greenroomBenchmark, /greenroom-run\.json/, 'greenroom benchmark writes a durable run packet after running or failing');
+assert.match(greenroomBenchmark, /requestedCommand/, 'greenroom benchmark records the exact command it intends to run');
+assert.match(greenroomBenchmark, /effectiveCommand/, 'greenroom benchmark records the exact command it actually ran');
+assert.match(greenroomBenchmark, /cwd/, 'greenroom benchmark records the benchmark checkout cwd');
+assert.match(greenroomBenchmark, /gitCommit/, 'greenroom benchmark records the git commit under test');
+assert.match(greenroomBenchmark, /baseUrl/, 'greenroom benchmark records the target server route');
+assert.match(greenroomBenchmark, /uncontendedEvidenceClaim/, 'greenroom benchmark must distinguish requested greenroom conditions from proven uncontended timing evidence');
+assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing the packet without spending a browser/GPU sweep');
