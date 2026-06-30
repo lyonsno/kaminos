@@ -26,6 +26,7 @@ assert.match(index, /new THREE\.Raycaster\(\)/, 'viewport click selection uses a
 assert.match(index, /function pickSceneObjectFromViewportPointer\(/, 'viewport click selection resolves pointer hits to authored scene objects');
 assert.match(index, /function pickForgeHostFromViewportPointer\(/, 'viewport click selection resolves pointer hits to Forge Host station and smoke-offer meshes');
 assert.match(index, /function handleViewportSelectionClick\(/, 'viewport click selection has an explicit click handler distinct from orbit dirtying');
+assert.match(index, /function scrollForgeHostSmokeChamberIntoView\(/, 'opening a Smoke Offer has an explicit visibility path to the chamber panel');
 assert.match(index, /viewportSuppressedClick/, 'viewport drag rejection suppresses the follow-up click fallback');
 assert.match(index, /if \(drift > 5\)[\s\S]*viewportSuppressedClick/, 'viewport drag rejection is recorded before returning');
 assert.match(index, /greenroomPreviewIsActive\(\)/, 'viewport click selection preserves temporary Greenroom preview mode');
@@ -54,6 +55,7 @@ assert.match(index, /routeForgeHostSmokeOfferToChamber/, 'Forge Host browser rou
 assert.match(index, /buildForgeHostSmokeDispositionReceipt/, 'Forge Host browser route builds structured disposition receipts');
 assert.match(index, /captureForgeHostSmokeChamberScreenshot/, 'Forge Host browser route captures chamber screenshots through an explicit function');
 assert.match(index, /openForgeHostSmokeOffer\(forgeHit\.station\.smokeOffers\[0\]\.id\)/, 'clicking a 3D Forge Host smoke-offer marker opens the same Smoke Chamber route as the panel row');
+assert.match(index, /scrollForgeHostSmokeChamberIntoView\(\)/, 'opened Smoke Chambers scroll into view instead of looking like a no-op below the fold');
 assert.match(index, /kaminos\.forge-host\.smoke-offer\.v0/, 'Forge Host UI preserves smoke-offer schema identity');
 assert.match(index, /kaminos\.forge-host\.smoke-chamber\.v0/, 'Forge Host UI preserves smoke-chamber schema identity');
 assert.match(index, /kaminos\.forge-host\.smoke-disposition-receipt\.v0/, 'Forge Host UI preserves smoke disposition receipt schema identity');
