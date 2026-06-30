@@ -114,6 +114,99 @@ function normalizeQuenchVapor(value) {
   return clampFinite(value, 0, 2, 0);
 }
 
+function normalizeRuntimeQuality(value) {
+  const normalized = String(value || 'live_high').toLowerCase().replace(/-/g, '_');
+  if (['live_high', 'live', 'high', 'hero', 'default'].includes(normalized)) return 'live_high';
+  if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
+  if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
+  if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
+  if (normalized === 'auto') return 'auto';
+  return 'live_high';
+}
+
+function runtimeQualityEffectiveFromPressure(requested, gpuPressure) {
+  const normalized = normalizeRuntimeQuality(requested);
+  if (normalized !== 'auto') return normalized;
+  const pressure = clampFinite(gpuPressure, 0, 1, 0);
+  if (pressure >= 0.90) return 'impostor';
+  if (pressure >= 0.70) return 'holdover';
+  if (pressure >= 0.45) return 'live_low';
+  return 'live_high';
+}
+
+function applyRuntimeQualityControls(controls = {}) {
+  const requested = normalizeRuntimeQuality(controls.runtimeQualityRequested);
+  const gpuPressure = clampFinite(controls.gpuPressure, 0, 1, 0);
+  const effective = runtimeQualityEffectiveFromPressure(requested, gpuPressure);
+  const next = {
+    ...controls,
+    runtimeQualityRequested: requested,
+    runtimeQualityEffective: effective,
+    runtimeQualityReason: String(controls.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified',
+    gpuPressure,
+  };
+  const cap = (key, limit) => {
+    const current = Number(next[key]);
+    if (Number.isFinite(current) && current > limit) next[key] = limit;
+  };
+  const floor = (key, limit) => {
+    const current = Number(next[key]);
+    if (Number.isFinite(current) && current < limit) next[key] = limit;
+  };
+  if (effective === 'live_low') {
+    cap('renderScale', 0.75);
+    cap('raySteps', 96);
+    floor('adaptiveRays', 0.45);
+    floor('majorantCadence', 2);
+  } else if (effective === 'holdover') {
+    cap('renderScale', 0.70);
+    cap('raySteps', 72);
+    floor('adaptiveRays', 0.65);
+    floor('occupancySkip', 0.25);
+    floor('majorantSkip', 0.35);
+    floor('majorantCadence', 4);
+    floor('temporalAccum', 0.42);
+    next.pressureStrategy = 'global';
+    next.pressureIterations = Math.min(1, Number.isFinite(Number(next.pressureIterations)) ? Number(next.pressureIterations) : 1);
+  } else if (effective === 'impostor') {
+    cap('renderScale', 0.60);
+    cap('raySteps', 48);
+    floor('adaptiveRays', 0.85);
+    floor('occupancySkip', 0.45);
+    floor('majorantSkip', 0.55);
+    floor('majorantCadence', 8);
+    floor('temporalAccum', 0.65);
+    next.pressureStrategy = 'global';
+    next.pressureIterations = 0;
+  }
+  return next;
+}
+
+function runtimeQualityReceipt(controls = {}) {
+  const requested = normalizeRuntimeQuality(controls.runtimeQualityRequested);
+  const effective = runtimeQualityEffectiveFromPressure(controls.runtimeQualityEffective || requested, controls.gpuPressure);
+  const gpuPressure = clampFinite(controls.gpuPressure, 0, 1, 0);
+  const reason = String(controls.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
+  return {
+    identity: 'volume-runtime-quality-ladder-v0',
+    requested,
+    effective,
+    reason,
+    gpuPressure,
+    knobs: {
+      renderScale: normalizeRenderScale(controls.renderScale),
+      raySteps: clampFinite(controls.raySteps, 24, 160, 96),
+      adaptiveRays: clampFinite(controls.adaptiveRays, 0, 1, 0.65),
+      occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
+      majorantSkip: clampFinite(controls.majorantSkip, 0, 1, 0.70),
+      majorantCadence: normalizeMajorantBuildCadence(controls.majorantCadence),
+      temporalAccum: clampFinite(controls.temporalAccum, 0, 0.85, 0.25),
+      pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
+      pressureIterations: normalizePressureIterationCount(controls.pressureIterations, controls.volumeScene),
+    },
+  };
+}
+
 function snuffQuenchVaporStrength(controls = {}) {
   if (normalizeLifecycleEffect(controls.lifecycleEffect) !== 'snuff') return 0;
   const t = normalizeLifecycleT(controls.lifecycleT);
@@ -3207,7 +3300,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(100);
-  let controlsSnapshot = getControls();
+  let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   const state = {
@@ -3250,6 +3343,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     quenchVapor: normalizeQuenchVapor(controlsSnapshot.quenchVapor),
     quenchVaporStrength: snuffQuenchVaporStrength(controlsSnapshot),
     snuffVisualModel: snuffQuenchVaporStrength(controlsSnapshot) > 0 ? 'quench-vapor-v0' : 'inactive',
+    runtimeQualityRequested: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested),
+    runtimeQualityEffective: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested),
+    gpuPressure: clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0),
+    runtimeQualityReason: String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified',
+    runtimeQualityReceipt: runtimeQualityReceipt(controlsSnapshot),
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
@@ -4428,6 +4526,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
+    state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
+    state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
+    state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
+    state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
+    state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
     state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
@@ -5864,6 +5967,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         quenchVapor: state.quenchVapor,
         quenchVaporStrength: state.quenchVaporStrength,
         snuffVisualModel: state.snuffVisualModel,
+        runtimeQualityRequested: state.runtimeQualityRequested,
+        runtimeQualityEffective: state.runtimeQualityEffective,
+        gpuPressure: state.gpuPressure,
+        runtimeQualityReason: state.runtimeQualityReason,
+        runtimeQualityReceipt: state.runtimeQualityReceipt ? { ...state.runtimeQualityReceipt } : null,
         tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
         tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
         tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -6168,6 +6276,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       quenchVapor: state.quenchVapor,
       quenchVaporStrength: state.quenchVaporStrength,
       snuffVisualModel: state.snuffVisualModel,
+      runtimeQualityRequested: state.runtimeQualityRequested,
+      runtimeQualityEffective: state.runtimeQualityEffective,
+      gpuPressure: state.gpuPressure,
+      runtimeQualityReason: state.runtimeQualityReason,
+      runtimeQualityReceipt: state.runtimeQualityReceipt ? { ...state.runtimeQualityReceipt } : null,
       tallPlumeReactionCadenceDebug: state.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: state.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: state.tallPlumeFlowShelfContract,
@@ -6278,7 +6391,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const previousMajorantGrid = majorantGridSize;
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      controlsSnapshot = { ...controlsSnapshot, ...next };
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
@@ -6329,6 +6442,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
+      state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
+      state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
+      state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
+      state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
+      state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
       state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';

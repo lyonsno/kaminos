@@ -58,6 +58,25 @@ function normalizeLifecycleEffect(value) {
   return normalized === 'snuff' ? 'snuff' : 'none';
 }
 
+function normalizeRuntimeQuality(value) {
+  const normalized = String(value || 'live_high').toLowerCase().replace(/-/g, '_');
+  if (['live_high', 'live', 'high', 'hero', 'default'].includes(normalized)) return 'live_high';
+  if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
+  if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
+  if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
+  if (normalized === 'auto') return 'auto';
+  return 'live_high';
+}
+
+function runtimeQualityFromPressure(requested, gpuPressure) {
+  const normalized = normalizeRuntimeQuality(requested);
+  if (normalized !== 'auto') return normalized;
+  if (gpuPressure >= 0.90) return 'impostor';
+  if (gpuPressure >= 0.70) return 'holdover';
+  if (gpuPressure >= 0.45) return 'live_low';
+  return 'live_high';
+}
+
 function fireLickOperatorGainFromAmount(value) {
   const numeric = Number(value);
   const amount = Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
@@ -397,24 +416,24 @@ const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid) ? reques
 const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
 const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid) ? requestedMajorantGrid : canonicalMacroPreset.majorantGrid ?? 48;
 const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
-const expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
+let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
   ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
-const expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
-const expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
-const expectedPressureIterations = expectedSpatialPressureTiers
+let expectedPressureStrategy = normalizePressureStrategy(routeParams.get('volume_pressure_strategy'), expectedVolumeScene);
+let expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+let expectedPressureIterations = expectedSpatialPressureTiers
   ? 3
   : routeParams.has('volume_pressure_iterations') && Number.isFinite(requestedPressureIterations)
     ? Math.max(0, Math.min(12, Math.round(requestedPressureIterations)))
     : defaultPressureIterationsForScene(expectedVolumeScene);
-const expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
-const expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
+let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
+let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-const expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
-const expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
-const expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
+let expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+let expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
+let expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const requestedSimProfile = (routeParams.get('volume_sim_profile') || '').toLowerCase();
@@ -432,11 +451,11 @@ const RAY_BUDGET_PRESETS = {
 const rayBudgetPreset = routeParams.get('volume_ray_budget_preset') || '';
 const presetBudget = RAY_BUDGET_PRESETS[rayBudgetPreset] || null;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
-const expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
+let expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
   ? Math.max(24, Math.min(160, requestedRaySteps))
   : presetBudget?.raySteps ?? canonicalMacroPreset.raySteps ?? scenePreset.raySteps ?? 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
-const expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
+let expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)
   ? Math.max(0, Math.min(1, requestedAdaptiveRays))
   : presetBudget?.adaptiveRays ?? canonicalMacroPreset.adaptiveRays ?? scenePreset.adaptiveRays ?? 0.65;
 const expectedPrimitiveFixture = routeParams.get('volume_primitive_fixture');
@@ -445,11 +464,11 @@ const expectedPrimitiveId = expectedLamellarHookFixture
   ? 'fixture-lamellar-hook-selected'
   : expectedPrimitiveFixture ? 'fixture-fire-smoke-sphere' : null;
 const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
-const expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
+let expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
   : canonicalMacroPreset.occupancySkip ?? scenePreset.occupancySkip ?? 0.35;
 const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
-const expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
+let expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
   ? Math.max(0, Math.min(1, requestedMajorantSkip))
   : canonicalMacroPreset.majorantSkip ?? scenePreset.majorantSkip ?? 0.70;
 const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
@@ -467,7 +486,7 @@ const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_rat
     ? 1.45
     : Infinity;
 const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
-const expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
+let expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
   ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
   : canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
 const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
@@ -537,7 +556,7 @@ const expectedWindHeight = routeParams.has('volume_wind_height') && Number.isFin
 const requestedWindDrift = routeParams.get('volume_expected_wind_drift') || '';
 const expectedWindDrift = ['left', 'right', 'none'].includes(requestedWindDrift) ? requestedWindDrift : '';
 const requestedRenderScale = Number(routeParams.get('volume_render_scale'));
-const expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
+let expectedRenderScale = routeParams.has('volume_render_scale') && Number.isFinite(requestedRenderScale)
   ? Math.max(0.6, Math.min(1, requestedRenderScale))
   : canonicalMacroPreset.renderScale ?? scenePreset.renderScale ?? 0.85;
 const requestedInputRadius = Number(routeParams.get('volume_input_radius'));
@@ -580,6 +599,49 @@ const expectedBonfireDepinch = expectedBonfireAblationParam('volume_bonfire_depi
 const expectedBonfireProjection = expectedBonfireAblationParam('volume_bonfire_projection');
 const expectedBonfireTemporal = expectedBonfireAblationParam('volume_bonfire_temporal');
 const expectedBonfireInstabilityProbe = expectedBonfireAblationParam('volume_bonfire_instability_probe', 0, 1);
+const expectedRuntimeQualityRequested = normalizeRuntimeQuality(routeParams.get('volume_runtime_quality'));
+const requestedGpuPressure = Number(routeParams.get('volume_gpu_pressure'));
+const expectedGpuPressure = routeParams.has('volume_gpu_pressure') && Number.isFinite(requestedGpuPressure)
+  ? Math.max(0, Math.min(1, requestedGpuPressure))
+  : 0;
+const expectedRuntimeQualityReason = String(routeParams.get('volume_quality_reason') || 'route-default').slice(0, 96) || 'route-default';
+const expectedRuntimeQualityEffective = runtimeQualityFromPressure(expectedRuntimeQualityRequested, expectedGpuPressure);
+if (expectedRuntimeQualityEffective === 'live_low') {
+  expectedRenderScale = Math.min(expectedRenderScale, 0.75);
+  expectedRaySteps = Math.min(expectedRaySteps, 96);
+  expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.45);
+  expectedMajorantCadence = Math.max(expectedMajorantCadence, 2);
+} else if (expectedRuntimeQualityEffective === 'holdover') {
+  expectedRenderScale = Math.min(expectedRenderScale, 0.70);
+  expectedRaySteps = Math.min(expectedRaySteps, 72);
+  expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.65);
+  expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.25);
+  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.35);
+  expectedMajorantCadence = Math.max(expectedMajorantCadence, 4);
+  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.42);
+  expectedPressureStrategy = 'global';
+  expectedPressureIterations = Math.min(1, expectedPressureIterations);
+} else if (expectedRuntimeQualityEffective === 'impostor') {
+  expectedRenderScale = Math.min(expectedRenderScale, 0.60);
+  expectedRaySteps = Math.min(expectedRaySteps, 48);
+  expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.85);
+  expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.45);
+  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.55);
+  expectedMajorantCadence = Math.max(expectedMajorantCadence, 8);
+  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.65);
+  expectedPressureStrategy = 'global';
+  expectedPressureIterations = 0;
+}
+expectedSpatialPressureTiers = expectedPressureStrategy === 'spatial_tiers';
+expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expectedPressureIterations;
+expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
+  ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
+  : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
+expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
+expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
+  ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
+  : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
 const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
   ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
   : expectedTemporalAccum;
@@ -912,6 +974,14 @@ async function main() {
     assert.ok(Math.abs((state.quenchVapor ?? 0) - expectedQuenchVapor) < 0.001, 'effective quench vapor did not reach debug state');
     assert.ok(Math.abs((state.quenchVaporStrength ?? 0) - expectedQuenchVaporStrength) < 0.001, 'effective quench-vapor strength did not match route phase');
     assert.equal(state.snuffVisualModel ?? 'inactive', expectedQuenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive', 'snuff visual model identity did not match effective quench-vapor state');
+    assert.equal(state.controls?.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request route/control did not apply');
+    assert.equal(state.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request did not reach debug state');
+    assert.equal(state.controls?.runtimeQualityEffective ?? 'live_high', expectedRuntimeQualityEffective, 'effective runtime quality control did not match pressure ladder');
+    assert.equal(state.runtimeQualityEffective ?? 'live_high', expectedRuntimeQualityEffective, 'effective runtime quality did not reach debug state');
+    assert.equal(state.runtimeQualityReceipt?.identity, 'volume-runtime-quality-ladder-v0', 'runtime quality receipt identity did not reach debug state');
+    assert.equal(state.runtimeQualityReceipt?.requested, expectedRuntimeQualityRequested, 'runtime quality receipt requested mode did not match route');
+    assert.equal(state.runtimeQualityReceipt?.effective, expectedRuntimeQualityEffective, 'runtime quality receipt effective mode did not match ladder');
+    assert.ok(Math.abs((state.gpuPressure ?? 0) - expectedGpuPressure) < 0.001, 'GPU pressure route/control did not apply');
     assert.ok(Math.abs((state.controls?.windStrength ?? 0) - expectedWindStrength) < 0.001, 'wind strength route/control did not apply');
     assert.ok(Math.abs((state.windStrength ?? 0) - expectedWindStrength) < 0.001, 'effective wind strength state did not match route/control');
     assert.ok(Math.abs((state.controls?.windAngle ?? 0) - expectedWindAngle) < 0.001, 'wind direction route/control did not apply');
@@ -1760,6 +1830,11 @@ async function main() {
       quenchVapor: sample.quenchVapor,
       quenchVaporStrength: sample.quenchVaporStrength,
       snuffVisualModel: sample.snuffVisualModel,
+      runtimeQualityRequested: sample.runtimeQualityRequested,
+      runtimeQualityEffective: sample.runtimeQualityEffective,
+      gpuPressure: sample.gpuPressure,
+      runtimeQualityReason: sample.runtimeQualityReason,
+      runtimeQualityReceipt: sample.runtimeQualityReceipt,
       tallPlumeReactionCadenceDebug: sample.tallPlumeReactionCadenceDebug,
       tallPlumeFlameCutoffContract: sample.tallPlumeFlameCutoffContract,
       tallPlumeFlowShelfContract: sample.tallPlumeFlowShelfContract,
@@ -1780,6 +1855,10 @@ async function main() {
       expectedLifecycleT,
       expectedQuenchVapor,
       expectedQuenchVaporStrength,
+      expectedRuntimeQualityRequested,
+      expectedRuntimeQualityEffective,
+      expectedGpuPressure,
+      expectedRuntimeQualityReason,
       expectedPlumeHeight,
       expectedCurl,
       expectedSpeed,
