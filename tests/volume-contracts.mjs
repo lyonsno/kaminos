@@ -172,9 +172,14 @@ assert.match(index, /reactionFuelScale/, 'Volume controls carry tall-plume react
 assert.match(index, /volume_lifecycle_effect/, 'URL route can request a lifecycle visual effect without rewriting cockpit fire controls');
 assert.match(index, /volume_lifecycle_t/, 'URL route can pin lifecycle effect phase for deterministic visual witnesses');
 assert.match(index, /volume_quench_vapor/, 'URL route can set cheap quench-vapor strength for failure snuff visuals');
+assert.match(index, /volume_runtime_quality/, 'URL route can request a pressure-aware volume runtime quality mode');
+assert.match(index, /volume_gpu_pressure/, 'URL route can pass host GPU pressure into the volume runtime ladder');
+assert.match(index, /volume_quality_reason/, 'URL route can preserve the host reason for a quality fallback');
 assert.match(index, /routedVolumeLifecycleEffect/, 'route-only lifecycle effect is preserved outside visible cockpit sliders');
 assert.match(index, /routedVolumeLifecycleT/, 'route-only lifecycle phase is preserved outside visible cockpit sliders');
 assert.match(index, /routedVolumeQuenchVapor/, 'route-only quench-vapor strength is preserved outside visible cockpit sliders');
+assert.match(index, /routedVolumeRuntimeQuality/, 'route-only runtime quality is preserved outside visible cockpit sliders');
+assert.match(index, /applyVolumeRuntimeQualityLadder/, 'runtime quality ladder applies explicit effective control downgrades');
 assert.match(index, /canonicalPlumeReadoutActive/, 'volume readout distinguishes canonical labels from ordinary scene truth');
 assert.match(index, /sceneContentLabel/, 'non-canonical volume readout derives content from live scene controls instead of canonical defaults');
 assert.match(index, /bonfire_plume/, 'Volume tab exposes a bottom-fireball smoke plume scene');
@@ -577,6 +582,11 @@ assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible ta
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
 assert.match(core, /quench-vapor-v0/, 'failure snuff visual has a stable cheap quench-vapor identity');
+assert.match(core, /normalizeRuntimeQuality/, 'volume core normalizes host-requested runtime quality');
+assert.match(core, /runtimeQualityRequested/, 'debug state records requested runtime quality separately from effective mode');
+assert.match(core, /runtimeQualityEffective/, 'debug state records the effective runtime quality mode');
+assert.match(core, /runtimeQualityReceipt/, 'debug state exposes the pressure-aware ladder receipt');
+assert.match(core, /volume-runtime-quality-ladder-v0/, 'runtime quality ladder has a stable receipt identity');
 assert.match(core, /tallPlumeFuelHeatReaction/, 'tall-plume fire is born from fuel/heat contact instead of source color alone');
 assert.match(core, /fuelConsumption/, 'tall-plume reaction consumes the fuel lane before writing material state');
 assert.match(core, /fireFuelOverlapRatio/, 'sim readback reports whether visible fire overlaps live fuel');
@@ -1077,6 +1087,10 @@ assert.match(witness, /volume_reaction_fuel/, 'witness accepts a route-only tall
 assert.match(witness, /expectedLifecycleEffect/, 'witness verifies lifecycle visual effect route identity');
 assert.match(witness, /expectedLifecycleT/, 'witness verifies lifecycle visual phase route identity');
 assert.match(witness, /expectedQuenchVapor/, 'witness verifies quench-vapor route identity');
+assert.match(witness, /expectedRuntimeQualityRequested/, 'witness verifies requested runtime quality route identity');
+assert.match(witness, /expectedRuntimeQualityEffective/, 'witness verifies effective runtime quality identity');
+assert.match(witness, /runtimeQualityReceipt/, 'witness records the runtime quality ladder receipt');
+assert.match(witness, /volume-runtime-quality-ladder-v0/, 'witness recognizes the stable runtime quality ladder identity');
 assert.match(witness, /snuffVisualModel/, 'witness records the active snuff visual model identity');
 assert.match(witness, /quenchVaporStrength/, 'witness records effective quench-vapor strength');
 assert.match(witness, /quench-vapor-v0/, 'witness recognizes the cheap failure-snuff vapor model');
