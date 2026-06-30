@@ -7792,6 +7792,7 @@ let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
 let routedVolumeSimProfile = false;
+let routedVolumeSimCadence = 1;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
 let routedVolumeQuenchVapor = 0;
@@ -7831,6 +7832,12 @@ function normalizeVolumeRuntimeQuality(value) {
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
+}
+
+function normalizeVolumeSimCadence(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(8, requested));
 }
 
 function normalizeVolumeQualityReason(value) {
@@ -8242,6 +8249,8 @@ function readVolumeControls() {
     pressureIterations: pressureConfig.pressureIterations,
     pressureStrategy: pressureConfig.pressureStrategy,
     simProfile: routedVolumeSimProfile,
+    simCadence: routedVolumeSimCadence,
+    effectiveVisualAuthority: routedVolumeSimCadence > 1 ? 'continuation' : 'live-sim',
     rayBudgetPreset: activeVolumeRayBudgetPreset || routedVolumeRayBudgetPreset,
     ...routedBonfireAblationControls,
   });
@@ -8320,7 +8329,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-scene-state').textContent = s.volumeScene || 'compact_plume';
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
-  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : 'live';
+  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : (s.effectiveVisualAuthority === 'continuation' ? 'continuation' : 'live');
   document.getElementById('volume-canonical-content-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.contentMode || 'smoke') : sceneContentLabel;
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
@@ -8507,6 +8516,10 @@ async function initKaminosVolumeRoute() {
   setVolumeControlValue('volume-pressure-mode', routedVolumePressureMode);
   const routeSimProfile = (params.get('volume_sim_profile') || '').toLowerCase();
   routedVolumeSimProfile = routeSimProfile === '1' || routeSimProfile === 'true' || routeSimProfile === 'yes' || routeSimProfile === 'on';
+  const routeSimCadence = Number(params.get('volume_sim_cadence'));
+  if (params.has('volume_sim_cadence') && Number.isFinite(routeSimCadence)) {
+    routedVolumeSimCadence = normalizeVolumeSimCadence(routeSimCadence);
+  }
   const routeGrid = Number(params.get('volume_grid'));
   if (Number.isFinite(routeGrid)) {
     document.getElementById('volume-grid-overlay').value = String(Math.max(0, Math.min(1, routeGrid)));

@@ -143,6 +143,10 @@ assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 her
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
+assert.match(index, /volume_sim_cadence/, 'URL route can request low-cadence simulation without hiding render continuation');
+assert.match(index, /routedVolumeSimCadence/, 'route-only sim cadence is preserved outside visible cockpit sliders');
+assert.match(index, /simCadence/, 'Volume controls carry requested sim cadence into renderer debug state');
+assert.match(index, /effectiveVisualAuthority/, 'Volume controls expose whether the current visual stream is live compute or continuation');
 assert.match(index, /<option value="128">128\^3<\/option>/, 'Volume grid selector can test a 128^3 simulation volume');
 assert.match(index, /<option value="160">160\^3<\/option>/, 'Volume grid selector can test a 160^3 simulation volume');
 assert.match(index, /<option value="32">32\^3 majorant<\/option>/, 'Majorant grid selector can test a 32^3 coarse field');
@@ -268,6 +272,7 @@ assert.match(index, /canonicalMotionMode/, 'volume controls carry effective cano
 assert.match(index, /canonicalContentMode/, 'volume controls carry effective canonical content mode into renderer debug state');
 assert.match(index, /volume-canonical-render-mode-state'\)\.textContent/, 'volume readout prints effective canonical render diagnostic mode');
 assert.match(index, /volume-canonical-motion-mode-state'\)\.textContent/, 'volume readout prints effective canonical motion diagnostic mode');
+assert.match(index, /effectiveVisualAuthority === 'continuation' \? 'continuation' : 'live'/, 'volume readout labels cadence-held render continuation instead of silent live compute');
 assert.match(index, /volume-canonical-content-mode-state'\)\.textContent/, 'volume readout prints effective canonical content mode');
 assert.match(index, /density:\s*0\.45/, 'canonical macro foothold preserves the operator-tuned low density control');
 assert.match(index, /smoke:\s*2\.80/, 'canonical macro foothold preserves the operator-tuned smoke visibility control');
@@ -428,6 +433,13 @@ assert.match(core, /majorantSkipGate/, 'fragment raymarch names the final guarde
 assert.match(core, /majorantCellExitDistance/, 'raymarch can skip toward the next coarse majorant cell boundary');
 assert.match(core, /sampleMajorantReadback/, 'witness readback can prove nonzero coarse majorant contents');
 assert.match(core, /rebuildFluidState/, 'fluid sim can rebuild GPU state when resolution changes');
+assert.match(core, /normalizeSimCadence/, 'volume core normalizes requested sim cadence explicitly');
+assert.match(core, /shouldRunSimForFrame/, 'volume core has a named per-frame sim cadence gate');
+assert.match(core, /state\.continuationFrameCount/, 'debug state records render frames that reused the most recent live field');
+assert.match(core, /state\.liveSimFrameCount/, 'debug state records frames that actually advanced live simulation');
+assert.match(core, /state\.lastLiveSimFrameId/, 'debug state records the latest render frame that advanced simulation');
+assert.match(core, /effectiveVisualAuthority:\s*state\.effectiveVisualAuthority/, 'sampleFrame preserves effective visual authority in witness readback');
+assert.match(core, /simCostLedger[\s\S]*simCadence/, 'sim cost ledger records requested/effective simulation cadence identity');
 assert.match(core, /gridOverlay/, 'fluid renderer exposes grid overlay state');
 assert.match(core, /gridLine/, 'fragment shader renders an active grid overlay');
 assert.match(core, /curlAtCell/, 'fluid compute shader measures velocity curl for fine detail');

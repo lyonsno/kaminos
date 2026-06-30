@@ -342,6 +342,12 @@ function normalizeMajorantBuildCadence(value) {
   return Math.max(1, Math.min(8, requested));
 }
 
+function normalizeSimCadence(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(8, requested));
+}
+
 function defaultPressureIterationsForScene(value) {
   return normalizeVolumeScene(value) === 'tall_plume' ? 2 : (normalizeVolumeScene(value) === 'bonfire_plume' ? 8 : 4);
 }
@@ -3345,6 +3351,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
+    simCadence: normalizeSimCadence(controlsSnapshot.simCadence),
+    effectiveVisualAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation' : 'live-sim',
+    continuationAuthority: normalizeSimCadence(controlsSnapshot.simCadence) > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0',
+    liveSimFrameCount: 0,
+    continuationFrameCount: 0,
+    lastLiveSimFrameId: -1,
+    lastSimFrameSkipped: false,
     simGrid: gridSize,
     simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     gridOverlay: 0,
@@ -4171,6 +4184,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     currentFluid = 0;
     currentFront = 0;
     state.simStepCount = 0;
+    state.liveSimFrameCount = 0;
+    state.continuationFrameCount = 0;
+    state.lastLiveSimFrameId = -1;
+    state.lastSimFrameSkipped = false;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
     state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
@@ -4551,6 +4568,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
+    state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -4634,7 +4654,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
-    const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
+    const pressureEnabled = !state.lastSimFrameSkipped && state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
     const tallPlumePressureStrategy = spatialPressureEnabled
@@ -4643,7 +4663,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const tallPlumePressureIterationTarget = scene === 'tall_plume' && !spatialPressureEnabled ? 2 : 0;
     const tallPlumePressureTierStrategyValue = spatialPressureEnabled ? tierPlan.strategy : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
     const pressureProjectionReadStrategy = spatialPressureEnabled ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-    const simPassesPerFrame = 1;
+    const simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.simCadence = simCadence;
+    state.effectiveVisualAuthority = simCadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+    const simPassesPerFrame = state.lastSimFrameSkipped ? 0 : 1;
     const fireLickOperatorGain = fireLickOperatorGainFromAmount(controlsSnapshot.fireLicks);
     const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;
     const mainFluidKernelStrategy = fireLickBreakupEnabled
@@ -4767,6 +4791,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fullGridWorkgroupsPerPass,
       majorantWorkgroupsPerPass,
       simPassesPerFrame,
+      simCadence,
+      effectiveVisualAuthority: state.effectiveVisualAuthority,
+      continuationAuthority: state.continuationAuthority,
+      liveSimFrameCount: state.liveSimFrameCount,
+      continuationFrameCount: state.continuationFrameCount,
+      lastLiveSimFrameId: state.lastLiveSimFrameId,
+      lastSimFrameSkipped: state.lastSimFrameSkipped,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
       tallPlumePressureIterationTarget,
@@ -4830,7 +4861,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.simCostLedger;
   }
 
-  function encodeSim(encoder) {
+  function shouldRunSimForFrame(options = {}) {
+    const cadence = normalizeSimCadence(controlsSnapshot.simCadence);
+    state.simCadence = cadence;
+    state.effectiveVisualAuthority = cadence > 1 ? 'continuation' : 'live-sim';
+    state.continuationAuthority = cadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
+    return options.force === true || cadence <= 1 || state.frameCount % cadence === 0;
+  }
+
+  function encodeSim(encoder, options = {}) {
+    if (!shouldRunSimForFrame(options)) {
+      state.lastSimFrameSkipped = true;
+      state.continuationFrameCount += 1;
+      updateSimCostLedger();
+      return false;
+    }
     const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
@@ -4844,7 +4889,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldProjectionPassthrough = false;
     encodePressureProjection(encoder);
     state.simStepCount += 1;
+    state.liveSimFrameCount += 1;
+    state.lastLiveSimFrameId = state.frameCount;
+    state.lastSimFrameSkipped = false;
     updateSimCostLedger();
+    return true;
   }
 
   function encodePressureProjection(encoder) {
@@ -5993,6 +6042,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         quenchVaporStrength: state.quenchVaporStrength,
         snuffVisualModel: state.snuffVisualModel,
         flameQuenchModel: state.flameQuenchModel,
+        simCadence: state.simCadence,
+        effectiveVisualAuthority: state.effectiveVisualAuthority,
+        continuationAuthority: state.continuationAuthority,
+        liveSimFrameCount: state.liveSimFrameCount,
+        continuationFrameCount: state.continuationFrameCount,
+        lastLiveSimFrameId: state.lastLiveSimFrameId,
+        lastSimFrameSkipped: state.lastSimFrameSkipped,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6303,6 +6359,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       quenchVaporStrength: state.quenchVaporStrength,
       snuffVisualModel: state.snuffVisualModel,
       flameQuenchModel: state.flameQuenchModel,
+      simCadence: state.simCadence,
+      effectiveVisualAuthority: state.effectiveVisualAuthority,
+      continuationAuthority: state.continuationAuthority,
+      liveSimFrameCount: state.liveSimFrameCount,
+      continuationFrameCount: state.continuationFrameCount,
+      lastLiveSimFrameId: state.lastLiveSimFrameId,
+      lastSimFrameSkipped: state.lastSimFrameSkipped,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -6470,6 +6533,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
+      state.simCadence = normalizeSimCadence(controlsSnapshot.simCadence);
+      state.effectiveVisualAuthority = state.simCadence > 1 ? 'continuation' : 'live-sim';
+      state.continuationAuthority = state.simCadence > 1 ? 'continuation-from-latest-live-field-v0' : 'live-sim-v0';
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
