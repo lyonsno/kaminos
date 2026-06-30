@@ -135,6 +135,74 @@ const baseVisualReport = {
         bytes: 66060836,
       },
     },
+    stages: [
+      {
+        id: 'run-sharp-image-to-splat',
+        status: 'real',
+        requestedRoute: 'adapter.sharp-image-to-splat.v0',
+        effectiveRoute: {
+          id: 'adapter.sharp-image-to-splat.v0',
+          effectiveBackend: 'browser-webgpu',
+          scheduler: {
+            schema: 'kaminos.webgpu-route-scheduler.v0',
+            requestedScheduler: {
+              mode: 'cooperative',
+              yieldMs: 2,
+              waitForSubmittedWorkDone: true,
+              phaseChunkSize: {
+                spnPatch: 1,
+                vitBlock: 6,
+              },
+            },
+            effectiveScheduler: {
+              mode: 'cooperative',
+              yieldMs: 2,
+              waitForSubmittedWorkDone: true,
+              phaseChunkSize: {
+                spnPatch: 1,
+                vitBlock: 6,
+              },
+              unsupportedFields: [],
+            },
+            verificationState: 'verified',
+          },
+          backpressure: {
+            schema: 'kaminos.webgpu-route-backpressure.v0',
+            requestedBudget: 'visible-wait',
+            effectiveBudget: 'visible-wait',
+            memoryExclusivity: 'shared',
+            warmCacheState: 'warm',
+            frameTail: {
+              sampleWindowMs: 30000,
+              longFrameCount: 7,
+              maxFrameGapMs: 118,
+              p95FrameGapMs: 72.4,
+              p99FrameGapMs: null,
+            },
+          },
+          optimization: {
+            profile: 'cooperative',
+            kernelProfile: 'sharp-vit-split-v0',
+            fusionBoundary: 'bounded-phase',
+          },
+          breathingRoom: {
+            schema: 'kaminos.sharp-webgpu-scheduler-evidence.v0',
+            verificationState: 'verified',
+            requestedScheduler: {
+              mode: 'cooperative',
+              spnPatchChunkSize: 1,
+              vitBlockChunkSize: 6,
+            },
+            effectiveScheduler: {
+              mode: 'cooperative',
+              spnPatchChunkSize: 1,
+              vitBlockChunkSize: 6,
+              unsupportedFields: [],
+            },
+          },
+        },
+      },
+    ],
   },
 };
 
@@ -143,6 +211,9 @@ assert.equal(classifyFrameTailDamage({ frameP95Ms: 18, queueDoneP95Ms: 28 }).buc
 assert.equal(classifyFrameTailDamage({ frameP95Ms: 34, queueDoneP95Ms: 64 }).bucket, 'warm');
 assert.equal(classifyFrameTailDamage({ frameP95Ms: 72, queueDoneP95Ms: 140 }).bucket, 'hot');
 assert.equal(classifyFrameTailDamage({ frameP95Ms: 160, queueDoneP95Ms: 310 }).bucket, 'deranged');
+assert.equal(classifyFrameTailDamage({}).bucket, 'unknown');
+assert.ok(classifyFrameTailDamage({}).reasons.includes('frame_p95_missing'));
+assert.ok(classifyFrameTailDamage({}).reasons.includes('queue_p95_missing'));
 
 const witness = buildComputeRouteContentionWitnessFromReport(baseVisualReport, {
   witnessId: 'contention-contract-001',
@@ -181,10 +252,21 @@ assert.ok(witness.frameTailDamage.reasons.includes('frame_p95_hot'));
 assert.ok(witness.frameTailDamage.reasons.includes('queue_p95_hot'));
 assert.equal(witness.outputHandoff.status, 'real-output-produced');
 assert.equal(witness.outputHandoff.artifactCount, 1);
+assert.equal(witness.scheduler.schema, 'kaminos.webgpu-route-scheduler.v0');
+assert.equal(witness.scheduler.verificationState, 'verified');
+assert.equal(witness.scheduler.requestedScheduler.phaseChunkSize.vitBlock, 6);
+assert.equal(witness.scheduler.effectiveScheduler.unsupportedFields.length, 0);
+assert.equal(witness.scheduler.adapterEvidence.schema, 'kaminos.sharp-webgpu-scheduler-evidence.v0');
+assert.equal(witness.backpressure.schema, 'kaminos.webgpu-route-backpressure.v0');
+assert.equal(witness.backpressure.requestedBudget, 'visible-wait');
+assert.equal(witness.backpressure.frameTail.sampleWindowMs, 30000);
+assert.equal(witness.optimization.profile, 'cooperative');
+assert.equal(witness.optimization.fusionBoundary, 'bounded-phase');
 assert.ok(witness.sourceTruthWarnings.includes('pipeline_route_completed_not_active_compute'));
 assert.deepEqual(witness.falseClosureChecks.missingTiming, false);
 assert.deepEqual(witness.falseClosureChecks.prerecordedMainPath, false);
 assert.deepEqual(witness.falseClosureChecks.fixtureOrCachedRoute, false);
+assert.deepEqual(witness.falseClosureChecks.schedulerUnverified, false);
 
 assert.throws(() => buildComputeRouteContentionWitness({
   routeIdentity: witness.routeIdentity,
@@ -192,6 +274,29 @@ assert.throws(() => buildComputeRouteContentionWitness({
   visualBudget: witness.visualBudget,
   timing: { frameP95Ms: 33 },
 }), /timing evidenceSource and disclaimer are required/);
+
+assert.throws(() => buildComputeRouteContentionWitness({
+  routeIdentity: witness.routeIdentity,
+  routePhase: witness.routePhase,
+  visualBudget: witness.visualBudget,
+  timing: {
+    evidenceSource: 'raf-and-queue-proxy',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+  },
+}), /finite frame-tail and queue-tail timing are required/);
+
+assert.throws(() => buildComputeRouteContentionWitnessFromReport({
+  ...baseVisualReport,
+  visualWitnessReport: {
+    ...baseVisualReport.visualWitnessReport,
+    timing: {
+      timingEvidenceSource: 'raf-and-queue-proxy',
+      timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
+      frameP95Ms: null,
+      queueDoneP95Ms: null,
+    },
+  },
+}), /finite frame-tail and queue-tail timing are required/);
 
 assert.throws(() => buildComputeRouteContentionWitnessFromReport({
   ...baseVisualReport,
@@ -220,6 +325,34 @@ assert.throws(() => buildComputeRouteContentionWitnessFromReport(baseVisualRepor
     prerecorded: true,
   },
 }), /pre-recorded visual budget cannot be primary contention evidence/);
+
+const schedulerUnverifiedWitness = buildComputeRouteContentionWitnessFromReport({
+  ...baseVisualReport,
+  pipelineReport: {
+    ...baseVisualReport.pipelineReport,
+    stages: [
+      {
+        ...baseVisualReport.pipelineReport.stages[0],
+        effectiveRoute: {
+          ...baseVisualReport.pipelineReport.stages[0].effectiveRoute,
+          scheduler: {
+            schema: 'kaminos.webgpu-route-scheduler.v0',
+            requestedScheduler: {
+              mode: 'cooperative',
+              yieldMs: 5,
+              waitForSubmittedWorkDone: true,
+            },
+            effectiveScheduler: null,
+            verificationState: 'scheduler-unverified',
+          },
+        },
+      },
+    ],
+  },
+});
+assert.equal(schedulerUnverifiedWitness.scheduler.verificationState, 'scheduler-unverified');
+assert.equal(schedulerUnverifiedWitness.falseClosureChecks.schedulerUnverified, true);
+assert.ok(schedulerUnverifiedWitness.witnessWarnings.includes('scheduler_unverified'));
 
 const tmp = mkdtempSync(join(tmpdir(), 'kaminos-contention-witness-contract-'));
 const inputReport = join(tmp, 'compute-route-fire-report.json');

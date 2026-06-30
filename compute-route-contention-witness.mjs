@@ -10,11 +10,16 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function firstStage(report) {
+  return Array.isArray(report?.pipelineReport?.stages) ? report.pipelineReport.stages[0] || null : null;
+}
+
 function unique(values) {
   return [...new Set(asArray(values).map(value => String(value)).filter(Boolean))];
 }
 
 function finiteOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
@@ -163,6 +168,103 @@ function sourceTruthWarningsFromReport(report = {}) {
   ]);
 }
 
+function cloneObject(value) {
+  if (!value || typeof value !== 'object') return null;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function effectiveRouteEvidence(report = {}) {
+  return {
+    ...(report.pipelineReport?.effectiveRouteConfig || {}),
+    ...(firstStage(report)?.effectiveRoute || {}),
+  };
+}
+
+function schedulerVerificationState(scheduler, adapterEvidence) {
+  if (scheduler?.verificationState) return scheduler.verificationState;
+  if (adapterEvidence?.verificationState) return adapterEvidence.verificationState;
+  if (scheduler?.effectiveScheduler || adapterEvidence?.effectiveScheduler) return 'adapter-evidence';
+  return 'scheduler-unverified';
+}
+
+function schedulerFromReport(report = {}) {
+  const routeEvidence = effectiveRouteEvidence(report);
+  const scheduler = cloneObject(routeEvidence.scheduler);
+  const adapterEvidence = cloneObject(routeEvidence.breathingRoom || routeEvidence.schedulerEvidence);
+  if (scheduler) {
+    return {
+      schema: scheduler.schema || 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: scheduler.requestedScheduler || null,
+      effectiveScheduler: scheduler.effectiveScheduler || null,
+      verificationState: schedulerVerificationState(scheduler, adapterEvidence),
+      adapterEvidence,
+    };
+  }
+  if (adapterEvidence) {
+    return {
+      schema: 'kaminos.webgpu-route-scheduler.v0',
+      requestedScheduler: adapterEvidence.requestedScheduler || null,
+      effectiveScheduler: adapterEvidence.effectiveScheduler || null,
+      verificationState: schedulerVerificationState(null, adapterEvidence),
+      adapterEvidence,
+    };
+  }
+  return {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: null,
+    effectiveScheduler: null,
+    verificationState: 'scheduler-unverified',
+    adapterEvidence: null,
+  };
+}
+
+function backpressureFromReport(report = {}) {
+  const routeEvidence = effectiveRouteEvidence(report);
+  const backpressure = cloneObject(routeEvidence.backpressure);
+  return backpressure || {
+    schema: 'kaminos.webgpu-route-backpressure.v0',
+    requestedBudget: null,
+    effectiveBudget: null,
+    memoryExclusivity: 'unknown',
+    warmCacheState: 'unknown',
+    frameTail: {
+      sampleWindowMs: 0,
+      longFrameCount: 0,
+      maxFrameGapMs: 0,
+      p95FrameGapMs: null,
+      p99FrameGapMs: null,
+    },
+  };
+}
+
+function optimizationFromReport(report = {}) {
+  const routeEvidence = effectiveRouteEvidence(report);
+  const optimization = cloneObject(routeEvidence.optimization);
+  return optimization || {
+    profile: 'unknown',
+    kernelProfile: null,
+    fusionBoundary: 'unknown',
+  };
+}
+
+function witnessWarningsFor({ scheduler }) {
+  const warnings = [];
+  if (scheduler?.verificationState === 'scheduler-unverified') warnings.push('scheduler_unverified');
+  const requested = scheduler?.requestedScheduler;
+  const effective = scheduler?.effectiveScheduler;
+  if (requested && !effective) warnings.push('requested_scheduler_without_effective_scheduler');
+  if (requested && effective) {
+    const unsupported = asArray(effective.unsupportedFields);
+    for (const [key, value] of Object.entries(requested)) {
+      const same = JSON.stringify(value) === JSON.stringify(effective[key]);
+      if (!same && unsupported.length === 0) {
+        warnings.push(`requested_effective_scheduler_drift_without_unsupported_fields:${key}`);
+      }
+    }
+  }
+  return unique(warnings);
+}
+
 function hasFixtureOrCachedEvidence(report, sourceTruthWarnings) {
   const runs = [
     report?.activeWitness?.routeRun,
@@ -185,6 +287,11 @@ function assertPrimaryEvidenceAllowed({ visualBudget, timing, sourceTruthWarning
   if (!timing?.evidenceSource || !timing?.disclaimer) {
     throw new Error('timing evidenceSource and disclaimer are required');
   }
+  const hasFrameTail = Number.isFinite(timing.frameP99Ms) || Number.isFinite(timing.frameP95Ms);
+  const hasQueueTail = Number.isFinite(timing.queueDoneP99Ms) || Number.isFinite(timing.queueDoneP95Ms);
+  if (!hasFrameTail || !hasQueueTail) {
+    throw new Error('finite frame-tail and queue-tail timing are required for primary contention evidence');
+  }
   if (visualBudget?.requested?.prerecorded === true || visualBudget?.requested?.liveSimulation === false) {
     throw new Error('pre-recorded visual budget cannot be primary contention evidence');
   }
@@ -199,6 +306,9 @@ export function buildComputeRouteContentionWitness({
   routePhase,
   visualBudget,
   timing,
+  scheduler = null,
+  backpressure = null,
+  optimization = null,
   outputHandoff = null,
   sourceTruthWarnings = [],
   pipelineReportPath = null,
@@ -217,6 +327,14 @@ export function buildComputeRouteContentionWitness({
   });
   const missingTiming = !Number.isFinite(timing.frameP95Ms) || !Number.isFinite(timing.queueDoneP95Ms);
   const frameTailDamage = classifyFrameTailDamage(timing);
+  const normalizedScheduler = scheduler || {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: null,
+    effectiveScheduler: null,
+    verificationState: 'scheduler-unverified',
+    adapterEvidence: null,
+  };
+  const witnessWarnings = witnessWarningsFor({ scheduler: normalizedScheduler });
   return {
     schema: COMPUTE_ROUTE_CONTENTION_WITNESS_SCHEMA,
     witnessId,
@@ -227,6 +345,26 @@ export function buildComputeRouteContentionWitness({
     visualBudget: visualBudget || {},
     timing,
     frameTailDamage,
+    scheduler: normalizedScheduler,
+    backpressure: backpressure || {
+      schema: 'kaminos.webgpu-route-backpressure.v0',
+      requestedBudget: null,
+      effectiveBudget: null,
+      memoryExclusivity: 'unknown',
+      warmCacheState: 'unknown',
+      frameTail: {
+        sampleWindowMs: 0,
+        longFrameCount: 0,
+        maxFrameGapMs: 0,
+        p95FrameGapMs: null,
+        p99FrameGapMs: null,
+      },
+    },
+    optimization: optimization || {
+      profile: 'unknown',
+      kernelProfile: null,
+      fusionBoundary: 'unknown',
+    },
     outputHandoff: outputHandoff || {
       status: 'unreported',
       artifactCount: 0,
@@ -234,10 +372,12 @@ export function buildComputeRouteContentionWitness({
       artifacts: [],
     },
     sourceTruthWarnings: normalizedWarnings,
+    witnessWarnings,
     falseClosureChecks: {
       missingTiming,
       prerecordedMainPath: visualBudget?.requested?.prerecorded === true || visualBudget?.requested?.liveSimulation === false,
       fixtureOrCachedRoute,
+      schedulerUnverified: normalizedScheduler.verificationState === 'scheduler-unverified',
       timingProxyOnly: timing.disclaimer === 'not-gpu-exclusive-or-present-latency',
     },
     reportRefs: {
@@ -277,6 +417,9 @@ export function buildComputeRouteContentionWitnessFromReport(report, {
     },
     visualBudget,
     timing,
+    scheduler: schedulerFromReport(report),
+    backpressure: backpressureFromReport(report),
+    optimization: optimizationFromReport(report),
     outputHandoff: outputHandoffFromReport(report),
     sourceTruthWarnings,
     pipelineReportPath: report.pipelineReportPath || null,
