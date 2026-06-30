@@ -3227,11 +3227,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       0.0,
       1.85
     );
-    let vaporAlpha = clamp(vaporCarrier * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
+    let quenchCoreHeatSignal = clamp(
+      temp * 0.82
+        + flame * 0.64
+        + flameDetail * 0.92
+        + fireLick * 0.24
+        + ember * 0.34
+        + heat * 0.16,
+      0.0,
+      2.8
+    );
+    let quenchCoreCollapse = clamp(
+      quenchVaporStrength
+        * smoothstep(0.10, 1.08, quenchCoreHeatSignal)
+        * smoothstep(0.0, 0.22, y)
+        * clamp(0.88 + fireNoise * 0.10 + verticalPuffBreak * 0.08, 0.68, 1.18),
+      0.0,
+      1.0
+    );
+    let flameBodyAuthority = 1.0 - quenchCoreCollapse * 0.90;
+    let renderTemp = temp * mix(1.0, 0.10 + 0.22 * smoothstep(0.0, 0.45, ember + emberFleck), quenchCoreCollapse);
+    let quenchedFlameDetail = flameDetail * (1.0 - quenchCoreCollapse * 0.66);
+    let quenchedFireLick = fireLick * (1.0 - quenchCoreCollapse * 0.54);
+    let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
+    let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
-    let fireSnuffDamping = 1.0 - clamp(vaporCarrier * 1.55, 0.0, 0.985);
+    let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let fireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping, 0.0, fireAlphaMax),
+      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -3246,7 +3269,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     temporalFireHistoryProtectSum = temporalFireHistoryProtectSum + materialTemporal.y * temporalSampleWeight;
     temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
     temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
-    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + temp * 0.075 + flameDetail * 0.45 + fireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
+    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + renderTemp * 0.075 + quenchedFlameDetail * 0.45 + quenchedFireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
@@ -3256,13 +3279,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
-    let flameCol = fireColor(temp) * (0.22 + temp * 0.82 + fireFilament * 0.82 + fireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
-    let radianceEmission = fireRadianceEmission(temp, flameDetail, fireLick, emberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene);
-    let smokeBacklight = fireColor(temp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, temp) * (0.13 + fireFilament * 0.10);
-    let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, temp);
+    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
+    let radianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain) * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene) * flameBodyAuthority;
+    let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
+    let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     var local = mix(smokeCol, flameCol * 0.30 + radianceEmission * 0.70, fireMix);
     let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
-    local = mix(local, vaporCol, clamp(vaporCarrier * 0.92, 0.0, 0.96));
+    local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
@@ -3343,6 +3366,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     quenchVapor: normalizeQuenchVapor(controlsSnapshot.quenchVapor),
     quenchVaporStrength: snuffQuenchVaporStrength(controlsSnapshot),
     snuffVisualModel: snuffQuenchVaporStrength(controlsSnapshot) > 0 ? 'quench-vapor-v0' : 'inactive',
+    flameQuenchModel: snuffQuenchVaporStrength(controlsSnapshot) > 0 ? 'quench-flame-body-v0' : 'inactive',
     runtimeQualityRequested: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested),
     runtimeQualityEffective: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested),
     gpuPressure: clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0),
@@ -4526,6 +4550,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
     state.quenchVaporStrength = quenchVaporStrength;
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
+    state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
     state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -5967,6 +5992,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         quenchVapor: state.quenchVapor,
         quenchVaporStrength: state.quenchVaporStrength,
         snuffVisualModel: state.snuffVisualModel,
+        flameQuenchModel: state.flameQuenchModel,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
         gpuPressure: state.gpuPressure,
@@ -6276,6 +6302,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       quenchVapor: state.quenchVapor,
       quenchVaporStrength: state.quenchVaporStrength,
       snuffVisualModel: state.snuffVisualModel,
+      flameQuenchModel: state.flameQuenchModel,
       runtimeQualityRequested: state.runtimeQualityRequested,
       runtimeQualityEffective: state.runtimeQualityEffective,
       gpuPressure: state.gpuPressure,
@@ -6442,6 +6469,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVapor = normalizeQuenchVapor(controlsSnapshot.quenchVapor);
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
+      state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);

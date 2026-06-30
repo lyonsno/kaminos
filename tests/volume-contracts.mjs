@@ -582,6 +582,9 @@ assert.match(core, /reactionFuelScale/, 'fluid uniforms carry a route-visible ta
 assert.match(core, /quenchVaporStrength/, 'fluid uniforms carry the cheap route-visible quench-vapor render strength');
 assert.match(core, /snuffVisualModel/, 'debug state names the active failure-snuff visual model');
 assert.match(core, /quench-vapor-v0/, 'failure snuff visual has a stable cheap quench-vapor identity');
+assert.match(core, /flameQuenchModel/, 'debug state names the active flame-body quench model separately from vapor');
+assert.match(core, /quench-flame-body-v0/, 'failure snuff damps the flame body instead of only painting vapor over it');
+assert.match(core, /quenchCoreCollapse/, 'render path computes a high-temperature flame-core collapse signal for snuff');
 assert.match(core, /normalizeRuntimeQuality/, 'volume core normalizes host-requested runtime quality');
 assert.match(core, /runtimeQualityRequested/, 'debug state records requested runtime quality separately from effective mode');
 assert.match(core, /runtimeQualityEffective/, 'debug state records the effective runtime quality mode');
@@ -1094,6 +1097,10 @@ assert.match(witness, /volume-runtime-quality-ladder-v0/, 'witness recognizes th
 assert.match(witness, /snuffVisualModel/, 'witness records the active snuff visual model identity');
 assert.match(witness, /quenchVaporStrength/, 'witness records effective quench-vapor strength');
 assert.match(witness, /quench-vapor-v0/, 'witness recognizes the cheap failure-snuff vapor model');
+assert.match(witness, /flameQuenchModel/, 'witness records the active flame-body quench model identity');
+assert.match(witness, /quench-flame-body-v0/, 'witness recognizes the snuff flame-body quench model');
+assert.match(witness, /expectsSnuffVisualEvidence/, 'witness accepts late snuff by vapor/smoke evidence instead of requiring active fire pixels');
+assert.match(witness, /bridged snuff vapor volume/, 'main-renderer witness names snuff vapor evidence separately from live fire');
 assert.match(witness, /fireFuelOverlapRatio/, 'witness records fire/fuel overlap evidence');
 assert.match(witness, /expectedTallPlumePreset/, 'witness reports effective tall-plume operator preset identity');
 assert.match(witness, /volume_expected_wind_drift/, 'witness can assert expected wind drift direction for tall-plume wind probes');

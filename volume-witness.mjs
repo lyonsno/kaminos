@@ -584,6 +584,8 @@ const expectedQuenchEnvelope = expectedLifecycleT * expectedLifecycleT * (3 - 2 
 const expectedQuenchVaporStrength = expectedLifecycleEffect === 'snuff'
   ? expectedQuenchVapor * expectedQuenchEnvelope
   : 0;
+const expectedFlameQuenchModel = expectedQuenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
+const expectsSnuffVisualEvidence = expectedLifecycleEffect === 'snuff' && expectedQuenchVaporStrength > 0;
 const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
@@ -974,6 +976,7 @@ async function main() {
     assert.ok(Math.abs((state.quenchVapor ?? 0) - expectedQuenchVapor) < 0.001, 'effective quench vapor did not reach debug state');
     assert.ok(Math.abs((state.quenchVaporStrength ?? 0) - expectedQuenchVaporStrength) < 0.001, 'effective quench-vapor strength did not match route phase');
     assert.equal(state.snuffVisualModel ?? 'inactive', expectedQuenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive', 'snuff visual model identity did not match effective quench-vapor state');
+    assert.equal(state.flameQuenchModel ?? 'inactive', expectedFlameQuenchModel, 'flame body quench model identity did not match effective snuff state');
     assert.equal(state.controls?.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request route/control did not apply');
     assert.equal(state.runtimeQualityRequested ?? 'live_high', expectedRuntimeQualityRequested, 'runtime quality request did not reach debug state');
     assert.equal(state.controls?.runtimeQualityEffective ?? 'live_high', expectedRuntimeQualityEffective, 'effective runtime quality control did not match pressure ladder');
@@ -1712,7 +1715,11 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
-    if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+    if (expectsSnuffVisualEvidence) {
+      if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.smokeLikePixels < 1500 || mainRendererMetrics.meanLuma < 8) {
+        throw new Error(`main renderer screenshot missing bridged snuff vapor volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
@@ -1741,6 +1748,10 @@ async function main() {
     } else if (expectsFuelStarvedTallPlume) {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || visibleFirePixels > 220) {
         throw new Error(`fuel-starved tall plume did not preserve smoke-only negative evidence: ${JSON.stringify(metrics)}`);
+      }
+    } else if (expectsSnuffVisualEvidence) {
+      if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.5) {
+        throw new Error(`snuff route did not preserve vapor/smoke volume evidence: ${JSON.stringify(metrics)}`);
       }
     } else if (expectsPerformanceVolumeEvidence) {
       const volumeSignalPixels =
@@ -1830,6 +1841,7 @@ async function main() {
       quenchVapor: sample.quenchVapor,
       quenchVaporStrength: sample.quenchVaporStrength,
       snuffVisualModel: sample.snuffVisualModel,
+      flameQuenchModel: sample.flameQuenchModel,
       runtimeQualityRequested: sample.runtimeQualityRequested,
       runtimeQualityEffective: sample.runtimeQualityEffective,
       gpuPressure: sample.gpuPressure,
