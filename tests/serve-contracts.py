@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import json
 import os
 from pathlib import Path
 import sys
@@ -291,6 +292,134 @@ def test_compute_route_fire_run_failure_never_keeps_fire_burning():
         assert current["allowsFullBurn"] is False
         assert current["exitCode"] == 7
         assert current["pipelineReport"] is None
+
+
+def test_compute_route_fire_promotes_completed_splat_to_asset_inbox_with_source_truth():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        experimental = root / "splats" / "inbox"
+        production = root / "splats" / "production"
+        experimental.mkdir(parents=True)
+        production.mkdir(parents=True)
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        (pipeline / "pipeline-witness.mjs").write_text(
+            """
+import { mkdirSync, writeFileSync } from 'node:fs';
+const arg = name => process.argv[process.argv.indexOf(name) + 1];
+const outDir = arg('--out-dir');
+const report = arg('--report');
+mkdirSync(`${outDir}/artifacts`, { recursive: true });
+writeFileSync(`${outDir}/artifacts/sharp-output.ply`, 'ply\\nformat ascii 1.0\\nelement vertex 1\\nproperty float x\\nproperty float y\\nproperty float z\\nend_header\\n0 0 0\\n');
+writeFileSync(report, JSON.stringify({
+  schema: 'kaminos.pipeline-witness.v0',
+  ok: true,
+  requestedPipelineId: 'sharp-image-to-splat-live-v0',
+  effectivePipelineId: 'sharp-image-to-splat-live-v0',
+  phase: 'complete',
+  effectiveRouteConfig: { routeId: 'adapter.sharp-image-to-splat-live.v0', outputRoot: outDir },
+  artifacts: {
+    input: { role: 'source-image', status: 'requested', path: process.argv[process.argv.indexOf('--input') + 1] },
+    splat: { role: 'splat-candidate', status: 'real', path: `${outDir}/artifacts/sharp-output.ply`, bytes: 108 }
+  },
+  stages: [{ id: 'run-sharp-image-to-splat', status: 'real', effectiveRoute: { effectiveBackend: 'browser-webgpu' } }]
+}, null, 2));
+""".strip()
+        )
+
+        previous_roots = list(serve.ASSET_ROOTS)
+        previous_browse = dict(BROWSE_ROOTS)
+        serve.ASSET_ROOTS[:] = [
+            {
+                "id": "splat-inbox",
+                "label": "Experimental Splat Inbox",
+                "kind": "splat",
+                "stage": "experimental",
+                "path": experimental,
+            },
+            {
+                "id": "splat-production",
+                "label": "Production Splats",
+                "kind": "splat",
+                "stage": "production",
+                "path": production,
+            },
+        ]
+        BROWSE_ROOTS["splat-inbox"] = experimental
+        BROWSE_ROOTS["splat-production"] = production
+        try:
+            run = serve.start_compute_route_fire_run(
+                input_path=str(input_path),
+                config={
+                    "pipeline_worktree": pipeline,
+                    "output_root": root / "runs",
+                },
+            )
+            deadline = time.time() + 5
+            current = run
+            while time.time() < deadline:
+                current = serve.compute_route_fire_status(run["runId"])
+                if current["status"] == "completed":
+                    break
+                time.sleep(0.05)
+
+            promoted = serve.promote_compute_route_fire_splat(run["runId"])
+            entries = serve.list_asset_entries(kind="splat")
+        finally:
+            serve.ASSET_ROOTS[:] = previous_roots
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+
+        assert current["status"] == "completed"
+        assert promoted["schema"] == "kaminos.compute-route-fire-promoted-splat.v0"
+        assert promoted["runId"] == run["runId"]
+        assert promoted["entry"]["root_id"] == "splat-inbox"
+        assert promoted["entry"]["stage"] == "experimental"
+        assert promoted["entry"]["source"].startswith("/api/read?root=splat-inbox&path=")
+        assert promoted["routeOutput"]["pipelineId"] == "sharp-image-to-splat-live-v0"
+        assert promoted["routeOutput"]["sourceArtifactPath"].endswith("/artifacts/sharp-output.ply")
+        assert promoted["routeOutput"]["reportPath"].endswith("/pipeline-witness.json")
+        promoted_path = experimental / promoted["entry"]["path"]
+        assert promoted_path.read_text().startswith("ply\n")
+        sidecar = promoted_path.with_name(promoted_path.name + ".kaminos-route-output.json")
+        assert sidecar.is_file()
+        assert json.loads(sidecar.read_text())["runId"] == run["runId"]
+        assert entries[0]["routeOutput"]["runId"] == run["runId"]
+
+
+def test_compute_route_fire_refuses_to_promote_failed_splat():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        pipeline = root / "pipeline"
+        pipeline.mkdir()
+        input_path = root / "source.png"
+        input_path.write_bytes(b"fake image")
+        (pipeline / "pipeline-witness.mjs").write_text("process.exit(7);\n")
+
+        run = serve.start_compute_route_fire_run(
+            input_path=str(input_path),
+            config={
+                "pipeline_worktree": pipeline,
+                "output_root": root / "runs",
+            },
+        )
+        deadline = time.time() + 5
+        current = run
+        while time.time() < deadline:
+            current = serve.compute_route_fire_status(run["runId"])
+            if current["status"] == "failed":
+                break
+            time.sleep(0.05)
+
+        assert current["status"] == "failed"
+        try:
+            serve.promote_compute_route_fire_splat(run["runId"])
+        except ValueError as error:
+            assert "completed" in str(error)
+        else:
+            raise AssertionError("failed compute route promoted a splat")
 
 
 def test_splat_asset_index_allows_pointer_symlinks_inside_declared_roots():

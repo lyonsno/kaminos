@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -49,6 +50,7 @@ GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
 SPLAT_EXTENSIONS = {".ply", ".spz"}
 SPLAT_CORRECTION_SCHEMA = "kaminos.splat-correction.v0"
+COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA = "kaminos.compute-route-fire-promoted-splat.v0"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV = "KAMINOS_HYBRID_SPLAT_OVERLAY_MODULE_URL"
 HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY = "KAMINOS_HYBRID_SPLAT_MODULE_URL"
 ASSET_ROOTS = [
@@ -159,6 +161,13 @@ def _compute_route_fire_artifacts_from_report(report):
             "bytes": artifact.get("bytes"),
         })
     return artifacts
+
+
+def _compute_route_fire_artifact_from_report(report, artifact_id):
+    if not isinstance(report, dict):
+        return None
+    artifact = (report.get("artifacts") or {}).get(artifact_id)
+    return artifact if isinstance(artifact, dict) else None
 
 
 def _compute_route_fire_snapshot(run):
@@ -300,6 +309,97 @@ def compute_route_fire_status(run_id):
             raise KeyError(run_id)
         _refresh_compute_route_fire_run(run)
         return _compute_route_fire_snapshot(run)
+
+
+def compute_route_fire_route_output_sidecar_path(asset_path):
+    return Path(asset_path).with_name(Path(asset_path).name + ".kaminos-route-output.json")
+
+
+def load_compute_route_fire_route_output(asset_path):
+    sidecar = compute_route_fire_route_output_sidecar_path(asset_path)
+    if not sidecar.is_file():
+        return None
+    try:
+        document = json.loads(sidecar.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if document.get("schema") != COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA:
+        return None
+    return document
+
+
+def _compute_route_fire_route_output_document(run, source_path, target_path):
+    report = run.get("pipeline_report") or {}
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA,
+        "runId": run["run_id"],
+        "pipelineId": run["pipeline_id"],
+        "requestedRoute": run["requested_route"],
+        "backendClass": run["backend_class"],
+        "reportPath": str(Path(run["report_path"])),
+        "sourceArtifactPath": str(Path(source_path)),
+        "promotedAssetPath": str(Path(target_path)),
+        "inputPath": str(Path(run["input_path"])),
+        "promotedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "effectiveRouteConfig": report.get("effectiveRouteConfig") if isinstance(report, dict) else None,
+    }
+
+
+def _promoted_compute_route_fire_response(run, target_path):
+    root = splat_inbox_root()
+    if not root:
+        raise FileNotFoundError("splat-inbox root is not configured")
+    route_output = load_compute_route_fire_route_output(target_path)
+    if not route_output:
+        source_artifact = _compute_route_fire_artifact_from_report(run.get("pipeline_report"), "splat")
+        route_output = _compute_route_fire_route_output_document(
+            run,
+            source_artifact.get("path") if source_artifact else target_path,
+            target_path,
+        )
+    return {
+        "schema": COMPUTE_ROUTE_FIRE_PROMOTED_SPLAT_SCHEMA,
+        "runId": run["run_id"],
+        "entry": build_asset_entry(root, target_path),
+        "routeOutput": route_output,
+    }
+
+
+def promote_compute_route_fire_splat(run_id):
+    with COMPUTE_ROUTE_FIRE_RUNS_LOCK:
+        run = COMPUTE_ROUTE_FIRE_RUNS.get(run_id)
+        if not run:
+            raise KeyError(run_id)
+        _refresh_compute_route_fire_run(run)
+        if run["status"] != "completed":
+            raise ValueError(f"compute route must be completed before promotion: {run['status']}")
+        existing = run.get("promoted_splat_path")
+        if existing and Path(existing).is_file():
+            return _promoted_compute_route_fire_response(run, Path(existing))
+
+        artifact = _compute_route_fire_artifact_from_report(run.get("pipeline_report"), "splat")
+        if not artifact or artifact.get("status") != "real":
+            raise ValueError("completed route has no real splat artifact")
+        source_path = Path(artifact.get("path") or "").expanduser()
+        if source_path.suffix.lower() not in SPLAT_EXTENSIONS:
+            raise ValueError(f"completed splat artifact has unsupported extension: {source_path.suffix or 'missing'}")
+        if not source_path.is_file():
+            raise FileNotFoundError(f"completed splat artifact not found: {source_path}")
+
+        root = splat_inbox_root()
+        if not root:
+            raise FileNotFoundError("splat-inbox root is not configured")
+        root_path = Path(root["path"]).expanduser().resolve()
+        root_path.mkdir(parents=True, exist_ok=True)
+        target_name = sanitize_splat_filename(f"{run_id}-{source_path.name}")
+        target_path = (root_path / target_name).resolve()
+        if not target_path.is_relative_to(root_path):
+            raise PermissionError("Path traversal")
+        shutil.copyfile(source_path, target_path)
+        route_output = _compute_route_fire_route_output_document(run, source_path, target_path)
+        compute_route_fire_route_output_sidecar_path(target_path).write_text(json.dumps(route_output, indent=2))
+        run["promoted_splat_path"] = str(target_path)
+        return _promoted_compute_route_fire_response(run, target_path)
 
 
 def splat_asset_root_allows_pointer(root_name):
@@ -477,6 +577,7 @@ def build_asset_entry(root, path):
         rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
     correction_document = load_splat_asset_correction(root_id, rel_path)
+    route_output_document = load_compute_route_fire_route_output(path)
     return {
         "id": f"{root_id}:{rel_path}",
         "kind": root.get("kind"),
@@ -489,6 +590,7 @@ def build_asset_entry(root, path):
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
         "correction": correction_document.get("correction") if correction_document else None,
+        "routeOutput": route_output_document,
         "display": build_asset_display_metadata(
             path,
             root_label=root.get("label") or root_id,
@@ -740,6 +842,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_save_scene()
         elif parsed.path == "/api/compute-route-fire/start":
             self.handle_compute_route_fire_start()
+        elif parsed.path == "/api/compute-route-fire/promote-splat":
+            self.handle_compute_route_fire_promote_splat()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -785,6 +889,32 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(compute_route_fire_status(run_id))
         except KeyError:
             self.send_json({"error": f"unknown runId: {run_id}"}, 404)
+
+    def handle_compute_route_fire_promote_splat(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        run_id = payload.get("runId") or payload.get("run_id")
+        if not run_id:
+            self.send_json({"error": "runId required"}, 400)
+            return
+        try:
+            self.send_json(promote_compute_route_fire_splat(run_id))
+        except KeyError:
+            self.send_json({"error": f"unknown runId: {run_id}"}, 404)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 409)
+        except PermissionError:
+            self.send_json({"error": "Path traversal"}, 403)
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

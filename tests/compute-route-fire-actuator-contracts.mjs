@@ -12,10 +12,16 @@ assert.match(index, /id="compute-route-fire-input-path"/, 'operator can see or e
 assert.match(index, /id="compute-route-fire-run-status"/, 'operator sees running/completed/failed status');
 assert.match(index, /id="compute-route-fire-run-report"/, 'operator sees the report path after completion');
 assert.match(index, /id="compute-route-fire-run-artifacts"/, 'operator sees output artifacts after completion');
+assert.match(index, /id="compute-route-fire-output-asset"/, 'operator sees the promoted output asset identity after completion');
+assert.match(index, /id="compute-route-fire-load-output"/, 'operator has a direct control to load the completed splat output');
 assert.match(index, /startComputeRouteFireRun/, 'browser owns an actuator start function');
 assert.match(index, /pollComputeRouteFireRun/, 'browser polls live route status instead of replaying a completed run');
+assert.match(index, /promoteComputeRouteFireOutput/, 'browser promotes completed route output before import');
+assert.match(index, /loadComputeRouteFireOutput/, 'browser can load the promoted route output into the scene');
 assert.match(index, /\/api\/compute-route-fire\/start/, 'browser starts the route through the Kaminos server API');
 assert.match(index, /\/api\/compute-route-fire\/status/, 'browser polls route state through the Kaminos server API');
+assert.match(index, /\/api\/compute-route-fire\/promote-splat/, 'browser asks the server to promote the completed splat into the asset index');
 assert.match(index, /volumePrototype\.setActive\(true\)/, 'browser starts fire while the route is running');
 assert.match(index, /volumePrototype\.setActive\(false\)/, 'browser stops fire after completion or failure');
+assert.match(index, /setActiveTab\('assets'\)/, 'completed output load returns the operator to the scene object selection surface');
 assert.doesNotMatch(index, /Start SHARP[\s\S]{0,120}smokePayload/, 'actuator control must not be wired to smoke-payload replay');

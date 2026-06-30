@@ -690,6 +690,10 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
       </div>
       <div class="field"><span class="field-key">Report</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-report">--</span></div>
       <div class="field"><span class="field-key">Error</span><span class="field-val route-fire-field-long" id="compute-route-fire-run-error">--</span></div>
+      <div class="field"><span class="field-key">Asset</span><span class="field-val route-fire-field-long" id="compute-route-fire-output-asset">--</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="compute-route-fire-load-output" hidden>Load Output Splat</button>
+      </div>
       <div class="compute-route-fire-artifacts" id="compute-route-fire-run-artifacts"></div>
     </div>
     <div
@@ -7761,6 +7765,9 @@ let computeRouteFireActuatorState = {
   enabled: false,
   run: null,
   pollTimer: 0,
+  promotedByRunId: {},
+  loadedByRunId: {},
+  loadingRunId: null,
 };
 
 function volumeRouteFireBaseUrl() {
@@ -7935,10 +7942,24 @@ function setComputeRouteFireStatusClass(status) {
   if (status === 'failed') statusEl.classList.add('compute-route-fire-status-failed');
 }
 
+function computeRouteFireArtifact(run, artifactId) {
+  return (run?.artifacts || []).find(row => row.id === artifactId) || null;
+}
+
+function computeRouteFirePromotedOutput(run) {
+  if (!run?.runId) return null;
+  return run.promotedSplat || computeRouteFireActuatorState.promotedByRunId[run.runId] || null;
+}
+
+function computeRouteFireOutputCanLoad(run) {
+  return run?.status === 'completed' && !!computeRouteFireArtifact(run, 'splat');
+}
+
 function renderComputeRouteFireRun(run = null) {
   const root = document.getElementById('compute-route-fire-actuator');
   if (!root) return null;
   const status = run?.status || 'idle';
+  const promoted = computeRouteFirePromotedOutput(run);
   root.dataset.computeRouteFireRunStatus = status;
   document.getElementById('compute-route-fire-run-status').textContent = status;
   setComputeRouteFireStatusClass(status);
@@ -7956,6 +7977,35 @@ function renderComputeRouteFireRun(run = null) {
   document.getElementById('compute-route-fire-run-report').title = run?.reportPath || '';
   document.getElementById('compute-route-fire-run-error').textContent = run?.error || '--';
   document.getElementById('compute-route-fire-run-error').title = run?.error || '';
+  const assetEl = document.getElementById('compute-route-fire-output-asset');
+  const loadButton = document.getElementById('compute-route-fire-load-output');
+  const loaded = !!computeRouteFireActuatorState.loadedByRunId[run?.runId];
+  const loading = computeRouteFireActuatorState.loadingRunId === run?.runId;
+  if (assetEl) {
+    const assetName = promoted?.entry?.name || promoted?.entry?.path || '';
+    assetEl.textContent = loading
+      ? 'loading output splat...'
+      : loaded
+        ? `loaded ${assetName || 'output splat'}`
+        : promoted
+          ? compactPathTail(promoted.entry?.source || promoted.entry?.path || assetName)
+          : computeRouteFireOutputCanLoad(run)
+            ? 'output splat produced'
+            : '--';
+    assetEl.title = promoted?.entry?.source || promoted?.entry?.path || '';
+  }
+  if (loadButton) {
+    const canLoad = computeRouteFireOutputCanLoad(run);
+    loadButton.hidden = !canLoad;
+    loadButton.disabled = loading || loaded;
+    loadButton.textContent = loading
+      ? 'Loading Output Splat'
+      : loaded
+        ? 'Output Splat Loaded'
+        : promoted
+          ? 'Load Promoted Splat'
+          : 'Load Output Splat';
+  }
   const artifacts = document.getElementById('compute-route-fire-run-artifacts');
   artifacts.replaceChildren();
   for (const row of run?.artifacts || []) {
@@ -7975,6 +8025,99 @@ function renderComputeRouteFireRun(run = null) {
   }
   computeRouteFireActuatorState.run = run;
   return run;
+}
+
+async function promoteComputeRouteFireOutput(run = computeRouteFireActuatorState.run) {
+  if (!run?.runId) throw new Error('No compute route run to promote');
+  if (computeRouteFireActuatorState.promotedByRunId[run.runId]) {
+    return computeRouteFireActuatorState.promotedByRunId[run.runId];
+  }
+  const response = await fetch('/api/compute-route-fire/promote-splat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ runId: run.runId }),
+  });
+  const promoted = await response.json().catch(() => ({}));
+  if (!response.ok || promoted.error || !promoted.entry?.source) {
+    throw new Error(promoted.error || `Output splat promotion failed ${response.status}`);
+  }
+  computeRouteFireActuatorState.promotedByRunId[run.runId] = promoted;
+  renderComputeRouteFireRun({ ...run, promotedSplat: promoted });
+  return promoted;
+}
+
+function computeRouteFirePromotedSplatMetadata(promoted, run) {
+  const entry = promoted.entry || {};
+  const routeOutput = promoted.routeOutput || entry.routeOutput || {};
+  const fileName = entry.name || entry.path || 'sharp-output.ply';
+  return {
+    source: entry.source,
+    fileName,
+    label: entry.display?.title || fileName,
+    routeOutput,
+    splat: {
+      schema: 'kaminos.splat-asset.v0',
+      assetSource: entry.source,
+      fileName,
+      format: fileName.split('.').pop()?.toLowerCase() || 'ply',
+      bounds: null,
+      splatCount: null,
+      sidecars: [],
+      correction: entry.correction || null,
+      routeOutput,
+      provenance: {
+        source_group: 'compute-route-fire',
+        source_url: entry.source,
+        root_id: entry.root_id || 'splat-inbox',
+        root_label: entry.root_label || null,
+        asset_stage: entry.stage || 'experimental',
+        asset_path: entry.path || null,
+        run_id: run?.runId || promoted.runId || null,
+        pipeline_id: routeOutput.pipelineId || run?.pipelineId || null,
+        requested_route: routeOutput.requestedRoute || run?.requestedRoute || null,
+        backend_class: routeOutput.backendClass || run?.backendClass || null,
+        report_path: routeOutput.reportPath || run?.reportPath || null,
+        source_artifact_path: routeOutput.sourceArtifactPath || computeRouteFireArtifact(run, 'splat')?.path || null,
+      },
+    },
+  };
+}
+
+async function loadComputeRouteFireOutput(run = computeRouteFireActuatorState.run, options = {}) {
+  if (!computeRouteFireOutputCanLoad(run)) return null;
+  if (computeRouteFireActuatorState.loadedByRunId[run.runId]) {
+    return computeRouteFireActuatorState.loadedByRunId[run.runId];
+  }
+  computeRouteFireActuatorState.loadingRunId = run.runId;
+  renderComputeRouteFireRun(run);
+  try {
+    const promoted = await promoteComputeRouteFireOutput(run);
+    const entry = promoted.entry;
+    const display = entry.display || { title: entry.name || entry.path || 'Output Splat', raw_name: entry.name || entry.path || '' };
+    const metadata = computeRouteFirePromotedSplatMetadata(promoted, run);
+    const object = await greenroomImportSplat(entry.source, entry.name || entry.path || 'sharp-output.ply', display, {
+      clear: false,
+      metadata,
+    });
+    computeRouteFireActuatorState.loadedByRunId[run.runId] = {
+      entry,
+      objectId: object?.userData?.kaminosSceneObject?.id || activeSceneObjectId || null,
+      loadedAt: new Date().toISOString(),
+    };
+    await grBrowseSplatAssets();
+    setActiveTab('assets');
+    setInfo(`Loaded SHARP output splat: ${display.title || entry.name || entry.path}`);
+    return computeRouteFireActuatorState.loadedByRunId[run.runId];
+  } catch (error) {
+    setInfo(`Output splat load failed: ${error.message || error}`);
+    throw error;
+  } finally {
+    computeRouteFireActuatorState.loadingRunId = null;
+    renderComputeRouteFireRun({
+      ...run,
+      promotedSplat: computeRouteFireActuatorState.promotedByRunId[run.runId] || null,
+    });
+  }
 }
 
 async function applyComputeRouteFireVisualState(run) {
@@ -7999,11 +8142,17 @@ async function pollComputeRouteFireRun(runId) {
     computeRouteFireActuatorState.pollTimer = window.setTimeout(() => pollComputeRouteFireRun(runId), 1000);
   } else {
     document.getElementById('compute-route-fire-start').disabled = false;
+    if (run.status === 'completed') {
+      loadComputeRouteFireOutput(run, { auto: true }).catch(error => {
+        console.warn('completed compute route output load failed', error);
+      });
+    }
   }
   return run;
 }
 
 async function startComputeRouteFireRun() {
+  computeRouteFireActuatorState.loadingRunId = null;
   renderComputeRouteFireRun({ status: 'starting', artifacts: [] });
   await applyComputeRouteFireVisualState({ status: 'idle' });
   const inputPath = document.getElementById('compute-route-fire-input-path').value.trim();
@@ -8041,11 +8190,18 @@ async function initComputeRouteFireActuator() {
     volumePrototype.setActive(false);
     startButton.disabled = false;
   }));
+  document.getElementById('compute-route-fire-load-output').addEventListener('click', () => {
+    loadComputeRouteFireOutput().catch(error => {
+      console.warn('compute route output load failed', error);
+    });
+  });
   renderComputeRouteFireRun({ status: config.error ? 'failed' : 'idle', error: config.error || null, artifacts: [] });
 }
 
 window.kaminosComputeRouteFireActuatorDebugState = () => computeRouteFireActuatorState;
 window.kaminosStartComputeRouteFireRun = startComputeRouteFireRun;
+window.kaminosPromoteComputeRouteFireOutput = promoteComputeRouteFireOutput;
+window.kaminosLoadComputeRouteFireOutput = loadComputeRouteFireOutput;
 
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
