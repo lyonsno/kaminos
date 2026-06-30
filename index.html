@@ -4515,6 +4515,10 @@ function initOrbShellCompositionRoute() {
       const witnessState = orbShellCompositionWitness.enableLowerSocketSemanticRenderInventoryWitness();
       setOrbShellSemanticLegend(witnessState);
       setInfo(`Orb Shell Macro Grounding lower-socket semantic inventory: ${witnessState.visibleCount} visible meshes`);
+    } else if (orbShellFocus === 'macro-morphology-inventory') {
+      const witnessState = orbShellCompositionWitness.enableMacroMorphologyInventoryWitness();
+      setOrbShellSemanticLegend(null);
+      setInfo(`Orb Shell Macro Morphology Inventory: ${witnessState.visibleCurveCount} early sphere curves visible`);
     } else {
       setOrbShellSemanticLegend(null);
       frameOrbShellCompositionCamera();

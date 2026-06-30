@@ -34,6 +34,7 @@ let cleanSidewallTopologyWitness = null;
 let liveTerminalCapWitness = null;
 let apertureTangencyWitness = null;
 let macroContactMapWitness = null;
+let macroMorphologyInventoryWitness = null;
 let lowerSocketSemanticRenderInventoryWitness = null;
 
 function writeReport(report) {
@@ -69,9 +70,14 @@ async function send(ws, method, params = {}) {
   const id = ++counter;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      ws.removeEventListener('message', onMessage);
+      reject(new Error(`${method} timed out during ${phase}`));
+    }, 12000);
     const onMessage = message => {
       const payload = JSON.parse(message.data.toString());
       if (payload.id !== id) return;
+      clearTimeout(timeout);
       ws.removeEventListener('message', onMessage);
       if (payload.error) reject(new Error(`${method}: ${JSON.stringify(payload.error)}`));
       else resolve(payload.result);
@@ -278,6 +284,11 @@ async function main() {
       macroContactMapWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroContactMapWitness?.()');
       await delay(500);
     }
+    if (focus === 'macro-morphology-inventory') {
+      await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameMacroMorphologyInventory?.()');
+      macroMorphologyInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableMacroMorphologyInventoryWitness?.()');
+      await delay(500);
+    }
     if (focus === 'lower-socket-semantic-render-inventory') {
       await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.frameLowerSocketAnatomy?.()');
       lowerSocketSemanticRenderInventoryWitness = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.enableLowerSocketSemanticRenderInventoryWitness?.()');
@@ -290,7 +301,25 @@ async function main() {
     if (forceAo !== null) {
       assert.equal(renderEffectPolicy?.ambientOcclusionEnabled, forceAo, 'forced AO state did not take effect');
     }
-    const state = await evaluate(ws, 'window.__kaminosOrbShellCompositionWitness?.debugState?.()');
+    const state = await evaluate(ws, `
+      (() => {
+        const state = window.__kaminosOrbShellCompositionWitness?.debugState?.();
+        if (!state) return state;
+        const composition = state.OrbShellComposition;
+        state.OrbShellComposition = composition ? {
+          schema: 'OrbShellCompositionDebugSummary',
+          identity: state.identity,
+          macroAssemblageCount: state.macroAssemblageCount,
+          macroAssemblageIds: state.macroAssemblageIds,
+          variantId: state.variantId,
+          variationSeed: state.variationSeed,
+          variationLeafCount: state.variationLeafCount,
+          macroMorphologyRecordCount: state.macroMorphologyRecordCount,
+          diagnosticCompactionReason: 'avoid-returning-full-nested-composition-through-cdp-report-path',
+        } : null;
+        return state;
+      })()
+    `);
     assert.equal(state?.identity, 'orb-shell-macro-grammar-grounding-v0', 'wrong composition witness identity');
     assert.equal(state?.active, true, 'composition witness inactive');
     assert.equal(state?.baselineDisposition, 'coherent-but-wrong-model-baseline', 'v0 baseline disposition missing');
@@ -306,6 +335,9 @@ async function main() {
     assert.ok(state?.MacroContactSample?.every(sample => sample?.schema === 'MacroContactSample'), 'MacroContactSample records missing from debug state');
     assert.ok(state?.macroClosestContactIds?.length >= 1, 'closest contact ids missing from debug state');
     assert.ok(state?.macroGeometryCoherenceWatchCount >= 1, 'geometry coherence watch must preserve diagnostic trust caveats');
+    assert.equal(state?.OrbShellMorphologyInventory?.schema, 'OrbShellMorphologyInventory', 'OrbShellMorphologyInventory missing from debug state');
+    assert.equal(state?.macroMorphologyRecordCount, state.macroAssemblageCount, 'morphology inventory must cover every rendered macro');
+    assert.ok(state?.MacroSphereCurveDecomposition?.every(curve => curve?.schema === 'MacroSphereCurveDecomposition'), 'MacroSphereCurveDecomposition records missing from debug state');
     if (state?.selectedMacroAssemblageIds?.includes('lower-socket-keel')) {
       assert.equal(state?.LowerSocketKeelAnatomyLaw?.schema, 'LowerSocketKeelAnatomyLaw', 'selected lower socket must preserve anatomy law in witness state');
       assert.equal(state?.lowerSocketKeelAnatomyVerdict, 'procedural-lower-socket-anatomy-law-applied', 'selected lower socket must record applied anatomy-law verdict');
@@ -333,6 +365,12 @@ async function main() {
       assert.equal(macroContactMapWitness?.schema, 'MacroContactMapWitnessState', 'macro contact map witness did not activate');
       assert.equal(macroContactMapWitness?.visualOverlayMode, 'ranked-closest-contact-segments', 'macro contact map witness did not enable closest-contact overlay');
       assert.ok(macroContactMapWitness?.visibleOverlayIds?.length >= Math.min(3, state.macroClosestContactIds.length), 'macro contact map overlay meshes not visible');
+    }
+    if (focus === 'macro-morphology-inventory') {
+      assert.equal(macroMorphologyInventoryWitness?.schema, 'MacroMorphologyInventoryWitnessState', 'macro morphology inventory witness did not activate');
+      assert.equal(macroMorphologyInventoryWitness?.mode, 'macro-morphology-inventory-isolated-v0', 'macro morphology inventory witness used wrong mode');
+      assert.equal(macroMorphologyInventoryWitness?.visibleCurveCount, state.macroAssemblageCount, 'macro morphology witness must show one early curve per macro');
+      assert.ok(macroMorphologyInventoryWitness?.visibleReferenceIds?.includes('macro-morphology-reference-sphere'), 'macro morphology witness must show the reference sphere');
     }
     assert.ok(state?.bandMemberCount >= state.macroAssemblageCount * 2, 'composition must expose child band families');
     assert.equal(state?.territoryBodyCount, state.macroAssemblageCount, 'composition must expose one MacroTerritoryBody per macro assemblage');
@@ -478,8 +516,8 @@ async function main() {
     assert.ok(state?.seamGapCount >= 5, 'composition must expose seam/gap descriptors');
     assert.ok(state?.MacroRegionSeamGapDescriptor?.every(gap => gap?.schema === 'MacroRegionSeamGapDescriptor'), 'MacroRegionSeamGapDescriptor records missing from debug state');
     assert.ok(state?.sphericalClosureAnchors?.some(anchor => anchor.id === 'crown-closure-anchor'), 'crown closure anchor missing');
-    assert.ok(state?.OrbShellComposition?.inverseProceduralHypotheses, 'OrbShellComposition lacks inverseProceduralHypotheses');
-    assert.ok(state?.OrbShellComposition?.AperturePressure?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
+    assert.ok(state?.inverseProceduralHypotheses, 'inverseProceduralHypotheses missing from debug state');
+    assert.ok(state?.forbiddenFailureClasses?.includes('strip-soup'), 'failure class evidence missing');
 
     phase = 'screenshot';
     let captureOptions = { format: 'png', captureBeyondViewport: false };
@@ -541,6 +579,12 @@ async function main() {
       macroClosestContactIds: state.macroClosestContactIds,
       macroGeometryCoherenceWatch: state.macroGeometryCoherenceWatch,
       macroGeometryCoherenceWatchCount: state.macroGeometryCoherenceWatchCount,
+      OrbShellMorphologyInventory: state.OrbShellMorphologyInventory,
+      macroMorphologyInventory: state.macroMorphologyInventory,
+      MacroSphereCurveDecomposition: state.MacroSphereCurveDecomposition,
+      macroMorphologyRecordCount: state.macroMorphologyRecordCount,
+      macroMorphologyPathologyClassCounts: state.macroMorphologyPathologyClassCounts,
+      macroMorphologyInventoryWitness,
       LowerSocketKeelAnatomyLaw: state.LowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyLaw: state.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyVerdict: state.lowerSocketKeelAnatomyVerdict,

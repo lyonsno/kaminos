@@ -6,6 +6,7 @@ export const ORB_SHELL_MACRO_FAMILY_SUBSTRIP_MODE = 'parent-owned-lamellar-subst
 export const ORB_SHELL_APERTURE_TERMINATION_MODE = 'aperture-relative-lamellar-termination-v0';
 export const ORB_SHELL_APERTURE_TANGENCY_WITNESS_MODE = 'aperture-tangency-witness-v0';
 export const ORB_SHELL_LOWER_SOCKET_RENDER_INVENTORY_MODE = 'lower-socket-semantic-render-inventory-v0';
+export const ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE = 'macro-curve-vs-promoted-body-diagnostic-v0';
 
 const TAU = Math.PI * 2;
 const MACRO_VARIATION_IDS = [
@@ -3807,6 +3808,271 @@ function createLowerSocketRenderInventoryPlan(composition) {
   };
 }
 
+function sampleEarlySphereCurvePoint(assemblage, t, radius = 1.045) {
+  const control = assemblage.spine.control;
+  const torsion = assemblage.macroTorsionField;
+  const lat = control.startLat + (control.endLat - control.startLat) * t;
+  const effectiveTwist = control.effectiveTwist ?? control.twist;
+  const torsionWave = torsion
+    ? Math.sin(TAU * t + torsion.phaseLag) * torsion.torsionGradient * Math.sin(Math.PI * t)
+    : 0;
+  const surfaceRollBias = torsion
+    ? torsion.surfaceRoll * Math.sin(Math.PI * t) * 0.04
+    : 0;
+  const lon = assemblage.sphericalTerritory.centerPhase
+    + assemblage.handedness * effectiveTwist * (t - 0.5)
+    + Math.sin(Math.PI * t) * control.bow
+    + torsionWave
+    + surfaceRollBias;
+  return spherePoint(lat, lon, radius);
+}
+
+function createMacroSphereCurveDecomposition(assemblage, sampleCount = 48, radius = 1.045) {
+  const samples = [];
+  for (let index = 0; index < sampleCount; index++) {
+    const t = index / (sampleCount - 1);
+    const point = sampleEarlySphereCurvePoint(assemblage, t, radius);
+    const pointRadius = Math.hypot(...point);
+    samples.push({
+      t,
+      point,
+      pointRadius,
+      radiusError: pointRadius - radius,
+    });
+  }
+  return {
+    schema: 'MacroSphereCurveDecomposition',
+    mode: ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE,
+    id: `${assemblage.id}-early-sphere-curve`,
+    parentAssemblage: assemblage.id,
+    generationStage: 'post-variation-pre-promotion-sphere-line',
+    referenceRadius: radius,
+    sampleCount,
+    samples,
+    maxAbsRadiusError: Math.max(...samples.map(sample => Math.abs(sample.radiusError))),
+    visualOverlayId: `${assemblage.id}-early-sphere-curve-line`,
+    sourceControl: {
+      proceduralFamily: assemblage.spine.proceduralFamily,
+      impulseLine: assemblage.spine.impulseLine,
+      startLat: assemblage.spine.control.startLat,
+      endLat: assemblage.spine.control.endLat,
+      effectiveTwist: assemblage.spine.control.effectiveTwist ?? assemblage.spine.control.twist,
+      bow: assemblage.spine.control.bow,
+      torsionFieldId: assemblage.macroTorsionField?.id || null,
+    },
+  };
+}
+
+function curveMorphologyMetrics(points) {
+  const finitePoints = (points || []).filter(point => (
+    Array.isArray(point)
+    && point.length === 3
+    && point.every(Number.isFinite)
+  ));
+  if (finitePoints.length < 3) {
+    return {
+      schema: 'MacroCurveMorphologyMetrics',
+      sampleCount: finitePoints.length,
+      length: 0,
+      chordLength: 0,
+      lateralChordRatio: 0,
+      maxTurnAngle: 0,
+      meanTurnAngle: 0,
+      turnEnergy: 0,
+      estimatedInflectionCount: 0,
+    };
+  }
+  let length = 0;
+  for (let index = 1; index < finitePoints.length; index++) {
+    length += pointDistance(finitePoints[index - 1], finitePoints[index]);
+  }
+  const start = finitePoints[0];
+  const end = finitePoints[finitePoints.length - 1];
+  const chordLength = Math.max(1e-6, pointDistance(start, end));
+  const axis = normalizePoint(subtractPoints(end, start));
+  const lateralDistances = finitePoints.map(point => {
+    const relative = subtractPoints(point, start);
+    const progress = dotPoints(relative, axis);
+    const projected = addScaledPoint(start, axis, progress);
+    return pointDistance(point, projected);
+  });
+  const turnAngles = [];
+  const signedTurns = [];
+  const referenceNormal = normalizePoint(addPoints(start, end));
+  for (let index = 1; index < finitePoints.length - 1; index++) {
+    const previous = normalizePoint(subtractPoints(finitePoints[index], finitePoints[index - 1]));
+    const next = normalizePoint(subtractPoints(finitePoints[index + 1], finitePoints[index]));
+    const dot = clamp(dotPoints(previous, next), -1, 1);
+    const angle = Math.acos(dot);
+    turnAngles.push(angle);
+    const turnNormal = crossPoints(previous, next);
+    const signed = dotPoints(turnNormal, referenceNormal);
+    if (Math.abs(signed) > 1e-5) signedTurns.push(Math.sign(signed));
+  }
+  let estimatedInflectionCount = 0;
+  for (let index = 1; index < signedTurns.length; index++) {
+    if (signedTurns[index] !== signedTurns[index - 1]) estimatedInflectionCount += 1;
+  }
+  const turnEnergy = turnAngles.reduce((sum, angle) => sum + Math.abs(angle), 0);
+  const maxTurnAngle = Math.max(0, ...turnAngles);
+  return {
+    schema: 'MacroCurveMorphologyMetrics',
+    sampleCount: finitePoints.length,
+    length,
+    chordLength,
+    lengthToChordRatio: length / chordLength,
+    maxLateralChordDistance: Math.max(...lateralDistances),
+    meanLateralChordDistance: lateralDistances.reduce((sum, value) => sum + value, 0) / lateralDistances.length,
+    lateralChordRatio: Math.max(...lateralDistances) / chordLength,
+    maxTurnAngle,
+    meanTurnAngle: turnAngles.length ? turnEnergy / turnAngles.length : 0,
+    turnEnergy,
+    estimatedInflectionCount,
+  };
+}
+
+function aggregateSideWallMetrics(sideWalls) {
+  const metrics = (sideWalls || []).map(wall => ({
+    sideWallId: wall.id,
+    targetEdge: wall.targetEdge,
+    metrics: curveMorphologyMetrics((wall.outerSurfaceEdge || []).map(sample => sample.point)),
+  }));
+  return {
+    schema: 'MacroSideWallMorphologyMetrics',
+    sideWallCount: metrics.length,
+    maxTurnAngle: Math.max(0, ...metrics.map(record => record.metrics.maxTurnAngle)),
+    maxLateralChordRatio: Math.max(0, ...metrics.map(record => record.metrics.lateralChordRatio)),
+    maxTurnEnergy: Math.max(0, ...metrics.map(record => record.metrics.turnEnergy)),
+    sideWalls: metrics,
+  };
+}
+
+function aggregateSubstripMetrics(substrips) {
+  const metrics = (substrips || []).map(substrip => {
+    const points = (substrip.edgeSamples || []).map(sample => lerpPoint(sample.leftEdge, sample.rightEdge, 0.5));
+    return {
+      substripId: substrip.id,
+      role: substrip.role,
+      metrics: curveMorphologyMetrics(points),
+    };
+  });
+  return {
+    schema: 'MacroSubstripMorphologyMetrics',
+    substripCount: metrics.length,
+    maxTurnAngle: Math.max(0, ...metrics.map(record => record.metrics.maxTurnAngle)),
+    maxLateralChordRatio: Math.max(0, ...metrics.map(record => record.metrics.lateralChordRatio)),
+    maxTurnEnergy: Math.max(0, ...metrics.map(record => record.metrics.turnEnergy)),
+    substrips: metrics,
+  };
+}
+
+function createMacroMorphologyInventoryRecord(composition, assemblage) {
+  const retiredParentIds = composition.macroFamilySubstripPlan?.visibleParentRetirementPolicy?.retiredParentAssemblageIds || [];
+  const sideWalls = (composition.liveMacroSideWallPlan?.sideWalls || []).filter(wall => wall.parentAssemblage === assemblage.id);
+  const substrips = (composition.macroFamilySubstripPlan?.substrips || []).filter(strip => strip.parentAssemblage === assemblage.id);
+  const earlySphereCurve = createMacroSphereCurveDecomposition(assemblage);
+  const promotedPoints = macroPromotedBodyCenterlinePoints(assemblage, 48, 1.045);
+  const promotedCenterline = {
+    schema: 'MacroPromotedCenterlineDecomposition',
+    mode: ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE,
+    id: `${assemblage.id}-promoted-centerline`,
+    parentAssemblage: assemblage.id,
+    generationStage: 'post-promotion-post-anatomy-centerline',
+    sampleCount: promotedPoints.length,
+    samples: promotedPoints.map((point, index) => ({ t: index / (promotedPoints.length - 1), point })),
+  };
+  const sourceCurveMetrics = curveMorphologyMetrics(earlySphereCurve.samples.map(sample => sample.point));
+  const promotedCenterlineMetrics = curveMorphologyMetrics(promotedPoints);
+  const sideWallMetrics = aggregateSideWallMetrics(sideWalls);
+  const substripFamilyMetrics = aggregateSubstripMetrics(substrips);
+  const renderClassComparison = retiredParentIds.includes(assemblage.id) && substrips.length
+    ? 'parent-owned-substrip-family'
+    : retiredParentIds.includes(assemblage.id)
+      ? 'retired-or-support-body'
+      : 'direct-wide-promoted-body';
+  const pathologyClasses = [];
+  if (sourceCurveMetrics.lateralChordRatio > 0.16 || sourceCurveMetrics.maxTurnAngle > 0.32) {
+    pathologyClasses.push('source-curve-high-curvature-risk');
+  }
+  if (
+    promotedCenterlineMetrics.lateralChordRatio > Math.max(0.12, sourceCurveMetrics.lateralChordRatio + 0.04)
+    || promotedCenterlineMetrics.maxTurnAngle > Math.max(0.34, sourceCurveMetrics.maxTurnAngle + 0.1)
+  ) {
+    pathologyClasses.push('wide-body-squiggle-risk');
+  }
+  if (
+    sideWallMetrics.maxTurnAngle > promotedCenterlineMetrics.maxTurnAngle + 0.12
+    || sideWallMetrics.maxLateralChordRatio > promotedCenterlineMetrics.lateralChordRatio + 0.045
+  ) {
+    pathologyClasses.push('sidewall-frame-crease-risk');
+  }
+  if (renderClassComparison === 'parent-owned-substrip-family' && substrips.length >= 2) {
+    pathologyClasses.push('strip-family-visually-forgiving');
+  }
+  if (assemblage.id === 'lower-socket-keel') {
+    pathologyClasses.push('wandering-s-hook-visible-offender');
+  }
+  return {
+    schema: 'MacroMorphologyInventoryRecord',
+    mode: ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE,
+    id: `${assemblage.id}-morphology-record`,
+    parentAssemblage: assemblage.id,
+    role: assemblage.role,
+    renderClassComparison,
+    earlySphereCurve,
+    promotedCenterline,
+    sourceCurveMetrics,
+    promotedCenterlineMetrics,
+    sideWallMetrics,
+    substripFamilyMetrics,
+    pathologyClasses: [...new Set(pathologyClasses)],
+    diagnosticQuestion: [
+      assemblage.id === 'lower-socket-keel'
+        ? 'is the lower-socket squiggle born in the source curve or promoted later'
+        : 'does this macro stay clean as a source curve before promotion',
+      substrips.length
+        ? 'does substrip decomposition hide or solve wide-body curvature pressure'
+        : 'does the wide promoted body carry visible curvature honestly',
+      'which stage should own the next repair',
+    ],
+  };
+}
+
+function createMacroMorphologyInventory(composition) {
+  const records = composition.macroAssemblages.map(assemblage => (
+    createMacroMorphologyInventoryRecord(composition, assemblage)
+  ));
+  const pathologyClassCounts = {};
+  for (const record of records) {
+    for (const pathologyClass of record.pathologyClasses) {
+      pathologyClassCounts[pathologyClass] = (pathologyClassCounts[pathologyClass] || 0) + 1;
+    }
+  }
+  return {
+    schema: 'OrbShellMorphologyInventory',
+    mode: ORB_SHELL_MACRO_MORPHOLOGY_INVENTORY_MODE,
+    visualDecompositionMode: 'early-macro-curves-as-lines-on-reference-sphere',
+    referenceSphereRadius: 1.045,
+    sourceStage: 'post-variation-pre-promotion-sphere-line',
+    comparedStages: [
+      'post-variation-pre-promotion-sphere-line',
+      'post-promotion-post-anatomy-centerline',
+      'live-sidewall-outer-edges',
+      'parent-owned-substrip-centerlines',
+    ],
+    records,
+    recordCount: records.length,
+    curveDecompositions: records.map(record => record.earlySphereCurve),
+    pathologyClassCounts,
+    failurePressure: [
+      'do-not-spot-fix-lower-socket-before-source-curve-inventory',
+      'do-not-treat-decomposed-family-visual-success-as-wide-body-success',
+      'do-not-let-materials-or-sidewalls-stand-in-for-source-curve-coherence',
+    ],
+    diagnosticVerdict: 'morphology-inventory-before-next-geometry-repair',
+  };
+}
+
 function createChannelThroughLineAudit(composition) {
   const northEast = composition.macroAssemblages.find(assemblage => assemblage.id === 'north-east-counter-thrust');
   const candidates = [
@@ -3959,6 +4225,7 @@ export function applyControlledOrbShellVariation(composition, descriptor) {
   next.lamellarPlateBoundaryPlan = createLamellarPlateBoundaryPlan(next);
   next.lamellarInnerReturnPlan = createLamellarInnerReturnPlan(next);
   next.lowerSocketRenderInventoryPlan = createLowerSocketRenderInventoryPlan(next);
+  next.macroMorphologyInventory = createMacroMorphologyInventory(next);
   next.frontApertureOwnership.effectiveVariation = frontParameters;
   for (const owner of next.frontApertureOwnership.owners) {
     owner.preservedByVariation = true;
@@ -4561,6 +4828,11 @@ function makeMacroContactSegmentGeometry(THREE, contact, radius = 0.006) {
   const start = new THREE.Vector3(...contact.closestApproach.sourcePoint);
   const end = new THREE.Vector3(...contact.closestApproach.targetPoint);
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([start, end]), 1, radius, 8, false);
+}
+
+function makeMacroSphereCurveLineGeometry(THREE, decomposition, radius = 0.0065) {
+  const points = (decomposition.samples || []).map(sample => new THREE.Vector3(...sample.point));
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), Math.max(16, points.length * 2), radius, 8, false);
 }
 
 function makeSeamGapHintGeometry(THREE, gap) {
@@ -5175,6 +5447,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
   const macroContactIntersectMaterial = new THREE.MeshBasicMaterial({ color: 0xff3f5f, transparent: true, opacity: 0.96, depthWrite: false, depthTest: false });
   const macroContactNearMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
   const macroContactClearMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.62, depthWrite: false, depthTest: false });
+  const macroMorphologyReferenceSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x1b3941, transparent: true, opacity: 0.18, wireframe: true, depthWrite: false });
+  const macroMorphologyCleanCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x63d7ff, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+  const macroMorphologyRiskCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.98, depthWrite: false, depthTest: false });
+  const macroMorphologyOffenderCurveMaterial = new THREE.MeshBasicMaterial({ color: 0xff4f7a, transparent: true, opacity: 1, depthWrite: false, depthTest: false });
+  const macroMorphologySubstripCurveMaterial = new THREE.MeshBasicMaterial({ color: 0x9bc53d, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
   const apertureOwnerBodyMaterial = neutralPbrMaterial({ color: 0x1a2427, side: THREE.DoubleSide });
   const apertureOwnerRailMaterial = neutralPbrMaterial({ color: 0x46565b, roughness: 0.4, metalness: 0.05 });
   const crossingSubSurgeRailMaterial = neutralPbrMaterial({ color: 0x1d2a2f, roughness: 0.52, metalness: 0.04 });
@@ -5270,6 +5547,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     macroContactIntersectMaterial,
     macroContactNearMaterial,
     macroContactClearMaterial,
+    macroMorphologyReferenceSphereMaterial,
+    macroMorphologyCleanCurveMaterial,
+    macroMorphologyRiskCurveMaterial,
+    macroMorphologyOffenderCurveMaterial,
+    macroMorphologySubstripCurveMaterial,
     apertureOwnerBodyMaterial,
     apertureOwnerRailMaterial,
     promotedBodyMaterial,
@@ -5295,6 +5577,17 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     if (bandMember.role === 'body') return bodyMaterial;
     if (bandMember.role === 'hopping-member') return hopMaterial;
     return railMaterial;
+  }
+
+  function materialForMorphologyRecord(record) {
+    if (record?.pathologyClasses?.includes('wandering-s-hook-visible-offender')) return macroMorphologyOffenderCurveMaterial;
+    if (
+      record?.pathologyClasses?.includes('wide-body-squiggle-risk')
+      || record?.pathologyClasses?.includes('sidewall-frame-crease-risk')
+      || record?.pathologyClasses?.includes('source-curve-high-curvature-risk')
+    ) return macroMorphologyRiskCurveMaterial;
+    if (record?.pathologyClasses?.includes('strip-family-visually-forgiving')) return macroMorphologySubstripCurveMaterial;
+    return macroMorphologyCleanCurveMaterial;
   }
 
   function legacyTargetBandTubeSuppressed(assemblage, bandMember) {
@@ -5551,6 +5844,29 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
     amberLight.position.set(2.4, -0.3, 2.6);
     group.add(amberLight);
     group.add(new THREE.HemisphereLight(0x445057, 0x070707, 0.55));
+
+    const morphologySphere = new THREE.Mesh(
+      new THREE.SphereGeometry(composition.macroMorphologyInventory?.referenceSphereRadius || 1.045, 64, 32),
+      macroMorphologyReferenceSphereMaterial,
+    );
+    morphologySphere.name = 'macro-morphology-reference-sphere';
+    morphologySphere.visible = false;
+    morphologySphere.userData.MacroMorphologyReferenceSphere = true;
+    morphologySphere.userData.OrbShellMorphologyInventory = composition.macroMorphologyInventory;
+    group.add(morphologySphere);
+
+    for (const record of composition.macroMorphologyInventory?.records || []) {
+      const curveMesh = new THREE.Mesh(
+        makeMacroSphereCurveLineGeometry(THREE, record.earlySphereCurve),
+        materialForMorphologyRecord(record),
+      );
+      curveMesh.name = record.earlySphereCurve.visualOverlayId;
+      curveMesh.visible = false;
+      curveMesh.userData.OrbShellMorphologyInventory = composition.macroMorphologyInventory;
+      curveMesh.userData.MacroMorphologyInventoryRecord = record;
+      curveMesh.userData.MacroSphereCurveDecomposition = record.earlySphereCurve;
+      group.add(curveMesh);
+    }
 
     for (const assemblage of composition.macroAssemblages) {
       const macroGroup = new THREE.Group();
@@ -5830,6 +6146,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       macroContactCount: composition.macroContactMap?.contactCount || 0,
       macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
       macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
+      OrbShellMorphologyInventory: composition.macroMorphologyInventory,
+      macroMorphologyInventory: composition.macroMorphologyInventory,
+      MacroSphereCurveDecomposition: composition.macroMorphologyInventory?.curveDecompositions || [],
+      macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
+      macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
       LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
       lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
@@ -5973,6 +6294,12 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
       controls.update();
       onDirty?.();
     },
+    frameMacroMorphologyInventory() {
+      camera.position.set(0.08, 0.2, 3.35);
+      controls.target.set(0, 0.02, 0.15);
+      controls.update();
+      onDirty?.();
+    },
     frameLowerSocketAnatomy() {
       camera.position.set(-1.72, 0.18, 1.56);
       controls.target.set(-0.66, -0.42, 0.32);
@@ -6111,6 +6438,63 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         visibleCount,
         hiddenCount,
         visibleOverlayIds,
+      };
+    },
+    enableMacroMorphologyInventoryWitness() {
+      scene.children.forEach(child => {
+        if (child !== group) {
+          child.userData.macroMorphologyInventoryWitnessHidden = true;
+          child.visible = false;
+        }
+      });
+      let visibleCount = 0;
+      let hiddenCount = 0;
+      const visibleCurveIds = [];
+      const visibleReferenceIds = [];
+      const visibleRecords = [];
+      group?.traverse(child => {
+        if (!child.isMesh) return;
+        const curve = child.userData?.MacroSphereCurveDecomposition;
+        const record = child.userData?.MacroMorphologyInventoryRecord;
+        const isReferenceSphere = !!child.userData?.MacroMorphologyReferenceSphere;
+        const isAperture = !!child.userData?.AperturePressure;
+        child.visible = !!curve || isReferenceSphere || isAperture;
+        if (child.visible) {
+          visibleCount += 1;
+          if (curve) visibleCurveIds.push(child.name);
+          if (isReferenceSphere) visibleReferenceIds.push(child.name);
+          if (record) {
+            visibleRecords.push({
+              parentAssemblage: record.parentAssemblage,
+              visualOverlayId: record.earlySphereCurve.visualOverlayId,
+              renderClassComparison: record.renderClassComparison,
+              pathologyClasses: record.pathologyClasses,
+              sourceCurveMetrics: record.sourceCurveMetrics,
+              promotedCenterlineMetrics: record.promotedCenterlineMetrics,
+            });
+          }
+        } else {
+          hiddenCount += 1;
+        }
+      });
+      this.frameMacroMorphologyInventory();
+      return {
+        schema: 'MacroMorphologyInventoryWitnessState',
+        mode: 'macro-morphology-inventory-isolated-v0',
+        visualDecompositionMode: composition.macroMorphologyInventory?.visualDecompositionMode,
+        inventory: composition.macroMorphologyInventory,
+        visibleCount,
+        hiddenCount,
+        visibleCurveCount: visibleCurveIds.length,
+        visibleCurveIds,
+        visibleReferenceIds,
+        visibleRecords,
+        pathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
+        diagnosticQuestion: [
+          'do early sphere curves already squiggle',
+          'does promotion or sidewall framing introduce the visible kink',
+          'which macro family should own the next repair',
+        ],
       };
     },
     enableApertureTangencyWitness() {
@@ -6321,6 +6705,11 @@ export function createKaminosOrbShellCompositionWitness({ THREE, scene, camera, 
         macroClosestContactIds: composition.macroContactMap?.closestContactIds || [],
         macroGeometryCoherenceWatch: composition.macroContactMap?.geometryCoherenceWatch || [],
         macroGeometryCoherenceWatchCount: composition.macroContactMap?.geometryCoherenceWatchCount || 0,
+        OrbShellMorphologyInventory: composition.macroMorphologyInventory,
+        macroMorphologyInventory: composition.macroMorphologyInventory,
+        MacroSphereCurveDecomposition: composition.macroMorphologyInventory?.curveDecompositions || [],
+        macroMorphologyRecordCount: composition.macroMorphologyInventory?.recordCount || 0,
+        macroMorphologyPathologyClassCounts: composition.macroMorphologyInventory?.pathologyClassCounts || {},
         LowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
         lowerSocketKeelAnatomyLaw: composition.lowerSocketKeelAnatomyLaw,
         lowerSocketKeelAnatomyVerdict: composition.lowerSocketKeelAnatomyVerdict,
